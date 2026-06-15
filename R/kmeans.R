@@ -1,8 +1,8 @@
 #' Fast k-means clustering
 #'
 #' Run k-means using the fastest available backend. CPU acceleration uses
-#' FAISS when fastEmbedR was built with FAISS; CUDA acceleration uses RAPIDS
-#' cuVS when fastEmbedR was built with cuVS. If an optional backend is not
+#' FAISS when faissR was built with FAISS; CUDA acceleration uses RAPIDS
+#' cuVS when faissR was built with cuVS. If an optional backend is not
 #' available, explicit requests fail clearly instead of silently changing
 #' backend.
 #'
@@ -80,8 +80,8 @@ fast_kmeans <- function(data,
   if (identical(backend, "faiss")) {
     if (!isTRUE(faiss_available())) {
       stop(
-        "FAISS k-means is not available. Reinstall fastEmbedR with ",
-        "FASTEMBEDR_USE_FAISS=1 and FAISS_HOME=/path/to/faiss.",
+        "FAISS k-means is not available. Reinstall faissR with ",
+        "FAISS_HOME=/path/to/faiss.",
         call. = FALSE
       )
     }

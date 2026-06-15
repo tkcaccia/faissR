@@ -19,8 +19,8 @@ List faiss_flat_knn_impl(NumericMatrix,
                          bool,
                          int) {
   Rcpp::stop(
-    "FAISS backend is not available. Reinstall fastEmbedR with a FAISS C++ "
-    "library visible to configure, for example FASTEMBEDR_USE_FAISS=1 and "
+    "FAISS backend is not available. Reinstall faissR with a FAISS C++ "
+    "library visible to configure, for example "
     "FAISS_HOME=/path/to/faiss."
   );
 }
@@ -33,8 +33,8 @@ List faiss_ivf_knn_impl(NumericMatrix,
                         bool,
                         int) {
   Rcpp::stop(
-    "FAISS IVF backend is not available. Reinstall fastEmbedR with a FAISS C++ "
-    "library visible to configure, for example FASTEMBEDR_USE_FAISS=1 and "
+    "FAISS IVF backend is not available. Reinstall faissR with a FAISS C++ "
+    "library visible to configure, for example "
     "FAISS_HOME=/path/to/faiss."
   );
 }
@@ -45,8 +45,8 @@ List faiss_flat_ip_knn_impl(NumericMatrix,
                             bool,
                             int) {
   Rcpp::stop(
-    "FAISS IndexFlatIP backend is not available. Reinstall fastEmbedR with "
-    "FASTEMBEDR_USE_FAISS=1 and FAISS_HOME=/path/to/faiss."
+    "FAISS IndexFlatIP backend is not available. Reinstall faissR with "
+    "FAISS_HOME=/path/to/faiss."
   );
 }
 
@@ -55,9 +55,9 @@ List faiss_gpu_flat_knn_impl(NumericMatrix,
                              int,
                              bool) {
   Rcpp::stop(
-    "FAISS GPU Flat L2 backend is not available. Reinstall fastEmbedR with "
+    "FAISS GPU Flat L2 backend is not available. Reinstall faissR with "
     "a FAISS GPU/cuVS library visible to configure, for example "
-    "FASTEMBEDR_USE_FAISS=1 and FAISS_HOME=/path/to/faiss-gpu."
+    "FAISS_HOME=/path/to/faiss-gpu."
   );
 }
 
@@ -66,9 +66,9 @@ List faiss_gpu_flat_ip_knn_impl(NumericMatrix,
                                 int,
                                 bool) {
   Rcpp::stop(
-    "FAISS GPU Flat IP backend is not available. Reinstall fastEmbedR with "
+    "FAISS GPU Flat IP backend is not available. Reinstall faissR with "
     "a FAISS GPU/cuVS library visible to configure, for example "
-    "FASTEMBEDR_USE_FAISS=1 and FAISS_HOME=/path/to/faiss-gpu."
+    "FAISS_HOME=/path/to/faiss-gpu."
   );
 }
 
@@ -82,8 +82,8 @@ List faiss_ivfpq_knn_impl(NumericMatrix,
                           bool,
                           int) {
   Rcpp::stop(
-    "FAISS IndexIVFPQ backend is not available. Reinstall fastEmbedR with "
-    "FASTEMBEDR_USE_FAISS=1 and FAISS_HOME=/path/to/faiss."
+    "FAISS IndexIVFPQ backend is not available. Reinstall faissR with "
+    "FAISS_HOME=/path/to/faiss."
   );
 }
 
@@ -96,8 +96,8 @@ List faiss_hnsw_knn_impl(NumericMatrix,
                          bool,
                          int) {
   Rcpp::stop(
-    "FAISS IndexHNSWFlat backend is not available. Reinstall fastEmbedR with "
-    "FASTEMBEDR_USE_FAISS=1 and FAISS_HOME=/path/to/faiss."
+    "FAISS IndexHNSWFlat backend is not available. Reinstall faissR with "
+    "FAISS_HOME=/path/to/faiss."
   );
 }
 
@@ -110,8 +110,8 @@ List faiss_nsg_knn_impl(NumericMatrix,
                         bool,
                         int) {
   Rcpp::stop(
-    "FAISS IndexNSGFlat backend is not available. Reinstall fastEmbedR with "
-    "FASTEMBEDR_USE_FAISS=1 and FAISS_HOME=/path/to/faiss."
+    "FAISS IndexNSGFlat backend is not available. Reinstall faissR with "
+    "FAISS_HOME=/path/to/faiss."
   );
 }
 
@@ -124,8 +124,8 @@ List faiss_nndescent_knn_impl(NumericMatrix,
                               bool,
                               int) {
   Rcpp::stop(
-    "FAISS IndexNNDescentFlat backend is not available. Reinstall fastEmbedR "
-    "with FASTEMBEDR_USE_FAISS=1 and FAISS_HOME=/path/to/faiss."
+    "FAISS IndexNNDescentFlat backend is not available. Reinstall faissR "
+    "with FAISS_HOME=/path/to/faiss."
   );
 }
 
@@ -136,9 +136,9 @@ List faiss_gpu_ivf_flat_knn_impl(NumericMatrix,
                                  int,
                                  bool) {
   Rcpp::stop(
-    "FAISS GPU IVF Flat backend is not available. Reinstall fastEmbedR with "
+    "FAISS GPU IVF Flat backend is not available. Reinstall faissR with "
     "a FAISS GPU/cuVS library visible to configure, for example "
-    "FASTEMBEDR_USE_FAISS=1 and FAISS_HOME=/path/to/faiss-gpu."
+    "FAISS_HOME=/path/to/faiss-gpu."
   );
 }
 
@@ -151,9 +151,9 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix,
                               int,
                               bool) {
   Rcpp::stop(
-    "FAISS GPU IVF-PQ backend is not available. Reinstall fastEmbedR with "
+    "FAISS GPU IVF-PQ backend is not available. Reinstall faissR with "
     "a FAISS GPU/cuVS library visible to configure, for example "
-    "FASTEMBEDR_USE_FAISS=1 and FAISS_HOME=/path/to/faiss-gpu."
+    "FAISS_HOME=/path/to/faiss-gpu."
   );
 }
 
@@ -166,7 +166,7 @@ List faiss_kmeans_impl(NumericMatrix,
                        int,
                        bool) {
   Rcpp::stop(
-    "FAISS k-means is not available. Reinstall fastEmbedR with "
-    "FASTEMBEDR_USE_FAISS=1 and FAISS_HOME=/path/to/faiss."
+    "FAISS k-means is not available. Reinstall faissR with "
+    "FAISS_HOME=/path/to/faiss."
   );
 }

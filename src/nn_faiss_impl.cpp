@@ -307,7 +307,7 @@ List faiss_gpu_flat_knn_impl(NumericMatrix data,
   (void)exclude_self;
   Rcpp::stop(
     "FAISS GPU Flat L2 backend is not available in this build. "
-    "Install FAISS GPU/cuVS headers and rebuild with FASTEMBEDR_USE_FAISS=1."
+    "Install FAISS GPU/cuVS headers and rebuild faissR with FAISS_HOME set."
   );
 #endif
 }
@@ -333,7 +333,7 @@ List faiss_gpu_flat_ip_knn_impl(NumericMatrix data,
   (void)exclude_self;
   Rcpp::stop(
     "FAISS GPU Flat IP backend is not available in this build. "
-    "Install FAISS GPU/cuVS headers and rebuild with FASTEMBEDR_USE_FAISS=1."
+    "Install FAISS GPU/cuVS headers and rebuild faissR with FAISS_HOME set."
   );
 #endif
 }
@@ -490,7 +490,7 @@ List faiss_gpu_ivf_flat_knn_impl(NumericMatrix data,
   (void)exclude_self;
   Rcpp::stop(
     "FAISS GPU IVF Flat backend is not available in this build. "
-    "Install FAISS GPU/cuVS headers and rebuild with FASTEMBEDR_USE_FAISS=1."
+    "Install FAISS GPU/cuVS headers and rebuild faissR with FAISS_HOME set."
   );
 #endif
 }
@@ -546,7 +546,7 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
   (void)exclude_self;
   Rcpp::stop(
     "FAISS GPU IVF-PQ backend is not available in this build. "
-    "Install FAISS GPU/cuVS headers and rebuild with FASTEMBEDR_USE_FAISS=1."
+    "Install FAISS GPU/cuVS headers and rebuild faissR with FAISS_HOME set."
   );
 #endif
 }

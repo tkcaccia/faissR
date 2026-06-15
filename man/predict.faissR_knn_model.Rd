@@ -2,7 +2,7 @@
 % Please edit documentation in R/knn_model.R
 \name{predict.faissR_knn_model}
 \alias{predict.faissR_knn_model}
-\title{Predict from a fastEmbedR kNN model}
+\title{Predict from a faissR kNN model}
 \usage{
 \method{predict}{faissR_knn_model}(object, newdata, k = NULL, vote = c("majority", "weighted"), ...)
 }
@@ -23,5 +23,5 @@ means an unweighted neighbour mean for regression.}
 A factor for classification or numeric vector for regression.
 }
 \description{
-Predict from a fastEmbedR kNN model
+Predict from a faissR kNN model
 }

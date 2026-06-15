@@ -12,9 +12,10 @@ classifier/regressor helpers. `fastEmbedR` now uses this package for KNN and
 keeps the UMAP/openTSNE embedding optimizers.
 }
 \details{
-Optional FAISS and RAPIDS cuVS backends are detected at build time. If they
-are not available, explicit requests fail clearly and the package remains
-usable through native CPU and optional RcppHNSW paths.
+FAISS is a required system dependency. RAPIDS cuVS/CUDA is optional, so
+CPU-only machines can compile and use FAISS CPU indexes without NVIDIA
+libraries. Explicit CUDA/cuVS requests fail clearly when those optional
+libraries are unavailable.
 }
 \seealso{
 Useful links:

@@ -7,7 +7,7 @@
 cuvs_available()
 }
 \value{
-`TRUE` when fastEmbedR was compiled and linked against RAPIDS cuVS
+`TRUE` when faissR was compiled and linked against RAPIDS cuVS
   and the CUDA runtime reports at least one available device.
 }
 \description{

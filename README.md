@@ -3,7 +3,7 @@
 `faissR` is the nearest-neighbour companion package for `fastEmbedR`.
 It contains the KNN/search side of the workflow:
 
-- `nn()` for exact CPU, RcppHNSW, optional FAISS, optional cuVS/CUDA, and small
+- `nn()` for exact CPU, FAISS, RcppHNSW, optional cuVS/CUDA, and small
   native spatial search paths;
 - `candidate_knn()` for exact top-k ranking inside supplied candidate rows;
 - `knn_graph()` for original-space or embedding-space `igraph` graph creation;
@@ -21,18 +21,35 @@ install.packages("remotes")
 remotes::install_github("tkcaccia/faissR")
 ```
 
-Optional FAISS and RAPIDS cuVS libraries are not vendored. Explicit optional
-backend builds fail clearly if headers or libraries are unavailable:
+FAISS is a required system dependency and is not vendored. `faissR` compiles
+with C++20 because recent FAISS headers use C++20 syntax. RAPIDS cuVS/CUDA is
+optional, so machines without an NVIDIA GPU can still compile and use the CPU
+FAISS backends.
+
+On macOS, the simplest route is usually:
 
 ```sh
-FAISS_HOME=/path/to/faiss FAISSR_USE_FAISS=1 R CMD INSTALL .
+brew install faiss
+R CMD INSTALL .
+```
 
+On Linux or custom installations, set `FAISS_HOME` if FAISS is not visible via
+`pkg-config` or standard library paths:
+
+```sh
+FAISS_HOME=/path/to/faiss R CMD INSTALL .
+```
+
+Optional CUDA/cuVS builds are enabled only when requested or auto-detected:
+
+```sh
 CUDA_HOME=/path/to/cuda CUVS_HOME=/path/to/cuvs \
 FAISSR_USE_CUDA=1 FAISSR_USE_CUVS=1 R CMD INSTALL .
 ```
 
-The old `FASTEMBEDR_USE_*` environment variables are still accepted by
-`configure` for compatibility with existing benchmark scripts.
+The old `FASTEMBEDR_USE_CUDA` and `FASTEMBEDR_USE_CUVS` environment variables
+are still accepted by `configure` for compatibility with existing benchmark
+scripts. FAISS is always required.
 
 ## Example
 

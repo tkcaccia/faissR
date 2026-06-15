@@ -96,7 +96,7 @@ cuvs.fit <- function(X_train, y_train, ...) {
   knn_fit(X_train, y_train, backend = "cuda_cuvs", ...)
 }
 
-#' Predict from a fastEmbedR kNN model
+#' Predict from a faissR kNN model
 #'
 #' @param object A model returned by [knn_fit()], [faiss.fit()], or
 #'   [cuvs.fit()].

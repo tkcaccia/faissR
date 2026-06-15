@@ -7,7 +7,7 @@
 faiss_available()
 }
 \value{
-`TRUE` when fastEmbedR was compiled and linked against FAISS.
+`TRUE` when faissR was compiled and linked against FAISS.
 }
 \description{
 Check whether the real FAISS C++ backend is available

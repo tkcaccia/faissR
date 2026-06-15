@@ -53,48 +53,44 @@ if [ "$os_name" = "Darwin" ]; then
   libs="-pthread -framework Foundation -framework Metal"
 fi
 
-use_faiss=$(first_env FAISSR_USE_FAISS FASTEMBEDR_USE_FAISS)
-if [ -z "$use_faiss" ]; then use_faiss=auto; fi
 faiss_home=${FAISS_HOME:-}
-faiss_objects="nn_faiss_bridge.o nn_faiss_stub.o"
+faiss_objects="nn_faiss_bridge.o nn_faiss_impl.o"
 faiss_cppflags=""
 faiss_libs=""
 faiss_libdir=""
 
-if [ "$use_faiss" != "0" ]; then
-  if [ -n "$faiss_home" ] && [ -f "$faiss_home/include/faiss/IndexFlat.h" ]; then
-    faiss_cppflags="-I$faiss_home/include"
-    if [ -d "$faiss_home/lib64" ]; then
-      faiss_libdir="$faiss_home/lib64"
-    else
-      faiss_libdir="$faiss_home/lib"
-    fi
-    faiss_libs="-L$faiss_libdir -Wl,-rpath,$faiss_libdir -lfaiss"
-  elif command -v pkg-config >/dev/null 2>&1 && pkg-config --exists faiss 2>/dev/null; then
-    faiss_cppflags=$(pkg-config --cflags faiss)
-    faiss_libs=$(pkg-config --libs faiss)
-  elif [ -f /opt/homebrew/include/faiss/IndexFlat.h ] && \
-       { [ -f /opt/homebrew/lib/libfaiss.dylib ] || [ -f /opt/homebrew/lib/libfaiss.a ]; }; then
-    faiss_cppflags="-I/opt/homebrew/include"
-    faiss_libdir="/opt/homebrew/lib"
-    faiss_libs="-L$faiss_libdir -Wl,-rpath,$faiss_libdir -lfaiss"
-  elif [ -f /usr/local/include/faiss/IndexFlat.h ] && \
-       { [ -f /usr/local/lib/libfaiss.dylib ] || [ -f /usr/local/lib/libfaiss.so ] || [ -f /usr/local/lib/libfaiss.a ]; }; then
-    faiss_cppflags="-I/usr/local/include"
-    faiss_libdir="/usr/local/lib"
-    faiss_libs="-L$faiss_libdir -Wl,-rpath,$faiss_libdir -lfaiss"
+if [ -n "$faiss_home" ] && [ -f "$faiss_home/include/faiss/IndexFlat.h" ]; then
+  faiss_cppflags="-I$faiss_home/include"
+  if [ -d "$faiss_home/lib64" ]; then
+    faiss_libdir="$faiss_home/lib64"
+  else
+    faiss_libdir="$faiss_home/lib"
   fi
-
-  if [ -n "$faiss_cppflags" ] && [ -n "$faiss_libs" ]; then
-    faiss_objects="nn_faiss_bridge.o nn_faiss_impl.o"
-    cppflags="$cppflags -DFASTEMBEDR_HAS_FAISS $faiss_cppflags"
-    libs="$libs $faiss_libs"
-  elif [ "$use_faiss" = "1" ]; then
-    echo "FAISSR_USE_FAISS=1 was requested, but FAISS headers/library were not found." >&2
-    echo "Set FAISS_HOME to a prefix containing include/faiss and lib/libfaiss, or install a pkg-config faiss file." >&2
-    exit 1
-  fi
+  faiss_libs="-L$faiss_libdir -Wl,-rpath,$faiss_libdir -lfaiss"
+elif command -v pkg-config >/dev/null 2>&1 && pkg-config --exists faiss 2>/dev/null; then
+  faiss_cppflags=$(pkg-config --cflags faiss)
+  faiss_libs=$(pkg-config --libs faiss)
+elif [ -f /opt/homebrew/include/faiss/IndexFlat.h ] && \
+     { [ -f /opt/homebrew/lib/libfaiss.dylib ] || [ -f /opt/homebrew/lib/libfaiss.a ]; }; then
+  faiss_cppflags="-I/opt/homebrew/include"
+  faiss_libdir="/opt/homebrew/lib"
+  faiss_libs="-L$faiss_libdir -Wl,-rpath,$faiss_libdir -lfaiss"
+elif [ -f /usr/local/include/faiss/IndexFlat.h ] && \
+     { [ -f /usr/local/lib/libfaiss.dylib ] || [ -f /usr/local/lib/libfaiss.so ] || [ -f /usr/local/lib/libfaiss.a ]; }; then
+  faiss_cppflags="-I/usr/local/include"
+  faiss_libdir="/usr/local/lib"
+  faiss_libs="-L$faiss_libdir -Wl,-rpath,$faiss_libdir -lfaiss"
 fi
+
+if [ -z "$faiss_cppflags" ] || [ -z "$faiss_libs" ]; then
+  echo "FAISS is required to build faissR, but FAISS headers/library were not found." >&2
+  echo "Install FAISS or set FAISS_HOME to a prefix containing include/faiss and lib/libfaiss." >&2
+  echo "CUDA/cuVS is optional; NVIDIA libraries are not required for a CPU-only FAISS build." >&2
+  exit 1
+fi
+
+cppflags="$cppflags -DFASTEMBEDR_HAS_FAISS $faiss_cppflags"
+libs="$libs $faiss_libs"
 
 cuda_objects="nn_cuda_stub.o"
 cuda_rule=""
@@ -215,7 +211,7 @@ if [ "$use_cuvs" != "0" ]; then
 fi
 
 {
-  echo "CXX_STD = CXX17"
+  echo "CXX_STD = CXX20"
   echo "PKG_CXXFLAGS = -pthread"
   if [ -n "$cppflags" ]; then
     echo "PKG_CPPFLAGS = $cppflags"

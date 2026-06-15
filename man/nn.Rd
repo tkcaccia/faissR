@@ -50,7 +50,7 @@ Euclidean self-KNN or reference/query KNN.
 grid implementation for Euclidean self-KNN only; it does not silently
 fall back to CPU.
 `"hnsw"`/`"rcpphnsw"` uses the optional CRAN package RcppHNSW.
-`"faiss"` uses the real FAISS C++ `IndexFlatL2` backend when fastEmbedR was
+`"faiss"` uses the real FAISS C++ `IndexFlatL2` backend when faissR was
 built against FAISS. `"faiss_ivf"`, `"faiss_ivfpq"`, `"faiss_hnsw"`,
 `"faiss_nsg"`, and `"faiss_nndescent"` use the corresponding FAISS index
 types when FAISS is available at compile time. `"faiss_gpu_flat_l2"` and

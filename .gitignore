@@ -12,5 +12,6 @@ inst/doc/
 src/*.o
 src/*.so
 src/*.dylib
+src/Makevars
 src/symbols.rds
 .DS_Store

@@ -19,8 +19,8 @@ List cuvs_bruteforce_knn_impl(NumericMatrix,
                               int,
                               bool) {
   Rcpp::stop(
-    "cuVS backend is not available. Reinstall fastEmbedR with RAPIDS cuVS "
-    "visible to configure, for example FASTEMBEDR_USE_CUVS=1 and "
+    "cuVS backend is not available. Reinstall faissR with RAPIDS cuVS "
+    "visible to configure, for example FAISSR_USE_CUVS=1 and "
     "CUVS_HOME=/path/to/cuvs."
   );
 }
@@ -34,8 +34,8 @@ List cuvs_cagra_knn_impl(NumericMatrix,
                          int,
                          int) {
   Rcpp::stop(
-    "cuVS CAGRA backend is not available. Reinstall fastEmbedR with RAPIDS "
-    "cuVS visible to configure, for example FASTEMBEDR_USE_CUVS=1 and "
+    "cuVS CAGRA backend is not available. Reinstall faissR with RAPIDS "
+    "cuVS visible to configure, for example FAISSR_USE_CUVS=1 and "
     "CUVS_HOME=/path/to/cuvs."
   );
 }
@@ -46,8 +46,8 @@ List cuvs_nndescent_self_knn_impl(NumericMatrix,
                                   int,
                                   int) {
   Rcpp::stop(
-    "cuVS NN-descent backend is not available. Reinstall fastEmbedR with "
-    "RAPIDS cuVS visible to configure, for example FASTEMBEDR_USE_CUVS=1 "
+    "cuVS NN-descent backend is not available. Reinstall faissR with "
+    "RAPIDS cuVS visible to configure, for example FAISSR_USE_CUVS=1 "
     "and CUVS_HOME=/path/to/cuvs."
   );
 }
@@ -59,8 +59,8 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix,
                             int,
                             bool) {
   Rcpp::stop(
-    "Direct cuVS IVF-Flat backend is not available. Reinstall fastEmbedR with "
-    "RAPIDS cuVS visible to configure, for example FASTEMBEDR_USE_CUVS=1 "
+    "Direct cuVS IVF-Flat backend is not available. Reinstall faissR with "
+    "RAPIDS cuVS visible to configure, for example FAISSR_USE_CUVS=1 "
     "and CUVS_HOME=/path/to/cuvs."
   );
 }
@@ -74,8 +74,8 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix,
                           int,
                           bool) {
   Rcpp::stop(
-    "Direct cuVS IVF-PQ backend is not available. Reinstall fastEmbedR with "
-    "RAPIDS cuVS visible to configure, for example FASTEMBEDR_USE_CUVS=1 "
+    "Direct cuVS IVF-PQ backend is not available. Reinstall faissR with "
+    "RAPIDS cuVS visible to configure, for example FAISSR_USE_CUVS=1 "
     "and CUVS_HOME=/path/to/cuvs. IVF-PQ is explicit-only and intended for "
     "GPU memory pressure."
   );
@@ -89,8 +89,8 @@ List cuvs_kmeans_impl(NumericMatrix,
                       int64_t,
                       bool) {
   Rcpp::stop(
-    "cuVS k-means backend is not available. Reinstall fastEmbedR with RAPIDS "
-    "cuVS visible to configure, for example FASTEMBEDR_USE_CUVS=1 and "
+    "cuVS k-means backend is not available. Reinstall faissR with RAPIDS "
+    "cuVS visible to configure, for example FAISSR_USE_CUVS=1 and "
     "CUVS_HOME=/path/to/cuvs."
   );
 }

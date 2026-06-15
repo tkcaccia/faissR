@@ -162,7 +162,7 @@ nn_compute <- function(data,
     if (!isTRUE(faiss_available())) {
       stop(
         "The real FAISS C++ backend is not available in this build. ",
-        "Reinstall with `FASTEMBEDR_USE_FAISS=1` and `FAISS_HOME` pointing ",
+        "Reinstall faissR with `FAISS_HOME` pointing ",
         "to a FAISS installation.",
         call. = FALSE
       )
@@ -187,7 +187,7 @@ nn_compute <- function(data,
     if (!isTRUE(faiss_available())) {
       stop(
         "The real FAISS C++ backend is not available in this build. ",
-        "Reinstall with `FASTEMBEDR_USE_FAISS=1` and `FAISS_HOME` pointing ",
+        "Reinstall faissR with `FAISS_HOME` pointing ",
         "to a FAISS installation.",
         call. = FALSE
       )
@@ -220,7 +220,7 @@ nn_compute <- function(data,
     if (!isTRUE(faiss_available())) {
       stop(
         "The real FAISS C++ GPU Flat L2 backend is not available in this build. ",
-        "Reinstall with `FASTEMBEDR_USE_FAISS=1` and FAISS GPU/cuVS headers ",
+        "Reinstall faissR with FAISS GPU/cuVS headers ",
         "available through `FAISS_HOME`.",
         call. = FALSE
       )
@@ -246,7 +246,7 @@ nn_compute <- function(data,
     if (!isTRUE(faiss_available())) {
       stop(
         "The real FAISS C++ GPU Flat IP backend is not available in this build. ",
-        "Reinstall with `FASTEMBEDR_USE_FAISS=1` and FAISS GPU/cuVS headers ",
+        "Reinstall faissR with FAISS GPU/cuVS headers ",
         "available through `FAISS_HOME`.",
         call. = FALSE
       )
@@ -279,7 +279,7 @@ nn_compute <- function(data,
     if (!isTRUE(faiss_available())) {
       stop(
         "The real FAISS C++ IVF backend is not available in this build. ",
-        "Reinstall with `FASTEMBEDR_USE_FAISS=1` and `FAISS_HOME` pointing ",
+        "Reinstall faissR with `FAISS_HOME` pointing ",
         "to a FAISS installation.",
         call. = FALSE
       )
@@ -309,7 +309,7 @@ nn_compute <- function(data,
     if (!isTRUE(faiss_available())) {
       stop(
         "The real FAISS C++ IVFPQ backend is not available in this build. ",
-        "Reinstall with `FASTEMBEDR_USE_FAISS=1` and `FAISS_HOME` pointing ",
+        "Reinstall faissR with `FAISS_HOME` pointing ",
         "to a FAISS installation.",
         call. = FALSE
       )
@@ -344,7 +344,7 @@ nn_compute <- function(data,
     if (!isTRUE(faiss_available())) {
       stop(
         "The real FAISS C++ GPU IVF Flat backend is not available in this build. ",
-        "Reinstall with `FASTEMBEDR_USE_FAISS=1` and FAISS GPU/cuVS headers ",
+        "Reinstall faissR with FAISS GPU/cuVS headers ",
         "available through `FAISS_HOME`.",
         call. = FALSE
       )
@@ -381,7 +381,7 @@ nn_compute <- function(data,
     if (!isTRUE(faiss_available())) {
       stop(
         "The real FAISS C++ GPU IVF-PQ backend is not available in this build. ",
-        "Reinstall with `FASTEMBEDR_USE_FAISS=1` and FAISS GPU/cuVS headers ",
+        "Reinstall faissR with FAISS GPU/cuVS headers ",
         "available through `FAISS_HOME`.",
         call. = FALSE
       )
@@ -418,7 +418,7 @@ nn_compute <- function(data,
     if (!isTRUE(faiss_available())) {
       stop(
         "The real FAISS C++ HNSW backend is not available in this build. ",
-        "Reinstall with `FASTEMBEDR_USE_FAISS=1` and `FAISS_HOME` pointing ",
+        "Reinstall faissR with `FAISS_HOME` pointing ",
         "to a FAISS installation.",
         call. = FALSE
       )
@@ -450,7 +450,7 @@ nn_compute <- function(data,
     if (!isTRUE(faiss_available())) {
       stop(
         "The real FAISS C++ NSG backend is not available in this build. ",
-        "Reinstall with `FASTEMBEDR_USE_FAISS=1` and `FAISS_HOME` pointing ",
+        "Reinstall faissR with `FAISS_HOME` pointing ",
         "to a FAISS installation.",
         call. = FALSE
       )
@@ -482,7 +482,7 @@ nn_compute <- function(data,
     if (!isTRUE(faiss_available())) {
       stop(
         "The real FAISS C++ NNDescent backend is not available in this build. ",
-        "Reinstall with `FASTEMBEDR_USE_FAISS=1` and `FAISS_HOME` pointing ",
+        "Reinstall faissR with `FAISS_HOME` pointing ",
         "to a FAISS installation.",
         call. = FALSE
       )
@@ -1576,7 +1576,7 @@ faiss_self_knn <- function(data,
   if (!isTRUE(faiss_available())) {
     stop(
       "The real FAISS C++ backend is not available in this build. ",
-      "Reinstall with `FASTEMBEDR_USE_FAISS=1` and `FAISS_HOME` pointing ",
+      "Reinstall faissR with `FAISS_HOME` pointing ",
       "to a FAISS installation.",
       call. = FALSE
     )
@@ -2791,7 +2791,7 @@ require_cuvs_backend <- function(label = "cuVS") {
     label,
     " backend is not available in this build or no CUDA device is visible.",
     suffix,
-    " Reinstall with `FASTEMBEDR_USE_CUDA=1 FASTEMBEDR_USE_CUVS=1` and ",
+    " Reinstall faissR with `FAISSR_USE_CUDA=1 FAISSR_USE_CUVS=1` and ",
     "`CUVS_HOME` pointing to a RAPIDS cuVS installation.",
     call. = FALSE
   )
@@ -3032,7 +3032,7 @@ grid_self_knn <- function(data,
 #'   grid implementation for Euclidean self-KNN only; it does not silently
 #'   fall back to CPU.
 #'   `"hnsw"`/`"rcpphnsw"` uses the optional CRAN package RcppHNSW.
-#'   `"faiss"` uses the real FAISS C++ `IndexFlatL2` backend when fastEmbedR was
+#'   `"faiss"` uses the real FAISS C++ `IndexFlatL2` backend when faissR was
 #'   built against FAISS. `"faiss_ivf"`, `"faiss_ivfpq"`, `"faiss_hnsw"`,
 #'   `"faiss_nsg"`, and `"faiss_nndescent"` use the corresponding FAISS index
 #'   types when FAISS is available at compile time. `"faiss_gpu_flat_l2"` and
@@ -3293,7 +3293,7 @@ cuda_available <- function() {
 
 #' Check whether the real FAISS C++ backend is available
 #'
-#' @return `TRUE` when fastEmbedR was compiled and linked against FAISS.
+#' @return `TRUE` when faissR was compiled and linked against FAISS.
 #' @export
 faiss_available <- function() {
   isTRUE(faiss_available_cpp())
@@ -3301,7 +3301,7 @@ faiss_available <- function() {
 
 #' Check whether the RAPIDS cuVS backend is available
 #'
-#' @return `TRUE` when fastEmbedR was compiled and linked against RAPIDS cuVS
+#' @return `TRUE` when faissR was compiled and linked against RAPIDS cuVS
 #'   and the CUDA runtime reports at least one available device.
 #' @export
 cuvs_available <- function() {
