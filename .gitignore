@@ -1,0 +1,16 @@
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+*.Rcheck/
+*.tar.gz
+Rplots.pdf
+cache/
+dev/
+tools/
+inst/doc/
+src/*.o
+src/*.so
+src/*.dylib
+src/symbols.rds
+.DS_Store
