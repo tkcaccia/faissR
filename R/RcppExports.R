@@ -237,6 +237,10 @@ kmeans_faiss_cpp <- function(data, centers, max_iter, nredo, tol, seed, n_thread
     .Call(`_faissR_kmeans_faiss_cpp`, data, centers, max_iter, nredo, tol, seed, n_threads, kmeans_plus_plus)
 }
 
+kmeans_faiss_gpu_cpp <- function(data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus) {
+    .Call(`_faissR_kmeans_faiss_gpu_cpp`, data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus)
+}
+
 metal_available_cpp <- function() {
     .Call(`_faissR_metal_available_cpp`)
 }

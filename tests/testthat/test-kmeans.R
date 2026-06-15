@@ -44,3 +44,18 @@ test_that("fast_kmeans explicit cuVS request fails clearly when unavailable", {
     "cuVS"
   )
 })
+
+test_that("fast_kmeans CUDA requests never silently use CPU", {
+  x <- matrix(rnorm(80), ncol = 4)
+  out <- tryCatch(
+    fast_kmeans(x, centers = 2, backend = "cuda", max_iter = 2),
+    error = identity
+  )
+  if (inherits(out, "error")) {
+    expect_match(conditionMessage(out), "CUDA k-means|FAISS GPU|cuVS")
+  } else {
+    expect_true(out$backend %in% c("cuda_faiss", "cuda_cuvs"))
+    expect_false(identical(out$backend, "cpu"))
+    expect_false(identical(out$backend, "faiss"))
+  }
+})

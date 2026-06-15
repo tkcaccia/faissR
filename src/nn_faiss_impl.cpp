@@ -652,3 +652,121 @@ List faiss_kmeans_impl(NumericMatrix data,
     Rcpp::stop("FAISS k-means failed: %s", e.what());
   }
 }
+
+List faiss_gpu_kmeans_impl(NumericMatrix data,
+                           int centers,
+                           int max_iter,
+                           int nredo,
+                           double tol,
+                           int seed,
+                           bool kmeans_plus_plus) {
+#ifdef FASTEMBEDR_HAS_FAISS_GPU
+  if (data.nrow() < 1 || data.ncol() < 1) {
+    Rcpp::stop("data must have at least one row and one column");
+  }
+  const int n = data.nrow();
+  const int p = data.ncol();
+  if (centers < 1 || centers > n) {
+    Rcpp::stop("centers must be in [1, nrow(data)]");
+  }
+  max_iter = std::max(1, max_iter);
+  nredo = std::max(1, nredo);
+  if (!std::isfinite(tol) || tol < 0.0) tol = 1e-4;
+
+  std::vector<float> xb;
+  copy_row_major_float(data, xb);
+
+  faiss::ClusteringParameters cp;
+  cp.niter = max_iter;
+  cp.nredo = nredo;
+  cp.verbose = false;
+  cp.spherical = false;
+  cp.seed = seed;
+  cp.min_points_per_centroid = 1;
+  cp.max_points_per_centroid = std::max(
+    256,
+    static_cast<int>((static_cast<long long>(n) + centers - 1) / centers)
+  );
+  cp.early_stop_threshold = tol;
+  if (kmeans_plus_plus) {
+    cp.init_method = faiss::ClusteringInitMethod::KMEANS_PLUS_PLUS;
+  }
+
+  try {
+    faiss::gpu::StandardGpuResources resources;
+    faiss::gpu::GpuIndexFlatConfig config;
+    config.device = 0;
+
+    faiss::gpu::GpuIndexFlatL2 train_index(&resources, p, config);
+    faiss::Clustering clustering(p, centers, cp);
+    clustering.train(n, xb.data(), train_index);
+
+    faiss::gpu::GpuIndexFlatL2 assign_index(&resources, p, config);
+    assign_index.add(centers, clustering.centroids.data());
+    std::vector<float> distances(static_cast<std::size_t>(n));
+    std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n));
+    assign_index.search(n, xb.data(), 1, distances.data(), labels.data());
+
+    NumericMatrix center_matrix(centers, p);
+    for (int c = 0; c < p; ++c) {
+      for (int r = 0; r < centers; ++r) {
+        center_matrix(r, c) =
+          clustering.centroids[static_cast<std::size_t>(r) * p + c];
+      }
+    }
+
+    Rcpp::IntegerVector cluster(n);
+    Rcpp::IntegerVector size(centers);
+    Rcpp::NumericVector withinss(centers);
+    double total = 0.0;
+    for (int i = 0; i < n; ++i) {
+      const int label = static_cast<int>(labels[static_cast<std::size_t>(i)]);
+      if (label < 0 || label >= centers) {
+        Rcpp::stop("FAISS GPU k-means returned an invalid cluster label");
+      }
+      cluster[i] = label + 1;
+      size[label] += 1;
+      const double d = std::max(
+        0.0,
+        static_cast<double>(distances[static_cast<std::size_t>(i)])
+      );
+      withinss[label] += d;
+      total += d;
+    }
+
+    const int actual_iter = static_cast<int>(clustering.iteration_stats.size());
+    return List::create(
+      Rcpp::Named("cluster") = cluster,
+      Rcpp::Named("centers") = center_matrix,
+      Rcpp::Named("withinss") = withinss,
+      Rcpp::Named("tot.withinss") = total,
+      Rcpp::Named("size") = size,
+      Rcpp::Named("iter") = actual_iter > 0 ? actual_iter : max_iter,
+      Rcpp::Named("backend_library") = "faiss_gpu",
+      Rcpp::Named("parameters") = List::create(
+        Rcpp::Named("centers") = centers,
+        Rcpp::Named("max_iter") = max_iter,
+        Rcpp::Named("n_init") = nredo,
+        Rcpp::Named("tol") = tol,
+        Rcpp::Named("seed") = seed,
+        Rcpp::Named("device") = 0,
+        Rcpp::Named("max_points_per_centroid") = cp.max_points_per_centroid
+      )
+    );
+  } catch (const std::exception& e) {
+    Rcpp::stop("FAISS GPU k-means failed: %s", e.what());
+  }
+#else
+  (void)data;
+  (void)centers;
+  (void)max_iter;
+  (void)nredo;
+  (void)tol;
+  (void)seed;
+  (void)kmeans_plus_plus;
+  Rcpp::stop(
+    "FAISS GPU k-means is not available in this build. "
+    "Install FAISS GPU/cuVS headers and rebuild faissR with FAISS_HOME set."
+  );
+#endif
+}

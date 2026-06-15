@@ -87,6 +87,13 @@ List faiss_kmeans_impl(NumericMatrix data,
                        int seed,
                        int n_threads,
                        bool kmeans_plus_plus);
+List faiss_gpu_kmeans_impl(NumericMatrix data,
+                           int centers,
+                           int max_iter,
+                           int nredo,
+                           double tol,
+                           int seed,
+                           bool kmeans_plus_plus);
 
 // [[Rcpp::export]]
 bool faiss_available_cpp() {
@@ -245,6 +252,25 @@ List kmeans_faiss_cpp(NumericMatrix data,
     tol,
     seed,
     n_threads,
+    kmeans_plus_plus
+  );
+}
+
+// [[Rcpp::export]]
+List kmeans_faiss_gpu_cpp(NumericMatrix data,
+                          int centers,
+                          int max_iter,
+                          int nredo,
+                          double tol,
+                          int seed,
+                          bool kmeans_plus_plus) {
+  return faiss_gpu_kmeans_impl(
+    data,
+    centers,
+    max_iter,
+    nredo,
+    tol,
+    seed,
     kmeans_plus_plus
   );
 }

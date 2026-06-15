@@ -7,7 +7,8 @@
 fast_kmeans(
   data,
   centers,
-  backend = c("auto", "cpu", "faiss", "cuda", "cuda_cuvs", "cuvs"),
+  backend = c("auto", "cpu", "faiss", "cuda", "cuda_faiss", "faiss_gpu", "cuda_cuvs",
+    "cuvs"),
   max_iter = 100L,
   n_init = 1L,
   tol = 1e-04,
@@ -23,7 +24,7 @@ fast_kmeans(
 \item{centers}{Number of clusters.}
 
 \item{backend}{One of `"auto"`, `"cpu"`, `"faiss"`, `"cuda"`,
-`"cuda_cuvs"`, or `"cuvs"`.}
+`"cuda_faiss"`, `"faiss_gpu"`, `"cuda_cuvs"`, or `"cuvs"`.}
 
 \item{max_iter}{Maximum number of Lloyd iterations.}
 
@@ -31,8 +32,9 @@ fast_kmeans(
 
 \item{tol}{Relative convergence tolerance where supported.}
 
-\item{seed}{Random seed for CPU/statistics and FAISS paths. The current cuVS
-C API does not expose an explicit seed in the stable params structure.}
+\item{seed}{Random seed for CPU/statistics and FAISS paths. The current
+direct cuVS C API path does not expose an explicit seed in the stable
+params structure.}
 
 \item{n_threads}{Number of CPU threads for FAISS/statistics paths.}
 
@@ -48,10 +50,10 @@ A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
 }
 \description{
 Run k-means using the fastest available backend. CPU acceleration uses
-FAISS when faissR was built with FAISS; CUDA acceleration uses RAPIDS
-cuVS when faissR was built with cuVS. If an optional backend is not
-available, explicit requests fail clearly instead of silently changing
-backend.
+FAISS when faissR was built with FAISS. CUDA acceleration first tries FAISS
+GPU, which can use NVIDIA/cuVS-enabled FAISS builds, then direct RAPIDS cuVS
+when available. Explicit GPU requests fail clearly instead of silently
+changing to CPU.
 }
 \examples{
 x <- scale(as.matrix(iris[, 1:4]))

@@ -898,6 +898,23 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// kmeans_faiss_gpu_cpp
+List kmeans_faiss_gpu_cpp(NumericMatrix data, int centers, int max_iter, int nredo, double tol, int seed, bool kmeans_plus_plus);
+RcppExport SEXP _faissR_kmeans_faiss_gpu_cpp(SEXP dataSEXP, SEXP centersSEXP, SEXP max_iterSEXP, SEXP nredoSEXP, SEXP tolSEXP, SEXP seedSEXP, SEXP kmeans_plus_plusSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< int >::type centers(centersSEXP);
+    Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
+    Rcpp::traits::input_parameter< int >::type nredo(nredoSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type kmeans_plus_plus(kmeans_plus_plusSEXP);
+    rcpp_result_gen = Rcpp::wrap(kmeans_faiss_gpu_cpp(data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus));
+    return rcpp_result_gen;
+END_RCPP
+}
 // metal_available_cpp
 bool metal_available_cpp();
 RcppExport SEXP _faissR_metal_available_cpp() {
@@ -1079,6 +1096,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_faiss_gpu_ivf_flat_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_ivf_flat_cpp, 6},
     {"_faissR_nn_faiss_gpu_ivfpq_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_ivfpq_cpp, 8},
     {"_faissR_kmeans_faiss_cpp", (DL_FUNC) &_faissR_kmeans_faiss_cpp, 8},
+    {"_faissR_kmeans_faiss_gpu_cpp", (DL_FUNC) &_faissR_kmeans_faiss_gpu_cpp, 7},
     {"_faissR_metal_available_cpp", (DL_FUNC) &_faissR_metal_available_cpp, 0},
     {"_faissR_nn_metal_cpp", (DL_FUNC) &_faissR_nn_metal_cpp, 4},
     {"_faissR_landmark_candidate_knn_metal_cpp", (DL_FUNC) &_faissR_landmark_candidate_knn_metal_cpp, 5},

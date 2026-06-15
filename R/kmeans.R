@@ -1,20 +1,21 @@
 #' Fast k-means clustering
 #'
 #' Run k-means using the fastest available backend. CPU acceleration uses
-#' FAISS when faissR was built with FAISS; CUDA acceleration uses RAPIDS
-#' cuVS when faissR was built with cuVS. If an optional backend is not
-#' available, explicit requests fail clearly instead of silently changing
-#' backend.
+#' FAISS when faissR was built with FAISS. CUDA acceleration first tries FAISS
+#' GPU, which can use NVIDIA/cuVS-enabled FAISS builds, then direct RAPIDS cuVS
+#' when available. Explicit GPU requests fail clearly instead of silently
+#' changing to CPU.
 #'
 #' @param data Numeric matrix with observations in rows.
 #' @param centers Number of clusters.
 #' @param backend One of `"auto"`, `"cpu"`, `"faiss"`, `"cuda"`,
-#'   `"cuda_cuvs"`, or `"cuvs"`.
+#'   `"cuda_faiss"`, `"faiss_gpu"`, `"cuda_cuvs"`, or `"cuvs"`.
 #' @param max_iter Maximum number of Lloyd iterations.
 #' @param n_init Number of random restarts where supported.
 #' @param tol Relative convergence tolerance where supported.
-#' @param seed Random seed for CPU/statistics and FAISS paths. The current cuVS
-#'   C API does not expose an explicit seed in the stable params structure.
+#' @param seed Random seed for CPU/statistics and FAISS paths. The current
+#'   direct cuVS C API path does not expose an explicit seed in the stable
+#'   params structure.
 #' @param n_threads Number of CPU threads for FAISS/statistics paths.
 #' @param streaming_batch_size cuVS host-data streaming batch size. `0` lets
 #'   cuVS choose its default.
@@ -29,7 +30,10 @@
 #' @export
 fast_kmeans <- function(data,
                         centers,
-                        backend = c("auto", "cpu", "faiss", "cuda", "cuda_cuvs", "cuvs"),
+                        backend = c(
+                          "auto", "cpu", "faiss", "cuda", "cuda_faiss",
+                          "faiss_gpu", "cuda_cuvs", "cuvs"
+                        ),
                         max_iter = 100L,
                         n_init = 1L,
                         tol = 1e-4,
@@ -67,14 +71,14 @@ fast_kmeans <- function(data,
 
   if (identical(backend, "auto")) {
     backend <- if (isTRUE(cuvs_available()) && isTRUE(cuda_available())) {
-      "cuda_cuvs"
+      "cuda"
     } else if (isTRUE(faiss_available())) {
       "faiss"
     } else {
       "cpu"
     }
   }
-  if (identical(backend, "cuda")) backend <- "cuda_cuvs"
+  if (identical(backend, "faiss_gpu")) backend <- "cuda_faiss"
   if (identical(backend, "cuvs")) backend <- "cuda_cuvs"
 
   if (identical(backend, "faiss")) {
@@ -96,6 +100,33 @@ fast_kmeans <- function(data,
       identical(init, "kmeans++")
     )
     return(finish_fast_kmeans(out, backend = "faiss", init = init))
+  }
+
+  if (identical(backend, "cuda")) {
+    return(run_cuda_kmeans(
+      x = x,
+      centers = centers,
+      max_iter = max_iter,
+      n_init = n_init,
+      tol = tol,
+      seed = seed,
+      streaming_batch_size = streaming_batch_size,
+      init = init,
+      allow_cuvs_fallback = TRUE
+    ))
+  }
+
+  if (identical(backend, "cuda_faiss")) {
+    out <- run_faiss_gpu_kmeans(
+      x = x,
+      centers = centers,
+      max_iter = max_iter,
+      n_init = n_init,
+      tol = tol,
+      seed = seed,
+      init = init
+    )
+    return(finish_fast_kmeans(out, backend = "cuda_faiss", init = init))
   }
 
   if (identical(backend, "cuda_cuvs")) {
@@ -155,6 +186,92 @@ fast_kmeans <- function(data,
   )
   class(out) <- c("faissR_kmeans", "fastEmbedR_kmeans", "kmeans")
   out
+}
+
+run_cuda_kmeans <- function(x,
+                            centers,
+                            max_iter,
+                            n_init,
+                            tol,
+                            seed,
+                            streaming_batch_size,
+                            init,
+                            allow_cuvs_fallback = TRUE) {
+  faiss_error <- NULL
+  if (isTRUE(faiss_available())) {
+    out <- tryCatch(
+      run_faiss_gpu_kmeans(
+        x = x,
+        centers = centers,
+        max_iter = max_iter,
+        n_init = n_init,
+        tol = tol,
+        seed = seed,
+        init = init
+      ),
+      error = function(e) {
+        faiss_error <<- conditionMessage(e)
+        NULL
+      }
+    )
+    if (!is.null(out)) {
+      return(finish_fast_kmeans(out, backend = "cuda_faiss", init = init))
+    }
+  }
+
+  if (allow_cuvs_fallback && isTRUE(cuvs_available()) && isTRUE(cuda_available())) {
+    out <- kmeans_cuvs_cpp(
+      x,
+      as.integer(centers),
+      as.integer(max_iter),
+      as.integer(n_init),
+      as.numeric(tol),
+      as.integer(streaming_batch_size),
+      identical(init, "kmeans++")
+    )
+    return(finish_fast_kmeans(out, backend = "cuda_cuvs", init = init))
+  }
+
+  cuvs_note <- if (isTRUE(cuvs_available()) && isTRUE(cuda_available())) {
+    "direct cuVS is available but was not used"
+  } else {
+    "direct cuVS is unavailable"
+  }
+  if (is.null(faiss_error)) {
+    faiss_error <- "FAISS GPU k-means was not attempted because FAISS is unavailable"
+  }
+  stop(
+    "CUDA k-means is not available. FAISS GPU status: ",
+    faiss_error,
+    "; cuVS status: ",
+    cuvs_note,
+    ".",
+    call. = FALSE
+  )
+}
+
+run_faiss_gpu_kmeans <- function(x,
+                                 centers,
+                                 max_iter,
+                                 n_init,
+                                 tol,
+                                 seed,
+                                 init) {
+  if (!isTRUE(faiss_available())) {
+    stop(
+      "FAISS GPU k-means requires faissR to be built with FAISS.",
+      call. = FALSE
+    )
+  }
+  kmeans_faiss_gpu_cpp(
+    x,
+    as.integer(centers),
+    as.integer(max_iter),
+    as.integer(n_init),
+    as.numeric(tol),
+    as.integer(seed),
+    identical(init, "kmeans++")
+  )
 }
 
 finish_fast_kmeans <- function(out, backend, init) {
