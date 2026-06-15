@@ -277,3 +277,7 @@ row_candidate_knn_metal_subset_handle_cpp <- function(handle, candidate_indices,
     .Call(`_faissR_row_candidate_knn_metal_subset_handle_cpp`, handle, candidate_indices, query_rows, k, return_distances)
 }
 
+sparse_nn_cpp <- function(data, points, k, metric, exclude_self, self_query) {
+    .Call(`_faissR_sparse_nn_cpp`, data, points, k, metric, exclude_self, self_query)
+}
+

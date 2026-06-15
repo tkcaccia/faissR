@@ -1,5 +1,6 @@
 useDynLib(faissR, .registration = TRUE)
 importFrom(Rcpp, evalCpp)
+importFrom(methods, as)
 importFrom(stats, dist)
 export(backend_info)
 export(candidate_knn)

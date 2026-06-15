@@ -18,9 +18,11 @@ URL: https://github.com/tkcaccia/faissR
 BugReports: https://github.com/tkcaccia/faissR/issues
 Encoding: UTF-8
 Imports:
+    methods,
     Rcpp
 Suggests:
     igraph,
+    Matrix,
     RcppHNSW,
     testthat
 LinkingTo:

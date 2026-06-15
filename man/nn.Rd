@@ -8,31 +8,33 @@ nn(
   data,
   points = data,
   k = NULL,
-  backend = c("auto", "cpu", "cpu_approx", "cpu_grid", "grid", "cpu_grid2d", "grid2d",
-    "cpu_grid3d", "grid3d", "vptree", "cpu_vptree", "hnsw", "rcpphnsw", "cpu_hnsw",
-    "faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat", "faiss_flat_l2",
-    "faiss_flat_ip", "faiss_ivf", "faiss_ivf_flat", "cpu_faiss_index_ivf", "faiss_ivfpq",
-    "faiss_hnsw", "faiss_nsg", "faiss_nndescent", "faiss_gpu_flat", "faiss_gpu_flat_l2",
-    "faiss_gpu_flat_ip", "cuda_faiss_flat_l2", "cuda_faiss_flat_ip", "faiss_gpu_ivf",
-    "faiss_gpu_ivf_flat", 
-     "faiss_gpu_ivfpq", "cuda_faiss_ivf_flat",
-    "cuda_faiss_ivfpq", "cuvs", "gpu_cuvs", "cuda_cuvs", "cuda_cuvs_cagra", "cuda_cagra",
-    "gpu_cagra", "cuvs_ivf", "cuda_cuvs_ivf", "cuvs_ivf_flat", "cuda_cuvs_ivf_flat",
-    "cuvs_ivfpq", "cuda_cuvs_ivfpq", "cuvs_ivf_pq", "cuda_cuvs_ivf_pq",
-    "cuvs_bruteforce", "cuda_cuvs_bruteforce", "cuda_cuvs_exact", "cuvs_nndescent",
-    "cuda_cuvs_nndescent", "cuda_grid", "cuda_grid_auto", "gpu_grid", "cuda_grid2d",
-    "cuda_grid3d", "gpu", "cuda", "cuda_approx", "cuda_nndescent", 
-     "cuda_ivf",
-    "cuda_faiss"),
+  backend = c("auto", "cpu", "cpu_approx", "cpu_grid", "grid", "cpu_sparse", "sparse",
+    "sparse_cpu", "cpu_grid2d", "grid2d", "cpu_grid3d", "grid3d", "vptree", "cpu_vptree",
+    "hnsw", "rcpphnsw", "cpu_hnsw", "faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat",
+    "faiss_flat_l2", "faiss_flat_ip", "faiss_ivf", "faiss_ivf_flat",
+    "cpu_faiss_index_ivf", "faiss_ivfpq", "faiss_hnsw", "faiss_nsg", "faiss_nndescent",
+    "faiss_gpu_flat", "faiss_gpu_flat_l2", "faiss_gpu_flat_ip", "cuda_faiss_flat_l2",
+    "cuda_faiss_flat_ip", "faiss_gpu_ivf", 
+     "faiss_gpu_ivf_flat", "faiss_gpu_ivfpq",
+    "cuda_faiss_ivf_flat", "cuda_faiss_ivfpq", "cuvs", "gpu_cuvs", "cuda_cuvs",
+    "cuda_cuvs_cagra", "cuda_cagra", "gpu_cagra", "cuvs_ivf", "cuda_cuvs_ivf",
+    "cuvs_ivf_flat", "cuda_cuvs_ivf_flat", "cuvs_ivfpq", "cuda_cuvs_ivfpq",
+    "cuvs_ivf_pq", "cuda_cuvs_ivf_pq", "cuvs_bruteforce", "cuda_cuvs_bruteforce",
+    "cuda_cuvs_exact", "cuvs_nndescent", "cuda_cuvs_nndescent", "cuda_grid",
+    "cuda_grid_auto", "gpu_grid", "cuda_grid2d", "cuda_grid3d", "gpu", "cuda",
+    "cuda_approx", 
+     "cuda_nndescent", "cuda_ivf", "cuda_faiss"),
   metric = c("euclidean", "cosine", "correlation"),
   n_threads = NULL
 )
 }
 \arguments{
-\item{data}{Numeric matrix of reference observations in rows.}
+\item{data}{Numeric matrix/data frame or sparse `Matrix` object of reference
+observations in rows. Sparse inputs use the native exact `dgCMatrix`
+backend for `backend = "auto"` or `"cpu"`.}
 
-\item{points}{Numeric matrix of query observations in rows. Defaults to
-`data`.}
+\item{points}{Numeric matrix/data frame or sparse `Matrix` object of query
+observations in rows. Defaults to `data`.}
 
 \item{k}{Number of neighbors to return. `NULL` chooses the package's
 automatic neighborhood size and includes the self-neighbor when `points`
@@ -49,6 +51,10 @@ Euclidean self-KNN or reference/query KNN.
 `"cuda_grid_auto"`/`"cuda_grid"` chooses the native CUDA exact 2D or 3D
 grid implementation for Euclidean self-KNN only; it does not silently
 fall back to CPU.
+`"cpu_sparse"`/`"sparse"` forces the native exact sparse `dgCMatrix` CPU
+path for Euclidean, cosine, and correlation distances. Explicit dense
+accelerator backends convert sparse input to dense matrices because
+FAISS/cuVS/Metal kernels operate on dense row vectors.
 `"hnsw"`/`"rcpphnsw"` uses the optional CRAN package RcppHNSW.
 `"faiss"` uses the real FAISS C++ `IndexFlatL2` backend when faissR was
 built against FAISS. `"faiss_ivf"`, `"faiss_ivfpq"`, `"faiss_hnsw"`,

@@ -221,5 +221,5 @@ fi
     echo "NVCC = $nvcc"
     printf "%s" "$cuda_rule"
   fi
-  echo "OBJECTS = RcppExports.o embedding_utils.o graph.o nn.o nn_fortran.o $faiss_objects $cuvs_objects $metal_objects nn_cuda_bridge.o $cuda_objects"
+  echo "OBJECTS = RcppExports.o embedding_utils.o graph.o nn.o nn_sparse.o nn_fortran.o $faiss_objects $cuvs_objects $metal_objects nn_cuda_bridge.o $cuda_objects"
 } > src/Makevars

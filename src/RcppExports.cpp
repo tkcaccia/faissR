@@ -1035,6 +1035,22 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// sparse_nn_cpp
+List sparse_nn_cpp(S4 data, S4 points, int k, std::string metric, bool exclude_self, bool self_query);
+RcppExport SEXP _faissR_sparse_nn_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP metricSEXP, SEXP exclude_selfSEXP, SEXP self_querySEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< S4 >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< S4 >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
+    Rcpp::traits::input_parameter< bool >::type self_query(self_querySEXP);
+    rcpp_result_gen = Rcpp::wrap(sparse_nn_cpp(data, points, k, metric, exclude_self, self_query));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_faissR_standardize_cpu_cpp", (DL_FUNC) &_faissR_standardize_cpu_cpp, 1},
@@ -1106,6 +1122,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_metal_knn_data_handle_cpp", (DL_FUNC) &_faissR_metal_knn_data_handle_cpp, 1},
     {"_faissR_row_candidate_knn_metal_handle_cpp", (DL_FUNC) &_faissR_row_candidate_knn_metal_handle_cpp, 4},
     {"_faissR_row_candidate_knn_metal_subset_handle_cpp", (DL_FUNC) &_faissR_row_candidate_knn_metal_subset_handle_cpp, 5},
+    {"_faissR_sparse_nn_cpp", (DL_FUNC) &_faissR_sparse_nn_cpp, 6},
     {NULL, NULL, 0}
 };
 

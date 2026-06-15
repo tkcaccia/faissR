@@ -22,6 +22,92 @@ test_that("nn returns exact euclidean neighbors", {
   expect_equal(unname(out$distances), unname(expected_dst))
 })
 
+test_that("nn accepts sparse Matrix inputs on the native sparse CPU path", {
+  skip_if_not_installed("Matrix")
+  x <- matrix(c(
+    0, 0, 1, 0,
+    1, 0, 0, 0,
+    0, 2, 0, 0,
+    3, 0, 0, 4
+  ), ncol = 4, byrow = TRUE)
+  sx <- Matrix::Matrix(x, sparse = TRUE)
+
+  dense <- nn(x, k = 3L, backend = "cpu")
+  sparse <- nn(sx, k = 3L, backend = "auto")
+
+  expect_equal(attr(sparse, "backend"), "cpu_sparse")
+  expect_true(isTRUE(attr(sparse, "exact")))
+  expect_equal(unname(sparse$indices), unname(dense$indices))
+  expect_equal(unname(sparse$distances), unname(dense$distances), tolerance = 1e-12)
+  expect_true(isTRUE(attr(sparse, "sparse")$input))
+})
+
+test_that("nn sparse query path matches dense query path", {
+  skip_if_not_installed("Matrix")
+  data <- matrix(c(
+    0, 0, 1,
+    1, 0, 0,
+    0, 2, 0,
+    2, 2, 1
+  ), ncol = 3, byrow = TRUE)
+  points <- matrix(c(
+    1, 0, 0,
+    0, 1, 1
+  ), ncol = 3, byrow = TRUE)
+
+  dense <- nn(data, points, k = 2L, backend = "cpu")
+  sparse <- nn(
+    Matrix::Matrix(data, sparse = TRUE),
+    Matrix::Matrix(points, sparse = TRUE),
+    k = 2L,
+    backend = "cpu_sparse"
+  )
+
+  expect_equal(attr(sparse, "backend"), "cpu_sparse")
+  expect_equal(unname(sparse$indices), unname(dense$indices))
+  expect_equal(unname(sparse$distances), unname(dense$distances), tolerance = 1e-12)
+})
+
+test_that("nn sparse cosine and correlation match dense CPU", {
+  skip_if_not_installed("Matrix")
+  x <- matrix(c(
+    1, 0, 0, 2,
+    0, 1, 0, 0,
+    1, 1, 0, 0,
+    0, 0, 3, 0
+  ), ncol = 4, byrow = TRUE)
+  sx <- Matrix::Matrix(x, sparse = TRUE)
+
+  dense_cos <- nn(x, k = 3L, backend = "cpu", metric = "cosine")
+  sparse_cos <- nn(sx, k = 3L, backend = "cpu_sparse", metric = "cosine")
+  expect_equal(unname(sparse_cos$indices), unname(dense_cos$indices))
+  expect_equal(unname(sparse_cos$distances), unname(dense_cos$distances), tolerance = 1e-12)
+
+  dense_cor <- nn(x, k = 3L, backend = "cpu", metric = "correlation")
+  sparse_cor <- nn(sx, k = 3L, backend = "cpu_sparse", metric = "correlation")
+  expect_equal(unname(sparse_cor$indices), unname(dense_cor$indices))
+  expect_equal(unname(sparse_cor$distances), unname(dense_cor$distances), tolerance = 1e-12)
+})
+
+test_that("nn_without_self works with sparse Matrix input", {
+  skip_if_not_installed("Matrix")
+  x <- matrix(c(
+    0, 0, 1,
+    1, 0, 0,
+    0, 2, 0,
+    2, 2, 1
+  ), ncol = 3, byrow = TRUE)
+  sx <- Matrix::Matrix(x, sparse = TRUE)
+
+  dense <- nn_without_self(x, k = 2L, backend = "cpu")
+  sparse <- nn_without_self(sx, k = 2L, backend = "auto")
+
+  expect_equal(attr(sparse, "backend"), "cpu_sparse")
+  expect_equal(unname(sparse$indices), unname(dense$indices))
+  expect_equal(unname(sparse$distances), unname(dense$distances), tolerance = 1e-12)
+  expect_false(any(sparse$indices[, 1L] == seq_len(nrow(x))))
+})
+
 test_that("nn returns exact cosine neighbors on CPU", {
   x <- matrix(c(
     1, 0,

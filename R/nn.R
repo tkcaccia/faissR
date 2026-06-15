@@ -6,6 +6,28 @@ nn_compute <- function(data,
                        exclude_self = FALSE,
                        n_threads = NULL,
                        metric = "euclidean") {
+  data_sparse <- is_sparse_matrix_input(data)
+  points_sparse <- if (isTRUE(points_missing)) data_sparse else is_sparse_matrix_input(points)
+  if (isTRUE(data_sparse) || isTRUE(points_sparse)) {
+    sparse_native <- backend %in% c("auto", "cpu", "sparse", "cpu_sparse", "sparse_cpu")
+    if (isTRUE(sparse_native)) {
+      return(nn_sparse_compute(
+        data = data,
+        points = points,
+        k = k,
+        backend = backend,
+        points_missing = points_missing,
+        exclude_self = exclude_self,
+        metric = metric
+      ))
+    }
+    warning(
+      "Sparse input is being converted to a dense matrix for backend `",
+      backend,
+      "`. Use `backend = \"cpu_sparse\"` to keep the exact sparse CPU path.",
+      call. = FALSE
+    )
+  }
   data <- as.matrix(data)
   storage.mode(data) <- "double"
   if (isTRUE(points_missing)) {
@@ -798,6 +820,98 @@ nn_compute <- function(data,
     isTRUE(exclude_self)
   )
   finish_nn_result(out, "cpu", k, self_query, metric = metric)
+}
+
+is_sparse_matrix_input <- function(x) {
+  inherits(x, "sparseMatrix") || inherits(x, "dgCMatrix")
+}
+
+as_dgCMatrix_input <- function(x, name) {
+  if (inherits(x, "dgCMatrix")) return(x)
+  if (is_sparse_matrix_input(x)) {
+    return(methods::as(x, "dgCMatrix"))
+  }
+  if (!is.matrix(x) && !is.data.frame(x)) {
+    stop("`", name, "` must be a matrix, data frame, or sparse Matrix object.", call. = FALSE)
+  }
+  if (!requireNamespace("Matrix", quietly = TRUE)) {
+    stop(
+      "Dense-to-sparse conversion requires the Matrix package. ",
+      "Install Matrix or pass a dgCMatrix object.",
+      call. = FALSE
+    )
+  }
+  x <- as.matrix(x)
+  storage.mode(x) <- "double"
+  Matrix::Matrix(x, sparse = TRUE)
+}
+
+nn_sparse_compute <- function(data,
+                              points,
+                              k,
+                              backend,
+                              points_missing,
+                              exclude_self,
+                              metric) {
+  metric <- normalize_nn_metric(metric)
+  data <- as_dgCMatrix_input(data, "data")
+  points <- if (isTRUE(points_missing)) {
+    data
+  } else {
+    as_dgCMatrix_input(points, "points")
+  }
+  if (!identical(ncol(data), ncol(points))) {
+    stop("`data` and `points` must have the same number of columns.", call. = FALSE)
+  }
+  if (nrow(data) < 1L || nrow(points) < 1L) {
+    stop("`data` and `points` must have at least one row.", call. = FALSE)
+  }
+  self_query <- isTRUE(points_missing) || (
+    nrow(data) == nrow(points) &&
+      ncol(data) == ncol(points) &&
+      identical(data, points)
+  )
+  if (isTRUE(exclude_self) && !isTRUE(self_query)) {
+    stop("Self-neighbor exclusion is only valid when `points` is `data`.", call. = FALSE)
+  }
+  if (is.null(k)) {
+    k <- if (nrow(data) == 1L) {
+      1L
+    } else {
+      min(
+        nrow(data),
+        auto_k(nrow(data), include_self = isTRUE(self_query) && !isTRUE(exclude_self))
+      )
+    }
+  }
+  k <- as.integer(k)
+  if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L) {
+    stop("`k` must be NULL or a positive integer.", call. = FALSE)
+  }
+  max_k <- if (isTRUE(exclude_self)) nrow(data) - 1L else nrow(data)
+  if (k > max_k) {
+    stop("`k` cannot be larger than the available neighbor count.", call. = FALSE)
+  }
+  if (!all(is.finite(data@x)) || !all(is.finite(points@x))) {
+    stop("`data` and `points` must contain only finite values.", call. = FALSE)
+  }
+  out <- sparse_nn_cpp(
+    data,
+    points,
+    as.integer(k),
+    metric,
+    isTRUE(exclude_self),
+    isTRUE(self_query)
+  )
+  result <- finish_nn_result(out, "cpu_sparse", k, self_query, exact = TRUE, metric = metric)
+  attr(result, "sparse") <- list(
+    input = TRUE,
+    backend = "native_dgCMatrix_exact",
+    data_nnz = length(data@x),
+    points_nnz = length(points@x),
+    requested_backend = backend
+  )
+  result
 }
 
 resolve_auto_knn_gpu_backend <- function(backend,
@@ -3014,9 +3128,11 @@ grid_self_knn <- function(data,
 #' two- or three-dimensional Euclidean self-KNN: it chooses the native 2D or 3D
 #' CUDA grid kernel and errors clearly when CUDA is unavailable.
 #'
-#' @param data Numeric matrix of reference observations in rows.
-#' @param points Numeric matrix of query observations in rows. Defaults to
-#'   `data`.
+#' @param data Numeric matrix/data frame or sparse `Matrix` object of reference
+#'   observations in rows. Sparse inputs use the native exact `dgCMatrix`
+#'   backend for `backend = "auto"` or `"cpu"`.
+#' @param points Numeric matrix/data frame or sparse `Matrix` object of query
+#'   observations in rows. Defaults to `data`.
 #' @param k Number of neighbors to return. `NULL` chooses the package's
 #'   automatic neighborhood size and includes the self-neighbor when `points`
 #'   is `data`.
@@ -3031,6 +3147,10 @@ grid_self_knn <- function(data,
 #'   `"cuda_grid_auto"`/`"cuda_grid"` chooses the native CUDA exact 2D or 3D
 #'   grid implementation for Euclidean self-KNN only; it does not silently
 #'   fall back to CPU.
+#'   `"cpu_sparse"`/`"sparse"` forces the native exact sparse `dgCMatrix` CPU
+#'   path for Euclidean, cosine, and correlation distances. Explicit dense
+#'   accelerator backends convert sparse input to dense matrices because
+#'   FAISS/cuVS/Metal kernels operate on dense row vectors.
 #'   `"hnsw"`/`"rcpphnsw"` uses the optional CRAN package RcppHNSW.
 #'   `"faiss"` uses the real FAISS C++ `IndexFlatL2` backend when faissR was
 #'   built against FAISS. `"faiss_ivf"`, `"faiss_ivfpq"`, `"faiss_hnsw"`,
@@ -3093,6 +3213,7 @@ nn <- function(data,
                k = NULL,
                backend = c(
                  "auto", "cpu", "cpu_approx", "cpu_grid", "grid",
+                 "cpu_sparse", "sparse", "sparse_cpu",
                  "cpu_grid2d", "grid2d", "cpu_grid3d", "grid3d",
                  "vptree", "cpu_vptree", "hnsw", "rcpphnsw", "cpu_hnsw",
                  "faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat", "faiss_flat_l2",
@@ -3136,7 +3257,8 @@ nn <- function(data,
 #' self-neighbour should be removed. It returns exactly `k` non-self neighbours
 #' per observation.
 #'
-#' @param data Numeric matrix or data frame with observations in rows.
+#' @param data Numeric matrix/data frame or sparse `Matrix` object with
+#'   observations in rows.
 #' @param k Number of non-self neighbours to return.
 #' @param backend Nearest-neighbour backend. `"auto"` chooses CUDA/cuVS when
 #'   available, then FAISS, then RcppHNSW/CPU fallbacks.
@@ -3149,6 +3271,7 @@ nn_without_self <- function(data,
                             k,
                             backend = c(
                               "auto", "cpu", "cpu_approx", "cpu_grid", "grid",
+                              "cpu_sparse", "sparse", "sparse_cpu",
                               "cpu_grid2d", "grid2d", "cpu_grid3d", "grid3d",
                               "vptree", "cpu_vptree", "hnsw", "rcpphnsw", "cpu_hnsw",
                               "faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat", "faiss_flat_l2",

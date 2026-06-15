@@ -1,4 +1,4 @@
 CXX_STD = CXX20
 PKG_CPPFLAGS = -I"$(FAISS_HOME)/include"
 PKG_LIBS = -L"$(FAISS_HOME)/lib" -lfaiss
-OBJECTS = RcppExports.o embedding_utils.o graph.o nn.o nn_fortran.o nn_faiss_bridge.o nn_faiss_impl.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_metal_bridge.o nn_metal_stub.o nn_cuda_bridge.o nn_cuda_stub.o
+OBJECTS = RcppExports.o embedding_utils.o graph.o nn.o nn_sparse.o nn_fortran.o nn_faiss_bridge.o nn_faiss_impl.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_metal_bridge.o nn_metal_stub.o nn_cuda_bridge.o nn_cuda_stub.o
