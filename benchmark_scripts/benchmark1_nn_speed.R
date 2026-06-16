@@ -723,7 +723,11 @@ if (worker) {
     row$peak_rss_gb <- read_peak_rss_gb()
   }, error = function(e) {
     row$status <- "failed"
-    row$error <- conditionMessage(e)
+    msg <- conditionMessage(e)
+    if (!nzchar(msg)) {
+      msg <- paste("native backend failed without an R condition message:", method)
+    }
+    row$error <- msg
     row$time_sec <- proc.time()[["elapsed"]] - started_total
     row$peak_rss_gb <- read_peak_rss_gb()
   })

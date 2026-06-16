@@ -514,10 +514,14 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
   while (pq_nbits > 4 && (1 << pq_nbits) > n_data) {
     --pq_nbits;
   }
+  const int max_full_precision_lut_entries = 49152 / (static_cast<int>(sizeof(float)) * (1 << pq_nbits));
+  while (pq_m > 1 && pq_m > max_full_precision_lut_entries) --pq_m;
+  while (pq_m > 1 && (n_features % pq_m) != 0) --pq_m;
   faiss::gpu::StandardGpuResources resources;
   faiss::gpu::GpuIndexIVFPQConfig config;
   config.device = 0;
-  config.useFloat16LookupTables = true;
+  // Full-precision lookup tables are safer for raw, unscaled benchmark data.
+  config.useFloat16LookupTables = false;
   faiss::gpu::GpuIndexIVFPQ index(
     &resources,
     n_features,
