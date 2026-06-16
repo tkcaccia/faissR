@@ -51,6 +51,21 @@ The old `FASTEMBEDR_USE_CUDA` and `FASTEMBEDR_USE_CUVS` environment variables
 are still accepted by `configure` for compatibility with existing benchmark
 scripts. FAISS is always required.
 
+## FAISS GPU with cuVS
+
+`faissR` distinguishes two GPU/cuVS routes:
+
+- FAISS GPU indexes with NVIDIA cuVS integration, exposed through FAISS-backed
+  backends such as `faiss_gpu_ivf_flat` and `faiss_gpu_ivfpq`. When the linked
+  FAISS library was built with cuVS support, these paths report backend labels
+  such as `GpuIndexIVFFlat_cuVS` and `GpuIndexIVFPQ_cuVS`.
+- Direct RAPIDS cuVS calls, exposed through explicit backends such as
+  `cuda_cuvs_cagra`, `cuda_cuvs_nndescent`, `cuda_cuvs_bruteforce`,
+  `cuda_cuvs_ivf_flat`, and `cuda_cuvs_ivfpq`.
+
+Use `backend_info()` and the `backend` attribute returned by `nn()` to confirm
+which route a result used.
+
 ## Example
 
 ```r

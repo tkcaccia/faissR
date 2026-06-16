@@ -30,3 +30,6 @@
 ^\.DS_Store$
 ^\.pytest_cache$
 ^\.pytest_cache/
+
+^benchmark_scripts$
+^benchmark_scripts/

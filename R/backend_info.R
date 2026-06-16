@@ -18,18 +18,44 @@ backend_info <- function() {
   cuvs <- cuvs_summary()
 
   data.frame(
-    backend = c("cpu", "faiss", "cuvs", "cuda", "metal"),
-    available = c(TRUE, faiss_knn, cuvs_knn, cuda_knn, metal_knn),
-    knn_available = c(TRUE, faiss_knn, cuvs_knn, cuda_knn, metal_knn),
-    explicit_backend = c("cpu", "faiss", "cuda_cuvs", "cuda", "metal"),
-    device = c(cpu_summary(), faiss$device, cuvs$device, cuda$device, metal$device),
-    runtime = c(R.version$platform, faiss$runtime, cuvs$runtime, cuda$runtime, metal$runtime),
+    backend = c("cpu", "faiss", "faiss_gpu_cuvs", "cuvs", "cuda", "metal"),
+    available = c(TRUE, faiss_knn, faiss_knn && cuda_knn, cuvs_knn, cuda_knn, metal_knn),
+    knn_available = c(TRUE, faiss_knn, faiss_knn && cuda_knn, cuvs_knn, cuda_knn, metal_knn),
+    explicit_backend = c(
+      "cpu",
+      "faiss",
+      "faiss_gpu_ivf_flat/faiss_gpu_ivfpq",
+      "cuda_cuvs",
+      "cuda",
+      "metal"
+    ),
+    device = c(
+      cpu_summary(),
+      faiss$device,
+      cuda$device,
+      cuvs$device,
+      cuda$device,
+      metal$device
+    ),
+    runtime = c(
+      R.version$platform,
+      faiss$runtime,
+      combine_nonempty(faiss$runtime, "FAISS GPU IVF indexes backed by NVIDIA cuVS when FAISS is built with cuVS"),
+      cuvs$runtime,
+      cuda$runtime,
+      metal$runtime
+    ),
     note = c(
       "Native CPU path is always available.",
       if (faiss_knn) {
         "Real FAISS C++ KNN is available for explicit FAISS requests."
       } else {
         "Real FAISS C++ KNN is unavailable; explicit FAISS requests will fail."
+      },
+      if (faiss_knn && cuda_knn) {
+        "FAISS GPU IVF-Flat and IVF-PQ use FAISS GPU indexes with NVIDIA cuVS integration when the linked FAISS library provides it; result backends report GpuIndexIVFFlat_cuVS or GpuIndexIVFPQ_cuVS."
+      } else {
+        "FAISS GPU cuVS-integrated IVF requests are unavailable; explicit FAISS GPU IVF requests will fail."
       },
       if (cuvs_knn) {
         "RAPIDS cuVS CUDA KNN is available for explicit cuVS requests."
