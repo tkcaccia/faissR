@@ -880,6 +880,24 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nn_faiss_gpu_cagra_cpp
+List nn_faiss_gpu_cagra_cpp(NumericMatrix data, NumericMatrix points, int k, int graph_degree, int intermediate_graph_degree, int search_width, int itopk_size, bool exclude_self);
+RcppExport SEXP _faissR_nn_faiss_gpu_cagra_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP graph_degreeSEXP, SEXP intermediate_graph_degreeSEXP, SEXP search_widthSEXP, SEXP itopk_sizeSEXP, SEXP exclude_selfSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type graph_degree(graph_degreeSEXP);
+    Rcpp::traits::input_parameter< int >::type intermediate_graph_degree(intermediate_graph_degreeSEXP);
+    Rcpp::traits::input_parameter< int >::type search_width(search_widthSEXP);
+    Rcpp::traits::input_parameter< int >::type itopk_size(itopk_sizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_gpu_cagra_cpp(data, points, k, graph_degree, intermediate_graph_degree, search_width, itopk_size, exclude_self));
+    return rcpp_result_gen;
+END_RCPP
+}
 // kmeans_faiss_cpp
 List kmeans_faiss_cpp(NumericMatrix data, int centers, int max_iter, int nredo, double tol, int seed, int n_threads, bool kmeans_plus_plus);
 RcppExport SEXP _faissR_kmeans_faiss_cpp(SEXP dataSEXP, SEXP centersSEXP, SEXP max_iterSEXP, SEXP nredoSEXP, SEXP tolSEXP, SEXP seedSEXP, SEXP n_threadsSEXP, SEXP kmeans_plus_plusSEXP) {
@@ -1111,6 +1129,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_faiss_nndescent_cpp", (DL_FUNC) &_faissR_nn_faiss_nndescent_cpp, 8},
     {"_faissR_nn_faiss_gpu_ivf_flat_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_ivf_flat_cpp, 6},
     {"_faissR_nn_faiss_gpu_ivfpq_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_ivfpq_cpp, 8},
+    {"_faissR_nn_faiss_gpu_cagra_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_cagra_cpp, 8},
     {"_faissR_kmeans_faiss_cpp", (DL_FUNC) &_faissR_kmeans_faiss_cpp, 8},
     {"_faissR_kmeans_faiss_gpu_cpp", (DL_FUNC) &_faissR_kmeans_faiss_gpu_cpp, 7},
     {"_faissR_metal_available_cpp", (DL_FUNC) &_faissR_metal_available_cpp, 0},

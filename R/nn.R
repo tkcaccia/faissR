@@ -436,6 +436,40 @@ nn_compute <- function(data,
     return(result)
   }
 
+  if (backend %in% c("faiss_gpu_cagra", "cuda_faiss_cagra")) {
+    if (!isTRUE(faiss_available())) {
+      stop(
+        "The real FAISS GPU CAGRA backend is not available in this build. ",
+        "Reinstall faissR with FAISS GPU/cuVS headers ",
+        "available through `FAISS_HOME`.",
+        call. = FALSE
+      )
+    }
+    params <- cuvs_cagra_params(nrow(data), k)
+    out <- nn_faiss_gpu_cagra_cpp(
+      data,
+      points,
+      as.integer(k),
+      as.integer(params$graph_degree),
+      as.integer(params$intermediate_graph_degree),
+      as.integer(params$search_width),
+      as.integer(params$itopk_size),
+      isTRUE(exclude_self)
+    )
+    result <- finish_nn_result(out, "faiss_gpu_cagra", k, self_query, exact = FALSE)
+    attr(result, "approximation") <- list(
+      strategy = "faiss_gpu_GpuIndexCagra_cuVS",
+      backend = "faiss_gpu_cagra",
+      library = "faiss",
+      accelerator = "cuda",
+      graph_degree = as.integer(out$graph_degree),
+      intermediate_graph_degree = as.integer(out$intermediate_graph_degree),
+      search_width = as.integer(out$search_width),
+      itopk_size = as.integer(out$itopk_size)
+    )
+    return(result)
+  }
+
   if (identical(backend, "faiss_hnsw")) {
     if (!isTRUE(faiss_available())) {
       stop(
@@ -3222,6 +3256,7 @@ nn <- function(data,
                  "faiss_gpu_flat", "faiss_gpu_flat_l2", "faiss_gpu_flat_ip",
                  "cuda_faiss_flat_l2", "cuda_faiss_flat_ip",
                  "faiss_gpu_ivf", "faiss_gpu_ivf_flat", "faiss_gpu_ivfpq",
+                 "faiss_gpu_cagra", "cuda_faiss_cagra",
                  "cuda_faiss_ivf_flat", "cuda_faiss_ivfpq",
                  "cuvs", "gpu_cuvs", "cuda_cuvs", "cuda_cuvs_cagra",
                  "cuda_cagra", "gpu_cagra",
@@ -3280,6 +3315,7 @@ nn_without_self <- function(data,
                               "faiss_gpu_flat", "faiss_gpu_flat_l2", "faiss_gpu_flat_ip",
                               "cuda_faiss_flat_l2", "cuda_faiss_flat_ip",
                               "faiss_gpu_ivf", "faiss_gpu_ivf_flat", "faiss_gpu_ivfpq",
+                              "faiss_gpu_cagra", "cuda_faiss_cagra",
                               "cuda_faiss_ivf_flat", "cuda_faiss_ivfpq",
                               "cuvs", "gpu_cuvs", "cuda_cuvs", "cuda_cuvs_cagra",
                               "cuda_cagra", "gpu_cagra",

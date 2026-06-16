@@ -24,7 +24,7 @@ backend_info <- function() {
     explicit_backend = c(
       "cpu",
       "faiss",
-      "faiss_gpu_ivf_flat/faiss_gpu_ivfpq",
+      "faiss_gpu_ivf_flat/faiss_gpu_ivfpq/faiss_gpu_cagra",
       "cuda_cuvs",
       "cuda",
       "metal"
@@ -40,7 +40,7 @@ backend_info <- function() {
     runtime = c(
       R.version$platform,
       faiss$runtime,
-      combine_nonempty(faiss$runtime, "FAISS GPU IVF indexes backed by NVIDIA cuVS when FAISS is built with cuVS"),
+      combine_nonempty(faiss$runtime, "FAISS GPU IVF and CAGRA indexes backed by NVIDIA cuVS when FAISS is built with cuVS"),
       cuvs$runtime,
       cuda$runtime,
       metal$runtime
@@ -53,9 +53,9 @@ backend_info <- function() {
         "Real FAISS C++ KNN is unavailable; explicit FAISS requests will fail."
       },
       if (faiss_knn && cuda_knn) {
-        "FAISS GPU IVF-Flat and IVF-PQ use FAISS GPU indexes with NVIDIA cuVS integration when the linked FAISS library provides it; result backends report GpuIndexIVFFlat_cuVS or GpuIndexIVFPQ_cuVS."
+        "FAISS GPU IVF-Flat, IVF-PQ, and CAGRA use FAISS GPU indexes with NVIDIA cuVS integration when the linked FAISS library provides it; result backends report GpuIndexIVFFlat_cuVS, GpuIndexIVFPQ_cuVS, or GpuIndexCagra_cuVS."
       } else {
-        "FAISS GPU cuVS-integrated IVF requests are unavailable; explicit FAISS GPU IVF requests will fail."
+        "FAISS GPU cuVS-integrated IVF/CAGRA requests are unavailable; explicit FAISS GPU IVF/CAGRA requests will fail."
       },
       if (cuvs_knn) {
         "RAPIDS cuVS CUDA KNN is available for explicit cuVS requests."

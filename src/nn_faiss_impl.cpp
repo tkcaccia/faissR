@@ -32,6 +32,11 @@
 #include <faiss/gpu/GpuIndexIVFPQ.h>
 #endif
 
+#if defined(FASTEMBEDR_HAS_FAISS_GPU) && __has_include(<faiss/gpu/GpuIndexCagra.h>)
+#define FASTEMBEDR_HAS_FAISS_GPU_CAGRA 1
+#include <faiss/gpu/GpuIndexCagra.h>
+#endif
+
 using Rcpp::IntegerMatrix;
 using Rcpp::List;
 using Rcpp::NumericMatrix;
@@ -551,6 +556,97 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
   Rcpp::stop(
     "FAISS GPU IVF-PQ backend is not available in this build. "
     "Install FAISS GPU/cuVS headers and rebuild faissR with FAISS_HOME set."
+  );
+#endif
+}
+
+List faiss_gpu_cagra_knn_impl(NumericMatrix data,
+                              NumericMatrix points,
+                              int k,
+                              int graph_degree,
+                              int intermediate_graph_degree,
+                              int search_width,
+                              int itopk_size,
+                              bool exclude_self) {
+#ifdef FASTEMBEDR_HAS_FAISS_GPU_CAGRA
+  validate_inputs(data, points, k, exclude_self);
+  const bool self_query = exclude_self || same_matrix_storage(data, points);
+  const int n_data = data.nrow();
+  const int n_points = points.nrow();
+  const int n_features = data.ncol();
+  const int search_k = exclude_self ? std::min(n_data, k + 1) : k;
+
+  graph_degree = clamp_positive(graph_degree, std::max(64, k + 1), n_data - 1);
+  intermediate_graph_degree = clamp_positive(
+    intermediate_graph_degree,
+    std::max(128, graph_degree * 2),
+    n_data - 1
+  );
+  intermediate_graph_degree = std::max(intermediate_graph_degree, graph_degree);
+  itopk_size = clamp_positive(itopk_size, std::max(64, graph_degree), 4096);
+  itopk_size = std::max(itopk_size, search_k);
+  search_width = std::max(1, search_width);
+
+  std::vector<float> xb;
+  std::vector<float> xq;
+  copy_row_major_float(data, xb);
+  if (!same_matrix_storage(data, points)) {
+    copy_row_major_float(points, xq);
+  }
+  const float* query_ptr = same_matrix_storage(data, points) ? xb.data() : xq.data();
+
+  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::GpuIndexCagraConfig config;
+  config.device = 0;
+  config.graph_degree = static_cast<std::size_t>(graph_degree);
+  config.intermediate_graph_degree = static_cast<std::size_t>(intermediate_graph_degree);
+  config.store_dataset = true;
+  faiss::gpu::GpuIndexCagra index(
+    &resources,
+    n_features,
+    faiss::METRIC_L2,
+    config
+  );
+
+  std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
+  std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
+  try {
+    index.train(n_data, xb.data());
+    faiss::gpu::SearchParametersCagra params;
+    params.itopk_size = static_cast<std::size_t>(itopk_size);
+    params.search_width = static_cast<std::size_t>(search_width);
+    index.search(
+      n_points,
+      query_ptr,
+      search_k,
+      distances.data(),
+      labels.data(),
+      &params
+    );
+  } catch (const std::exception& e) {
+    Rcpp::stop("FAISS GpuIndexCagra search failed: %s", e.what());
+  }
+
+  List out = format_faiss_result(
+    labels, distances, n_points, search_k, k, self_query, exclude_self,
+    "GpuIndexCagra_cuVS", false, DistanceOutput::L2Squared,
+    NA_INTEGER, NA_INTEGER, graph_degree, search_width
+  );
+  out["intermediate_graph_degree"] = intermediate_graph_degree;
+  out["itopk_size"] = itopk_size;
+  return out;
+#else
+  (void)data;
+  (void)points;
+  (void)k;
+  (void)graph_degree;
+  (void)intermediate_graph_degree;
+  (void)search_width;
+  (void)itopk_size;
+  (void)exclude_self;
+  Rcpp::stop(
+    "FAISS GPU CAGRA backend is not available in this build. "
+    "Install FAISS GPU/cuVS headers with faiss/gpu/GpuIndexCagra.h and rebuild faissR."
   );
 #endif
 }

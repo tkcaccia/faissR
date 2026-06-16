@@ -79,6 +79,14 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
                               int pq_m,
                               int pq_nbits,
                               bool exclude_self);
+List faiss_gpu_cagra_knn_impl(NumericMatrix data,
+                              NumericMatrix points,
+                              int k,
+                              int graph_degree,
+                              int intermediate_graph_degree,
+                              int search_width,
+                              int itopk_size,
+                              bool exclude_self);
 List faiss_kmeans_impl(NumericMatrix data,
                        int centers,
                        int max_iter,
@@ -232,6 +240,27 @@ List nn_faiss_gpu_ivfpq_cpp(NumericMatrix data,
                             bool exclude_self) {
   return faiss_gpu_ivfpq_knn_impl(
     data, points, k, nlist, nprobe, pq_m, pq_nbits, exclude_self
+  );
+}
+
+// [[Rcpp::export]]
+List nn_faiss_gpu_cagra_cpp(NumericMatrix data,
+                            NumericMatrix points,
+                            int k,
+                            int graph_degree,
+                            int intermediate_graph_degree,
+                            int search_width,
+                            int itopk_size,
+                            bool exclude_self) {
+  return faiss_gpu_cagra_knn_impl(
+    data,
+    points,
+    k,
+    graph_degree,
+    intermediate_graph_degree,
+    search_width,
+    itopk_size,
+    exclude_self
   );
 }
 
