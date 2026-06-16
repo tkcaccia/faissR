@@ -10,9 +10,11 @@ Author: Stefano Caccia [aut, cre]
 Maintainer: Stefano Caccia <tkcaccia@gmail.com>
 Description: Native nearest-neighbour search, graph construction, k-nearest
     neighbour prediction, and k-means helpers for large dimensionality
-    reduction workflows. The package builds against the FAISS C++ library for
-    CPU indexes and can optionally use RAPIDS cuVS/CUDA indexes on NVIDIA
-    machines. CPU-only systems do not need NVIDIA libraries.
+    reduction workflows. The package builds against the FAISS C++ similarity
+    search library for CPU and GPU indexes, including FAISS GPU indexes backed
+    by NVIDIA cuVS when the linked FAISS build provides them. It can also
+    optionally call RAPIDS cuVS/CUDA directly on NVIDIA machines. CPU-only
+    systems do not need NVIDIA libraries.
 License: GPL (>= 3)
 URL: https://github.com/tkcaccia/faissR
 BugReports: https://github.com/tkcaccia/faissR/issues
@@ -27,6 +29,6 @@ Suggests:
     testthat
 LinkingTo:
     Rcpp
-SystemRequirements: C++20, Fortran, FAISS C++ library, optional RAPIDS cuVS library for backend = "cuda_cuvs", optional CUDA toolkit for CUDA KNN backends, Metal framework on macOS for optional native Metal candidate kernels
+SystemRequirements: C++20, Fortran, FAISS C++ library, optional CUDA-enabled FAISS build for FAISS GPU indexes, optional RAPIDS cuVS library for backend = "cuda_cuvs", optional CUDA toolkit for CUDA KNN backends, Metal framework on macOS for optional native Metal candidate kernels
 Config/roxygen2/version: 8.0.0
 Config/testthat/edition: 3
