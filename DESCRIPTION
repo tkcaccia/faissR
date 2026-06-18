@@ -29,6 +29,6 @@ Suggests:
     testthat
 LinkingTo:
     Rcpp
-SystemRequirements: C++20, Fortran, FAISS C++ library, optional CUDA-enabled FAISS build for FAISS GPU indexes, optional RAPIDS cuVS library for backend = "cuda_cuvs", optional CUDA toolkit for CUDA KNN backends, Metal framework on macOS for optional native Metal candidate kernels
+SystemRequirements: C++20, Fortran, FAISS C++ library, optional CUDA-enabled FAISS build for FAISS GPU indexes, optional RAPIDS cuVS library for backend = "cuda_cuvs", optional CUDA toolkit for CUDA KNN backends
 Config/roxygen2/version: 8.0.0
 Config/testthat/edition: 3

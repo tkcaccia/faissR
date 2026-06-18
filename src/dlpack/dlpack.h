@@ -24,7 +24,6 @@ typedef enum {
   kDLCUDAHost = 3,
   kDLOpenCL = 4,
   kDLVulkan = 7,
-  kDLMetal = 8,
   kDLVPI = 9,
   kDLROCM = 10,
   kDLROCMHost = 11,

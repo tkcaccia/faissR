@@ -13,10 +13,9 @@
 #' @param points Numeric query matrix with observations in rows. Defaults to
 #'   `data`, i.e. self-query candidate KNN.
 #' @param k Number of neighbours to return from each candidate row.
-#' @param backend `"auto"`/`"cpu"` for the general CPU implementation,
-#'   `"cuda"` for the native CUDA row-candidate kernel, or `"metal"` for the
-#'   native Metal candidate top-k kernel. GPU backends currently require
-#'   self-query Euclidean candidates with `exclude_self = TRUE`.
+#' @param backend `"auto"`/`"cpu"` for the general CPU implementation, or
+#'   `"cuda"` for the native CUDA row-candidate kernel. GPU backends currently
+#'   require self-query Euclidean candidates with `exclude_self = TRUE`.
 #' @param metric `"euclidean"`, `"cosine"`, or `"correlation"`. GPU candidate
 #'   kernels currently support Euclidean only.
 #' @param n_threads CPU threads for the CPU backend.
@@ -35,7 +34,7 @@ candidate_knn <- function(data,
                           candidates,
                           points = data,
                           k,
-                          backend = c("auto", "cpu", "cuda", "metal"),
+                          backend = c("auto", "cpu", "cuda"),
                           metric = c("euclidean", "cosine", "correlation"),
                           n_threads = NULL,
                           exclude_self = FALSE) {
@@ -89,29 +88,6 @@ candidate_knn <- function(data,
     }
     out <- row_candidate_knn_cuda_cpp(x, cand, as.integer(k))
     result <- finish_nn_result(out, "cuda_candidate", k, TRUE, exact = FALSE, metric = metric)
-    attr(result, "candidate_knn") <- list(
-      candidate_columns = as.integer(ncol(cand)),
-      exclude_self = isTRUE(exclude_self),
-      exact_within_candidates = TRUE
-    )
-    return(result)
-  }
-
-  if (identical(backend, "metal")) {
-    if (!identical(metric, "euclidean")) {
-      stop("Metal candidate KNN currently supports only `metric = \"euclidean\"`.", call. = FALSE)
-    }
-    if (!isTRUE(exclude_self)) {
-      stop("Metal candidate KNN currently requires `exclude_self = TRUE`.", call. = FALSE)
-    }
-    if (!isTRUE(self_query)) {
-      stop("Metal candidate KNN currently requires self-query candidates.", call. = FALSE)
-    }
-    if (!isTRUE(metal_available())) {
-      stop("No Metal backend is available on this machine.", call. = FALSE)
-    }
-    out <- candidate_topk_l2_batched_metal_cpp(x, cand, as.integer(k))
-    result <- finish_nn_result(out, "metal_candidate", k, TRUE, exact = FALSE, metric = metric)
     attr(result, "candidate_knn") <- list(
       candidate_columns = as.integer(ncol(cand)),
       exclude_self = isTRUE(exclude_self),

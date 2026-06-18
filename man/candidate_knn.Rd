@@ -9,7 +9,7 @@ candidate_knn(
   candidates,
   points = data,
   k,
-  backend = c("auto", "cpu", "cuda", "metal"),
+  backend = c("auto", "cpu", "cuda"),
   metric = c("euclidean", "cosine", "correlation"),
   n_threads = NULL,
   exclude_self = FALSE
@@ -27,10 +27,9 @@ entries are ignored.}
 
 \item{k}{Number of neighbours to return from each candidate row.}
 
-\item{backend}{`"auto"`/`"cpu"` for the general CPU implementation,
-`"cuda"` for the native CUDA row-candidate kernel, or `"metal"` for the
-native Metal candidate top-k kernel. GPU backends currently require
-self-query Euclidean candidates with `exclude_self = TRUE`.}
+\item{backend}{`"auto"`/`"cpu"` for the general CPU implementation, or
+`"cuda"` for the native CUDA row-candidate kernel. GPU backends currently
+require self-query Euclidean candidates with `exclude_self = TRUE`.}
 
 \item{metric}{`"euclidean"`, `"cosine"`, or `"correlation"`. GPU candidate
 kernels currently support Euclidean only.}

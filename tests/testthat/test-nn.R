@@ -721,11 +721,6 @@ test_that("removed nn compatibility options are not accepted", {
   expect_error(nn(data, point, k = 3, method = "manhattan"), "unused")
 })
 
-test_that("metal availability helper returns a logical scalar", {
-  expect_type(metal_available(), "logical")
-  expect_length(metal_available(), 1L)
-})
-
 test_that("cuda availability helper returns a logical scalar", {
   expect_type(cuda_available(), "logical")
   expect_length(cuda_available(), 1L)
@@ -744,7 +739,8 @@ test_that("cuvs availability helper returns a logical scalar", {
 test_that("backend_info reports native availability without crashing", {
   info <- backend_info()
   expect_s3_class(info, "data.frame")
-  expect_true(all(c("cpu", "faiss", "cuvs", "cuda", "metal") %in% info$backend))
+  expect_true(all(c("cpu", "faiss", "cuvs", "cuda") %in% info$backend))
+  expect_setequal(info$backend, c("cpu", "faiss", "faiss_gpu_cuvs", "cuvs", "cuda"))
   expect_true(all(c(
     "available",
     "knn_available",
@@ -760,11 +756,11 @@ test_that("backend_info reports native availability without crashing", {
   expect_match(cuda_info, "available")
 })
 
-test_that("Metal KNN backend is not part of the cleaned nn API", {
-  x <- matrix(rnorm(30), ncol = 3)
-  expect_error(nn(x, x, k = 2, backend = "metal"), "should be one of")
-  expect_error(nn(x, x, k = 2, backend = "metal_nndescent"), "should be one of")
-  expect_error(nn(x, x, k = 2, backend = "metal_ivf"), "should be one of")
+test_that("backend helpers expose only supported accelerators", {
+  expect_setequal(
+    grep("_available$", getNamespaceExports("faissR"), value = TRUE),
+    c("cuda_available", "cuvs_available", "faiss_available")
+  )
 })
 
 test_that("CUDA grid auto does not silently fall back to CPU", {

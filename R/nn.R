@@ -1006,15 +1006,6 @@ select_cuvs_auto_backend <- function(self_query,
   "cuda_cagra"
 }
 
-should_auto_use_exact_metal_knn <- function(n) {
-  threshold <- getOption("fastEmbedR.metal_exact_auto_threshold", 15000L)
-  threshold <- suppressWarnings(as.integer(threshold))
-  if (length(threshold) != 1L || is.na(threshold) || !is.finite(threshold)) {
-    threshold <- 15000L
-  }
-  as.integer(n) <= max(1L, threshold)
-}
-
 should_use_auto_cpu_approx_self_knn <- function(self_query,
                                                 n,
                                                 p,
@@ -3184,7 +3175,7 @@ grid_self_knn <- function(data,
 #'   `"cpu_sparse"`/`"sparse"` forces the native exact sparse `dgCMatrix` CPU
 #'   path for Euclidean, cosine, and correlation distances. Explicit dense
 #'   accelerator backends convert sparse input to dense matrices because
-#'   FAISS/cuVS/Metal kernels operate on dense row vectors.
+#'   FAISS/cuVS/CUDA kernels operate on dense row vectors.
 #'   `"hnsw"`/`"rcpphnsw"` uses the optional CRAN package RcppHNSW.
 #'   `"faiss"` uses the real FAISS C++ `IndexFlatL2` backend when faissR was
 #'   built against FAISS. `"faiss_ivf"`, `"faiss_ivfpq"`, `"faiss_hnsw"`,
@@ -3432,14 +3423,6 @@ print.faissR_nn <- function(x, ...) {
 }
 
 print.fastEmbedR_nn <- print.faissR_nn
-
-#' Check whether the native Metal backend is available
-#'
-#' @return `TRUE` when a Metal device is available to the package.
-#' @export
-metal_available <- function() {
-  isTRUE(metal_available_cpp())
-}
 
 #' Check whether the native CUDA backend is available
 #'
