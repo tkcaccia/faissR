@@ -1,5 +1,14 @@
 # faissR
 
+**Home** |
+[Installation](docs/installation.md) |
+[Implementation](docs/implementation.md) |
+[Examples](docs/examples.md) |
+[Benchmarks](docs/benchmarks.md) |
+[API](docs/usage-api.md) |
+[Backends](docs/backend-capabilities.md) |
+[References](docs/references.md)
+
 `faissR` is an R package for fast nearest-neighbour search, graph construction,
 kNN prediction, and k-means. It is designed as the nearest-neighbour companion
 package for `fastEmbedR`, but the package can also be used directly whenever an
@@ -13,57 +22,35 @@ those capabilities through R-friendly return objects while keeping explicit
 backend requests honest: if a GPU backend is requested and unavailable, the call
 fails instead of silently falling back to CPU.
 
-It contains the KNN/search side of the workflow:
+The package focuses on:
 
-- `nn()` for exact CPU, FAISS, RcppHNSW, optional cuVS/CUDA, and small
-  native spatial search paths;
-- `candidate_knn()` for exact top-k ranking inside supplied candidate rows;
-- `knn_graph()` for original-space or embedding-space `igraph` graph creation;
-- `fast_kmeans()` for CPU/FAISS/cuVS k-means;
-- `knn_fit()`, `faiss.fit()`, `cuvs.fit()`, `predict()`, and
-  `predict_proba()` for kNN classification/regression.
+- `nn()` for FAISS CPU and optional FAISS/cuVS CUDA nearest-neighbour search;
+- `candidate_knn()` for top-k ranking inside supplied candidate sets;
+- `knn_graph()` for `igraph` graph construction from data, KNN output, or an
+  embedding;
+- `fast_kmeans()` for FAISS/cuVS-backed k-means;
+- `knn_fit()`, `faiss.fit()`, `cuvs.fit()`, `predict()`, and `predict_proba()`
+  for kNN classification and regression;
+- explicit backend reporting, with no silent CPU fallback labelled as GPU.
 
-`fastEmbedR` now depends on `faissR` for neighbour search and keeps UMAP and
-openTSNE embedding optimizers.
+`fastEmbedR` calls `faissR::nn()` internally for one-call UMAP/openTSNE, and
+advanced users can compute KNN once with `faissR` and reuse it across multiple
+embedding or clustering workflows.
 
 ## Installation
+
+FAISS is a mandatory system dependency for `faissR`. RAPIDS cuVS/CUDA is
+optional and only needed for NVIDIA GPU backends.
 
 ```r
 install.packages("remotes")
 remotes::install_github("tkcaccia/faissR")
 ```
 
-FAISS is a required system dependency and is not vendored. `faissR` compiles
-with C++20 because recent FAISS headers use C++20 syntax. RAPIDS cuVS/CUDA is
-optional, so machines without an NVIDIA GPU can still compile and use the CPU
-FAISS backends.
+See [Installation](docs/installation.md) for macOS, Linux, conda, FAISS, CUDA,
+and cuVS requirements.
 
-On macOS, the simplest route is usually:
-
-```sh
-brew install faiss
-R CMD INSTALL .
-```
-
-On Linux or custom installations, set `FAISS_HOME` if FAISS is not visible via
-`pkg-config` or standard library paths:
-
-```sh
-FAISS_HOME=/path/to/faiss R CMD INSTALL .
-```
-
-Optional CUDA/cuVS builds are enabled only when requested or auto-detected:
-
-```sh
-CUDA_HOME=/path/to/cuda CUVS_HOME=/path/to/cuvs \
-FAISSR_USE_CUDA=1 FAISSR_USE_CUVS=1 R CMD INSTALL .
-```
-
-The old `FASTEMBEDR_USE_CUDA` and `FASTEMBEDR_USE_CUVS` environment variables
-are still accepted by `configure` for compatibility with existing benchmark
-scripts. FAISS is always required.
-
-## FAISS GPU with cuVS
+## FAISS GPU With cuVS
 
 `faissR` distinguishes two GPU/cuVS routes. This distinction matters for
 benchmarking and methods sections, because FAISS can call cuVS internally while
@@ -106,15 +93,20 @@ For no-inner-product benchmarks, use L2/cosine-capable methods only. FAISS
 inner-product indexes solve a different objective, maximum dot-product search,
 and should be benchmarked separately.
 
-## Example
+## Quick Example
 
 ```r
 library(faissR)
 
 x <- scale(as.matrix(iris[, 1:4]))
-knn <- nn(x, k = 15, backend = "auto", n_threads = 4)
-knn
+knn <- nn(x, k = 15, backend = "auto", metric = "euclidean", n_threads = 4)
 
+str(knn)
+```
+
+Build a shared-nearest-neighbour graph:
+
+```r
 if (requireNamespace("igraph", quietly = TRUE)) {
   g <- knn_graph(knn, k = 15, weight = "snn")
   cl <- igraph::cluster_louvain(g, weights = igraph::E(g)$weight)
@@ -122,21 +114,41 @@ if (requireNamespace("igraph", quietly = TRUE)) {
 }
 ```
 
-## With fastEmbedR
+Use the same KNN output in `fastEmbedR`:
+
+```r
+library(fastEmbedR)
+
+y_tsne <- fastEmbedR::opentsne_knn(knn, init_data = x, backend = "cpu")
+y_umap <- fastEmbedR::umap_knn(knn, backend = "cpu", graph_mode = "fuzzy")
+```
+
+## Backend Check
 
 ```r
 library(faissR)
-library(fastEmbedR)
 
-x <- scale(as.matrix(iris[, 1:4]))
-knn <- faissR::nn(x, k = 15, backend = "auto")
-
-layout_umap <- fastEmbedR::umap_knn(knn)
-layout_tsne <- fastEmbedR::opentsne_knn(knn, init_data = x)
+backend_info()
+faiss_available()
+cuda_available()
+cuvs_available()
 ```
 
-Use `backend_info()` to inspect available NN backends. `faissR` never silently
-runs CPU code when an explicit GPU backend is requested.
+An explicit GPU backend request must resolve to a real GPU implementation.
+Otherwise the call fails clearly and reports the missing dependency.
+
+## Documentation
+
+- [Installation](docs/installation.md): FAISS, CUDA, cuVS, and environment
+  variables.
+- [Implementation](docs/implementation.md): algorithmic details and design
+  rationale.
+- [Examples](docs/examples.md): small reproducible examples.
+- [Benchmarks](docs/benchmarks.md): recommended benchmark design and output.
+- [API](docs/usage-api.md): user-facing functions and return objects.
+- [Backends](docs/backend-capabilities.md): CPU/CUDA capability table.
+- [References](docs/references.md): AACR-style literature and software
+  references.
 
 ## Acknowledgements
 
@@ -146,9 +158,6 @@ source systems:
 - [FAISS](https://faiss.ai/index.html), developed primarily by Meta FAIR, is the
   required C++ similarity-search and clustering library used by the FAISS
   backends.
-- The FAISS documentation describes FAISS as supporting efficient search over
-  dense vectors, GPU implementations, batched search, approximate speed/accuracy
-  tradeoffs, and maximum inner-product search.
 - [RAPIDS cuVS](https://github.com/rapidsai/cuvs) and NVIDIA CUDA provide the
   optional direct GPU vector-search backends.
 - Meta and NVIDIA's FAISS/cuVS integration work explains why IVF-Flat, IVF-PQ,
