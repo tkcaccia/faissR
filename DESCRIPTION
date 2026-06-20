@@ -23,7 +23,6 @@ Imports:
     methods,
     Rcpp
 Suggests:
-    igraph,
     Matrix,
     RcppHNSW,
     testthat

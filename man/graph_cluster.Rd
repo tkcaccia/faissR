@@ -3,7 +3,7 @@
 \name{graph_cluster}
 \alias{graph_cluster}
 \alias{print.faissR_graph_cluster}
-\title{Cluster a nearest-neighbour graph}
+\title{Cluster a nearest-neighbour graph without igraph}
 \usage{
 graph_cluster(
   graph,
@@ -18,34 +18,34 @@ graph_cluster(
   n_runs = 1L,
   resolution = 1,
   objective_function = c("modularity", "CPM"),
-  n_iterations = 2L,
+  n_iterations = 10L,
   steps = 4L,
   seed = NULL,
   ...
 )
 }
 \arguments{
-\item{graph}{An \code{igraph} graph, a matrix/data frame accepted by \code{knn_graph()}, a KNN object returned by \code{nn()}, or an embedding object accepted by \code{knn_graph()}.}
-\item{method}{One of \code{"random_walking"}, \code{"louvain"}, or \code{"leiden"}. \code{"random_walking"} uses igraph's walktrap/random-walk community method.}
-\item{backend}{Community-detection backend. \code{"cpu"} uses \code{igraph}. \code{"cuda"} is reserved for RAPIDS cuGraph and currently fails clearly unless a future build links a CUDA graph backend.}
-\item{k}{Number of neighbours when \code{graph} is not already an \code{igraph} graph.}
-\item{graph_backend}{Backend passed to \code{knn_graph()} for neighbour search.}
-\item{weight}{Weighting passed to \code{knn_graph()} when a graph must be built.}
-\item{mutual, prune}{Graph-construction options passed to \code{knn_graph()}.}
-\item{n_threads}{CPU threads. Used by \code{knn_graph()} and by repeated CPU runs when \code{n_runs > 1} on Unix-like platforms.}
+\item{graph}{A numeric matrix/data frame, a KNN object returned by \code{nn()}, or an embedding object with a matrix \code{layout}.}
+\item{method}{One of \code{"random_walking"}, \code{"louvain"}, or \code{"leiden"}. \code{"random_walking"} uses a native random-walk label-propagation pass inspired by walktrap/random-walk clustering.}
+\item{backend}{Community-detection backend. \code{"cpu"} uses native faissR C++/OpenMP code. \code{"cuda"} is reserved for a native RAPIDS libcugraph backend and currently fails clearly unless a future build links libcugraph.}
+\item{k}{Number of neighbours when \code{graph} is not already a KNN object.}
+\item{graph_backend}{Backend passed to \code{nn_without_self()} for neighbour search.}
+\item{weight}{KNN graph weighting used when a graph must be built.}
+\item{mutual, prune}{Native graph-construction options.}
+\item{n_threads}{CPU threads. Used by KNN construction and native CPU clustering.}
 \item{n_runs}{Number of repeated CPU community-detection runs. The result with the largest modularity is returned. Values greater than one can use several CPU cores.}
 \item{resolution}{Modularity resolution for Louvain/Leiden.}
-\item{objective_function}{Leiden objective, \code{"modularity"} or \code{"CPM"}.}
-\item{n_iterations}{Leiden iteration count.}
-\item{steps}{Walk length used by igraph's walktrap implementation.}
+\item{objective_function}{Reserved for Leiden-compatible APIs; currently recorded in parameters.}
+\item{n_iterations}{Native clustering iteration count.}
+\item{steps}{Random-walk propagation depth.}
 \item{seed}{Optional seed for reproducible repeated CPU runs.}
 \item{...}{Reserved for future backend options.}
 }
 \description{
-\code{graph_cluster()} runs community detection on an \code{igraph} graph or first builds one with \code{knn_graph()}. The nearest-neighbour graph can therefore use FAISS/cuVS backends, while CPU community detection uses \code{igraph} algorithms. The CUDA backend is reserved for RAPIDS cuGraph Louvain, Leiden, and random-walk implementations and fails clearly when faissR was not built with a cuGraph binding.
+\code{graph_cluster()} runs native faissR community detection on a KNN graph. The graph can be supplied as a precomputed \code{nn()} result or built from a matrix/data frame using any faissR nearest-neighbour backend, including FAISS and cuVS KNN backends. CPU clustering is native C++/OpenMP code and does not depend on igraph. CUDA graph clustering is reserved for a native RAPIDS libcugraph binding and fails clearly when faissR was not built against libcugraph; it never calls Python and never silently falls back to CPU.
 }
 \value{
-A \code{faissR_graph_cluster} list with membership, modularity, method, backend, graph, and the backend-specific community object.
+A \code{faissR_graph_cluster} list with membership, modularity, method, backend, graph edge list, parameters, and source acknowledgements.
 }
 \references{
 Blondel VD, Guillaume JL, Lambiotte R, Lefebvre E. Fast unfolding of communities in large networks. Journal of Statistical Mechanics: Theory and Experiment. 2008;2008(10):P10008.
@@ -60,14 +60,11 @@ Sahu S. Heuristic-based Dynamic Leiden Algorithm for Efficient Tracking of Commu
 
 Kapralov M, Lattanzi S, Nouri N, Tardos J. Efficient and Local Parallel Random Walks. arXiv:2112.00655.
 
-CPU implementations are provided through the igraph R package. The CUDA route is designed for a future RAPIDS cuGraph binding; cuGraph provides GPU Louvain, Leiden, and random-walk algorithms in its CUDA/C++/Python stack. See \url{https://github.com/rapidsai/cugraph} and \url{https://docs.rapids.ai/api/cugraph/}.
+CPU implementations are native faissR C++/OpenMP code. The CUDA route is designed for a future native RAPIDS libcugraph binding; cuGraph provides GPU Louvain, Leiden, and random-walk algorithms in its CUDA/C++ stack. See \url{https://github.com/rapidsai/cugraph} and \url{https://docs.rapids.ai/api/cugraph/}.
 }
 \examples{
-if (requireNamespace("igraph", quietly = TRUE)) {
-  set.seed(1)
-  x <- rbind(matrix(rnorm(80, -2), ncol = 4), matrix(rnorm(80, 2), ncol = 4))
-  g <- knn_graph(x, k = 8, backend = "cpu", weight = "snn")
-  cl <- graph_cluster(g, method = "louvain", backend = "cpu")
-  table(cl$membership)
-}
+set.seed(1)
+x <- rbind(matrix(rnorm(80, -2), ncol = 4), matrix(rnorm(80, 2), ncol = 4))
+cl <- graph_cluster(x, method = "louvain", backend = "cpu", k = 8)
+table(cl$membership)
 }
