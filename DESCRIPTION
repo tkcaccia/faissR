@@ -3,11 +3,11 @@ Type: Package
 Title: FAISS-Backed Nearest Neighbours, Graphs, kNN Models, and k-Means
 Version: 0.1.0
 Authors@R: person(given = "Stefano",
-    family = "Caccia",
+    family = "Cacciatore",
     role = c("aut", "cre"),
     email = "tkcaccia@gmail.com")
-Author: Stefano Caccia [aut, cre]
-Maintainer: Stefano Caccia <tkcaccia@gmail.com>
+Author: Stefano Cacciatore [aut, cre]
+Maintainer: Stefano Cacciatore <tkcaccia@gmail.com>
 Description: Native nearest-neighbour search, graph construction, k-nearest
     neighbour prediction, and k-means helpers for large dimensionality
     reduction workflows. The package requires the FAISS C++ library for CPU
