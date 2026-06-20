@@ -3587,3 +3587,11 @@ faiss_available <- function() {
 cuvs_available <- function() {
   isTRUE(cuvs_available_cpp())
 }
+
+#' Check whether the RAPIDS libcugraph backend is available
+#'
+#' @return `TRUE` when faissR was compiled and linked against RAPIDS libcugraph.
+#' @export
+cugraph_available <- function() {
+  isTRUE(cugraph_available_cpp())
+}

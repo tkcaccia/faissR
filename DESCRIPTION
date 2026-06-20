@@ -28,6 +28,6 @@ Suggests:
     testthat
 LinkingTo:
     Rcpp
-SystemRequirements: C++20, Fortran, FAISS C++ library, optional CUDA toolkit and RAPIDS cuVS library for CUDA/cuVS NN and k-means backends
+SystemRequirements: C++20, Fortran, FAISS C++ library; optional CUDA toolkit, RAPIDS cuVS library for CUDA/cuVS NN and k-means backends, and RAPIDS libcugraph for CUDA graph clustering
 Config/roxygen2/version: 8.0.0
 Config/testthat/edition: 3

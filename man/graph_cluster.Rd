@@ -27,7 +27,7 @@ graph_cluster(
 \arguments{
 \item{graph}{A numeric matrix/data frame, a KNN object returned by \code{nn()}, or an embedding object with a matrix \code{layout}.}
 \item{method}{One of \code{"random_walking"}, \code{"louvain"}, or \code{"leiden"}. \code{"random_walking"} uses a native random-walk label-propagation pass inspired by walktrap/random-walk clustering.}
-\item{backend}{Community-detection backend. \code{"cpu"} uses native faissR C++/OpenMP code. \code{"cuda"} is reserved for a native RAPIDS libcugraph backend and currently fails clearly unless a future build links libcugraph.}
+\item{backend}{Community-detection backend. \code{"cpu"} uses native faissR C++/OpenMP code. \code{"cuda"} uses native RAPIDS libcugraph for Louvain and Leiden when libcugraph was detected at build time; random-walking is CPU-only.}
 \item{k}{Number of neighbours when \code{graph} is not already a KNN object.}
 \item{graph_backend}{Backend passed to \code{nn_without_self()} for neighbour search.}
 \item{weight}{KNN graph weighting used when a graph must be built.}
@@ -42,7 +42,7 @@ graph_cluster(
 \item{...}{Reserved for future backend options.}
 }
 \description{
-\code{graph_cluster()} runs native faissR community detection on a KNN graph. The graph can be supplied as a precomputed \code{nn()} result or built from a matrix/data frame using any faissR nearest-neighbour backend, including FAISS and cuVS KNN backends. CPU clustering is native C++/OpenMP code and does not depend on igraph. CUDA graph clustering is reserved for a native RAPIDS libcugraph binding and fails clearly when faissR was not built against libcugraph; it never calls Python and never silently falls back to CPU.
+\code{graph_cluster()} runs native faissR community detection on a KNN graph. The graph can be supplied as a precomputed \code{nn()} result or built from a matrix/data frame using any faissR nearest-neighbour backend, including FAISS and cuVS KNN backends. CPU clustering is native C++/OpenMP code and does not depend on igraph. CUDA graph clustering uses native RAPIDS libcugraph for Louvain and Leiden when faissR was built against libcugraph. Random-walking currently remains CPU-only. CUDA graph clustering never calls Python and never silently falls back to CPU.
 }
 \value{
 A \code{faissR_graph_cluster} list with membership, modularity, method, backend, graph edge list, parameters, and source acknowledgements.
@@ -60,11 +60,11 @@ Sahu S. Heuristic-based Dynamic Leiden Algorithm for Efficient Tracking of Commu
 
 Kapralov M, Lattanzi S, Nouri N, Tardos J. Efficient and Local Parallel Random Walks. arXiv:2112.00655.
 
-CPU implementations are native faissR C++/OpenMP code. The CUDA route is designed for a future native RAPIDS libcugraph binding; cuGraph provides GPU Louvain, Leiden, and random-walk algorithms in its CUDA/C++ stack. See \url{https://github.com/rapidsai/cugraph} and \url{https://docs.rapids.ai/api/cugraph/}.
+CPU implementations are native faissR C++/OpenMP code. CUDA Louvain and Leiden use RAPIDS libcugraph when available at build time; cuGraph also provides GPU random-walk primitives that may support a future native random-walking adapter. See \url{https://github.com/rapidsai/cugraph} and \url{https://docs.rapids.ai/api/cugraph/}.
 }
 \examples{
 set.seed(1)
 x <- rbind(matrix(rnorm(80, -2), ncol = 4), matrix(rnorm(80, 2), ncol = 4))
-cl <- graph_cluster(x, method = "louvain", backend = "cpu", k = 8)
+cl <- graph_cluster(x, method = "louvain", backend = "cpu", k = 8, graph_backend = "cpu")
 table(cl$membership)
 }

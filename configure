@@ -104,6 +104,57 @@ nn_cuda_kernels.o: nn_cuda_kernels.cpp
 "
 fi
 
+use_cugraph=$(first_env FAISSR_USE_CUGRAPH FASTEMBEDR_USE_CUGRAPH)
+if [ -z "$use_cugraph" ]; then use_cugraph=auto; fi
+cugraph_home=${CUGRAPH_HOME:-}
+cugraph_objects="graph_cugraph_stub.o"
+cugraph_cppflags=""
+cugraph_libs=""
+
+if [ "$use_cugraph" != "0" ]; then
+  if [ "$cuda_objects" = "nn_cuda_stub.o" ]; then
+    if [ "$use_cugraph" = "1" ]; then
+      echo "FAISSR_USE_CUGRAPH=1 was requested, but faissR is not being built with CUDA." >&2
+      echo "Set FAISSR_USE_CUDA=1 and CUDA_HOME/NVCC, or use FAISSR_USE_CUGRAPH=0." >&2
+      exit 1
+    fi
+  else
+    if [ -z "$cugraph_home" ] && [ -n "${CONDA_PREFIX:-}" ] && \
+       [ -f "$CONDA_PREFIX/include/cugraph_c/community_algorithms.h" ]; then
+      cugraph_home=$CONDA_PREFIX
+    fi
+    if [ -n "$cugraph_home" ] && [ -f "$cugraph_home/include/cugraph_c/community_algorithms.h" ]; then
+      cugraph_cppflags="-I$cugraph_home/include"
+      if [ -d "$cugraph_home/lib64" ]; then
+        cugraph_libdir="$cugraph_home/lib64"
+      else
+        cugraph_libdir="$cugraph_home/lib"
+      fi
+      cugraph_libs="-L$cugraph_libdir -Wl,-rpath,$cugraph_libdir -lcugraph_c -lcugraph"
+      if [ -f "$cugraph_libdir/libraft.so" ]; then
+        cugraph_libs="$cugraph_libs -lraft"
+      fi
+    elif command -v pkg-config >/dev/null 2>&1 && pkg-config --exists libcugraph 2>/dev/null; then
+      cugraph_cppflags=$(pkg-config --cflags libcugraph)
+      cugraph_libs=$(pkg-config --libs libcugraph)
+    elif [ -f /usr/local/include/cugraph_c/community_algorithms.h ] && \
+         { [ -f /usr/local/lib/libcugraph_c.so ] || [ -f /usr/local/lib/libcugraph_c.a ]; }; then
+      cugraph_cppflags="-I/usr/local/include"
+      cugraph_libs="-L/usr/local/lib -Wl,-rpath,/usr/local/lib -lcugraph_c -lcugraph"
+    fi
+
+    if [ -n "$cugraph_cppflags" ] && [ -n "$cugraph_libs" ]; then
+      cugraph_objects="graph_cugraph_impl.o"
+      cppflags="$cppflags -DFASTEMBEDR_HAS_CUGRAPH $cugraph_cppflags"
+      libs="$libs $cugraph_libs"
+    elif [ "$use_cugraph" = "1" ]; then
+      echo "FAISSR_USE_CUGRAPH=1 was requested, but RAPIDS libcugraph headers/library were not found." >&2
+      echo "Set CUGRAPH_HOME to a prefix containing include/cugraph_c and lib/libcugraph_c, or install a pkg-config libcugraph file." >&2
+      exit 1
+    fi
+  fi
+fi
+
 use_cuvs=$(first_env FAISSR_USE_CUVS FASTEMBEDR_USE_CUVS)
 if [ -z "$use_cuvs" ]; then use_cuvs=auto; fi
 cuvs_home=${CUVS_HOME:-}
@@ -212,5 +263,5 @@ fi
     echo "NVCC = $nvcc"
     printf "%s" "$cuda_rule"
   fi
-  echo "OBJECTS = RcppExports.o embedding_utils.o graph.o nn.o nn_sparse.o nn_fortran.o $faiss_objects $cuvs_objects nn_cuda_bridge.o $cuda_objects"
+  echo "OBJECTS = RcppExports.o embedding_utils.o graph.o $cugraph_objects nn.o nn_sparse.o nn_fortran.o $faiss_objects $cuvs_objects nn_cuda_bridge.o $cuda_objects"
 } > src/Makevars

@@ -122,9 +122,10 @@ resolve_knn_graph_backend <- function(backend) {
 #' The graph can be supplied as a precomputed [nn()] result or built from a
 #' matrix/data frame using any faissR nearest-neighbour backend, including FAISS
 #' and cuVS KNN backends. The CPU clustering backend is implemented in C++ and
-#' uses OpenMP when available. The CUDA clustering backend is reserved for a
-#' native RAPIDS libcugraph binding and fails clearly when faissR was not built
-#' against libcugraph; it never calls Python and never silently falls back to CPU.
+#' uses OpenMP when available. The CUDA clustering backend uses native RAPIDS libcugraph for
+#' `method = "louvain"` and `method = "leiden"` when faissR is built
+#' against libcugraph. `method = "random_walking"` currently remains CPU-only.
+#' CUDA graph clustering never calls Python and never silently falls back to CPU.
 #'
 #' @param graph Numeric matrix/data frame, a KNN object returned by [nn()], or an
 #'   embedding object with a matrix `layout`.
@@ -134,7 +135,8 @@ resolve_knn_graph_backend <- function(backend) {
 #'   moving. `"leiden"` adds a native refinement pass that splits disconnected
 #'   communities after local moving.
 #' @param backend Community-detection backend. `"cpu"` uses native C++/OpenMP.
-#'   `"cuda"` is reserved for a native RAPIDS libcugraph backend.
+#'   `"cuda"` uses native RAPIDS libcugraph for Louvain and Leiden when
+#'   libcugraph was detected at build time; random-walking is CPU-only.
 #' @param k Number of neighbours when `graph` is not already a KNN object.
 #' @param graph_backend Backend passed to [nn_without_self()] for neighbour
 #'   search when `graph` is a matrix or embedding.
@@ -170,9 +172,10 @@ resolve_knn_graph_backend <- function(backend) {
 #' Kapralov M, Lattanzi S, Nouri N, Tardos J. Efficient and Local Parallel
 #' Random Walks. arXiv:2112.00655.
 #'
-#' CPU implementations are native faissR C++/OpenMP code. CUDA graph clustering
-#' is designed for a future native RAPIDS libcugraph binding; RAPIDS cuGraph
-#' provides GPU Louvain, Leiden, and random-walk algorithms in its CUDA/C++ stack.
+#' CPU implementations are native faissR C++/OpenMP code. CUDA Louvain and
+#' Leiden use RAPIDS libcugraph when available at build time; RAPIDS cuGraph
+#' also provides GPU random-walk primitives that may support a future native
+#' random-walking adapter.
 #' @export
 graph_cluster <- function(graph,
                           method = c("random_walking", "louvain", "leiden"),

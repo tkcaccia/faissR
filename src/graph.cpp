@@ -294,6 +294,17 @@ List knn_graph_edges_cpp(IntegerMatrix indices,
 #include <numeric>
 #include <queue>
 #include <unordered_map>
+
+List graph_cluster_cugraph_edges_cpp(List edge_list, std::string method, int n_runs, double resolution, int n_iterations, int steps, int seed);
+
+// [[Rcpp::export]]
+bool cugraph_available_cpp() {
+#ifdef FASTEMBEDR_HAS_CUGRAPH
+  return true;
+#else
+  return false;
+#endif
+}
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -608,7 +619,8 @@ List graph_cluster_cpp(IntegerMatrix indices,
                        int steps,
                        int seed) {
   if (backend == "cuda") {
-    Rcpp::stop("Native CUDA graph clustering requires RAPIDS libcugraph headers and library at build time. This faissR build was not linked to libcugraph; no Python/cuGraph bridge is used.");
+    List edge_list = knn_graph_edges_cpp(indices, distances, weight_type, prune, mutual);
+    return graph_cluster_cugraph_edges_cpp(edge_list, method, n_runs, resolution, n_iterations, steps, seed);
   }
   if (backend != "cpu") Rcpp::stop("unsupported graph clustering backend");
   if (method != "louvain" && method != "leiden" && method != "random_walking") {
@@ -667,7 +679,7 @@ List graph_cluster_edges_cpp(List edge_list,
                              int steps,
                              int seed) {
   if (backend == "cuda") {
-    Rcpp::stop("Native CUDA graph clustering requires RAPIDS libcugraph headers and library at build time. This faissR build was not linked to libcugraph; no Python/cuGraph bridge is used.");
+    return graph_cluster_cugraph_edges_cpp(edge_list, method, n_runs, resolution, n_iterations, steps, seed);
   }
   if (backend != "cpu") Rcpp::stop("unsupported graph clustering backend");
   if (method != "louvain" && method != "leiden" && method != "random_walking") {

@@ -11,26 +11,29 @@ backend_info <- function() {
   cuda_knn <- backend_flag(cuda_available)
   faiss_knn <- backend_flag(faiss_available)
   cuvs_knn <- backend_flag(cuvs_available)
+  cugraph_graph <- backend_flag(cugraph_available)
   cuda <- cuda_summary()
   faiss <- faiss_summary()
   cuvs <- cuvs_summary()
 
   data.frame(
-    backend = c("cpu", "faiss", "faiss_gpu_cuvs", "cuvs", "cuda"),
-    available = c(TRUE, faiss_knn, faiss_knn && cuda_knn, cuvs_knn, cuda_knn),
-    knn_available = c(TRUE, faiss_knn, faiss_knn && cuda_knn, cuvs_knn, cuda_knn),
+    backend = c("cpu", "faiss", "faiss_gpu_cuvs", "cuvs", "cuda", "cugraph"),
+    available = c(TRUE, faiss_knn, faiss_knn && cuda_knn, cuvs_knn, cuda_knn, cugraph_graph && cuda_knn),
+    knn_available = c(TRUE, faiss_knn, faiss_knn && cuda_knn, cuvs_knn, cuda_knn, FALSE),
     explicit_backend = c(
       "cpu",
       "faiss",
       "faiss_gpu_ivf_flat/faiss_gpu_ivfpq/faiss_gpu_cagra",
       "cuda_cuvs",
-      "cuda"
+      "cuda",
+      "graph_cluster(..., backend = \"cuda\")"
     ),
     device = c(
       cpu_summary(),
       faiss$device,
       cuda$device,
       cuvs$device,
+      cuda$device,
       cuda$device
     ),
     runtime = c(
@@ -38,7 +41,8 @@ backend_info <- function() {
       faiss$runtime,
       combine_nonempty(faiss$runtime, "FAISS GPU IVF and CAGRA indexes backed by NVIDIA cuVS when FAISS is built with cuVS"),
       cuvs$runtime,
-      cuda$runtime
+      cuda$runtime,
+      combine_nonempty(cuda$runtime, "RAPIDS libcugraph C API")
     ),
     note = c(
       "Native CPU path is always available.",
@@ -61,6 +65,11 @@ backend_info <- function() {
         "Native CUDA KNN path is available for explicit CUDA requests."
       } else {
         "Native CUDA KNN path is unavailable; explicit CUDA requests will fail."
+      },
+      if (cugraph_graph && cuda_knn) {
+        "RAPIDS libcugraph graph clustering is available for explicit CUDA Louvain/Leiden requests; random_walking remains CPU-only."
+      } else {
+        "RAPIDS libcugraph graph clustering is unavailable; explicit CUDA graph-clustering requests will fail unless rebuilt with libcugraph."
       }
     ),
     stringsAsFactors = FALSE

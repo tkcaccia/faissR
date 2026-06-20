@@ -22,9 +22,8 @@ remotes::install_github("tkcaccia/faissR")
 ```
 
 FAISS is a required system dependency and is not vendored. `faissR` compiles
-with C++20 because recent FAISS headers use C++20 syntax. RAPIDS cuVS/CUDA is
-optional, so machines without an NVIDIA GPU can still compile and use the CPU
-FAISS backends.
+with C++20 because recent FAISS headers use C++20 syntax. RAPIDS cuVS/CUDA and RAPIDS libcugraph are optional, so machines without an
+NVIDIA GPU can still compile and use the CPU FAISS backends.
 
 On macOS, the simplest route is usually:
 
@@ -47,9 +46,17 @@ CUDA_HOME=/path/to/cuda CUVS_HOME=/path/to/cuvs \
 FAISSR_USE_CUDA=1 FAISSR_USE_CUVS=1 R CMD INSTALL .
 ```
 
-The old `FASTEMBEDR_USE_CUDA` and `FASTEMBEDR_USE_CUVS` environment variables
-are still accepted by `configure` for compatibility with existing benchmark
-scripts. FAISS is always required.
+Optional CUDA graph clustering uses native RAPIDS libcugraph when available:
+
+```sh
+CUDA_HOME=/path/to/cuda CUGRAPH_HOME=/path/to/cugraph \
+FAISSR_USE_CUDA=1 FAISSR_USE_CUGRAPH=1 R CMD INSTALL .
+```
+
+The old `FASTEMBEDR_USE_CUDA`, `FASTEMBEDR_USE_CUVS`, and
+`FASTEMBEDR_USE_CUGRAPH` environment variables are still accepted by
+`configure` for compatibility with existing benchmark scripts. FAISS is always
+required.
 
 ## FAISS GPU with cuVS
 
@@ -98,17 +105,17 @@ CPU multicore execution is controlled with `n_threads`; repeated runs use
 `n_runs`, and the best run by modularity is returned.
 
 The CUDA graph-clustering backend is intentionally explicit. `backend = "cuda"`
-is reserved for a future native RAPIDS libcugraph binding because cuGraph is the
-CUDA library that already provides GPU Louvain, Leiden, and random-walk
-sampling. faissR does not use a Python/cuGraph bridge. Until faissR is linked to
-libcugraph, CUDA graph clustering reports unavailable rather than silently using
-CPU code.
+uses native RAPIDS libcugraph for Louvain and Leiden when faissR is built with
+libcugraph. `method = "random_walking"` is currently CPU-only until a dedicated
+cuGraph random-walk clustering adapter is added. faissR does not use a
+Python/cuGraph bridge. If libcugraph is not linked, CUDA graph clustering reports
+unavailable rather than silently using CPU code.
 
 Algorithmic and implementation acknowledgements: FAISS for nearest-neighbour
 indexes; NVIDIA RAPIDS cuVS for optional CUDA nearest-neighbour/k-means
 backends and FAISS GPU/cuVS integration; native faissR C++/OpenMP code for CPU
-community detection; RAPIDS cuGraph/libcugraph as the intended CUDA graph
-clustering library; Blondel et al. (2008) for Louvain; Pons and Latapy (2006)
+community detection; RAPIDS cuGraph/libcugraph for CUDA Louvain and Leiden graph
+clustering; Blondel et al. (2008) for Louvain; Pons and Latapy (2006)
 for walktrap/random-walk clustering; Traag et al. (2019) for Leiden; Sahu's
 GVE-Leiden/OpenMP and dynamic Leiden work (arXiv:2312.13936 and
 arXiv:2410.15451) as multicore and dynamic Leiden implementation
