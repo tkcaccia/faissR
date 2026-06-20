@@ -1631,7 +1631,6 @@ IntegerMatrix nndescent_candidate_matrix_mlx_cpp(IntegerMatrix indices,
   // (https://github.com/hanxiao/mlx-vis, mlx_vis/_nndescent/nndescent.py):
   // keep NEW-neighbour expansion when converging and skip reverse candidates
   // once the graph is nearly stable. The implementation below is native C++
-  // and feeds the package's native row-candidate refinement schedule.
   const int reverse_limit = use_reverse ? std::max(1, std::min(k, n_sources)) : 0;
   std::vector<std::vector<int> > reverse_lists;
   if (use_reverse) {

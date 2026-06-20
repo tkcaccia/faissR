@@ -534,7 +534,7 @@ test_that("real FAISS C++ backend is either exact or clearly unavailable", {
   if (faiss_available()) {
     exact <- faissR:::nn_without_self(x, k = k, backend = "cpu", n_threads = 2L)
     out <- faissR:::nn_without_self(x, k = k, backend = "faiss", n_threads = 2L)
-    recall <- faissR:::knn_recall(out, exact, k = k)
+    recall <- faissR:::.knn_recall_summary(out, exact, k = k)
 
     expect_equal(dim(out$indices), c(nrow(x), k))
     expect_equal(attr(out, "backend"), "faiss")
@@ -566,8 +566,95 @@ test_that("real FAISS IVF backend records approximate index metadata", {
     expect_equal(attr(out, "approximation")$strategy, "faiss_IndexIVFFlat")
     expect_equal(attr(out, "approximation")$nlist, 16L)
     expect_equal(attr(out, "approximation")$nprobe, 4L)
+    expect_equal(attr(out, "approximation")$requested_nlist, 16L)
+    expect_equal(attr(out, "approximation")$requested_nprobe, 4L)
+    expect_false(attr(out, "approximation")$ivf_parameters_adjusted)
+
+    options(
+      fastEmbedR.faiss_nlist = 9999L,
+      fastEmbedR.faiss_nprobe = 9999L
+    )
+    clamped <- nn(x, k = k + 1L, backend = "faiss_ivf", n_threads = 2L)
+    expect_equal(attr(clamped, "approximation")$nlist, nrow(x))
+    expect_equal(attr(clamped, "approximation")$nprobe, nrow(x))
+    expect_equal(attr(clamped, "approximation")$requested_nlist, 9999L)
+    expect_equal(attr(clamped, "approximation")$requested_nprobe, 9999L)
+    expect_true(attr(clamped, "approximation")$ivf_parameters_adjusted)
   } else {
     expect_error(nn(x, k = k + 1L, backend = "faiss_ivf"), "FAISS")
+  }
+})
+
+test_that("FAISS graph backends reject too-small training sets clearly", {
+  set.seed(13815)
+  x <- matrix(rnorm(80L * 8L), nrow = 80L)
+
+  if (faiss_available()) {
+    expect_error(
+      faissR:::nn_without_self(x, k = 10L, backend = "faiss_nsg", n_threads = 2L),
+      "more than 100 training rows"
+    )
+    expect_error(
+      faissR:::nn_without_self(x, k = 10L, backend = "faiss_nndescent", n_threads = 2L),
+      "more than 100 training rows"
+    )
+  } else {
+    expect_error(nn(x, k = 10L, backend = "faiss_nsg"), "FAISS")
+    expect_error(nn(x, k = 10L, backend = "faiss_nndescent"), "FAISS")
+  }
+})
+
+test_that("FAISS graph backends report actual and requested parameters", {
+  set.seed(1382)
+  x <- matrix(rnorm(200L * 8L), nrow = 200L)
+
+  if (faiss_available()) {
+    nsg <- faissR:::nn_without_self(x, k = 10L, backend = "faiss_nsg", n_threads = 2L)
+    nsg_approx <- attr(nsg, "approximation")
+    expect_equal(dim(nsg$indices), c(nrow(x), 10L))
+    expect_equal(nsg_approx$r, 32L)
+    expect_equal(nsg_approx$requested_r, 32L)
+    expect_equal(nsg_approx$search_l, 100L)
+    expect_equal(nsg_approx$requested_search_l, 100L)
+    expect_equal(nsg_approx$gk, max(64L, 2L * 10L, 2L * nsg_approx$r))
+    expect_false(nsg_approx$nsg_parameters_adjusted)
+
+    nnd <- faissR:::nn_without_self(x, k = 10L, backend = "faiss_nndescent", n_threads = 2L)
+    nnd_approx <- attr(nnd, "approximation")
+    expect_equal(dim(nnd$indices), c(nrow(x), 10L))
+    expect_equal(nnd_approx$graph_k, 64L)
+    expect_equal(nnd_approx$requested_graph_k, 64L)
+    expect_equal(nnd_approx$n_iter, 10L)
+    expect_equal(nnd_approx$requested_n_iter, 10L)
+    expect_false(nnd_approx$nndescent_parameters_adjusted)
+  } else {
+    expect_error(nn(x, k = 10L, backend = "faiss_nsg"), "FAISS")
+    expect_error(nn(x, k = 10L, backend = "faiss_nndescent"), "FAISS")
+  }
+})
+
+test_that("FAISS HNSW reports actual and requested parameters", {
+  set.seed(1381)
+  x <- matrix(rnorm(30L * 6L), nrow = 30L)
+
+  if (faiss_available()) {
+    old_options <- options(
+      fastEmbedR.faiss_hnsw_m = 128L,
+      fastEmbedR.faiss_hnsw_ef_construction = 2L,
+      fastEmbedR.faiss_hnsw_ef_search = 2L
+    )
+    on.exit(options(old_options), add = TRUE)
+
+    out <- faissR:::nn_without_self(x, k = 10L, backend = "faiss_hnsw", n_threads = 2L)
+    approx <- attr(out, "approximation")
+    expect_equal(dim(out$indices), c(nrow(x), 10L))
+    expect_equal(approx$m, nrow(x))
+    expect_equal(approx$requested_m, 128L)
+    expect_equal(approx$ef_search, 10L)
+    expect_equal(approx$requested_ef_search, 10L)
+    expect_true(approx$hnsw_parameters_adjusted)
+  } else {
+    expect_error(nn(x, k = 10L, backend = "faiss_hnsw"), "FAISS")
   }
 })
 
@@ -740,7 +827,6 @@ test_that("backend_info reports native availability without crashing", {
   info <- backend_info()
   expect_s3_class(info, "data.frame")
   expect_true(all(c("cpu", "faiss", "cuvs", "cuda") %in% info$backend))
-  expect_setequal(info$backend, c("cpu", "faiss", "faiss_gpu_cuvs", "cuvs", "cuda"))
   expect_true(all(c(
     "available",
     "knn_available",
@@ -754,13 +840,6 @@ test_that("backend_info reports native availability without crashing", {
   expect_type(cuda_info, "character")
   expect_length(cuda_info, 1L)
   expect_match(cuda_info, "available")
-})
-
-test_that("backend helpers expose only supported accelerators", {
-  expect_setequal(
-    grep("_available$", getNamespaceExports("faissR"), value = TRUE),
-    c("cuda_available", "cuvs_available", "faiss_available")
-  )
 })
 
 test_that("CUDA grid auto does not silently fall back to CPU", {
@@ -826,7 +905,7 @@ test_that("CUDA NN-descent requests use RAPIDS cuVS", {
   k <- 8L
   exact <- faissR:::nn_without_self(x, k = k, backend = "cpu", n_threads = 4L)
   refined <- faissR:::nn_without_self(x, k = k, backend = "cuda_cuvs_nndescent")
-  recall <- faissR:::knn_recall(refined, exact, k)
+  recall <- faissR:::.knn_recall_summary(refined, exact, k)
 
   expect_equal(dim(refined$indices), c(nrow(x), k))
   expect_equal(attr(refined, "backend"), "cuda_cuvs_nndescent")
@@ -836,6 +915,31 @@ test_that("CUDA NN-descent requests use RAPIDS cuVS", {
   )
   expect_false(isTRUE(attr(refined, "exact")))
   expect_gt(recall$recall_at_k, 0.65)
+})
+
+test_that("cuVS CAGRA reports actual and requested graph parameters", {
+  skip_if_not(cuvs_available())
+
+  set.seed(839)
+  x <- matrix(rnorm(40L * 8L), nrow = 40L)
+  old_options <- options(
+    fastEmbedR.cuvs_graph_degree = 128L,
+    fastEmbedR.cuvs_intermediate_graph_degree = 512L,
+    fastEmbedR.cuvs_search_width = 0L,
+    fastEmbedR.cuvs_itopk_size = 8L
+  )
+  on.exit(options(old_options), add = TRUE)
+
+  out <- faissR:::nn_without_self(x, k = 10L, backend = "cuda_cuvs_cagra")
+  approx <- attr(out, "approximation")
+  expect_equal(dim(out$indices), c(nrow(x), 10L))
+  expect_equal(approx$graph_degree, nrow(x) - 1L)
+  expect_equal(approx$requested_graph_degree, 128L)
+  expect_equal(approx$intermediate_graph_degree, nrow(x) - 1L)
+  expect_equal(approx$requested_intermediate_graph_degree, 512L)
+  expect_equal(approx$itopk_size, 10L)
+  expect_equal(approx$requested_itopk_size, 8L)
+  expect_true(approx$cagra_parameters_adjusted)
 })
 
 test_that("CUDA backend reports unavailable runtime clearly", {

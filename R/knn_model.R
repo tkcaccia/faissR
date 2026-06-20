@@ -15,7 +15,7 @@
 #' @param task `"auto"`, `"classification"`, or `"regression"`. `"auto"` treats
 #'   numeric responses as regression and other response types as classification.
 #' @param k Default number of neighbours used by [predict()] and
-#'   [predict_proba()] when they are called without `k`.
+#'   [predict()] with `type = "prob"` when they are called without `k`.
 #' @param n_threads CPU threads passed to [nn()] for CPU backends.
 #' @param ... Additional arguments passed to [knn_fit()] by the convenience
 #'   wrappers [faiss.fit()] and [cuvs.fit()].
@@ -24,7 +24,7 @@
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' clf <- knn_fit(x, iris$Species, backend = "cpu", k = 5)
 #' head(predict(clf, x, k = 5))
-#' head(predict_proba(clf, x, k = 5))
+#' head(predict(clf, x, k = 5, type = "prob"))
 #'
 #' reg <- knn_fit(x, iris$Sepal.Length, backend = "cpu", task = "regression")
 #' head(predict(reg, x, k = 5, vote = "weighted"))
@@ -104,15 +104,19 @@ cuvs.fit <- function(X_train, y_train, ...) {
 #' @param k Number of neighbours.
 #' @param vote `"majority"` or `"weighted"` for classification; `"majority"`
 #'   means an unweighted neighbour mean for regression.
+#' @param type `"response"` for class/regression predictions or `"prob"` for
+#'   class probability matrices from classification models.
 #' @param ... Reserved for future options.
 #' @return A factor for classification or numeric vector for regression.
 #' @export
 predict.faissR_knn_model <- function(object,
-                                         newdata,
-                                         k = NULL,
-                                         vote = c("majority", "weighted"),
-                                         ...) {
+                                      newdata,
+                                      k = NULL,
+                                      vote = c("majority", "weighted"),
+                                      type = c("response", "prob"),
+                                      ...) {
   vote <- match.arg(vote)
+  type <- match.arg(type)
   query <- validate_knn_model_query(object, newdata)
   k <- normalize_knn_model_k(if (is.null(k)) object$k else k, nrow(object$X_train))
   neighbours <- nn(
@@ -131,8 +135,14 @@ predict.faissR_knn_model <- function(object,
       levels = object$levels,
       weighted = identical(vote, "weighted")
     )
+    if (identical(type, "prob")) {
+      return(proba)
+    }
     best <- max.col(proba, ties.method = "first")
     return(factor(object$levels[best], levels = object$levels))
+  }
+  if (identical(type, "prob")) {
+    stop("`type = \"prob\"` is only available for classification models.", call. = FALSE)
   }
   regression_vote(
     response = object$y_train,
@@ -142,53 +152,8 @@ predict.faissR_knn_model <- function(object,
   )
 }
 
-#' Class probabilities from kNN neighbour votes
-#'
-#' @param object A classification model returned by [knn_fit()],
-#'   [faiss.fit()], or [cuvs.fit()].
-#' @param newdata Numeric query matrix with observations in rows.
-#' @param k Number of neighbours.
-#' @param vote `"majority"` for count probabilities or `"weighted"` for
-#'   inverse-distance weighted probabilities.
-#' @return Numeric matrix of class probabilities.
-#' @export
-predict_proba <- function(object,
-                          newdata,
-                          k = NULL,
-                          vote = c("majority", "weighted")) {
-  UseMethod("predict_proba")
-}
-
 #' @export
 predict.fastEmbedR_knn_model <- predict.faissR_knn_model
-
-#' @export
-predict_proba.faissR_knn_model <- function(object,
-                                               newdata,
-                                               k = NULL,
-                                               vote = c("majority", "weighted")) {
-  vote <- match.arg(vote)
-  if (!identical(object$task, "classification")) {
-    stop("`predict_proba()` is only available for classification models.", call. = FALSE)
-  }
-  query <- validate_knn_model_query(object, newdata)
-  k <- normalize_knn_model_k(if (is.null(k)) object$k else k, nrow(object$X_train))
-  neighbours <- nn(
-    object$X_train,
-    query,
-    k = k,
-    backend = object$backend,
-    metric = object$metric,
-    n_threads = object$n_threads
-  )
-  class_vote_probabilities(
-    labels = object$y_train,
-    indices = neighbours$indices,
-    distances = neighbours$distances,
-    levels = object$levels,
-    weighted = identical(vote, "weighted")
-  )
-}
 
 validate_knn_model_query <- function(object, newdata) {
   if (!inherits(object, "faissR_knn_model") && !inherits(object, "fastEmbedR_knn_model")) {
@@ -205,8 +170,6 @@ validate_knn_model_query <- function(object, newdata) {
   query
 }
 
-#' @export
-predict_proba.fastEmbedR_knn_model <- predict_proba.faissR_knn_model
 
 normalize_knn_model_k <- function(k, n_train) {
   k <- suppressWarnings(as.integer(k))

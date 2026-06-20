@@ -49,7 +49,7 @@ and approximate-search diagnostics.
 
 ## Graph Construction
 
-`knn_graph()` converts KNN output into an `igraph` graph. The supported weights
+`knn_graph()` converts KNN output into a native `faissR_graph` edge-list object. The supported weights
 are:
 
 - `weight = "distance"`: closer neighbours receive stronger edge weights based
@@ -58,13 +58,16 @@ are:
 
 The function accepts an existing KNN object directly. This avoids repeating
 nearest-neighbour search when the same graph is needed for clustering or
-embedding diagnostics.
+embedding diagnostics. `graph_cluster()` can then run native random-walking,
+Louvain, or Leiden-style clustering without depending on `igraph`. CUDA Louvain
+and Leiden use RAPIDS libcugraph when faissR is built with libcugraph; CUDA
+random-walking is not enabled yet.
 
 ## kNN Models
 
 `knn_fit()`, `faiss.fit()`, and `cuvs.fit()` build a reusable kNN classifier or
 regressor. Prediction uses majority vote or distance-weighted vote for labels,
-and `predict_proba()` returns class probabilities from neighbour votes.
+and `predict(type = "prob")` returns class probabilities from neighbour votes.
 
 This model API is useful when a FAISS/cuVS index should be fitted once and
 queried repeatedly, for example with ImageNet-like feature matrices.
@@ -86,6 +89,8 @@ functions. Users who want explicit control over vector search should load
 
 ## Licensing And Acknowledgement
 
-FAISS, RAPIDS cuVS, HNSW, NN-descent, IVF, product quantization, and k-means
-literature informed the implementation choices [1-7]. External libraries are
-linked as system dependencies and are not vendored into the package.
+FAISS, RAPIDS cuVS, RAPIDS cuGraph, HNSW, NN-descent, IVF, product
+quantization, graph clustering, and k-means literature informed the
+implementation choices [1-12]. External libraries are linked as system
+dependencies and are not vendored into the package. faissR is released under
+the MIT license.

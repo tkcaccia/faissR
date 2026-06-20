@@ -1,4 +1,5 @@
+PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS)
 CXX_STD = CXX20
 PKG_CPPFLAGS = -I"$(FAISS_HOME)/include"
-PKG_LIBS = -L"$(FAISS_HOME)/lib" -lfaiss
+PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) -L"$(FAISS_HOME)/lib" -lfaiss
 OBJECTS = RcppExports.o embedding_utils.o graph.o nn.o nn_sparse.o nn_fortran.o nn_faiss_bridge.o nn_faiss_impl.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o

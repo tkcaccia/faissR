@@ -9,18 +9,20 @@
 [Backends](backend-capabilities.md) |
 [References](references.md)
 
-`faissR` contains the vector-search layer used by `fastEmbedR` and by direct
-kNN, graph, k-means, and kNN-model workflows.
+`faissR` contains the vector-search, graph, k-means, and kNN-model layer used
+by direct R workflows and by the `fastEmbedR` ecosystem. FAISS is mandatory;
+CUDA, RAPIDS cuVS, and RAPIDS libcugraph are optional compiled backends.
 
 ## Pages
 
-- [Installation](installation.md): FAISS is mandatory; CUDA and RAPIDS cuVS are
-  optional.
-- [Implementation](implementation.md): dense KNN, sparse/candidate KNN, graphs,
-  k-means, kNN prediction, and backend rules.
+- [Installation](installation.md): CRAN/source-build expectations, mandatory
+  FAISS, and optional CUDA/RAPIDS libraries.
+- [Implementation](implementation.md): dense KNN, sparse/candidate KNN, native
+  graphs, graph clustering, k-means, kNN prediction, and backend rules.
 - [Examples](examples.md): compact examples based on iris.
 - [Benchmarks](benchmarks.md): benchmark design for speed, recall, memory, and
   downstream embedding checks.
 - [API](usage-api.md): function overview.
 - [Backends](backend-capabilities.md): supported CPU and CUDA paths.
-- [References](references.md): AACR-style references and acknowledgements.
+- [References](references.md): references, software acknowledgements, and
+  implementation inspirations.

@@ -19,10 +19,20 @@ References are listed in AACR journal style.
 6. Jégou H, Douze M, Schmid C. Product quantization for nearest neighbor search. IEEE Trans Pattern Anal Mach Intell 2011;33:117-28.
 7. Lloyd SP. Least squares quantization in PCM. IEEE Trans Inf Theory 1982;28:129-37.
 8. MacQueen J. Some methods for classification and analysis of multivariate observations. In: Proceedings of the Fifth Berkeley Symposium on Mathematical Statistics and Probability; 1967. p. 281-97.
+9. Blondel VD, Guillaume JL, Lambiotte R, Lefebvre E. Fast unfolding of communities in large networks. J Stat Mech 2008;2008:P10008.
+10. Pons P, Latapy M. Computing communities in large networks using random walks. J Graph Algorithms Appl 2006;10:191-218.
+11. Traag VA, Waltman L, van Eck NJ. From Louvain to Leiden: guaranteeing well-connected communities. Sci Rep 2019;9:5233.
+12. RAPIDS Development Team. RAPIDS cuGraph: GPU graph analytics [software]. Available from: https://github.com/rapidsai/cugraph.
 
 ## Software Acknowledgements
 
-`faissR` links to external FAISS and optional RAPIDS cuVS installations rather
-than vendoring those libraries. HNSW, NN-descent, IVF, product quantization,
-flat search, and k-means implementations are acknowledged as algorithmic and
-software foundations where the compiled backend exposes them.
+`faissR` links to external FAISS and optional RAPIDS cuVS/cuGraph installations
+rather than vendoring those libraries. HNSW, NN-descent, IVF, product
+quantization, flat search, k-means, Louvain, Leiden, and random-walk clustering
+are acknowledged as algorithmic and software foundations where the compiled
+backend exposes them.
+
+Native CPU graph clustering is faissR C++/OpenMP code inspired by the Louvain,
+Leiden, walktrap/random-walk, and multicore graph-clustering literature. CUDA
+Louvain and Leiden use RAPIDS libcugraph when available. The package does not
+use a Python/cuGraph bridge.

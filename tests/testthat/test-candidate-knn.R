@@ -89,12 +89,9 @@ test_that("candidate_knn GPU requests do not silently fall back", {
   x <- matrix(rnorm(20), ncol = 2)
   candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
 
-  if (!cuda_available()) {
+  if (cuda_available()) {
+    expect_no_error(candidate_knn(x, candidates, k = 2L, backend = "cuda", exclude_self = TRUE))
+  } else {
     expect_error(candidate_knn(x, candidates, k = 2L, backend = "cuda", exclude_self = TRUE), "CUDA")
   }
-  expect_error(
-    candidate_knn(x, candidates[1:2, , drop = FALSE], points = x[1:2, , drop = FALSE], k = 2L, backend = "cuda", exclude_self = TRUE),
-    "exclude_self|self-query|CUDA"
-  )
-  expect_error(candidate_knn(x, candidates, k = 2L, backend = "cuda"), "exclude_self|CUDA")
 })

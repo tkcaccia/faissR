@@ -15,6 +15,11 @@ parse_args <- function(args) {
 
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0L || is.na(x)) y else x
 
+script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
+script_file <- sub("^--file=", "", script_arg[[1L]] %||% "benchmark_scripts/benchmark1_nn_speed.R")
+script_dir <- dirname(normalizePath(script_file, mustWork = FALSE))
+source(file.path(script_dir, "source.R"))
+
 args <- parse_args(commandArgs(trailingOnly = TRUE))
 
 faiss_env_dir <- Sys.getenv("FAISSR_CONDA_ENV", "/home/chiamaka/.fastEmbedR/micromamba/envs/fastembedr-faissgpu-cuvs")
@@ -348,7 +353,7 @@ evaluate_knn_quality <- function(x, obj, k, metric, exact) {
     indices = as.matrix(sx$indices[rows, seq_len(k), drop = FALSE]),
     distances = as.matrix(sx$distances[rows, seq_len(k), drop = FALSE])
   )
-  rec <- faissR::knn_recall(cand, ref, k = k)
+  rec <- benchmark_knn_recall(cand, ref, k = k)
   denom <- mean(abs(ref$distances), na.rm = TRUE) + sqrt(.Machine$double.eps)
   empty$recall_at_k <- rec$recall_at_k[[1L]]
   empty$median_recall_at_k <- rec$median_recall_at_k[[1L]]

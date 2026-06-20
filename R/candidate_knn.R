@@ -13,9 +13,9 @@
 #' @param points Numeric query matrix with observations in rows. Defaults to
 #'   `data`, i.e. self-query candidate KNN.
 #' @param k Number of neighbours to return from each candidate row.
-#' @param backend `"auto"`/`"cpu"` for the general CPU implementation, or
-#'   `"cuda"` for the native CUDA row-candidate kernel. GPU backends currently
-#'   require self-query Euclidean candidates with `exclude_self = TRUE`.
+#' @param backend `"auto"`/`"cpu"` for the general CPU implementation,
+#'   `"cuda"` for the native CUDA row-candidate kernel. GPU backends currently require
+#'   self-query Euclidean candidates with `exclude_self = TRUE`.
 #' @param metric `"euclidean"`, `"cosine"`, or `"correlation"`. GPU candidate
 #'   kernels currently support Euclidean only.
 #' @param n_threads CPU threads for the CPU backend.

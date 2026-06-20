@@ -87,15 +87,23 @@ void copy_row_major_float(const NumericMatrix& src, std::vector<float>& dest) {
   const int nrow = src.nrow();
   const int ncol = src.ncol();
   dest.assign(static_cast<std::size_t>(nrow) * ncol, 0.0f);
-  for (int c = 0; c < ncol; ++c) {
-    for (int r = 0; r < nrow; ++r) {
+  bool finite = true;
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) reduction(&& : finite)
+#endif
+  for (int r = 0; r < nrow; ++r) {
+    for (int c = 0; c < ncol; ++c) {
       const double value = src(r, c);
       if (!std::isfinite(value)) {
-        Rcpp::stop("cuVS backend requires finite numeric input");
+        finite = false;
+        continue;
       }
       dest[static_cast<std::size_t>(r) * ncol + c] =
         static_cast<float>(value);
     }
+  }
+  if (!finite) {
+    Rcpp::stop("cuVS backend requires finite numeric input");
   }
 }
 
@@ -115,6 +123,18 @@ int env_int(const char* name, const int default_value, const int min_value) {
     return default_value;
   }
   return static_cast<int>(value);
+}
+
+bool env_flag(const char* name) {
+  const char* raw = std::getenv(name);
+  if (raw == nullptr || raw[0] == '\0') return false;
+  return std::string(raw) != "0" && std::string(raw) != "false";
+}
+
+void cuvs_debug(const char* message) {
+  if (env_flag("FAISSR_CUVS_DEBUG")) {
+    Rcpp::Rcerr << "[faissR cuVS] " << message << "\n";
+  }
 }
 
 DLManagedTensor make_tensor(void* data,
@@ -461,19 +481,21 @@ List format_uint32_result(const std::vector<uint32_t>& labels,
   NumericMatrix dists(n_points, out_k);
   int* indices_ptr = indices.begin();
   double* dists_ptr = dists.begin();
+  const bool skip_self = exclude_self && self_query;
 
   for (int i = 0; i < n_points; ++i) {
+    const std::size_t row_offset = static_cast<std::size_t>(i) * search_k;
     int written = 0;
     for (int j = 0; j < search_k && written < out_k; ++j) {
-      const uint32_t label = labels[static_cast<std::size_t>(i) * search_k + j];
-      if (exclude_self && self_query && label == static_cast<uint32_t>(i)) {
+      const std::size_t result_offset = row_offset + j;
+      const uint32_t label = labels[result_offset];
+      if (skip_self && label == static_cast<uint32_t>(i)) {
         continue;
       }
-      indices_ptr[static_cast<std::size_t>(written) * n_points + i] =
-        static_cast<int>(label) + 1;
-      const float raw = distances[static_cast<std::size_t>(i) * search_k + j];
-      dists_ptr[static_cast<std::size_t>(written) * n_points + i] =
-        already_sqrt ? static_cast<double>(raw) :
+      const std::size_t output_offset = static_cast<std::size_t>(written) * n_points + i;
+      indices_ptr[output_offset] = static_cast<int>(label) + 1;
+      const float raw = distances[result_offset];
+      dists_ptr[output_offset] = already_sqrt ? static_cast<double>(raw) :
         std::sqrt(std::max(static_cast<double>(raw), 0.0));
       ++written;
     }
@@ -504,23 +526,25 @@ List format_int64_result(const std::vector<int64_t>& labels,
   NumericMatrix dists(n_points, out_k);
   int* indices_ptr = indices.begin();
   double* dists_ptr = dists.begin();
+  const bool skip_self = exclude_self && self_query;
 
   for (int i = 0; i < n_points; ++i) {
+    const std::size_t row_offset = static_cast<std::size_t>(i) * search_k;
     int written = 0;
     for (int j = 0; j < search_k && written < out_k; ++j) {
-      const int64_t label = labels[static_cast<std::size_t>(i) * search_k + j];
+      const std::size_t result_offset = row_offset + j;
+      const int64_t label = labels[result_offset];
       if (label < 0) continue;
-      if (exclude_self && self_query && label == static_cast<int64_t>(i)) {
+      if (skip_self && label == static_cast<int64_t>(i)) {
         continue;
       }
       if (label > std::numeric_limits<int>::max()) {
         Rcpp::stop("cuVS returned a neighbor index that does not fit in R integer");
       }
-      indices_ptr[static_cast<std::size_t>(written) * n_points + i] =
-        static_cast<int>(label) + 1;
-      const float raw = distances[static_cast<std::size_t>(i) * search_k + j];
-      dists_ptr[static_cast<std::size_t>(written) * n_points + i] =
-        already_sqrt ? static_cast<double>(raw) :
+      const std::size_t output_offset = static_cast<std::size_t>(written) * n_points + i;
+      indices_ptr[output_offset] = static_cast<int>(label) + 1;
+      const float raw = distances[result_offset];
+      dists_ptr[output_offset] = already_sqrt ? static_cast<double>(raw) :
         std::sqrt(std::max(static_cast<double>(raw), 0.0));
       ++written;
     }
@@ -582,7 +606,8 @@ List cuvs_bruteforce_knn_impl(NumericMatrix data,
                               int k,
                               bool exclude_self) {
   validate_inputs(data, points, k, exclude_self);
-  const bool self_query = exclude_self || same_matrix_storage(data, points);
+  const bool same_storage = same_matrix_storage(data, points);
+  const bool self_query = exclude_self || same_storage;
   const int n_data = data.nrow();
   const int n_points = points.nrow();
   const int n_features = data.ncol();
@@ -591,7 +616,7 @@ List cuvs_bruteforce_knn_impl(NumericMatrix data,
   std::vector<float> xb;
   std::vector<float> xq;
   copy_row_major_float(data, xb);
-  if (!same_matrix_storage(data, points)) {
+  if (!same_storage) {
     copy_row_major_float(points, xq);
   }
 
@@ -605,7 +630,7 @@ List cuvs_bruteforce_knn_impl(NumericMatrix data,
 
   DeviceBuffer query_d;
   void* query_ptr = dataset_d.get();
-  if (!same_matrix_storage(data, points)) {
+  if (!same_storage) {
     const std::size_t query_bytes = xq.size() * sizeof(float);
     query_d.reset(res.get(), query_bytes);
     cuda_check(
@@ -613,6 +638,11 @@ List cuvs_bruteforce_knn_impl(NumericMatrix data,
       "cudaMemcpy(queries)"
     );
     query_ptr = query_d.get();
+  }
+
+  std::vector<float>().swap(xb);
+  if (!same_storage) {
+    std::vector<float>().swap(xq);
   }
 
   DeviceBuffer neighbors_d(
@@ -691,11 +721,16 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
                          int search_width,
                          int itopk_size) {
   validate_inputs(data, points, k, exclude_self);
-  const bool self_query = exclude_self || same_matrix_storage(data, points);
+  const bool same_storage = same_matrix_storage(data, points);
+  const bool self_query = exclude_self || same_storage;
   const int n_data = data.nrow();
   const int n_points = points.nrow();
   const int n_features = data.ncol();
   const int search_k = exclude_self ? std::min(n_data, k + 1) : k;
+  const int requested_graph_degree = graph_degree;
+  const int requested_intermediate_graph_degree = intermediate_graph_degree;
+  const int requested_search_width = search_width;
+  const int requested_itopk_size = itopk_size;
 
   graph_degree = std::max(search_k, graph_degree);
   graph_degree = std::min(graph_degree, std::max(1, n_data - 1));
@@ -711,7 +746,7 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
   std::vector<float> xb;
   std::vector<float> xq;
   copy_row_major_float(data, xb);
-  if (!same_matrix_storage(data, points)) {
+  if (!same_storage) {
     copy_row_major_float(points, xq);
   }
 
@@ -725,7 +760,7 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
 
   DeviceBuffer query_d;
   void* query_ptr = dataset_d.get();
-  if (!same_matrix_storage(data, points)) {
+  if (!same_storage) {
     const std::size_t query_bytes = xq.size() * sizeof(float);
     query_d.reset(res.get(), query_bytes);
     cuda_check(
@@ -733,6 +768,11 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
       "cudaMemcpy(queries)"
     );
     query_ptr = query_d.get();
+  }
+
+  std::vector<float>().swap(xb);
+  if (!same_storage) {
+    std::vector<float>().swap(xq);
   }
 
   int64_t dataset_shape[2] = {n_data, n_features};
@@ -847,6 +887,13 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
   out["intermediate_graph_degree"] = intermediate_graph_degree;
   out["search_width"] = search_width;
   out["itopk_size"] = itopk_size;
+  out["requested_graph_degree"] = requested_graph_degree;
+  out["requested_intermediate_graph_degree"] = requested_intermediate_graph_degree;
+  out["requested_search_width"] = requested_search_width;
+  out["requested_itopk_size"] = requested_itopk_size;
+  out["cagra_parameters_adjusted"] = requested_graph_degree != graph_degree ||
+    requested_intermediate_graph_degree != intermediate_graph_degree ||
+    requested_search_width != search_width || requested_itopk_size != itopk_size;
   out["search_batch_size"] = batch_size;
   return out;
 }
@@ -865,7 +912,8 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix data,
   );
 #else
   validate_inputs(data, points, k, exclude_self);
-  const bool self_query = exclude_self || same_matrix_storage(data, points);
+  const bool same_storage = same_matrix_storage(data, points);
+  const bool self_query = exclude_self || same_storage;
   const int n_data = data.nrow();
   const int n_points = points.nrow();
   const int n_features = data.ncol();
@@ -875,14 +923,16 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix data,
 
   std::vector<float> xb;
   std::vector<float> xq;
+  cuvs_debug("ivf_flat: copy input to row-major host buffers");
   copy_row_major_float(data, xb);
-  if (!same_matrix_storage(data, points)) {
+  if (!same_storage) {
     copy_row_major_float(points, xq);
   }
 
   CuvsResources res;
   const std::size_t data_bytes = xb.size() * sizeof(float);
   DeviceBuffer dataset_d(res.get(), data_bytes);
+  cuvs_debug("ivf_flat: copy dataset to device");
   cuda_check(
     cudaMemcpy(dataset_d.get(), xb.data(), data_bytes, cudaMemcpyHostToDevice),
     "cudaMemcpy(dataset)"
@@ -890,14 +940,20 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix data,
 
   DeviceBuffer query_d;
   void* query_ptr = dataset_d.get();
-  if (!same_matrix_storage(data, points)) {
+  if (!same_storage) {
     const std::size_t query_bytes = xq.size() * sizeof(float);
     query_d.reset(res.get(), query_bytes);
+    cuvs_debug("ivf_flat: copy queries to separate device buffer");
     cuda_check(
       cudaMemcpy(query_d.get(), xq.data(), query_bytes, cudaMemcpyHostToDevice),
       "cudaMemcpy(queries)"
     );
     query_ptr = query_d.get();
+  }
+
+  std::vector<float>().swap(xb);
+  if (!same_storage) {
+    std::vector<float>().swap(xq);
   }
 
   int64_t dataset_shape[2] = {n_data, n_features};
@@ -909,14 +965,30 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix data,
   index_params.get()->metric = L2Expanded;
   index_params.get()->add_data_on_build = true;
   index_params.get()->n_lists = static_cast<uint32_t>(n_lists);
-  index_params.get()->conservative_memory_allocation = false;
+  const bool small_high_dim = n_data <= 5000 && n_features >= 4096;
+  const int default_kmeans_iters = small_high_dim ? 1 : 20;
+  const int kmeans_iters = env_int(
+    "FASTEMBEDR_CUVS_IVF_FLAT_KMEANS_N_ITERS",
+    default_kmeans_iters,
+    1
+  );
+  const int train_percent = env_int(
+    "FASTEMBEDR_CUVS_IVF_FLAT_TRAIN_PERCENT",
+    100,
+    1
+  );
+  index_params.get()->kmeans_n_iters = static_cast<uint32_t>(kmeans_iters);
+  index_params.get()->kmeans_trainset_fraction = std::min(100, train_percent) / 100.0;
+  index_params.get()->adaptive_centers = false;
+  index_params.get()->conservative_memory_allocation = true;
 
   IvfFlatIndex index;
+  cuvs_debug("ivf_flat: build index begin");
   cuvs_check(
     cuvsIvfFlatBuild(res.get(), index_params.get(), &dataset_tensor, index.get()),
     "cuvsIvfFlatBuild"
   );
-
+  cuvs_debug("ivf_flat: build index done");
   IvfFlatSearchParams search_params;
   search_params.get()->n_probes = static_cast<uint32_t>(n_probes);
 
@@ -952,6 +1024,7 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix data,
       distances_d.get(), output_shape, 2, kDLCUDA, kDLFloat, 32
     );
 
+    if (offset == 0) cuvs_debug("ivf_flat: first search batch begin");
     cuvs_check(
       cuvsIvfFlatSearch(
         res.get(),
@@ -965,6 +1038,7 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix data,
       "cuvsIvfFlatSearch"
     );
     cuda_sync("cudaDeviceSynchronize");
+    if (offset == 0) cuvs_debug("ivf_flat: first search batch done");
 
     const std::size_t batch_values =
       static_cast<std::size_t>(current_batch) * search_k;
@@ -1004,6 +1078,9 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix data,
   out["n_lists"] = n_lists;
   out["n_probes"] = n_probes;
   out["search_batch_size"] = batch_size;
+  out["kmeans_n_iters"] = kmeans_iters;
+  out["kmeans_trainset_fraction"] = std::min(100, train_percent) / 100.0;
+  out["conservative_memory_allocation"] = true;
   return out;
 #endif
 }
@@ -1024,11 +1101,14 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix data,
   );
 #else
   validate_inputs(data, points, k, exclude_self);
-  const bool self_query = exclude_self || same_matrix_storage(data, points);
+  const bool same_storage = same_matrix_storage(data, points);
+  const bool self_query = exclude_self || same_storage;
   const int n_data = data.nrow();
   const int n_points = points.nrow();
   const int n_features = data.ncol();
   const int search_k = exclude_self ? std::min(n_data, k + 1) : k;
+  const int requested_pq_dim = pq_dim;
+  const int requested_pq_bits = pq_bits;
   n_lists = std::max(1, std::min(n_lists, n_data));
   n_probes = std::max(1, std::min(n_probes, n_lists));
   pq_dim = std::max(0, pq_dim);
@@ -1037,7 +1117,7 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix data,
   std::vector<float> xb;
   std::vector<float> xq;
   copy_row_major_float(data, xb);
-  if (!same_matrix_storage(data, points)) {
+  if (!same_storage) {
     copy_row_major_float(points, xq);
   }
 
@@ -1051,7 +1131,7 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix data,
 
   DeviceBuffer query_d;
   void* query_ptr = dataset_d.get();
-  if (!same_matrix_storage(data, points)) {
+  if (!same_storage) {
     const std::size_t query_bytes = xq.size() * sizeof(float);
     query_d.reset(res.get(), query_bytes);
     cuda_check(
@@ -1059,6 +1139,11 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix data,
       "cudaMemcpy(queries)"
     );
     query_ptr = query_d.get();
+  }
+
+  std::vector<float>().swap(xb);
+  if (!same_storage) {
+    std::vector<float>().swap(xq);
   }
 
   int64_t dataset_shape[2] = {n_data, n_features};
@@ -1171,6 +1256,10 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix data,
   out["n_probes"] = n_probes;
   out["pq_dim"] = static_cast<int>(actual_pq_dim);
   out["pq_bits"] = static_cast<int>(actual_pq_bits);
+  out["requested_pq_dim"] = requested_pq_dim;
+  out["requested_pq_bits"] = requested_pq_bits;
+  out["pq_parameters_adjusted"] = requested_pq_dim != static_cast<int>(actual_pq_dim) ||
+    requested_pq_bits != static_cast<int>(actual_pq_bits);
   out["search_batch_size"] = batch_size;
   return out;
 #endif

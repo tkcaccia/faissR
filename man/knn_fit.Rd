@@ -34,7 +34,7 @@ CPU search or `"cuda"`/`"cuda_cuvs"` for CUDA/cuVS when available.}
 numeric responses as regression and other response types as classification.}
 
 \item{k}{Default number of neighbours used by [predict()] and
-[predict_proba()] when they are called without `k`.}
+[predict()] with \code{type = "prob"} when they are called without `k`.}
 
 \item{n_threads}{CPU threads passed to [nn()] for CPU backends.}
 
@@ -56,7 +56,7 @@ averages.
 x <- scale(as.matrix(iris[, 1:4]))
 clf <- knn_fit(x, iris$Species, backend = "cpu", k = 5)
 head(predict(clf, x, k = 5))
-head(predict_proba(clf, x, k = 5))
+head(predict(clf, x, k = 5, type = "prob"))
 
 reg <- knn_fit(x, iris$Sepal.Length, backend = "cpu", task = "regression")
 head(predict(reg, x, k = 5, vote = "weighted"))
