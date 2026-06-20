@@ -19,8 +19,8 @@ libraries. FAISS GPU indexes can use NVIDIA cuVS integration when linked
 against a cuVS-enabled FAISS build; direct RAPIDS cuVS backends are also
 available when requested at build time. Explicit CUDA/cuVS requests fail
 clearly when those optional libraries are unavailable. Graph clustering uses native faissR C++/OpenMP code rather than igraph. CUDA
-graph clustering is reserved for a future native RAPIDS libcugraph binding for
-Louvain, Leiden, and random-walk algorithms; no Python bridge is used.
+Louvain and Leiden use native RAPIDS libcugraph when faissR is built with
+libcugraph; CUDA random-walking is currently CPU-only. No Python bridge is used.
 }
 \seealso{
 Useful links:

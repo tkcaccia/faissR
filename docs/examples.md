@@ -31,13 +31,27 @@ inner-product search where supported.
 knn_cos <- nn(x, k = 15, backend = "auto", metric = "cosine", n_threads = 4)
 ```
 
-## Shared Nearest-Neighbour Graph
+## Shared Nearest-Neighbour Graph And Leiden Clustering
 
 ```r
-if (requireNamespace("igraph", quietly = TRUE)) {
-  g <- knn_graph(knn, k = 15, weight = "snn")
-  cl <- igraph::cluster_louvain(g, weights = igraph::E(g)$weight)
-  table(labels, igraph::membership(cl))
+g <- knn_graph(knn, k = 15, weight = "snn")
+
+leiden <- graph_cluster(g, method = "leiden", backend = "cpu", n_threads = 4)
+louvain <- graph_cluster(g, method = "louvain", backend = "cpu", n_threads = 4)
+walk <- graph_cluster(g, method = "random_walking", backend = "cpu", n_threads = 4)
+
+table(labels, leiden$membership)
+table(labels, louvain$membership)
+table(labels, walk$membership)
+```
+
+If faissR was compiled with RAPIDS libcugraph, Louvain and Leiden can run on
+CUDA without changing the API:
+
+```r
+if (isTRUE(cugraph_available())) {
+  leiden_gpu <- graph_cluster(g, method = "leiden", backend = "cuda")
+  table(labels, leiden_gpu$membership)
 }
 ```
 
@@ -52,7 +66,7 @@ fit <- knn_fit(x[train, ], labels[train], backend = "auto", metric = "euclidean"
 pred <- predict(fit, x[test, ], k = 5)
 mean(pred == labels[test])
 
-prob <- predict_proba(fit, x[test, ], k = 5)
+prob <- predict(fit, x[test, ], k = 5, type = "prob")
 head(prob)
 ```
 

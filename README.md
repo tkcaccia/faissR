@@ -99,7 +99,7 @@ library(faissR)
 x <- scale(as.matrix(iris[, 1:4]))
 knn <- nn(x, k = 15, backend = "auto", metric = "euclidean", n_threads = 4)
 
-cl <- graph_cluster(knn, method = "louvain", backend = "cpu", n_runs = 2, n_threads = 2)
+cl <- graph_cluster(knn, method = "leiden", backend = "cpu", n_runs = 2, n_threads = 2)
 table(cl$membership)
 ```
 
