@@ -15,7 +15,7 @@ Description: Native nearest-neighbour search, graph construction, k-nearest
     integration or direct RAPIDS cuVS/CUDA indexes on NVIDIA machines.
     CPU-only systems do not need NVIDIA libraries. Class probabilities are
     returned through predict(type = "prob") for kNN classification models.
-License: GPL (>= 3)
+License: MIT + file LICENSE
 URL: https://github.com/tkcaccia/faissR
 BugReports: https://github.com/tkcaccia/faissR/issues
 Encoding: UTF-8
