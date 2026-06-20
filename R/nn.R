@@ -2686,16 +2686,16 @@ faiss_pq_params <- function(p) {
 
 faiss_hnsw_params <- function(k) {
   k <- as.integer(k)
-  m <- faiss_option_int("hnsw_m", 64L, min_value = 2L, max_value = 256L)
+  m <- faiss_option_int("hnsw_m", 32L, min_value = 2L, max_value = 256L)
   ef_construction <- faiss_option_int(
     "hnsw_ef_construction",
-    max(320L, 5L * m),
+    max(200L, 5L * m),
     min_value = m,
     max_value = 4096L
   )
   ef_search <- faiss_option_int(
     "hnsw_ef_search",
-    max(300L, 6L * k),
+    max(150L, 3L * k),
     min_value = k,
     max_value = 4096L
   )
