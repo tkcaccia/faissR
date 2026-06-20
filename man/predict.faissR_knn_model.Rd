@@ -14,7 +14,7 @@
 )
 }
 \arguments{
-\item{object}{A model returned by \code{knn()}.}
+\item{object}{A model returned by [knn()].}
 
 \item{newdata}{Numeric query matrix with observations in rows.}
 
@@ -29,7 +29,8 @@ class probability matrices from classification models.}
 \item{...}{Reserved for future options.}
 }
 \value{
-A factor for classification, a numeric vector for regression, or a numeric class-probability matrix when `type = "prob"`.
+A factor for classification, a numeric vector for regression, or a
+  numeric class-probability matrix when `type = "prob"`.
 }
 \description{
 Predict from a faissR kNN model

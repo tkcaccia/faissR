@@ -5,6 +5,7 @@
 [Implementation](docs/implementation.md) |
 [Examples](docs/examples.md) |
 [Benchmarks](docs/benchmarks.md) |
+[Autotuning](docs/autotuning.md) |
 [API](docs/usage-api.md) |
 [Backends](docs/backend-capabilities.md) |
 [References](docs/references.md)
@@ -99,7 +100,7 @@ library(faissR)
 x <- scale(as.matrix(iris[, 1:4]))
 nn_res <- nn(x, k = 15, backend = "auto", metric = "euclidean", n_threads = 4)
 
-cl <- graph_cluster(knn, method = "leiden", backend = "cpu", n_runs = 2, n_threads = 2)
+cl <- graph_cluster(nn_res, method = "leiden", backend = "cpu", n_runs = 2, n_threads = 2)
 table(cl$membership)
 ```
 

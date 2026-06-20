@@ -506,40 +506,6 @@ nn_compute <- function(data,
     return(result)
   }
 
-  if (backend %in% c("faiss_gpu_cagra", "cuda_faiss_cagra")) {
-    if (!isTRUE(faiss_available())) {
-      stop(
-        "The real FAISS GPU CAGRA backend is not available in this build. ",
-        "Reinstall faissR with FAISS GPU/cuVS headers ",
-        "available through `FAISS_HOME`.",
-        call. = FALSE
-      )
-    }
-    params <- cuvs_cagra_params(nrow(data), k)
-    out <- nn_faiss_gpu_cagra_cpp(
-      data,
-      points,
-      as.integer(k),
-      as.integer(params$graph_degree),
-      as.integer(params$intermediate_graph_degree),
-      as.integer(params$search_width),
-      as.integer(params$itopk_size),
-      isTRUE(exclude_self)
-    )
-    result <- finish_nn_result(out, "faiss_gpu_cagra", k, self_query, exact = FALSE)
-    attr(result, "approximation") <- list(
-      strategy = "faiss_gpu_GpuIndexCagra_cuVS",
-      backend = "faiss_gpu_cagra",
-      library = "faiss",
-      accelerator = "cuda",
-      graph_degree = as.integer(out$graph_degree),
-      intermediate_graph_degree = as.integer(out$intermediate_graph_degree),
-      search_width = as.integer(out$search_width),
-      itopk_size = as.integer(out$itopk_size)
-    )
-    return(result)
-  }
-
   if (identical(backend, "faiss_hnsw")) {
     if (!isTRUE(faiss_available())) {
       stop(
@@ -668,6 +634,29 @@ nn_compute <- function(data,
       tuned <- cuvs_cagra_tune_params(data, k, params)
       params <- tuned$params
       tuning <- tuned$tuning
+      if (is.list(tuning) && !identical(tuning$status, "target_met")) {
+        best_recall <- if (is.data.frame(tuning$results) && "recall" %in% names(tuning$results)) {
+          suppressWarnings(max(tuning$results$recall, na.rm = TRUE))
+        } else {
+          NA_real_
+        }
+        min_recall <- getOption("fastEmbedR.cuvs_cagra_tune_min_recall", tuning$target_recall)
+        min_recall <- suppressWarnings(as.numeric(min_recall))
+        if (length(min_recall) != 1L || is.na(min_recall) || !is.finite(min_recall)) {
+          min_recall <- 0.985
+        }
+        if (!is.finite(best_recall) || best_recall < min_recall) {
+          stop(
+            "cuVS CAGRA pilot tuning did not meet the requested recall target ",
+            "on this dataset (best pilot recall = ",
+            if (is.finite(best_recall)) formatC(best_recall, digits = 4, format = "f") else "NA",
+            "). Use `backend = \"faiss_gpu_cagra\"`, ",
+            "`backend = \"cuda_cuvs_bruteforce\"`, or explicitly disable ",
+            "`fastEmbedR.cuvs_cagra_tune` to force cuVS CAGRA.",
+            call. = FALSE
+          )
+        }
+      }
     }
     out <- nn_cuvs_cagra_cpp(
       data,
@@ -1156,7 +1145,7 @@ select_self_approx_backend <- function(prefer_cuda = FALSE) {
     return("cuda_cagra")
   }
   if (isTRUE(faiss_available())) {
-    return("faiss_nndescent")
+    return("faiss_hnsw")
   }
   if (isTRUE(requireNamespace("RcppHNSW", quietly = TRUE))) {
     return("hnsw")
@@ -2299,7 +2288,7 @@ ivf_list_count <- function(n, k) {
 ivf_probe_count <- function(nlist, k) {
   nlist <- as.integer(nlist)
   k <- as.integer(k)
-  as.integer(max(1L, min(nlist, max(4L, ceiling(sqrt(nlist)), ceiling(k / 5)))))
+  as.integer(max(1L, min(nlist, max(16L, ceiling(sqrt(nlist)), ceiling(k / 3)))))
 }
 
 faiss_ivf_params <- function(n, k) {
@@ -2704,17 +2693,17 @@ faiss_hnsw_params <- function(k) {
 
 faiss_nsg_params <- function(k) {
   k <- as.integer(k)
-  r <- faiss_option_int("nsg_r", 32L, min_value = 2L, max_value = 512L)
-  search_l <- faiss_option_int("nsg_search_l", max(100L, 2L * k), min_value = k, max_value = 4096L)
+  r <- faiss_option_int("nsg_r", 48L, min_value = 2L, max_value = 512L)
+  search_l <- faiss_option_int("nsg_search_l", max(200L, 4L * k), min_value = k, max_value = 4096L)
   build_type <- faiss_option_int("nsg_build_type", 1L, min_value = 0L, max_value = 1L)
   list(r = as.integer(r), search_l = as.integer(search_l), build_type = as.integer(build_type))
 }
 
 faiss_nndescent_params <- function(k) {
   k <- as.integer(k)
-  graph_k <- faiss_option_int("nndescent_graph_k", max(k, 64L), min_value = k, max_value = 1024L)
-  n_iter <- faiss_option_int("nndescent_iter", 10L, min_value = 1L, max_value = 100L)
-  search_l <- faiss_option_int("nndescent_search_l", max(k, graph_k), min_value = k, max_value = 4096L)
+  graph_k <- faiss_option_int("nndescent_graph_k", max(100L, 2L * k), min_value = k, max_value = 1024L)
+  n_iter <- faiss_option_int("nndescent_iter", 20L, min_value = 1L, max_value = 100L)
+  search_l <- faiss_option_int("nndescent_search_l", max(graph_k, 2L * k), min_value = k, max_value = 4096L)
   list(graph_k = as.integer(graph_k), n_iter = as.integer(n_iter), search_l = as.integer(search_l))
 }
 
@@ -3320,11 +3309,11 @@ grid_self_knn <- function(data,
 #' the common `nn(data, points, k)` use case. Explicit `backend = "cpu"`
 #' performs exact brute-force search in C++ and is mainly a reference path for
 #' small data or recall checks. `backend = "auto"` chooses a recorded fast path
-#' for large self-KNN searches: CUDA cuVS NN-Descent when a CUDA backend is
-#' requested and cuVS is available, otherwise FAISS NN-Descent when FAISS is
-#' compiled in, otherwise the optional CRAN-friendly RcppHNSW backend when
-#' installed, otherwise exact CPU. Use `backend = "cpu_approx"` to force the
-#' non-CUDA part of that selector. `backend = "cpu_grid"` is a native exact
+#' for large self-KNN searches: CUDA routes use explicit cuVS/FAISS GPU
+#' backends when requested and available; CPU approximate routing prefers FAISS
+#' HNSW when FAISS is compiled in, otherwise the optional CRAN-friendly RcppHNSW
+#' backend when installed, otherwise exact CPU. Use `backend = "cpu_approx"` to
+#' force the non-CUDA part of that selector. `backend = "cpu_grid"` is a native exact
 #' two- or three-dimensional Euclidean self-KNN spatial selector: it uses a
 #' fast grid for uniform-like clouds and a VP-tree for thin or imbalanced
 #' clouds. `backend = "vptree"`/`"cpu_vptree"` builds an exact VP-tree on
@@ -3343,7 +3332,7 @@ grid_self_knn <- function(data,
 #'   is `data`.
 #' @param backend Execution backend. `"auto"` records the selected fast backend
 #'   in `attr(result, "backend")`. `"cpu"` always uses the exact C++ CPU path.
-#'   `"cpu_approx"` chooses FAISS NN-Descent, RcppHNSW, or exact CPU depending
+#'   `"cpu_approx"` chooses FAISS HNSW, RcppHNSW, or exact CPU depending
 #'   on what is available; for large 2D Euclidean self-KNN it chooses
 #'   `"cpu_grid2d"` and for large 3D Euclidean self-KNN it chooses
 #'   `"cpu_grid"`. Explicit `"cpu_grid2d"`/`"cpu_grid3d"` force the exact
@@ -3373,15 +3362,18 @@ grid_self_knn <- function(data,
 #'   `fastEmbedR.faiss_gpu_ivf_tune_policy = "fixed"` skips pilot tuning on a
 #'   cache miss and uses the current deterministic IVF defaults directly.
 #'   `"cuda_cuvs"` uses a RAPIDS-inspired cuVS policy: exact cuVS brute force
-#'   for small searches and cuVS NN-descent for large self-KNN. Use
-#'   `"cuda_cagra"`/`"cuda_cuvs_cagra"` to force cuVS CAGRA,
+#'   for small searches and cuVS graph/IVF routes for large self-KNN. Use
+#'   `"cuda_cagra"`/`"cuda_cuvs_cagra"` to force direct cuVS CAGRA,
 #'   `"cuda_cuvs_bruteforce"` for
 #'   exact cuVS brute-force search, and `"cuda_cuvs_nndescent"` for cuVS
 #'   NN-descent self-KNN. `"gpu"` is a CUDA-only convenience alias for KNN now.
-#'   For large CUDA self-KNN, `"cuda"`/`"gpu"` prefer cuVS CAGRA with batched
-#'   search and internal recall-aware pilot tuning. The CAGRA pilot is cached
-#'   on disk by dataset signature and `k`, so repeated benchmark runs reuse the
-#'   same tuned graph parameters instead of rerunning the pilot. Internal option
+#'   For large CUDA self-KNN, direct cuVS CAGRA uses batched search and
+#'   recall-aware pilot tuning. The CAGRA pilot is cached on disk by dataset
+#'   signature and `k`, so repeated benchmark runs reuse the same tuned graph
+#'   parameters instead of rerunning the pilot. If pilot recall does not meet
+#'   the configured target, the backend stops instead of silently returning poor
+#'   neighbours; use `"faiss_gpu_cagra"` or `"cuda_cuvs_bruteforce"` when a
+#'   reliable CUDA route is needed. Internal option
 #'   `fastEmbedR.cuvs_cagra_tune_policy = "fixed"` skips a cache miss and uses
 #'   the current default CAGRA policy directly. `"cuda_cuvs_ivf_flat"` and
 #'   `"cuda_cuvs_ivfpq"` call RAPIDS cuVS IVF-Flat and IVF-PQ directly through

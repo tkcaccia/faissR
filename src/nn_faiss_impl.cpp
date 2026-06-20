@@ -142,6 +142,7 @@ List format_faiss_result(const std::vector<faiss::idx_t>& labels,
                          const std::string& index_type,
                          const bool exact,
                          const DistanceOutput distance_output = DistanceOutput::L2Squared,
+                         const int n_threads = 1,
                          const int nlist = NA_INTEGER,
                          const int nprobe = NA_INTEGER,
                          const int graph_degree = NA_INTEGER,
@@ -152,7 +153,11 @@ List format_faiss_result(const std::vector<faiss::idx_t>& labels,
   double* dists_ptr = dists.begin();
   const bool skip_self = exclude_self && self_query;
   const bool inner_product_output = distance_output == DistanceOutput::InnerProduct;
+  bool complete = true;
 
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(n_threads > 0 ? n_threads : 1) schedule(static) reduction(&& : complete)
+#endif
   for (int i = 0; i < n_points; ++i) {
     const std::size_t row_offset = static_cast<std::size_t>(i) * search_k;
     double row_best_ip = -std::numeric_limits<double>::infinity();
@@ -185,8 +190,11 @@ List format_faiss_result(const std::vector<faiss::idx_t>& labels,
       ++written;
     }
     if (written < out_k) {
-      Rcpp::stop("FAISS returned fewer neighbors than requested");
+      complete = false;
     }
+  }
+  if (!complete) {
+    Rcpp::stop("FAISS returned fewer neighbors than requested");
   }
 
   List out = List::create(
@@ -225,6 +233,8 @@ List search_faiss_index(faiss::Index& index,
   const int n_points = points.nrow();
   const int search_k = exclude_self ? std::min(n_data, k + 1) : k;
 
+  OmpThreadScope threads(n_threads);
+
   std::vector<float> xb;
   std::vector<float> xq;
   copy_row_major_float(data, xb);
@@ -239,7 +249,6 @@ List search_faiss_index(faiss::Index& index,
   std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
 
   try {
-    OmpThreadScope threads(n_threads);
     if (!index.is_trained) {
       index.train(n_data, xb.data());
     }
@@ -259,7 +268,7 @@ List search_faiss_index(faiss::Index& index,
 
   return format_faiss_result(
     labels, distances, n_points, search_k, k, self_query, exclude_self,
-    index_type, exact, distance_output, nlist, nprobe, graph_degree, search_width
+    index_type, exact, distance_output, n_threads, nlist, nprobe, graph_degree, search_width
   );
 }
 
@@ -734,7 +743,7 @@ List faiss_gpu_cagra_knn_impl(NumericMatrix data,
   List out = format_faiss_result(
     labels, distances, n_points, search_k, k, self_query, exclude_self,
     "GpuIndexCagra_cuVS", false, DistanceOutput::L2Squared,
-    NA_INTEGER, NA_INTEGER, graph_degree, search_width
+    1, NA_INTEGER, NA_INTEGER, graph_degree, search_width
   );
   out["intermediate_graph_degree"] = intermediate_graph_degree;
   out["itopk_size"] = itopk_size;

@@ -14,16 +14,16 @@ nn(
     "faiss_flat_l2", "faiss_flat_ip", "faiss_ivf", "faiss_ivf_flat",
     "cpu_faiss_index_ivf", "faiss_ivfpq", "faiss_hnsw", "faiss_nsg", "faiss_nndescent",
     "faiss_gpu_flat", "faiss_gpu_flat_l2", "faiss_gpu_flat_ip", "cuda_faiss_flat_l2",
-    "cuda_faiss_flat_ip", "faiss_gpu_ivf", 
+    "cuda_faiss_flat_ip", "faiss_gpu_ivf",
      "faiss_gpu_ivf_flat", "faiss_gpu_ivfpq",
-    "faiss_gpu_cagra", "cuda_faiss_cagra", "cuda_faiss_ivf_flat", "cuda_faiss_ivfpq", "cuvs", "gpu_cuvs", "cuda_cuvs",
-    "cuda_cuvs_cagra", "cuda_cagra", "gpu_cagra", "cuvs_ivf", "cuda_cuvs_ivf",
-    "cuvs_ivf_flat", "cuda_cuvs_ivf_flat", "cuvs_ivfpq", "cuda_cuvs_ivfpq",
-    "cuvs_ivf_pq", "cuda_cuvs_ivf_pq", "cuvs_bruteforce", "cuda_cuvs_bruteforce",
-    "cuda_cuvs_exact", "cuvs_nndescent", "cuda_cuvs_nndescent", "cuda_grid",
-    "cuda_grid_auto", "gpu_grid", "cuda_grid2d", "cuda_grid3d", "gpu", "cuda",
-    "cuda_approx", 
-     "cuda_nndescent", "cuda_ivf", "cuda_faiss"),
+    "faiss_gpu_cagra", "cuda_faiss_cagra", "cuda_faiss_ivf_flat", "cuda_faiss_ivfpq",
+    "cuvs", "gpu_cuvs", "cuda_cuvs", "cuda_cuvs_cagra", "cuda_cagra", "gpu_cagra",
+    "cuvs_ivf", "cuda_cuvs_ivf", "cuvs_ivf_flat", "cuda_cuvs_ivf_flat", "cuvs_ivfpq",
+    "cuda_cuvs_ivfpq", "cuvs_ivf_pq", "cuda_cuvs_ivf_pq", "cuvs_bruteforce",
+    "cuda_cuvs_bruteforce", "cuda_cuvs_exact", "cuvs_nndescent", "cuda_cuvs_nndescent",
+    "cuda_grid", "cuda_grid_auto", "gpu_grid", "cuda_grid2d",
+     "cuda_grid3d", "gpu",
+    "cuda", "cuda_approx", "cuda_nndescent", "cuda_ivf", "cuda_faiss"),
   metric = c("euclidean", "cosine", "correlation"),
   n_threads = NULL
 )
@@ -42,7 +42,7 @@ is `data`.}
 
 \item{backend}{Execution backend. `"auto"` records the selected fast backend
 in `attr(result, "backend")`. `"cpu"` always uses the exact C++ CPU path.
-`"cpu_approx"` chooses FAISS NN-Descent, RcppHNSW, or exact CPU depending
+`"cpu_approx"` chooses FAISS HNSW, RcppHNSW, or exact CPU depending
 on what is available; for large 2D Euclidean self-KNN it chooses
 `"cpu_grid2d"` and for large 3D Euclidean self-KNN it chooses
 `"cpu_grid"`. Explicit `"cpu_grid2d"`/`"cpu_grid3d"` force the exact
@@ -72,15 +72,18 @@ and caches the chosen values by dataset signature and `k`. Internal option
 `fastEmbedR.faiss_gpu_ivf_tune_policy = "fixed"` skips pilot tuning on a
 cache miss and uses the current deterministic IVF defaults directly.
 `"cuda_cuvs"` uses a RAPIDS-inspired cuVS policy: exact cuVS brute force
-for small searches and cuVS NN-descent for large self-KNN. Use
-`"cuda_cagra"`/`"cuda_cuvs_cagra"` to force cuVS CAGRA,
+for small searches and cuVS graph/IVF routes for large self-KNN. Use
+`"cuda_cagra"`/`"cuda_cuvs_cagra"` to force direct cuVS CAGRA,
 `"cuda_cuvs_bruteforce"` for
 exact cuVS brute-force search, and `"cuda_cuvs_nndescent"` for cuVS
 NN-descent self-KNN. `"gpu"` is a CUDA-only convenience alias for KNN now.
-For large CUDA self-KNN, `"cuda"`/`"gpu"` prefer cuVS CAGRA with batched
-search and internal recall-aware pilot tuning. The CAGRA pilot is cached
-on disk by dataset signature and `k`, so repeated benchmark runs reuse the
-same tuned graph parameters instead of rerunning the pilot. Internal option
+For large CUDA self-KNN, direct cuVS CAGRA uses batched search and
+recall-aware pilot tuning. The CAGRA pilot is cached on disk by dataset
+signature and `k`, so repeated benchmark runs reuse the same tuned graph
+parameters instead of rerunning the pilot. If pilot recall does not meet
+the configured target, the backend stops instead of silently returning poor
+neighbours; use `"faiss_gpu_cagra"` or `"cuda_cuvs_bruteforce"` when a
+reliable CUDA route is needed. Internal option
 `fastEmbedR.cuvs_cagra_tune_policy = "fixed"` skips a cache miss and uses
 the current default CAGRA policy directly. `"cuda_cuvs_ivf_flat"` and
 `"cuda_cuvs_ivfpq"` call RAPIDS cuVS IVF-Flat and IVF-PQ directly through
@@ -116,11 +119,11 @@ A list with integer matrix `indices` and numeric matrix `distances`.
 the common `nn(data, points, k)` use case. Explicit `backend = "cpu"`
 performs exact brute-force search in C++ and is mainly a reference path for
 small data or recall checks. `backend = "auto"` chooses a recorded fast path
-for large self-KNN searches: CUDA cuVS NN-Descent when a CUDA backend is
-requested and cuVS is available, otherwise FAISS NN-Descent when FAISS is
-compiled in, otherwise the optional CRAN-friendly RcppHNSW backend when
-installed, otherwise exact CPU. Use `backend = "cpu_approx"` to force the
-non-CUDA part of that selector. `backend = "cpu_grid"` is a native exact
+for large self-KNN searches: CUDA routes use explicit cuVS/FAISS GPU
+backends when requested and available; CPU approximate routing prefers FAISS
+HNSW when FAISS is compiled in, otherwise the optional CRAN-friendly RcppHNSW
+backend when installed, otherwise exact CPU. Use `backend = "cpu_approx"` to
+force the non-CUDA part of that selector. `backend = "cpu_grid"` is a native exact
 two- or three-dimensional Euclidean self-KNN spatial selector: it uses a
 fast grid for uniform-like clouds and a VP-tree for thin or imbalanced
 clouds. `backend = "vptree"`/`"cpu_vptree"` builds an exact VP-tree on

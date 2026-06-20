@@ -89,6 +89,7 @@ test_that("graph_cluster runs native CPU Leiden-style refinement without igraph"
 })
 
 test_that("graph_cluster reports native CUDA graph backend as unavailable without libcugraph", {
+  skip_if(isTRUE(cugraph_available()), "libcugraph is available")
   set.seed(507)
   x <- matrix(rnorm(80), ncol = 4)
   expect_error(

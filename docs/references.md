@@ -23,6 +23,10 @@ References are listed in AACR journal style.
 10. Pons P, Latapy M. Computing communities in large networks using random walks. J Graph Algorithms Appl 2006;10:191-218.
 11. Traag VA, Waltman L, van Eck NJ. From Louvain to Leiden: guaranteeing well-connected communities. Sci Rep 2019;9:5233.
 12. RAPIDS Development Team. RAPIDS cuGraph: GPU graph analytics [software]. Available from: https://github.com/rapidsai/cugraph.
+13. NVIDIA Developer Blog. Enhancing GPU-accelerated vector search in FAISS with NVIDIA cuVS. Available from: https://developer.nvidia.com/blog/enhancing-gpu-accelerated-vector-search-in-faiss-with-nvidia-cuvs/.
+14. Meta Engineering. Accelerating GPU indexes in FAISS with NVIDIA cuVS. Available from: https://engineering.fb.com/2025/05/08/data-infrastructure/accelerating-gpu-indexes-in-faiss-with-nvidia-cuvs/.
+15. FAISS Project. GPU Faiss with cuVS. Available from: https://github.com/facebookresearch/faiss/wiki/GPU-Faiss-with-cuVS.
+16. FAISS Project. C++ API documentation. Available from: https://faiss.ai/cpp_api/classlist.html.
 
 ## Software Acknowledgements
 
@@ -34,5 +38,7 @@ backend exposes them.
 
 Native CPU graph clustering is faissR C++/OpenMP code inspired by the Louvain,
 Leiden, walktrap/random-walk, and multicore graph-clustering literature. CUDA
-Louvain and Leiden use RAPIDS libcugraph when available. The package does not
-use a Python/cuGraph bridge.
+Louvain and Leiden use RAPIDS libcugraph when available. FAISS GPU CAGRA and
+FAISS GPU IVF routes follow the FAISS GPU/cuVS integration documented by FAISS,
+NVIDIA, and Meta. Direct cuVS routes call RAPIDS cuVS C/C++ libraries. The
+package does not use a Python/cuGraph bridge.

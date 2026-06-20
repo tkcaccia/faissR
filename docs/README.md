@@ -5,6 +5,7 @@
 [Implementation](implementation.md) |
 [Examples](examples.md) |
 [Benchmarks](benchmarks.md) |
+[Autotuning](autotuning.md) |
 [API](usage-api.md) |
 [Backends](backend-capabilities.md) |
 [References](references.md)
@@ -22,6 +23,7 @@ CUDA, RAPIDS cuVS, and RAPIDS libcugraph are optional compiled backends.
 - [Examples](examples.md): compact examples based on iris.
 - [Benchmarks](benchmarks.md): benchmark design for speed, recall, memory, and
   downstream embedding checks.
+- [Autotuning](autotuning.md): empirical backend roles, defaults, and guardrails.
 - [API](usage-api.md): function overview.
 - [Backends](backend-capabilities.md): supported CPU and CUDA paths.
 - [References](references.md): references, software acknowledgements, and

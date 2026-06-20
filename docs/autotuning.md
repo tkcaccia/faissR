@@ -1,0 +1,128 @@
+# Autotuning Notes
+
+[Home](../README.md) |
+[Installation](installation.md) |
+[Implementation](implementation.md) |
+[Examples](examples.md) |
+[Benchmarks](benchmarks.md) |
+**Autotuning** |
+[API](usage-api.md) |
+[Backends](backend-capabilities.md) |
+[References](references.md)
+
+These notes summarize the empirical `nn()` tuning run on chiamaka for k = 50,
+Euclidean/L2 search, raw unscaled data, and all benchmark datasets except
+imagenet. The full result files are in:
+
+`/mnt/sata_ssd/faissR_AUTOTUNE_ALLMETHODS_20260620_224207`
+
+Important files:
+
+- `autotune_results.csv`: one row per dataset and method label.
+- `autotune_method_summary.csv`: method-level speed/recall/failure summary.
+- `autotune_recommendations_by_dataset.csv`: fastest method by recall target.
+- `autotune_issues.csv`: low-recall, unavailable, or failed rows.
+
+## Default Policy
+
+Use these rules for `backend = "auto"` and for explicit backend recommendations:
+
+- Prefer exact GPU search when the data fits and target recall is very high.
+  `faiss_gpu_flat_l2` and `cuda_cuvs_bruteforce` were the most reliable
+  high-recall CUDA paths.
+- Prefer `faiss_hnsw` for CPU approximate self-KNN. In this benchmark it gave a
+  better speed/accuracy balance than FAISS NN-Descent.
+- Prefer `cpu_grid` for 2D/3D Euclidean simulated data. The grid backends are
+  intentionally unavailable for higher-dimensional data.
+- Treat IVFPQ backends as memory-pressure tools, not accuracy-first defaults.
+- Treat direct `cuda_cuvs_cagra` as experimental on high-dimensional raw data
+  until pilot tuning proves adequate recall. `faiss_gpu_cagra` was reliable in
+  the same MNIST test where direct cuVS CAGRA was not.
+
+## Method-Specific Settings
+
+| Method label | Role | Current tuning rule |
+|---|---|---|
+| `faiss_flat_exact` | CPU exact baseline | Use for exact CPU reference on small/medium data; avoid as default for large high-dimensional self-search because MNIST/FashionMNIST timed out. |
+| `faiss_gpu_flat_l2` | CUDA exact/high-recall | Preferred high-recall GPU default when FAISS GPU is available and data fits. |
+| `cuda_cuvs_bruteforce` | CUDA exact/high-recall | Preferred exact cuVS path; consistently recall 1 in this benchmark and often fastest. |
+| `faiss_hnsw_fast` | CPU speed tier | M = 24, efConstruction = 120, efSearch = 80; good speed, but recall can be below 0.999 on image/flow data. |
+| `faiss_hnsw_balanced` | CPU default tier | M = 32, efConstruction = 200, efSearch = 150; best general CPU balance and used as the default `faiss_hnsw` setting. |
+| `faiss_hnsw_high` | CPU high-recall tier | M = 48, efConstruction = 240, efSearch = 220; use when recall target is about 0.999 or higher. |
+| `rcpphnsw` | CPU fallback | Good fallback when FAISS is unavailable, but FAISS HNSW is preferred when FAISS is built. |
+| `faiss_ivf_fast` | CPU IVF speed tier | nprobe = 4; too low-recall on many datasets, not a default accuracy path. |
+| `faiss_ivf_balanced` | CPU IVF middle tier | Default `nprobe` now uses at least 16 probes; useful when HNSW is not desired. |
+| `faiss_ivf_high` | CPU IVF high-recall tier | nprobe = 16 in the benchmark; often much better recall, but slower on image data. |
+| `faiss_gpu_ivf_flat` | CUDA IVF-Flat | Useful but not consistently faster than exact GPU on these sample sizes; keep pilot/cache tuning enabled. |
+| `cuda_cuvs_ivf_flat` | CUDA cuVS IVF-Flat | Fast on low-dimensional flow/simulated data at about 0.99-0.999 recall; not high-recall default. |
+| `faiss_ivfpq_fast` | CPU memory-pressure tier | Low recall on many datasets; use only when memory reduction is the priority. |
+| `faiss_ivfpq_balanced` | CPU memory-pressure tier | Still low recall on image/low-dimensional flow datasets; explicit opt-in only. |
+| `faiss_gpu_ivfpq` | CUDA memory-pressure tier | Fast but low recall in this benchmark; explicit opt-in only. |
+| `cuda_cuvs_ivfpq` | CUDA memory-pressure tier | Better than FAISS GPU IVFPQ on some datasets but still not an accuracy-first default. |
+| `faiss_nsg_fast` | CPU graph candidate | Can be accurate but failed on some datasets with fewer than k neighbours; use safer params or retry. |
+| `faiss_nsg_balanced` | CPU graph candidate | Safer than fast but still had a failure; default params increased to r = 48 and search_l = 200. |
+| `faiss_nndescent_fast` | CPU graph speed tier | Fast, but recall was usually lower than HNSW. |
+| `faiss_nndescent_balanced` | CPU graph candidate | Defaults increased to graph_k = 100, iter = 20, search_l = 100 for k = 50; still not the CPU auto default. |
+| `cuda_cuvs_nndescent` | CUDA graph speed tier | Fast and useful at around 0.99 recall on some datasets; failed on COIL20. |
+| `faiss_gpu_cagra` | CUDA graph high-recall tier | Reliable high-recall CAGRA path through FAISS/cuVS integration. |
+| `cuda_cuvs_cagra` | Direct cuVS CAGRA | Guarded by pilot recall. Direct cuVS CAGRA had anomalously poor MNIST recall; do not trust without pilot success. |
+| `cpu_grid` | Exact 2D/3D spatial path | Best for simulated 2D/3D Euclidean data; unavailable by design outside 2D/3D. |
+| `cuda_grid` | CUDA 2D/3D spatial path | Correct for 2D/3D but slower than CPU grid on chiamaka in this run. |
+
+
+## ImageNet Probe On Chiamaka
+
+Additional ImageNet probes were run on chiamaka after installing the current
+working tree. The dataset was found at:
+
+`/mnt/sata_ssd/fastEmbedR_Data/imagenet/imagenet.RData`
+
+The object contains `imagenet$data` and `imagenet$labels`. The data table has
+1,281,167 rows and 1,024 columns and occupies about 10 GB as double-precision R
+columns. Probe outputs were saved in:
+
+`/mnt/sata_ssd/faissR_IMAGENET_PROBE_20260621_000829`
+
+Important files:
+
+- `imagenet_probe_results.csv`: 10k and 50k self-KNN sample results with exact
+  FAISS GPU Flat as the recall reference.
+- `imagenet_full_query_results.csv`: full-reference query attempts against
+  1,000 sampled queries.
+
+On the 50k sample, the fastest exact/high-recall routes were:
+
+| Method | Seconds | Recall vs FAISS GPU Flat |
+|---|---:|---:|
+| `faiss_gpu_flat_l2` | 1.208 | 1.000000 |
+| `cuda_cuvs_bruteforce` | 1.747 | 0.999999 |
+| `faiss_hnsw` | 31.692 | 0.999524 |
+| `faiss_gpu_cagra` | 8.769 | 0.996410 |
+| `cuda_cuvs_cagra` | 3.406 | 0.993652 |
+
+Full-reference tests with 1,281,167 reference rows and 1,000 query rows were
+attempted for `faiss_hnsw`, `faiss_ivf`, `faiss_gpu_cagra`, and
+`cuda_cuvs_ivf_flat`. All four worker processes were killed with exit code 137.
+The common failure mode was host-memory pressure from loading a 10 GB double
+`data.table`, coercing it to a second contiguous double matrix, and then building
+backend-side float/index buffers. On this machine, full ImageNet should be run
+from a memory-efficient matrix/float32 representation or on a host with more RAM.
+
+## Known Issues From The Run
+
+- Direct cuVS CAGRA can produce very low recall on high-dimensional raw MNIST.
+  The package now stops when pilot tuning cannot meet the target recall, instead
+  of silently returning a poor result.
+- FAISS NSG can return fewer neighbours than requested on some datasets. Keep
+  safer defaults and consider adding a retry path before using it as an auto
+  default.
+- cuVS NN-Descent failed on COIL20 with a CUDA invalid-argument error. It should
+  remain explicit or secondary until more robust guards are added.
+- IVFPQ methods are often fast or memory-efficient, but recall was frequently
+  poor. They should be documented as compressed-memory methods.
+
+## Reproducibility
+
+The run used isolated worker processes with a 240 second timeout per
+method/dataset row. Failures and timeouts were recorded and did not stop the
+matrix. CPU methods used 12 OpenMP/MKL threads on chiamaka.

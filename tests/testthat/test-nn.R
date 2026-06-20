@@ -479,11 +479,11 @@ test_that("removed CPU approximation backends are not public nn choices", {
   expect_error(nn(x, k = 5L, backend = "cpu_annoy"), "should be one of")
 })
 
-test_that("CPU approximate selector chooses FAISS NN-Descent, RcppHNSW, or exact CPU", {
+test_that("CPU approximate selector chooses FAISS HNSW, RcppHNSW, or exact CPU", {
   selected <- faissR:::select_cpu_approx_backend(12000L, 30L, 30L)
-  expect_true(selected %in% c("faiss_nndescent", "hnsw", "cpu"))
+  expect_true(selected %in% c("faiss_hnsw", "hnsw", "cpu"))
   if (faiss_available()) {
-    expect_equal(selected, "faiss_nndescent")
+    expect_equal(selected, "faiss_hnsw")
   } else if (requireNamespace("RcppHNSW", quietly = TRUE)) {
     expect_equal(selected, "hnsw")
   }
@@ -612,20 +612,20 @@ test_that("FAISS graph backends report actual and requested parameters", {
     nsg <- faissR:::nn_without_self(x, k = 10L, backend = "faiss_nsg", n_threads = 2L)
     nsg_approx <- attr(nsg, "approximation")
     expect_equal(dim(nsg$indices), c(nrow(x), 10L))
-    expect_equal(nsg_approx$r, 32L)
-    expect_equal(nsg_approx$requested_r, 32L)
-    expect_equal(nsg_approx$search_l, 100L)
-    expect_equal(nsg_approx$requested_search_l, 100L)
+    expect_equal(nsg_approx$r, 48L)
+    expect_equal(nsg_approx$requested_r, 48L)
+    expect_equal(nsg_approx$search_l, 200L)
+    expect_equal(nsg_approx$requested_search_l, 200L)
     expect_equal(nsg_approx$gk, max(64L, 2L * 10L, 2L * nsg_approx$r))
     expect_false(nsg_approx$nsg_parameters_adjusted)
 
     nnd <- faissR:::nn_without_self(x, k = 10L, backend = "faiss_nndescent", n_threads = 2L)
     nnd_approx <- attr(nnd, "approximation")
     expect_equal(dim(nnd$indices), c(nrow(x), 10L))
-    expect_equal(nnd_approx$graph_k, 64L)
-    expect_equal(nnd_approx$requested_graph_k, 64L)
-    expect_equal(nnd_approx$n_iter, 10L)
-    expect_equal(nnd_approx$requested_n_iter, 10L)
+    expect_equal(nnd_approx$graph_k, 100L)
+    expect_equal(nnd_approx$requested_graph_k, 100L)
+    expect_equal(nnd_approx$n_iter, 20L)
+    expect_equal(nnd_approx$requested_n_iter, 20L)
     expect_false(nnd_approx$nndescent_parameters_adjusted)
   } else {
     expect_error(nn(x, k = 10L, backend = "faiss_nsg"), "FAISS")

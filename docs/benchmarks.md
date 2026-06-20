@@ -5,6 +5,7 @@
 [Implementation](implementation.md) |
 [Examples](examples.md) |
 **Benchmarks** |
+[Autotuning](autotuning.md) |
 [API](usage-api.md) |
 [Backends](backend-capabilities.md) |
 [References](references.md)

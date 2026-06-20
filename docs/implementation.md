@@ -5,205 +5,202 @@
 **Implementation** |
 [Examples](examples.md) |
 [Benchmarks](benchmarks.md) |
+[Autotuning](autotuning.md) |
 [API](usage-api.md) |
 [Backends](backend-capabilities.md) |
 [References](references.md)
 
-`faissR` is designed as a standalone nearest-neighbour, graph, k-means, and
-kNN-model layer. FAISS is the required vector-search dependency. CUDA, RAPIDS
-cuVS, and RAPIDS libcugraph are optional compiled backends. The package code
-does not call Python and does not require conda.
+`faissR` is a standalone R package for nearest-neighbour search, graph
+construction, graph clustering, kNN prediction, and k-means. FAISS is the
+required compiled vector-search dependency. CUDA, RAPIDS cuVS, and RAPIDS
+libcugraph are optional compiled backends; the package must still install from
+source on CPU-only systems when FAISS is available. The code does not call
+Python and does not require conda.
 
 ## Design Rules
 
-1. FAISS is mandatory for package compilation.
-2. CUDA, cuVS, and cuGraph are optional. CPU-only source installation must work
-   when FAISS is available.
-3. Explicit GPU requests never silently fall back to CPU.
-4. Low-level KNN output is an R list with `indices` and `distances` matrices.
-5. Graph and model functions reuse KNN output where possible so expensive
-   neighbour search can be computed once.
-6. Benchmark-only quality helpers are kept out of the public package API.
+1. FAISS CPU support is mandatory for the package build.
+2. CUDA, FAISS GPU, cuVS, and libcugraph support are optional at compile time.
+3. Explicit GPU backends fail clearly when GPU support is unavailable; they do
+   not silently fall back to CPU.
+4. KNN outputs use simple 1-based `indices` and numeric `distances` matrices.
+5. Expensive KNN work should be reusable by graph, clustering, embedding, and
+   supervised prediction functions.
+6. Benchmark-only quality helpers are kept out of the public API.
+7. External libraries are linked as system dependencies and are not vendored
+   into the package.
 
 ## `nn()`
 
-`nn()` is the low-level nearest-neighbour search function. It accepts a
-reference matrix and, optionally, a query matrix. If no query matrix is supplied,
-it performs self-search. The result is a `faissR_nn` object containing 1-based
-integer neighbour indices and numeric distances, with backend metadata stored as
-attributes.
+`nn()` is the low-level nearest-neighbour function. It accepts a reference
+matrix/data frame and, optionally, a query matrix/data frame. If `points` is not
+supplied, it performs self-search. Results are `faissR_nn` objects containing
+neighbour indices, distances, the resolved backend, the metric, and exact versus
+approximate metadata.
 
-Implemented routes include:
+Supported CPU routes include:
 
-- native exact CPU search;
-- FAISS CPU Flat, IVF-Flat, IVF-PQ, HNSW, NSG, and NN-descent when supported by
+- native exact dense CPU search;
+- native exact sparse `dgCMatrix` search;
+- FAISS CPU Flat, IVF-Flat, IVF-PQ, HNSW, NSG, and NN-Descent when present in
   the linked FAISS build;
-- FAISS GPU Flat, IVF-Flat, IVF-PQ, and CAGRA when FAISS GPU support is built;
-- direct RAPIDS cuVS brute force, CAGRA, IVF-Flat, IVF-PQ, and NN-descent when
-  cuVS is available;
-- RcppHNSW fallback when the suggested package is installed;
-- sparse/candidate and low-dimensional grid paths for specialized cases.
+- RcppHNSW as an optional CRAN-friendly fallback;
+- exact 2D/3D grid and VP-tree routes for low-dimensional Euclidean self-KNN.
 
-The public metrics are deliberately limited to `"euclidean"`, `"cosine"`, and
-`"correlation"`. Euclidean/L2 is the validated high-performance path for FAISS,
-CUDA, and cuVS. Cosine/correlation are routed to supported CPU paths unless a
-backend explicitly supports the required semantics.
+Supported CUDA routes include:
+
+- FAISS GPU Flat, IVF-Flat, IVF-PQ, and CAGRA when FAISS GPU support is built;
+- direct RAPIDS cuVS brute force, CAGRA, IVF-Flat, IVF-PQ, and NN-Descent when
+  cuVS is available;
+- native CUDA 2D/3D grid search for low-dimensional Euclidean self-KNN.
+
+The validated high-performance metric is Euclidean/L2. Cosine and correlation
+are exposed for exact CPU and RcppHNSW-compatible paths; accelerator backends
+reject unsupported metric/backend combinations instead of returning Euclidean
+neighbours under a different label.
+
+### Automatic Backend Policy
+
+`backend = "cpu_approx"` now prefers FAISS HNSW when FAISS is available,
+then RcppHNSW, then exact CPU. This follows the chiamaka autotuning run where
+FAISS HNSW gave the best CPU speed/recall balance on image and flow datasets.
+
+`backend = "cuda_cuvs"`, `"cuda"`, and explicit CUDA aliases use CUDA-only
+routes. Exact CUDA references are `faiss_gpu_flat_l2` and
+`cuda_cuvs_bruteforce`. FAISS GPU CAGRA uses the FAISS/cuVS integration path.
+Direct cuVS CAGRA is guarded by pilot recall tuning; if the pilot does not meet
+the configured recall target, the function stops and recommends
+`faiss_gpu_cagra` or `cuda_cuvs_bruteforce` rather than silently returning a
+poor graph-search result.
+
+IVF probe defaults are conservative enough to avoid misleading speed-only
+results. IVFPQ is treated as an explicit memory-pressure backend because product
+quantization can reduce recall substantially.
 
 ## `nn_without_self()`
 
-`nn_without_self()` wraps `nn()` for self-search and removes the self-neighbour.
-It is used by graph construction and clustering paths that need exactly `k`
-non-self neighbours per row. Internally it requests enough neighbours to remove
-the self column safely and returns the same KNN object shape as `nn()`.
+`nn_without_self()` wraps self-KNN and returns exactly `k` non-self neighbours.
+It is used internally by graph construction, clustering, and benchmarks. The
+function requests enough neighbours to remove the self-match safely and keeps the
+same `faissR_nn` result shape as `nn()`.
 
 ## `candidate_knn()`
 
-`candidate_knn()` ranks only a supplied candidate set for each query row. This
-avoids constructing a full all-pairs distance matrix when another algorithm has
-already generated likely neighbours. The CPU implementation computes exact
-candidate distances and keeps the top `k`; CUDA candidate-ranking code is used
-when compiled and explicitly requested. The output matches the `nn()` result
-shape so it can feed downstream graph, prediction, or benchmark code.
+`candidate_knn()` ranks a supplied candidate set for each query row. It avoids a
+full all-pairs search when another algorithm has already proposed likely
+neighbours. CPU candidate ranking is exact; CUDA candidate ranking is used only
+when compiled and explicitly requested. The output can feed graph construction,
+prediction, or diagnostic code.
 
 ## `knn_graph()`
 
-`knn_graph()` builds a native `faissR_graph` edge-list object from:
+`knn_graph()` converts a matrix, an existing KNN object, or an embedding-like
+object into a native `faissR_graph` edge list. When KNN is not supplied, it calls
+`nn_without_self()` with the requested backend. Supported edge weights include:
 
-- a numeric matrix or data frame;
-- an existing `nn()` result;
-- an embedding-like object with a matrix layout.
-
-When KNN is not supplied, `knn_graph()` calls `nn_without_self()` using the
-requested neighbour backend. It then builds weighted edges in C++ with one of
-these weight modes:
-
+- `"distance"`: distance-derived edge strengths;
 - `"snn"`: shared-nearest-neighbour/Jaccard weights;
-- `"adaptive"`: adaptive exponential distance weights;
-- `"distance"`: `1 / (1 + distance)` weights;
-- `"binary"`: unweighted edges;
-- `"auto"`: SNN for input-space graphs and distance weights for embedding-space
-  graphs.
+- `"adaptive"`: local-scale exponential distance weights;
+- `"binary"`: unweighted graph edges;
+- `"auto"`: SNN for input-space graphs and distance-style weights for
+  embedding-space graphs.
 
-The graph object stores metadata such as `k`, weighting mode, pruning, mutual
-edge filtering, and the KNN backend used. It does not require `igraph`.
+The graph object stores `k`, weighting, pruning, mutual-edge filtering, and KNN
+backend metadata. It does not require `igraph`.
 
 ## `graph_cluster()`
 
-`graph_cluster()` is the public community-detection API. It accepts either a
-precomputed `faissR_graph`, a KNN object, a matrix/data frame, or an embedding
-object. If necessary, it first builds a KNN graph through `knn_graph()` and then
-runs clustering on the native edge list.
+`graph_cluster()` performs community detection on a precomputed `faissR_graph`,
+a KNN object, or a matrix-like input. If a graph is not supplied, it builds one
+with `knn_graph()` first.
 
-Supported methods:
+Implemented methods are:
 
-- `method = "random_walking"`: CPU native random-walk label propagation inspired
-  by walktrap/random-walk clustering. It uses the `steps` argument as the walk
-  depth/control parameter and currently runs on CPU only.
-- `method = "louvain"`: native CPU modularity local-moving implementation. With
-  `backend = "cuda"` and a libcugraph-enabled build, it calls RAPIDS libcugraph
-  Louvain instead.
-- `method = "leiden"`: native CPU Louvain-style local moving plus a refinement
-  pass that splits disconnected communities. With `backend = "cuda"` and a
-  libcugraph-enabled build, it calls RAPIDS libcugraph Leiden instead.
+- `method = "random_walking"`: native CPU random-walk label propagation inspired
+  by walktrap/random-walk clustering;
+- `method = "louvain"`: native CPU modularity local-moving, with optional CUDA
+  libcugraph Louvain when built and requested;
+- `method = "leiden"`: native CPU local moving plus refinement to split
+  disconnected communities, with optional CUDA libcugraph Leiden when built and
+  requested.
 
-Important backend behavior:
-
-- `backend = "cpu"` uses faissR C++/OpenMP code and honors `n_threads` where
-  OpenMP is available.
-- `backend = "cuda"` requires RAPIDS libcugraph at build time for Louvain and
-  Leiden. It never calls Python and never silently falls back to CPU.
-- CUDA random-walking is intentionally unavailable until a dedicated cuGraph
-  random-walk clustering adapter is implemented.
-
-The returned `faissR_graph_cluster` object contains membership, modularity,
-number of communities, method/backend labels, the graph used, run parameters,
-and source acknowledgements.
+CPU graph clustering uses faissR C++/OpenMP code and honors `n_threads` where
+OpenMP is available. CUDA Louvain and Leiden require RAPIDS libcugraph and never
+fall back to CPU for an explicit CUDA request. CUDA random-walking remains
+unavailable until a dedicated CUDA implementation is added.
 
 ## `fast_kmeans()`
 
-`fast_kmeans()` runs k-means through the fastest compiled backend that matches
-the request. CPU builds use FAISS/statistics paths. CUDA builds first try FAISS
-GPU k-means when available, then direct RAPIDS cuVS k-means where supported.
-Explicit GPU requests fail clearly when CUDA/cuVS is unavailable. The return
-object includes cluster assignments, centers, within-cluster sums of squares,
-cluster sizes, iteration count, selected backend, and parameters.
+`fast_kmeans()` provides CPU and CUDA k-means routes. CPU builds use compiled
+FAISS/native numeric paths. CUDA builds try FAISS GPU k-means and direct cuVS
+k-means when those libraries are available. Results include cluster assignments,
+centres, within-cluster sums of squares, cluster sizes, iteration count, selected
+backend, and run parameters.
 
-## `knn()`
+## `knn()` And `predict()`
 
-`knn()` is the high-level supervised kNN model API. It replaces the older public
-`knn_fit()`, `faiss.fit()`, and `cuvs.fit()` API.
+`knn()` is the high-level supervised kNN API. It replaces the older public split
+between `knn_fit()`, `faiss.fit()`, and `cuvs.fit()`.
 
-Two call forms are supported:
+Two forms are supported:
 
 ```r
 model <- knn(Xtrain, Ytrain)
 pred <- predict(model, Xtest)
 ```
 
-or immediate prediction:
+and immediate prediction:
 
 ```r
 pred <- knn(Xtrain, Ytrain, Xtest)
 prob <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 ```
 
-Internally, `knn()` stores the training matrix, response vector, task type,
-backend, metric, `k`, and CPU-thread settings in a `faissR_knn_model` object.
-It does not build a permanent FAISS/cuVS index object yet; prediction calls the
-selected `nn()` backend using the stored training data.
-
-## `predict()`
-
-`predict.faissR_knn_model()` applies a model returned by `knn()`. For
-classification it computes neighbour votes and returns a factor by default. With
-`type = "prob"`, it returns a class-probability matrix. For regression it
-returns a numeric vector of neighbour averages. `vote = "weighted"` uses
-inverse-distance weights and handles exact zero-distance matches explicitly.
-
-Saved model compatibility is maintained for objects created with older internal
-field names, but the public API is now `knn()` plus `predict()`.
-
-## `backend_info()`
-
-`backend_info()` reports compiled/runtime backend availability in a data frame.
-It checks native CPU, FAISS, FAISS GPU/cuVS-integrated routes, direct cuVS,
-native CUDA, and cuGraph graph clustering. It is informational only; explicit
-backend calls still validate availability at execution time.
+The fitted model stores the training matrix, response, task type, backend,
+metric, `k`, and thread settings. `predict()` performs classification or
+regression from neighbour votes. `predict(type = "prob")` returns class
+probabilities for classification, so a separate `predict_proba()` API is not
+needed.
 
 ## Availability Helpers
 
-- `faiss_available()` returns whether faissR was compiled and linked against
-  FAISS.
-- `cuda_available()` returns whether the package was built with CUDA support and
-  a CUDA device is visible.
-- `cuvs_available()` returns whether direct RAPIDS cuVS backends are compiled
-  and usable.
-- `cugraph_available()` returns whether RAPIDS libcugraph support was compiled
-  for CUDA graph clustering.
+- `faiss_available()` reports whether FAISS support was compiled and linked.
+- `cuda_available()` reports CUDA build/runtime availability.
+- `cuvs_available()` reports direct RAPIDS cuVS availability.
+- `cugraph_available()` reports RAPIDS libcugraph graph-clustering support.
+- `backend_info()` returns a data frame summarizing compiled/runtime backends,
+  explicit backend labels, devices, and notes.
 
-These helpers are useful in examples, benchmark scripts, and optional test
-blocks, but production code should still handle explicit backend errors.
+These helpers are informational; explicit backend calls still validate
+availability at execution time.
 
-## Print Methods
+## Large Data And ImageNet
 
-`print.faissR_nn()` summarizes KNN result dimensions, backend metadata, metric,
-and self-query status. `print.faissR_graph_cluster()` summarizes clustering
-method, backend, number of communities, modularity, thread count, and the
-selected run when repeated runs were used. These methods are S3 methods and are
-called through base `print()`.
+The ImageNet feature file tested on chiamaka contains 1,281,167 rows by 1,024
+features. It is stored as a double `data.table`, about 10 GB in R. Before FAISS
+or cuVS can index it, R must create a contiguous numeric matrix and the backend
+then creates float/index buffers. On the 31 GB RAM chiamaka host, full-reference
+1.28M-row query tests were killed by the OS for FAISS HNSW, FAISS IVF, FAISS GPU
+CAGRA, and direct cuVS IVF-Flat. This is a data representation and host-memory
+limit, not evidence that those algorithms cannot handle ImageNet on a larger or
+more memory-efficient setup.
 
-## Relationship To fastEmbedR
+Bounded ImageNet samples did work. On a 50,000-row sample with `k = 50`,
+`faiss_gpu_flat_l2` completed in 1.208 seconds with exact recall, direct
+`cuda_cuvs_bruteforce` completed in 1.747 seconds at 0.999999 recall, and
+`faiss_hnsw` completed in 31.692 seconds at 0.999524 recall. The saved probe
+files are listed in [Autotuning](autotuning.md).
 
-`fastEmbedR` imports `faissR` and calls `faissR::nn()` for matrix-input
-`opentsne()` and `umap()`. The embedding package should not duplicate FAISS,
-CUDA, or cuVS logic. Users who want explicit control over vector search should
-load `faissR` directly, compute KNN once, and pass the result to downstream
-embedding or clustering workflows.
+For full ImageNet-scale runs on small-memory hosts, the preferred next
+implementation step is to avoid loading the dataset as a double data frame. A
+matrix or float32/on-disk representation would remove one large conversion copy
+and make FAISS/cuVS index construction more practical.
 
 ## Licensing And Acknowledgement
 
-FAISS, RAPIDS cuVS, RAPIDS cuGraph, HNSW, NN-descent, IVF, product
-quantization, graph clustering, and k-means literature informed the
-implementation choices [1-12]. External libraries are linked as system
-dependencies and are not vendored into the package. faissR is released under the
-MIT license.
+faissR is released under the MIT license. The implementation is inspired by and
+links against external work including FAISS, FAISS GPU/cuVS integration, RAPIDS
+cuVS, RAPIDS libcugraph, HNSW, NN-Descent, IVF, product quantization, k-means,
+Louvain, Leiden, and random-walk clustering. See [References](references.md) for
+papers, software projects, and acknowledgements. External libraries remain
+separate system dependencies with their own licenses.
