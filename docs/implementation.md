@@ -65,9 +65,11 @@ random-walking is not enabled yet.
 
 ## kNN Models
 
-`knn_fit()`, `faiss.fit()`, and `cuvs.fit()` build a reusable kNN classifier or
-regressor. Prediction uses majority vote or distance-weighted vote for labels,
-and `predict(type = "prob")` returns class probabilities from neighbour votes.
+`knn()` builds a reusable kNN classifier or regressor when called with
+`Xtrain` and `Ytrain`; when `Xtest` is supplied it immediately returns
+predictions. `predict()` applies a fitted model. Prediction uses majority vote
+or distance-weighted vote for labels, and `predict(type = "prob")` returns
+class probabilities from neighbour votes.
 
 This model API is useful when a FAISS/cuVS index should be fitted once and
 queried repeatedly, for example with ImageNet-like feature matrices.

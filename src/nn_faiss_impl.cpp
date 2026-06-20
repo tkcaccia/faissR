@@ -618,9 +618,6 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
   while (pq_m > 1 && ((n_features % pq_m) != 0 || !faiss_gpu_supported_pq_code_size(pq_m))) {
     --pq_m;
   }
-  const int max_full_precision_lut_entries = 49152 / (static_cast<int>(sizeof(float)) * (1 << pq_nbits));
-  while (pq_m > 1 && pq_m > max_full_precision_lut_entries) --pq_m;
-  while (pq_m > 1 && (n_features % pq_m) != 0) --pq_m;
   faiss::gpu::StandardGpuResources resources;
   faiss::gpu::GpuIndexIVFPQConfig config;
   config.device = 0;

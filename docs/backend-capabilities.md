@@ -34,7 +34,7 @@ FAISS GPU, RAPIDS cuVS, and RAPIDS libcugraph support.
 | `knn_graph()` | yes | uses CUDA KNN if the supplied/generated KNN uses CUDA | Returns a native `faissR_graph` edge list. |
 | `graph_cluster()` | yes | Louvain/Leiden with libcugraph when built | CPU random-walking/Louvain/Leiden use native C++/OpenMP. CUDA random-walking is not enabled yet. |
 | `candidate_knn()` | yes | optional CUDA candidate ranking where compiled | Useful for projection/refinement candidate sets. |
-| `knn_fit()` | yes | yes, if CUDA backend requested and available | Stores training data/index metadata for repeated prediction. |
+| `knn()` / `predict()` | yes | yes, if CUDA backend requested and available | Stores training data/index metadata for repeated prediction, or predicts immediately when `Xtest` is supplied. |
 | `fast_kmeans()` | yes | yes, where FAISS/cuVS k-means is available | Use `backend_info()` to confirm. |
 
 ## Availability Helpers

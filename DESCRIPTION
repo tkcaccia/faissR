@@ -13,8 +13,10 @@ Description: Native nearest-neighbour search, graph construction, graph clusteri
     reduction workflows. The package requires the FAISS C++ library for CPU
     indexes and can optionally use FAISS GPU indexes with NVIDIA cuVS
     integration or direct RAPIDS cuVS/CUDA indexes on NVIDIA machines.
-    CPU-only systems do not need NVIDIA libraries. Class probabilities are
-    returned through predict(type = "prob") for kNN classification models.
+    CPU-only systems do not need NVIDIA libraries. Supervised kNN models use
+    knn(Xtrain, Ytrain) and predict(), or knn(Xtrain, Ytrain, Xtest) for
+    immediate prediction. Class probabilities are returned through
+    predict(type = "prob") for kNN classification models.
 License: MIT + file LICENSE
 URL: https://github.com/tkcaccia/faissR
 BugReports: https://github.com/tkcaccia/faissR/issues

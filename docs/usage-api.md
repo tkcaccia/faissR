@@ -19,9 +19,7 @@
 | `knn_graph()` | Build a native weighted graph from KNN output, data, or an embedding. |
 | `graph_cluster()` | Run native random-walking, Louvain, or Leiden clustering on a KNN graph. |
 | `fast_kmeans()` | FAISS/cuVS-backed k-means where available. |
-| `knn_fit()` | Fit a reusable kNN classifier/regressor. |
-| `faiss.fit()` | Alias for FAISS-oriented kNN model fitting. |
-| `cuvs.fit()` | Alias for cuVS-oriented kNN model fitting. |
+| `knn()` | Fit a reusable kNN classifier/regressor, or fit and predict immediately when `Xtest` is supplied. |
 | `predict()` | kNN class or numeric prediction. |
 | `backend_info()` | Report available FAISS, CUDA, cuVS, cuGraph, and optional backend capabilities. |
 
@@ -31,9 +29,9 @@
 library(faissR)
 
 x <- scale(as.matrix(iris[, 1:4]))
-knn <- nn(x, k = 50, backend = "auto", metric = "euclidean", n_threads = 4)
+nn_res <- nn(x, k = 50, backend = "auto", metric = "euclidean", n_threads = 4)
 
-saveRDS(knn, "iris_knn_k50.rds")
+saveRDS(nn_res, "iris_knn_k50.rds")
 ```
 
 ## Graph Clustering
@@ -42,7 +40,7 @@ saveRDS(knn, "iris_knn_k50.rds")
 with the `method` argument:
 
 ```r
-graph <- knn_graph(knn, k = 15, weight = "snn")
+graph <- knn_graph(nn_res, k = 15, weight = "snn")
 
 leiden <- graph_cluster(graph, method = "leiden", backend = "cpu", n_threads = 4)
 louvain <- graph_cluster(graph, method = "louvain", backend = "cpu", n_threads = 4)

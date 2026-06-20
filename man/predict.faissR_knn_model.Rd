@@ -14,8 +14,7 @@
 )
 }
 \arguments{
-\item{object}{A model returned by [knn_fit()], [faiss.fit()], or
-[cuvs.fit()].}
+\item{object}{A model returned by \code{knn()}.}
 
 \item{newdata}{Numeric query matrix with observations in rows.}
 

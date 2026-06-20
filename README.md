@@ -33,9 +33,9 @@ headers and libraries discovered by `configure`.
   Leiden-style clustering. CUDA Louvain and Leiden use RAPIDS libcugraph when
   faissR is built with libcugraph; CUDA random-walking is not enabled yet.
 - `fast_kmeans()` for CPU, FAISS CPU/GPU, and optional cuVS k-means.
-- `knn_fit()`, `faiss.fit()`, `cuvs.fit()`, and `predict()` for kNN
-  classification/regression, including class probabilities with
-  `predict(type = "prob")`.
+- `knn()` and `predict()` for kNN classification/regression, including
+  immediate prediction with `knn(Xtrain, Ytrain, Xtest)` and class
+  probabilities with `predict(type = "prob")`.
 - `backend_info()`, `faiss_available()`, `cuda_available()`,
   `cuvs_available()`, and `cugraph_available()` to report compiled/runtime
   backend support.
@@ -97,7 +97,7 @@ route and parameters a result used.
 library(faissR)
 
 x <- scale(as.matrix(iris[, 1:4]))
-knn <- nn(x, k = 15, backend = "auto", metric = "euclidean", n_threads = 4)
+nn_res <- nn(x, k = 15, backend = "auto", metric = "euclidean", n_threads = 4)
 
 cl <- graph_cluster(knn, method = "leiden", backend = "cpu", n_runs = 2, n_threads = 2)
 table(cl$membership)

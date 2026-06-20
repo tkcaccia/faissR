@@ -1,78 +1,110 @@
-#' Fit a k-nearest-neighbour classifier or regressor
+#' Fit or apply a k-nearest-neighbour classifier or regressor
 #'
-#' `knn_fit()` stores a reference matrix and response vector, then uses [nn()]
-#' during prediction. This keeps the model API small while still using the
-#' package's FAISS, cuVS/CUDA, HNSW, grid, VP-tree, or exact CPU neighbour
-#' backends. Classification supports majority or inverse-distance weighted
-#' votes. Regression supports ordinary or inverse-distance weighted neighbour
-#' averages.
+#' `knn()` is the high-level supervised kNN API. With `Xtrain` and `Ytrain`
+#' only, it returns a reusable model. With `Xtest`, it immediately predicts the
+#' query rows by fitting the model and calling [predict()] internally. The
+#' low-level nearest-neighbour search API remains [nn()].
 #'
-#' @param X_train Numeric training matrix with observations in rows.
-#' @param y_train Training labels or numeric response.
+#' @param Xtrain Numeric training matrix with observations in rows.
+#' @param Ytrain Training labels or numeric response.
+#' @param Xtest Optional numeric query matrix. If supplied, `knn()` returns
+#'   predictions for `Xtest`; otherwise it returns a fitted model.
 #' @param backend Neighbour backend passed to [nn()]. Use `"faiss"` for FAISS
 #'   CPU search or `"cuda"`/`"cuda_cuvs"` for CUDA/cuVS when available.
 #' @param metric Distance metric passed to [nn()].
 #' @param task `"auto"`, `"classification"`, or `"regression"`. `"auto"` treats
 #'   numeric responses as regression and other response types as classification.
-#' @param k Default number of neighbours used by [predict()] and
-#'   [predict()] with `type = "prob"` when they are called without `k`.
+#' @param k Default number of neighbours used by [predict()] and by immediate
+#'   predictions when `Xtest` is supplied.
 #' @param n_threads CPU threads passed to [nn()] for CPU backends.
-#' @param ... Additional arguments passed to [knn_fit()] by the convenience
-#'   wrappers [faiss.fit()] and [cuvs.fit()].
-#' @return A fitted `faissR_knn_model` object.
+#' @param vote `"majority"` or `"weighted"` for immediate predictions.
+#' @param type `"response"` for class/regression predictions or `"prob"` for
+#'   class probability matrices from classification models.
+#' @param ... Reserved for future options.
+#' @return If `Xtest` is not supplied, a fitted `faissR_knn_model` object. If
+#'   `Xtest` is supplied, a factor for classification, a numeric vector for
+#'   regression, or a numeric class-probability matrix when `type = "prob"`.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
-#' clf <- knn_fit(x, iris$Species, backend = "cpu", k = 5)
-#' head(predict(clf, x, k = 5))
-#' head(predict(clf, x, k = 5, type = "prob"))
+#' model <- knn(x, iris$Species, backend = "cpu", k = 5)
+#' head(predict(model, x, k = 5))
+#' head(predict(model, x, k = 5, type = "prob"))
 #'
-#' reg <- knn_fit(x, iris$Sepal.Length, backend = "cpu", task = "regression")
-#' head(predict(reg, x, k = 5, vote = "weighted"))
+#' pred <- knn(x, iris$Species, x, backend = "cpu", k = 5)
+#' head(pred)
 #' @export
-knn_fit <- function(X_train,
-                    y_train,
-                    backend = "auto",
-                    metric = c("euclidean", "cosine", "correlation"),
-                    task = c("auto", "classification", "regression"),
-                    k = 15L,
-                    n_threads = NULL) {
+knn <- function(Xtrain,
+                Ytrain,
+                Xtest = NULL,
+                backend = "auto",
+                metric = c("euclidean", "cosine", "correlation"),
+                task = c("auto", "classification", "regression"),
+                k = 15L,
+                n_threads = NULL,
+                vote = c("majority", "weighted"),
+                type = c("response", "prob"),
+                ...) {
+  vote <- match.arg(vote)
+  type <- match.arg(type)
+  model <- knn_model_fit(
+    Xtrain = Xtrain,
+    Ytrain = Ytrain,
+    backend = backend,
+    metric = metric,
+    task = task,
+    k = k,
+    n_threads = n_threads
+  )
+  if (is.null(Xtest)) {
+    return(model)
+  }
+  predict(model, Xtest, k = k, vote = vote, type = type, ...)
+}
+
+knn_model_fit <- function(Xtrain,
+                          Ytrain,
+                          backend = "auto",
+                          metric = c("euclidean", "cosine", "correlation"),
+                          task = c("auto", "classification", "regression"),
+                          k = 15L,
+                          n_threads = NULL) {
   metric <- match.arg(metric)
   task <- match.arg(task)
-  x <- as.matrix(X_train)
+  x <- as.matrix(Xtrain)
   storage.mode(x) <- "double"
   if (nrow(x) < 1L || ncol(x) < 1L) {
-    stop("`X_train` must have at least one row and one column.", call. = FALSE)
+    stop("`Xtrain` must have at least one row and one column.", call. = FALSE)
   }
   if (!all(is.finite(x))) {
-    stop("`X_train` must contain only finite values.", call. = FALSE)
+    stop("`Xtrain` must contain only finite values.", call. = FALSE)
   }
-  if (NROW(y_train) != nrow(x)) {
-    stop("`y_train` must have one value for each row of `X_train`.", call. = FALSE)
+  if (NROW(Ytrain) != nrow(x)) {
+    stop("`Ytrain` must have one value for each row of `Xtrain`.", call. = FALSE)
   }
-  if (anyNA(y_train)) {
-    stop("`y_train` must not contain missing values.", call. = FALSE)
+  if (anyNA(Ytrain)) {
+    stop("`Ytrain` must not contain missing values.", call. = FALSE)
   }
   k <- normalize_knn_model_k(k, nrow(x))
   n_threads <- normalize_nn_threads(n_threads)
 
   if (identical(task, "auto")) {
-    task <- if (is.numeric(y_train)) "regression" else "classification"
+    task <- if (is.numeric(Ytrain)) "regression" else "classification"
   }
   if (identical(task, "regression")) {
-    y <- as.numeric(y_train)
+    y <- as.numeric(Ytrain)
     if (!all(is.finite(y))) {
-      stop("Regression `y_train` must contain only finite numeric values.", call. = FALSE)
+      stop("Regression `Ytrain` must contain only finite numeric values.", call. = FALSE)
     }
     levels <- NULL
   } else {
-    y <- as.factor(y_train)
+    y <- as.factor(Ytrain)
     levels <- levels(y)
   }
 
   structure(
     list(
-      X_train = x,
-      y_train = y,
+      Xtrain = x,
+      Ytrain = y,
       task = task,
       levels = levels,
       backend = as.character(backend)[1L],
@@ -84,22 +116,9 @@ knn_fit <- function(X_train,
   )
 }
 
-#' @rdname knn_fit
-#' @export
-faiss.fit <- function(X_train, y_train, ...) {
-  knn_fit(X_train, y_train, backend = "faiss", ...)
-}
-
-#' @rdname knn_fit
-#' @export
-cuvs.fit <- function(X_train, y_train, ...) {
-  knn_fit(X_train, y_train, backend = "cuda_cuvs", ...)
-}
-
 #' Predict from a faissR kNN model
 #'
-#' @param object A model returned by [knn_fit()], [faiss.fit()], or
-#'   [cuvs.fit()].
+#' @param object A model returned by [knn()].
 #' @param newdata Numeric query matrix with observations in rows.
 #' @param k Number of neighbours.
 #' @param vote `"majority"` or `"weighted"` for classification; `"majority"`
@@ -107,7 +126,8 @@ cuvs.fit <- function(X_train, y_train, ...) {
 #' @param type `"response"` for class/regression predictions or `"prob"` for
 #'   class probability matrices from classification models.
 #' @param ... Reserved for future options.
-#' @return A factor for classification or numeric vector for regression.
+#' @return A factor for classification, a numeric vector for regression, or a
+#'   numeric class-probability matrix when `type = "prob"`.
 #' @export
 predict.faissR_knn_model <- function(object,
                                       newdata,
@@ -118,9 +138,11 @@ predict.faissR_knn_model <- function(object,
   vote <- match.arg(vote)
   type <- match.arg(type)
   query <- validate_knn_model_query(object, newdata)
-  k <- normalize_knn_model_k(if (is.null(k)) object$k else k, nrow(object$X_train))
+  train <- model_Xtrain(object)
+  response <- model_Ytrain(object)
+  k <- normalize_knn_model_k(if (is.null(k)) object$k else k, nrow(train))
   neighbours <- nn(
-    object$X_train,
+    train,
     query,
     k = k,
     backend = object$backend,
@@ -129,7 +151,7 @@ predict.faissR_knn_model <- function(object,
   )
   if (identical(object$task, "classification")) {
     proba <- class_vote_probabilities(
-      labels = object$y_train,
+      labels = response,
       indices = neighbours$indices,
       distances = neighbours$distances,
       levels = object$levels,
@@ -145,7 +167,7 @@ predict.faissR_knn_model <- function(object,
     stop("`type = \"prob\"` is only available for classification models.", call. = FALSE)
   }
   regression_vote(
-    response = object$y_train,
+    response = response,
     indices = neighbours$indices,
     distances = neighbours$distances,
     weighted = identical(vote, "weighted")
@@ -161,7 +183,8 @@ validate_knn_model_query <- function(object, newdata) {
   }
   query <- as.matrix(newdata)
   storage.mode(query) <- "double"
-  if (nrow(query) < 1L || ncol(query) != ncol(object$X_train)) {
+  train <- model_Xtrain(object)
+  if (nrow(query) < 1L || ncol(query) != ncol(train)) {
     stop("`newdata` must have at least one row and the same columns as training data.", call. = FALSE)
   }
   if (!all(is.finite(query))) {
@@ -170,6 +193,19 @@ validate_knn_model_query <- function(object, newdata) {
   query
 }
 
+model_Xtrain <- function(object) {
+  x <- object$Xtrain
+  if (is.null(x)) x <- object$X_train
+  if (is.null(x)) stop("`object` does not contain training data.", call. = FALSE)
+  x
+}
+
+model_Ytrain <- function(object) {
+  y <- object$Ytrain
+  if (is.null(y)) y <- object$y_train
+  if (is.null(y)) stop("`object` does not contain training responses.", call. = FALSE)
+  y
+}
 
 normalize_knn_model_k <- function(k, n_train) {
   k <- suppressWarnings(as.integer(k))
