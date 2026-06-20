@@ -89,28 +89,9 @@ test_that("candidate_knn GPU requests do not silently fall back", {
   x <- matrix(rnorm(20), ncol = 2)
   candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
 
-  if (!cuda_available()) {
+  if (cuda_available()) {
+    expect_no_error(candidate_knn(x, candidates, k = 2L, backend = "cuda", exclude_self = TRUE))
+  } else {
     expect_error(candidate_knn(x, candidates, k = 2L, backend = "cuda", exclude_self = TRUE), "CUDA")
   }
-  if (!metal_available()) {
-    expect_error(candidate_knn(x, candidates, k = 2L, backend = "metal", exclude_self = TRUE), "Metal")
-  }
-  expect_error(
-    candidate_knn(x, candidates[1:2, , drop = FALSE], points = x[1:2, , drop = FALSE], k = 2L, backend = "cuda", exclude_self = TRUE),
-    "exclude_self|self-query|CUDA"
-  )
-  expect_error(candidate_knn(x, candidates, k = 2L, backend = "cuda"), "exclude_self|CUDA")
-})
-
-test_that("candidate_knn Metal matches CPU when available", {
-  skip_if_not(metal_available())
-  set.seed(303)
-  x <- matrix(rnorm(20 * 4), nrow = 20)
-  candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
-
-  cpu <- candidate_knn(x, candidates, k = 5L, backend = "cpu", exclude_self = TRUE)
-  metal <- candidate_knn(x, candidates, k = 5L, backend = "metal", exclude_self = TRUE)
-
-  expect_equal(metal$indices, cpu$indices)
-  expect_equal(metal$distances, cpu$distances, tolerance = 5e-5)
 })

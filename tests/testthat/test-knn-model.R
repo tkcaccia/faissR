@@ -13,7 +13,7 @@ test_that("knn_fit predicts classes and probabilities", {
   expect_equal(as.character(pred), c("a", "b"))
   expect_equal(levels(pred), levels(y))
 
-  proba <- predict_proba(fit, matrix(c(0.1, 0.2, 5.2, 5.4), ncol = 2, byrow = TRUE))
+  proba <- predict(fit, matrix(c(0.1, 0.2, 5.2, 5.4), ncol = 2, byrow = TRUE), type = "prob")
   expect_equal(dim(proba), c(2L, 2L))
   expect_equal(colnames(proba), c("a", "b"))
   expect_equal(rowSums(proba), c(1, 1), tolerance = 1e-12)
@@ -29,7 +29,7 @@ test_that("weighted votes use exact matches cleanly", {
   ), ncol = 2, byrow = TRUE)
   fit <- knn_fit(x, c("zero", "other", "other"), backend = "cpu", k = 3L)
 
-  proba <- predict_proba(fit, x[1, , drop = FALSE], k = 3L, vote = "weighted")
+  proba <- predict(fit, x[1, , drop = FALSE], k = 3L, vote = "weighted", type = "prob")
   expect_equal(unname(proba[1, "zero"]), 1)
   expect_equal(unname(proba[1, "other"]), 0)
 })
@@ -47,7 +47,7 @@ test_that("knn_fit supports regression", {
   expect_type(pred, "double")
   expect_equal(pred, 1, tolerance = 1e-12)
   expect_lt(pred_w, pred)
-  expect_error(predict_proba(fit, x), "classification")
+  expect_error(predict(fit, x, type = "prob"), "classification")
 })
 
 test_that("faiss.fit and cuvs.fit preserve explicit backend requests", {

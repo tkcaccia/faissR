@@ -4,7 +4,14 @@
 \alias{predict.faissR_knn_model}
 \title{Predict from a faissR kNN model}
 \usage{
-\method{predict}{faissR_knn_model}(object, newdata, k = NULL, vote = c("majority", "weighted"), ...)
+\method{predict}{faissR_knn_model}(
+  object,
+  newdata,
+  k = NULL,
+  vote = c("majority", "weighted"),
+  type = c("response", "prob"),
+  ...
+)
 }
 \arguments{
 \item{object}{A model returned by [knn_fit()], [faiss.fit()], or
@@ -17,10 +24,13 @@
 \item{vote}{`"majority"` or `"weighted"` for classification; `"majority"`
 means an unweighted neighbour mean for regression.}
 
+\item{type}{`"response"` for class/regression predictions or `"prob"` for
+class probability matrices from classification models.}
+
 \item{...}{Reserved for future options.}
 }
 \value{
-A factor for classification or numeric vector for regression.
+A factor for classification, a numeric vector for regression, or a numeric class-probability matrix when `type = "prob"`.
 }
 \description{
 Predict from a faissR kNN model

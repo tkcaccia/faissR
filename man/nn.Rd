@@ -54,7 +54,7 @@ fall back to CPU.
 `"cpu_sparse"`/`"sparse"` forces the native exact sparse `dgCMatrix` CPU
 path for Euclidean, cosine, and correlation distances. Explicit dense
 accelerator backends convert sparse input to dense matrices because
-FAISS/cuVS/Metal kernels operate on dense row vectors.
+FAISS/cuVS kernels operate on dense row vectors.
 `"hnsw"`/`"rcpphnsw"` uses the optional CRAN package RcppHNSW.
 `"faiss"` uses the real FAISS C++ `IndexFlatL2` backend when faissR was
 built against FAISS. `"faiss_ivf"`, `"faiss_ivfpq"`, `"faiss_hnsw"`,

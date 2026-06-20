@@ -9,41 +9,36 @@
 #' @export
 backend_info <- function() {
   cuda_knn <- backend_flag(cuda_available)
-  metal_knn <- backend_flag(metal_available)
   faiss_knn <- backend_flag(faiss_available)
   cuvs_knn <- backend_flag(cuvs_available)
   cuda <- cuda_summary()
-  metal <- metal_summary()
   faiss <- faiss_summary()
   cuvs <- cuvs_summary()
 
   data.frame(
-    backend = c("cpu", "faiss", "faiss_gpu_cuvs", "cuvs", "cuda", "metal"),
-    available = c(TRUE, faiss_knn, faiss_knn && cuda_knn, cuvs_knn, cuda_knn, metal_knn),
-    knn_available = c(TRUE, faiss_knn, faiss_knn && cuda_knn, cuvs_knn, cuda_knn, metal_knn),
+    backend = c("cpu", "faiss", "faiss_gpu_cuvs", "cuvs", "cuda"),
+    available = c(TRUE, faiss_knn, faiss_knn && cuda_knn, cuvs_knn, cuda_knn),
+    knn_available = c(TRUE, faiss_knn, faiss_knn && cuda_knn, cuvs_knn, cuda_knn),
     explicit_backend = c(
       "cpu",
       "faiss",
-      "faiss_gpu_ivf_flat/faiss_gpu_ivfpq",
+      "faiss_gpu_ivf_flat/faiss_gpu_ivfpq/faiss_gpu_cagra",
       "cuda_cuvs",
-      "cuda",
-      "metal"
+      "cuda"
     ),
     device = c(
       cpu_summary(),
       faiss$device,
       cuda$device,
       cuvs$device,
-      cuda$device,
-      metal$device
+      cuda$device
     ),
     runtime = c(
       R.version$platform,
       faiss$runtime,
-      combine_nonempty(faiss$runtime, "FAISS GPU IVF indexes backed by NVIDIA cuVS when FAISS is built with cuVS"),
+      combine_nonempty(faiss$runtime, "FAISS GPU IVF and CAGRA indexes backed by NVIDIA cuVS when FAISS is built with cuVS"),
       cuvs$runtime,
-      cuda$runtime,
-      metal$runtime
+      cuda$runtime
     ),
     note = c(
       "Native CPU path is always available.",
@@ -53,9 +48,9 @@ backend_info <- function() {
         "Real FAISS C++ KNN is unavailable; explicit FAISS requests will fail."
       },
       if (faiss_knn && cuda_knn) {
-        "FAISS GPU IVF-Flat and IVF-PQ use FAISS GPU indexes with NVIDIA cuVS integration when the linked FAISS library provides it; result backends report GpuIndexIVFFlat_cuVS or GpuIndexIVFPQ_cuVS."
+        "FAISS GPU IVF-Flat, IVF-PQ, and CAGRA use FAISS GPU indexes with NVIDIA cuVS integration when the linked FAISS library provides it; result backends report GpuIndexIVFFlat_cuVS, GpuIndexIVFPQ_cuVS, or GpuIndexCagra_cuVS."
       } else {
-        "FAISS GPU cuVS-integrated IVF requests are unavailable; explicit FAISS GPU IVF requests will fail."
+        "FAISS GPU cuVS-integrated IVF/CAGRA requests are unavailable; explicit FAISS GPU IVF/CAGRA requests will fail."
       },
       if (cuvs_knn) {
         "RAPIDS cuVS CUDA KNN is available for explicit cuVS requests."
@@ -66,11 +61,6 @@ backend_info <- function() {
         "Native CUDA KNN path is available for explicit CUDA requests."
       } else {
         "Native CUDA KNN path is unavailable; explicit CUDA requests will fail."
-      },
-      if (metal_knn) {
-        "Native Metal candidate/grid KNN path is available for explicit Metal requests."
-      } else {
-        "Native Metal KNN path is unavailable; explicit Metal requests will fail."
       }
     ),
     stringsAsFactors = FALSE
@@ -262,26 +252,4 @@ combine_nonempty <- function(...) {
   values <- values[!is.na(values) & nzchar(values)]
   values <- unique(values)
   if (length(values) == 0L) NA_character_ else paste(values, collapse = ", ")
-}
-
-metal_summary <- function() {
-  if (!identical(Sys.info()[["sysname"]], "Darwin")) {
-    return(list(device = NA_character_, runtime = NA_character_))
-  }
-  arch <- R.version$platform
-  device <- if (grepl("arm64|aarch64", arch)) {
-    "Apple Silicon Metal"
-  } else {
-    "macOS Metal"
-  }
-  version <- tryCatch(
-    system2("sw_vers", "-productVersion", stdout = TRUE, stderr = FALSE),
-    error = function(e) character()
-  )
-  runtime <- if (length(version) >= 1L && nzchar(version[1L])) {
-    paste0("macOS ", version[1L])
-  } else {
-    "macOS"
-  }
-  list(device = device, runtime = runtime)
 }

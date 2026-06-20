@@ -15,6 +15,11 @@ parse_args <- function(args) {
 
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0L || is.na(x)) y else x
 
+script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
+script_file <- sub("^--file=", "", script_arg[[1L]] %||% "benchmark_scripts/benchmark1_nn_speed.R")
+script_dir <- dirname(normalizePath(script_file, mustWork = FALSE))
+source(file.path(script_dir, "source.R"))
+
 args <- parse_args(commandArgs(trailingOnly = TRUE))
 
 faiss_env_dir <- Sys.getenv("FAISSR_CONDA_ENV", "/home/chiamaka/.fastEmbedR/micromamba/envs/fastembedr-faissgpu-cuvs")
@@ -146,6 +151,25 @@ method_metric_applicable <- function(method, metric) {
 }
 
 method_dataset_applicable <- function(method, dataset) {
+  validation_pending <- c(
+    "faissR_cuda_cuvs_cagra",
+    "cuda_ml_knn",
+    "RANN_bd",
+    "rnndescent_rpf",
+    "rnndescent_rnnd",
+    "rnndescent_nnd",
+    "rnndescent_bruteforce",
+    "uwot_similarity_graph_fnn",
+    "uwot_similarity_graph_annoy",
+    "uwot_similarity_graph_hnsw",
+    "uwot_similarity_graph_nndescent"
+  )
+  if (method %in% validation_pending) {
+    return(list(
+      ok = FALSE,
+      reason = paste0("method `", method, "` is marked unavailable pending wrapper/accuracy validation")
+    ))
+  }
   grid_methods <- c("faissR_cpu_grid", "faissR_cuda_grid_auto")
   grid_datasets <- c("SimulatedUniform2D", "SimulatedUniform3D")
   if (method %in% grid_methods && !dataset %in% grid_datasets) {
@@ -307,7 +331,8 @@ evaluate_knn_quality <- function(x, obj, k, metric, exact) {
     empty$min_recall_at_k <- 1
     empty$mean_relative_distance_error <- 0
     empty$rank_correlation <- 1
-    empty$quality_status <- "exact_backend"
+    empty$quality_status <- "exact_assumed"
+    empty$quality_error <- "exact backend; recall is assumed rather than recomputed"
     return(empty)
   }
   rows <- choose_quality_rows(nrow(x), ncol(x))
@@ -328,7 +353,7 @@ evaluate_knn_quality <- function(x, obj, k, metric, exact) {
     indices = as.matrix(sx$indices[rows, seq_len(k), drop = FALSE]),
     distances = as.matrix(sx$distances[rows, seq_len(k), drop = FALSE])
   )
-  rec <- faissR::knn_recall(cand, ref, k = k)
+  rec <- benchmark_knn_recall(cand, ref, k = k)
   denom <- mean(abs(ref$distances), na.rm = TRUE) + sqrt(.Machine$double.eps)
   empty$recall_at_k <- rec$recall_at_k[[1L]]
   empty$median_recall_at_k <- rec$median_recall_at_k[[1L]]
@@ -421,6 +446,7 @@ run_method <- function(method, x, k, n_threads, dataset, out_dir, metric) {
       faiss_ivfpq = "faiss_ivfpq",
       faiss_gpu_ivf_flat = "faiss_gpu_ivf_flat",
       faiss_gpu_ivfpq = "faiss_gpu_ivfpq",
+      faiss_gpu_cagra = "faiss_gpu_cagra",
       faiss_hnsw = "faiss_hnsw",
       faiss_nsg = "faiss_nsg",
       faiss_nndescent = "faiss_nndescent",
@@ -435,7 +461,7 @@ run_method <- function(method, x, k, n_threads, dataset, out_dir, metric) {
       cuda_cuvs_nndescent = "cuda_cuvs_nndescent",
       backend
     )
-    obj <- faissR::nn(x, k = k, backend = backend, n_threads = n_threads, metric = metric_arg_for_label(metric))
+    obj <- faissR::nn_without_self(x, k = k, backend = backend, n_threads = n_threads, metric = metric_arg_for_label(metric))
     if (identical(method, "faissR_cuda_cuvs_nndescent") && identical(metric, "l2")) {
       save_cuvs_knn(obj, dataset, out_dir)
     }
@@ -544,13 +570,12 @@ method_table <- function() {
       "faissR_cpu_exact",
       "faissR_rcpphnsw",
       "faissR_faiss_flat_l2",
-      "faissR_faiss_flat_ip",
       "faissR_faiss_gpu_flat_l2",
-      "faissR_faiss_gpu_flat_ip",
       "faissR_faiss_ivf",
       "faissR_faiss_ivfpq",
       "faissR_faiss_gpu_ivf_flat",
       "faissR_faiss_gpu_ivfpq",
+      "faissR_faiss_gpu_cagra",
       "faissR_faiss_hnsw",
       "faissR_faiss_nsg",
       "faissR_faiss_nndescent",
@@ -584,7 +609,7 @@ method_table <- function() {
       "Rtsne_neighbors"
     ),
     implementation = c(
-      rep("faissR", 22),
+      rep("faissR", 21),
       "Rnanoflann", "RANN", "RANN",
       "rnndescent", "rnndescent", "rnndescent", "rnndescent",
       "RcppHNSW", "RcppAnnoy",
@@ -594,14 +619,14 @@ method_table <- function() {
       "umap", "Rtsne"
     ),
     backend = c(
-      "CPU", "CPU", "CPU", "CPU", "CUDA", "CUDA", "CPU", "CPU", "CUDA", "CUDA", "CPU", "CPU", "CPU",
+      "CPU", "CPU", "CPU", "CUDA", "CPU", "CPU", "CUDA", "CUDA", "CUDA", "CPU", "CPU", "CPU",
       "CPU", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA",
       rep("CPU", 16),
       "CUDA",
       "CPU", "CPU"
     ),
     kind = c(
-      rep("knn_search", 39),
+      rep("knn_search", 38),
       "knn_consumer",
       "not_applicable"
     ),
@@ -610,6 +635,7 @@ method_table <- function() {
   methods$backend_detail <- methods$backend
   methods$backend_detail[methods$method == "faissR_faiss_gpu_ivf_flat"] <- "FAISS GPU + cuVS integrated IVF-Flat"
   methods$backend_detail[methods$method == "faissR_faiss_gpu_ivfpq"] <- "FAISS GPU + cuVS integrated IVF-PQ"
+  methods$backend_detail[methods$method == "faissR_faiss_gpu_cagra"] <- "FAISS GPU + cuVS integrated CAGRA"
   methods$backend_detail[methods$method %in% c(
     "faissR_cuda_cuvs_ivf_flat",
     "faissR_cuda_cuvs_ivfpq",
@@ -618,8 +644,7 @@ method_table <- function() {
     "faissR_cuda_cuvs_nndescent"
   )] <- "Direct RAPIDS cuVS"
   methods$backend_detail[methods$method %in% c(
-    "faissR_faiss_gpu_flat_l2",
-    "faissR_faiss_gpu_flat_ip"
+    "faissR_faiss_gpu_flat_l2"
   )] <- "FAISS GPU Flat"
   methods
 }
@@ -723,7 +748,11 @@ if (worker) {
     row$peak_rss_gb <- read_peak_rss_gb()
   }, error = function(e) {
     row$status <- "failed"
-    row$error <- conditionMessage(e)
+    msg <- conditionMessage(e)
+    if (!nzchar(msg)) {
+      msg <- paste("native backend failed without an R condition message:", method)
+    }
+    row$error <- msg
     row$time_sec <- proc.time()[["elapsed"]] - started_total
     row$peak_rss_gb <- read_peak_rss_gb()
   })
@@ -802,9 +831,10 @@ dir.create(file.path(out_dir, "worker_results"), recursive = TRUE, showWarnings 
 
 utils::write.csv(datasets, file.path(out_dir, "benchmark1_datasets.csv"), row.names = FALSE)
 utils::write.csv(methods, file.path(out_dir, "benchmark1_methods.csv"), row.names = FALSE)
-k_values <- as.integer(strsplit(args$k_values %||% Sys.getenv("FAISSR_BENCHMARK1_K_VALUES", "15,50,100"), ",", fixed = TRUE)[[1L]])
+k_values <- as.integer(strsplit(args$k_values %||% Sys.getenv("FAISSR_BENCHMARK1_K_VALUES", "50"), ",", fixed = TRUE)[[1L]])
 k_values <- unique(k_values[is.finite(k_values) & !is.na(k_values) & k_values > 0L])
-if (!length(k_values)) k_values <- c(15L, 50L, 100L)
+k_values <- intersect(k_values, 50L)
+if (!length(k_values)) k_values <- 50L
 metric_values <- strsplit(args$metrics %||% Sys.getenv("FAISSR_BENCHMARK1_METRICS", "l2,cosine"), ",", fixed = TRUE)[[1L]]
 metric_values <- unique(tolower(trimws(metric_values)))
 metric_values[metric_values %in% c("euclidean")] <- "l2"

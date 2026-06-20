@@ -1,15 +1,14 @@
 # faissR
 
-`faissR` is the nearest-neighbour companion package for `fastEmbedR`.
+`faissR` provides native nearest-neighbour search, graph construction, kNN models, and k-means for R workflows that need mandatory FAISS support and optional NVIDIA CUDA/cuVS acceleration.
+
 It contains the KNN/search side of the workflow:
 
-- `nn()` for exact CPU, FAISS, RcppHNSW, optional cuVS/CUDA, and small
-  native spatial search paths;
+- `nn()` for exact native CPU references, FAISS CPU/GPU indexes, RcppHNSW fallback, optional RAPIDS cuVS/CUDA indexes, and small native spatial search paths;
 - `candidate_knn()` for exact top-k ranking inside supplied candidate rows;
 - `knn_graph()` for original-space or embedding-space `igraph` graph creation;
-- `fast_kmeans()` for CPU/FAISS/cuVS k-means;
-- `knn_fit()`, `faiss.fit()`, `cuvs.fit()`, `predict()`, and
-  `predict_proba()` for kNN classification/regression.
+- `fast_kmeans()` for CPU, FAISS CPU/GPU, and cuVS k-means;
+- `knn_fit()`, `faiss.fit()`, `cuvs.fit()`, and `predict()` for kNN classification/regression, including class probabilities with `predict(type = "prob")`.
 
 `fastEmbedR` now depends on `faissR` for neighbour search and keeps UMAP and
 openTSNE embedding optimizers.
@@ -63,8 +62,16 @@ scripts. FAISS is always required.
   `cuda_cuvs_cagra`, `cuda_cuvs_nndescent`, `cuda_cuvs_bruteforce`,
   `cuda_cuvs_ivf_flat`, and `cuda_cuvs_ivfpq`.
 
-Use `backend_info()` and the `backend` attribute returned by `nn()` to confirm
-which route a result used.
+Use `backend_info()` and the `backend`, `resolved_backend`, `faiss`, `cuvs`, and `approximation` attributes returned by `nn()` to confirm which route and parameters a result used.
+
+## kNN Models
+
+```r
+fit <- knn_fit(x, iris$Species, backend = "faiss", k = 5)
+pred <- predict(fit, x)
+prob <- predict(fit, x, type = "prob")
+```
+
 
 ## Example
 
@@ -95,5 +102,4 @@ layout_umap <- fastEmbedR::umap_knn(knn)
 layout_tsne <- fastEmbedR::opentsne_knn(knn, init_data = x)
 ```
 
-Use `backend_info()` to inspect available NN backends. `faissR` never silently
-runs CPU code when an explicit GPU backend is requested.
+Use `backend_info()` to inspect available NN backends. `faissR` never silently runs CPU code when an explicit GPU backend is requested. Public API helpers are focused on search, graph construction, kNN prediction, and k-means; benchmark-only quality helpers live in benchmark scripts rather than the package namespace.

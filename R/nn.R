@@ -6,6 +6,7 @@ nn_compute <- function(data,
                        exclude_self = FALSE,
                        n_threads = NULL,
                        metric = "euclidean") {
+  requested_backend <- backend
   data_sparse <- is_sparse_matrix_input(data)
   points_sparse <- if (isTRUE(points_missing)) data_sparse else is_sparse_matrix_input(points)
   if (isTRUE(data_sparse) || isTRUE(points_sparse)) {
@@ -322,7 +323,11 @@ nn_compute <- function(data,
       backend = "faiss_ivf",
       library = "faiss",
       nlist = as.integer(out$nlist),
-      nprobe = as.integer(out$nprobe)
+      nprobe = as.integer(out$nprobe),
+      requested_nlist = as.integer(params$requested_nlist),
+      requested_nprobe = as.integer(params$requested_nprobe),
+      ivf_parameters_adjusted = !identical(as.integer(params$requested_nlist), as.integer(out$nlist)) ||
+        !identical(as.integer(params$requested_nprobe), as.integer(out$nprobe))
     )
     return(result)
   }
@@ -356,8 +361,15 @@ nn_compute <- function(data,
       library = "faiss",
       nlist = as.integer(out$nlist),
       nprobe = as.integer(out$nprobe),
+      requested_nlist = as.integer(params$requested_nlist),
+      requested_nprobe = as.integer(params$requested_nprobe),
+      ivf_parameters_adjusted = !identical(as.integer(params$requested_nlist), as.integer(out$nlist)) ||
+        !identical(as.integer(params$requested_nprobe), as.integer(out$nprobe)),
       pq_m = as.integer(out$pq_m),
-      pq_nbits = as.integer(out$pq_nbits)
+      pq_nbits = as.integer(out$pq_nbits),
+      requested_pq_m = as.integer(out$requested_pq_m),
+      requested_pq_nbits = as.integer(out$requested_pq_nbits),
+      pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted)
     )
     return(result)
   }
@@ -394,6 +406,10 @@ nn_compute <- function(data,
       accelerator = "cuda",
       nlist = as.integer(out$nlist),
       nprobe = as.integer(out$nprobe),
+      requested_nlist = as.integer(params$requested_nlist),
+      requested_nprobe = as.integer(params$requested_nprobe),
+      ivf_parameters_adjusted = !identical(as.integer(params$requested_nlist), as.integer(out$nlist)) ||
+        !identical(as.integer(params$requested_nprobe), as.integer(out$nprobe)),
       tuning = tuning
     )
     return(result)
@@ -430,8 +446,62 @@ nn_compute <- function(data,
       default_candidate = FALSE,
       nlist = as.integer(out$nlist),
       nprobe = as.integer(out$nprobe),
+      requested_nlist = as.integer(params$requested_nlist),
+      requested_nprobe = as.integer(params$requested_nprobe),
+      ivf_parameters_adjusted = !identical(as.integer(params$requested_nlist), as.integer(out$nlist)) ||
+        !identical(as.integer(params$requested_nprobe), as.integer(out$nprobe)),
       pq_m = as.integer(out$pq_m),
-      pq_nbits = as.integer(out$pq_nbits)
+      pq_nbits = as.integer(out$pq_nbits),
+      requested_pq_m = as.integer(out$requested_pq_m),
+      requested_pq_nbits = as.integer(out$requested_pq_nbits),
+      pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted)
+    )
+    return(result)
+  }
+
+  if (backend %in% c("faiss_gpu_cagra", "cuda_faiss_cagra")) {
+    if (!isTRUE(faiss_available())) {
+      stop(
+        "The real FAISS GPU CAGRA backend is not available in this build. ",
+        "Reinstall faissR with FAISS GPU/cuVS headers ",
+        "available through `FAISS_HOME`.",
+        call. = FALSE
+      )
+    }
+    params <- cuvs_cagra_params(nrow(data), k)
+    out <- nn_faiss_gpu_cagra_cpp(
+      data,
+      points,
+      as.integer(k),
+      as.integer(params$graph_degree),
+      as.integer(params$intermediate_graph_degree),
+      as.integer(params$search_width),
+      as.integer(params$itopk_size),
+      isTRUE(exclude_self)
+    )
+    requested_graph_degree <- if (is.null(params$requested_graph_degree)) out$requested_graph_degree else params$requested_graph_degree
+    requested_intermediate_graph_degree <- if (is.null(params$requested_intermediate_graph_degree)) out$requested_intermediate_graph_degree else params$requested_intermediate_graph_degree
+    requested_search_width <- if (is.null(params$requested_search_width)) out$requested_search_width else params$requested_search_width
+    requested_itopk_size <- if (is.null(params$requested_itopk_size)) out$requested_itopk_size else params$requested_itopk_size
+    result <- finish_nn_result(out, "faiss_gpu_cagra", k, self_query, exact = FALSE)
+    attr(result, "approximation") <- list(
+      strategy = "faiss_gpu_GpuIndexCagra_cuVS",
+      backend = "faiss_gpu_cagra",
+      library = "faiss",
+      accelerator = "cuda",
+      graph_degree = as.integer(out$graph_degree),
+      intermediate_graph_degree = as.integer(out$intermediate_graph_degree),
+      search_width = as.integer(out$search_width),
+      itopk_size = as.integer(out$itopk_size),
+      requested_graph_degree = as.integer(requested_graph_degree),
+      requested_intermediate_graph_degree = as.integer(requested_intermediate_graph_degree),
+      requested_search_width = as.integer(requested_search_width),
+      requested_itopk_size = as.integer(requested_itopk_size),
+      cagra_parameters_adjusted = isTRUE(out$cagra_parameters_adjusted) ||
+        !identical(as.integer(requested_graph_degree), as.integer(out$graph_degree)) ||
+        !identical(as.integer(requested_intermediate_graph_degree), as.integer(out$intermediate_graph_degree)) ||
+        !identical(as.integer(requested_search_width), as.integer(out$search_width)) ||
+        !identical(as.integer(requested_itopk_size), as.integer(out$itopk_size))
     )
     return(result)
   }
@@ -461,9 +531,13 @@ nn_compute <- function(data,
       strategy = "faiss_IndexHNSWFlat",
       backend = "faiss_hnsw",
       library = "faiss",
-      m = as.integer(params$m),
-      ef_construction = as.integer(params$ef_construction),
-      ef_search = as.integer(params$ef_search)
+      m = as.integer(out$m),
+      ef_construction = as.integer(out$ef_construction),
+      ef_search = as.integer(out$ef_search),
+      requested_m = as.integer(out$requested_m),
+      requested_ef_construction = as.integer(out$requested_ef_construction),
+      requested_ef_search = as.integer(out$requested_ef_search),
+      hnsw_parameters_adjusted = isTRUE(out$hnsw_parameters_adjusted)
     )
     return(result)
   }
@@ -493,9 +567,14 @@ nn_compute <- function(data,
       strategy = "faiss_IndexNSGFlat",
       backend = "faiss_nsg",
       library = "faiss",
-      r = as.integer(params$r),
-      search_l = as.integer(params$search_l),
-      build_type = as.integer(params$build_type)
+      r = as.integer(out$r),
+      search_l = as.integer(out$search_l),
+      build_type = as.integer(out$build_type),
+      gk = as.integer(out$gk),
+      requested_r = as.integer(out$requested_r),
+      requested_search_l = as.integer(out$requested_search_l),
+      requested_build_type = as.integer(out$requested_build_type),
+      nsg_parameters_adjusted = isTRUE(out$nsg_parameters_adjusted)
     )
     return(result)
   }
@@ -525,9 +604,13 @@ nn_compute <- function(data,
       strategy = "faiss_IndexNNDescentFlat",
       backend = "faiss_nndescent",
       library = "faiss",
-      graph_k = as.integer(params$graph_k),
-      n_iter = as.integer(params$n_iter),
-      search_l = as.integer(params$search_l)
+      graph_k = as.integer(out$graph_k),
+      n_iter = as.integer(out$n_iter),
+      search_l = as.integer(out$search_l),
+      requested_graph_k = as.integer(out$requested_graph_k),
+      requested_n_iter = as.integer(out$requested_n_iter),
+      requested_search_l = as.integer(out$requested_search_l),
+      nndescent_parameters_adjusted = isTRUE(out$nndescent_parameters_adjusted)
     )
     return(result)
   }
@@ -562,15 +645,33 @@ nn_compute <- function(data,
       as.integer(params$search_width),
       as.integer(params$itopk_size)
     )
-    result <- finish_nn_result(out, "cuda_cuvs_cagra", k, self_query, exact = FALSE)
+    requested_graph_degree <- if (is.null(params$requested_graph_degree)) out$requested_graph_degree else params$requested_graph_degree
+    requested_intermediate_graph_degree <- if (is.null(params$requested_intermediate_graph_degree)) out$requested_intermediate_graph_degree else params$requested_intermediate_graph_degree
+    requested_search_width <- if (is.null(params$requested_search_width)) out$requested_search_width else params$requested_search_width
+    requested_itopk_size <- if (is.null(params$requested_itopk_size)) out$requested_itopk_size else params$requested_itopk_size
+    resolved_backend <- "cuda_cuvs_cagra"
+    result_backend <- if (requested_backend %in% c("cuda", "gpu")) requested_backend else resolved_backend
+    result <- finish_nn_result(out, result_backend, k, self_query, exact = FALSE)
+    if (!identical(result_backend, resolved_backend)) {
+      attr(result, "resolved_backend") <- resolved_backend
+    }
     attr(result, "approximation") <- list(
       strategy = "rapids_cuvs_cagra",
-      backend = "cuda_cuvs_cagra",
+      backend = resolved_backend,
       library = "cuvs",
       graph_degree = as.integer(out$graph_degree),
       intermediate_graph_degree = as.integer(out$intermediate_graph_degree),
       search_width = as.integer(out$search_width),
       itopk_size = as.integer(out$itopk_size),
+      requested_graph_degree = as.integer(requested_graph_degree),
+      requested_intermediate_graph_degree = as.integer(requested_intermediate_graph_degree),
+      requested_search_width = as.integer(requested_search_width),
+      requested_itopk_size = as.integer(requested_itopk_size),
+      cagra_parameters_adjusted = isTRUE(out$cagra_parameters_adjusted) ||
+        !identical(as.integer(requested_graph_degree), as.integer(out$graph_degree)) ||
+        !identical(as.integer(requested_intermediate_graph_degree), as.integer(out$intermediate_graph_degree)) ||
+        !identical(as.integer(requested_search_width), as.integer(out$search_width)) ||
+        !identical(as.integer(requested_itopk_size), as.integer(out$itopk_size)),
       search_batch_size = as.integer(out$search_batch_size),
       tuning = tuning
     )
@@ -597,6 +698,10 @@ nn_compute <- function(data,
       default_candidate = FALSE,
       nlist = as.integer(out$n_lists),
       nprobe = as.integer(out$n_probes),
+      requested_nlist = as.integer(params$requested_nlist),
+      requested_nprobe = as.integer(params$requested_nprobe),
+      ivf_parameters_adjusted = !identical(as.integer(params$requested_nlist), as.integer(out$n_lists)) ||
+        !identical(as.integer(params$requested_nprobe), as.integer(out$n_probes)),
       search_batch_size = as.integer(out$search_batch_size)
     )
     return(result)
@@ -626,8 +731,17 @@ nn_compute <- function(data,
       default_candidate = FALSE,
       nlist = as.integer(out$n_lists),
       nprobe = as.integer(out$n_probes),
+      requested_nlist = as.integer(params$requested_nlist),
+      requested_nprobe = as.integer(params$requested_nprobe),
+      ivf_parameters_adjusted = !identical(as.integer(params$requested_nlist), as.integer(out$n_lists)) ||
+        !identical(as.integer(params$requested_nprobe), as.integer(out$n_probes)),
       pq_dim = as.integer(out$pq_dim),
       pq_bits = as.integer(out$pq_bits),
+      requested_pq_dim = as.integer(pq$requested_pq_dim),
+      requested_pq_bits = as.integer(pq$requested_pq_bits),
+      pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted) ||
+        !identical(as.integer(pq$requested_pq_dim), as.integer(out$pq_dim)) ||
+        !identical(as.integer(pq$requested_pq_bits), as.integer(out$pq_bits)),
       search_batch_size = as.integer(out$search_batch_size)
     )
     return(result)
@@ -641,11 +755,17 @@ nn_compute <- function(data,
       as.integer(k),
       isTRUE(exclude_self)
     )
-    result <- finish_nn_result(out, "cuda_cuvs_bruteforce", k, self_query, exact = TRUE)
+    resolved_backend <- "cuda_cuvs_bruteforce"
+    result_backend <- if (requested_backend %in% c("cuda", "gpu")) requested_backend else resolved_backend
+    result <- finish_nn_result(out, result_backend, k, self_query, exact = TRUE)
+    if (!identical(result_backend, resolved_backend)) {
+      attr(result, "resolved_backend") <- resolved_backend
+    }
     attr(result, "cuvs") <- list(
       index_type = as.character(out$index_type),
       library = "cuvs",
-      backend = "cuda"
+      backend = "cuda",
+      resolved_backend = resolved_backend
     )
     return(result)
   }
@@ -970,15 +1090,6 @@ select_cuvs_auto_backend <- function(self_query,
     return("cuda_cuvs_bruteforce")
   }
   "cuda_cagra"
-}
-
-should_auto_use_exact_metal_knn <- function(n) {
-  threshold <- getOption("fastEmbedR.metal_exact_auto_threshold", 15000L)
-  threshold <- suppressWarnings(as.integer(threshold))
-  if (length(threshold) != 1L || is.na(threshold) || !is.finite(threshold)) {
-    threshold <- 15000L
-  }
-  as.integer(n) <= max(1L, threshold)
 }
 
 should_use_auto_cpu_approx_self_knn <- function(self_query,
@@ -1633,7 +1744,7 @@ attach_knn_recall_subset <- function(result,
   } else {
     result$indices[rows, 1L + seq_len(compare_k), drop = FALSE]
   }
-  recall <- knn_recall(
+  recall <- .knn_recall_summary(
     list(indices = approx_idx),
     list(indices = exact_idx),
     k = compare_k
@@ -1732,9 +1843,13 @@ faiss_self_knn <- function(data,
       backend = backend,
       library = "faiss",
       exact = FALSE,
-      m = as.integer(params$m),
-      ef_construction = as.integer(params$ef_construction),
-      ef_search = as.integer(params$ef_search),
+      m = as.integer(out$m),
+      ef_construction = as.integer(out$ef_construction),
+      ef_search = as.integer(out$ef_search),
+      requested_m = as.integer(out$requested_m),
+      requested_ef_construction = as.integer(out$requested_ef_construction),
+      requested_ef_search = as.integer(out$requested_ef_search),
+      hnsw_parameters_adjusted = isTRUE(out$hnsw_parameters_adjusted),
       seed = as.integer(seed)
     )
     return(out)
@@ -1757,9 +1872,14 @@ faiss_self_knn <- function(data,
       backend = backend,
       library = "faiss",
       exact = FALSE,
-      r = as.integer(params$r),
-      search_l = as.integer(params$search_l),
-      build_type = as.integer(params$build_type),
+      r = as.integer(out$r),
+      search_l = as.integer(out$search_l),
+      build_type = as.integer(out$build_type),
+      gk = as.integer(out$gk),
+      requested_r = as.integer(out$requested_r),
+      requested_search_l = as.integer(out$requested_search_l),
+      requested_build_type = as.integer(out$requested_build_type),
+      nsg_parameters_adjusted = isTRUE(out$nsg_parameters_adjusted),
       seed = as.integer(seed)
     )
     return(out)
@@ -1782,9 +1902,13 @@ faiss_self_knn <- function(data,
       backend = backend,
       library = "faiss",
       exact = FALSE,
-      graph_k = as.integer(params$graph_k),
-      n_iter = as.integer(params$n_iter),
-      search_l = as.integer(params$search_l),
+      graph_k = as.integer(out$graph_k),
+      n_iter = as.integer(out$n_iter),
+      search_l = as.integer(out$search_l),
+      requested_graph_k = as.integer(out$requested_graph_k),
+      requested_n_iter = as.integer(out$requested_n_iter),
+      requested_search_l = as.integer(out$requested_search_l),
+      nndescent_parameters_adjusted = isTRUE(out$nndescent_parameters_adjusted),
       seed = as.integer(seed)
     )
     return(out)
@@ -2153,17 +2277,30 @@ faiss_ivf_params <- function(n, k) {
   if (is.null(nprobe)) nprobe <- getOption("fastEmbedR.ivf_nprobe", NULL)
 
   nlist <- if (is.null(nlist)) ivf_list_count(n, k) else suppressWarnings(as.integer(nlist))
+  requested_nlist <- nlist
   if (length(nlist) != 1L || is.na(nlist) || !is.finite(nlist)) {
     nlist <- ivf_list_count(n, k)
+  }
+  if (length(requested_nlist) != 1L || is.na(requested_nlist) || !is.finite(requested_nlist)) {
+    requested_nlist <- nlist
   }
   nlist <- max(1L, min(n, nlist))
 
   nprobe <- if (is.null(nprobe)) ivf_probe_count(nlist, k) else suppressWarnings(as.integer(nprobe))
+  requested_nprobe <- nprobe
   if (length(nprobe) != 1L || is.na(nprobe) || !is.finite(nprobe)) {
     nprobe <- ivf_probe_count(nlist, k)
   }
+  if (length(requested_nprobe) != 1L || is.na(requested_nprobe) || !is.finite(requested_nprobe)) {
+    requested_nprobe <- nprobe
+  }
   nprobe <- max(1L, min(nlist, nprobe))
-  list(nlist = as.integer(nlist), nprobe = as.integer(nprobe))
+  list(
+    nlist = as.integer(nlist),
+    nprobe = as.integer(nprobe),
+    requested_nlist = as.integer(requested_nlist),
+    requested_nprobe = as.integer(requested_nprobe)
+  )
 }
 
 faiss_ivf_manual_params <- function() {
@@ -2178,19 +2315,32 @@ cuvs_ivfpq_params <- function(p) {
   pq_dim <- getOption("fastEmbedR.cuvs_ivfpq_pq_dim", NULL)
   if (is.null(pq_dim)) pq_dim <- getOption("fastEmbedR.ivfpq_pq_dim", 0L)
   pq_dim <- suppressWarnings(as.integer(pq_dim))
+  requested_pq_dim <- pq_dim
   if (length(pq_dim) != 1L || is.na(pq_dim) || !is.finite(pq_dim) || pq_dim < 0L) {
     pq_dim <- 0L
+  }
+  if (length(requested_pq_dim) != 1L || is.na(requested_pq_dim) || !is.finite(requested_pq_dim)) {
+    requested_pq_dim <- pq_dim
   }
 
   pq_bits <- getOption("fastEmbedR.cuvs_ivfpq_pq_bits", NULL)
   if (is.null(pq_bits)) pq_bits <- getOption("fastEmbedR.ivfpq_pq_bits", 8L)
   pq_bits <- suppressWarnings(as.integer(pq_bits))
+  requested_pq_bits <- pq_bits
   if (length(pq_bits) != 1L || is.na(pq_bits) || !is.finite(pq_bits)) {
     pq_bits <- 8L
   }
+  if (length(requested_pq_bits) != 1L || is.na(requested_pq_bits) || !is.finite(requested_pq_bits)) {
+    requested_pq_bits <- pq_bits
+  }
   pq_bits <- as.integer(max(4L, min(8L, pq_bits)))
 
-  list(pq_dim = as.integer(pq_dim), pq_bits = pq_bits)
+  list(
+    pq_dim = as.integer(pq_dim),
+    pq_bits = pq_bits,
+    requested_pq_dim = as.integer(requested_pq_dim),
+    requested_pq_bits = as.integer(requested_pq_bits)
+  )
 }
 
 .faiss_gpu_ivf_tune_cache <- new.env(parent = emptyenv())
@@ -2431,7 +2581,7 @@ faiss_gpu_ivf_tune_params <- function(data, k, base_params) {
         stringsAsFactors = FALSE
       )
     } else {
-      recall <- knn_recall(approx, reference, k = compare_k)$recall_at_k
+      recall <- .knn_recall_summary(approx, reference, k = compare_k)$recall_at_k
       rows_out[[i]] <- data.frame(
         nlist = cand$nlist,
         nprobe = cand$nprobe,
@@ -2502,16 +2652,16 @@ faiss_pq_params <- function(p) {
 
 faiss_hnsw_params <- function(k) {
   k <- as.integer(k)
-  m <- faiss_option_int("hnsw_m", 32L, min_value = 2L, max_value = 256L)
+  m <- faiss_option_int("hnsw_m", 64L, min_value = 2L, max_value = 256L)
   ef_construction <- faiss_option_int(
     "hnsw_ef_construction",
-    max(200L, 4L * m),
+    max(320L, 5L * m),
     min_value = m,
     max_value = 4096L
   )
   ef_search <- faiss_option_int(
     "hnsw_ef_search",
-    max(100L, 2L * k),
+    max(300L, 6L * k),
     min_value = k,
     max_value = 4096L
   )
@@ -2541,30 +2691,47 @@ cuvs_option_int <- function(name, default, min_value = 1L, max_value = .Machine$
   as.integer(max(min_value, min(max_value, value)))
 }
 
+cuvs_requested_option_int <- function(name, default) {
+  value <- getOption(paste0("fastEmbedR.cuvs_", name), NULL)
+  value <- if (is.null(value)) default else suppressWarnings(as.integer(value))
+  if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- default
+  as.integer(value)
+}
+
 cuvs_cagra_params <- function(n, k) {
   n <- as.integer(n)
   k <- as.integer(k)
+  default_graph_degree <- max(64L, k + 1L)
+  requested_graph_degree <- cuvs_requested_option_int("graph_degree", default_graph_degree)
   graph_degree <- cuvs_option_int(
     "graph_degree",
-    default = max(64L, k + 1L),
+    default = default_graph_degree,
     min_value = k + 1L,
     max_value = max(1L, n - 1L)
   )
+  default_intermediate_graph_degree <- max(128L, graph_degree * 2L)
+  requested_intermediate_graph_degree <- cuvs_requested_option_int(
+    "intermediate_graph_degree",
+    default_intermediate_graph_degree
+  )
   intermediate_graph_degree <- cuvs_option_int(
     "intermediate_graph_degree",
-    default = max(128L, graph_degree * 2L),
+    default = default_intermediate_graph_degree,
     min_value = graph_degree,
     max_value = max(1L, n - 1L)
   )
+  requested_search_width <- cuvs_requested_option_int("search_width", 0L)
   search_width <- cuvs_option_int(
     "search_width",
     default = 0L,
     min_value = 0L,
     max_value = 1024L
   )
+  default_itopk_size <- max(64L, graph_degree)
+  requested_itopk_size <- cuvs_requested_option_int("itopk_size", default_itopk_size)
   itopk_size <- cuvs_option_int(
     "itopk_size",
-    default = max(64L, graph_degree),
+    default = default_itopk_size,
     min_value = k,
     max_value = 4096L
   )
@@ -2572,7 +2739,11 @@ cuvs_cagra_params <- function(n, k) {
     graph_degree = as.integer(graph_degree),
     intermediate_graph_degree = as.integer(intermediate_graph_degree),
     search_width = as.integer(search_width),
-    itopk_size = as.integer(itopk_size)
+    itopk_size = as.integer(itopk_size),
+    requested_graph_degree = as.integer(requested_graph_degree),
+    requested_intermediate_graph_degree = as.integer(requested_intermediate_graph_degree),
+    requested_search_width = as.integer(requested_search_width),
+    requested_itopk_size = as.integer(requested_itopk_size)
   )
 }
 
@@ -2807,7 +2978,7 @@ cuvs_cagra_tune_params <- function(data, k, base_params) {
         stringsAsFactors = FALSE
       )
     } else {
-      recall <- knn_recall(approx, reference, k = compare_k)$recall_at_k
+      recall <- .knn_recall_summary(approx, reference, k = compare_k)$recall_at_k
       rows_out[[i]] <- data.frame(
         graph_degree = cand$graph_degree,
         intermediate_graph_degree = cand$intermediate_graph_degree,
@@ -3150,7 +3321,7 @@ grid_self_knn <- function(data,
 #'   `"cpu_sparse"`/`"sparse"` forces the native exact sparse `dgCMatrix` CPU
 #'   path for Euclidean, cosine, and correlation distances. Explicit dense
 #'   accelerator backends convert sparse input to dense matrices because
-#'   FAISS/cuVS/Metal kernels operate on dense row vectors.
+#'   FAISS/cuVS kernels operate on dense row vectors.
 #'   `"hnsw"`/`"rcpphnsw"` uses the optional CRAN package RcppHNSW.
 #'   `"faiss"` uses the real FAISS C++ `IndexFlatL2` backend when faissR was
 #'   built against FAISS. `"faiss_ivf"`, `"faiss_ivfpq"`, `"faiss_hnsw"`,
@@ -3222,6 +3393,7 @@ nn <- function(data,
                  "faiss_gpu_flat", "faiss_gpu_flat_l2", "faiss_gpu_flat_ip",
                  "cuda_faiss_flat_l2", "cuda_faiss_flat_ip",
                  "faiss_gpu_ivf", "faiss_gpu_ivf_flat", "faiss_gpu_ivfpq",
+                 "faiss_gpu_cagra", "cuda_faiss_cagra",
                  "cuda_faiss_ivf_flat", "cuda_faiss_ivfpq",
                  "cuvs", "gpu_cuvs", "cuda_cuvs", "cuda_cuvs_cagra",
                  "cuda_cagra", "gpu_cagra",
@@ -3280,6 +3452,7 @@ nn_without_self <- function(data,
                               "faiss_gpu_flat", "faiss_gpu_flat_l2", "faiss_gpu_flat_ip",
                               "cuda_faiss_flat_l2", "cuda_faiss_flat_ip",
                               "faiss_gpu_ivf", "faiss_gpu_ivf_flat", "faiss_gpu_ivfpq",
+                              "faiss_gpu_cagra", "cuda_faiss_cagra",
                               "cuda_faiss_ivf_flat", "cuda_faiss_ivfpq",
                               "cuvs", "gpu_cuvs", "cuda_cuvs", "cuda_cuvs_cagra",
                               "cuda_cagra", "gpu_cagra",
@@ -3308,18 +3481,7 @@ nn_without_self <- function(data,
   )
 }
 
-#' Measure approximate KNN recall
-#'
-#' Compare an approximate nearest-neighbour result against an exact/reference
-#' result by counting how many neighbours overlap in the first `k` columns.
-#'
-#' @param approx Approximate KNN result from [nn()] or an integer index matrix.
-#' @param exact Reference KNN result from [nn()] or an integer index matrix.
-#' @param k Number of neighbours to compare. Defaults to the shared number of
-#'   columns in `approx` and `exact`.
-#' @return A one-row data frame with mean, median, and minimum recall at `k`.
-#' @export
-knn_recall <- function(approx, exact, k = NULL) {
+.knn_recall_summary <- function(approx, exact, k = NULL) {
   approx_idx <- if (is.list(approx)) approx$indices else approx
   exact_idx <- if (is.list(exact)) exact$indices else exact
   approx_idx <- as.matrix(approx_idx)
@@ -3332,12 +3494,15 @@ knn_recall <- function(approx, exact, k = NULL) {
     stop("`k` must be a positive integer.", call. = FALSE)
   }
   k <- min(k, ncol(approx_idx), ncol(exact_idx))
-  values <- knn_recall_cpp(approx_idx, exact_idx, as.integer(k))
+  recall <- numeric(nrow(approx_idx))
+  for (i in seq_len(nrow(approx_idx))) {
+    recall[[i]] <- mean(approx_idx[i, seq_len(k)] %in% exact_idx[i, seq_len(k)])
+  }
   data.frame(
     k = k,
-    recall_at_k = unname(values["recall_at_k"]),
-    median_recall_at_k = unname(values["median_recall_at_k"]),
-    min_recall_at_k = unname(values["min_recall_at_k"]),
+    recall_at_k = mean(recall),
+    median_recall_at_k = median(recall),
+    min_recall_at_k = min(recall),
     stringsAsFactors = FALSE
   )
 }
@@ -3396,14 +3561,6 @@ print.faissR_nn <- function(x, ...) {
 }
 
 print.fastEmbedR_nn <- print.faissR_nn
-
-#' Check whether the native Metal backend is available
-#'
-#' @return `TRUE` when a Metal device is available to the package.
-#' @export
-metal_available <- function() {
-  isTRUE(metal_available_cpp())
-}
 
 #' Check whether the native CUDA backend is available
 #'

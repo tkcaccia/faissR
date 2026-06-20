@@ -1,6 +1,6 @@
 Package: faissR
 Type: Package
-Title: Fast Native Nearest Neighbours, Graphs, kNN Models, and k-means
+Title: FAISS-Backed Nearest Neighbours, Graphs, kNN Models, and k-Means
 Version: 0.1.0
 Authors@R: person(given = "Stefano",
     family = "Caccia",
@@ -10,9 +10,11 @@ Author: Stefano Caccia [aut, cre]
 Maintainer: Stefano Caccia <tkcaccia@gmail.com>
 Description: Native nearest-neighbour search, graph construction, k-nearest
     neighbour prediction, and k-means helpers for large dimensionality
-    reduction workflows. The package builds against the FAISS C++ library for
-    CPU indexes and can optionally use RAPIDS cuVS/CUDA indexes on NVIDIA
-    machines. CPU-only systems do not need NVIDIA libraries.
+    reduction workflows. The package requires the FAISS C++ library for CPU
+    indexes and can optionally use FAISS GPU indexes with NVIDIA cuVS
+    integration or direct RAPIDS cuVS/CUDA indexes on NVIDIA machines.
+    CPU-only systems do not need NVIDIA libraries. Class probabilities are
+    returned through predict(type = "prob") for kNN classification models.
 License: GPL (>= 3)
 URL: https://github.com/tkcaccia/faissR
 BugReports: https://github.com/tkcaccia/faissR/issues
@@ -27,6 +29,6 @@ Suggests:
     testthat
 LinkingTo:
     Rcpp
-SystemRequirements: C++20, Fortran, FAISS C++ library, optional RAPIDS cuVS library for backend = "cuda_cuvs", optional CUDA toolkit for CUDA KNN backends, Metal framework on macOS for optional native Metal candidate kernels
+SystemRequirements: C++20, Fortran, FAISS C++ library, optional CUDA toolkit and RAPIDS cuVS library for CUDA/cuVS NN and k-means backends
 Config/roxygen2/version: 8.0.0
 Config/testthat/edition: 3

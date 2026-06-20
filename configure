@@ -41,17 +41,8 @@ if [ "$use_cuda" = "1" ] && [ -z "$cuda_home" ]; then
   exit 1
 fi
 
-os_name=$(uname -s 2>/dev/null || echo unknown)
-
-metal_objects="nn_metal_bridge.o nn_metal_stub.o"
 cppflags=""
 libs="-pthread"
-
-if [ "$os_name" = "Darwin" ]; then
-  metal_objects="nn_metal_bridge.o nn_metal_impl.o"
-  cppflags="-DHAVE_METAL=1"
-  libs="-pthread -framework Foundation -framework Metal"
-fi
 
 faiss_home=${FAISS_HOME:-}
 faiss_objects="nn_faiss_bridge.o nn_faiss_impl.o"
@@ -212,14 +203,14 @@ fi
 
 {
   echo "CXX_STD = CXX20"
-  echo "PKG_CXXFLAGS = -pthread"
+  echo 'PKG_CXXFLAGS = -pthread $(SHLIB_OPENMP_CXXFLAGS)'
   if [ -n "$cppflags" ]; then
     echo "PKG_CPPFLAGS = $cppflags"
   fi
-  echo "PKG_LIBS = $libs"
+  printf '%s%s\n' 'PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) ' "$libs"
   if [ "$cuda_objects" != "nn_cuda_stub.o" ]; then
     echo "NVCC = $nvcc"
     printf "%s" "$cuda_rule"
   fi
-  echo "OBJECTS = RcppExports.o embedding_utils.o graph.o nn.o nn_sparse.o nn_fortran.o $faiss_objects $cuvs_objects $metal_objects nn_cuda_bridge.o $cuda_objects"
+  echo "OBJECTS = RcppExports.o embedding_utils.o graph.o nn.o nn_sparse.o nn_fortran.o $faiss_objects $cuvs_objects nn_cuda_bridge.o $cuda_objects"
 } > src/Makevars

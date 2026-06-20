@@ -233,48 +233,16 @@ nn_faiss_gpu_ivfpq_cpp <- function(data, points, k, nlist, nprobe, pq_m, pq_nbit
     .Call(`_faissR_nn_faiss_gpu_ivfpq_cpp`, data, points, k, nlist, nprobe, pq_m, pq_nbits, exclude_self)
 }
 
+nn_faiss_gpu_cagra_cpp <- function(data, points, k, graph_degree, intermediate_graph_degree, search_width, itopk_size, exclude_self) {
+    .Call(`_faissR_nn_faiss_gpu_cagra_cpp`, data, points, k, graph_degree, intermediate_graph_degree, search_width, itopk_size, exclude_self)
+}
+
 kmeans_faiss_cpp <- function(data, centers, max_iter, nredo, tol, seed, n_threads, kmeans_plus_plus) {
     .Call(`_faissR_kmeans_faiss_cpp`, data, centers, max_iter, nredo, tol, seed, n_threads, kmeans_plus_plus)
 }
 
 kmeans_faiss_gpu_cpp <- function(data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus) {
     .Call(`_faissR_kmeans_faiss_gpu_cpp`, data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus)
-}
-
-metal_available_cpp <- function() {
-    .Call(`_faissR_metal_available_cpp`)
-}
-
-nn_metal_cpp <- function(data, points, k, square) {
-    .Call(`_faissR_nn_metal_cpp`, data, points, k, square)
-}
-
-landmark_candidate_knn_metal_cpp <- function(data, projection_indices, k, bucket_cols, query_cols) {
-    .Call(`_faissR_landmark_candidate_knn_metal_cpp`, data, projection_indices, k, bucket_cols, query_cols)
-}
-
-grid_knn_metal_cpp <- function(data, k, grid_dims, bins_per_dim, radius) {
-    .Call(`_faissR_grid_knn_metal_cpp`, data, k, grid_dims, bins_per_dim, radius)
-}
-
-row_candidate_knn_metal_cpp <- function(data, candidate_indices, k) {
-    .Call(`_faissR_row_candidate_knn_metal_cpp`, data, candidate_indices, k)
-}
-
-candidate_topk_l2_batched_metal_cpp <- function(data, candidate_indices, k) {
-    .Call(`_faissR_candidate_topk_l2_batched_metal_cpp`, data, candidate_indices, k)
-}
-
-metal_knn_data_handle_cpp <- function(data) {
-    .Call(`_faissR_metal_knn_data_handle_cpp`, data)
-}
-
-row_candidate_knn_metal_handle_cpp <- function(handle, candidate_indices, k, return_distances = TRUE) {
-    .Call(`_faissR_row_candidate_knn_metal_handle_cpp`, handle, candidate_indices, k, return_distances)
-}
-
-row_candidate_knn_metal_subset_handle_cpp <- function(handle, candidate_indices, query_rows, k, return_distances = TRUE) {
-    .Call(`_faissR_row_candidate_knn_metal_subset_handle_cpp`, handle, candidate_indices, query_rows, k, return_distances)
 }
 
 sparse_nn_cpp <- function(data, points, k, metric, exclude_self, self_query) {
