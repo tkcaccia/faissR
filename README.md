@@ -1,12 +1,13 @@
 # faissR
 
-`faissR` provides native nearest-neighbour search, graph construction, kNN models, and k-means for R workflows that need mandatory FAISS support and optional NVIDIA CUDA/cuVS acceleration.
+`faissR` provides native nearest-neighbour search, graph construction, graph clustering, kNN models, and k-means for R workflows that need mandatory FAISS support and optional NVIDIA CUDA/cuVS acceleration.
 
 It contains the KNN/search side of the workflow:
 
 - `nn()` for exact native CPU references, FAISS CPU/GPU indexes, RcppHNSW fallback, optional RAPIDS cuVS/CUDA indexes, and small native spatial search paths;
 - `candidate_knn()` for exact top-k ranking inside supplied candidate rows;
 - `knn_graph()` for original-space or embedding-space `igraph` graph creation;
+- `graph_cluster()` for random-walk/walktrap, Louvain, and Leiden clustering on those graphs;
 - `fast_kmeans()` for CPU, FAISS CPU/GPU, and cuVS k-means;
 - `knn_fit()`, `faiss.fit()`, `cuvs.fit()`, and `predict()` for kNN classification/regression, including class probabilities with `predict(type = "prob")`.
 
@@ -84,10 +85,38 @@ knn
 
 if (requireNamespace("igraph", quietly = TRUE)) {
   g <- knn_graph(knn, k = 15, weight = "snn")
-  cl <- igraph::cluster_louvain(g, weights = igraph::E(g)$weight)
-  table(igraph::membership(cl))
+  cl <- graph_cluster(g, method = "louvain", backend = "cpu", n_runs = 2, n_threads = 2)
+  table(cl$membership)
 }
 ```
+
+## Graph Clustering and Acknowledgements
+
+`graph_cluster()` currently runs CPU community detection through the optional
+`igraph` package. It supports `method = "random_walking"` through igraph's
+walktrap/random-walk clustering, `method = "louvain"`, and `method = "leiden"`.
+CPU multicore execution is available for repeated runs with `n_runs > 1` and
+`n_threads > 1`; the best run by modularity is returned.
+
+The CUDA graph-clustering backend is intentionally explicit. `backend = "cuda"`
+is reserved for a future RAPIDS cuGraph binding because cuGraph is the CUDA
+library that already provides GPU Louvain, Leiden, and random-walk sampling.
+Until faissR is linked to cuGraph, CUDA graph clustering reports unavailable
+rather than silently using CPU code.
+
+Algorithmic and implementation acknowledgements: FAISS for nearest-neighbour
+indexes; NVIDIA RAPIDS cuVS for optional CUDA nearest-neighbour/k-means
+backends and FAISS GPU/cuVS integration; igraph for CPU Louvain, Leiden, and
+walktrap community detection; RAPIDS cuGraph as the intended CUDA graph
+clustering library; Blondel et al. (2008) for Louvain; Pons and Latapy (2006)
+for walktrap/random-walk clustering; Traag et al. (2019) for Leiden; Sahu's
+GVE-Leiden/OpenMP and dynamic Leiden work (arXiv:2312.13936 and
+arXiv:2410.15451) as multicore and dynamic Leiden implementation
+inspiration, including the referenced C++ repositories
+`https://github.com/puzzlef/leiden-communities-openmp` and
+`https://github.com/puzzlef/leiden-communities-openmp-heuristic-dynamic`; and Kapralov,
+Lattanzi, Nouri, and Tardos (arXiv:2112.00655) for local parallel random-walk
+motivation.
 
 ## With fastEmbedR
 

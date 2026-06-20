@@ -15,7 +15,7 @@ nn_without_self(
     "faiss_gpu_flat", "faiss_gpu_flat_l2", "faiss_gpu_flat_ip", "cuda_faiss_flat_l2",
     "cuda_faiss_flat_ip", "faiss_gpu_ivf", 
      "faiss_gpu_ivf_flat", "faiss_gpu_ivfpq",
-    "cuda_faiss_ivf_flat", "cuda_faiss_ivfpq", "cuvs", "gpu_cuvs", "cuda_cuvs",
+    "faiss_gpu_cagra", "cuda_faiss_cagra", "cuda_faiss_ivf_flat", "cuda_faiss_ivfpq", "cuvs", "gpu_cuvs", "cuda_cuvs",
     "cuda_cuvs_cagra", "cuda_cagra", "gpu_cagra", "cuvs_ivf", "cuda_cuvs_ivf",
     "cuvs_ivf_flat", "cuda_cuvs_ivf_flat", "cuvs_ivfpq", "cuda_cuvs_ivfpq",
     "cuvs_ivf_pq", "cuda_cuvs_ivf_pq", "cuvs_bruteforce", "cuda_cuvs_bruteforce",

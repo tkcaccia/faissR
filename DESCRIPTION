@@ -1,6 +1,6 @@
 Package: faissR
 Type: Package
-Title: FAISS-Backed Nearest Neighbours, Graphs, kNN Models, and k-Means
+Title: FAISS-Backed Nearest Neighbours, Graph Clustering, kNN Models, and k-Means
 Version: 0.1.0
 Authors@R: person(given = "Stefano",
     family = "Cacciatore",
@@ -8,8 +8,8 @@ Authors@R: person(given = "Stefano",
     email = "tkcaccia@gmail.com")
 Author: Stefano Cacciatore [aut, cre]
 Maintainer: Stefano Cacciatore <tkcaccia@gmail.com>
-Description: Native nearest-neighbour search, graph construction, k-nearest
-    neighbour prediction, and k-means helpers for large dimensionality
+Description: Native nearest-neighbour search, graph construction, graph clustering,
+    k-nearest neighbour prediction, and k-means helpers for large dimensionality
     reduction workflows. The package requires the FAISS C++ library for CPU
     indexes and can optionally use FAISS GPU indexes with NVIDIA cuVS
     integration or direct RAPIDS cuVS/CUDA indexes on NVIDIA machines.

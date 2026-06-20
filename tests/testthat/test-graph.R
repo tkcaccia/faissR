@@ -81,3 +81,51 @@ test_that("knn_graph output works with standard igraph clustering", {
     expect_length(igraph::membership(leiden), nrow(x))
   }
 })
+
+
+test_that("graph_cluster runs CPU random-walk and Louvain clustering", {
+  skip_if_not_installed("igraph")
+  set.seed(505)
+  x <- rbind(
+    matrix(rnorm(80, -2, 0.2), ncol = 4),
+    matrix(rnorm(80, 2, 0.2), ncol = 4)
+  )
+  g <- knn_graph(x, k = 8L, backend = "cpu", weight = "snn")
+
+  walk <- graph_cluster(g, method = "random_walking", backend = "cpu", steps = 3)
+  expect_s3_class(walk, "faissR_graph_cluster")
+  expect_length(walk$membership, nrow(x))
+  expect_equal(walk$method, "random_walking")
+  expect_true("Pons and Latapy (2006) for random-walk walktrap clustering" %in% walk$sources)
+
+  louvain <- graph_cluster(g, method = "louvain", backend = "cpu", n_runs = 2, n_threads = 2, seed = 1)
+  expect_s3_class(louvain, "faissR_graph_cluster")
+  expect_length(louvain$membership, nrow(x))
+  expect_length(louvain$all_modularity, 2L)
+  expect_gte(length(unique(louvain$membership)), 2L)
+})
+
+test_that("graph_cluster runs Leiden when igraph provides it", {
+  skip_if_not_installed("igraph")
+  skip_if_not("cluster_leiden" %in% getNamespaceExports("igraph"))
+  set.seed(506)
+  x <- rbind(
+    matrix(rnorm(80, -2, 0.2), ncol = 4),
+    matrix(rnorm(80, 2, 0.2), ncol = 4)
+  )
+  g <- knn_graph(x, k = 8L, backend = "cpu", weight = "snn")
+
+  leiden <- graph_cluster(g, method = "leiden", backend = "cpu", n_iterations = 2)
+  expect_s3_class(leiden, "faissR_graph_cluster")
+  expect_length(leiden$membership, nrow(x))
+  expect_true(any(grepl("GVE-Leiden", leiden$sources, fixed = TRUE)))
+})
+
+test_that("graph_cluster reports CUDA graph backend as unavailable without cuGraph", {
+  skip_if_not_installed("igraph")
+  g <- igraph::make_ring(10)
+  expect_error(
+    graph_cluster(g, method = "louvain", backend = "cuda"),
+    "cuGraph"
+  )
+})
