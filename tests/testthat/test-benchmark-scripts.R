@@ -639,6 +639,23 @@ test_that("legacy Benchmark #1 quality metrics guard invalid finite means", {
   expect_true(is.na(env$knn_rank_correlation(candidate, reference, k = 2L)))
 })
 
+test_that("legacy Benchmark #1 inner-product reference uses distance convention", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
+    "if (worker)"
+  )
+  x <- matrix(c(
+    2, 0,
+    0, 3,
+    1, 1
+  ), ncol = 2, byrow = TRUE)
+
+  ref <- env$exact_subset_knn(x, rows = 1L, k = 2L, metric = "inner_product")
+
+  expect_equal(ref$indices[1L, ], c(3L, 2L))
+  expect_equal(ref$distances[1L, ], c(0, 2), tolerance = 1e-12)
+})
+
 test_that("benchmark KNN recall ignores missing neighbour padding", {
   source_file <- test_path("../../benchmark_scripts/source.R")
   if (!file.exists(source_file)) {

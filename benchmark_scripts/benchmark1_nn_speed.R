@@ -386,7 +386,8 @@ exact_subset_knn <- function(x, rows, k, metric) {
       score[r] <- -Inf
       ord <- order(score, decreasing = TRUE)[seq_len(k)]
       idx[ii, ] <- ord
-      dst[ii, ] <- score[ord]
+      best <- score[ord[[1L]]]
+      dst[ii, ] <- best - score[ord]
     } else {
       diff <- sweep(z, 2L, z[r, ], FUN = "-")
       dist2 <- rowSums(diff * diff)
