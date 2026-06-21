@@ -76,6 +76,51 @@ optional thread-control helper packages before FAISS/cuVS.
 The same explicit-runtime convention is used by the NN metrics and k-means
 benchmark scripts.
 
+## NN Metrics
+
+`benchmark_scripts/benchmark_nn_metrics.R` focuses on faissR's public `nn()`
+method matrix. It benchmarks `backend = "auto"`, `"cpu"`, and `"cuda"` across
+the public methods, the four public metrics (`"euclidean"`, `"cosine"`,
+`"correlation"`, and `"inner_product"`), and `k = 5, 10, 15, 50, 100` by
+default. Unsupported method/backend/metric combinations are preflighted with
+`nn_capabilities()` and written as expected skips.
+
+Use `--cycles=10` to repeat speed and recall measurements. The raw result table
+contains one row per dataset/backend/method/metric/k/cycle combination.
+`nn_metric_best_by_dataset_backend_metric_k_cycle.csv` keeps the best row within
+each cycle, while `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the
+overall best row across cycles for backward-compatible summaries.
+
+Example CPU-focused metric run:
+
+```sh
+Rscript benchmark_scripts/benchmark_nn_metrics.R \
+  --data_root=/path/to/Data \
+  --out_dir=/path/to/faissR_NN_METRICS_CPU \
+  --datasets=COIL20,USPS,FashionMNIST,MNIST \
+  --backends=cpu \
+  --methods=auto,exact,flat,HNSW,IVF,IVFPQ,NSG,NNDescent \
+  --metrics=euclidean,cosine,correlation,inner_product \
+  --k_values=5,10,15,50,100 \
+  --threads=12 \
+  --cycles=10
+```
+
+Example CUDA-focused metric run:
+
+```sh
+Rscript benchmark_scripts/benchmark_nn_metrics.R \
+  --data_root=/path/to/Data \
+  --out_dir=/path/to/faissR_NN_METRICS_CUDA \
+  --datasets=COIL20,USPS,FashionMNIST,MNIST \
+  --backends=cuda \
+  --methods=auto,exact,flat,grid,IVF,IVFPQ,NNDescent,CAGRA \
+  --metrics=euclidean,cosine,correlation,inner_product \
+  --k_values=5,10,15,50,100 \
+  --threads=2 \
+  --cycles=10
+```
+
 ## Graph Clustering
 
 `benchmark_scripts/benchmark_graph_clustering.R` measures the two-stage graph

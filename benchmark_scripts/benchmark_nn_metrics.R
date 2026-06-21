@@ -198,7 +198,7 @@ metric_reference <- function(x, k, metric, quality_n, quality_max_ops, n_threads
   )
 }
 
-result_row <- function(dataset, n, p, backend, method, metric, k, n_threads,
+result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threads,
                        status, error = NA_character_, elapsed_sec = NA_real_,
                        peak_rss_gb = NA_real_,
                        result_backend = NA_character_,
@@ -219,6 +219,7 @@ result_row <- function(dataset, n, p, backend, method, metric, k, n_threads,
     method = method,
     metric = metric,
     k = as.integer(k),
+    cycle = as.integer(cycle),
     n_threads = as.integer(n_threads),
     status = status,
     error = error,
@@ -339,9 +340,16 @@ is_expected_skip <- function(caps, backend, method, metric) {
   NULL
 }
 
-run_one <- function(x, dataset_name, backend, method, metric, k, n_threads,
-                    timeout, reference) {
+run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_threads,
+                    timeout, reference, seed) {
   started <- proc.time()[["elapsed"]]
+  old_options <- options(
+    fastEmbedR.approx_knn_seed = as.integer(seed),
+    fastEmbedR.faiss_gpu_ivf_tune_seed = as.integer(seed + 11L),
+    fastEmbedR.cuvs_cagra_tune_seed = as.integer(seed + 23L)
+  )
+  on.exit(options(old_options), add = TRUE)
+  set.seed(as.integer(seed))
   tryCatch({
     out <- with_elapsed_limit({
       faissR::nn(
@@ -373,6 +381,7 @@ run_one <- function(x, dataset_name, backend, method, metric, k, n_threads,
       method = method,
       metric = metric,
       k = k,
+      cycle = cycle,
       n_threads = n_threads,
       status = "success",
       elapsed_sec = elapsed,
@@ -396,6 +405,7 @@ run_one <- function(x, dataset_name, backend, method, metric, k, n_threads,
       method = method,
       metric = metric,
       k = k,
+      cycle = cycle,
       n_threads = n_threads,
       status = "failed",
       error = conditionMessage(e),
@@ -423,6 +433,7 @@ n_threads <- as_int_arg(args$threads, 4L)
 configure_threads(n_threads)
 seed <- as_int_arg(args$seed, 1L)
 timeout <- as_int_arg(args$timeout, 600L)
+cycles <- as_int_arg(args$cycles, 1L)
 quality_n <- as_int_arg(args$quality_n, 512L)
 quality_max_ops <- suppressWarnings(as.numeric(args$quality_max_ops %||% "5e9"))
 if (length(quality_max_ops) != 1L || is.na(quality_max_ops) || !is.finite(quality_max_ops)) quality_max_ops <- 5e9
@@ -443,12 +454,12 @@ capabilities <- faissR::nn_capabilities()
 
 config <- data.frame(
   key = c("data_root", "out_dir", "datasets", "backends", "methods", "metrics",
-          "k_values", "threads", "timeout", "quality_n", "quality_max_ops",
+          "k_values", "threads", "timeout", "cycles", "quality_n", "quality_max_ops",
           "recall_threshold", "seed"),
   value = c(
     data_root, out_dir, paste(datasets, collapse = ","), paste(backends, collapse = ","),
     paste(methods, collapse = ","), paste(metrics, collapse = ","),
-    paste(k_values, collapse = ","), n_threads, timeout, quality_n,
+    paste(k_values, collapse = ","), n_threads, timeout, cycles, quality_n,
     format(quality_max_ops, scientific = TRUE), recall_threshold, seed
   ),
   stringsAsFactors = FALSE
@@ -470,6 +481,7 @@ for (dataset_name in datasets) {
       method = NA_character_,
       metric = NA_character_,
       k = NA_integer_,
+      cycle = NA_integer_,
       n_threads = n_threads,
       status = "failed",
       error = conditionMessage(loaded)
@@ -485,51 +497,57 @@ for (dataset_name in datasets) {
         metric_reference(x, k, metric, quality_n, quality_max_ops, n_threads, seed),
         error = function(e) NULL
       )
-      for (backend in backends) {
-        for (method in methods) {
-          row_id <- row_id + 1L
-          expected <- is_expected_skip(capabilities, backend, method, metric)
-          if (!is.null(expected)) {
-            row <- result_row(
-              dataset = dataset_name,
-              n = nrow(x),
-              p = ncol(x),
-              backend = backend,
-              method = method,
-              metric = metric,
-              k = k,
-              n_threads = n_threads,
-              status = "expected_skip",
-              error = expected$notes,
-              expected_skip = TRUE,
-              capability_notes = expected$notes
+      for (cycle in seq_len(cycles)) {
+        cycle_seed <- seed + (cycle - 1L) * 1000003L
+        for (backend in backends) {
+          for (method in methods) {
+            row_id <- row_id + 1L
+            expected <- is_expected_skip(capabilities, backend, method, metric)
+            if (!is.null(expected)) {
+              row <- result_row(
+                dataset = dataset_name,
+                n = nrow(x),
+                p = ncol(x),
+                backend = backend,
+                method = method,
+                metric = metric,
+                k = k,
+                cycle = cycle,
+                n_threads = n_threads,
+                status = "expected_skip",
+                error = expected$notes,
+                expected_skip = TRUE,
+                capability_notes = expected$notes
+              )
+            } else {
+              row <- run_one(
+                x = x,
+                dataset_name = dataset_name,
+                backend = backend,
+                method = method,
+                metric = metric,
+                k = k,
+                cycle = cycle,
+                n_threads = n_threads,
+                timeout = timeout,
+                reference = references[[ref_key]],
+                seed = cycle_seed
+              )
+            }
+            results[[row_id]] <- row
+            utils::write.csv(
+              do.call(rbind, results),
+              file.path(out_dir, "nn_metric_benchmark_results.csv"),
+              row.names = FALSE
             )
-          } else {
-            row <- run_one(
-              x = x,
-              dataset_name = dataset_name,
-              backend = backend,
-              method = method,
-              metric = metric,
-              k = k,
-              n_threads = n_threads,
-              timeout = timeout,
-              reference = references[[ref_key]]
-            )
+            cat(sprintf(
+              "[%s] dataset=%s cycle=%s backend=%s method=%s metric=%s k=%s status=%s elapsed=%.3f\n",
+              format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+              dataset_name, cycle, backend, method, metric, k, row$status,
+              ifelse(is.na(row$elapsed_sec), 0, row$elapsed_sec)
+            ))
+            flush.console()
           }
-          results[[row_id]] <- row
-          utils::write.csv(
-            do.call(rbind, results),
-            file.path(out_dir, "nn_metric_benchmark_results.csv"),
-            row.names = FALSE
-          )
-          cat(sprintf(
-            "[%s] dataset=%s backend=%s method=%s metric=%s k=%s status=%s elapsed=%.3f\n",
-            format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-            dataset_name, backend, method, metric, k, row$status,
-            ifelse(is.na(row$elapsed_sec), 0, row$elapsed_sec)
-          ))
-          flush.console()
         }
       }
     }
@@ -549,12 +567,17 @@ if (nrow(ok)) {
   best$quality_score <- NULL
   utils::write.csv(best, file.path(out_dir, "nn_metric_best_by_dataset_backend_metric_k.csv"), row.names = FALSE)
 
+  ok_cycle <- ok[order(ok$dataset, ok$backend, ok$metric, ok$k, ok$cycle, -ok$quality_score, ok$elapsed_sec), , drop = FALSE]
+  best_cycle <- do.call(rbind, lapply(split(ok_cycle, paste(ok_cycle$dataset, ok_cycle$backend, ok_cycle$metric, ok_cycle$k, ok_cycle$cycle, sep = "__")), function(x) x[1L, , drop = FALSE]))
+  best_cycle$quality_score <- NULL
+  utils::write.csv(best_cycle, file.path(out_dir, "nn_metric_best_by_dataset_backend_metric_k_cycle.csv"), row.names = FALSE)
+
   fastest <- NULL
   tunable <- ok[!is.na(ok$recall_at_k) & ok$recall_at_k >= recall_threshold, , drop = FALSE]
   if (nrow(tunable)) {
-    tunable <- tunable[order(tunable$dataset, tunable$backend, tunable$metric, tunable$k, tunable$elapsed_sec), , drop = FALSE]
+    tunable <- tunable[order(tunable$dataset, tunable$backend, tunable$metric, tunable$k, tunable$cycle, tunable$elapsed_sec), , drop = FALSE]
     fastest <- do.call(rbind, lapply(
-      split(tunable, paste(tunable$dataset, tunable$backend, tunable$metric, tunable$k, sep = "__")),
+      split(tunable, paste(tunable$dataset, tunable$backend, tunable$metric, tunable$k, tunable$cycle, sep = "__")),
       function(x) x[1L, , drop = FALSE]
     ))
     fastest$quality_score <- NULL
@@ -567,7 +590,7 @@ if (nrow(ok)) {
 
   auto_rows <- ok[ok$method == "auto", , drop = FALSE]
   if (nrow(auto_rows) && !is.null(fastest) && nrow(fastest)) {
-    keys <- c("dataset", "backend", "metric", "k")
+    keys <- c("dataset", "backend", "metric", "k", "cycle")
     auto_keep <- c(keys, "result_backend", "resolved_backend", "implementation_backend", "elapsed_sec", "recall_at_k", "recall_reference", "recall_query_n")
     fastest_keep <- c(keys, "method", "result_backend", "resolved_backend", "implementation_backend", "elapsed_sec", "recall_at_k", "recall_reference", "recall_query_n")
     names(auto_rows)[match(auto_keep[-seq_along(keys)], names(auto_rows))] <- paste0("auto_", auto_keep[-seq_along(keys)])
@@ -612,14 +635,16 @@ materials <- c(
   sprintf("- k values: `%s`", paste(k_values, collapse = "`, `")),
   sprintf("- CPU thread cap: `%s`", n_threads),
   sprintf("- Timeout per combination: `%s` seconds", timeout),
+  sprintf("- Cycles: `%s`", cycles),
   sprintf("- Fastest-method recall threshold: `%s`", recall_threshold),
   "",
   "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities()` and recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
   "`nn_metric_capabilities.csv` stores the capability table used for that preflight.",
   "`result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label.",
-  "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used.",
-  "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k whose recall is at least `recall_threshold`.",
-  "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches.",
+  "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k.",
+  "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",
+  "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches.",
+  "`nn_metric_best_by_dataset_backend_metric_k_cycle.csv` stores the best row within each cycle; `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the overall best row across cycles for backward-compatible summaries.",
   "The script does not add benchmark-only helpers to the package API."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_nn_metrics.md"))
