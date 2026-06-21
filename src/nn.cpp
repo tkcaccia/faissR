@@ -40,8 +40,6 @@ struct Neighbor {
 
 enum class DistanceKind {
   Euclidean,
-  Manhattan,
-  Minkowski,
   Cosine,
   Correlation,
   InnerProduct
@@ -104,8 +102,6 @@ void copy_row_major(const double* src, std::vector<double>& dest, const int nrow
 
 DistanceKind distance_kind_from_method(const std::string& method) {
   if (method == "euclidean") return DistanceKind::Euclidean;
-  if (method == "manhattan") return DistanceKind::Manhattan;
-  if (method == "minkowski") return DistanceKind::Minkowski;
   if (method == "cosine") return DistanceKind::Cosine;
   if (method == "correlation") return DistanceKind::Correlation;
   if (method == "inner_product") return DistanceKind::InnerProduct;
@@ -135,22 +131,6 @@ double distance_value_layout(const double* data,
         const double diff = data[static_cast<std::size_t>(c) * n_data + data_row] -
                             points[static_cast<std::size_t>(c) * n_points + point_row];
         acc += diff * diff;
-      }
-    }
-    return acc;
-  }
-  if constexpr (kind == DistanceKind::Manhattan) {
-    if constexpr (row_major) {
-      const double* x = data + static_cast<std::size_t>(data_row) * n_features;
-      const double* y = points + static_cast<std::size_t>(point_row) * n_features;
-      for (int c = 0; c < n_features; ++c) {
-        acc += std::abs(x[c] - y[c]);
-      }
-    } else {
-      for (int c = 0; c < n_features; ++c) {
-        const double diff = data[static_cast<std::size_t>(c) * n_data + data_row] -
-                            points[static_cast<std::size_t>(c) * n_points + point_row];
-        acc += std::abs(diff);
       }
     }
     return acc;
@@ -254,19 +234,6 @@ double distance_value_layout(const double* data,
     return -dot;
   }
 
-  if constexpr (row_major) {
-    const double* x = data + static_cast<std::size_t>(data_row) * n_features;
-    const double* y = points + static_cast<std::size_t>(point_row) * n_features;
-    for (int c = 0; c < n_features; ++c) {
-      acc += std::pow(std::abs(x[c] - y[c]), p);
-    }
-  } else {
-    for (int c = 0; c < n_features; ++c) {
-      const double diff = data[static_cast<std::size_t>(c) * n_data + data_row] -
-                          points[static_cast<std::size_t>(c) * n_points + point_row];
-      acc += std::pow(std::abs(diff), p);
-    }
-  }
   return acc;
 }
 
@@ -343,8 +310,6 @@ void write_knn_rows(const double* data_ptr,
       double dist = top[static_cast<std::size_t>(j)].distance;
       if constexpr (kind == DistanceKind::Euclidean) {
         if (!square) dist = std::sqrt(std::max(dist, 0.0));
-      } else if constexpr (kind == DistanceKind::Minkowski) {
-        dist = std::pow(std::max(dist, 0.0), 1.0 / p);
       } else if constexpr (kind == DistanceKind::InnerProduct) {
         dist = std::max(dist - top.front().distance, 0.0);
       }
@@ -1398,12 +1363,9 @@ List nn_cpp(NumericMatrix data,
   }
   const int max_k = exclude_self ? n_data - 1 : n_data;
   if (k < 1 || k > max_k) Rcpp::stop("k must be in the available neighbor range");
-  if (method != "euclidean" && method != "manhattan" && method != "minkowski" &&
-      method != "cosine" && method != "correlation" && method != "inner_product") {
+  if (method != "euclidean" && method != "cosine" &&
+      method != "correlation" && method != "inner_product") {
     Rcpp::stop("unsupported method");
-  }
-  if (method == "minkowski" && (!std::isfinite(p) || p <= 0.0)) {
-    Rcpp::stop("p must be positive for minkowski distance");
   }
   const DistanceKind distance_kind = distance_kind_from_method(method);
 
@@ -1492,18 +1454,6 @@ List nn_cpp(NumericMatrix data,
           p, use_fixed_topk, exclude_self, indices_ptr, distances_ptr, query_start, query_end
         );
       }
-    } else if (distance_kind == DistanceKind::Manhattan) {
-      if (!use_row_major) {
-        write_knn_rows<DistanceKind::Manhattan, false>(
-          data_ptr, points_ptr, n_data, n_points, n_features, k, square, sorted,
-          p, use_fixed_topk, exclude_self, indices_ptr, distances_ptr, query_start, query_end
-        );
-      } else {
-        write_knn_rows<DistanceKind::Manhattan, true>(
-          data_ptr, points_ptr, n_data, n_points, n_features, k, square, sorted,
-          p, use_fixed_topk, exclude_self, indices_ptr, distances_ptr, query_start, query_end
-        );
-      }
     } else if (distance_kind == DistanceKind::Cosine) {
       if (!use_row_major) {
         write_knn_rows<DistanceKind::Cosine, false>(
@@ -1536,18 +1486,6 @@ List nn_cpp(NumericMatrix data,
         );
       } else {
         write_knn_rows<DistanceKind::InnerProduct, true>(
-          data_ptr, points_ptr, n_data, n_points, n_features, k, square, sorted,
-          p, use_fixed_topk, exclude_self, indices_ptr, distances_ptr, query_start, query_end
-        );
-      }
-    } else {
-      if (!use_row_major) {
-        write_knn_rows<DistanceKind::Minkowski, false>(
-          data_ptr, points_ptr, n_data, n_points, n_features, k, square, sorted,
-          p, use_fixed_topk, exclude_self, indices_ptr, distances_ptr, query_start, query_end
-        );
-      } else {
-        write_knn_rows<DistanceKind::Minkowski, true>(
           data_ptr, points_ptr, n_data, n_points, n_features, k, square, sorted,
           p, use_fixed_topk, exclude_self, indices_ptr, distances_ptr, query_start, query_end
         );

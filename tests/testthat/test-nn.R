@@ -22,6 +22,23 @@ test_that("nn returns exact euclidean neighbors", {
   expect_equal(unname(out$distances), unname(expected_dst))
 })
 
+test_that("native exact KNN only accepts the documented metrics", {
+  x <- matrix(c(
+    0, 0,
+    1, 0,
+    0, 1
+  ), ncol = 2, byrow = TRUE)
+
+  expect_error(
+    faissR:::nn_cpp(x, x, 2L, "manhattan", FALSE, TRUE, 2, FALSE, 1L, FALSE),
+    "unsupported method"
+  )
+  expect_error(
+    faissR:::nn_cpp(x, x, 2L, "minkowski", FALSE, TRUE, 2, FALSE, 1L, FALSE),
+    "unsupported method"
+  )
+})
+
 test_that("nn accepts sparse Matrix inputs on the native sparse CPU path", {
   skip_if_not_installed("Matrix")
   x <- matrix(c(
