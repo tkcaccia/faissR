@@ -335,7 +335,8 @@ when ARI is unavailable it selects the fastest median-time row. The
 `"fastest_within_ari_tolerance"` or `"speed_only_no_ari"`.
 `kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()`
 rows with those recommendations and reports median speed ratio, median ARI gap,
-withinss ratio, and backend/implementation agreement.
+withinss ratio, backend/implementation agreement, and the recommendation basis
+used for the recommended row.
 Explicit CUDA/library combinations that are known unavailable before execution
 are recorded as `status = "expected_skip"` with `expected_skip = TRUE`, while
 `resolved_backend` remains `"cuda"` so the skipped public device request is

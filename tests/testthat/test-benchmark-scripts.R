@@ -253,10 +253,13 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
     tuning_policy = c("auto", "auto", "auto", "auto", "stats", "stats")
   )
   recommendations <- cycle_summary[cycle_summary$method == "stats", , drop = FALSE]
+  recommendations$recommendation_basis <- "fastest_within_ari_tolerance"
 
   out <- env$compare_fast_kmeans_to_recommendations(cycle_summary, recommendations)
+  expect_equal(anyDuplicated(names(out)), 0L)
   expect_equal(as.integer(out$centers), c(3L, 3L, 5L, 5L))
   expect_equal(out$fast_backend, c("cpu", "cuda", "cpu", "cuda"))
+  expect_equal(unique(out$recommended_recommendation_basis), "fastest_within_ari_tolerance")
 })
 
 test_that("graph benchmark recommendations are grouped by target cluster count", {
