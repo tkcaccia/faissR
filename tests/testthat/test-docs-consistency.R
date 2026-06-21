@@ -159,6 +159,33 @@ test_that("README describes public NN metrics and correlation semantics", {
   expect_true(grepl("Correlation is centered cosine similarity", prose, fixed = TRUE))
   expect_true(grepl("inner product is the raw dot product", prose, fixed = TRUE))
   expect_true(grepl("distance choices belong in `metric`", prose, fixed = TRUE))
+  expect_true(grepl("zero-normalized rows have distance `0`", prose, fixed = TRUE))
+  expect_true(grepl("explicit CUDA routes remain on CUDA", prose, fixed = TRUE))
+})
+
+test_that("GitHub and reference docs describe normalized zero-row metric semantics", {
+  docs_files <- c(
+    test_path("../../README.md"),
+    test_path("../../docs", c(
+      "backend-capabilities.md",
+      "implementation.md",
+      "nn-methods.md",
+      "usage-api.md"
+    )),
+    test_path("../../man/nn.Rd")
+  )
+  missing <- !file.exists(docs_files)
+  if (any(missing)) {
+    skip("GitHub or reference documentation files are not available in this installed-package test context.")
+  }
+
+  for (docs_file in docs_files) {
+    prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+    expect_true(
+      grepl("zero-normalized", prose, fixed = TRUE),
+      info = basename(docs_file)
+    )
+  }
 })
 
 test_that("GitHub documentation pages do not duplicate headings", {

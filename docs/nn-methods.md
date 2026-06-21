@@ -64,6 +64,12 @@ rather than silently falling back to Euclidean search.
 Common aliases are accepted at the API boundary and canonicalized in result
 attributes: `"l2"` maps to `"euclidean"`, `"cor"`/`"pearson"` map to
 `"correlation"`, and `"ip"` maps to `"inner_product"`.
+For normalized cosine and correlation routes, all-zero cosine rows and constant
+correlation rows are zero-normalized edge cases. faissR treats two
+zero-normalized rows as distance `0` and a zero-normalized row versus a nonzero
+row as distance `1`. CPU FAISS Flat uses exact CPU scoring for those rows to
+preserve deterministic small-`k` tie handling; explicit CUDA calls remain on
+CUDA and keep CUDA backend metadata.
 
 | Method | CPU metrics | CUDA metrics | Notes |
 | --- | --- | --- | --- |

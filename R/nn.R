@@ -4896,6 +4896,11 @@ grid_self_knn <- function(data,
 #'   and RcppHNSW. FAISS approximate IP-capable routes use row L2 normalization
 #'   for cosine and row centering plus L2 normalization for correlation before
 #'   inner-product search; distances are returned as `1 - similarity`.
+#'   All-zero cosine rows and constant correlation rows are zero-normalized
+#'   edge cases: two zero-normalized rows have distance `0`, while a
+#'   zero-normalized row versus a nonzero row has distance `1`. CPU FAISS Flat
+#'   uses the exact CPU scorer for those rows to preserve deterministic
+#'   small-`k` tie handling; explicit CUDA routes remain on CUDA.
 #'   CPU `method = "auto"` can use FAISS Flat for larger exact non-Euclidean
 #'   query workloads, FAISS HNSW for large non-Euclidean self-search when FAISS
 #'   is available, and RcppHNSW/hnswlib only as the fallback when FAISS is

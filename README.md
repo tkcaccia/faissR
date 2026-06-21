@@ -63,7 +63,12 @@ the tuned defaults identified for the resolved method.
 The public nearest-neighbour metrics are `"euclidean"`, `"cosine"`,
 `"correlation"`, and `"inner_product"`. Correlation is centered cosine
 similarity, whereas inner product is the raw dot product; distance choices
-belong in `metric`, not in separate method names.
+belong in `metric`, not in separate method names. For normalized cosine and
+correlation routes, all-zero cosine rows and constant correlation rows are
+handled explicitly: two zero-normalized rows have distance `0`, while a
+zero-normalized row versus a nonzero row has distance `1`. CPU FAISS Flat uses
+the exact CPU scorer for this degenerate case to preserve deterministic
+small-`k` tie handling; explicit CUDA routes remain on CUDA.
 The [NN methods guide](docs/nn-methods.md) describes each nearest-neighbour
 method and cites the relevant algorithm/software references.
 

@@ -105,7 +105,13 @@ FAISS CPU/GPU IVFPQ, FAISS CPU HNSW, and RcppHNSW-compatible
 paths. FAISS IP-capable approximate routes implement cosine by row L2
 normalizing the inputs before inner-product search, and correlation by row
 centering plus L2 normalization before inner-product search; both routes return
-`1 - similarity` distances. Inner-product search is exposed for exact native CPU
+`1 - similarity` distances. All-zero cosine rows and constant correlation rows
+are zero-normalized edge cases. faissR treats two zero-normalized rows as
+distance `0` and a zero-normalized row versus a nonzero row as distance `1`.
+CPU FAISS Flat uses the exact CPU scorer for those rows to preserve
+deterministic small-`k` tie handling; explicit CUDA routes remain on CUDA and
+apply the normalized-distance repair without relabelling the backend.
+Inner-product search is exposed for exact native CPU
 scoring, FAISS Flat IP routes, FAISS IVF-Flat/IVFPQ IP, FAISS HNSW
 IP, and the RcppHNSW/hnswlib IP
 fallback. Approximate accelerator backends reject unsupported metric/backend
@@ -188,7 +194,7 @@ public method names map to different concrete functions depending on `backend`.
 | --- | --- | --- | --- |
 | `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, FAISS GPU CAGRA selector, or FAISS GPU Flat IP for non-Euclidean exact routes. | Default for general use. |
 | `exact` | Native exact CPU route. | FAISS GPU Flat when available, otherwise cuVS brute force. | Accuracy-first baseline. |
-| `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized Flat IP. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP. | Exact FAISS route [1-2,16]. |
+| `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP while staying on CUDA for explicit CUDA calls. | Exact FAISS route [1-2,16]. |
 | `bruteforce` | Native exact CPU route. | Direct cuVS brute force when available. | Useful for comparing direct cuVS against FAISS GPU Flat [3]. |
 | `grid` | Native 2D/3D exact spatial grid. | CUDA 2D/3D grid. | Errors outside two or three columns. |
 | `vptree` | Native exact CPU VP-tree for Euclidean, cosine, and correlation; zero-normalized non-Euclidean rows use exact CPU fallback. | Unsupported. | Low-dimensional CPU helper. |
