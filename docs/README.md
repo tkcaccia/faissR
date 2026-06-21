@@ -24,7 +24,7 @@ CUDA, RAPIDS cuVS, and RAPIDS libcugraph are optional compiled backends.
 - [Benchmarks](benchmarks.md): benchmark design for speed, recall, memory, and
   downstream embedding checks.
 - [Autotuning](autotuning.md): empirical backend roles, defaults, and guardrails.
-- [API](usage-api.md): function overview.
+- [API](usage-api.md): function and argument reference.
 - [Backends](backend-capabilities.md): supported CPU and CUDA paths.
 - [References](references.md): references, software acknowledgements, and
   implementation inspirations.
