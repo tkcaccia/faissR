@@ -158,8 +158,11 @@ quantization can reduce recall substantially [6].
 
 ### Method Families
 
-The public `method` names are stable user-facing labels. Internally they map to
-different concrete functions depending on `backend`.
+The public `method` names are stable user-facing labels. Each algorithm family
+has one public method name; implementation labels such as `faiss_hnsw`,
+`faiss_ivf`, `faiss_gpu_ivf_flat`, or `cuda_cuvs_cagra` are reserved for
+resolved backend metadata and legacy explicit `backend` calls. Internally, the
+public method names map to different concrete functions depending on `backend`.
 
 | Method | CPU behavior | CUDA behavior | Notes |
 | --- | --- | --- | --- |

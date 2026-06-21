@@ -526,29 +526,29 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cpu", "IVF", "euclidean"),
     "faiss_ivf"
   )
-  expect_equal(
+  expect_error(
     faissR:::resolve_public_nn_backend("cpu", "faiss_hnsw", "euclidean"),
-    "faiss_hnsw"
+    "method.*must be one of"
   )
-  expect_equal(
+  expect_error(
     faissR:::resolve_public_nn_backend("cpu", "faiss_ivf", "euclidean"),
-    "faiss_ivf"
+    "method.*must be one of"
   )
-  expect_equal(
+  expect_error(
     faissR:::resolve_public_nn_backend("cpu", "faiss_nndescent", "euclidean"),
-    "faiss_nndescent"
+    "method.*must be one of"
   )
-  expect_equal(
+  expect_error(
     faissR:::resolve_public_nn_backend("cuda", "faiss_gpu_ivf_flat", "euclidean"),
-    "faiss_gpu_ivf_flat"
+    "method.*must be one of"
   )
-  expect_equal(
+  expect_error(
     faissR:::resolve_public_nn_backend("cuda", "cuda_cuvs_nndescent", "euclidean"),
-    "cuda_cuvs_nndescent"
+    "method.*must be one of"
   )
-  expect_true(
-    faissR:::resolve_public_nn_backend("cuda", "faiss_gpu_cagra", "euclidean") %in%
-      c("faiss_gpu_cagra", "cuda_cuvs_cagra")
+  expect_error(
+    faissR:::resolve_public_nn_backend("cuda", "faiss_gpu_cagra", "euclidean"),
+    "method.*must be one of"
   )
   expect_true(
     faissR:::resolve_public_nn_backend("cuda", "CAGRA", "euclidean") %in%
