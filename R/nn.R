@@ -1456,7 +1456,7 @@ nn_capability_row <- function(method, backend, metric) {
       supported <- all_metrics
       exact <- NA
       implementation <- "shape-aware CPU selector"
-      notes <- "Euclidean can resolve to exact, grid, FAISS IVF, or FAISS HNSW; non-Euclidean resolves to exact, FAISS Flat, or RcppHNSW/hnswlib when available."
+      notes <- "Euclidean can resolve to exact, grid, FAISS IVF, or FAISS HNSW; non-Euclidean resolves to exact, FAISS Flat, FAISS HNSW, or RcppHNSW/hnswlib fallback depending on shape and availability."
     } else if (all_metrics) {
       supported <- TRUE
       exact <- NA
