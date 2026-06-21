@@ -156,6 +156,13 @@ label_center_count <- function(labels, fallback) {
 }
 
 kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
+  helper <- tryCatch(
+    getFromNamespace("kmeans_auto_params", "faissR"),
+    error = function(e) NULL
+  )
+  if (is.function(helper)) {
+    return(helper(n = n, p = p, centers = centers, tuning = tuning))
+  }
   if (!identical(tuning, "auto")) {
     return(list(max_iter = 100L, n_init = 1L, tol = 1e-4, policy = tuning))
   }

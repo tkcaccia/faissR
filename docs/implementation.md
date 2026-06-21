@@ -148,8 +148,9 @@ cosine/correlation/inner-product query or exact workloads before falling back to
 RcppHNSW/hnswlib for large non-Euclidean self-search when FAISS is unavailable
 [1-2,5]. On CUDA, it uses CUDA grid search for large
 2D/3D Euclidean self-KNN, exact FAISS GPU Flat or cuVS brute force for small and
-medium searches, and FAISS GPU CAGRA for very large self-KNN when FAISS GPU/cuVS
-integration is available [13-15].
+medium Euclidean searches, FAISS GPU CAGRA for very large Euclidean self-KNN
+when FAISS GPU/cuVS integration is available, and FAISS GPU Flat inner-product
+routes for cosine, correlation, and raw inner-product searches [13-15].
 The public `tuning` argument controls method-specific pilot tuning. The default
 `tuning = "auto"` uses the recommended tuning policy for the resolved method;
 `"cache"`, `"pilot"`, and `"fixed"` can be selected explicitly, and
@@ -179,7 +180,7 @@ public method names map to different concrete functions depending on `backend`.
 
 | Method | CPU behavior | CUDA behavior | Notes |
 | --- | --- | --- | --- |
-| `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, or FAISS GPU CAGRA selector. | Default for general use. |
+| `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, FAISS GPU CAGRA selector, or FAISS GPU Flat IP for non-Euclidean metrics. | Default for general use. |
 | `exact` | Native exact CPU route. | FAISS GPU Flat when available, otherwise cuVS brute force. | Accuracy-first baseline. |
 | `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized Flat IP. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP. | Exact FAISS route [1-2,16]. |
 | `bruteforce` | Native exact CPU route. | Direct cuVS brute force when available. | Useful for comparing direct cuVS against FAISS GPU Flat [3]. |
