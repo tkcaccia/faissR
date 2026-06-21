@@ -28,12 +28,14 @@ entries are ignored.}
 \item{k}{Number of neighbours to return from each candidate row.}
 
 \item{backend}{`"auto"`/`"cpu"` for the general CPU implementation,
-`"cuda"` for the native CUDA row-candidate kernel. GPU backends currently require
-self-query Euclidean candidates with `exclude_self = TRUE`.}
+`"cuda"` for the native CUDA row-candidate kernel. GPU backends currently
+require self-query candidates with `exclude_self = TRUE`.}
 
 \item{metric}{`"euclidean"`, `"cosine"`, `"correlation"`, or
-`"inner_product"`. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are
-accepted. GPU candidate kernels currently support Euclidean only.}
+`"inner_product"`. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and
+`"ip"` are accepted. CUDA candidate scoring supports Euclidean directly
+and cosine/correlation through normalized Euclidean scoring; raw
+inner-product CUDA candidate scoring is not exposed.}
 
 \item{n_threads}{CPU threads for the CPU backend.}
 

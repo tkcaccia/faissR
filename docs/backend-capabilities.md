@@ -83,7 +83,7 @@ a CPU FAISS route in faissR.
 
 | Function | CPU | CUDA | Notes |
 | --- | --- | --- | --- |
-| `candidate_knn()` | yes | optional CUDA candidate ranking where compiled | Exact ranking inside supplied candidates; it does not generate candidates. |
+| `candidate_knn()` | yes | optional CUDA candidate ranking where compiled | Exact ranking inside supplied candidates; CUDA supports Euclidean plus normalized cosine/correlation, but not raw inner product. |
 | `knn_graph()` | yes | uses CUDA KNN if generated/supplied KNN uses CUDA | Returns a native `faissR_graph` edge list without requiring `igraph`. |
 | `graph_cluster()` | native random-walking, Louvain, Leiden | Louvain/Leiden with RAPIDS libcugraph when built | CUDA random-walking is not enabled yet [9-12,17-19]. |
 | `fast_kmeans()` | native/FAISS CPU k-means | FAISS GPU or direct cuVS k-means where available | Uses the same `"auto"`, `"cpu"`, `"cuda"` backend policy [7-8]. |

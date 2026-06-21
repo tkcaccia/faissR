@@ -14,12 +14,13 @@
 #'   `data`, i.e. self-query candidate KNN.
 #' @param k Number of neighbours to return from each candidate row.
 #' @param backend `"auto"`/`"cpu"` for the general CPU implementation,
-#'   `"cuda"` for the native CUDA row-candidate kernel. GPU backends currently require
-#'   self-query Euclidean candidates with `exclude_self = TRUE`.
+#'   `"cuda"` for the native CUDA row-candidate kernel. GPU backends currently
+#'   require self-query candidates with `exclude_self = TRUE`.
 #' @param metric `"euclidean"`, `"cosine"`, `"correlation"`, or
 #'   `"inner_product"`. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and
-#'   `"ip"` are accepted. GPU candidate kernels currently support Euclidean
-#'   only.
+#'   `"ip"` are accepted. CUDA candidate scoring supports Euclidean directly
+#'   and cosine/correlation through normalized Euclidean scoring; raw
+#'   inner-product CUDA candidate scoring is not exposed.
 #' @param n_threads CPU threads for the CPU backend.
 #' @param exclude_self If `TRUE`, remove each query row from its own candidate
 #'   set. This is valid only for self-query candidate KNN.
@@ -76,8 +77,8 @@ candidate_knn <- function(data,
   }
 
   if (identical(backend, "cuda")) {
-    if (!identical(metric, "euclidean")) {
-      stop("CUDA candidate KNN currently supports only `metric = \"euclidean\"`.", call. = FALSE)
+    if (identical(metric, "inner_product")) {
+      stop("CUDA candidate KNN does not support `metric = \"inner_product\"`.", call. = FALSE)
     }
     if (!isTRUE(exclude_self)) {
       stop("CUDA candidate KNN currently requires `exclude_self = TRUE`.", call. = FALSE)
@@ -88,12 +89,22 @@ candidate_knn <- function(data,
     if (!isTRUE(cuda_available())) {
       stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
     }
-    out <- row_candidate_knn_cuda_cpp(x, cand, as.integer(k))
+    metric_inputs <- NULL
+    search_x <- x
+    if (metric %in% c("cosine", "correlation")) {
+      metric_inputs <- normalized_euclidean_metric_inputs(x, q, self_query, metric)
+      search_x <- metric_inputs$data
+    }
+    out <- row_candidate_knn_cuda_cpp(search_x, cand, as.integer(k))
     result <- finish_nn_result(out, "cuda_candidate", k, TRUE, exact = FALSE, metric = metric)
+    if (!is.null(metric_inputs)) {
+      result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
+    }
     attr(result, "candidate_knn") <- list(
       candidate_columns = as.integer(ncol(cand)),
       exclude_self = isTRUE(exclude_self),
-      exact_within_candidates = TRUE
+      exact_within_candidates = TRUE,
+      transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform
     )
     return(result)
   }

@@ -110,7 +110,7 @@ candidate_knn(data, candidates, points = data, k,
 | `points` | Optional query matrix. Defaults to `data` for self-query candidate scoring. |
 | `k` | Number of best neighbours to keep from each candidate row. Must be no larger than `ncol(candidates)`. |
 | `backend` | `"auto"`/`"cpu"` for exact CPU scoring inside candidates, or `"cuda"` for the native CUDA row-candidate kernel. |
-| `metric` | `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"` for CPU. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. CUDA candidate scoring currently supports Euclidean only. |
+| `metric` | `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"` for CPU. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. CUDA candidate scoring supports Euclidean directly and cosine/correlation through normalized Euclidean scoring; raw inner-product CUDA candidate scoring is not exposed. |
 | `n_threads` | CPU worker threads. |
 | `exclude_self` | If `TRUE`, remove each row from its own candidate list. This requires `points = data`. |
 

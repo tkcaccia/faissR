@@ -231,9 +231,12 @@ same `faissR_nn` result shape as `nn()`.
 
 `candidate_knn()` ranks a supplied candidate set for each query row. It avoids a
 full all-pairs search when another algorithm has already proposed likely
-neighbours. CPU candidate ranking is exact; CUDA candidate ranking is used only
-when compiled and explicitly requested. The output can feed graph construction,
-prediction, or diagnostic code.
+neighbours. CPU candidate ranking is exact for all public metrics. CUDA
+candidate ranking is used only when compiled and explicitly requested; it scores
+Euclidean candidates directly and cosine/correlation candidates after the same
+row-normalized Euclidean transform used by graph-search methods. Raw
+inner-product CUDA candidate scoring is not exposed. The output can feed graph
+construction, prediction, or diagnostic code.
 
 ## `knn_graph()`
 
