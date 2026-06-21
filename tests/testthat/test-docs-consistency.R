@@ -54,6 +54,44 @@ test_that("public NN method and metric labels are unique canonical labels", {
   expect_false("manhattan" %in% metrics)
 })
 
+test_that("public API excludes retired wrapper and platform-specific helper names", {
+  namespace_exports <- getNamespaceExports("faissR")
+  expected_exports <- c(
+    "backend_info",
+    "candidate_knn",
+    "cuda_available",
+    "cugraph_available",
+    "cuvs_available",
+    "faiss_available",
+    "fast_kmeans",
+    "graph_cluster",
+    "knn",
+    "knn_graph",
+    "nn",
+    "nn_capabilities",
+    "nn_without_self"
+  )
+  retired_exports <- c(
+    "knn_fit",
+    "faiss.fit",
+    "cuvs.fit",
+    "predict_proba",
+    "knn_recall",
+    "metal_available"
+  )
+
+  expect_setequal(namespace_exports, expected_exports)
+  expect_false(any(retired_exports %in% namespace_exports))
+
+  man_dir <- test_path("../../man")
+  if (!dir.exists(man_dir)) {
+    skip("Manual files are not available in this installed-package test context.")
+  }
+  man_topics <- sub("\\.Rd$", "", basename(list.files(man_dir, pattern = "\\.Rd$")))
+  expect_false(any(retired_exports %in% man_topics))
+  expect_false(any(grepl("metal", man_topics, ignore.case = TRUE)))
+})
+
 test_that("README describes public NN metrics and correlation semantics", {
   readme_file <- test_path("../../README.md")
   if (!file.exists(readme_file)) {
