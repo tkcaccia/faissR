@@ -164,6 +164,7 @@ with_elapsed_limit <- function(expr, timeout) {
 
 result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, method,
                        weight, n_clusters, n_threads, status, error = NA_character_,
+                       n_clusters_source = NA_character_,
                        load_sec = NA_real_, graph_sec = NA_real_,
                        cluster_sec = NA_real_, total_sec = NA_real_,
                        peak_rss_gb = NA_real_, n_edges = NA_integer_,
@@ -190,6 +191,7 @@ result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, 
     method = method,
     weight = weight,
     n_clusters_requested = if (is.null(n_clusters)) NA_integer_ else as.integer(n_clusters),
+    n_clusters_source = n_clusters_source,
     n_threads = as.integer(n_threads),
     status = status,
     error = error,
@@ -275,6 +277,7 @@ summarize_graph_cycles <- function(ok) {
       median_n_communities = finite_median(x$n_communities),
       median_selected_resolution = finite_median(x$selected_resolution),
       n_clusters_requested = dominant_value(x$n_clusters_requested),
+      n_clusters_source = dominant_value(x$n_clusters_source),
       graph_cached = any(as.logical(x$graph_cached), na.rm = TRUE),
       stringsAsFactors = FALSE
     )
@@ -320,7 +323,7 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
     "cluster_resolved_backend", "method", "weight", "success_cycles",
     "median_graph_sec", "median_cluster_sec", "median_total_sec",
     "median_ari", "min_ari", "median_modularity", "median_n_communities",
-    "median_selected_resolution", "graph_cached"
+    "median_selected_resolution", "n_clusters_source", "graph_cached"
   )
   auto <- auto[, keep, drop = FALSE]
   recommendations <- recommendations[, keep, drop = FALSE]
@@ -464,11 +467,14 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
   cluster_preflight_route <- graph_cluster_preflight_route(cluster_backend)
   graph_target <- graph_meta$target_n_clusters %||% NULL
   n_clusters <- NULL
+  n_clusters_source <- NA_character_
   if (!identical(method, "random_walking")) {
     if (is.null(graph_target)) {
       n_clusters <- label_target_clusters(labels, target_mode)
+      if (!is.null(n_clusters)) n_clusters_source <- target_mode
     } else {
       n_clusters <- NULL
+      n_clusters_source <- "stored_graph_target"
     }
   }
   n_clusters_requested <- graph_target %||% n_clusters
@@ -504,6 +510,7 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       method = method,
       weight = weight,
       n_clusters = n_clusters_requested,
+      n_clusters_source = n_clusters_source,
       n_threads = n_threads,
       status = "success",
       graph_sec = graph_sec,
@@ -533,6 +540,7 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       method = method,
       weight = weight,
       n_clusters = n_clusters_requested,
+      n_clusters_source = n_clusters_source,
       n_threads = n_threads,
       status = "failed",
       error = conditionMessage(e),
@@ -675,6 +683,13 @@ for (dataset_name in datasets) {
             } else {
               graph_target_clusters %||% label_target_clusters(loaded$labels, target_mode)
             }
+            row_target_source <- if (identical(method, "random_walking") || is.null(row_target_clusters)) {
+              NA_character_
+            } else if (!is.null(graph_target_clusters)) {
+              "stored_graph_target"
+            } else {
+              target_mode
+            }
             if (!is.null(skip_reason)) {
               row <- result_row(
                 dataset = dataset_name,
@@ -687,6 +702,7 @@ for (dataset_name in datasets) {
                 method = method,
                 weight = if (identical(graph_build$status, "success")) graph_build$weight else weight,
                 n_clusters = row_target_clusters,
+                n_clusters_source = row_target_source,
                 n_threads = n_threads,
                 status = "expected_skip",
                 error = skip_reason,
@@ -712,6 +728,7 @@ for (dataset_name in datasets) {
                 method = method,
                 weight = weight,
                 n_clusters = row_target_clusters,
+                n_clusters_source = row_target_source,
                 n_threads = n_threads,
                 status = if (identical(graph_build$status, "expected_skip")) "expected_skip" else "failed",
                 error = graph_build$error,
@@ -822,6 +839,7 @@ materials <- c(
   "",
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
   "When `target_clusters = \"labels\"`, Louvain and Leiden use `n_clusters = length(unique(labels))`. If a benchmark block contains only Louvain/Leiden, this target is stored on the graph with `knn_graph(n_clusters = ...)` and reused by `graph_cluster()`; mixed blocks that include random-walking pass the target only to Louvain/Leiden rows because random-walking intentionally has no cluster-count target.",
+  "`n_clusters_requested` records the target community count used for Louvain/Leiden rows. `n_clusters_source` records whether that target came from dataset labels, a stored `knn_graph(n_clusters = ...)` target, or no target.",
   "Each KNN graph is built once per dataset/cycle/k/graph-backend/weight combination and reused across clustering methods and clustering backends within that cycle. The `cycle` column supports repeated benchmark cycles such as `--cycles=10`; `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
   "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, community counts, and resolved backend metadata.",
   "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering/backend/method row within `ari_tolerance` of the best median ARI for each dataset/k/target-cluster-count combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; when ARI is unavailable it selects the fastest median total-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",

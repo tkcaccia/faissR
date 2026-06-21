@@ -251,6 +251,7 @@ test_that("graph benchmark recommendations are grouped by target cluster count",
     median_n_communities = c(3, 3, 5, 5, 3, 3),
     median_selected_resolution = c(1, 1, 2, 2, 1, 1),
     n_clusters_requested = c(3L, 3L, 5L, 5L, 3L, 3L),
+    n_clusters_source = c("labels", "labels", "labels", "labels", "labels", "labels"),
     graph_cached = c(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE)
   )
 
@@ -285,6 +286,7 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
     method = c("louvain", "louvain"),
     weight = c("snn", "snn"),
     n_clusters_requested = c(3L, 5L),
+    n_clusters_source = c("stored_graph_target", "labels"),
     n_threads = c(2L, 2L),
     status = c("success", "success"),
     error = c(NA_character_, NA_character_),
@@ -305,6 +307,7 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
   out <- env$summarize_graph_cycles(ok)
   expect_equal(nrow(out), 2L)
   expect_equal(sort(as.integer(out$n_clusters_requested)), c(3L, 5L))
+  expect_equal(sort(out$n_clusters_source), c("labels", "stored_graph_target"))
 })
 
 test_that("graph benchmark auto comparison has unique schema columns", {
@@ -331,6 +334,7 @@ test_that("graph benchmark auto comparison has unique schema columns", {
     median_modularity = c(0.4, 0.41),
     median_n_communities = c(3, 3),
     median_selected_resolution = c(1, 1),
+    n_clusters_source = c("labels", "labels"),
     graph_cached = c(TRUE, TRUE)
   )
   recommendations <- cycle_summary[2, , drop = FALSE]
