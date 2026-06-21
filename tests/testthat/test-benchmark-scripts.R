@@ -272,6 +272,36 @@ test_that("NN metric best-row ranking prefers recall stability before speed", {
   expect_equal(best_cycle$method, c("slow_stable", "fast_missing_recall"))
 })
 
+test_that("NN metric best rows use threshold-aware speed and recall rules", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  ok <- data.frame(
+    dataset = c("A", "A", "B", "B", "C", "C", "D", "D"),
+    backend = c("cpu", "cpu", "cpu", "cpu", "cuda", "cuda", "cuda", "cuda"),
+    method = c(
+      "slow_perfect", "fast_good",
+      "lower_recall_fast", "higher_recall_slow",
+      "fast_missing_recall", "slow_missing_recall",
+      "cycle1_fast_good", "cycle2_fast_good"
+    ),
+    metric = c("euclidean", "euclidean", "cosine", "cosine", "correlation", "correlation", "euclidean", "euclidean"),
+    k = c(50L, 50L, 15L, 15L, 10L, 10L, 5L, 5L),
+    cycle = c(1L, 1L, 1L, 1L, 1L, 1L, 1L, 2L),
+    recall_at_k = c(1.00, 0.99, 0.94, 0.96, NA, NA, 0.99, 0.99),
+    min_recall_at_k = c(1.00, 0.98, 0.93, 0.95, NA, NA, 0.98, 0.98),
+    elapsed_sec = c(4, 1, 1, 3, 1, 2, 2, 1),
+    stringsAsFactors = FALSE
+  )
+
+  best <- env$select_nn_metric_best_rows(ok, recall_threshold = 0.98)
+  expect_equal(best$method, c("fast_good", "higher_recall_slow", "fast_missing_recall", "cycle2_fast_good"))
+
+  best_cycle <- env$select_nn_metric_best_rows(ok, recall_threshold = 0.98, include_cycle = TRUE)
+  expect_equal(best_cycle$method, c("fast_good", "higher_recall_slow", "fast_missing_recall", "cycle1_fast_good", "cycle2_fast_good"))
+})
+
 test_that("NN metric benchmark canonicalizes metric aliases before preflight", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),

@@ -128,9 +128,10 @@ unavailable for the group, it selects the fastest successful row and marks
 ratio, median recall gap, backend/implementation agreement, and the
 recommendation basis used for the recommended row.
 `nn_metric_best_by_dataset_backend_metric_k_cycle.csv` keeps the best row within
-each cycle after ranking by recall@k, minimum recall@k, and elapsed time, while
+each cycle using the same recall-threshold rule: fastest above threshold,
+best recall below threshold, and fastest when recall is unavailable.
 `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the overall best row
-across cycles with the same ranking for backward-compatible summaries.
+across cycles with the same rule for backward-compatible summaries.
 
 Example CPU-focused metric run:
 

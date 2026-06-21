@@ -456,6 +456,39 @@ rank_nn_metric_success <- function(ok, include_cycle = FALSE) {
   ok[do.call(order, order_args), , drop = FALSE]
 }
 
+select_nn_metric_best_rows <- function(ok, recall_threshold, include_cycle = FALSE) {
+  if (!nrow(ok)) return(ok)
+  keys <- c("dataset", "backend", "metric", "k")
+  if (isTRUE(include_cycle)) keys <- c(keys, "cycle")
+  parts <- split(ok, do.call(paste, c(ok[keys], sep = "__")))
+  best <- lapply(parts, function(x) {
+    has_recall <- is.finite(x$recall_at_k)
+    if (any(has_recall)) {
+      above <- x[has_recall & x$recall_at_k >= recall_threshold, , drop = FALSE]
+      if (nrow(above)) {
+        ranked <- above[order(
+          nn_metric_rank_value(above, "elapsed_sec", Inf),
+          nn_metric_rank_value(above, "recall_at_k", -Inf, higher_is_better = TRUE),
+          nn_metric_rank_value(above, "min_recall_at_k", -Inf, higher_is_better = TRUE)
+        ), , drop = FALSE]
+        return(ranked[1L, , drop = FALSE])
+      }
+      ranked <- x[has_recall, , drop = FALSE]
+      ranked <- ranked[order(
+        nn_metric_rank_value(ranked, "recall_at_k", -Inf, higher_is_better = TRUE),
+        nn_metric_rank_value(ranked, "min_recall_at_k", -Inf, higher_is_better = TRUE),
+        nn_metric_rank_value(ranked, "elapsed_sec", Inf)
+      ), , drop = FALSE]
+      return(ranked[1L, , drop = FALSE])
+    }
+    ranked <- x[order(nn_metric_rank_value(x, "elapsed_sec", Inf)), , drop = FALSE]
+    ranked[1L, , drop = FALSE]
+  })
+  out <- do.call(rbind, best)
+  row.names(out) <- NULL
+  out[do.call(order, out[keys]), , drop = FALSE]
+}
+
 canonical_method_key <- function(method) {
   trimws(as.character(method))
 }
@@ -886,12 +919,10 @@ utils::write.csv(results_df, file.path(out_dir, "nn_metric_benchmark_results.csv
 
 ok <- results_df[results_df$status == "success", , drop = FALSE]
 if (nrow(ok)) {
-  ok_ranked <- rank_nn_metric_success(ok)
-  best <- do.call(rbind, lapply(split(ok_ranked, paste(ok_ranked$dataset, ok_ranked$backend, ok_ranked$metric, ok_ranked$k, sep = "__")), function(x) x[1L, , drop = FALSE]))
+  best <- select_nn_metric_best_rows(ok, recall_threshold, include_cycle = FALSE)
   utils::write.csv(best, file.path(out_dir, "nn_metric_best_by_dataset_backend_metric_k.csv"), row.names = FALSE)
 
-  ok_cycle <- rank_nn_metric_success(ok, include_cycle = TRUE)
-  best_cycle <- do.call(rbind, lapply(split(ok_cycle, paste(ok_cycle$dataset, ok_cycle$backend, ok_cycle$metric, ok_cycle$k, ok_cycle$cycle, sep = "__")), function(x) x[1L, , drop = FALSE]))
+  best_cycle <- select_nn_metric_best_rows(ok, recall_threshold, include_cycle = TRUE)
   utils::write.csv(best_cycle, file.path(out_dir, "nn_metric_best_by_dataset_backend_metric_k_cycle.csv"), row.names = FALSE)
 
   cycle_summary <- summarize_nn_cycles(ok)
@@ -998,7 +1029,7 @@ materials <- c(
   "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/metric/k and reports success counts, median/min/max elapsed time, recall stability, and the dominant implementation backend.",
   "`nn_metric_recommendations_from_cycles.csv` selects one method per dataset/backend/metric/k. When recall is available, it selects the fastest method whose median recall is at least `recall_threshold`; tied median times are broken by higher median recall, minimum recall, and median minimum recall. If no method reaches the threshold it selects the best-recall row and marks it as below threshold, breaking tied median recall by minimum recall, median minimum recall, and then speed. When recall is unavailable for the group, it selects the fastest successful row and marks the recommendation as speed-only.",
   "`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate `method = \"auto\"` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median recall gap, and backend/implementation agreement.",
-  "`nn_metric_best_by_dataset_backend_metric_k_cycle.csv` stores the best row within each cycle after ranking by recall@k, minimum recall@k, and elapsed time; `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the overall best row across cycles with the same ranking for backward-compatible summaries.",
+  "`nn_metric_best_by_dataset_backend_metric_k_cycle.csv` stores the best row within each cycle using the same recall-threshold rule as the cycle recommendations: fastest above threshold, best recall below threshold, and fastest when recall is unavailable; `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the overall best row across cycles with the same rule for backward-compatible summaries.",
   "The script does not add benchmark-only helpers to the package API."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_nn_metrics.md"))
