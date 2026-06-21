@@ -10,7 +10,7 @@ coerce_knn_input <- function(indices,
         call. = FALSE
       )
     }
-    input_backend <- attr(indices, "backend")
+    input_backend <- attr(indices, "resolved_backend") %||% attr(indices, "backend")
     distances <- indices$distances
     indices <- indices$indices
   }

@@ -41,7 +41,10 @@ the stored target is used instead of relying only on \code{resolution}.}
 A native \code{faissR_graph} edge-list object. The \code{faissR_graph}
 attribute stores graph-construction metadata, including
 \code{requested_backend} and \code{resolved_backend} for the public KNN backend
-policy used when faissR computes neighbours internally.
+policy used when faissR computes neighbours internally. For precomputed KNN
+input, \code{nn_backend} prefers the KNN object's resolved backend when
+available, so benchmark metadata records concrete FAISS/cuVS routes rather
+than only the public requested backend.
 }
 \description{
 \code{knn_graph()} turns a data matrix, a precomputed \code{nn()} result, or an embedding object with a matrix \code{layout} into a weighted nearest-neighbour graph. It returns a native \code{faissR_graph} edge-list object and does not require igraph.

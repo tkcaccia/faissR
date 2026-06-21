@@ -15,6 +15,31 @@ test_that("knn_graph builds a native graph from a KNN object", {
   expect_equal(attr(g, "faissR_graph")$weight, "snn")
 })
 
+test_that("precomputed KNN graph metadata prefers resolved backend", {
+  knn <- list(
+    indices = matrix(c(
+      2L, 3L,
+      1L, 3L,
+      2L, 1L
+    ), nrow = 3L, byrow = TRUE),
+    distances = matrix(c(
+      1, 2,
+      1, 1.5,
+      1.5, 2
+    ), nrow = 3L, byrow = TRUE)
+  )
+  class(knn) <- "faissR_nn"
+  attr(knn, "backend") <- "cuda"
+  attr(knn, "resolved_backend") <- "faiss_gpu_cagra"
+  attr(knn, "metric") <- "euclidean"
+
+  g <- knn_graph(knn, k = 2L, weight = "distance")
+  cl <- graph_cluster(knn, method = "louvain", backend = "cpu", k = 2L, weight = "distance")
+
+  expect_equal(attr(g, "faissR_graph")$nn_backend, "faiss_gpu_cagra")
+  expect_equal(cl$parameters$graph_backend, "faiss_gpu_cagra")
+})
+
 test_that("knn_graph accepts embedding objects as native layout graphs", {
   set.seed(503)
   x <- rbind(
