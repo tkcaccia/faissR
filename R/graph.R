@@ -116,10 +116,6 @@ is_fastembedr_embedding <- function(x) {
 }
 
 resolve_knn_graph_backend <- function(backend) {
-  backend_label <- as.character(backend)[1L]
-  if (!tolower(backend_label) %in% c("auto", "cpu", "cuda")) {
-    return(backend_label)
-  }
   normalize_public_compute_backend(backend)
 }
 

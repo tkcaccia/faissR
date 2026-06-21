@@ -52,6 +52,32 @@ test_that("knn_graph supports adaptive weights and mutual edges natively", {
   expect_true(all(g_mutual$weight > 0))
 })
 
+test_that("graph construction rejects implementation backend labels", {
+  x <- matrix(rnorm(80), ncol = 4)
+  expect_error(
+    knn_graph(x, k = 5L, backend = "faiss"),
+    "must be one of"
+  )
+  expect_error(
+    knn_graph(x, k = 5L, backend = "cuda_cuvs"),
+    "must be one of"
+  )
+  expect_error(
+    graph_cluster(
+      x,
+      method = "louvain",
+      backend = "cpu",
+      graph_backend = "faiss",
+      k = 5L
+    ),
+    "must be one of"
+  )
+  expect_error(
+    faissR:::resolve_knn_graph_backend("cpu_grid"),
+    "must be one of"
+  )
+})
+
 test_that("knn_graph stores an optional cluster-count target for graph_cluster", {
   set.seed(509)
   x <- rbind(
