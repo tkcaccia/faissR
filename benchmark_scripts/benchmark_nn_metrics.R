@@ -720,6 +720,24 @@ is_expected_skip <- function(caps, backend, method, metric) {
 
 nn_data_expected_skip <- function(x, method) {
   method <- canonical_method_key(method)[[1L]]
+  if (identical(method, "grid")) {
+    p <- ncol(x)
+    if (length(p) != 1L || is.na(p) || !p %in% c(2L, 3L)) {
+      return(list(
+        skip = TRUE,
+        route = NA_character_,
+        notes = sprintf(
+          paste(
+            "`method = \"grid\"` supports only two- or three-column matrices.",
+            "This dataset has %s columns, so grid is recorded as an expected",
+            "skip instead of a method failure."
+          ),
+          if (length(p) == 1L && !is.na(p)) as.character(p) else "an unknown number of"
+        )
+      ))
+    }
+    return(NULL)
+  }
   if (!identical(method, "sparse")) return(NULL)
   if (inherits(x, "sparseMatrix") || inherits(x, "dgCMatrix")) return(NULL)
   list(
@@ -1040,6 +1058,7 @@ materials <- c(
   "",
   "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities()` and the public backend resolver, then recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
   "`method = \"sparse\"` is included in the default public method list but is recorded as an expected skip for dense benchmark datasets, because it is intended for sparse `Matrix` inputs and should not force dense data through a sparse conversion.",
+  "`method = \"grid\"` is included in the default public method list but is recorded as an expected skip for datasets outside two or three columns, because it is a native low-dimensional spatial search route.",
   "`nn_metric_benchmark_config.csv` records the run configuration. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, recall metadata, and resolved backend fields.",
   "`nn_metric_capabilities.csv` stores the design-level capability table used for that preflight. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
   "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label.",

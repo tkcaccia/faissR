@@ -105,6 +105,9 @@ default. Metric aliases accepted by the API, such as `"l2"`, `"cor"`,
 The public `method = "sparse"` route is included in the default method list,
 but dense benchmark datasets record it as an expected skip because that route
 is intended for sparse `Matrix` inputs.
+The public `method = "grid"` route is also recorded as an expected skip for
+datasets that are not two- or three-dimensional, because that method is a
+native low-dimensional spatial search route.
 Unsupported method/backend/metric combinations are preflighted with
 `nn_capabilities()` and the public backend resolver, then written as expected
 skips. Runtime expected skips also record when a resolved route requires

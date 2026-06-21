@@ -500,7 +500,7 @@ test_that("NN metric auto-vs-fastest guards speed ratios and recall gaps", {
   expect_true(is.finite(out$auto_speed_ratio[out$dataset == "B"]))
 })
 
-test_that("NN metric benchmark accounts for sparse method on dense data", {
+test_that("NN metric benchmark accounts for data-shaped method skips", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
     "args <- parse_args()"
@@ -508,11 +508,21 @@ test_that("NN metric benchmark accounts for sparse method on dense data", {
 
   default_methods <- env$default_nn_method_values()
   expect_true("sparse" %in% default_methods)
+  expect_true("grid" %in% default_methods)
 
-  skip <- env$nn_data_expected_skip(matrix(rnorm(20), ncol = 4), "sparse")
-  expect_type(skip, "list")
-  expect_true(isTRUE(skip$skip))
-  expect_match(skip$notes, "sparse Matrix")
+  dense <- matrix(rnorm(20), ncol = 4)
+  sparse_skip <- env$nn_data_expected_skip(dense, "sparse")
+  expect_type(sparse_skip, "list")
+  expect_true(isTRUE(sparse_skip$skip))
+  expect_match(sparse_skip$notes, "sparse Matrix")
+
+  grid_skip <- env$nn_data_expected_skip(dense, "grid")
+  expect_type(grid_skip, "list")
+  expect_true(isTRUE(grid_skip$skip))
+  expect_match(grid_skip$notes, "two- or three-column")
+  expect_match(grid_skip$notes, "4 columns")
+  expect_null(env$nn_data_expected_skip(matrix(rnorm(20), ncol = 2), "grid"))
+  expect_null(env$nn_data_expected_skip(matrix(rnorm(30), ncol = 3), "grid"))
   expect_null(env$nn_data_expected_skip(matrix(rnorm(20), ncol = 4), "flat"))
 })
 
