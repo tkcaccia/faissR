@@ -526,10 +526,29 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cpu", "IVF", "euclidean"),
     "faiss_ivf"
   )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "faiss_hnsw", "euclidean"),
+    "faiss_hnsw"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "faiss_ivf", "euclidean"),
+    "faiss_ivf"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "faiss_nndescent", "euclidean"),
+    "faiss_nndescent"
+  )
   expect_true(
     faissR:::resolve_public_nn_backend("cuda", "CAGRA", "euclidean") %in%
       c("faiss_gpu_cagra", "cuda_cuvs_cagra")
   )
+})
+
+test_that("nearest-neighbour results expose resolved backend metadata", {
+  x <- matrix(rnorm(200), ncol = 4)
+  out <- nn_without_self(x, k = 5L, backend = "cpu", method = "exact", n_threads = 2L)
+  expect_equal(attr(out, "backend"), "cpu")
+  expect_equal(attr(out, "resolved_backend"), "cpu")
 })
 
 test_that("public tuning policy normalizes and can override defaults", {

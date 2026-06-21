@@ -162,6 +162,7 @@ finish_nn_result <- function(out,
                              exact = TRUE,
                              metric = "euclidean") {
   attr(out, "backend") <- backend
+  attr(out, "resolved_backend") <- backend
   attr(out, "k") <- as.integer(k)
   attr(out, "self_query") <- isTRUE(self_query)
   attr(out, "exact") <- isTRUE(exact)
