@@ -273,8 +273,8 @@ predict(object, newdata, k = NULL,
 | `type` | `"response"` for predicted labels/values or `"prob"` for classification probabilities. |
 | `...` | Reserved for future options. |
 
-For classification, `predict(type = "prob")` replaces a separate
-`predict_proba()` function.
+For classification, use `predict(type = "prob")` to return class
+probabilities.
 
 ## Availability Helpers
 

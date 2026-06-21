@@ -340,8 +340,8 @@ consistent with `nn()`, `knn_graph()`, and `graph_cluster()`.
 
 ## `knn()` And `predict()`
 
-`knn()` is the high-level supervised kNN API. It replaces the older public split
-between `knn_fit()`, `faiss.fit()`, and `cuvs.fit()`.
+`knn()` is the high-level supervised kNN API. It uses one public model/predict
+interface for CPU, FAISS, CUDA, and cuVS-backed neighbour search.
 
 Two forms are supported:
 
@@ -360,8 +360,7 @@ prob <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 The fitted model stores the training matrix, response, task type, backend,
 method, metric, tuning policy, `k`, and thread settings. `predict()` performs
 classification or regression from neighbour votes. `predict(type = "prob")`
-returns class probabilities for classification, so a separate `predict_proba()`
-API is not needed.
+returns class probabilities for classification.
 
 The supervised API intentionally reuses `nn()` rather than creating independent
 FAISS/cuVS model classes. That keeps method selection, backend validation,
