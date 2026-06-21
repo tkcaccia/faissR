@@ -54,3 +54,51 @@ saveRDS(knn, "knn_k100.rds")
 
 The same object can then feed `fastEmbedR`, graph construction, classifier
 tests, and recall diagnostics without paying the KNN cost repeatedly.
+
+## Graph Clustering
+
+`benchmark_scripts/benchmark_graph_clustering.R` measures the two-stage graph
+workflow:
+
+1. `knn_graph()` builds a weighted nearest-neighbour graph.
+2. `graph_cluster()` runs random-walking, Louvain, or Leiden clustering.
+
+The script records graph-construction time, clustering time, total time, peak
+resident memory when available, number of edges, number of communities,
+modularity, and adjusted Rand index (ARI) against `dataset$labels` when labels
+are present. ARI is computed by the benchmark helper in
+`benchmark_scripts/source.R`; it is not part of the public package API.
+
+Example CPU run:
+
+```sh
+Rscript benchmark_scripts/benchmark_graph_clustering.R \
+  --data_root=/path/to/Data \
+  --out_dir=/path/to/faissR_GRAPH_CLUSTER_CPU \
+  --datasets=COIL20,USPS,FashionMNIST,MNIST \
+  --k_values=15,50,100 \
+  --graph_backends=cpu \
+  --cluster_backends=cpu \
+  --methods=random_walking,louvain,leiden \
+  --threads=12
+```
+
+Example CUDA run:
+
+```sh
+Rscript benchmark_scripts/benchmark_graph_clustering.R \
+  --data_root=/path/to/Data \
+  --out_dir=/path/to/faissR_GRAPH_CLUSTER_CUDA \
+  --datasets=COIL20,USPS,FashionMNIST,MNIST \
+  --k_values=15,50,100 \
+  --graph_backends=cuda \
+  --cluster_backends=cuda \
+  --methods=louvain,leiden \
+  --threads=2
+```
+
+When `--target_clusters=labels` is used, Louvain and Leiden receive
+`n_clusters = length(unique(dataset$labels))`. Random-walking is run without a
+cluster-count target because the public API intentionally reserves
+`n_clusters` for Louvain and Leiden. CUDA rows fail explicitly when faissR was
+not built with the required CUDA/cuGraph support.
