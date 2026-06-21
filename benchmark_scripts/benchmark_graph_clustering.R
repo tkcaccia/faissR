@@ -315,7 +315,7 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
     "cluster_resolved_backend", "method", "weight", "success_cycles",
     "median_graph_sec", "median_cluster_sec", "median_total_sec",
     "median_ari", "min_ari", "median_modularity", "median_n_communities",
-    "median_selected_resolution", "n_clusters_requested", "graph_cached"
+    "median_selected_resolution", "graph_cached"
   )
   auto <- auto[, keep, drop = FALSE]
   recommendations <- recommendations[, keep, drop = FALSE]

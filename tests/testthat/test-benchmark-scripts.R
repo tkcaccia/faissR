@@ -189,3 +189,41 @@ test_that("graph benchmark recommendations are grouped by target cluster count",
   expect_equal(as.integer(out$n_clusters_requested), c(3L, 5L))
   expect_equal(out$method, c("leiden", "leiden"))
 })
+
+test_that("graph benchmark auto comparison has unique schema columns", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = c("A", "A"),
+    k = c(15L, 15L),
+    n_clusters_requested = c(3L, 3L),
+    graph_backend = c("auto", "cpu"),
+    graph_resolved_backend = c("cpu", "cpu"),
+    cluster_backend = c("auto", "cpu"),
+    cluster_resolved_backend = c("cpu", "cpu"),
+    method = c("louvain", "leiden"),
+    weight = c("snn", "snn"),
+    success_cycles = c(2L, 2L),
+    median_graph_sec = c(1, 1),
+    median_cluster_sec = c(3, 2),
+    median_total_sec = c(4, 3),
+    median_ari = c(0.90, 0.91),
+    min_ari = c(0.89, 0.90),
+    median_modularity = c(0.4, 0.41),
+    median_n_communities = c(3, 3),
+    median_selected_resolution = c(1, 1),
+    graph_cached = c(TRUE, TRUE)
+  )
+  recommendations <- cycle_summary[2, , drop = FALSE]
+
+  out <- env$compare_auto_graph_to_recommendations(cycle_summary, recommendations)
+
+  expect_equal(anyDuplicated(names(out)), 0L)
+  expect_true("n_clusters_requested" %in% names(out))
+  expect_false("auto_n_clusters_requested" %in% names(out))
+  expect_false("recommended_n_clusters_requested" %in% names(out))
+  expect_equal(out$auto_method, "louvain")
+  expect_equal(out$recommended_method, "leiden")
+})
