@@ -797,6 +797,21 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nn_faiss_flat_normalized_ip_distance_cpp
+List nn_faiss_flat_normalized_ip_distance_cpp(NumericMatrix data, NumericMatrix points, int k, bool exclude_self, int n_threads);
+RcppExport SEXP _faissR_nn_faiss_flat_normalized_ip_distance_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_flat_normalized_ip_distance_cpp(data, points, k, exclude_self, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
 // nn_faiss_gpu_flat_cpp
 List nn_faiss_gpu_flat_cpp(NumericMatrix data, NumericMatrix points, int k, bool exclude_self);
 RcppExport SEXP _faissR_nn_faiss_gpu_flat_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP) {
@@ -1056,6 +1071,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_faiss_flat_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_cpp, 5},
     {"_faissR_nn_faiss_ivf_cpp", (DL_FUNC) &_faissR_nn_faiss_ivf_cpp, 7},
     {"_faissR_nn_faiss_flat_ip_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_ip_cpp, 5},
+    {"_faissR_nn_faiss_flat_normalized_ip_distance_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_normalized_ip_distance_cpp, 5},
     {"_faissR_nn_faiss_gpu_flat_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_flat_cpp, 4},
     {"_faissR_nn_faiss_gpu_flat_ip_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_flat_ip_cpp, 4},
     {"_faissR_nn_faiss_ivfpq_cpp", (DL_FUNC) &_faissR_nn_faiss_ivfpq_cpp, 9},

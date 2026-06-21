@@ -24,6 +24,11 @@ List faiss_flat_ip_knn_impl(NumericMatrix data,
                             int k,
                             bool exclude_self,
                             int n_threads);
+List faiss_flat_normalized_ip_distance_knn_impl(NumericMatrix data,
+                                                NumericMatrix points,
+                                                int k,
+                                                bool exclude_self,
+                                                int n_threads);
 List faiss_gpu_flat_knn_impl(NumericMatrix data,
                              NumericMatrix points,
                              int k,
@@ -142,6 +147,17 @@ List nn_faiss_flat_ip_cpp(NumericMatrix data,
                           bool exclude_self,
                           int n_threads) {
   return faiss_flat_ip_knn_impl(data, points, k, exclude_self, n_threads);
+}
+
+// [[Rcpp::export]]
+List nn_faiss_flat_normalized_ip_distance_cpp(NumericMatrix data,
+                                              NumericMatrix points,
+                                              int k,
+                                              bool exclude_self,
+                                              int n_threads) {
+  return faiss_flat_normalized_ip_distance_knn_impl(
+    data, points, k, exclude_self, n_threads
+  );
 }
 
 // [[Rcpp::export]]

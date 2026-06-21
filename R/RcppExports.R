@@ -213,6 +213,10 @@ nn_faiss_flat_ip_cpp <- function(data, points, k, exclude_self, n_threads) {
     .Call(`_faissR_nn_faiss_flat_ip_cpp`, data, points, k, exclude_self, n_threads)
 }
 
+nn_faiss_flat_normalized_ip_distance_cpp <- function(data, points, k, exclude_self, n_threads) {
+    .Call(`_faissR_nn_faiss_flat_normalized_ip_distance_cpp`, data, points, k, exclude_self, n_threads)
+}
+
 nn_faiss_gpu_flat_cpp <- function(data, points, k, exclude_self) {
     .Call(`_faissR_nn_faiss_gpu_flat_cpp`, data, points, k, exclude_self)
 }
@@ -260,4 +264,3 @@ kmeans_faiss_gpu_cpp <- function(data, centers, max_iter, nredo, tol, seed, kmea
 sparse_nn_cpp <- function(data, points, k, metric, exclude_self, self_query) {
     .Call(`_faissR_sparse_nn_cpp`, data, points, k, metric, exclude_self, self_query)
 }
-

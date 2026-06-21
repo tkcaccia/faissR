@@ -213,10 +213,28 @@ test_that("non-euclidean metrics use only validated backend paths", {
   expect_equal(attr(auto_cor, "backend"), "cpu")
   expect_equal(attr(auto_cor, "metric"), "correlation")
 
-  expect_error(
-    nn(x, k = 4L, backend = "faiss", metric = "cosine"),
-    "validated Euclidean-distance semantics only"
-  )
+  if (isTRUE(faiss_available())) {
+    faiss_cos <- nn(x, k = 4L, backend = "cpu", method = "flat", metric = "cosine", n_threads = 2L)
+    cpu_cos <- nn(x, k = 4L, backend = "cpu", method = "exact", metric = "cosine", n_threads = 2L)
+    expect_equal(attr(faiss_cos, "backend"), "faiss_flat_cosine")
+    expect_equal(attr(faiss_cos, "metric"), "cosine")
+    expect_true(isTRUE(attr(faiss_cos, "exact")))
+    expect_equal(unname(faiss_cos$indices), unname(cpu_cos$indices))
+    expect_equal(unname(faiss_cos$distances), unname(cpu_cos$distances), tolerance = 1e-5)
+
+    faiss_cor <- nn(x, k = 4L, backend = "cpu", method = "flat", metric = "correlation", n_threads = 2L)
+    cpu_cor <- nn(x, k = 4L, backend = "cpu", method = "exact", metric = "correlation", n_threads = 2L)
+    expect_equal(attr(faiss_cor, "backend"), "faiss_flat_correlation")
+    expect_equal(attr(faiss_cor, "metric"), "correlation")
+    expect_true(isTRUE(attr(faiss_cor, "exact")))
+    expect_equal(unname(faiss_cor$indices), unname(cpu_cor$indices))
+    expect_equal(unname(faiss_cor$distances), unname(cpu_cor$distances), tolerance = 1e-5)
+  } else {
+    expect_error(
+      nn(x, k = 4L, backend = "cpu", method = "flat", metric = "cosine"),
+      "FAISS"
+    )
+  }
   expect_error(
     nn(x, k = 4L, backend = "cuda_cuvs_nndescent", metric = "correlation"),
     "validated Euclidean-distance semantics only"
@@ -230,6 +248,24 @@ test_that("non-euclidean metrics use only validated backend paths", {
       nn(x, k = 4L, backend = "hnsw", metric = "inner_product"),
       "RcppHNSW"
     )
+  }
+})
+
+test_that("FAISS Flat cosine and correlation preserve zero-row exact distances", {
+  skip_if_not(isTRUE(faiss_available()), "FAISS is not available")
+  x <- matrix(c(
+    0, 0, 0,
+    0, 0, 0,
+    1, 0, 0,
+    1, 2, 3,
+    2, 4, 6
+  ), ncol = 3, byrow = TRUE)
+
+  for (metric in c("cosine", "correlation")) {
+    flat <- nn(x, k = 5L, backend = "cpu", method = "flat", metric = metric, n_threads = 2L)
+    exact <- nn(x, k = 5L, backend = "cpu", method = "exact", metric = metric, n_threads = 2L)
+    expect_equal(unname(flat$indices), unname(exact$indices))
+    expect_equal(unname(flat$distances), unname(exact$distances), tolerance = 1e-5)
   }
 })
 
@@ -604,6 +640,14 @@ test_that("public backend and method resolver maps device plus method", {
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "flat", "inner_product"),
     "faiss_flat_ip"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "flat", "cosine"),
+    "faiss_flat_cosine"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "flat", "correlation"),
+    "faiss_flat_correlation"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "flat", "inner_product"),

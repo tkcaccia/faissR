@@ -45,7 +45,8 @@ namespace {
 
 enum class DistanceOutput {
   L2Squared,
-  InnerProduct
+  InnerProduct,
+  OneMinusInnerProduct
 };
 
 void validate_inputs(const NumericMatrix& data,
@@ -153,6 +154,7 @@ List format_faiss_result(const std::vector<faiss::idx_t>& labels,
   double* dists_ptr = dists.begin();
   const bool skip_self = exclude_self && self_query;
   const bool inner_product_output = distance_output == DistanceOutput::InnerProduct;
+  const bool one_minus_ip_output = distance_output == DistanceOutput::OneMinusInnerProduct;
   bool complete = true;
 
 #ifdef _OPENMP
@@ -183,9 +185,16 @@ List format_faiss_result(const std::vector<faiss::idx_t>& labels,
       const std::size_t output_offset = static_cast<std::size_t>(written) * n_points + i;
       indices_ptr[output_offset] = static_cast<int>(label) + 1;
       const float sq = distances[result_offset];
-      const double value = inner_product_output ?
-        std::max(row_best_ip - static_cast<double>(sq), 0.0) :
-        std::sqrt(std::max(static_cast<double>(sq), 0.0));
+      double value;
+      if (inner_product_output) {
+        value = std::max(row_best_ip - static_cast<double>(sq), 0.0);
+      } else if (one_minus_ip_output) {
+        value = 1.0 - static_cast<double>(sq);
+        if (value < 0.0 && value > -1e-6) value = 0.0;
+        if (value > 2.0 && value < 2.0 + 1e-6) value = 2.0;
+      } else {
+        value = std::sqrt(std::max(static_cast<double>(sq), 0.0));
+      }
       dists_ptr[output_offset] = value;
       ++written;
     }
@@ -208,7 +217,8 @@ List format_faiss_result(const std::vector<faiss::idx_t>& labels,
   if (graph_degree != NA_INTEGER) out["graph_degree"] = graph_degree;
   if (search_width != NA_INTEGER) out["search_width"] = search_width;
   out["metric"] = distance_output == DistanceOutput::InnerProduct ?
-    "inner_product_similarity_shifted_to_distance" : "euclidean";
+    "inner_product_similarity_shifted_to_distance" :
+    (distance_output == DistanceOutput::OneMinusInnerProduct ? "one_minus_inner_product" : "euclidean");
   return out;
 }
 
@@ -334,6 +344,19 @@ List faiss_flat_ip_knn_impl(NumericMatrix data,
   return search_faiss_index(
     index, data, points, k, exclude_self, n_threads,
     "IndexFlatIP", true, DistanceOutput::InnerProduct
+  );
+}
+
+List faiss_flat_normalized_ip_distance_knn_impl(NumericMatrix data,
+                                                NumericMatrix points,
+                                                int k,
+                                                bool exclude_self,
+                                                int n_threads) {
+  const int n_features = data.ncol();
+  faiss::IndexFlatIP index(n_features);
+  return search_faiss_index(
+    index, data, points, k, exclude_self, n_threads,
+    "IndexFlatIP", true, DistanceOutput::OneMinusInnerProduct
   );
 }
 
