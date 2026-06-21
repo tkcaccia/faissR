@@ -102,3 +102,45 @@ When `--target_clusters=labels` is used, Louvain and Leiden receive
 cluster-count target because the public API intentionally reserves
 `n_clusters` for Louvain and Leiden. CUDA rows fail explicitly when faissR was
 not built with the required CUDA/cuGraph support.
+
+## NN Metrics
+
+`benchmark_scripts/benchmark_nn_metrics.R` is a faissR-only nearest-neighbour
+metric matrix. It runs public `nn()` combinations over:
+
+- backends: `"cpu"`, `"cuda"`, or any subset passed with `--backends`;
+- methods: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`,
+  `"vptree"`, `"HNSW"`, `"IVF"`, `"IVFPQ"`, `"NSG"`, `"NNDescent"`, and
+  `"CAGRA"`;
+- metrics: `"euclidean"`, `"cosine"`, `"correlation"`, and
+  `"inner_product"`;
+- k values: `5`, `10`, `15`, `50`, and `100` by default.
+
+Unsupported combinations are saved as failed rows with the package error
+message. Recall is computed against exact CPU references only when the full
+dataset fits the configured `--quality_n` and `--quality_max_ops` limits; large
+datasets still contribute speed, memory, and availability rows.
+
+Example CPU run:
+
+```sh
+Rscript benchmark_scripts/benchmark_nn_metrics.R \
+  --data_root=/path/to/Data \
+  --out_dir=/path/to/faissR_NN_METRICS_CPU \
+  --backends=cpu \
+  --metrics=euclidean,cosine,correlation,inner_product \
+  --k_values=5,10,15,50,100 \
+  --threads=12
+```
+
+Example CUDA run:
+
+```sh
+Rscript benchmark_scripts/benchmark_nn_metrics.R \
+  --data_root=/path/to/Data \
+  --out_dir=/path/to/faissR_NN_METRICS_CUDA \
+  --backends=cuda \
+  --metrics=euclidean,inner_product \
+  --k_values=5,10,15,50,100 \
+  --threads=2
+```
