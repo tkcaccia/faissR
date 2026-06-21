@@ -560,7 +560,8 @@ if (nrow(ok)) {
       all = FALSE
     )
     if (nrow(comparison)) {
-      comparison$auto_is_fastest_method <- comparison$auto_resolved_backend == comparison$fastest_resolved_backend
+      comparison$auto_is_fastest_method <- comparison$fastest_method == "auto"
+      comparison$auto_uses_fastest_backend <- comparison$auto_resolved_backend == comparison$fastest_resolved_backend
       comparison$auto_speed_ratio <- ifelse(
         comparison$fastest_elapsed_sec > 0,
         comparison$auto_elapsed_sec / comparison$fastest_elapsed_sec,
@@ -596,7 +597,7 @@ materials <- c(
   "`nn_metric_capabilities.csv` stores the capability table used for that preflight.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k whose recall is at least `recall_threshold`.",
-  "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row and records speed ratio, recall gap, and whether the resolved backend matches.",
+  "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, and whether the resolved backend matches.",
   "The script does not add benchmark-only helpers to the package API."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_nn_metrics.md"))
