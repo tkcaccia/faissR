@@ -22,6 +22,28 @@ source_benchmark_helpers <- function(path, stop_marker) {
   env
 }
 
+test_that("benchmark materials document compact best summary outputs", {
+  files <- c(
+    graph = "graph_cluster_best_by_dataset.csv",
+    kmeans = "kmeans_best_by_dataset.csv"
+  )
+  scripts <- c(
+    graph = test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    kmeans = test_path("../../benchmark_scripts/benchmark_kmeans.R")
+  )
+  docs_file <- test_path("../../docs/benchmarks.md")
+  if (!all(file.exists(scripts)) || !file.exists(docs_file)) {
+    skip("Benchmark scripts or GitHub benchmark documentation are not available in this installed-package test context.")
+  }
+
+  docs <- paste(readLines(docs_file, warn = FALSE), collapse = "\n")
+  for (name in names(files)) {
+    script <- paste(readLines(scripts[[name]], warn = FALSE), collapse = "\n")
+    expect_true(grepl(files[[name]], script, fixed = TRUE), info = scripts[[name]])
+    expect_true(grepl(files[[name]], docs, fixed = TRUE), info = docs_file)
+  }
+})
+
 test_that("NN metric benchmark preflights unsupported NSG metrics as expected skips", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),

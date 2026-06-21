@@ -168,6 +168,9 @@ complete graph-plus-clustering workflow represented by the row.
 dataset/k/graph-backend/cluster-backend/method/weight and reports success
 counts, median/min/max graph, clustering, and total time, ARI stability,
 modularity stability, community counts, and resolved backend metadata.
+`graph_cluster_best_by_dataset.csv` keeps a compact best successful row per
+dataset after ranking by ARI, modularity, and total time for backward-compatible
+summaries.
 `graph_cluster_recommendations_from_cycles.csv` selects the fastest successful
 graph/clustering/backend/method row within `ari_tolerance` of the best median
 ARI for each dataset/k/target-cluster-count combination; when ARI is
@@ -328,6 +331,8 @@ hand-launching the same benchmark multiple times. `kmeans_cycle_summary.csv`
 aggregates successful rows across cycles by dataset/method/backend/centers and
 reports success counts, median/min/max elapsed time, ARI stability, withinss
 stability, iteration counts, and resolved backend metadata.
+`kmeans_best_by_dataset.csv` keeps a compact best successful row per dataset
+after ranking by ARI and elapsed time for backward-compatible summaries.
 `kmeans_recommendations_from_cycles.csv` selects the fastest row within
 `ari_tolerance` of the best median ARI for each dataset/centers combination;
 when ARI is unavailable it selects the fastest median-time row. The
