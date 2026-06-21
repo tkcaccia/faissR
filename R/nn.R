@@ -4851,8 +4851,9 @@ nn <- function(data,
 #'   observations in rows.
 #' @param k Number of non-self neighbours to return.
 #' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
-#'   follows \code{\link{nn}()} backend/method/metric resolution, using CUDA only for
-#'   validated CUDA combinations and CPU otherwise.
+#'   follows \code{\link{nn}()} backend/method/metric resolution, using CUDA
+#'   only for validated CUDA combinations when CUDA/cuVS runtime support is
+#'   available, and CPU otherwise.
 #' @param method Algorithm selector passed through the same resolver as
 #'   \code{\link{nn}()}. See \code{\link{nn}()} for method descriptions and
 #'   references.

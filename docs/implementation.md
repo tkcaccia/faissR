@@ -136,7 +136,8 @@ construction, clustering, benchmarking, and supervised prediction.
 The public KNN API separates device choice from algorithm choice:
 
 - `backend = "auto"` uses a validated CUDA route only when the requested
-  method/metric combination is supported, and otherwise resolves to CPU;
+  method/metric combination is supported and CUDA/cuVS runtime support is
+  available, and otherwise resolves to CPU;
 - `backend = "cpu"` forces CPU execution;
 - `backend = "cuda"` forces CUDA execution and fails clearly if unavailable.
 

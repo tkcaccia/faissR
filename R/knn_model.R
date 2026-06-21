@@ -11,7 +11,8 @@
 #'   predictions for `Xtest`; otherwise it returns a fitted model.
 #' @param backend Device backend passed to \code{\link{nn}()}: `"auto"`, `"cpu"`, or
 #'   `"cuda"`. `"auto"` follows \code{\link{nn}()} backend/method/metric resolution,
-#'   using CUDA only for validated CUDA combinations and CPU otherwise.
+#'   using CUDA only for validated CUDA combinations when CUDA/cuVS runtime
+#'   support is available, and CPU otherwise.
 #' @param method Nearest-neighbour algorithm selector passed to
 #'   \code{\link{nn}()}. See \code{\link{nn}()} for method descriptions and
 #'   references.

@@ -27,7 +27,8 @@ knn(
 \item{Xtest}{Optional numeric query matrix. If supplied, \code{knn()} returns predictions for \code{Xtest}; otherwise it returns a fitted model.}
 \item{backend}{Device backend passed to \code{nn()}: \code{"auto"}, \code{"cpu"}, or
 \code{"cuda"}. \code{"auto"} follows \code{nn()} backend/method/metric
-resolution, using CUDA only for validated CUDA combinations and CPU otherwise.}
+resolution, using CUDA only for validated CUDA combinations when CUDA/cuVS
+runtime support is available, and CPU otherwise.}
 \item{method}{Nearest-neighbour algorithm selector passed to \code{nn()}. \code{"auto"} chooses the most appropriate method for the selected backend. See \code{?nn} for descriptions and references for \code{"exact"}, \code{"flat"}, \code{"bruteforce"}, \code{"grid"}, \code{"vptree"}, \code{"sparse"}, \code{"hnsw"}, \code{"ivf"}, \code{"ivfpq"}, \code{"nsg"}, \code{"nndescent"}, and \code{"cagra"}.}
 \item{metric}{Distance metric passed to \code{nn()}: \code{"euclidean"},
 \code{"cosine"}, \code{"correlation"}, or \code{"inner_product"}. Aliases such

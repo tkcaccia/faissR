@@ -241,7 +241,7 @@ prob  <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 | `Xtrain` | Numeric training matrix with observations in rows. |
 | `Ytrain` | Training labels for classification or numeric response for regression. Must have one value per row of `Xtrain`. |
 | `Xtest` | Optional query matrix. If supplied, `knn()` fits and predicts immediately; otherwise it returns a reusable model. |
-| `backend` | Device backend passed to `nn()`: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` follows `nn()` backend/method/metric resolution, using CUDA only for validated CUDA combinations and CPU otherwise. |
+| `backend` | Device backend passed to `nn()`: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` follows `nn()` backend/method/metric resolution, using CUDA only for validated CUDA combinations when CUDA/cuVS runtime support is available, and CPU otherwise. |
 | `method` | Nearest-neighbour algorithm selector passed to `nn()`. `"auto"` chooses the most appropriate method for the selected backend. |
 | `metric` | Distance metric passed to `nn()`: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as canonical metric labels. |
 | `tuning` | Tuning policy passed to `nn()`. `"auto"` uses the tuned default for the resolved method. |

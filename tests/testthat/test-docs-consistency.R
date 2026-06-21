@@ -57,6 +57,27 @@ test_that("usage API graph_cluster signature shows the live default method", {
   expect_equal(documented_method, live_method)
 })
 
+test_that("backend auto documentation states the CUDA runtime requirement", {
+  docs_files <- test_path("../../docs", c(
+    "backend-capabilities.md",
+    "implementation.md",
+    "nn-methods.md",
+    "usage-api.md"
+  ))
+  missing <- !file.exists(docs_files)
+  if (any(missing)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  for (docs_file in docs_files) {
+    prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+    expect_true(
+      grepl("CUDA/cuVS runtime[[:space:]]+support is[[:space:]]+available", prose),
+      info = basename(docs_file)
+    )
+  }
+})
+
 test_that("benchmark documentation describes canonical metric aliases once", {
   docs_file <- test_path("../../docs/benchmarks.md")
   if (!file.exists(docs_file)) {
