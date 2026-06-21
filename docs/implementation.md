@@ -17,6 +17,13 @@ libcugraph are optional compiled backends; the package must still install from
 source on CPU-only systems when FAISS is available [1-3,12-16]. The code does
 not call Python and does not require conda.
 
+The implementation is organized around one public idea: users choose a device
+family with `backend` and an algorithm family with `method`. The package then
+resolves that request to a concrete compiled route, records the resolved backend
+in the result attributes, and fails early for unsupported combinations. This is
+important for reproducible benchmarking: `backend = "cuda"` must mean a CUDA
+route was attempted, not that the package silently ran a CPU fallback.
+
 ## Design Rules
 
 1. FAISS CPU support is mandatory for the package build.
@@ -29,6 +36,40 @@ not call Python and does not require conda.
 6. Benchmark-only quality helpers are kept out of the public API.
 7. External libraries are linked as system dependencies and are not vendored
    into the package.
+8. Distance semantics are explicit: algorithm choice belongs in `method`, while
+   Euclidean/cosine/correlation choices belong in `metric`.
+9. Approximate routes should expose enough metadata to make speed/quality
+   trade-offs auditable.
+
+## Build And Runtime Model
+
+`configure` detects FAISS first. A build without FAISS is considered
+misconfigured because FAISS is the core compiled dependency of faissR. On
+machines without CUDA, the package can still build with FAISS CPU and native CPU
+code. CUDA/cuVS/cuGraph support is enabled only when the required headers and
+libraries are detected.
+
+At runtime, availability helpers (`faiss_available()`, `cuda_available()`,
+`cuvs_available()`, and `cugraph_available()`) report compiled/runtime support.
+They are diagnostic helpers, not a substitute for execution-time validation.
+Every explicit backend request is checked again when the method runs. For
+example, `backend = "cuda", method = "CAGRA"` errors if neither FAISS GPU CAGRA
+nor direct cuVS CAGRA is available.
+
+Compiled backends are reached through Rcpp/C++ bridge files:
+
+- FAISS CPU/GPU routines are isolated behind the FAISS bridge and use FAISS
+  indexes such as Flat, IVF, IVFPQ, HNSW, NSG, NNDescent, and GPU CAGRA where
+  the linked FAISS build exposes them [1-2,5-6,13-16].
+- Direct RAPIDS cuVS routines are isolated behind the cuVS bridge and are
+  optional at build time [3].
+- CUDA-native helper kernels, such as the low-dimensional grid and candidate
+  kernels, are isolated behind the CUDA bridge.
+- RAPIDS libcugraph is used only for optional CUDA Louvain/Leiden graph
+  clustering [12].
+
+The package does not vendor FAISS, cuVS, or cuGraph. Those projects remain
+system dependencies with their own release cadence and licenses.
 
 ## `nn()`
 
@@ -59,6 +100,25 @@ The validated high-performance metric is Euclidean/L2. Cosine and correlation
 are exposed for exact CPU and RcppHNSW-compatible paths; accelerator backends
 reject unsupported metric/backend combinations instead of returning Euclidean
 neighbours under a different label.
+
+### Result Metadata
+
+All KNN routes return a `faissR_nn` object with:
+
+- `indices`: an integer matrix of 1-based R row indices;
+- `distances`: a numeric matrix aligned with `indices`;
+- `attr(result, "backend")`: the public/resolved backend label returned to the
+  user;
+- `attr(result, "resolved_backend")`: when relevant, the concrete backend chosen
+  behind an alias such as `backend = "cuda"`;
+- `attr(result, "metric")`: the metric used;
+- `attr(result, "exact")`: whether the route is exact by construction;
+- `attr(result, "approximation")`: method-specific parameters for approximate
+  routes, such as `nlist`, `nprobe`, HNSW `M`, CAGRA graph degree, or tuning
+  metadata.
+
+This metadata is intentionally simple because the same result object feeds graph
+construction, clustering, benchmarking, and supervised prediction.
 
 ### Backend And Method Policy
 
@@ -95,6 +155,51 @@ IVF probe defaults are conservative enough to avoid misleading speed-only
 results. IVFPQ is treated as an explicit memory-pressure backend because product
 quantization can reduce recall substantially [6].
 
+### Method Families
+
+The public `method` names are stable user-facing labels. Internally they map to
+different concrete functions depending on `backend`.
+
+| Method | CPU behavior | CUDA behavior | Notes |
+| --- | --- | --- | --- |
+| `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, or FAISS GPU CAGRA selector. | Default for general use. |
+| `exact` | Native exact CPU route. | FAISS GPU Flat when available, otherwise cuVS brute force. | Accuracy-first baseline. |
+| `flat` | FAISS Flat L2 index. | FAISS GPU Flat L2 index. | Exact FAISS route [1-2,16]. |
+| `bruteforce` | Native exact CPU route. | Direct cuVS brute force when available. | Useful for comparing direct cuVS against FAISS GPU Flat [3]. |
+| `grid` | Native 2D/3D exact spatial grid. | CUDA 2D/3D grid. | Errors outside two or three columns. |
+| `vptree` | Native exact CPU VP-tree. | Unsupported. | Low-dimensional CPU helper. |
+| `sparse` | Native exact sparse `dgCMatrix` route. | Unsupported. | Avoids densifying sparse matrices. |
+| `HNSW` | FAISS CPU HNSW. | Unsupported. | High-recall CPU graph-search route [5,16]. |
+| `IVF` | FAISS CPU IVF-Flat. | FAISS GPU IVF-Flat. | Coarse-list approximate route [1-2,16]. |
+| `IVFPQ` | FAISS CPU IVF-PQ. | FAISS GPU IVF-PQ. | Compressed approximate route [6,16]. |
+| `NSG` | FAISS CPU NSG if available. | Unsupported. | Optional FAISS graph-search baseline [16]. |
+| `NNDescent` | FAISS CPU NNDescent if available. | Direct cuVS NN-descent. | Approximate KNN graph construction [3-4,16]. |
+| `CAGRA` | Unsupported. | FAISS GPU CAGRA preferred, direct cuVS CAGRA fallback. | CUDA-only graph-search method [3,13-16]. |
+
+Unsupported method/backend pairs stop before computation. This makes benchmark
+failures interpretable: a row marked unavailable or unsupported means the
+requested algorithm/device combination does not exist in the package, not that a
+different algorithm was substituted.
+
+### Automatic Tuning
+
+The public `tuning` argument controls method-specific tuning for approximate GPU
+routes. Its default, `tuning = "auto"`, means “use the appropriate default
+policy for the resolved method.” Current policies are intentionally conservative:
+
+- `cache`: run a pilot tuning step when needed and reuse/store the selected
+  parameters;
+- `pilot`: run the pilot for this call without persisting the result;
+- `fixed`: use fixed defaults but still record tuning metadata;
+- `off`/`none`: disable tuning.
+
+FAISS GPU IVF tuning tests candidate `nlist`/`nprobe` settings on a sample and
+selects the fastest candidate that meets the recall target when possible. cuVS
+CAGRA tuning tests graph/search parameters and rejects the route if the pilot
+cannot meet the configured minimum recall. This behavior was added because some
+direct cuVS CAGRA runs were fast but produced untrustworthy recall on raw
+high-dimensional data.
+
 ## `nn_without_self()`
 
 `nn_without_self()` wraps self-KNN and returns exactly `k` non-self neighbours.
@@ -126,6 +231,12 @@ object into a native `faissR_graph` edge list. When KNN is not supplied, it call
 The graph object stores `k`, weighting, pruning, mutual-edge filtering, and KNN
 backend metadata. It does not require `igraph`.
 
+The graph construction layer deliberately accepts precomputed KNN output. This
+allows expensive FAISS/cuVS searches to be reused across clustering, embedding,
+or downstream analyses. It also makes benchmarking cleaner because nearest
+neighbour speed can be measured independently from graph weighting and
+community detection.
+
 ## `graph_cluster()`
 
 `graph_cluster()` performs community detection on a precomputed `faissR_graph`,
@@ -135,25 +246,42 @@ with `knn_graph()` first.
 Implemented methods are:
 
 - `method = "random_walking"`: native CPU random-walk label propagation inspired
-  by walktrap/random-walk clustering [10];
+  by walktrap/random-walk clustering and local parallel random-walk work
+  [10,19];
 - `method = "louvain"`: native CPU modularity local-moving, with optional CUDA
   libcugraph Louvain when built and requested [9,12];
 - `method = "leiden"`: native CPU local moving plus refinement to split
   disconnected communities, with optional CUDA libcugraph Leiden when built and
-  requested [11-12].
+  requested [11-12,17-18].
 
 CPU graph clustering uses faissR C++/OpenMP code and honors `n_threads` where
 OpenMP is available. CUDA Louvain and Leiden require RAPIDS libcugraph and never
 fall back to CPU for an explicit CUDA request. CUDA random-walking remains
 unavailable until a dedicated CUDA implementation is added.
 
+Native graph clustering does not depend on `igraph`. This keeps the graph API
+under faissR's control and avoids a large mandatory graph dependency. The
+returned object includes membership, modularity, backend, parameters, graph edge
+list, and source acknowledgements.
+
+The clustering implementation benefits from fast KNN indirectly: FAISS/cuVS can
+build the KNN graph faster, and `graph_cluster()` can then cluster that graph.
+The community-detection step itself is a graph algorithm; it does not call FAISS
+once the graph edges have been built.
+
 ## `fast_kmeans()`
 
 `fast_kmeans()` provides CPU and CUDA k-means routes. CPU builds use compiled
 FAISS/native numeric paths. CUDA builds try FAISS GPU k-means and direct cuVS
-k-means when those libraries are available [7-8]. Results include cluster assignments,
-centres, within-cluster sums of squares, cluster sizes, iteration count, selected
-backend, and run parameters.
+k-means when those libraries are available [7-8]. Results include cluster
+assignments, centres, within-cluster sums of squares, cluster sizes, iteration
+count, selected backend, and run parameters.
+
+The public backend policy is the same as for KNN: `backend = "auto"` uses CUDA
+when a CUDA k-means implementation is available and CPU otherwise;
+`backend = "cpu"` forces the CPU route; `backend = "cuda"` requires an
+accelerated route and errors if unavailable. This makes k-means behavior
+consistent with `nn()`, `knn_graph()`, and `graph_cluster()`.
 
 ## `knn()` And `predict()`
 
@@ -175,10 +303,15 @@ prob <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 ```
 
 The fitted model stores the training matrix, response, task type, backend,
-metric, `k`, and thread settings. `predict()` performs classification or
-regression from neighbour votes. `predict(type = "prob")` returns class
-probabilities for classification, so a separate `predict_proba()` API is not
-needed.
+method, metric, tuning policy, `k`, and thread settings. `predict()` performs
+classification or regression from neighbour votes. `predict(type = "prob")`
+returns class probabilities for classification, so a separate `predict_proba()`
+API is not needed.
+
+The supervised API intentionally reuses `nn()` rather than creating independent
+FAISS/cuVS model classes. That keeps method selection, backend validation,
+tuning, and result semantics identical between unsupervised KNN and supervised
+kNN prediction.
 
 ## Availability Helpers
 
@@ -191,6 +324,25 @@ needed.
 
 These helpers are informational; explicit backend calls still validate
 availability at execution time.
+
+## Memory And Data Representation
+
+R stores ordinary numeric matrices as double precision. FAISS and cuVS commonly
+operate on float data internally. Most accelerated routes therefore need at
+least one conversion/copy from R's column-major double matrix to backend-friendly
+buffers. For moderate datasets this overhead is small relative to KNN search;
+for very large datasets it can dominate memory use.
+
+The implementation tries to keep public inputs simple (`matrix`, `data.frame`,
+and sparse `Matrix` objects) while recording memory-sensitive behavior in
+benchmark notes. Future improvements can reduce copies by supporting explicit
+float32/on-disk data representations, but the current CRAN-oriented interface
+does not require nonstandard R vector types.
+
+Sparse input is handled separately. If the input is a sparse `Matrix`, the
+native sparse CPU route can avoid densification. GPU and FAISS routes that do
+not support sparse input fail or densify only when explicitly requested, rather
+than pretending to preserve sparse semantics.
 
 ## Large Data And ImageNet
 
@@ -219,6 +371,6 @@ and make FAISS/cuVS index construction more practical.
 faissR is released under the MIT license. The implementation is inspired by and
 links against external work including FAISS, FAISS GPU/cuVS integration, RAPIDS
 cuVS, RAPIDS libcugraph, HNSW, NN-Descent, IVF, product quantization, k-means,
-Louvain, Leiden, and random-walk clustering [1-16]. See [References](references.md) for
-papers, software projects, and acknowledgements. External libraries remain
-separate system dependencies with their own licenses.
+Louvain, Leiden, and random-walk clustering [1-19]. See
+[References](references.md) for papers, software projects, and acknowledgements.
+External libraries remain separate system dependencies with their own licenses.
