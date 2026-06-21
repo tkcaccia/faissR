@@ -32,7 +32,8 @@ test_that("benchmark materials document key row-level and summary outputs", {
     graph = c(
       "graph_cluster_benchmark_config.csv",
       "graph_cluster_benchmark_results.csv",
-      "graph_cluster_best_by_dataset.csv"
+      "graph_cluster_best_by_dataset.csv",
+      "graph_cluster_best_by_dataset_k_target.csv"
     ),
     kmeans = c(
       "kmeans_benchmark_config.csv",
@@ -963,6 +964,33 @@ test_that("graph benchmark best-row ranking uses modularity before speed", {
   ranked <- env$rank_graph_cluster_success(ok)
   best <- ranked[!duplicated(ranked$dataset), , drop = FALSE]
   expect_equal(best$method, c("slow_high_modularity", "fast_missing_quality"))
+})
+
+test_that("graph benchmark best rows can preserve k and target dimensions", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  ok <- data.frame(
+    dataset = c("A", "A", "A", "A"),
+    k = c(15L, 15L, 50L, 50L),
+    n_clusters_requested = c(3L, 3L, 3L, 5L),
+    method = c("fast_low_ari", "slow_high_ari", "k50", "target5"),
+    ari = c(0.8, 0.9, 0.7, 0.95),
+    modularity = c(0.1, 0.1, 0.2, 0.3),
+    total_sec = c(1, 2, 1, 1),
+    stringsAsFactors = FALSE
+  )
+
+  compact <- env$select_graph_best_rows(ok, group_cols = "dataset")
+  by_target <- env$select_graph_best_rows(ok, group_cols = c("dataset", "k", "n_clusters_requested"))
+
+  expect_equal(compact$method, "target5")
+  expect_setequal(by_target$method, c("slow_high_ari", "k50", "target5"))
+  expect_equal(
+    nrow(unique(by_target[, c("dataset", "k", "n_clusters_requested"), drop = FALSE])),
+    3L
+  )
 })
 
 test_that("graph benchmark cycle summaries preserve target cluster count", {

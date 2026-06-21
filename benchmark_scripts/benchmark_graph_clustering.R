@@ -412,6 +412,22 @@ rank_graph_cluster_success <- function(ok) {
   ), , drop = FALSE]
 }
 
+select_graph_best_rows <- function(ok, group_cols = c("dataset")) {
+  ranked <- rank_graph_cluster_success(ok)
+  if (!nrow(ranked)) return(ranked)
+  key <- do.call(
+    paste,
+    c(
+      lapply(group_cols, function(col) {
+        value <- ranked[[col]]
+        ifelse(is.na(value), "NA", as.character(value))
+      }),
+      sep = "\r"
+    )
+  )
+  ranked[!duplicated(key), , drop = FALSE]
+}
+
 graph_cluster_expected_skip <- function(cluster_backend, method) {
   cluster_backend <- tolower(as.character(cluster_backend)[1L])
   method <- tolower(as.character(method)[1L])
@@ -861,9 +877,14 @@ utils::write.csv(results_df, file.path(out_dir, "graph_cluster_benchmark_results
 
 ok <- results_df[results_df$status == "success", , drop = FALSE]
 if (nrow(ok)) {
-  ok_ranked <- rank_graph_cluster_success(ok)
-  best <- do.call(rbind, lapply(split(ok_ranked, ok_ranked$dataset), function(x) x[1L, , drop = FALSE]))
+  best <- select_graph_best_rows(ok, group_cols = "dataset")
   utils::write.csv(best, file.path(out_dir, "graph_cluster_best_by_dataset.csv"), row.names = FALSE)
+  best_by_target <- select_graph_best_rows(ok, group_cols = c("dataset", "k", "n_clusters_requested"))
+  utils::write.csv(
+    best_by_target,
+    file.path(out_dir, "graph_cluster_best_by_dataset_k_target.csv"),
+    row.names = FALSE
+  )
 
   cycle_summary <- summarize_graph_cycles(ok)
   utils::write.csv(
@@ -913,7 +934,7 @@ materials <- c(
   "When `target_clusters = \"labels\"`, Louvain and Leiden use `n_clusters = length(unique(labels))`. If a benchmark block contains only Louvain/Leiden, this target is stored on the graph with `knn_graph(n_clusters = ...)` and reused by `graph_cluster()`; mixed blocks that include random-walking pass the target only to Louvain/Leiden rows because random-walking intentionally has no cluster-count target.",
   "`n_clusters_requested` records the target community count used for Louvain/Leiden rows. `n_clusters_source` records whether that target came from dataset labels, a stored `knn_graph(n_clusters = ...)` target, or no target.",
   "Each KNN graph is built once per dataset/cycle/k/graph-backend/weight combination and reused across clustering methods and clustering backends within that cycle. The `cycle` column supports repeated benchmark cycles such as `--cycles=10`; `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
-  "`graph_cluster_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, modularity, and total time for a compact backwards-compatible summary.",
+  "`graph_cluster_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, modularity, and total time for a compact backwards-compatible summary. `graph_cluster_best_by_dataset_k_target.csv` keeps the best successful row per dataset/k/target-cluster-count combination so different neighbourhood sizes and Louvain/Leiden target counts remain auditable.",
   "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, community counts, and resolved backend metadata.",
   "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering/backend/method row within `ari_tolerance` of the best median ARI for each dataset/k/target-cluster-count combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median total times are broken by higher median ARI and then higher median modularity. When ARI is unavailable it selects the fastest median total-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
   "`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where graph or clustering backend was `auto` with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median ARI gap, modularity gap, and backend/method agreement. Speed ratios and quality gaps are `NA` when the required timing, ARI, or modularity values are unavailable or invalid.",

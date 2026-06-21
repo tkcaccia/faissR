@@ -196,7 +196,9 @@ counts, median/min/max graph, clustering, and total time, ARI stability,
 modularity stability, community counts, and resolved backend metadata.
 `graph_cluster_best_by_dataset.csv` keeps a compact best successful row per
 dataset after ranking by ARI, modularity, and total time for backward-compatible
-summaries.
+summaries. `graph_cluster_best_by_dataset_k_target.csv` keeps the same
+best-row ranking per dataset/k/target-cluster-count combination, which is the
+safer table for comparing neighbourhood sizes and Louvain/Leiden target counts.
 `graph_cluster_recommendations_from_cycles.csv` selects the fastest successful
 graph/clustering/backend/method row within `ari_tolerance` of the best median
 ARI for each dataset/k/target-cluster-count combination; when ARI is
