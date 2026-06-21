@@ -86,6 +86,31 @@ test_that("NN metric benchmark preflights every unsupported capability row", {
   }
 })
 
+test_that("NN metric benchmark preflights supported rows as runnable or runtime skips", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  caps <- nn_capabilities()
+  supported <- caps[caps$supported, , drop = FALSE]
+  expect_gt(nrow(supported), 0L)
+
+  for (i in seq_len(nrow(supported))) {
+    row <- supported[i, , drop = FALSE]
+    label <- sprintf("%s/%s/%s", row$backend, row$method, row$metric)
+    skip <- env$is_expected_skip(caps, row$backend, row$method, row$metric)
+    if (is.null(skip)) {
+      resolved <- faissR:::resolve_public_nn_backend(row$backend, row$method, row$metric)
+      expect_type(resolved, "character")
+      expect_true(nzchar(resolved), info = label)
+    } else {
+      expect_type(skip, "list")
+      expect_true(isTRUE(skip$skip), info = label)
+      expect_true(nzchar(skip$notes), info = label)
+    }
+  }
+})
+
 test_that("NN metric benchmark recommendations are grouped by backend metric and k", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
