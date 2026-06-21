@@ -54,9 +54,9 @@ instead of silently running CPU code and labelling it as GPU.
 
 For public nearest-neighbour APIs, `backend` selects the device family:
 `"auto"`, `"cpu"`, or `"cuda"`. The `method` argument selects the algorithm,
-for example `method = "grid"` or `method = "CAGRA"`. Thus
+for example `method = "grid"` or `method = "cagra"`. Thus
 `nn(x, backend = "cuda", method = "grid")` uses the CUDA grid route, while
-`nn(x, backend = "cpu", method = "CAGRA")` stops because CAGRA is CUDA-only.
+`nn(x, backend = "cpu", method = "cagra")` stops because CAGRA is CUDA-only.
 With the default `method = "auto"`, faissR chooses the most appropriate method
 for the selected backend. With `tuning = "auto"`, approximate GPU methods use
 the tuned defaults identified for the resolved method.

@@ -26,7 +26,7 @@ head(nn_res$distances)
 ## Non-Euclidean Metrics
 
 Cosine and correlation use validated exact CPU paths, FAISS Flat CPU/GPU routes
-through normalized Flat IP, and FAISS HNSW on CPU when `method = "HNSW"` is
+through normalized Flat IP, and FAISS HNSW on CPU when `method = "hnsw"` is
 selected. Inner-product search is available for exact CPU scoring, FAISS Flat IP,
 and FAISS HNSW IP routes where supported.
 

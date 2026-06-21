@@ -83,7 +83,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
   caps <- nn_capabilities()
   methods <- c(
     "auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
-    "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"
+    "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"
   )
   metrics <- c("euclidean", "cosine", "correlation", "inner_product")
 
@@ -96,9 +96,9 @@ test_that("nn_capabilities documents the public method metric matrix", {
 
   expect_true(caps$supported[caps$method == "flat" & caps$metric == "correlation" & caps$backend == "cuda"])
   expect_true(caps$supported[caps$method == "sparse" & caps$metric == "inner_product" & caps$backend == "cpu"])
-  expect_true(all(!caps$supported[caps$method == "CAGRA" & caps$backend == "cpu"]))
-  expect_true(all(!caps$supported[caps$method == "HNSW" & caps$backend == "cuda"]))
-  expect_true(all(!caps$supported[caps$method == "IVF" & caps$metric == "cosine"]))
+  expect_true(all(!caps$supported[caps$method == "cagra" & caps$backend == "cpu"]))
+  expect_true(all(!caps$supported[caps$method == "hnsw" & caps$backend == "cuda"]))
+  expect_true(all(!caps$supported[caps$method == "ivf" & caps$metric == "cosine"]))
   expect_true(all(!caps$supported[caps$method == "vptree" & caps$metric == "inner_product"]))
 })
 
@@ -758,37 +758,49 @@ test_that("public backend and method resolver maps device plus method", {
     "cuda_grid"
   )
   expect_error(
-    faissR:::resolve_public_nn_backend("cpu", "CAGRA", "euclidean"),
-    "CAGRA.*only available.*cuda"
+    faissR:::resolve_public_nn_backend("cpu", "cagra", "euclidean"),
+    "cagra.*only available.*cuda"
   )
   expect_error(
-    faissR:::resolve_public_nn_backend("cuda", "HNSW", "euclidean"),
-    "HNSW.*only available.*cpu"
+    faissR:::resolve_public_nn_backend("cuda", "hnsw", "euclidean"),
+    "hnsw.*only available.*cpu"
   )
   expect_equal(
-    faissR:::resolve_public_nn_backend("cpu", "IVF", "euclidean"),
+    faissR:::resolve_public_nn_backend("cpu", "ivf", "euclidean"),
     "faiss_ivf"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "hnsw", "euclidean"),
+    "faiss_hnsw"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "hnsw", "cosine"),
+    if (faiss_available()) "faiss_hnsw" else "hnsw"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "hnsw", "correlation"),
+    if (faiss_available()) "faiss_hnsw" else "hnsw"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "hnsw", "inner_product"),
+    if (faiss_available()) "faiss_hnsw" else "hnsw"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "hnsw", "euclidean"),
+    "faiss_hnsw"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "HNSW", "euclidean"),
     "faiss_hnsw"
   )
-  expect_equal(
-    faissR:::resolve_public_nn_backend("cpu", "HNSW", "cosine"),
-    if (faiss_available()) "faiss_hnsw" else "hnsw"
-  )
-  expect_equal(
-    faissR:::resolve_public_nn_backend("cpu", "HNSW", "correlation"),
-    if (faiss_available()) "faiss_hnsw" else "hnsw"
-  )
-  expect_equal(
-    faissR:::resolve_public_nn_backend("cpu", "HNSW", "inner_product"),
-    if (faiss_available()) "faiss_hnsw" else "hnsw"
+  expect_true(
+    faissR:::resolve_public_nn_backend("cuda", "CAGRA", "euclidean") %in%
+      c("faiss_gpu_cagra", "cuda_cuvs_cagra")
   )
   if (faiss_available()) {
     x_hnsw <- matrix(rnorm(240L), nrow = 40L)
     for (metric in c("cosine", "correlation", "inner_product")) {
-      out <- nn(x_hnsw, k = 5L, backend = "cpu", method = "HNSW", metric = metric, n_threads = 2L)
+      out <- nn(x_hnsw, k = 5L, backend = "cpu", method = "hnsw", metric = metric, n_threads = 2L)
       expect_equal(attr(out, "backend"), "faiss_hnsw")
       expect_equal(attr(out, "metric"), metric)
       expect_equal(attr(out, "approximation")$library, "faiss")
@@ -827,11 +839,11 @@ test_that("public backend and method resolver maps device plus method", {
     "faiss_gpu_flat_correlation"
   )
   expect_error(
-    faissR:::resolve_public_nn_backend("cuda", "CAGRA", "inner_product"),
+    faissR:::resolve_public_nn_backend("cuda", "cagra", "inner_product"),
     "inner_product"
   )
   expect_error(
-    faissR:::resolve_public_nn_backend("cuda", "CAGRA", "cosine"),
+    faissR:::resolve_public_nn_backend("cuda", "cagra", "cosine"),
     "approximate methods"
   )
   expect_error(
@@ -859,7 +871,7 @@ test_that("public backend and method resolver maps device plus method", {
     "method.*must be one of"
   )
   expect_true(
-    faissR:::resolve_public_nn_backend("cuda", "CAGRA", "euclidean") %in%
+    faissR:::resolve_public_nn_backend("cuda", "cagra", "euclidean") %in%
       c("faiss_gpu_cagra", "cuda_cuvs_cagra")
   )
 })
@@ -1090,7 +1102,7 @@ test_that("RcppHNSW backend supports inner-product metric", {
   on.exit(options(old_options), add = TRUE)
 
   out <- internal_nn(x, k = 3L, backend = "hnsw", metric = "inner_product", n_threads = 2L)
-  public <- nn(x, k = 3L, backend = "cpu", method = "HNSW", metric = "inner_product", n_threads = 2L)
+  public <- nn(x, k = 3L, backend = "cpu", method = "hnsw", metric = "inner_product", n_threads = 2L)
 
   expect_equal(dim(out$indices), c(nrow(x), 3L))
   expect_equal(attr(out, "backend"), "hnsw")

@@ -24,9 +24,9 @@ Distance choices belong in `metric`, not in `method`.
 | Exact CPU reference | `nn(x, k, backend = "cpu", method = "exact")` |
 | Exact FAISS CPU/GPU route | `nn(x, k, backend = "cpu", method = "flat")` or `nn(x, k, backend = "cuda", method = "flat")` |
 | Exact CUDA route through cuVS when available | `nn(x, k, backend = "cuda", method = "bruteforce")` |
-| Large high-dimensional CPU approximate search | `nn(x, k, backend = "cpu", method = "HNSW")` |
-| Large CUDA graph search | `nn(x, k, backend = "cuda", method = "CAGRA")` |
-| Memory-pressure approximate search | `nn(x, k, backend = "cpu", method = "IVFPQ")` or `nn(x, k, backend = "cuda", method = "IVFPQ")` |
+| Large high-dimensional CPU approximate search | `nn(x, k, backend = "cpu", method = "hnsw")` |
+| Large CUDA graph search | `nn(x, k, backend = "cuda", method = "cagra")` |
+| Memory-pressure approximate search | `nn(x, k, backend = "cpu", method = "ivfpq")` or `nn(x, k, backend = "cuda", method = "ivfpq")` |
 | 2D/3D spatial self-KNN | `nn(x, k, backend = "cpu", method = "grid")` or `nn(x, k, backend = "cuda", method = "grid")` |
 | Sparse matrix input | `nn(x, k, backend = "cpu", method = "sparse")` |
 
@@ -46,12 +46,12 @@ as a data frame for benchmark preflight checks.
 | `"grid"` | yes | native 2D/3D grid | native CUDA 2D/3D grid | native faissR implementation |
 | `"vptree"` | yes | native CPU VP-tree | unsupported | VP-tree/metric search [20] |
 | `"sparse"` | yes | native sparse CPU | unsupported | native faissR sparse implementation |
-| `"HNSW"` | approximate | FAISS HNSW for all metrics when FAISS is available; RcppHNSW/hnswlib fallback | unsupported | HNSW [5,16] |
-| `"IVF"` | approximate | FAISS IVF-Flat | FAISS GPU IVF-Flat | FAISS IVF [1-2,16] |
-| `"IVFPQ"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
-| `"NSG"` | approximate | FAISS NSG when exposed | unsupported | NSG/FAISS [16,21] |
-| `"NNDescent"` | approximate | FAISS NNDescent when exposed | cuVS NN-descent | NN-descent/cuVS [3-4,16] |
-| `"CAGRA"` | approximate | unsupported | FAISS GPU CAGRA or cuVS CAGRA | FAISS/cuVS CAGRA [3,13-16] |
+| `"hnsw"` | approximate | FAISS HNSW for all metrics when FAISS is available; RcppHNSW/hnswlib fallback | unsupported | HNSW [5,16] |
+| `"ivf"` | approximate | FAISS IVF-Flat | FAISS GPU IVF-Flat | FAISS IVF [1-2,16] |
+| `"ivfpq"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
+| `"nsg"` | approximate | FAISS NSG when exposed | unsupported | NSG/FAISS [16,21] |
+| `"nndescent"` | approximate | FAISS NNDescent when exposed | cuVS NN-descent | NN-descent/cuVS [3-4,16] |
+| `"cagra"` | approximate | unsupported | FAISS GPU CAGRA or cuVS CAGRA | FAISS/cuVS CAGRA [3,13-16] |
 
 ## Metric Support Matrix
 
@@ -71,12 +71,12 @@ rather than silently falling back to Euclidean search.
 | `"grid"` | euclidean | euclidean | 2D/3D self-KNN only. |
 | `"vptree"` | euclidean, cosine, correlation | unsupported | Inner product is not a metric for VP-tree pruning. |
 | `"sparse"` | euclidean, cosine, correlation, inner_product | unsupported | Exact sparse CPU route for `Matrix` inputs. |
-| `"HNSW"` | euclidean, cosine, correlation, inner_product | unsupported | FAISS HNSW is used for all metrics when available; cosine/correlation use normalized inner-product search. |
-| `"IVF"` | euclidean | euclidean | FAISS IVF-Flat routes are validated for L2. |
-| `"IVFPQ"` | euclidean | euclidean | Product-quantized IVF routes are validated for L2. |
-| `"NSG"` | euclidean | unsupported | CPU FAISS NSG route. |
-| `"NNDescent"` | euclidean | euclidean | CPU FAISS NNDescent and CUDA cuVS NN-descent routes. |
-| `"CAGRA"` | unsupported | euclidean | CUDA-only FAISS/cuVS graph search. |
+| `"hnsw"` | euclidean, cosine, correlation, inner_product | unsupported | FAISS HNSW is used for all metrics when available; cosine/correlation use normalized inner-product search. |
+| `"ivf"` | euclidean | euclidean | FAISS IVF-Flat routes are validated for L2. |
+| `"ivfpq"` | euclidean | euclidean | Product-quantized IVF routes are validated for L2. |
+| `"nsg"` | euclidean | unsupported | CPU FAISS NSG route. |
+| `"nndescent"` | euclidean | euclidean | CPU FAISS NNDescent and CUDA cuVS NN-descent routes. |
+| `"cagra"` | unsupported | euclidean | CUDA-only FAISS/cuVS graph search. |
 
 Programmatic form:
 
@@ -109,9 +109,9 @@ expected skips, not algorithmic failures.
 for every dataset. For benchmarking, report the resolved backend stored in the
 result attributes.
 
-## `"HNSW"` Metrics
+## `"hnsw"` Metrics
 
-CPU `method = "HNSW"` is metric-aware. When FAISS is available, faissR uses
+CPU `method = "hnsw"` is metric-aware. When FAISS is available, faissR uses
 FAISS HNSW for Euclidean/L2 and raw inner-product search. Cosine is implemented
 by row L2 normalization followed by FAISS HNSW inner-product search, and
 correlation is implemented by row centering plus L2 normalization followed by
@@ -200,9 +200,9 @@ GPU routes are usually more relevant.
 Use this method when preserving sparse representation matters more than using
 FAISS/CUDA acceleration.
 
-## `"HNSW"`
+## `"hnsw"`
 
-`method = "HNSW"` requests FAISS CPU HNSW, a graph-based approximate nearest
+`method = "hnsw"` requests FAISS CPU HNSW, a graph-based approximate nearest
 neighbour index based on Hierarchical Navigable Small World graphs [5,16].
 
 - It is CPU-only in faissR.
@@ -213,9 +213,9 @@ neighbour index based on Hierarchical Navigable Small World graphs [5,16].
 HNSW is approximate. It can give excellent recall/speed trade-offs, but recall
 should be measured for new datasets when it is used for scientific conclusions.
 
-## `"IVF"`
+## `"ivf"`
 
-`method = "IVF"` requests an inverted-file Flat index [1-2,16].
+`method = "ivf"` requests an inverted-file Flat index [1-2,16].
 
 - On CPU, it maps to FAISS CPU IVF-Flat.
 - On CUDA, it maps to FAISS GPU IVF-Flat.
@@ -226,9 +226,9 @@ IVF partitions the vector space into coarse cells and searches a subset of
 cells. It is approximate unless `nprobe` approaches the number of lists. It is
 useful for large datasets where exhaustive search is too expensive.
 
-## `"IVFPQ"`
+## `"ivfpq"`
 
-`method = "IVFPQ"` requests IVF with product quantization [6,16].
+`method = "ivfpq"` requests IVF with product quantization [6,16].
 
 - On CPU, it maps to FAISS CPU IVF-PQ.
 - On CUDA, it maps to FAISS GPU IVF-PQ.
@@ -239,9 +239,9 @@ IVFPQ is a memory-pressure method. It can be fast and memory-efficient, but
 recall can drop substantially. Treat it as explicit opt-in when memory matters,
 not as the default accuracy-first method.
 
-## `"NSG"`
+## `"nsg"`
 
-`method = "NSG"` requests FAISS CPU NSG if the linked FAISS build exposes it.
+`method = "nsg"` requests FAISS CPU NSG if the linked FAISS build exposes it.
 NSG is a graph-based approximate nearest-neighbour method designed to build a
 navigating graph with a sparse, search-friendly structure [16,21].
 
@@ -252,9 +252,9 @@ navigating graph with a sparse, search-friendly structure [16,21].
 When using NSG, check whether the backend returns the requested number of
 neighbours and measure recall on a representative subset.
 
-## `"NNDescent"`
+## `"nndescent"`
 
-`method = "NNDescent"` requests NN-descent style approximate KNN graph
+`method = "nndescent"` requests NN-descent style approximate KNN graph
 construction [4].
 
 - On CPU, faissR uses FAISS NNDescent when exposed by the linked FAISS build
@@ -266,14 +266,14 @@ runtime depend strongly on graph degree, iterations, data shape, and backend.
 It is best benchmarked against exact or high-recall references before being used
 as a default.
 
-## `"CAGRA"`
+## `"cagra"`
 
-`method = "CAGRA"` is CUDA-only. faissR prefers FAISS GPU CAGRA when the linked
+`method = "cagra"` is CUDA-only. faissR prefers FAISS GPU CAGRA when the linked
 FAISS GPU build provides NVIDIA cuVS integration; otherwise it uses direct
 RAPIDS cuVS CAGRA when available [3,13-16].
 
-- `backend = "cpu", method = "CAGRA"` errors.
-- `backend = "cuda", method = "CAGRA"` requires CUDA plus FAISS GPU CAGRA or
+- `backend = "cpu", method = "cagra"` errors.
+- `backend = "cuda", method = "cagra"` requires CUDA plus FAISS GPU CAGRA or
   cuVS CAGRA.
 - Direct cuVS CAGRA is guarded by pilot recall tuning.
 

@@ -18,7 +18,7 @@
 - `backend = "cuda"` forces CUDA execution and errors if no compatible CUDA
   backend is available.
 - `method` selects the algorithm family, for example `"auto"`, `"flat"`,
-  `"HNSW"`, `"IVF"`, `"CAGRA"`, or `"grid"`.
+  `"hnsw"`, `"ivf"`, `"cagra"`, or `"grid"`.
 
 FAISS is the required compiled vector-search dependency. CUDA, FAISS GPU,
 RAPIDS cuVS, and RAPIDS libcugraph are optional compiled/runtime capabilities
@@ -30,7 +30,7 @@ explicit CUDA request with CPU work.
 | Public backend | Meaning | Failure behavior |
 | --- | --- | --- |
 | `"auto"` | Prefer CUDA/cuVS for validated CUDA method/metric combinations; otherwise use CPU. | Falls back to CPU only because the user requested automatic device selection. |
-| `"cpu"` | Use CPU/native/FAISS CPU routes. | Errors for CUDA-only methods such as `method = "CAGRA"`. |
+| `"cpu"` | Use CPU/native/FAISS CPU routes. | Errors for CUDA-only methods such as `method = "cagra"`. |
 | `"cuda"` | Use CUDA/FAISS GPU/cuVS routes. | Errors if CUDA/cuVS support is unavailable or if the selected method is CPU-only. |
 
 The resolved backend is stored in `attr(result, "backend")`. Some routes also
@@ -48,16 +48,16 @@ list with method-specific parameters.
 | `"grid"` | Native exact 2D/3D Euclidean grid. | Native CUDA 2D/3D Euclidean grid. | Low-dimensional spatial or simulated data. |
 | `"vptree"` | Native exact CPU vantage-point tree for Euclidean, cosine, and correlation; zero-normalized non-Euclidean rows use exact CPU fallback. | Unsupported. | Low-dimensional CPU searches. |
 | `"sparse"` | Native exact sparse `dgCMatrix` CPU route. | Unsupported. | Sparse matrices without densifying. |
-| `"HNSW"` | FAISS CPU HNSW for all four public metrics when FAISS is available; RcppHNSW/hnswlib fallback otherwise. | Unsupported. | High-recall approximate CPU graph search [5,16]. |
-| `"IVF"` | FAISS CPU IVF-Flat. | FAISS GPU IVF-Flat. | Large approximate search with coarse-list probing [1-2,16]. |
-| `"IVFPQ"` | FAISS CPU IVF-PQ. | FAISS GPU IVF-PQ. | Compressed-memory approximate search [6,16]. |
-| `"NSG"` | FAISS CPU NSG when exposed by FAISS. | Unsupported. | Optional CPU graph-search baseline [16]. |
-| `"NNDescent"` | FAISS CPU NNDescent when exposed by FAISS. | Direct RAPIDS cuVS NN-descent. | Approximate KNN graph construction [3-4,16]. |
-| `"CAGRA"` | Unsupported. | FAISS GPU CAGRA preferred; direct RAPIDS cuVS CAGRA when available. | CUDA graph-search method [3,13-16]. |
+| `"hnsw"` | FAISS CPU HNSW for all four public metrics when FAISS is available; RcppHNSW/hnswlib fallback otherwise. | Unsupported. | High-recall approximate CPU graph search [5,16]. |
+| `"ivf"` | FAISS CPU IVF-Flat. | FAISS GPU IVF-Flat. | Large approximate search with coarse-list probing [1-2,16]. |
+| `"ivfpq"` | FAISS CPU IVF-PQ. | FAISS GPU IVF-PQ. | Compressed-memory approximate search [6,16]. |
+| `"nsg"` | FAISS CPU NSG when exposed by FAISS. | Unsupported. | Optional CPU graph-search baseline [16]. |
+| `"nndescent"` | FAISS CPU NNDescent when exposed by FAISS. | Direct RAPIDS cuVS NN-descent. | Approximate KNN graph construction [3-4,16]. |
+| `"cagra"` | Unsupported. | FAISS GPU CAGRA preferred; direct RAPIDS cuVS CAGRA when available. | CUDA graph-search method [3,13-16]. |
 
 Unsupported combinations fail before computation. For example,
-`nn(x, backend = "cpu", method = "CAGRA")` errors because CAGRA is CUDA-only,
-and `nn(x, backend = "cuda", method = "HNSW")` errors because HNSW is currently
+`nn(x, backend = "cpu", method = "cagra")` errors because CAGRA is CUDA-only,
+and `nn(x, backend = "cuda", method = "hnsw")` errors because HNSW is currently
 a CPU FAISS route in faissR.
 
 ## Compiled Backend Families

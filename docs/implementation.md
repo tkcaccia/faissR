@@ -54,7 +54,7 @@ At runtime, availability helpers (`faiss_available()`, `cuda_available()`,
 `cuvs_available()`, and `cugraph_available()`) report compiled/runtime support.
 They are diagnostic helpers, not a substitute for execution-time validation.
 Every explicit backend request is checked again when the method runs. For
-example, `backend = "cuda", method = "CAGRA"` errors if neither FAISS GPU CAGRA
+example, `backend = "cuda", method = "cagra"` errors if neither FAISS GPU CAGRA
 nor direct cuVS CAGRA is available.
 
 Compiled backends are reached through Rcpp/C++ bridge files:
@@ -159,7 +159,7 @@ Explicit methods map to the selected backend. For example,
 `method = "grid", backend = "cpu"` resolves to the CPU grid implementation,
 whereas `method = "grid", backend = "cuda"` resolves to the CUDA grid
 implementation. Invalid combinations fail before computation; for example,
-`method = "CAGRA", backend = "cpu"` errors because CAGRA is CUDA-only.
+`method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only.
 
 Direct cuVS CAGRA is guarded by pilot recall tuning; if the pilot does not meet
 the configured recall target, the function stops and recommends FAISS GPU CAGRA

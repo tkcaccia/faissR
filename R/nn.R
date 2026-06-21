@@ -1170,8 +1170,8 @@ normalize_nn_method <- function(method) {
   if (!method %in% names(aliases)) {
     stop(
       "`method` must be one of \"auto\", \"exact\", \"flat\", \"bruteforce\", ",
-      "\"grid\", \"vptree\", \"sparse\", \"HNSW\", \"IVF\", \"IVFPQ\", ",
-      "\"NSG\", \"NNDescent\", or \"CAGRA\".",
+      "\"grid\", \"vptree\", \"sparse\", \"hnsw\", \"ivf\", \"ivfpq\", ",
+      "\"nsg\", \"nndescent\", or \"cagra\".",
       " It should be one of the supported method labels.",
       call. = FALSE
     )
@@ -1186,7 +1186,7 @@ nn_metric_labels <- function() {
 nn_method_labels <- function() {
   c(
     "auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
-    "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"
+    "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"
   )
 }
 
@@ -1285,7 +1285,7 @@ nn_capability_row <- function(method, backend, metric) {
     exact <- if (supported) TRUE else NA
     implementation <- if (identical(backend, "cpu")) "native sparse CPU exact" else NA_character_
     notes <- if (identical(backend, "cpu")) "Requires sparse Matrix input to avoid dense conversion." else "Sparse exact search is CPU-only."
-  } else if (identical(method, "HNSW")) {
+  } else if (identical(method, "hnsw")) {
     supported <- identical(backend, "cpu") && all_metrics
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) "FAISS HNSW or RcppHNSW/hnswlib" else NA_character_
@@ -1294,26 +1294,26 @@ nn_capability_row <- function(method, backend, metric) {
     } else {
       "HNSW is CPU-only in the public API."
     }
-  } else if (method %in% c("IVF", "IVFPQ")) {
+  } else if (method %in% c("ivf", "ivfpq")) {
     supported <- euclidean
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) {
-      if (identical(method, "IVF")) "FAISS CPU IVF-Flat" else "FAISS CPU IVF-PQ"
+      if (identical(method, "ivf")) "FAISS CPU IVF-Flat" else "FAISS CPU IVF-PQ"
     } else {
-      if (identical(method, "IVF")) "FAISS GPU IVF-Flat" else "FAISS GPU IVF-PQ"
+      if (identical(method, "ivf")) "FAISS GPU IVF-Flat" else "FAISS GPU IVF-PQ"
     }
     notes <- if (supported) "Validated for Euclidean/L2 search." else "FAISS IVF routes are currently validated only for Euclidean/L2 search."
-  } else if (identical(method, "NSG")) {
+  } else if (identical(method, "nsg")) {
     supported <- identical(backend, "cpu") && euclidean
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) "FAISS CPU NSG" else NA_character_
     notes <- if (identical(backend, "cpu")) "Validated for Euclidean/L2 search." else "NSG is CPU-only in the public API."
-  } else if (identical(method, "NNDescent")) {
+  } else if (identical(method, "nndescent")) {
     supported <- euclidean
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) "FAISS CPU NNDescent" else "cuVS CUDA NN-descent"
     notes <- if (supported) "Validated for Euclidean/L2 self-KNN search." else "NNDescent routes are currently validated only for Euclidean/L2 search."
-  } else if (identical(method, "CAGRA")) {
+  } else if (identical(method, "cagra")) {
     supported <- identical(backend, "cuda") && euclidean
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cuda")) "FAISS GPU CAGRA or cuVS CAGRA" else NA_character_
@@ -1433,7 +1433,7 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
       ivfpq = "faiss_ivfpq",
       nsg = "faiss_nsg",
       nndescent = "faiss_nndescent",
-      cagra = stop("`method = \"CAGRA\"` is only available with `backend = \"cuda\"`.", call. = FALSE),
+      cagra = stop("`method = \"cagra\"` is only available with `backend = \"cuda\"`.", call. = FALSE),
       stop("Unsupported CPU nearest-neighbour method.", call. = FALSE)
     )
   } else {
@@ -1458,8 +1458,8 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
       ivfpq = "faiss_gpu_ivfpq",
       nndescent = "cuda_cuvs_nndescent",
       cagra = if (isTRUE(faiss_available())) "faiss_gpu_cagra" else "cuda_cuvs_cagra",
-      hnsw = stop("`method = \"HNSW\"` is only available with `backend = \"cpu\"`.", call. = FALSE),
-      nsg = stop("`method = \"NSG\"` is only available with `backend = \"cpu\"`.", call. = FALSE),
+      hnsw = stop("`method = \"hnsw\"` is only available with `backend = \"cpu\"`.", call. = FALSE),
+      nsg = stop("`method = \"nsg\"` is only available with `backend = \"cpu\"`.", call. = FALSE),
       sparse = stop("`method = \"sparse\"` is only available with `backend = \"cpu\"`.", call. = FALSE),
       vptree = stop("`method = \"vptree\"` is only available with `backend = \"cpu\"`.", call. = FALSE),
       stop("Unsupported CUDA nearest-neighbour method.", call. = FALSE)
@@ -1476,12 +1476,12 @@ public_nn_method_label <- function(method) {
     grid = "grid",
     vptree = "vptree",
     sparse = "sparse",
-    hnsw = "HNSW",
-    ivf = "IVF",
-    ivfpq = "IVFPQ",
-    nsg = "NSG",
-    nndescent = "NNDescent",
-    cagra = "CAGRA"
+    hnsw = "hnsw",
+    ivf = "ivf",
+    ivfpq = "ivfpq",
+    nsg = "nsg",
+    nndescent = "nndescent",
+    cagra = "cagra"
   )
   labels[[method]] %||% method
 }
@@ -4131,7 +4131,7 @@ grid_self_knn <- function(data,
 #' `backend = "cpu", method = "grid"` uses the CPU grid implementation, while
 #' `backend = "cuda", method = "grid"` uses the CUDA grid implementation.
 #' Invalid combinations stop clearly before computation; for example,
-#' `backend = "cpu", method = "CAGRA"` errors because CAGRA is CUDA-only.
+#' `backend = "cpu", method = "cagra"` errors because CAGRA is CUDA-only.
 #'
 #' @details
 #' Method descriptions:
@@ -4154,18 +4154,18 @@ grid_self_knn <- function(data,
 #'   Euclidean tree search when rows are nonzero/nonconstant and exact CPU
 #'   fallback otherwise. Raw inner product is not available for VP-tree because
 #'   it is not a metric distance for tree pruning; use `"exact"`, `"flat"`, or
-#'   `"HNSW"` for inner-product search.
+#'   `"hnsw"` for inner-product search.
 #'   \item `"sparse"`: native exact sparse `dgCMatrix` CPU search.
-#'   \item `"HNSW"`: FAISS CPU HNSW approximate graph-search index [5,16].
-#'   \item `"IVF"`: FAISS inverted-file index, trading exhaustive search for
+#'   \item `"hnsw"`: FAISS CPU HNSW approximate graph-search index [5,16].
+#'   \item `"ivf"`: FAISS inverted-file index, trading exhaustive search for
 #'   coarse-list probing [1-2,16].
-#'   \item `"IVFPQ"`: FAISS inverted-file index with product quantization,
+#'   \item `"ivfpq"`: FAISS inverted-file index with product quantization,
 #'   mainly for compressed-memory approximate search [1-2,6,16].
-#'   \item `"NSG"`: FAISS CPU NSG graph-search index when exposed by the linked
+#'   \item `"nsg"`: FAISS CPU NSG graph-search index when exposed by the linked
 #'   FAISS build [16].
-#'   \item `"NNDescent"`: NN-descent approximate graph construction via FAISS
+#'   \item `"nndescent"`: NN-descent approximate graph construction via FAISS
 #'   on CPU or cuVS on CUDA [3-4,16].
-#'   \item `"CAGRA"`: CUDA-only graph-search method via FAISS GPU CAGRA/cuVS
+#'   \item `"cagra"`: CUDA-only graph-search method via FAISS GPU CAGRA/cuVS
 #'   integration or direct RAPIDS cuVS CAGRA [3,13-16].
 #' }
 #'
@@ -4210,10 +4210,11 @@ grid_self_knn <- function(data,
 #'   is unavailable.
 #' @param method Algorithm selector. `"auto"` chooses a shape-aware default for
 #'   the selected backend. Other values include `"exact"`, `"flat"`,
-#'   `"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"HNSW"`, `"IVF"`,
-#'   `"IVFPQ"`, `"NSG"`, `"NNDescent"`, and `"CAGRA"`. Unsupported
-#'   backend/method combinations fail clearly; for example,
-#'   `method = "CAGRA", backend = "cpu"` errors because CAGRA is CUDA-only.
+#'   `"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"hnsw"`, `"ivf"`,
+#'   `"ivfpq"`, `"nsg"`, `"nndescent"`, and `"cagra"`. Older uppercase
+#'   spellings are accepted as compatibility aliases but are not listed as
+#'   separate methods. Unsupported backend/method combinations fail clearly; for example,
+#'   `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only.
 #' @param metric Distance metric. The intentionally small public set is
 #'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
 #'   `"euclidean"` is the validated high-performance default. `"cosine"` and
@@ -4223,7 +4224,7 @@ grid_self_knn <- function(data,
 #'   correlation before inner-product search; distances are returned as
 #'   `1 - similarity`. CPU `method = "auto"` can use FAISS Flat for larger
 #'   exact non-Euclidean query workloads and FAISS HNSW or RcppHNSW/hnswlib for
-#'   large non-Euclidean self-search. CPU `method = "HNSW"` uses FAISS HNSW for
+#'   large non-Euclidean self-search. CPU `method = "hnsw"` uses FAISS HNSW for
 #'   all metrics when available and RcppHNSW/hnswlib when FAISS is unavailable.
 #'   `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP
 #'   for `method = "flat"` when available. Unsupported backend combinations
@@ -4250,7 +4251,7 @@ nn <- function(data,
                k = NULL,
                backend = c("auto", "cpu", "cuda"),
                method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree",
-                          "sparse", "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
+                          "sparse", "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"),
                metric = c("euclidean", "cosine", "correlation", "inner_product"),
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                n_threads = NULL) {
@@ -4300,7 +4301,7 @@ nn_without_self <- function(data,
                             k,
                             backend = c("auto", "cpu", "cuda"),
                             method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree",
-                                       "sparse", "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
+                                       "sparse", "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"),
                             metric = c("euclidean", "cosine", "correlation", "inner_product"),
                             tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                             n_threads = NULL) {

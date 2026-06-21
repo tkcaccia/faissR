@@ -8,8 +8,8 @@ nn_without_self(
   data,
   k,
   backend = c("auto", "cpu", "cuda"),
-  method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse", "HNSW",
-    "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
+  method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse", "hnsw",
+    "ivf", "ivfpq", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   n_threads = NULL

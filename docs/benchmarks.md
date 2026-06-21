@@ -214,8 +214,8 @@ metric matrix. It runs public `nn()` combinations over:
 - backends: `"auto"`, `"cpu"`, `"cuda"`, or any subset passed with
   `--backends`;
 - methods: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`,
-  `"vptree"`, `"HNSW"`, `"IVF"`, `"IVFPQ"`, `"NSG"`, `"NNDescent"`, and
-  `"CAGRA"`;
+  `"vptree"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"nsg"`, `"nndescent"`, and
+  `"cagra"`;
 - metrics: `"euclidean"`, `"cosine"`, `"correlation"`, and
   `"inner_product"`;
 - k values: `5`, `10`, `15`, `50`, and `100` by default.

@@ -12,7 +12,7 @@ graph_cluster(
   k = 50L,
   graph_backend = "auto",
   graph_method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
-    "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
+    "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   weight = c("auto", "snn", "adaptive", "distance", "binary"),

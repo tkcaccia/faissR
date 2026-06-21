@@ -9,8 +9,8 @@ nn(
   points = data,
   k = NULL,
   backend = c("auto", "cpu", "cuda"),
-  method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse", "HNSW",
-    "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
+  method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse", "hnsw",
+    "ivf", "ivfpq", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   n_threads = NULL
@@ -36,10 +36,11 @@ is unavailable.}
 
 \item{method}{Algorithm selector. `"auto"` chooses a shape-aware default for
 the selected backend. Other values include `"exact"`, `"flat"`,
-`"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"HNSW"`, `"IVF"`,
-`"IVFPQ"`, `"NSG"`, `"NNDescent"`, and `"CAGRA"`. Unsupported
-backend/method combinations fail clearly; for example,
-`method = "CAGRA", backend = "cpu"` errors because CAGRA is CUDA-only.}
+`"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"hnsw"`, `"ivf"`,
+`"ivfpq"`, `"nsg"`, `"nndescent"`, and `"cagra"`. Older uppercase
+spellings are accepted as compatibility aliases but are not listed as
+separate methods. Unsupported backend/method combinations fail clearly; for example,
+`method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only.}
 
 \item{metric}{Distance metric. The intentionally small public set is
 `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
@@ -50,7 +51,7 @@ normalization for cosine and row centering plus L2 normalization for
 correlation before inner-product search; distances are returned as
 `1 - similarity`. CPU `method = "auto"` can use FAISS Flat for larger
 exact non-Euclidean query workloads and FAISS HNSW or RcppHNSW/hnswlib for
-large non-Euclidean self-search. CPU `method = "HNSW"` uses FAISS HNSW for
+large non-Euclidean self-search. CPU `method = "hnsw"` uses FAISS HNSW for
 all metrics when available and RcppHNSW/hnswlib when FAISS is unavailable.
 `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP
 for `method = "flat"` when available. Unsupported backend combinations
@@ -78,7 +79,7 @@ or `"cuda"`; `method` chooses the algorithm. For example,
 `backend = "cpu", method = "grid"` uses the CPU grid implementation, while
 `backend = "cuda", method = "grid"` uses the CUDA grid implementation.
 Invalid combinations stop clearly before computation; for example,
-`backend = "cpu", method = "CAGRA"` errors because CAGRA is CUDA-only.
+`backend = "cpu", method = "cagra"` errors because CAGRA is CUDA-only.
 }
 \details{
 Method descriptions:
@@ -101,18 +102,18 @@ Method descriptions:
   Euclidean tree search when rows are nonzero/nonconstant and exact CPU
   fallback otherwise. Raw inner product is not available for VP-tree because
   it is not a metric distance for tree pruning; use `"exact"`, `"flat"`, or
-  `"HNSW"` for inner-product search.
+  `"hnsw"` for inner-product search.
   \item `"sparse"`: native exact sparse `dgCMatrix` CPU search.
-  \item `"HNSW"`: FAISS CPU HNSW approximate graph-search index [5,16].
-  \item `"IVF"`: FAISS inverted-file index, trading exhaustive search for
+  \item `"hnsw"`: FAISS CPU HNSW approximate graph-search index [5,16].
+  \item `"ivf"`: FAISS inverted-file index, trading exhaustive search for
   coarse-list probing [1-2,16].
-  \item `"IVFPQ"`: FAISS inverted-file index with product quantization,
+  \item `"ivfpq"`: FAISS inverted-file index with product quantization,
   mainly for compressed-memory approximate search [1-2,6,16].
-  \item `"NSG"`: FAISS CPU NSG graph-search index when exposed by the linked
+  \item `"nsg"`: FAISS CPU NSG graph-search index when exposed by the linked
   FAISS build [16].
-  \item `"NNDescent"`: NN-descent approximate graph construction via FAISS
+  \item `"nndescent"`: NN-descent approximate graph construction via FAISS
   on CPU or cuVS on CUDA [3-4,16].
-  \item `"CAGRA"`: CUDA-only graph-search method via FAISS GPU CAGRA/cuVS
+  \item `"cagra"`: CUDA-only graph-search method via FAISS GPU CAGRA/cuVS
   integration or direct RAPIDS cuVS CAGRA [3,13-16].
 }
 

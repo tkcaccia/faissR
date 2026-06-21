@@ -9,8 +9,8 @@ knn(
   Ytrain,
   Xtest = NULL,
   backend = c("auto", "cpu", "cuda"),
-  method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse", "HNSW",
-    "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
+  method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse", "hnsw",
+    "ivf", "ivfpq", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   task = c("auto", "classification", "regression"),
@@ -28,7 +28,7 @@ knn(
 \item{backend}{Device backend passed to \code{nn()}: \code{"auto"}, \code{"cpu"}, or
 \code{"cuda"}. \code{"auto"} follows \code{nn()} backend/method/metric
 resolution, using CUDA only for validated CUDA combinations and CPU otherwise.}
-\item{method}{Nearest-neighbour algorithm selector passed to \code{nn()}. \code{"auto"} chooses the most appropriate method for the selected backend. See \code{?nn} for descriptions and references for \code{"exact"}, \code{"flat"}, \code{"bruteforce"}, \code{"grid"}, \code{"vptree"}, \code{"sparse"}, \code{"HNSW"}, \code{"IVF"}, \code{"IVFPQ"}, \code{"NSG"}, \code{"NNDescent"}, and \code{"CAGRA"}.}
+\item{method}{Nearest-neighbour algorithm selector passed to \code{nn()}. \code{"auto"} chooses the most appropriate method for the selected backend. See \code{?nn} for descriptions and references for \code{"exact"}, \code{"flat"}, \code{"bruteforce"}, \code{"grid"}, \code{"vptree"}, \code{"sparse"}, \code{"hnsw"}, \code{"ivf"}, \code{"ivfpq"}, \code{"nsg"}, \code{"nndescent"}, and \code{"cagra"}.}
 \item{metric}{Distance metric passed to \code{nn()}: \code{"euclidean"},
 \code{"cosine"}, \code{"correlation"}, or \code{"inner_product"}. See
 \code{nn()} for metric/backend support details, including metric-aware CPU

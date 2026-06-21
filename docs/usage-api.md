@@ -43,8 +43,8 @@ nn(data, points = data, k = NULL, backend = "auto",
 | `points` | Optional query matrix/data frame/sparse matrix with the same number of columns as `data`. Defaults to `data` for self-search. |
 | `k` | Number of neighbours to return. If `NULL`, faissR chooses an automatic neighbourhood size. |
 | `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses a validated CUDA route only when the requested method/metric combination is supported, and otherwise resolves to CPU. Explicit `"cuda"` fails clearly when CUDA support or the selected CUDA combination is unavailable. |
-| `method` | Algorithm selector: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"HNSW"`, `"IVF"`, `"IVFPQ"`, `"NSG"`, `"NNDescent"`, or `"CAGRA"` [1-6,13-16]. For example, `method = "grid", backend = "cpu"` maps to the CPU grid implementation, while `method = "grid", backend = "cuda"` maps to the CUDA grid implementation. Distance choices belong in `metric`, not `method`. Invalid backend/method combinations, such as `method = "CAGRA", backend = "cpu"`, stop with a clear error. |
-| `metric` | Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Euclidean/L2 is the validated high-performance route for approximate FAISS/CUDA/cuVS. Cosine and correlation use validated exact paths, FAISS CPU/GPU Flat through normalized `IndexFlatIP`, and CPU FAISS HNSW through normalized inner-product search when `method = "HNSW"` is selected. Inner product is supported by native exact CPU scoring, FAISS Flat IP, FAISS HNSW IP, and RcppHNSW/hnswlib fallback paths when FAISS is unavailable. |
+| `method` | Algorithm selector: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"nsg"`, `"nndescent"`, or `"cagra"` [1-6,13-16]. For example, `method = "grid", backend = "cpu"` maps to the CPU grid implementation, while `method = "grid", backend = "cuda"` maps to the CUDA grid implementation. Distance choices belong in `metric`, not `method`. Invalid backend/method combinations, such as `method = "cagra", backend = "cpu"`, stop with a clear error. |
+| `metric` | Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Euclidean/L2 is the validated high-performance route for approximate FAISS/CUDA/cuVS. Cosine and correlation use validated exact paths, FAISS CPU/GPU Flat through normalized `IndexFlatIP`, and CPU FAISS HNSW through normalized inner-product search when `method = "hnsw"` is selected. Inner product is supported by native exact CPU scoring, FAISS Flat IP, FAISS HNSW IP, and RcppHNSW/hnswlib fallback paths when FAISS is unavailable. |
 | `tuning` | Tuning policy for approximate GPU methods: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. `"auto"` uses the appropriate tuned default for the resolved method. |
 | `n_threads` | Number of CPU worker threads for CPU/FAISS CPU backends. GPU backends ignore this argument. |
 
@@ -63,12 +63,12 @@ Returns a `faissR_nn` list with `indices` and `distances` matrices. Indices are
 | `"grid"` | Native spatial grid search for 2D/3D Euclidean self-KNN. It is intended for low-dimensional spatial or simulated data and errors clearly outside supported dimensions. |
 | `"vptree"` | Native exact vantage-point-tree search for Euclidean CPU queries, plus cosine/correlation through normalized Euclidean tree search when safe. Zero-normalized rows use exact CPU fallback. |
 | `"sparse"` | Native exact sparse `dgCMatrix` CPU search. It keeps sparse input sparse instead of densifying. |
-| `"HNSW"` | FAISS CPU HNSW graph-search index. HNSW is a high-recall approximate nearest-neighbour graph method and is the default CPU approximate route for many large high-dimensional datasets [5,16]. |
-| `"IVF"` | FAISS inverted-file index. IVF partitions vectors into coarse lists and probes selected lists; it trades exactness for speed/memory and is useful for very large CPU/GPU searches [1-2,16]. |
-| `"IVFPQ"` | FAISS IVF with product quantization. IVFPQ compresses vectors and is best treated as a memory-pressure method rather than an accuracy-first default [1-2,6,16]. |
-| `"NSG"` | FAISS CPU NSG graph-search index when the linked FAISS build exposes it. It is kept as an optional graph-search baseline [16]. |
-| `"NNDescent"` | NN-descent style approximate graph construction. CPU uses FAISS NNDescent when available; CUDA maps to cuVS NN-descent [3-4,16]. |
-| `"CAGRA"` | CUDA-only graph-search method. faissR prefers FAISS GPU CAGRA when FAISS is built with NVIDIA cuVS integration and otherwise uses direct cuVS CAGRA when available [3,13-16]. |
+| `"hnsw"` | FAISS CPU HNSW graph-search index. HNSW is a high-recall approximate nearest-neighbour graph method and is the default CPU approximate route for many large high-dimensional datasets [5,16]. |
+| `"ivf"` | FAISS inverted-file index. IVF partitions vectors into coarse lists and probes selected lists; it trades exactness for speed/memory and is useful for very large CPU/GPU searches [1-2,16]. |
+| `"ivfpq"` | FAISS IVF with product quantization. IVFPQ compresses vectors and is best treated as a memory-pressure method rather than an accuracy-first default [1-2,6,16]. |
+| `"nsg"` | FAISS CPU NSG graph-search index when the linked FAISS build exposes it. It is kept as an optional graph-search baseline [16]. |
+| `"nndescent"` | NN-descent style approximate graph construction. CPU uses FAISS NNDescent when available; CUDA maps to cuVS NN-descent [3-4,16]. |
+| `"cagra"` | CUDA-only graph-search method. faissR prefers FAISS GPU CAGRA when FAISS is built with NVIDIA cuVS integration and otherwise uses direct cuVS CAGRA when available [3,13-16]. |
 
 ## `nn_without_self()`
 
