@@ -966,6 +966,21 @@ test_that("graph benchmark defaults cover requested methods backends and k grid"
   )
 })
 
+test_that("graph benchmark target cluster mode is explicit", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+
+  expect_equal(env$normalize_target_clusters_mode("labels"), "labels")
+  expect_equal(env$normalize_target_clusters_mode("dataset_labels"), "labels")
+  expect_equal(env$normalize_target_clusters_mode("none"), "none")
+  expect_equal(env$normalize_target_clusters_mode("off"), "none")
+  expect_null(env$label_target_clusters(rep(letters[1:3], each = 2L), "none"))
+  expect_equal(env$label_target_clusters(rep(letters[1:3], each = 2L), "labels"), 3L)
+  expect_error(env$normalize_target_clusters_mode("labelled"), "target_clusters")
+})
+
 test_that("graph benchmark recommendations are grouped by target cluster count", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),

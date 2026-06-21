@@ -262,16 +262,17 @@ Rscript benchmark_scripts/benchmark_graph_clustering.R \
   --threads=2
 ```
 
-When `--target_clusters=labels` is used, Louvain and Leiden use
-`n_clusters = length(unique(dataset$labels))`. If the selected method set
-contains only Louvain and Leiden, the benchmark stores that target on the graph
-with `knn_graph(n_clusters = ...)` and lets `graph_cluster()` reuse it. Mixed
-method sets that include random-walking pass the target only to Louvain/Leiden
-rows because the public API intentionally reserves `n_clusters` for Louvain and
-Leiden. The target is validated as a positive integer no larger than the
-graph vertex count, so malformed label-derived targets fail clearly before
-clustering. CUDA rows fail explicitly when faissR was not built with the
-required CUDA/cuGraph support.
+`--target_clusters` is normalized to either `labels` or `none`, and invalid
+values stop before the benchmark starts. When `--target_clusters=labels` is
+used, Louvain and Leiden use `n_clusters = length(unique(dataset$labels))`. If
+the selected method set contains only Louvain and Leiden, the benchmark stores
+that target on the graph with `knn_graph(n_clusters = ...)` and lets
+`graph_cluster()` reuse it. Mixed method sets that include random-walking pass
+the target only to Louvain/Leiden rows because the public API intentionally
+reserves `n_clusters` for Louvain and Leiden. The target is validated as a
+positive integer no larger than the graph vertex count, so malformed
+label-derived targets fail clearly before clustering. CUDA rows fail explicitly
+when faissR was not built with the required CUDA/cuGraph support.
 
 ## NN Metrics File Layout
 

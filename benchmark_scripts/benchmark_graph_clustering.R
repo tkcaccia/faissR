@@ -473,6 +473,26 @@ graph_build_expected_skip <- function(graph_backend) {
   NULL
 }
 
+normalize_target_clusters_mode <- function(target_mode) {
+  target_mode <- tolower(trimws(as.character(target_mode)[1L] %||% "labels"))
+  aliases <- c(
+    labels = "labels",
+    label = "labels",
+    dataset_labels = "labels",
+    none = "none",
+    off = "none",
+    false = "none",
+    no = "none"
+  )
+  if (!target_mode %in% names(aliases)) {
+    stop(
+      "`target_clusters` must be one of \"labels\" or \"none\".",
+      call. = FALSE
+    )
+  }
+  unname(aliases[[target_mode]])
+}
+
 label_target_clusters <- function(labels, target_mode) {
   if (!identical(target_mode, "labels") || is.null(labels)) return(NULL)
   label_count <- length(unique(labels[!is.na(labels)]))
@@ -675,7 +695,7 @@ methods <- split_arg(args$methods, paste(default_graph_cluster_methods(), collap
 graph_backends <- split_arg(args$graph_backends, paste(default_graph_backends(), collapse = ","))
 cluster_backends <- split_arg(args$cluster_backends, paste(default_graph_backends(), collapse = ","))
 weight <- args$weight %||% "auto"
-target_mode <- args$target_clusters %||% "labels"
+target_mode <- normalize_target_clusters_mode(args$target_clusters %||% "labels")
 
 suppressPackageStartupMessages(library(faissR))
 
@@ -928,10 +948,11 @@ materials <- c(
   sprintf("- Cycles: `%s`", cycles),
   sprintf("- ARI tolerance for cycle recommendations: `%s`", ari_tolerance),
   sprintf("- CPU thread cap: `%s`", n_threads),
+  sprintf("- Target clusters mode: `%s`", target_mode),
   "",
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
   "`graph_cluster_benchmark_config.csv` records the run configuration. `graph_cluster_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, graph timings, clustering timings, memory, ARI, modularity, and backend metadata.",
-  "When `target_clusters = \"labels\"`, Louvain and Leiden use `n_clusters = length(unique(labels))`. If a benchmark block contains only Louvain/Leiden, this target is stored on the graph with `knn_graph(n_clusters = ...)` and reused by `graph_cluster()`; mixed blocks that include random-walking pass the target only to Louvain/Leiden rows because random-walking intentionally has no cluster-count target.",
+  "`target_clusters` is normalized to either `\"labels\"` or `\"none\"`; invalid values stop before the benchmark starts. When `target_clusters = \"labels\"`, Louvain and Leiden use `n_clusters = length(unique(labels))`. If a benchmark block contains only Louvain/Leiden, this target is stored on the graph with `knn_graph(n_clusters = ...)` and reused by `graph_cluster()`; mixed blocks that include random-walking pass the target only to Louvain/Leiden rows because random-walking intentionally has no cluster-count target.",
   "`n_clusters_requested` records the target community count used for Louvain/Leiden rows. `n_clusters_source` records whether that target came from dataset labels, a stored `knn_graph(n_clusters = ...)` target, or no target.",
   "Each KNN graph is built once per dataset/cycle/k/graph-backend/weight combination and reused across clustering methods and clustering backends within that cycle. The `cycle` column supports repeated benchmark cycles such as `--cycles=10`; `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
   "`graph_cluster_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, modularity, and total time for a compact backwards-compatible summary. `graph_cluster_best_by_dataset_k_target.csv` keeps the best successful row per dataset/k/target-cluster-count combination so different neighbourhood sizes and Louvain/Leiden target counts remain auditable.",
