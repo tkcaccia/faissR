@@ -1276,7 +1276,7 @@ nn_capability_row <- function(method, backend, metric) {
     exact <- if (supported) TRUE else NA
     implementation <- if (identical(backend, "cpu")) "native CPU VP-tree" else NA_character_
     notes <- if (identical(backend, "cpu")) {
-      "Supports Euclidean directly and cosine/correlation by normalized Euclidean search; raw inner product is unsupported."
+      "Supports Euclidean directly and cosine/correlation by normalized Euclidean search; raw inner product is not available for VP-tree because it is not a metric distance for tree pruning."
     } else {
       "VP-tree is CPU-only."
     }
@@ -4152,7 +4152,9 @@ grid_self_knn <- function(data,
 #'   \item `"vptree"`: native exact CPU vantage-point-tree search for
 #'   Euclidean, cosine, and correlation. Cosine/correlation use normalized
 #'   Euclidean tree search when rows are nonzero/nonconstant and exact CPU
-#'   fallback otherwise. Inner product is unsupported.
+#'   fallback otherwise. Raw inner product is not available for VP-tree because
+#'   it is not a metric distance for tree pruning; use `"exact"`, `"flat"`, or
+#'   `"HNSW"` for inner-product search.
 #'   \item `"sparse"`: native exact sparse `dgCMatrix` CPU search.
 #'   \item `"HNSW"`: FAISS CPU HNSW approximate graph-search index [5,16].
 #'   \item `"IVF"`: FAISS inverted-file index, trading exhaustive search for

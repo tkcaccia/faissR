@@ -99,7 +99,9 @@ Method descriptions:
   \item `"vptree"`: native exact CPU vantage-point-tree search for
   Euclidean, cosine, and correlation. Cosine/correlation use normalized
   Euclidean tree search when rows are nonzero/nonconstant and exact CPU
-  fallback otherwise. Inner product is unsupported.
+  fallback otherwise. Raw inner product is not available for VP-tree because
+  it is not a metric distance for tree pruning; use `"exact"`, `"flat"`, or
+  `"HNSW"` for inner-product search.
   \item `"sparse"`: native exact sparse `dgCMatrix` CPU search.
   \item `"HNSW"`: FAISS CPU HNSW approximate graph-search index [5,16].
   \item `"IVF"`: FAISS inverted-file index, trading exhaustive search for
