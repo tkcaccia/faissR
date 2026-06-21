@@ -87,7 +87,9 @@ Supported CPU routes include:
 - FAISS CPU Flat, IVF-Flat, IVF-PQ, HNSW, NSG, and NN-Descent when present in
   the linked FAISS build [1-6,16];
 - RcppHNSW as an optional CRAN-friendly fallback;
-- exact 2D/3D grid and VP-tree routes for low-dimensional Euclidean self-KNN.
+- exact 2D/3D grid and VP-tree routes for low-dimensional Euclidean self-KNN;
+  VP-tree also supports cosine/correlation through normalized Euclidean search
+  when rows are nonzero/nonconstant.
 
 Supported CUDA routes include:
 
@@ -178,7 +180,7 @@ public method names map to different concrete functions depending on `backend`.
 | `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized Flat IP. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP. | Exact FAISS route [1-2,16]. |
 | `bruteforce` | Native exact CPU route. | Direct cuVS brute force when available. | Useful for comparing direct cuVS against FAISS GPU Flat [3]. |
 | `grid` | Native 2D/3D exact spatial grid. | CUDA 2D/3D grid. | Errors outside two or three columns. |
-| `vptree` | Native exact CPU VP-tree. | Unsupported. | Low-dimensional CPU helper. |
+| `vptree` | Native exact CPU VP-tree for Euclidean, cosine, and correlation; zero-normalized non-Euclidean rows use exact CPU fallback. | Unsupported. | Low-dimensional CPU helper. |
 | `sparse` | Native exact sparse `dgCMatrix` route. | Unsupported. | Avoids densifying sparse matrices. |
 | `HNSW` | FAISS CPU HNSW. | Unsupported. | High-recall CPU graph-search route [5,16]. |
 | `IVF` | FAISS CPU IVF-Flat. | FAISS GPU IVF-Flat. | Coarse-list approximate route [1-2,16]. |

@@ -136,7 +136,14 @@ benchmarks. It is not a general high-dimensional ANN algorithm.
 metric-space nearest-neighbour search [20].
 
 - It is CPU-only.
-- It supports Euclidean routes in faissR.
+- It supports Euclidean directly.
+- It supports cosine and correlation by normalizing rows, running the Euclidean
+  VP-tree, and converting chord distances back to `1 - similarity`.
+- If zero or constant rows make that normalized tree transform unsafe, faissR
+  falls back to the native exact CPU scorer and records the fallback in
+  `attr(result, "spatial_index")`.
+- It does not support raw inner-product search because inner product is not a
+  metric for VP-tree pruning.
 - It is mainly useful for low-dimensional data where tree pruning reduces work.
 
 For high-dimensional image or cytometry-style data, FAISS HNSW, IVF, or exact

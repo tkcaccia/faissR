@@ -46,7 +46,7 @@ list with method-specific parameters.
 | `"flat"` | FAISS Flat L2/IP; cosine and correlation use normalized Flat IP. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP. | Exact FAISS exhaustive search [1-2,16]. |
 | `"bruteforce"` | Native exact CPU KNN. | Direct RAPIDS cuVS brute force. | Direct exhaustive route, useful for FAISS/cuVS comparisons [3]. |
 | `"grid"` | Native exact 2D/3D Euclidean grid. | Native CUDA 2D/3D Euclidean grid. | Low-dimensional spatial or simulated data. |
-| `"vptree"` | Native exact CPU vantage-point tree. | Unsupported. | Low-dimensional CPU searches. |
+| `"vptree"` | Native exact CPU vantage-point tree for Euclidean, cosine, and correlation; zero-normalized non-Euclidean rows use exact CPU fallback. | Unsupported. | Low-dimensional CPU searches. |
 | `"sparse"` | Native exact sparse `dgCMatrix` CPU route. | Unsupported. | Sparse matrices without densifying. |
 | `"HNSW"` | FAISS CPU HNSW. | Unsupported. | High-recall approximate CPU graph search [5,16]. |
 | `"IVF"` | FAISS CPU IVF-Flat. | FAISS GPU IVF-Flat. | Large approximate search with coarse-list probing [1-2,16]. |

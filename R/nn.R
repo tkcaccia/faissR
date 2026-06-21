@@ -110,6 +110,12 @@ nn_compute <- function(data,
       backend <- "faiss_gpu_flat_correlation"
     } else if (backend %in% c("faiss_gpu_flat_cosine", "faiss_gpu_flat_correlation")) {
       backend <- backend
+    } else if (metric %in% c("cosine", "correlation") &&
+               backend %in% c("vptree", "cpu_vptree")) {
+      backend <- "cpu_vptree"
+    } else if (identical(metric, "inner_product") &&
+               backend %in% c("vptree", "cpu_vptree")) {
+      backend <- "cpu_vptree"
     } else if (!backend %in% c("cpu", "cpu_auto", "hnsw", "rcpphnsw", "cpu_hnsw")) {
       stop(
         "`metric = \"", metric, "\"` currently supports only `backend = \"cpu\"` ",
@@ -931,23 +937,75 @@ nn_compute <- function(data,
   }
 
   if (backend %in% c("vptree", "cpu_vptree")) {
-    if (!identical(metric, "euclidean")) {
-      stop("`backend = \"cpu_vptree\"` supports only Euclidean distances.", call. = FALSE)
+    if (identical(metric, "inner_product")) {
+      stop("`backend = \"cpu_vptree\"` does not support inner-product search.", call. = FALSE)
+    }
+    tree_data <- data
+    tree_points <- points
+    data_zero <- NULL
+    points_zero <- NULL
+    if (identical(metric, "cosine")) {
+      tree_data <- row_l2_normalize(data)
+      tree_points <- if (isTRUE(self_query)) tree_data else row_l2_normalize(points)
+      data_zero <- rowSums(tree_data * tree_data) <= 0
+      points_zero <- if (isTRUE(self_query)) data_zero else rowSums(tree_points * tree_points) <= 0
+    } else if (identical(metric, "correlation")) {
+      tree_data <- row_center_l2_normalize(data)
+      tree_points <- if (isTRUE(self_query)) tree_data else row_center_l2_normalize(points)
+      data_zero <- rowSums(tree_data * tree_data) <= 0
+      points_zero <- if (isTRUE(self_query)) data_zero else rowSums(tree_points * tree_points) <= 0
+    }
+    if (metric %in% c("cosine", "correlation") && (any(data_zero) || any(points_zero))) {
+      out <- nn_cpp(
+        data,
+        points,
+        as.integer(k),
+        metric,
+        FALSE,
+        FALSE,
+        0,
+        TRUE,
+        as.integer(n_threads),
+        isTRUE(exclude_self)
+      )
+      result <- finish_nn_result(out, "cpu_vptree", k, self_query, exact = TRUE, metric = metric)
+      attr(result, "spatial_index") <- list(
+        strategy = "native_exact_cpu_zero_safe_vptree_fallback",
+        backend = "cpu_vptree",
+        exact = TRUE,
+        metric_transform = if (identical(metric, "correlation")) {
+          "row_center_l2_normalize_vptree_unavailable_for_zero_rows"
+        } else {
+          "row_l2_normalize_vptree_unavailable_for_zero_rows"
+        },
+        fallback = TRUE,
+        n_threads = as.integer(normalize_nn_threads(n_threads))
+      )
+      return(result)
     }
     if (isTRUE(self_query)) {
-      out <- vptree_self_knn(data, k = if (isTRUE(exclude_self)) k else k - 1L, n_threads = n_threads)
+      out <- vptree_self_knn(tree_data, k = if (isTRUE(exclude_self)) k else k - 1L, n_threads = n_threads)
       if (!isTRUE(exclude_self)) {
-        out$indices <- cbind(seq_len(nrow(data)), out$indices)
-        out$distances <- cbind(rep(0, nrow(data)), out$distances)
+        out$indices <- cbind(seq_len(nrow(tree_data)), out$indices)
+        out$distances <- cbind(rep(0, nrow(tree_data)), out$distances)
       }
     } else {
-      out <- vptree_query_knn(data, points, k = k, n_threads = n_threads)
+      out <- vptree_query_knn(tree_data, tree_points, k = k, n_threads = n_threads)
     }
     result <- finish_nn_result(out, "cpu_vptree", k, self_query, exact = TRUE, metric = metric)
+    if (metric %in% c("cosine", "correlation")) {
+      result <- normalized_euclidean_to_similarity_distance(result, data_zero, points_zero)
+      result <- sort_knn_rows_by_distance_index(result)
+    }
     attr(result, "spatial_index") <- list(
       strategy = "native_exact_vptree",
       backend = "cpu_vptree",
       exact = TRUE,
+      metric_transform = if (metric %in% c("cosine", "correlation")) {
+        if (identical(metric, "correlation")) "row_center_l2_normalize_then_vptree" else "row_l2_normalize_then_vptree"
+      } else {
+        NA_character_
+      },
       nodes = as.integer(out$nodes),
       n_threads = as.integer(normalize_nn_threads(n_threads))
     )
@@ -1731,6 +1789,22 @@ sort_knn_rows_by_distance_index <- function(result) {
     ord <- order(result$distances[i, ], result$indices[i, ])
     result$indices[i, ] <- result$indices[i, ord]
     result$distances[i, ] <- result$distances[i, ord]
+  }
+  result
+}
+
+normalized_euclidean_to_similarity_distance <- function(result, data_zero, points_zero) {
+  if (ncol(result$indices) < 1L) return(result)
+  for (i in seq_len(nrow(result$indices))) {
+    neighbors <- result$indices[i, ]
+    both_zero <- isTRUE(points_zero[[i]]) & data_zero[neighbors]
+    one_zero <- xor(isTRUE(points_zero[[i]]), data_zero[neighbors])
+    values <- (result$distances[i, ] * result$distances[i, ]) / 2
+    values[values < 0 & values > -1e-8] <- 0
+    values[values > 2 & values < 2 + 1e-8] <- 2
+    if (any(both_zero)) values[both_zero] <- 0
+    if (any(one_zero)) values[one_zero] <- 1
+    result$distances[i, ] <- values
   }
   result
 }
@@ -3774,7 +3848,10 @@ grid_self_knn <- function(data,
 #'   \item `"bruteforce"`: exhaustive brute-force search. CUDA prefers RAPIDS
 #'   cuVS brute force; CPU maps to exact CPU search [3].
 #'   \item `"grid"`: native exact 2D/3D Euclidean spatial grid search.
-#'   \item `"vptree"`: native exact CPU vantage-point-tree search.
+#'   \item `"vptree"`: native exact CPU vantage-point-tree search for
+#'   Euclidean, cosine, and correlation. Cosine/correlation use normalized
+#'   Euclidean tree search when rows are nonzero/nonconstant and exact CPU
+#'   fallback otherwise. Inner product is unsupported.
 #'   \item `"sparse"`: native exact sparse `dgCMatrix` CPU search.
 #'   \item `"HNSW"`: FAISS CPU HNSW approximate graph-search index [5,16].
 #'   \item `"IVF"`: FAISS inverted-file index, trading exhaustive search for

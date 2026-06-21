@@ -60,7 +60,7 @@ Returns a `faissR_nn` list with `indices` and `distances` matrices. Indices are
 | `"flat"` | FAISS Flat index route for exhaustive L2 search. It is exact but can avoid some generic R wrapper overhead and uses FAISS CPU/GPU implementations when available [1-2,16]. |
 | `"bruteforce"` | Brute-force exhaustive search. On CUDA this prefers the RAPIDS cuVS brute-force backend; on CPU it maps to the exact CPU route [3]. |
 | `"grid"` | Native spatial grid search for 2D/3D Euclidean self-KNN. It is intended for low-dimensional spatial or simulated data and errors clearly outside supported dimensions. |
-| `"vptree"` | Native exact vantage-point-tree search for Euclidean CPU queries. It is mainly useful for low-dimensional CPU data where tree pruning helps. |
+| `"vptree"` | Native exact vantage-point-tree search for Euclidean CPU queries, plus cosine/correlation through normalized Euclidean tree search when safe. Zero-normalized rows use exact CPU fallback. |
 | `"sparse"` | Native exact sparse `dgCMatrix` CPU search. It keeps sparse input sparse instead of densifying. |
 | `"HNSW"` | FAISS CPU HNSW graph-search index. HNSW is a high-recall approximate nearest-neighbour graph method and is the default CPU approximate route for many large high-dimensional datasets [5,16]. |
 | `"IVF"` | FAISS inverted-file index. IVF partitions vectors into coarse lists and probes selected lists; it trades exactness for speed/memory and is useful for very large CPU/GPU searches [1-2,16]. |

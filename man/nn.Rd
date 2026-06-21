@@ -92,7 +92,10 @@ Method descriptions:
   \item `"bruteforce"`: exhaustive brute-force search. CUDA prefers RAPIDS
   cuVS brute force; CPU maps to exact CPU search [3].
   \item `"grid"`: native exact 2D/3D Euclidean spatial grid search.
-  \item `"vptree"`: native exact CPU vantage-point-tree search.
+  \item `"vptree"`: native exact CPU vantage-point-tree search for
+  Euclidean, cosine, and correlation. Cosine/correlation use normalized
+  Euclidean tree search when rows are nonzero/nonconstant and exact CPU
+  fallback otherwise. Inner product is unsupported.
   \item `"sparse"`: native exact sparse `dgCMatrix` CPU search.
   \item `"HNSW"`: FAISS CPU HNSW approximate graph-search index [5,16].
   \item `"IVF"`: FAISS inverted-file index, trading exhaustive search for

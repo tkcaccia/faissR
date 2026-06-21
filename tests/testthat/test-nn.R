@@ -406,6 +406,63 @@ test_that("VP-tree query KNN matches exact CPU neighbors", {
   expect_equal(tree$distances, exact$distances, tolerance = 5e-6)
 })
 
+test_that("VP-tree supports exact cosine and correlation metrics", {
+  set.seed(12133)
+  x <- matrix(rnorm(120L), ncol = 4L)
+  points <- matrix(rnorm(32L), ncol = 4L)
+  k <- 6L
+
+  for (metric in c("cosine", "correlation")) {
+    exact_self <- nn(x, k = k, backend = "cpu", method = "exact", metric = metric, n_threads = 2L)
+    tree_self <- nn(x, k = k, backend = "cpu", method = "vptree", metric = metric, n_threads = 2L)
+    expect_equal(attr(tree_self, "backend"), "cpu_vptree")
+    expect_equal(attr(tree_self, "metric"), metric)
+    expect_equal(attr(tree_self, "spatial_index")$metric_transform %in% c(
+      "row_l2_normalize_then_vptree",
+      "row_center_l2_normalize_then_vptree"
+    ), TRUE)
+    expect_equal(unname(tree_self$indices), unname(exact_self$indices))
+    expect_equal(unname(tree_self$distances), unname(exact_self$distances), tolerance = 1e-5)
+
+    exact_query <- nn(x, points, k = k, backend = "cpu", method = "exact", metric = metric, n_threads = 2L)
+    tree_query <- nn(x, points, k = k, backend = "cpu_vptree", metric = metric, n_threads = 2L)
+    expect_equal(unname(tree_query$indices), unname(exact_query$indices))
+    expect_equal(unname(tree_query$distances), unname(exact_query$distances), tolerance = 1e-5)
+  }
+
+  expect_error(
+    nn(x, k = k, backend = "cpu", method = "vptree", metric = "inner_product"),
+    "inner-product|inner_product"
+  )
+})
+
+test_that("VP-tree cosine and correlation use exact fallback for zero-normalized rows", {
+  x <- rbind(
+    matrix(0, nrow = 2L, ncol = 4L),
+    matrix(rnorm(96L), ncol = 4L)
+  )
+  points <- rbind(
+    matrix(0, nrow = 1L, ncol = 4L),
+    matrix(rnorm(28L), ncol = 4L)
+  )
+  k <- 6L
+
+  for (metric in c("cosine", "correlation")) {
+    exact_self <- nn(x, k = k, backend = "cpu", method = "exact", metric = metric, n_threads = 2L)
+    tree_self <- nn(x, k = k, backend = "cpu", method = "vptree", metric = metric, n_threads = 2L)
+    expect_equal(attr(tree_self, "backend"), "cpu_vptree")
+    expect_true(isTRUE(attr(tree_self, "spatial_index")$fallback))
+    expect_equal(unname(tree_self$indices), unname(exact_self$indices))
+    expect_equal(unname(tree_self$distances), unname(exact_self$distances), tolerance = 1e-12)
+
+    exact_query <- nn(x, points, k = k, backend = "cpu", method = "exact", metric = metric, n_threads = 2L)
+    tree_query <- nn(x, points, k = k, backend = "cpu_vptree", metric = metric, n_threads = 2L)
+    expect_true(isTRUE(attr(tree_query, "spatial_index")$fallback))
+    expect_equal(unname(tree_query$indices), unname(exact_query$indices))
+    expect_equal(unname(tree_query$distances), unname(exact_query$distances), tolerance = 1e-12)
+  }
+})
+
 test_that("generic CPU spatial KNN falls back to VP-tree for thin data", {
   set.seed(1214)
   x <- cbind(runif(3000L), rnorm(3000L, sd = 1e-5), rnorm(3000L, sd = 1e-5))
