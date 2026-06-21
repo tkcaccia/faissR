@@ -164,6 +164,9 @@ improvement runs. The `graph_cached` column records reuse within a cycle.
 `graph_sec` is the shared graph-construction time, `cluster_sec` is
 clustering-only time, and `total_sec` is `graph_sec + cluster_sec` for the
 complete graph-plus-clustering workflow represented by the row.
+The run configuration is saved as `graph_cluster_benchmark_config.csv`, and
+the raw row-level result table is saved as
+`graph_cluster_benchmark_results.csv`.
 `graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by
 dataset/k/graph-backend/cluster-backend/method/weight and reports success
 counts, median/min/max graph, clustering, and total time, ARI stability,
@@ -326,7 +329,10 @@ parameters, tuning policy, benchmark cycle, and ARI against `dataset$labels` whe
 available. The result table separates `requested_backend`, `resolved_backend`,
 and `backend_used`, so `"auto"` device policy and the actual implementation
 (`"faiss"`, `"cpu"`, `"cuda_faiss"`, `"cuda_cuvs"`, or `"stats"`) can be
-audited directly. When `stats` is part of the run, `kmeans_fast_vs_stats.csv` compares
+audited directly. The run configuration is saved as
+`kmeans_benchmark_config.csv`, and the raw row-level result table is saved as
+`kmeans_benchmark_results.csv`. When `stats` is part of the run,
+`kmeans_fast_vs_stats.csv` compares
 each successful `fast_kmeans()` row against `stats::kmeans` for the same
 dataset, cycle, and number of centers, reporting speedup, ARI delta, and
 withinss ratio. Use `--cycles=10` to repeat speed/ARI measurements without

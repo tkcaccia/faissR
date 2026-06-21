@@ -682,6 +682,7 @@ materials <- c(
   sprintf("- ARI tolerance for cycle recommendations: `%s`", ari_tolerance),
   sprintf("- Requested centers fallback: `%s`; labels override this when available", fallback_centers),
   "",
+  "`kmeans_benchmark_config.csv` records the run configuration. `kmeans_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, selected parameters, ARI, within-cluster sums of squares, and backend metadata.",
   "The result table records cycle, elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, total within-cluster sum of squares, iterations, selected k-means parameters, tuning policy, and ARI against dataset labels when labels are available.",
   "`kmeans_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI and elapsed time for a compact backwards-compatible summary.",
   "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. The `cycle` column supports repeated benchmark cycles such as `--cycles=10` for speed/ARI tuning.",

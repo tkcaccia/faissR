@@ -29,8 +29,16 @@ test_that("benchmark materials document key row-level and summary outputs", {
       "nn_metric_benchmark_results.csv",
       "nn_metric_capabilities.csv"
     ),
-    graph = "graph_cluster_best_by_dataset.csv",
-    kmeans = "kmeans_best_by_dataset.csv"
+    graph = c(
+      "graph_cluster_benchmark_config.csv",
+      "graph_cluster_benchmark_results.csv",
+      "graph_cluster_best_by_dataset.csv"
+    ),
+    kmeans = c(
+      "kmeans_benchmark_config.csv",
+      "kmeans_benchmark_results.csv",
+      "kmeans_best_by_dataset.csv"
+    )
   )
   scripts <- c(
     nn = test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
