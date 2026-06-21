@@ -162,7 +162,7 @@ with_elapsed_limit <- function(expr, timeout) {
   force(expr)
 }
 
-result_row <- function(dataset, n, p, k, graph_backend, cluster_backend, method,
+result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, method,
                        weight, n_clusters, n_threads, status, error = NA_character_,
                        load_sec = NA_real_, graph_sec = NA_real_,
                        cluster_sec = NA_real_, total_sec = NA_real_,
@@ -177,6 +177,7 @@ result_row <- function(dataset, n, p, k, graph_backend, cluster_backend, method,
     dataset = dataset,
     n = as.integer(n),
     p = as.integer(p),
+    cycle = as.integer(cycle),
     k = as.integer(k),
     graph_backend = graph_backend,
     graph_resolved_backend = graph_resolved_backend,
@@ -238,7 +239,7 @@ graph_build_expected_skip <- function(graph_backend) {
 }
 
 build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
-                             n_threads, timeout) {
+                             n_threads, timeout, cycle = 1L) {
   n <- nrow(data_obj$data)
   p <- ncol(data_obj$data)
   started <- proc.time()[["elapsed"]]
@@ -275,6 +276,7 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
         dataset = dataset_name,
         n = n,
         p = p,
+        cycle = cycle,
         k = k,
         graph_backend = graph_backend,
         cluster_backend = NA_character_,
@@ -295,7 +297,7 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
 run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
                             graph_cached, n_edges, k, graph_backend,
                             cluster_backend, method, weight, n_threads,
-                            target_mode, seed, timeout) {
+                            target_mode, seed, timeout, cycle = 1L) {
   n <- nrow(data_obj$data)
   p <- ncol(data_obj$data)
   labels <- data_obj$labels
@@ -332,6 +334,7 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       dataset = dataset_name,
       n = n,
       p = p,
+      cycle = cycle,
       k = k,
       graph_backend = graph_backend,
       cluster_backend = cluster_backend,
@@ -358,6 +361,7 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       dataset = dataset_name,
       n = n,
       p = p,
+      cycle = cycle,
       k = k,
       graph_backend = graph_backend,
       cluster_backend = cluster_backend,
@@ -394,6 +398,7 @@ n_threads <- as_int_arg(args$threads, 2L)
 configure_threads(n_threads)
 seed <- as_int_arg(args$seed, 1L)
 timeout <- as_int_arg(args$timeout, 600L)
+cycles <- as_int_arg(args$cycles, 1L)
 k_values <- as_int_vec_arg(split_arg(args$k_values, "15,50,100"), 50L)
 datasets <- split_arg(args$datasets, paste(c(
   dataset_index(data_root)$dataset,
@@ -411,10 +416,10 @@ suppressPackageStartupMessages(library(faissR))
 config <- data.frame(
   key = c("data_root", "out_dir", "datasets", "methods", "graph_backends",
           "cluster_backends", "k_values", "threads", "timeout", "weight",
-          "target_clusters", "seed"),
+          "target_clusters", "cycles", "seed"),
   value = c(data_root, out_dir, paste(datasets, collapse = ","), paste(methods, collapse = ","),
             paste(graph_backends, collapse = ","), paste(cluster_backends, collapse = ","),
-            paste(k_values, collapse = ","), n_threads, timeout, weight, target_mode, seed),
+            paste(k_values, collapse = ","), n_threads, timeout, weight, target_mode, cycles, seed),
   stringsAsFactors = FALSE
 )
 utils::write.csv(config, file.path(out_dir, "graph_cluster_benchmark_config.csv"), row.names = FALSE)
@@ -431,6 +436,7 @@ for (dataset_name in datasets) {
       dataset = dataset_name,
       n = NA_integer_,
       p = NA_integer_,
+      cycle = NA_integer_,
       k = NA_integer_,
       graph_backend = NA_character_,
       cluster_backend = NA_character_,
@@ -446,117 +452,124 @@ for (dataset_name in datasets) {
   }
   for (k in k_values) {
     for (graph_backend in graph_backends) {
-      graph_skip_reason <- graph_build_expected_skip(graph_backend)
-      if (!is.null(graph_skip_reason)) {
-        graph_build <- list(
-          status = "expected_skip",
-          graph = NULL,
-          graph_sec = NA_real_,
-          n_edges = NA_integer_,
-          weight = weight,
-          error = graph_skip_reason
-        )
-      } else if (all_graph_cluster_expected_skips(cluster_backends, methods)) {
-        graph_build <- list(
-          status = "skipped",
-          graph = NULL,
-          graph_sec = NA_real_,
-          n_edges = NA_integer_,
-          weight = weight,
-          error = "Graph construction skipped because every clustering row in this block is an expected skip."
-        )
-      } else {
-        graph_build <- build_graph_once(
-          data_obj = loaded,
-          dataset_name = dataset_name,
-          k = k,
-          graph_backend = graph_backend,
-          weight = weight,
-          n_threads = n_threads,
-          timeout = timeout
-        )
-      }
-      for (cluster_backend in cluster_backends) {
-        for (method in methods) {
-          row_id <- row_id + 1L
-          skip_reason <- graph_cluster_expected_skip(cluster_backend, method)
-          if (!is.null(skip_reason)) {
-            row <- result_row(
-              dataset = dataset_name,
-              n = nrow(loaded$data),
-              p = ncol(loaded$data),
-              k = k,
-              graph_backend = graph_backend,
-              cluster_backend = cluster_backend,
-              method = method,
-              weight = if (identical(graph_build$status, "success")) graph_build$weight else weight,
-              n_clusters = NULL,
-              n_threads = n_threads,
-              status = "expected_skip",
-              error = skip_reason,
-              graph_sec = if (identical(graph_build$status, "success")) graph_build$graph_sec else NA_real_,
-              total_sec = if (identical(graph_build$status, "success")) graph_build$graph_sec else NA_real_,
-              peak_rss_gb = read_peak_rss_gb(),
-              n_edges = if (identical(graph_build$status, "success")) graph_build$n_edges else NA_integer_,
-              graph_resolved_backend = if (identical(graph_build$status, "success")) graph_build$graph_resolved_backend else NA_character_,
-              graph_cached = identical(graph_build$status, "success"),
-              expected_skip = TRUE
+      for (cycle in seq_len(cycles)) {
+        cycle_seed <- seed + (cycle - 1L) * 1000003L
+        graph_skip_reason <- graph_build_expected_skip(graph_backend)
+        if (!is.null(graph_skip_reason)) {
+          graph_build <- list(
+            status = "expected_skip",
+            graph = NULL,
+            graph_sec = NA_real_,
+            n_edges = NA_integer_,
+            weight = weight,
+            error = graph_skip_reason
+          )
+        } else if (all_graph_cluster_expected_skips(cluster_backends, methods)) {
+          graph_build <- list(
+            status = "skipped",
+            graph = NULL,
+            graph_sec = NA_real_,
+            n_edges = NA_integer_,
+            weight = weight,
+            error = "Graph construction skipped because every clustering row in this block is an expected skip."
+          )
+        } else {
+          graph_build <- build_graph_once(
+            data_obj = loaded,
+            dataset_name = dataset_name,
+            k = k,
+            graph_backend = graph_backend,
+            weight = weight,
+            n_threads = n_threads,
+            timeout = timeout,
+            cycle = cycle
+          )
+        }
+        for (cluster_backend in cluster_backends) {
+          for (method in methods) {
+            row_id <- row_id + 1L
+            skip_reason <- graph_cluster_expected_skip(cluster_backend, method)
+            if (!is.null(skip_reason)) {
+              row <- result_row(
+                dataset = dataset_name,
+                n = nrow(loaded$data),
+                p = ncol(loaded$data),
+                cycle = cycle,
+                k = k,
+                graph_backend = graph_backend,
+                cluster_backend = cluster_backend,
+                method = method,
+                weight = if (identical(graph_build$status, "success")) graph_build$weight else weight,
+                n_clusters = NULL,
+                n_threads = n_threads,
+                status = "expected_skip",
+                error = skip_reason,
+                graph_sec = if (identical(graph_build$status, "success")) graph_build$graph_sec else NA_real_,
+                total_sec = if (identical(graph_build$status, "success")) graph_build$graph_sec else NA_real_,
+                peak_rss_gb = read_peak_rss_gb(),
+                n_edges = if (identical(graph_build$status, "success")) graph_build$n_edges else NA_integer_,
+                graph_resolved_backend = if (identical(graph_build$status, "success")) graph_build$graph_resolved_backend else NA_character_,
+                graph_cached = identical(graph_build$status, "success"),
+                expected_skip = TRUE
+              )
+            } else if (!identical(graph_build$status, "success")) {
+              row <- result_row(
+                dataset = dataset_name,
+                n = nrow(loaded$data),
+                p = ncol(loaded$data),
+                cycle = cycle,
+                k = k,
+                graph_backend = graph_backend,
+                cluster_backend = cluster_backend,
+                method = method,
+                weight = weight,
+                n_clusters = NULL,
+                n_threads = n_threads,
+                status = if (identical(graph_build$status, "expected_skip")) "expected_skip" else "failed",
+                error = graph_build$error,
+                graph_sec = graph_build$graph_sec,
+                total_sec = graph_build$graph_sec,
+                peak_rss_gb = read_peak_rss_gb(),
+                graph_resolved_backend = if (identical(graph_build$status, "success")) graph_build$graph_resolved_backend else NA_character_,
+                graph_cached = FALSE,
+                expected_skip = identical(graph_build$status, "expected_skip")
+              )
+            } else {
+              row <- run_cluster_one(
+                data_obj = loaded,
+                dataset_name = dataset_name,
+                graph_obj = graph_build$graph,
+                graph_sec = graph_build$graph_sec,
+                graph_cached = TRUE,
+                n_edges = graph_build$n_edges,
+                k = k,
+                graph_backend = graph_backend,
+                cluster_backend = cluster_backend,
+                method = method,
+                weight = graph_build$weight,
+                n_threads = n_threads,
+                target_mode = target_mode,
+                seed = cycle_seed,
+                timeout = timeout,
+                cycle = cycle
+              )
+            }
+            row$load_sec <- load_sec
+            results[[row_id]] <- row
+            utils::write.csv(
+              do.call(rbind, results),
+              file.path(out_dir, "graph_cluster_benchmark_results.csv"),
+              row.names = FALSE
             )
-          } else if (!identical(graph_build$status, "success")) {
-            row <- result_row(
-              dataset = dataset_name,
-              n = nrow(loaded$data),
-              p = ncol(loaded$data),
-              k = k,
-              graph_backend = graph_backend,
-              cluster_backend = cluster_backend,
-              method = method,
-              weight = weight,
-              n_clusters = NULL,
-              n_threads = n_threads,
-              status = if (identical(graph_build$status, "expected_skip")) "expected_skip" else "failed",
-              error = graph_build$error,
-              graph_sec = graph_build$graph_sec,
-              total_sec = graph_build$graph_sec,
-              peak_rss_gb = read_peak_rss_gb(),
-              graph_resolved_backend = if (identical(graph_build$status, "success")) graph_build$graph_resolved_backend else NA_character_,
-              graph_cached = FALSE,
-              expected_skip = identical(graph_build$status, "expected_skip")
-            )
-          } else {
-            row <- run_cluster_one(
-              data_obj = loaded,
-              dataset_name = dataset_name,
-              graph_obj = graph_build$graph,
-              graph_sec = graph_build$graph_sec,
-              graph_cached = TRUE,
-              n_edges = graph_build$n_edges,
-              k = k,
-              graph_backend = graph_backend,
-              cluster_backend = cluster_backend,
-              method = method,
-              weight = graph_build$weight,
-              n_threads = n_threads,
-              target_mode = target_mode,
-              seed = seed,
-              timeout = timeout
+            cat(
+              sprintf(
+                "[%s] dataset=%s cycle=%s k=%s graph=%s cluster=%s method=%s status=%s total=%.3f\n",
+                format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+                dataset_name, cycle, k, graph_backend, cluster_backend, method,
+                row$status, row$total_sec
+              )
             )
           }
-          row$load_sec <- load_sec
-          results[[row_id]] <- row
-          utils::write.csv(
-            do.call(rbind, results),
-            file.path(out_dir, "graph_cluster_benchmark_results.csv"),
-            row.names = FALSE
-          )
-          cat(
-            sprintf(
-              "[%s] dataset=%s k=%s graph=%s cluster=%s method=%s status=%s total=%.3f\n",
-              format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-              dataset_name, k, graph_backend, cluster_backend, method,
-              row$status, row$total_sec
-            )
-          )
         }
       }
     }
@@ -588,11 +601,12 @@ materials <- c(
   sprintf("- Graph backends: `%s`", paste(graph_backends, collapse = "`, `")),
   sprintf("- Clustering backends: `%s`", paste(cluster_backends, collapse = "`, `")),
   sprintf("- k values: `%s`", paste(k_values, collapse = "`, `")),
+  sprintf("- Cycles: `%s`", cycles),
   sprintf("- CPU thread cap: `%s`", n_threads),
   "",
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
   "When `target_clusters = \"labels\"`, Louvain and Leiden receive `n_clusters = length(unique(labels))`; random-walking is benchmarked without a cluster-count target because the public API does not support that option for random-walking.",
-  "Each KNN graph is built once per dataset/k/graph-backend/weight combination and reused across clustering methods and clustering backends. The `graph_cached` column records this reuse; `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
+  "Each KNN graph is built once per dataset/cycle/k/graph-backend/weight combination and reused across clustering methods and clustering backends within that cycle. The `cycle` column supports repeated benchmark cycles such as `--cycles=10`; `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
   "`graph_backend` and `cluster_backend` record the requested public backends. `graph_resolved_backend` and `cluster_resolved_backend` record the resolved public device policy after `auto` selection, so CPU/CUDA rows can be audited without opening the R objects.",
   "Unsupported graph-clustering combinations known from the public API, such as CUDA random_walking, are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. If every row in a graph-build block is an expected skip, graph construction is skipped and graph timing/edge columns remain `NA`.",
   "CUDA rows are recorded as failed when faissR was not built with the required CUDA/cuGraph support; the benchmark does not silently replace CUDA clustering with CPU clustering."

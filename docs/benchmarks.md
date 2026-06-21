@@ -90,8 +90,10 @@ modularity, and adjusted Rand index (ARI) against `dataset$labels` when labels
 are present. ARI is computed by the benchmark helper in
 `benchmark_scripts/source.R`; it is not part of the public package API.
 For reproducibility and speed, each KNN graph is built once per
-dataset/k/graph-backend/weight combination and reused across clustering
-methods and clustering backends. The `graph_cached` column records this reuse.
+dataset/cycle/k/graph-backend/weight combination and reused across clustering
+methods and clustering backends within that cycle. The `cycle` column supports
+repeated benchmark cycles, for example `--cycles=10` for repeated speed/ARI
+improvement runs. The `graph_cached` column records reuse within a cycle.
 `graph_sec` is the shared graph-construction time, `cluster_sec` is
 clustering-only time, and `total_sec` is `graph_sec + cluster_sec` for the
 complete graph-plus-clustering workflow represented by the row.
@@ -118,6 +120,7 @@ Rscript benchmark_scripts/benchmark_graph_clustering.R \
   --out_dir=/path/to/faissR_GRAPH_CLUSTER_CPU \
   --datasets=COIL20,USPS,FashionMNIST,MNIST \
   --k_values=15,50,100 \
+  --cycles=10 \
   --graph_backends=cpu \
   --cluster_backends=cpu \
   --methods=random_walking,louvain,leiden \
@@ -132,6 +135,7 @@ Rscript benchmark_scripts/benchmark_graph_clustering.R \
   --out_dir=/path/to/faissR_GRAPH_CLUSTER_CUDA \
   --datasets=COIL20,USPS,FashionMNIST,MNIST \
   --k_values=15,50,100 \
+  --cycles=10 \
   --graph_backends=cuda \
   --cluster_backends=cuda \
   --methods=louvain,leiden \
