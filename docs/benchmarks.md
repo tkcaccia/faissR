@@ -80,6 +80,9 @@ explicitly before launch. The script no longer treats an unrelated active
 pollution on local machines. CPU worker threads are controlled with environment
 variables such as `OMP_NUM_THREADS`; the benchmark worker avoids loading
 optional thread-control helper packages before FAISS/cuVS.
+Benchmark #1 accepts the public metric aliases `euclidean`, `pearson`, `cor`,
+`ip`, and `innerproduct`, but unknown metric labels now stop the launcher before
+workers are submitted.
 
 The same explicit-runtime convention is used by the NN metrics and k-means
 benchmark scripts.

@@ -631,16 +631,20 @@ test_that("legacy Benchmark #1 defaults to all four public metrics", {
     c("l2", "cosine", "correlation", "inner_product")
   )
   expect_equal(
-    env$benchmark1_metric_values("euclidean,pearson,ip,unknown", env_metrics = NA_character_),
+    env$benchmark1_metric_values("euclidean,pearson,ip", env_metrics = NA_character_),
     c("l2", "correlation", "inner_product")
   )
   expect_equal(
     env$benchmark1_metric_values(metrics = NULL, env_metrics = "cosine,innerproduct"),
     c("cosine", "inner_product")
   )
-  expect_equal(
+  expect_error(
     env$benchmark1_metric_values("unknown", env_metrics = NA_character_),
-    c("l2", "cosine", "correlation", "inner_product")
+    "Invalid value\\(s\\): unknown"
+  )
+  expect_error(
+    env$benchmark1_metric_values("", env_metrics = ""),
+    "at least one metric"
   )
 })
 

@@ -78,16 +78,32 @@ if (!metric %in% c("l2", "cosine", "correlation", "inner_product")) metric <- "l
 benchmark1_metric_values <- function(metrics = NULL,
                                      env_metrics = Sys.getenv("FAISSR_BENCHMARK1_METRICS", unset = NA_character_)) {
   raw <- metrics %||% env_metrics
-  if (length(raw) != 1L || is.na(raw) || !nzchar(raw)) {
+  if (length(raw) != 1L || is.na(raw)) {
     raw <- "l2,cosine,correlation,inner_product"
   }
-  values <- strsplit(raw, ",", fixed = TRUE)[[1L]]
-  values <- unique(tolower(trimws(values)))
+  if (!nzchar(raw)) {
+    stop("`metrics` must contain at least one metric.", call. = FALSE)
+  }
+  values <- trimws(strsplit(raw, ",", fixed = TRUE)[[1L]])
+  values <- unique(tolower(values[nzchar(values)]))
   values[values %in% c("euclidean")] <- "l2"
   values[values %in% c("ip", "innerproduct")] <- "inner_product"
   values[values %in% c("cor", "pearson")] <- "correlation"
-  values <- unique(values[values %in% c("l2", "cosine", "correlation", "inner_product")])
-  if (!length(values)) values <- c("l2", "cosine", "correlation", "inner_product")
+  valid <- c("l2", "cosine", "correlation", "inner_product")
+  invalid <- values[!values %in% valid]
+  if (length(invalid)) {
+    stop(
+      "`metrics` must contain only Benchmark #1 metrics: ",
+      paste(valid, collapse = ", "),
+      ". Invalid value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  if (!length(values)) {
+    stop("`metrics` must contain at least one metric.", call. = FALSE)
+  }
   values
 }
 
