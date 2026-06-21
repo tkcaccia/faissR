@@ -33,7 +33,8 @@ Distance choices belong in `metric`, not in `method`.
 Use `backend_info()` to inspect which compiled CPU, FAISS, CUDA, cuVS, and
 cuGraph capabilities are available on a given machine.
 Use `nn_capabilities()` to return the same method/backend/metric support matrix
-as a data frame for benchmark preflight checks.
+as a data frame for benchmark preflight checks, including rows for
+`backend = "auto"`, `"cpu"`, and `"cuda"`.
 
 ## Method Summary
 

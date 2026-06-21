@@ -1433,8 +1433,9 @@ faissr_option <- function(name, default = NULL) {
 #' supported by design from combinations that should be treated as expected
 #' skips in benchmarks.
 #'
-#' @return A data frame with one row per public `method`, `backend`, and
-#'   `metric` combination. Columns include `supported`, `exact`,
+#' @return A data frame with one row per public `method`, `backend` (`"auto"`,
+#'   `"cpu"`, or `"cuda"`), and `metric` combination. Columns include
+#'   `supported`, `exact`,
 #'   `implementation`, and `notes`.
 #' @examples
 #' caps <- nn_capabilities()
@@ -1442,7 +1443,7 @@ faissr_option <- function(name, default = NULL) {
 #' @export
 nn_capabilities <- function() {
   methods <- nn_method_labels()
-  backends <- c("cpu", "cuda")
+  backends <- c("auto", "cpu", "cuda")
   metrics <- nn_metric_labels()
   rows <- vector("list", length(methods) * length(backends) * length(metrics))
   i <- 0L
@@ -1469,7 +1470,30 @@ nn_capability_row <- function(method, backend, metric) {
   euclidean <- identical(metric, "euclidean")
   non_ip_metric <- metric %in% c("euclidean", "cosine", "correlation")
 
-  if (identical(method, "auto")) {
+  if (identical(backend, "auto")) {
+    cpu <- nn_capability_row(method, "cpu", metric)
+    cuda <- nn_capability_row(method, "cuda", metric)
+    supported <- isTRUE(cpu$supported[[1L]]) || isTRUE(cuda$supported[[1L]])
+    exact_values <- c(
+      if (isTRUE(cpu$supported[[1L]])) cpu$exact[[1L]] else NA,
+      if (isTRUE(cuda$supported[[1L]])) cuda$exact[[1L]] else NA
+    )
+    exact_values <- exact_values[!is.na(exact_values)]
+    exact <- if (length(exact_values)) all(as.logical(exact_values)) else NA
+    implementation <- "runtime CPU/CUDA selector"
+    notes <- if (supported) {
+      paste(
+        "Auto backend uses CUDA only when the selected method/metric has a",
+        "validated CUDA route and the required runtime is available; otherwise",
+        "it uses the CPU route when one exists."
+      )
+    } else {
+      paste(
+        "No CPU or CUDA route is exposed for this public method/metric",
+        "combination."
+      )
+    }
+  } else if (identical(method, "auto")) {
     if (identical(backend, "cpu")) {
       supported <- all_metrics
       exact <- NA
@@ -1631,8 +1655,7 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
   if (identical(requested_device, "auto") && !identical(method, "auto")) {
     if (method %in% c("vptree", "sparse", "hnsw", "nsg")) {
       device <- "cpu"
-    } else if (identical(method, "cagra") &&
-               (isTRUE(cuda_available()) || isTRUE(cuvs_available()))) {
+    } else if (identical(method, "cagra")) {
       device <- "cuda"
     }
   }

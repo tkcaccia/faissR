@@ -59,6 +59,7 @@ test_that("NN methods documentation metric table agrees with nn_capabilities", {
 
   caps <- nn_capabilities()
   supported <- caps[caps$supported, c("method", "backend", "metric")]
+  supported <- supported[supported$backend %in% c("cpu", "cuda"), , drop = FALSE]
   supported <- supported[order(supported$method, supported$backend, supported$metric), , drop = FALSE]
   documented <- documented[order(documented$method, documented$backend, documented$metric), , drop = FALSE]
   row.names(supported) <- NULL

@@ -109,13 +109,13 @@ test_that("nn_capabilities documents the public method metric matrix", {
 
   expect_s3_class(caps, "data.frame")
   expect_setequal(caps$method, methods)
-  expect_setequal(caps$backend, c("cpu", "cuda"))
+  expect_setequal(caps$backend, c("auto", "cpu", "cuda"))
   expect_setequal(caps$metric, metrics)
   expect_identical(
     names(caps),
     c("method", "backend", "metric", "supported", "exact", "implementation", "notes")
   )
-  expect_equal(nrow(caps), length(methods) * 2L * length(metrics))
+  expect_equal(nrow(caps), length(methods) * 3L * length(metrics))
   expect_equal(anyDuplicated(caps[c("method", "backend", "metric")]), 0L)
 
   expect_true(caps$supported[caps$method == "flat" & caps$metric == "correlation" & caps$backend == "cuda"])
@@ -143,6 +143,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
 
 test_that("nn_capabilities agrees with public backend resolver", {
   caps <- nn_capabilities()
+  expect_equal(sort(unique(caps$backend)), c("auto", "cpu", "cuda"))
   for (i in seq_len(nrow(caps))) {
     row <- caps[i, , drop = FALSE]
     resolved <- tryCatch(
@@ -166,6 +167,26 @@ test_that("nn_capabilities agrees with public backend resolver", {
         )
       )
     }
+  }
+})
+
+test_that("nn_capabilities exposes auto backend as CPU/CUDA support union", {
+  caps <- nn_capabilities()
+  keys <- unique(caps[, c("method", "metric"), drop = FALSE])
+  for (i in seq_len(nrow(keys))) {
+    method <- keys$method[[i]]
+    metric <- keys$metric[[i]]
+    auto <- caps[caps$backend == "auto" & caps$method == method & caps$metric == metric, , drop = FALSE]
+    cpu <- caps[caps$backend == "cpu" & caps$method == method & caps$metric == metric, , drop = FALSE]
+    cuda <- caps[caps$backend == "cuda" & caps$method == method & caps$metric == metric, , drop = FALSE]
+    expect_equal(nrow(auto), 1L)
+    expect_equal(nrow(cpu), 1L)
+    expect_equal(nrow(cuda), 1L)
+    expect_equal(
+      auto$supported[[1L]],
+      isTRUE(cpu$supported[[1L]]) || isTRUE(cuda$supported[[1L]]),
+      info = sprintf("%s/%s", method, metric)
+    )
   }
 })
 

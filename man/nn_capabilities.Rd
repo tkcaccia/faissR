@@ -5,8 +5,9 @@
 nn_capabilities()
 }
 \value{
-A data frame with one row per public \code{method}, \code{backend}, and
-\code{metric} combination. Columns include \code{supported}, \code{exact},
+A data frame with one row per public \code{method}, \code{backend}
+(\code{"auto"}, \code{"cpu"}, or \code{"cuda"}), and \code{metric}
+combination. Columns include \code{supported}, \code{exact},
 \code{implementation}, and \code{notes}.
 }
 \description{

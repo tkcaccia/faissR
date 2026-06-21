@@ -111,8 +111,9 @@ notes. The boolean helpers return a single `TRUE`/`FALSE` value. They are
 useful for diagnostics and examples, but explicit backend calls still validate
 availability at execution time.
 `nn_capabilities()` returns a data frame with one row per public
-method/backend/metric combination and marks unsupported combinations before a
-benchmark tries to run them.
+method/backend/metric combination, including `backend = "auto"`, `"cpu"`, and
+`"cuda"`, and marks unsupported combinations before a benchmark tries to run
+them.
 
 The capability table is design-level. Runtime auto-selection can still choose
 CPU when the public CUDA design route needs a missing optional component. For
