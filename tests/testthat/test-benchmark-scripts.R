@@ -729,6 +729,67 @@ test_that("k-means fast comparison guards withinss ratios", {
   expect_true(all(is.finite(out$fast_median_speed_ratio)))
 })
 
+test_that("k-means fast comparison guards speed ratios and ARI gaps", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = c("A", "A", "B", "B"),
+    method = c("fast_kmeans", "stats", "fast_kmeans", "stats"),
+    backend = c("cpu", "stats", "cpu", "stats"),
+    backend_used = c("faiss", "stats", "faiss", "stats"),
+    resolved_backend = c("cpu", "stats", "cpu", "stats"),
+    centers = c(3L, 3L, 3L, 3L),
+    success_cycles = c(1L, 1L, 1L, 1L),
+    median_elapsed_sec = c(1, 0, 1, 1),
+    median_ari = c(0.9, 0.9, NA, 0.9),
+    min_ari = c(0.9, 0.9, NA, 0.9),
+    median_tot_withinss = c(10, 10, 10, 10),
+    median_iter = c(5, 5, 5, 5),
+    median_max_iter = c(100, 100, 100, 100),
+    median_n_init = c(1, 1, 1, 1),
+    median_tol = c(1e-4, 1e-4, 1e-4, 1e-4),
+    tuning_policy = c("auto", "stats", "auto", "stats")
+  )
+  recommendations <- cycle_summary[cycle_summary$method == "stats", , drop = FALSE]
+  recommendations$recommendation_basis <- "fastest_within_ari_tolerance"
+
+  out <- env$compare_fast_kmeans_to_recommendations(cycle_summary, recommendations)
+  expect_true(is.na(out$fast_median_speed_ratio[out$dataset == "A"]))
+  expect_true(is.na(out$fast_median_ari_gap[out$dataset == "B"]))
+  expect_true(is.finite(out$fast_median_speed_ratio[out$dataset == "B"]))
+})
+
+test_that("k-means fast-vs-stats comparison guards derived metrics", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+  ok <- data.frame(
+    dataset = c("A", "A", "B", "B"),
+    method = c("fast_kmeans", "stats", "fast_kmeans", "stats"),
+    backend = c("cpu", "stats", "cuda", "stats"),
+    backend_used = c("faiss", "stats", "cuda", "stats"),
+    resolved_backend = c("cpu", "stats", "cuda", "stats"),
+    centers = c(3L, 3L, 4L, 4L),
+    cycle = c(1L, 1L, 1L, 1L),
+    elapsed_sec = c(0, 1, 2, 4),
+    tot_withinss = c(10, 0, 10, 20),
+    ari = c(0.9, 0.9, NA, 0.8),
+    iter = c(5L, 5L, 5L, 5L),
+    status = "success"
+  )
+
+  out <- env$compare_fast_kmeans_to_stats(ok)
+
+  expect_true(is.na(out$speedup_vs_stats[out$dataset == "A"]))
+  expect_true(is.na(out$withinss_ratio_vs_stats[out$dataset == "A"]))
+  expect_true(is.na(out$ari_delta_vs_stats[out$dataset == "B"]))
+  expect_equal(out$speedup_vs_stats[out$dataset == "B"], 2)
+  expect_equal(out$withinss_ratio_vs_stats[out$dataset == "B"], 0.5)
+})
+
 test_that("graph benchmark defaults cover requested methods backends and k grid", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),

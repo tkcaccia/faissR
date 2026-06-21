@@ -374,17 +374,43 @@ compare_fast_kmeans_to_recommendations <- function(cycle_summary, recommendation
   comparison$fast_is_recommended_method <- comparison$fast_method == comparison$recommended_method
   comparison$fast_uses_recommended_backend <- comparison$fast_backend == comparison$recommended_backend
   comparison$fast_uses_recommended_implementation <- comparison$fast_backend_used == comparison$recommended_backend_used
-  comparison$fast_median_speed_ratio <- ifelse(
-    comparison$recommended_median_elapsed_sec > 0,
-    comparison$fast_median_elapsed_sec / comparison$recommended_median_elapsed_sec,
-    ifelse(comparison$fast_median_elapsed_sec == 0, 1, Inf)
+  comparison$fast_median_speed_ratio <- safe_positive_ratio(
+    comparison$fast_median_elapsed_sec,
+    comparison$recommended_median_elapsed_sec
   )
-  comparison$fast_median_ari_gap <- comparison$recommended_median_ari - comparison$fast_median_ari
+  comparison$fast_median_ari_gap <- safe_difference(
+    comparison$recommended_median_ari,
+    comparison$fast_median_ari
+  )
   comparison$fast_withinss_ratio <- safe_positive_ratio(
     comparison$fast_median_tot_withinss,
     comparison$recommended_median_tot_withinss
   )
   comparison[order(comparison$dataset, comparison$centers, comparison$fast_backend), , drop = FALSE]
+}
+
+compare_fast_kmeans_to_stats <- function(ok) {
+  fast_rows <- ok[ok$method == "fast_kmeans", , drop = FALSE]
+  stats_rows <- ok[ok$method == "stats", , drop = FALSE]
+  if (!nrow(fast_rows) || !nrow(stats_rows)) return(data.frame())
+  comparison <- merge(
+    fast_rows,
+    stats_rows[, c("dataset", "centers", "cycle", "elapsed_sec", "tot_withinss", "ari", "iter"), drop = FALSE],
+    by = c("dataset", "centers", "cycle"),
+    suffixes = c("_fast", "_stats"),
+    all = FALSE
+  )
+  if (!nrow(comparison)) return(comparison)
+  comparison$speedup_vs_stats <- safe_positive_ratio(
+    comparison$elapsed_sec_stats,
+    comparison$elapsed_sec_fast
+  )
+  comparison$ari_delta_vs_stats <- safe_difference(comparison$ari_fast, comparison$ari_stats)
+  comparison$withinss_ratio_vs_stats <- safe_positive_ratio(
+    comparison$tot_withinss_fast,
+    comparison$tot_withinss_stats
+  )
+  comparison[order(comparison$dataset, comparison$backend), , drop = FALSE]
 }
 
 safe_positive_ratio <- function(numerator, denominator) {
@@ -395,6 +421,17 @@ safe_positive_ratio <- function(numerator, denominator) {
   denominator <- rep(denominator, length.out = length(out))
   ok <- is.finite(numerator) & is.finite(denominator) & denominator > 0
   out[ok] <- numerator[ok] / denominator[ok]
+  out
+}
+
+safe_difference <- function(left, right) {
+  left <- suppressWarnings(as.numeric(left))
+  right <- suppressWarnings(as.numeric(right))
+  out <- rep(NA_real_, max(length(left), length(right)))
+  left <- rep(left, length.out = length(out))
+  right <- rep(right, length.out = length(out))
+  ok <- is.finite(left) & is.finite(right)
+  out[ok] <- left[ok] - right[ok]
   out
 }
 
@@ -677,31 +714,13 @@ if (nrow(ok)) {
     )
   }
 
-  fast_rows <- ok[ok$method == "fast_kmeans", , drop = FALSE]
-  stats_rows <- ok[ok$method == "stats", , drop = FALSE]
-  if (nrow(fast_rows) && nrow(stats_rows)) {
-    comparison <- merge(
-      fast_rows,
-      stats_rows[, c("dataset", "centers", "cycle", "elapsed_sec", "tot_withinss", "ari", "iter"), drop = FALSE],
-      by = c("dataset", "centers", "cycle"),
-      suffixes = c("_fast", "_stats"),
-      all = FALSE
+  comparison <- compare_fast_kmeans_to_stats(ok)
+  if (nrow(comparison)) {
+    utils::write.csv(
+      comparison,
+      file.path(out_dir, "kmeans_fast_vs_stats.csv"),
+      row.names = FALSE
     )
-    if (nrow(comparison)) {
-      comparison$speedup_vs_stats <- ifelse(
-        comparison$elapsed_sec_fast > 0,
-        comparison$elapsed_sec_stats / comparison$elapsed_sec_fast,
-        ifelse(comparison$elapsed_sec_stats == 0, 1, Inf)
-      )
-      comparison$ari_delta_vs_stats <- comparison$ari_fast - comparison$ari_stats
-      comparison$withinss_ratio_vs_stats <- comparison$tot_withinss_fast / comparison$tot_withinss_stats
-      comparison <- comparison[order(comparison$dataset, comparison$backend), , drop = FALSE]
-      utils::write.csv(
-        comparison,
-        file.path(out_dir, "kmeans_fast_vs_stats.csv"),
-        row.names = FALSE
-      )
-    }
   }
 }
 
@@ -725,10 +744,10 @@ materials <- c(
   "`kmeans_benchmark_config.csv` records the run configuration. `kmeans_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, selected parameters, ARI, within-cluster sums of squares, and backend metadata.",
   "The result table records cycle, elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, total within-cluster sum of squares, iterations, selected k-means parameters, tuning policy, and ARI against dataset labels when labels are available.",
   "`kmeans_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, elapsed time, and total within-cluster sum of squares for a compact backwards-compatible summary.",
-  "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. The `cycle` column supports repeated benchmark cycles such as `--cycles=10` for speed/ARI tuning.",
+  "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. Speedups, ARI deltas, and withinss ratios are `NA` when the required timing or quality values are missing or invalid. The `cycle` column supports repeated benchmark cycles such as `--cycles=10` for speed/ARI tuning.",
   "`kmeans_cycle_summary.csv` aggregates successful rows across cycles by dataset/method/backend/centers and reports success counts, median/min/max elapsed time, ARI stability, withinss stability, iteration counts, and resolved backend metadata.",
   "`kmeans_recommendations_from_cycles.csv` selects the fastest row within `ari_tolerance` of the best median ARI for each dataset/centers combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median times are broken by higher median ARI and then lower median total within-cluster sum of squares. When ARI is unavailable it selects the fastest median-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
-  "`kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median ARI gap, withinss ratio, and backend/implementation agreement. The withinss ratio is `NA` when the recommended within-cluster sum of squares is unavailable or non-positive.",
+  "`kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median ARI gap, withinss ratio, and backend/implementation agreement. Speed ratios, ARI gaps, and withinss ratios are `NA` when the required timing or quality values are missing or invalid.",
   "Explicit CUDA requests whose required CUDA, FAISS GPU, or cuVS k-means runtime is unavailable are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`; `resolved_backend` remains `cuda` so the skipped public device request is auditable. `backend = \"auto\"` resolves to CPU instead of becoming an expected skip when no k-means-capable CUDA route is available. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_kmeans.md"))
