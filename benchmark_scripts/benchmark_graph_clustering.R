@@ -209,6 +209,15 @@ graph_cluster_expected_skip <- function(cluster_backend, method) {
   NULL
 }
 
+all_graph_cluster_expected_skips <- function(cluster_backends, methods) {
+  checks <- unlist(lapply(cluster_backends, function(cluster_backend) {
+    vapply(methods, function(method) {
+      !is.null(graph_cluster_expected_skip(cluster_backend, method))
+    }, logical(1))
+  }), use.names = FALSE)
+  length(checks) > 0L && all(checks)
+}
+
 build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
                              n_threads, timeout) {
   n <- nrow(data_obj$data)
@@ -305,7 +314,7 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       graph_backend = graph_backend,
       cluster_backend = cluster_backend,
       method = method,
-      weight = attr(out$graph, "faissR_graph")$weight %||% weight,
+      weight = weight,
       n_clusters = n_clusters,
       n_threads = n_threads,
       status = "success",
@@ -413,15 +422,26 @@ for (dataset_name in datasets) {
   }
   for (k in k_values) {
     for (graph_backend in graph_backends) {
-      graph_build <- build_graph_once(
-        data_obj = loaded,
-        dataset_name = dataset_name,
-        k = k,
-        graph_backend = graph_backend,
-        weight = weight,
-        n_threads = n_threads,
-        timeout = timeout
-      )
+      if (all_graph_cluster_expected_skips(cluster_backends, methods)) {
+        graph_build <- list(
+          status = "skipped",
+          graph = NULL,
+          graph_sec = NA_real_,
+          n_edges = NA_integer_,
+          weight = weight,
+          error = "Graph construction skipped because every clustering row in this block is an expected skip."
+        )
+      } else {
+        graph_build <- build_graph_once(
+          data_obj = loaded,
+          dataset_name = dataset_name,
+          k = k,
+          graph_backend = graph_backend,
+          weight = weight,
+          n_threads = n_threads,
+          timeout = timeout
+        )
+      }
       for (cluster_backend in cluster_backends) {
         for (method in methods) {
           row_id <- row_id + 1L
@@ -536,7 +556,7 @@ materials <- c(
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
   "When `target_clusters = \"labels\"`, Louvain and Leiden receive `n_clusters = length(unique(labels))`; random-walking is benchmarked without a cluster-count target because the public API does not support that option for random-walking.",
   "Each KNN graph is built once per dataset/k/graph-backend/weight combination and reused across clustering methods and clustering backends. The `graph_cached` column records this reuse; `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
-  "Unsupported graph-clustering combinations known from the public API, such as CUDA random_walking, are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
+  "Unsupported graph-clustering combinations known from the public API, such as CUDA random_walking, are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. If every row in a graph-build block is an expected skip, graph construction is skipped and graph timing/edge columns remain `NA`.",
   "CUDA rows are recorded as failed when faissR was not built with the required CUDA/cuGraph support; the benchmark does not silently replace CUDA clustering with CPU clustering."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_graph_clustering.md"))
