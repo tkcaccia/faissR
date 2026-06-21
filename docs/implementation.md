@@ -334,9 +334,13 @@ policy is recorded in `result$parameters$tuning`; its shape metadata includes
 estimated work, `n_per_center`, and flags such as `many_centers` and
 `small_many_centers`. Small many-cluster problems can keep 100 Lloyd iterations
 and use three restarts when `n / centers` remains large enough, while genuinely
-large or high-dimensional problems keep cheaper settings. The `resolved_from`
-field records whether `max_iter`, `n_init`, and `tol` were selected by
-auto/default rules or supplied explicitly.
+large or high-dimensional problems keep cheaper settings. For benchmark-like
+shapes, MNIST70k with 10 centres uses 75 iterations and one restart,
+million-row low-dimensional data uses 50 iterations, one restart, and
+`tol = 1e-3`, while a small 50,000 x 10 / 100-cluster job keeps 100 iterations
+and three restarts. These are fixed rules, not pilot benchmark loops. The
+`resolved_from` field records whether `max_iter`, `n_init`, and `tol` were
+selected by auto/default rules or supplied explicitly.
 
 The public backend policy is the same as for KNN: `backend = "auto"` uses
 CUDA only when CUDA plus FAISS GPU k-means or direct cuVS k-means is compiled

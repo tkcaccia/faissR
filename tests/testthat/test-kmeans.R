@@ -99,6 +99,61 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(explicit$parameters$tuning$resolved_from$tol, "explicit")
 })
 
+test_that("fast_kmeans auto tuning is shape and center-count aware for benchmark shapes", {
+  mnist10 <- faissR:::kmeans_auto_params(
+    n = 70000L,
+    p = 784L,
+    centers = 10L,
+    tuning = "auto"
+  )
+  expect_equal(mnist10$max_iter, 75L)
+  expect_equal(mnist10$n_init, 1L)
+  expect_equal(mnist10$tol, 1e-4)
+  expect_true(isTRUE(mnist10$high_dim))
+  expect_false(isTRUE(mnist10$large_n))
+  expect_false(isTRUE(mnist10$many_centers))
+  expect_equal(mnist10$n_per_center, 7000)
+
+  flow10 <- faissR:::kmeans_auto_params(
+    n = 1000000L,
+    p = 32L,
+    centers = 10L,
+    tuning = "auto"
+  )
+  expect_equal(flow10$max_iter, 50L)
+  expect_equal(flow10$n_init, 1L)
+  expect_equal(flow10$tol, 1e-3)
+  expect_true(isTRUE(flow10$large_n))
+  expect_false(isTRUE(flow10$high_dim))
+  expect_equal(flow10$n_per_center, 100000)
+
+  small_many <- faissR:::kmeans_auto_params(
+    n = 50000L,
+    p = 10L,
+    centers = 100L,
+    tuning = "auto"
+  )
+  expect_equal(small_many$max_iter, 100L)
+  expect_equal(small_many$n_init, 3L)
+  expect_equal(small_many$tol, 1e-4)
+  expect_true(isTRUE(small_many$many_centers))
+  expect_true(isTRUE(small_many$small_many_centers))
+  expect_equal(small_many$n_per_center, 500)
+
+  highdim_many <- faissR:::kmeans_auto_params(
+    n = 70000L,
+    p = 784L,
+    centers = 100L,
+    tuning = "auto"
+  )
+  expect_equal(highdim_many$max_iter, 50L)
+  expect_equal(highdim_many$n_init, 1L)
+  expect_equal(highdim_many$tol, 1e-3)
+  expect_true(isTRUE(highdim_many$high_dim))
+  expect_true(isTRUE(highdim_many$many_centers))
+  expect_false(isTRUE(highdim_many$small_many_centers))
+})
+
 test_that("fast_kmeans auto backend requires a k-means capable CUDA route", {
   expect_equal(
     faissR:::resolve_fast_kmeans_backend(
