@@ -60,6 +60,48 @@ test_that("benchmark materials document key row-level and summary outputs", {
   }
 })
 
+test_that("benchmark dataset defaults use the requested real and simulated datasets", {
+  real_datasets <- c(
+    "COIL20",
+    "USPS",
+    "FashionMNIST",
+    "FlowRepository_FR-FCM-ZYRM_files",
+    "flow18",
+    "MNIST",
+    "imagenet",
+    "MetRef",
+    "mass41"
+  )
+  scripts <- list(
+    nn = list(
+      path = test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+      stop = "args <- parse_args()",
+      simulated = c("SimulatedUniform2D", "SimulatedUniform3D")
+    ),
+    graph = list(
+      path = test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+      stop = "args <- parse_args()",
+      simulated = c("SimulatedUniform2D", "SimulatedUniform3D")
+    ),
+    kmeans = list(
+      path = test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+      stop = "args <- parse_args()",
+      simulated = "SimulatedTiny3Clusters"
+    )
+  )
+
+  for (name in names(scripts)) {
+    script <- scripts[[name]]
+    env <- source_benchmark_helpers(script$path, script$stop)
+    expect_equal(env$dataset_index("/data")$dataset, real_datasets, info = name)
+    default_datasets <- env$split_arg(
+      NULL,
+      paste(c(env$dataset_index("/data")$dataset, script$simulated), collapse = ",")
+    )
+    expect_equal(default_datasets, c(real_datasets, script$simulated), info = name)
+  }
+})
+
 test_that("NN metric benchmark preflights unsupported NSG metrics as expected skips", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
