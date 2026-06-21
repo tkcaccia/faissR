@@ -307,6 +307,54 @@ summarize_kmeans_cycles <- function(ok) {
   out[order(out$dataset, -out$median_ari, out$median_elapsed_sec), , drop = FALSE]
 }
 
+recommend_kmeans_methods <- function(cycle_summary, ari_tolerance) {
+  parts <- split(cycle_summary, cycle_summary$dataset)
+  recommendations <- lapply(parts, function(x) {
+    has_ari <- is.finite(x$median_ari)
+    candidates <- if (any(has_ari)) {
+      best_ari <- max(x$median_ari[has_ari])
+      x[has_ari & x$median_ari >= best_ari - ari_tolerance, , drop = FALSE]
+    } else {
+      x
+    }
+    candidates <- candidates[order(candidates$median_elapsed_sec), , drop = FALSE]
+    candidates[1L, , drop = FALSE]
+  })
+  out <- do.call(rbind, recommendations)
+  row.names(out) <- NULL
+  out[order(out$dataset), , drop = FALSE]
+}
+
+compare_fast_kmeans_to_recommendations <- function(cycle_summary, recommendations) {
+  if (!nrow(recommendations)) return(recommendations)
+  fast <- cycle_summary[cycle_summary$method == "fast_kmeans", , drop = FALSE]
+  if (!nrow(fast)) return(data.frame())
+  keys <- c("dataset", "centers")
+  keep <- c(
+    keys, "method", "backend", "backend_used", "resolved_backend",
+    "success_cycles", "median_elapsed_sec", "median_ari", "min_ari",
+    "median_tot_withinss", "median_iter", "median_max_iter", "median_n_init",
+    "median_tol", "tuning_policy"
+  )
+  fast <- fast[, keep, drop = FALSE]
+  recommendations <- recommendations[, keep, drop = FALSE]
+  names(fast)[match(keep[-seq_along(keys)], names(fast))] <- paste0("fast_", keep[-seq_along(keys)])
+  names(recommendations)[match(keep[-seq_along(keys)], names(recommendations))] <- paste0("recommended_", keep[-seq_along(keys)])
+  comparison <- merge(fast, recommendations, by = keys, all = FALSE)
+  if (!nrow(comparison)) return(comparison)
+  comparison$fast_is_recommended_method <- comparison$fast_method == comparison$recommended_method
+  comparison$fast_uses_recommended_backend <- comparison$fast_backend == comparison$recommended_backend
+  comparison$fast_uses_recommended_implementation <- comparison$fast_backend_used == comparison$recommended_backend_used
+  comparison$fast_median_speed_ratio <- ifelse(
+    comparison$recommended_median_elapsed_sec > 0,
+    comparison$fast_median_elapsed_sec / comparison$recommended_median_elapsed_sec,
+    ifelse(comparison$fast_median_elapsed_sec == 0, 1, Inf)
+  )
+  comparison$fast_median_ari_gap <- comparison$recommended_median_ari - comparison$fast_median_ari
+  comparison$fast_withinss_ratio <- comparison$fast_median_tot_withinss / comparison$recommended_median_tot_withinss
+  comparison[order(comparison$dataset, comparison$fast_backend), , drop = FALSE]
+}
+
 kmeans_expected_skip <- function(method, backend) {
   method <- tolower(as.character(method)[1L])
   backend <- tolower(as.character(backend)[1L])
@@ -416,6 +464,10 @@ seed <- as_int_arg(args$seed, 1L)
 timeout <- as_int_arg(args$timeout, 600L)
 fallback_centers <- as_int_arg(args$centers, 10L)
 cycles <- as_int_arg(args$cycles, 1L)
+ari_tolerance <- suppressWarnings(as.numeric(args$ari_tolerance %||% "0.01"))
+if (length(ari_tolerance) != 1L || is.na(ari_tolerance) || !is.finite(ari_tolerance) || ari_tolerance < 0) {
+  ari_tolerance <- 0.01
+}
 max_iter <- args$max_iter %||% "auto"
 n_init <- args$n_init %||% "auto"
 tol <- args$tol %||% "auto"
@@ -429,10 +481,10 @@ suppressPackageStartupMessages(library(faissR))
 
 config <- data.frame(
   key = c("data_root", "out_dir", "datasets", "methods", "backends", "centers",
-          "threads", "timeout", "cycles", "max_iter", "n_init", "tol", "tuning", "seed"),
+          "threads", "timeout", "cycles", "ari_tolerance", "max_iter", "n_init", "tol", "tuning", "seed"),
   value = c(data_root, out_dir, paste(datasets, collapse = ","), paste(methods, collapse = ","),
             paste(backends, collapse = ","), fallback_centers, n_threads, timeout,
-            cycles, max_iter, n_init, tol, tuning, seed),
+            cycles, ari_tolerance, max_iter, n_init, tol, tuning, seed),
   stringsAsFactors = FALSE
 )
 utils::write.csv(config, file.path(out_dir, "kmeans_benchmark_config.csv"), row.names = FALSE)
@@ -538,6 +590,24 @@ if (nrow(ok)) {
     row.names = FALSE
   )
 
+  recommendations <- recommend_kmeans_methods(cycle_summary, ari_tolerance)
+  if (nrow(recommendations)) {
+    utils::write.csv(
+      recommendations,
+      file.path(out_dir, "kmeans_recommendations_from_cycles.csv"),
+      row.names = FALSE
+    )
+  }
+
+  aggregate_fast <- compare_fast_kmeans_to_recommendations(cycle_summary, recommendations)
+  if (nrow(aggregate_fast)) {
+    utils::write.csv(
+      aggregate_fast,
+      file.path(out_dir, "kmeans_fast_vs_cycle_recommendation.csv"),
+      row.names = FALSE
+    )
+  }
+
   fast_rows <- ok[ok$method == "fast_kmeans", , drop = FALSE]
   stats_rows <- ok[ok$method == "stats", , drop = FALSE]
   if (nrow(fast_rows) && nrow(stats_rows)) {
@@ -578,11 +648,14 @@ materials <- c(
   sprintf("- CPU thread cap: `%s`", n_threads),
   sprintf("- Timeout per combination: `%s` seconds", timeout),
   sprintf("- Cycles: `%s`", cycles),
+  sprintf("- ARI tolerance for cycle recommendations: `%s`", ari_tolerance),
   sprintf("- Requested centers fallback: `%s`; labels override this when available", fallback_centers),
   "",
   "The result table records cycle, elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, total within-cluster sum of squares, iterations, selected k-means parameters, tuning policy, and ARI against dataset labels when labels are available.",
   "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. The `cycle` column supports repeated benchmark cycles such as `--cycles=10` for speed/ARI tuning.",
   "`kmeans_cycle_summary.csv` aggregates successful rows across cycles by dataset/method/backend/centers and reports success counts, median/min/max elapsed time, ARI stability, withinss stability, iteration counts, and resolved backend metadata.",
+  "`kmeans_recommendations_from_cycles.csv` selects the fastest row within `ari_tolerance` of the best median ARI for each dataset; when ARI is unavailable it selects the fastest median-time row.",
+  "`kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()` rows with those cycle-summary recommendations and reports median speed ratio, median ARI gap, withinss ratio, and backend/implementation agreement.",
   "Unsupported CUDA or library combinations known before execution are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_kmeans.md"))

@@ -287,6 +287,12 @@ hand-launching the same benchmark multiple times. `kmeans_cycle_summary.csv`
 aggregates successful rows across cycles by dataset/method/backend/centers and
 reports success counts, median/min/max elapsed time, ARI stability, withinss
 stability, iteration counts, and resolved backend metadata.
+`kmeans_recommendations_from_cycles.csv` selects the fastest row within
+`ari_tolerance` of the best median ARI for each dataset; when ARI is
+unavailable it selects the fastest median-time row.
+`kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()`
+rows with those recommendations and reports median speed ratio, median ARI gap,
+withinss ratio, and backend/implementation agreement.
 CUDA/library combinations that are known unavailable before execution are
 recorded as `status = "expected_skip"` with `expected_skip = TRUE`; unexpected
 runtime errors remain failed rows and are not replaced with CPU timings.
@@ -302,7 +308,8 @@ Rscript benchmark_scripts/benchmark_kmeans.R \
   --backends=cpu \
   --centers=10 \
   --threads=12 \
-  --cycles=10
+  --cycles=10 \
+  --ari_tolerance=0.01
 ```
 
 Example CUDA run:
@@ -316,5 +323,6 @@ Rscript benchmark_scripts/benchmark_kmeans.R \
   --backends=cuda \
   --centers=10 \
   --threads=2 \
-  --cycles=10
+  --cycles=10 \
+  --ari_tolerance=0.01
 ```
