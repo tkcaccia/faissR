@@ -160,6 +160,11 @@ resolve_graph_cluster_backend <- function(backend) {
 #' @param n_threads CPU threads for KNN construction and native CPU clustering.
 #' @param n_runs Number of independent native runs. The best modularity is kept.
 #' @param resolution Modularity resolution for Louvain/Leiden-style scoring.
+#' @param n_clusters Optional target number of communities for Louvain/Leiden.
+#'   If supplied, faissR evaluates a small deterministic resolution grid around
+#'   `resolution` on the already-built graph and keeps the result whose
+#'   community count is closest to `n_clusters`. This is a convenience target,
+#'   not a hard guarantee.
 #' @param objective_function Reserved for Leiden-compatible APIs.
 #' @param n_iterations Native clustering iterations.
 #' @param steps Random-walk propagation depth.
@@ -203,6 +208,7 @@ graph_cluster <- function(graph,
                           n_threads = NULL,
                           n_runs = 1L,
                           resolution = 1,
+                          n_clusters = NULL,
                           objective_function = c("modularity", "CPM"),
                           n_iterations = 10L,
                           steps = 4L,
@@ -221,6 +227,7 @@ graph_cluster <- function(graph,
   if (length(resolution) != 1L || is.na(resolution) || !is.finite(resolution) || resolution <= 0) {
     stop("`resolution` must be a positive number.", call. = FALSE)
   }
+  n_clusters <- normalize_graph_target_clusters(n_clusters, method)
   prune <- suppressWarnings(as.numeric(prune))
   if (length(prune) != 1L || is.na(prune) || !is.finite(prune) || prune < 0) {
     stop("`prune` must be a non-negative number.", call. = FALSE)
@@ -232,13 +239,14 @@ graph_cluster <- function(graph,
   input_method <- NA_character_
   input_backend <- NA_character_
   if (inherits(graph, "faissR_graph")) {
-    ans <- graph_cluster_edges_cpp(
+    ans <- graph_cluster_edges_target(
       graph,
       method = method,
       backend = backend,
       n_threads = n_threads,
       n_runs = n_runs,
       resolution = resolution,
+      n_clusters = n_clusters,
       n_iterations = n_iterations,
       steps = steps,
       seed = seed
@@ -248,6 +256,8 @@ graph_cluster <- function(graph,
       meta,
       list(
         resolution = resolution,
+        n_clusters = n_clusters,
+        selected_resolution = ans$selected_resolution %||% resolution,
         objective_function = objective_function,
         n_iterations = as.integer(n_iterations),
         steps = as.integer(steps),
@@ -283,17 +293,21 @@ graph_cluster <- function(graph,
   }
   if (knn_input$n_neighbors < k) k <- knn_input$n_neighbors
   cols <- seq_len(k)
-  ans <- graph_cluster_cpp(
+  graph_edges <- knn_graph_edges_cpp(
     knn_input$indices[, cols, drop = FALSE],
     knn_input$distances[, cols, drop = FALSE],
-    method = method,
-    backend = backend,
     weight_type = weight,
     prune = prune,
-    mutual = isTRUE(mutual),
+    mutual = isTRUE(mutual)
+  )
+  ans <- graph_cluster_edges_target(
+    graph_edges,
+    method = method,
+    backend = backend,
     n_threads = n_threads,
     n_runs = n_runs,
     resolution = resolution,
+    n_clusters = n_clusters,
     n_iterations = n_iterations,
     steps = steps,
     seed = seed
@@ -307,6 +321,8 @@ graph_cluster <- function(graph,
     mutual = isTRUE(mutual),
     prune = prune,
     resolution = resolution,
+    n_clusters = n_clusters,
+    selected_resolution = ans$selected_resolution %||% resolution,
     objective_function = objective_function,
     n_iterations = as.integer(n_iterations),
     steps = as.integer(steps),
@@ -315,6 +331,79 @@ graph_cluster <- function(graph,
   ans$sources <- graph_cluster_sources(method, backend)
   class(ans) <- "faissR_graph_cluster"
   ans
+}
+
+normalize_graph_target_clusters <- function(n_clusters, method) {
+  if (is.null(n_clusters)) return(NULL)
+  if (identical(method, "random_walking")) {
+    stop("`n_clusters` is available for `method = \"louvain\"` or `\"leiden\"`, not `\"random_walking\"`.", call. = FALSE)
+  }
+  n_clusters <- suppressWarnings(as.integer(n_clusters))
+  if (length(n_clusters) != 1L || is.na(n_clusters) || !is.finite(n_clusters) || n_clusters < 1L) {
+    stop("`n_clusters` must be a positive integer.", call. = FALSE)
+  }
+  n_clusters
+}
+
+graph_resolution_candidates <- function(resolution, n_clusters) {
+  if (is.null(n_clusters)) return(resolution)
+  exponents <- seq(-3, 3)
+  candidates <- resolution * (2 ^ exponents)
+  candidates <- candidates[is.finite(candidates) & candidates > 0]
+  unique(c(resolution, candidates))
+}
+
+graph_cluster_edges_target <- function(edge_list,
+                                       method,
+                                       backend,
+                                       n_threads,
+                                       n_runs,
+                                       resolution,
+                                       n_clusters,
+                                       n_iterations,
+                                       steps,
+                                       seed) {
+  candidates <- graph_resolution_candidates(resolution, n_clusters)
+  best <- NULL
+  summary <- vector("list", length(candidates))
+  for (i in seq_along(candidates)) {
+    candidate_resolution <- candidates[[i]]
+    ans <- graph_cluster_edges_cpp(
+      edge_list,
+      method = method,
+      backend = backend,
+      n_threads = n_threads,
+      n_runs = n_runs,
+      resolution = candidate_resolution,
+      n_iterations = n_iterations,
+      steps = steps,
+      seed = seed
+    )
+    ans$selected_resolution <- candidate_resolution
+    summary[[i]] <- data.frame(
+      resolution = candidate_resolution,
+      n_communities = as.integer(ans$n_communities),
+      modularity = as.numeric(ans$modularity),
+      stringsAsFactors = FALSE
+    )
+    if (is.null(best)) {
+      best <- ans
+    } else if (is.null(n_clusters)) {
+      if (isTRUE(as.numeric(ans$modularity) > as.numeric(best$modularity))) best <- ans
+    } else {
+      current_gap <- abs(as.integer(ans$n_communities) - n_clusters)
+      best_gap <- abs(as.integer(best$n_communities) - n_clusters)
+      if (current_gap < best_gap ||
+          (current_gap == best_gap && as.numeric(ans$modularity) > as.numeric(best$modularity))) {
+        best <- ans
+      }
+    }
+  }
+  if (!is.null(n_clusters)) {
+    best$target_n_clusters <- as.integer(n_clusters)
+    best$resolution_search <- do.call(rbind, summary)
+  }
+  best
 }
 
 graph_cluster_sources <- function(method, backend) {

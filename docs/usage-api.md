@@ -140,7 +140,7 @@ required.
 graph_cluster(graph, method = "leiden", backend = "auto",
               k = 50L, graph_backend = "auto", weight = "auto",
               mutual = FALSE, prune = 0, n_threads = NULL,
-              n_runs = 1L, resolution = 1,
+              n_runs = 1L, resolution = 1, n_clusters = NULL,
               objective_function = "modularity",
               n_iterations = 10L, steps = 4L, seed = NULL, ...)
 ```
@@ -158,6 +158,7 @@ graph_cluster(graph, method = "leiden", backend = "auto",
 | `n_threads` | CPU threads for KNN construction and native CPU clustering. |
 | `n_runs` | Number of independent clustering runs. faissR keeps the best modularity run. |
 | `resolution` | Positive resolution parameter for Louvain/Leiden-style modularity scoring. Larger values tend to produce more communities. |
+| `n_clusters` | Optional target number of communities for Louvain/Leiden. If supplied, faissR builds the KNN graph once, evaluates a small deterministic resolution grid, and keeps the result closest to the requested count. This is a convenience target, not a hard guarantee. |
 | `objective_function` | Reserved Leiden-compatible option. Currently accepts `"modularity"` or `"CPM"`. |
 | `n_iterations` | Maximum native clustering iterations. |
 | `steps` | Random-walk propagation depth for `method = "random_walking"`. |

@@ -264,6 +264,14 @@ OpenMP is available. CUDA Louvain and Leiden require RAPIDS libcugraph and never
 fall back to CPU for an explicit CUDA request. CUDA random-walking remains
 unavailable until a dedicated CUDA implementation is added.
 
+`graph_cluster(n_clusters = m)` provides a target-community-count convenience
+for Louvain and Leiden. The graph is built once, then faissR evaluates a small
+deterministic grid of resolution values around the supplied `resolution` and
+keeps the result whose number of communities is closest to `m`, breaking ties by
+modularity. The selected resolution and search table are returned in the result
+metadata. `knn_graph()` itself still only constructs the weighted graph; cluster
+count targets belong to `graph_cluster()`, where resolution is applied.
+
 Native graph clustering does not depend on `igraph`. This keeps the graph API
 under faissR's control and avoids a large mandatory graph dependency. The
 returned object includes membership, modularity, backend, parameters, graph edge

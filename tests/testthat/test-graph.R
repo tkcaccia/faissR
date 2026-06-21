@@ -88,6 +88,39 @@ test_that("graph_cluster runs native CPU Leiden-style refinement without igraph"
   expect_true(any(grepl("GVE-Leiden", leiden$sources, fixed = TRUE)))
 })
 
+test_that("graph_cluster can target a requested number of communities", {
+  set.seed(508)
+  x <- rbind(
+    matrix(rnorm(80, -3, 0.15), ncol = 4),
+    matrix(rnorm(80, 0, 0.15), ncol = 4),
+    matrix(rnorm(80, 3, 0.15), ncol = 4)
+  )
+
+  cl <- graph_cluster(
+    x,
+    method = "louvain",
+    backend = "cpu",
+    graph_backend = "cpu",
+    k = 8L,
+    n_clusters = 3L,
+    n_threads = 2L,
+    seed = 1L
+  )
+
+  expect_s3_class(cl, "faissR_graph_cluster")
+  expect_equal(cl$target_n_clusters, 3L)
+  expect_s3_class(cl$resolution_search, "data.frame")
+  expect_true(nrow(cl$resolution_search) > 1L)
+  expect_equal(cl$parameters$n_clusters, 3L)
+  expect_equal(cl$parameters$selected_resolution, cl$selected_resolution)
+  expect_lte(abs(cl$n_communities - 3L), 1L)
+
+  expect_error(
+    graph_cluster(x, method = "random_walking", backend = "cpu", graph_backend = "cpu", k = 8L, n_clusters = 3L),
+    "n_clusters"
+  )
+})
+
 test_that("graph_cluster reports native CUDA graph backend as unavailable without libcugraph", {
   skip_if(isTRUE(cugraph_available()), "libcugraph is available")
   set.seed(507)

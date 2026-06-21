@@ -17,6 +17,7 @@ graph_cluster(
   n_threads = NULL,
   n_runs = 1L,
   resolution = 1,
+  n_clusters = NULL,
   objective_function = c("modularity", "CPM"),
   n_iterations = 10L,
   steps = 4L,
@@ -35,6 +36,10 @@ graph_cluster(
 \item{n_threads}{CPU threads. Used by KNN construction and native CPU clustering.}
 \item{n_runs}{Number of repeated CPU community-detection runs. The result with the largest modularity is returned. Values greater than one can use several CPU cores.}
 \item{resolution}{Modularity resolution for Louvain/Leiden.}
+\item{n_clusters}{Optional target number of communities for Louvain/Leiden.
+If supplied, faissR evaluates a small deterministic resolution grid on the
+already-built graph and keeps the result whose community count is closest to
+the target. This is a convenience target, not a hard guarantee.}
 \item{objective_function}{Reserved for Leiden-compatible APIs; currently recorded in parameters.}
 \item{n_iterations}{Native clustering iteration count.}
 \item{steps}{Random-walk propagation depth.}
@@ -44,16 +49,22 @@ graph_cluster(
 \description{
 \code{graph_cluster()} runs native faissR community detection on a KNN graph. The graph can be supplied as a precomputed \code{nn()} result or built from a matrix/data frame using any faissR nearest-neighbour backend, including FAISS and cuVS KNN backends. CPU clustering is native C++/OpenMP code and does not depend on igraph. CUDA graph clustering uses native RAPIDS libcugraph for Louvain and Leiden when faissR was built against libcugraph. Random-walking currently remains CPU-only. CUDA graph clustering never calls Python and never silently falls back to CPU.
 }
-\value{
-A \code{faissR_graph_cluster} list with membership, modularity, method, backend, graph edge list, parameters, and source acknowledgements.
-}
 \details{
+\code{n_clusters} is implemented in \code{graph_cluster()}, not
+\code{knn_graph()}, because \code{knn_graph()} only builds the weighted
+nearest-neighbour graph. When a target count is supplied for Louvain or Leiden,
+faissR builds or reuses the graph once, evaluates a small resolution grid, and
+records the selected resolution and search table in the returned object.
+
 Method descriptions:
 \itemize{
   \item \code{"random_walking"}: native CPU random-walk label-propagation/community method inspired by walktrap-style random-walk clustering and local parallel random-walk literature. CUDA random-walking is not enabled yet.
   \item \code{"louvain"}: native CPU Louvain modularity local-moving implementation, with optional RAPIDS libcugraph CUDA execution when faissR is built with cuGraph.
   \item \code{"leiden"}: native CPU Leiden-style local moving plus refinement, with optional RAPIDS libcugraph CUDA execution when available.
 }
+}
+\value{
+A \code{faissR_graph_cluster} list with membership, modularity, method, backend, graph edge list, parameters, and source acknowledgements.
 }
 \references{
 Blondel VD, Guillaume JL, Lambiotte R, Lefebvre E. Fast unfolding of communities in large networks. Journal of Statistical Mechanics: Theory and Experiment. 2008;2008(10):P10008.
