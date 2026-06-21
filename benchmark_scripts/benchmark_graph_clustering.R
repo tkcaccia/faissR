@@ -278,6 +278,59 @@ summarize_graph_cycles <- function(ok) {
   out[order(out$dataset, -out$median_ari, out$median_total_sec), , drop = FALSE]
 }
 
+recommend_graph_cluster_methods <- function(cycle_summary, ari_tolerance) {
+  parts <- split(cycle_summary, paste(cycle_summary$dataset, cycle_summary$k, sep = "__"))
+  recommendations <- lapply(parts, function(x) {
+    has_ari <- is.finite(x$median_ari)
+    candidates <- if (any(has_ari)) {
+      best_ari <- max(x$median_ari[has_ari])
+      x[has_ari & x$median_ari >= best_ari - ari_tolerance, , drop = FALSE]
+    } else {
+      x
+    }
+    candidates <- candidates[order(candidates$median_total_sec), , drop = FALSE]
+    candidates[1L, , drop = FALSE]
+  })
+  out <- do.call(rbind, recommendations)
+  row.names(out) <- NULL
+  out[order(out$dataset, out$k), , drop = FALSE]
+}
+
+compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations) {
+  if (!nrow(recommendations)) return(recommendations)
+  auto <- cycle_summary[
+    cycle_summary$graph_backend == "auto" | cycle_summary$cluster_backend == "auto",
+    ,
+    drop = FALSE
+  ]
+  if (!nrow(auto)) return(data.frame())
+  keys <- c("dataset", "k")
+  keep <- c(
+    keys, "graph_backend", "graph_resolved_backend", "cluster_backend",
+    "cluster_resolved_backend", "method", "weight", "success_cycles",
+    "median_graph_sec", "median_cluster_sec", "median_total_sec",
+    "median_ari", "min_ari", "median_modularity", "median_n_communities",
+    "median_selected_resolution", "n_clusters_requested", "graph_cached"
+  )
+  auto <- auto[, keep, drop = FALSE]
+  recommendations <- recommendations[, keep, drop = FALSE]
+  names(auto)[match(keep[-seq_along(keys)], names(auto))] <- paste0("auto_", keep[-seq_along(keys)])
+  names(recommendations)[match(keep[-seq_along(keys)], names(recommendations))] <- paste0("recommended_", keep[-seq_along(keys)])
+  comparison <- merge(auto, recommendations, by = keys, all = FALSE)
+  if (!nrow(comparison)) return(comparison)
+  comparison$auto_uses_recommended_graph_backend <- comparison$auto_graph_backend == comparison$recommended_graph_backend
+  comparison$auto_uses_recommended_cluster_backend <- comparison$auto_cluster_backend == comparison$recommended_cluster_backend
+  comparison$auto_uses_recommended_method <- comparison$auto_method == comparison$recommended_method
+  comparison$auto_median_speed_ratio <- ifelse(
+    comparison$recommended_median_total_sec > 0,
+    comparison$auto_median_total_sec / comparison$recommended_median_total_sec,
+    ifelse(comparison$auto_median_total_sec == 0, 1, Inf)
+  )
+  comparison$auto_median_ari_gap <- comparison$recommended_median_ari - comparison$auto_median_ari
+  comparison$auto_modularity_gap <- comparison$recommended_median_modularity - comparison$auto_median_modularity
+  comparison[order(comparison$dataset, comparison$k, comparison$auto_graph_backend, comparison$auto_cluster_backend, comparison$auto_method), , drop = FALSE]
+}
+
 graph_cluster_expected_skip <- function(cluster_backend, method) {
   cluster_backend <- tolower(as.character(cluster_backend)[1L])
   method <- tolower(as.character(method)[1L])
@@ -472,6 +525,10 @@ configure_threads(n_threads)
 seed <- as_int_arg(args$seed, 1L)
 timeout <- as_int_arg(args$timeout, 600L)
 cycles <- as_int_arg(args$cycles, 1L)
+ari_tolerance <- suppressWarnings(as.numeric(args$ari_tolerance %||% "0.01"))
+if (length(ari_tolerance) != 1L || is.na(ari_tolerance) || !is.finite(ari_tolerance) || ari_tolerance < 0) {
+  ari_tolerance <- 0.01
+}
 k_values <- as_int_vec_arg(split_arg(args$k_values, "15,50,100"), 50L)
 datasets <- split_arg(args$datasets, paste(c(
   dataset_index(data_root)$dataset,
@@ -489,10 +546,11 @@ suppressPackageStartupMessages(library(faissR))
 config <- data.frame(
   key = c("data_root", "out_dir", "datasets", "methods", "graph_backends",
           "cluster_backends", "k_values", "threads", "timeout", "weight",
-          "target_clusters", "cycles", "seed"),
+          "target_clusters", "cycles", "ari_tolerance", "seed"),
   value = c(data_root, out_dir, paste(datasets, collapse = ","), paste(methods, collapse = ","),
             paste(graph_backends, collapse = ","), paste(cluster_backends, collapse = ","),
-            paste(k_values, collapse = ","), n_threads, timeout, weight, target_mode, cycles, seed),
+            paste(k_values, collapse = ","), n_threads, timeout, weight, target_mode,
+            cycles, ari_tolerance, seed),
   stringsAsFactors = FALSE
 )
 utils::write.csv(config, file.path(out_dir, "graph_cluster_benchmark_config.csv"), row.names = FALSE)
@@ -668,6 +726,24 @@ if (nrow(ok)) {
     file.path(out_dir, "graph_cluster_cycle_summary.csv"),
     row.names = FALSE
   )
+
+  recommendations <- recommend_graph_cluster_methods(cycle_summary, ari_tolerance)
+  if (nrow(recommendations)) {
+    utils::write.csv(
+      recommendations,
+      file.path(out_dir, "graph_cluster_recommendations_from_cycles.csv"),
+      row.names = FALSE
+    )
+  }
+
+  auto_comparison <- compare_auto_graph_to_recommendations(cycle_summary, recommendations)
+  if (nrow(auto_comparison)) {
+    utils::write.csv(
+      auto_comparison,
+      file.path(out_dir, "graph_cluster_auto_vs_cycle_recommendation.csv"),
+      row.names = FALSE
+    )
+  }
 }
 
 materials <- c(
@@ -682,15 +758,18 @@ materials <- c(
   sprintf("- Clustering backends: `%s`", paste(cluster_backends, collapse = "`, `")),
   sprintf("- k values: `%s`", paste(k_values, collapse = "`, `")),
   sprintf("- Cycles: `%s`", cycles),
+  sprintf("- ARI tolerance for cycle recommendations: `%s`", ari_tolerance),
   sprintf("- CPU thread cap: `%s`", n_threads),
   "",
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
   "When `target_clusters = \"labels\"`, Louvain and Leiden receive `n_clusters = length(unique(labels))`; random-walking is benchmarked without a cluster-count target because the public API does not support that option for random-walking.",
   "Each KNN graph is built once per dataset/cycle/k/graph-backend/weight combination and reused across clustering methods and clustering backends within that cycle. The `cycle` column supports repeated benchmark cycles such as `--cycles=10`; `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
   "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, community counts, and resolved backend metadata.",
+  "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering/backend/method row within `ari_tolerance` of the best median ARI for each dataset and k; when ARI is unavailable it selects the fastest median total-time row.",
+  "`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where graph or clustering backend was `auto` with those cycle-summary recommendations and reports median speed ratio, median ARI gap, modularity gap, and backend/method agreement.",
   "`graph_backend` and `cluster_backend` record the requested public backends. `graph_resolved_backend` and `cluster_resolved_backend` record the resolved public device policy after `auto` selection, so CPU/CUDA rows can be audited without opening the R objects.",
   "Unsupported graph-clustering combinations known from the public API, such as CUDA random_walking, are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. If every row in a graph-build block is an expected skip, graph construction is skipped and graph timing/edge columns remain `NA`.",
-  "CUDA rows are recorded as failed when faissR was not built with the required CUDA/cuGraph support; the benchmark does not silently replace CUDA clustering with CPU clustering."
+  "CUDA rows are recorded as expected skips when faissR was not built with the required CUDA/cuGraph support; unexpected CUDA runtime errors remain failed rows. The benchmark does not silently replace explicit CUDA clustering with CPU clustering."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_graph_clustering.md"))
 

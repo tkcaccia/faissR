@@ -155,6 +155,14 @@ complete graph-plus-clustering workflow represented by the row.
 dataset/k/graph-backend/cluster-backend/method/weight and reports success
 counts, median/min/max graph, clustering, and total time, ARI stability,
 modularity stability, community counts, and resolved backend metadata.
+`graph_cluster_recommendations_from_cycles.csv` selects the fastest successful
+graph/clustering/backend/method row within `ari_tolerance` of the best median
+ARI for each dataset and k; when ARI is unavailable it selects the fastest
+median total-time row.
+`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where
+the graph or clustering backend was `"auto"` against those recommendations and
+reports median speed ratio, median ARI gap, modularity gap, and
+backend/method agreement.
 The result table stores both requested and resolved public backend metadata:
 `graph_backend`/`cluster_backend` are the user requests, while
 `graph_resolved_backend`/`cluster_resolved_backend` show the public device
@@ -179,6 +187,7 @@ Rscript benchmark_scripts/benchmark_graph_clustering.R \
   --datasets=COIL20,USPS,FashionMNIST,MNIST \
   --k_values=15,50,100 \
   --cycles=10 \
+  --ari_tolerance=0.01 \
   --graph_backends=cpu \
   --cluster_backends=cpu \
   --methods=random_walking,louvain,leiden \
@@ -194,6 +203,7 @@ Rscript benchmark_scripts/benchmark_graph_clustering.R \
   --datasets=COIL20,USPS,FashionMNIST,MNIST \
   --k_values=15,50,100 \
   --cycles=10 \
+  --ari_tolerance=0.01 \
   --graph_backends=cuda \
   --cluster_backends=cuda \
   --methods=louvain,leiden \
