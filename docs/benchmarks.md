@@ -86,6 +86,9 @@ the public methods, the four public metrics (`"euclidean"`, `"cosine"`,
 `"correlation"`, and `"inner_product"`), and `k = 5, 10, 15, 50, 100` by
 default. Metric aliases accepted by the API, such as `"l2"`, `"cor"`,
 `"pearson"`, and `"ip"`, are canonicalized before preflight and reporting.
+The public `method = "sparse"` route is included in the default method list,
+but dense benchmark datasets record it as an expected skip because that route
+is intended for sparse `Matrix` inputs.
 Unsupported method/backend/metric combinations are preflighted with
 `nn_capabilities()` and the public backend resolver, then written as expected
 skips. Runtime expected skips also record when a resolved route requires
@@ -235,8 +238,8 @@ metric matrix. It runs public `nn()` combinations over:
 - backends: `"auto"`, `"cpu"`, `"cuda"`, or any subset passed with
   `--backends`;
 - methods: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`,
-  `"vptree"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"nsg"`, `"nndescent"`, and
-  `"cagra"`;
+  `"vptree"`, `"sparse"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"nsg"`,
+  `"nndescent"`, and `"cagra"`;
 - metrics: `"euclidean"`, `"cosine"`, `"correlation"`, and
   `"inner_product"` after alias canonicalization;
 - k values: `5`, `10`, `15`, `50`, and `100` by default.
@@ -247,6 +250,9 @@ the public backend resolver, then saved as `status = "expected_skip"` rows with
 saved as `nn_metric_capabilities.csv`. For `backend = "auto"`, the preflight
 checks the resolved CPU/CUDA route and records expected skips when that route
 requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.
+The sparse route is also recorded as an expected skip for dense benchmark
+matrices so dense datasets are not converted just to exercise a sparse-specific
+method.
 Unexpected runtime errors remain ordinary failed rows. Recall is computed
 against exact CPU references when feasible. Small datasets use a full exact
 self-KNN reference; larger datasets use a deterministic sample of query rows

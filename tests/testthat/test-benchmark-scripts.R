@@ -87,6 +87,22 @@ test_that("NN metric benchmark canonicalizes metric aliases before preflight", {
   expect_false(isTRUE(env$capability_status(caps, "cpu", "nsg", "ip")$supported))
 })
 
+test_that("NN metric benchmark accounts for sparse method on dense data", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+
+  default_methods <- env$split_arg(NULL, "auto,exact,flat,bruteforce,grid,vptree,sparse,hnsw,ivf,ivfpq,nsg,nndescent,cagra")
+  expect_true("sparse" %in% default_methods)
+
+  skip <- env$nn_data_expected_skip(matrix(rnorm(20), ncol = 4), "sparse")
+  expect_type(skip, "list")
+  expect_true(isTRUE(skip$skip))
+  expect_match(skip$notes, "sparse Matrix")
+  expect_null(env$nn_data_expected_skip(matrix(rnorm(20), ncol = 4), "flat"))
+})
+
 test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),

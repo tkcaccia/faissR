@@ -583,6 +583,21 @@ is_expected_skip <- function(caps, backend, method, metric) {
   NULL
 }
 
+nn_data_expected_skip <- function(x, method) {
+  method <- canonical_method_key(method)[[1L]]
+  if (!identical(method, "sparse")) return(NULL)
+  if (inherits(x, "sparseMatrix") || inherits(x, "dgCMatrix")) return(NULL)
+  list(
+    skip = TRUE,
+    route = NA_character_,
+    notes = paste(
+      "`method = \"sparse\"` is a sparse Matrix route. The benchmark datasets",
+      "loaded by this script are dense matrices, so sparse is recorded as an",
+      "expected skip to avoid converting dense data into a sparse representation."
+    )
+  )
+}
+
 run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_threads,
                     timeout, reference, seed) {
   started <- proc.time()[["elapsed"]]
@@ -694,7 +709,7 @@ if (length(recall_threshold) != 1L || is.na(recall_threshold) || !is.finite(reca
 
 datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "SimulatedUniform2D", "SimulatedUniform3D"), collapse = ","))
 backends <- split_arg(args$backends, "auto,cpu,cuda")
-methods <- split_arg(args$methods, "auto,exact,flat,bruteforce,grid,vptree,hnsw,ivf,ivfpq,nsg,nndescent,cagra")
+methods <- split_arg(args$methods, "auto,exact,flat,bruteforce,grid,vptree,sparse,hnsw,ivf,ivfpq,nsg,nndescent,cagra")
 metrics <- canonical_metric_values(split_arg(args$metrics, "euclidean,cosine,correlation,inner_product"))
 if (!length(metrics)) metrics <- c("euclidean", "cosine", "correlation", "inner_product")
 k_values <- as_int_vec_arg(split_arg(args$k_values, "5,10,15,50,100"), c(5L, 10L, 15L, 50L, 100L))
@@ -753,6 +768,7 @@ for (dataset_name in datasets) {
           for (method in methods) {
             row_id <- row_id + 1L
             expected <- is_expected_skip(capabilities, backend, method, metric)
+            if (is.null(expected)) expected <- nn_data_expected_skip(x, method)
             if (!is.null(expected)) {
               row <- result_row(
                 dataset = dataset_name,
@@ -915,6 +931,7 @@ materials <- c(
   sprintf("- Fastest-method recall threshold: `%s`", recall_threshold),
   "",
   "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities()` and the public backend resolver, then recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
+  "`method = \"sparse\"` is included in the default public method list but is recorded as an expected skip for dense benchmark datasets, because it is intended for sparse `Matrix` inputs and should not force dense data through a sparse conversion.",
   "`nn_metric_capabilities.csv` stores the design-level capability table used for that preflight. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
   "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k.",
