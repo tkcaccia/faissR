@@ -116,11 +116,13 @@ metric matrix. It runs public `nn()` combinations over:
   `"inner_product"`;
 - k values: `5`, `10`, `15`, `50`, and `100` by default.
 
-Unsupported combinations are saved as failed rows with the package error
-message. Recall is computed against exact CPU references when feasible. Small
-datasets use a full exact self-KNN reference; larger datasets use a
-deterministic sample of query rows when
-`quality_n * nrow(data) * ncol(data)` fits `--quality_max_ops`. The
+Unsupported combinations are preflighted with `faissR::nn_capabilities()` and
+saved as `status = "expected_skip"` rows with `expected_skip = TRUE`; the
+capability table used for the run is saved as `nn_metric_capabilities.csv`.
+Unexpected runtime errors remain ordinary failed rows. Recall is computed
+against exact CPU references when feasible. Small datasets use a full exact
+self-KNN reference; larger datasets use a deterministic sample of query rows
+when `quality_n * nrow(data) * ncol(data)` fits `--quality_max_ops`. The
 `recall_reference` and `recall_query_n` columns record whether recall used a
 full or sampled exact reference. The script also writes
 `nn_metric_fastest_at_recall_threshold.csv`, which records the fastest

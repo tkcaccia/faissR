@@ -209,7 +209,9 @@ result_row <- function(dataset, n, p, backend, method, metric, k, n_threads,
                        median_recall_at_k = NA_real_,
                        min_recall_at_k = NA_real_,
                        recall_reference = NA_character_,
-                       recall_query_n = NA_integer_) {
+                       recall_query_n = NA_integer_,
+                       expected_skip = FALSE,
+                       capability_notes = NA_character_) {
   data.frame(
     dataset = dataset,
     n = as.integer(n),
@@ -230,8 +232,54 @@ result_row <- function(dataset, n, p, backend, method, metric, k, n_threads,
     min_recall_at_k = min_recall_at_k,
     recall_reference = recall_reference,
     recall_query_n = as.integer(recall_query_n),
+    expected_skip = isTRUE(expected_skip),
+    capability_notes = capability_notes,
     stringsAsFactors = FALSE
   )
+}
+
+canonical_method_key <- function(method) {
+  key <- tolower(gsub("[[:space:]_-]+", "", as.character(method)))
+  aliases <- c(
+    auto = "auto",
+    exact = "exact",
+    flat = "flat",
+    bruteforce = "bruteforce",
+    grid = "grid",
+    vptree = "vptree",
+    sparse = "sparse",
+    hnsw = "hnsw",
+    ivf = "ivf",
+    ivfpq = "ivfpq",
+    nsg = "nsg",
+    nndescent = "nndescent",
+    cagra = "cagra"
+  )
+  out <- unname(aliases[key])
+  out[is.na(out)] <- key[is.na(out)]
+  out
+}
+
+capability_row <- function(caps, backend, method, metric) {
+  backend <- tolower(as.character(backend)[1L])
+  metric <- tolower(as.character(metric)[1L])
+  method_key <- canonical_method_key(method)
+  caps_key <- canonical_method_key(caps$method)
+  hit <- caps[caps$backend == backend & caps_key == method_key & caps$metric == metric, , drop = FALSE]
+  if (!nrow(hit)) return(NULL)
+  hit[1L, , drop = FALSE]
+}
+
+is_expected_skip <- function(caps, backend, method, metric) {
+  if (!tolower(as.character(backend)[1L]) %in% c("cpu", "cuda")) return(NULL)
+  cap <- capability_row(caps, backend, method, metric)
+  if (is.null(cap)) {
+    return(list(skip = TRUE, notes = "Combination is not listed in faissR::nn_capabilities()."))
+  }
+  if (!isTRUE(cap$supported[[1L]])) {
+    return(list(skip = TRUE, notes = cap$notes[[1L]] %||% "Unsupported by faissR::nn_capabilities()."))
+  }
+  NULL
 }
 
 run_one <- function(x, dataset_name, backend, method, metric, k, n_threads,
@@ -332,6 +380,7 @@ metrics <- split_arg(args$metrics, "euclidean,cosine,correlation,inner_product")
 k_values <- as_int_vec_arg(split_arg(args$k_values, "5,10,15,50,100"), c(5L, 10L, 15L, 50L, 100L))
 
 suppressPackageStartupMessages(library(faissR))
+capabilities <- faissR::nn_capabilities()
 
 config <- data.frame(
   key = c("data_root", "out_dir", "datasets", "backends", "methods", "metrics",
@@ -346,6 +395,7 @@ config <- data.frame(
   stringsAsFactors = FALSE
 )
 utils::write.csv(config, file.path(out_dir, "nn_metric_benchmark_config.csv"), row.names = FALSE)
+utils::write.csv(capabilities, file.path(out_dir, "nn_metric_capabilities.csv"), row.names = FALSE)
 
 results <- list()
 row_id <- 0L
@@ -379,17 +429,35 @@ for (dataset_name in datasets) {
       for (backend in backends) {
         for (method in methods) {
           row_id <- row_id + 1L
-          row <- run_one(
-            x = x,
-            dataset_name = dataset_name,
-            backend = backend,
-            method = method,
-            metric = metric,
-            k = k,
-            n_threads = n_threads,
-            timeout = timeout,
-            reference = references[[ref_key]]
-          )
+          expected <- is_expected_skip(capabilities, backend, method, metric)
+          if (!is.null(expected)) {
+            row <- result_row(
+              dataset = dataset_name,
+              n = nrow(x),
+              p = ncol(x),
+              backend = backend,
+              method = method,
+              metric = metric,
+              k = k,
+              n_threads = n_threads,
+              status = "expected_skip",
+              error = expected$notes,
+              expected_skip = TRUE,
+              capability_notes = expected$notes
+            )
+          } else {
+            row <- run_one(
+              x = x,
+              dataset_name = dataset_name,
+              backend = backend,
+              method = method,
+              metric = metric,
+              k = k,
+              n_threads = n_threads,
+              timeout = timeout,
+              reference = references[[ref_key]]
+            )
+          }
           results[[row_id]] <- row
           utils::write.csv(
             do.call(rbind, results),
@@ -399,7 +467,8 @@ for (dataset_name in datasets) {
           cat(sprintf(
             "[%s] dataset=%s backend=%s method=%s metric=%s k=%s status=%s elapsed=%.3f\n",
             format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-            dataset_name, backend, method, metric, k, row$status, row$elapsed_sec
+            dataset_name, backend, method, metric, k, row$status,
+            ifelse(is.na(row$elapsed_sec), 0, row$elapsed_sec)
           ))
           flush.console()
         }
@@ -483,7 +552,8 @@ materials <- c(
   sprintf("- Timeout per combination: `%s` seconds", timeout),
   sprintf("- Fastest-method recall threshold: `%s`", recall_threshold),
   "",
-  "Unsupported method/backend/metric combinations are recorded as failed rows with the package error message.",
+  "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities()` and recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
+  "`nn_metric_capabilities.csv` stores the capability table used for that preflight.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k whose recall is at least `recall_threshold`.",
   "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row and records speed ratio, recall gap, and whether the resolved backend matches.",
