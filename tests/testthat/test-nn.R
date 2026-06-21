@@ -71,11 +71,11 @@ test_that("native exact KNN only accepts the documented metrics", {
 
   expect_error(
     faissR:::nn_cpp(x, x, 2L, "invalid_metric", FALSE, TRUE, 2, FALSE, 1L, FALSE),
-    "unsupported method"
+    "unsupported metric"
   )
   expect_error(
     faissR:::nn_cpp(x, x, 2L, "minkowski", FALSE, TRUE, 2, FALSE, 1L, FALSE),
-    "unsupported method"
+    "unsupported metric"
   )
 })
 

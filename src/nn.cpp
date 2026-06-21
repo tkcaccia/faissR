@@ -105,7 +105,7 @@ DistanceKind distance_kind_from_method(const std::string& method) {
   if (method == "cosine") return DistanceKind::Cosine;
   if (method == "correlation") return DistanceKind::Correlation;
   if (method == "inner_product") return DistanceKind::InnerProduct;
-  Rcpp::stop("unsupported method");
+  Rcpp::stop("unsupported metric");
 }
 
 template <DistanceKind kind, bool row_major>
@@ -1365,7 +1365,7 @@ List nn_cpp(NumericMatrix data,
   if (k < 1 || k > max_k) Rcpp::stop("k must be in the available neighbor range");
   if (method != "euclidean" && method != "cosine" &&
       method != "correlation" && method != "inner_product") {
-    Rcpp::stop("unsupported method");
+    Rcpp::stop("unsupported metric");
   }
   const DistanceKind distance_kind = distance_kind_from_method(method);
 
