@@ -176,8 +176,8 @@ unavailable it selects the fastest median total-time row. The
 `"fastest_within_ari_tolerance"` or `"speed_only_no_ari"`.
 `graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where
 the graph or clustering backend was `"auto"` against those recommendations and
-reports median speed ratio, median ARI gap, modularity gap, and
-backend/method agreement.
+reports the recommendation basis, median speed ratio, median ARI gap,
+modularity gap, and backend/method agreement.
 The result table stores both requested and resolved public backend metadata:
 `graph_backend`/`cluster_backend` are the user requests, while
 `graph_preflight_route`/`cluster_preflight_route` show the resolver decision

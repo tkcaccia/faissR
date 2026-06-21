@@ -370,6 +370,7 @@ test_that("graph benchmark auto comparison has unique schema columns", {
     graph_cached = c(TRUE, TRUE)
   )
   recommendations <- cycle_summary[2, , drop = FALSE]
+  recommendations$recommendation_basis <- "fastest_within_ari_tolerance"
 
   out <- env$compare_auto_graph_to_recommendations(cycle_summary, recommendations)
 
@@ -377,6 +378,7 @@ test_that("graph benchmark auto comparison has unique schema columns", {
   expect_true("n_clusters_requested" %in% names(out))
   expect_false("auto_n_clusters_requested" %in% names(out))
   expect_false("recommended_n_clusters_requested" %in% names(out))
+  expect_equal(out$recommended_recommendation_basis, "fastest_within_ari_tolerance")
   expect_equal(out$auto_method, "louvain")
   expect_equal(out$recommended_method, "leiden")
 })

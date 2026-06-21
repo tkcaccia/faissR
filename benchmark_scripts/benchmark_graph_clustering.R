@@ -325,10 +325,11 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
     "median_ari", "min_ari", "median_modularity", "median_n_communities",
     "median_selected_resolution", "n_clusters_source", "graph_cached"
   )
+  rec_keep <- c(keep, "recommendation_basis")
   auto <- auto[, keep, drop = FALSE]
-  recommendations <- recommendations[, keep, drop = FALSE]
+  recommendations <- recommendations[, rec_keep, drop = FALSE]
   names(auto)[match(keep[-seq_along(keys)], names(auto))] <- paste0("auto_", keep[-seq_along(keys)])
-  names(recommendations)[match(keep[-seq_along(keys)], names(recommendations))] <- paste0("recommended_", keep[-seq_along(keys)])
+  names(recommendations)[match(rec_keep[-seq_along(keys)], names(recommendations))] <- paste0("recommended_", rec_keep[-seq_along(keys)])
   comparison <- merge(auto, recommendations, by = keys, all = FALSE)
   if (!nrow(comparison)) return(comparison)
   comparison$auto_uses_recommended_graph_backend <- comparison$auto_graph_backend == comparison$recommended_graph_backend
@@ -843,7 +844,7 @@ materials <- c(
   "Each KNN graph is built once per dataset/cycle/k/graph-backend/weight combination and reused across clustering methods and clustering backends within that cycle. The `cycle` column supports repeated benchmark cycles such as `--cycles=10`; `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
   "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, community counts, and resolved backend metadata.",
   "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering/backend/method row within `ari_tolerance` of the best median ARI for each dataset/k/target-cluster-count combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; when ARI is unavailable it selects the fastest median total-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
-  "`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where graph or clustering backend was `auto` with those cycle-summary recommendations and reports median speed ratio, median ARI gap, modularity gap, and backend/method agreement.",
+  "`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where graph or clustering backend was `auto` with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median ARI gap, modularity gap, and backend/method agreement.",
   "`graph_backend` and `cluster_backend` record the requested public backends. `graph_preflight_route` and `cluster_preflight_route` record the public resolver decision before runtime availability checks; `graph_resolved_backend` and `cluster_resolved_backend` record the resolved device policy from successful result objects, so CPU/CUDA rows can be audited without opening the R objects.",
   "Unsupported graph-clustering combinations known from the public API, such as CUDA random_walking, are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. If every row in a graph-build block is an expected skip, graph construction is skipped and graph timing/edge columns remain `NA`.",
   "CUDA rows are recorded as expected skips when faissR was not built with the required CUDA/cuGraph support; unexpected CUDA runtime errors remain failed rows. The benchmark does not silently replace explicit CUDA clustering with CPU clustering."
