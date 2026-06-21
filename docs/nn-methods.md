@@ -297,6 +297,10 @@ Approximate methods should be reported with:
 tuning and cache selected parameters. `tuning = "off"` disables this behavior
 when deterministic fixed-parameter runs are required.
 
+Advanced tuning and cache knobs use `options(faissR.<name> = ...)`. Legacy
+`fastEmbedR.<name>` options remain compatibility fallbacks; if both are set,
+`faissR.*` wins.
+
 Exact methods mark `attr(result, "exact") = TRUE`; approximate methods mark it
 as `FALSE`.
 

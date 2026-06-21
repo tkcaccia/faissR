@@ -48,6 +48,10 @@ nn(data, points = data, k = NULL, backend = "auto",
 | `tuning` | Tuning policy for approximate GPU methods: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. `"auto"` uses the appropriate tuned default for the resolved method. |
 | `n_threads` | Number of CPU worker threads for CPU/FAISS CPU backends. GPU backends ignore this argument. |
 
+Advanced tuning and cache knobs use `options(faissR.<name> = ...)`. Legacy
+`fastEmbedR.<name>` options remain compatibility fallbacks; if both are set,
+`faissR.*` wins.
+
 Returns a `faissR_nn` list with `indices` and `distances` matrices. Indices are
 1-based R row numbers. The resolved backend is stored in
 `attr(result, "backend")`.

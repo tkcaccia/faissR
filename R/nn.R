@@ -761,7 +761,7 @@ nn_compute <- function(data,
         } else {
           NA_real_
         }
-        min_recall <- getOption("fastEmbedR.cuvs_cagra_tune_min_recall", tuning_metadata$target_recall)
+        min_recall <- faissr_option("cuvs_cagra_tune_min_recall", tuning_metadata$target_recall)
         min_recall <- suppressWarnings(as.numeric(min_recall))
         if (length(min_recall) != 1L || is.na(min_recall) || !is.finite(min_recall)) {
           min_recall <- 0.985
@@ -773,7 +773,7 @@ nn_compute <- function(data,
             if (is.finite(best_recall)) formatC(best_recall, digits = 4, format = "f") else "NA",
             "). Use `backend = \"faiss_gpu_cagra\"`, ",
             "`backend = \"cuda_cuvs_bruteforce\"`, or explicitly disable ",
-            "`fastEmbedR.cuvs_cagra_tune` to force cuVS CAGRA.",
+            "`faissR.cuvs_cagra_tune = FALSE` to force cuVS CAGRA.",
             call. = FALSE
           )
         }
@@ -1204,6 +1204,19 @@ nn_method_labels <- function() {
     "auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
     "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"
   )
+}
+
+faissr_option <- function(name, default = NULL) {
+  name <- as.character(name)
+  for (key in paste0("faissR.", name)) {
+    value <- getOption(key, NULL)
+    if (!is.null(value)) return(value)
+  }
+  for (key in paste0("fastEmbedR.", name)) {
+    value <- getOption(key, NULL)
+    if (!is.null(value)) return(value)
+  }
+  default
 }
 
 #' Nearest-neighbour method capabilities
@@ -1665,7 +1678,7 @@ select_cuda_auto_backend <- function(self_query,
     return("cuda")
   }
   exact_n <- faiss_option_int("cuda_auto_exact_n", 100000L, min_value = 1000L, max_value = 10000000L)
-  exact_work <- getOption("fastEmbedR.cuda_auto_exact_work", 5e12)
+  exact_work <- faissr_option("cuda_auto_exact_work", 5e12)
   exact_work <- suppressWarnings(as.numeric(exact_work))
   if (length(exact_work) != 1L || is.na(exact_work) || !is.finite(exact_work)) {
     exact_work <- 5e12
@@ -1697,7 +1710,7 @@ select_cuvs_auto_backend <- function(self_query,
                                      n_points,
                                      k,
                                      work_size) {
-  small_threshold <- getOption("fastEmbedR.cuvs_bruteforce_work_threshold", 5e12)
+  small_threshold <- faissr_option("cuvs_bruteforce_work_threshold", 5e12)
   small_threshold <- suppressWarnings(as.numeric(small_threshold))
   if (length(small_threshold) != 1L || is.na(small_threshold) || !is.finite(small_threshold)) {
     small_threshold <- 5e12
@@ -1730,7 +1743,7 @@ select_cpu_auto_backend <- function(self_query,
                                     work_size,
                                     metric = "euclidean") {
   if (!identical(metric, "euclidean")) {
-    exact_work <- getOption("fastEmbedR.cpu_auto_exact_work", 2e8)
+    exact_work <- faissr_option("cpu_auto_exact_work", 2e8)
     exact_work <- suppressWarnings(as.numeric(exact_work))
     if (length(exact_work) != 1L || is.na(exact_work) || !is.finite(exact_work)) {
       exact_work <- 2e8
@@ -1762,7 +1775,7 @@ select_cpu_auto_backend <- function(self_query,
   )) {
     return("cpu_grid")
   }
-  exact_work <- getOption("fastEmbedR.cpu_auto_exact_work", 2e8)
+  exact_work <- faissr_option("cpu_auto_exact_work", 2e8)
   exact_work <- suppressWarnings(as.numeric(exact_work))
   if (length(exact_work) != 1L || is.na(exact_work) || !is.finite(exact_work)) {
     exact_work <- 2e8
@@ -1779,7 +1792,7 @@ select_cpu_auto_backend <- function(self_query,
 }
 
 cpu_auto_faiss_flat_work_threshold <- function() {
-  value <- getOption("fastEmbedR.cpu_auto_faiss_flat_work", 5e7)
+  value <- faissr_option("cpu_auto_faiss_flat_work", 5e7)
   value <- suppressWarnings(as.numeric(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 0) {
     value <- 5e7
@@ -1857,16 +1870,16 @@ should_use_grid2d_self_knn <- function(self_query,
 
 grid_bins_per_dim <- function(n, k, p) {
   p <- as.integer(p)
-  value <- getOption(sprintf("fastEmbedR.grid%dd_bins_per_dim", p), NULL)
-  if (is.null(value)) value <- getOption("fastEmbedR.grid_bins_per_dim", NULL)
+  value <- faissr_option(sprintf("grid%dd_bins_per_dim", p), NULL)
+  if (is.null(value)) value <- faissr_option("grid_bins_per_dim", NULL)
   if (!is.null(value)) {
     value <- suppressWarnings(as.integer(value))
     if (length(value) == 1L && is.finite(value) && !is.na(value) && value > 0L) {
       return(as.integer(value))
     }
   }
-  target_occupancy <- getOption(sprintf("fastEmbedR.grid%dd_target_occupancy", p), NULL)
-  if (is.null(target_occupancy)) target_occupancy <- getOption("fastEmbedR.grid_target_occupancy", NULL)
+  target_occupancy <- faissr_option(sprintf("grid%dd_target_occupancy", p), NULL)
+  if (is.null(target_occupancy)) target_occupancy <- faissr_option("grid_target_occupancy", NULL)
   if (is.null(target_occupancy)) {
     target_occupancy <- if (identical(p, 3L)) {
       max(1.5, min(8, as.numeric(k) / 25))
@@ -1901,11 +1914,11 @@ select_cpu_spatial_backend <- function(data,
   if (!(p %in% c(2L, 3L))) {
     return("cpu_vptree")
   }
-  if (!isTRUE(getOption("fastEmbedR.cpu_spatial_auto", TRUE))) {
+  if (!isTRUE(faissr_option("cpu_spatial_auto", TRUE))) {
     return(if (p == 3L) "cpu_grid3d" else "cpu_grid2d")
   }
   n <- nrow(data)
-  sample_n <- min(n, as.integer(getOption("fastEmbedR.cpu_spatial_sample", 4096L)))
+  sample_n <- min(n, as.integer(faissr_option("cpu_spatial_sample", 4096L)))
   if (sample_n < 512L) {
     return(if (p == 3L) "cpu_grid3d" else "cpu_grid2d")
   }
@@ -1919,7 +1932,7 @@ select_cpu_spatial_backend <- function(data,
     return(out)
   }
   anisotropy <- min(sds[finite_sds]) / max(sds[finite_sds])
-  anisotropy_threshold <- as.numeric(getOption("fastEmbedR.cpu_spatial_anisotropy_threshold", 0.02))
+  anisotropy_threshold <- as.numeric(faissr_option("cpu_spatial_anisotropy_threshold", 0.02))
   if (!is.finite(anisotropy_threshold) || anisotropy_threshold <= 0) anisotropy_threshold <- 0.02
   if (is.finite(anisotropy) && anisotropy < anisotropy_threshold) {
     out <- "cpu_vptree"
@@ -1929,7 +1942,7 @@ select_cpu_spatial_backend <- function(data,
 
   unique_sample <- nrow(unique(round(xs, digits = 12L)))
   duplicate_ratio <- unique_sample / sample_n
-  duplicate_threshold <- as.numeric(getOption("fastEmbedR.cpu_spatial_duplicate_threshold", 0.05))
+  duplicate_threshold <- as.numeric(faissr_option("cpu_spatial_duplicate_threshold", 0.05))
   if (!is.finite(duplicate_threshold) || duplicate_threshold <= 0) duplicate_threshold <- 0.05
   if (is.finite(duplicate_ratio) && duplicate_ratio <= duplicate_threshold) {
     out <- if (p == 3L) "cpu_grid3d" else "cpu_grid2d"
@@ -1937,7 +1950,7 @@ select_cpu_spatial_backend <- function(data,
     return(out)
   }
 
-  sample_bins <- as.integer(getOption("fastEmbedR.cpu_spatial_sample_bins", if (p == 3L) 16L else 32L))
+  sample_bins <- as.integer(faissr_option("cpu_spatial_sample_bins", if (p == 3L) 16L else 32L))
   if (!is.finite(sample_bins) || is.na(sample_bins) || sample_bins < 4L) sample_bins <- if (p == 3L) 16L else 32L
   mins <- apply(xs, 2L, min)
   spans <- apply(xs, 2L, function(z) max(z) - min(z))
@@ -1952,7 +1965,7 @@ select_cpu_spatial_backend <- function(data,
   counts <- tabulate(cell + 1L, nbins = sample_bins^p)
   mean_count <- sample_n / length(counts)
   imbalance <- max(counts) / max(mean_count, 1e-12)
-  imbalance_threshold <- as.numeric(getOption("fastEmbedR.cpu_spatial_imbalance_threshold", 20))
+  imbalance_threshold <- as.numeric(faissr_option("cpu_spatial_imbalance_threshold", 20))
   if (!is.finite(imbalance_threshold) || imbalance_threshold <= 0) imbalance_threshold <- 20
   if (is.finite(imbalance) && imbalance > imbalance_threshold) {
     out <- "cpu_vptree"
@@ -2212,7 +2225,7 @@ should_use_gpu_approx_self_knn <- function(backend,
 }
 
 fast_knn_approx_seed <- function() {
-  value <- getOption("fastEmbedR.approx_knn_seed", 4L)
+  value <- faissr_option("approx_knn_seed", 4L)
   value <- suppressWarnings(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) 4L else value
 }
@@ -2223,7 +2236,7 @@ gpu_approx_params <- function(n,
                               label = NULL) {
   n <- as.integer(n)
   k <- as.integer(k)
-  anchors <- getOption("fastEmbedR.gpu_approx_anchors", NULL)
+  anchors <- faissr_option("gpu_approx_anchors", NULL)
   if (is.null(anchors)) {
     anchors <- max(128L, ceiling(4 * sqrt(n)), ceiling(n / 500))
     anchors <- min(n - 1L, 4096L, as.integer(anchors))
@@ -2234,7 +2247,7 @@ gpu_approx_params <- function(n,
     }
     anchors <- max(2L, min(n - 1L, anchors))
   }
-  projection_k <- getOption("fastEmbedR.gpu_approx_projection_k", NULL)
+  projection_k <- faissr_option("gpu_approx_projection_k", NULL)
   if (is.null(projection_k)) {
     projection_k <- max(12L, ceiling(k / 2))
     projection_k <- min(anchors, as.integer(projection_k))
@@ -2308,7 +2321,7 @@ gpu_approx_self_knn <- function(data,
     query_cols = as.integer(params$query_cols),
     seed = as.integer(seed)
   )
-  if (isTRUE(getOption("fastEmbedR.gpu_approx_recall", FALSE))) {
+  if (isTRUE(faissr_option("gpu_approx_recall", FALSE))) {
     result <- attach_knn_recall_subset(
       result,
       data = data,
@@ -2341,14 +2354,10 @@ gpu_ivf_self_knn <- function(data,
 gpu_nndescent_option <- function(backend, name, default = NULL) {
   backend <- as.character(backend)
   keys <- c(
-    sprintf("fastEmbedR.%s_nndescent_%s", backend, name),
-    sprintf("fastEmbedR.gpu_nndescent_%s", name)
+    sprintf("%s_nndescent_%s", backend, name),
+    sprintf("gpu_nndescent_%s", name)
   )
-  for (key in keys) {
-    value <- getOption(key, NULL)
-    if (!is.null(value)) return(value)
-  }
-  default
+  faissr_option(keys, default)
 }
 
 gpu_nndescent_graph_degree <- function(n, k, backend = "cuda") {
@@ -2563,7 +2572,7 @@ cuda_nndescent_self_knn <- function(data,
 }
 
 knn_recall_subset_size <- function(n) {
-  value <- getOption("fastEmbedR.gpu_approx_recall_sample", 512L)
+  value <- faissr_option("gpu_approx_recall_sample", 512L)
   value <- suppressWarnings(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 1L) {
     value <- 512L
@@ -2640,15 +2649,15 @@ should_use_nndescent_self_knn <- function(backend,
 }
 
 cpu_nndescent_prefer_faiss <- function() {
-  isTRUE(getOption("fastEmbedR.cpu_nndescent_prefer_faiss", TRUE)) &&
+  isTRUE(faissr_option("cpu_nndescent_prefer_faiss", TRUE)) &&
     isTRUE(faiss_available())
 }
 
 cpu_nndescent_faiss_index <- function() {
-  value <- tolower(as.character(getOption("fastEmbedR.cpu_nndescent_faiss_index", "hnsw"))[1L])
+  value <- tolower(as.character(faissr_option("cpu_nndescent_faiss_index", "hnsw"))[1L])
   if (!value %in% c("hnsw", "ivf", "flat", "nsg", "nndescent")) {
     warning(
-      "Option `fastEmbedR.cpu_nndescent_faiss_index` must be one of ",
+      "Option `faissR.cpu_nndescent_faiss_index` must be one of ",
       "\"hnsw\", \"ivf\", \"flat\", \"nsg\", or \"nndescent\"; using \"hnsw\".",
       call. = FALSE
     )
@@ -2808,9 +2817,9 @@ faiss_self_knn <- function(data,
 }
 
 rcpphnsw_params <- function(k) {
-  m <- getOption("fastEmbedR.hnsw_m", 16L)
-  ef_construction <- getOption("fastEmbedR.hnsw_ef_construction", 200L)
-  ef <- getOption("fastEmbedR.hnsw_ef", max(50L, 3L * as.integer(k)))
+  m <- faissr_option("hnsw_m", 16L)
+  ef_construction <- faissr_option("hnsw_ef_construction", 200L)
+  ef <- faissr_option("hnsw_ef", max(50L, 3L * as.integer(k)))
   m <- suppressWarnings(as.integer(m))
   ef_construction <- suppressWarnings(as.integer(ef_construction))
   ef <- suppressWarnings(as.integer(ef))
@@ -3066,7 +3075,7 @@ clustered_self_knn <- function(data,
 }
 
 annoy_tree_count <- function(n, k) {
-  value <- getOption("fastEmbedR.annoy_n_trees", NULL)
+  value <- faissr_option("annoy_n_trees", NULL)
   if (is.null(value)) {
     value <- if (n >= 10000L) 50L else 24L
   }
@@ -3076,7 +3085,7 @@ annoy_tree_count <- function(n, k) {
 }
 
 annoy_leaf_size <- function(k) {
-  value <- getOption("fastEmbedR.annoy_leaf_size", NULL)
+  value <- faissr_option("annoy_leaf_size", NULL)
   if (is.null(value)) {
     value <- max(64L, min(256L, ceiling(2L * k)))
   }
@@ -3086,7 +3095,7 @@ annoy_leaf_size <- function(k) {
 }
 
 annoy_search_k <- function(k, n_trees, leaf_size) {
-  value <- getOption("fastEmbedR.annoy_search_k", NULL)
+  value <- faissr_option("annoy_search_k", NULL)
   if (is.null(value)) {
     value <- max(n_trees * leaf_size, 50L * k)
   }
@@ -3147,10 +3156,8 @@ ivf_probe_count <- function(nlist, k) {
 faiss_ivf_params <- function(n, k) {
   n <- as.integer(n)
   k <- as.integer(k)
-  nlist <- getOption("fastEmbedR.faiss_nlist", NULL)
-  if (is.null(nlist)) nlist <- getOption("fastEmbedR.ivf_nlist", NULL)
-  nprobe <- getOption("fastEmbedR.faiss_nprobe", NULL)
-  if (is.null(nprobe)) nprobe <- getOption("fastEmbedR.ivf_nprobe", NULL)
+  nlist <- faissr_option(c("faiss_nlist", "ivf_nlist"), NULL)
+  nprobe <- faissr_option(c("faiss_nprobe", "ivf_nprobe"), NULL)
 
   nlist <- if (is.null(nlist)) ivf_list_count(n, k) else suppressWarnings(as.integer(nlist))
   requested_nlist <- nlist
@@ -3182,14 +3189,13 @@ faiss_ivf_params <- function(n, k) {
 faiss_ivf_manual_params <- function() {
   any(vapply(
     c("faiss_nlist", "ivf_nlist", "faiss_nprobe", "ivf_nprobe"),
-    function(name) !is.null(getOption(paste0("fastEmbedR.", name), NULL)),
+    function(name) !is.null(faissr_option(name, NULL)),
     logical(1)
   ))
 }
 
 cuvs_ivfpq_params <- function(p) {
-  pq_dim <- getOption("fastEmbedR.cuvs_ivfpq_pq_dim", NULL)
-  if (is.null(pq_dim)) pq_dim <- getOption("fastEmbedR.ivfpq_pq_dim", 0L)
+  pq_dim <- faissr_option(c("cuvs_ivfpq_pq_dim", "ivfpq_pq_dim"), 0L)
   pq_dim <- suppressWarnings(as.integer(pq_dim))
   requested_pq_dim <- pq_dim
   if (length(pq_dim) != 1L || is.na(pq_dim) || !is.finite(pq_dim) || pq_dim < 0L) {
@@ -3199,8 +3205,7 @@ cuvs_ivfpq_params <- function(p) {
     requested_pq_dim <- pq_dim
   }
 
-  pq_bits <- getOption("fastEmbedR.cuvs_ivfpq_pq_bits", NULL)
-  if (is.null(pq_bits)) pq_bits <- getOption("fastEmbedR.ivfpq_pq_bits", 8L)
+  pq_bits <- faissr_option(c("cuvs_ivfpq_pq_bits", "ivfpq_pq_bits"), 8L)
   pq_bits <- suppressWarnings(as.integer(pq_bits))
   requested_pq_bits <- pq_bits
   if (length(pq_bits) != 1L || is.na(pq_bits) || !is.finite(pq_bits)) {
@@ -3228,7 +3233,7 @@ cuvs_ivfpq_params <- function(p) {
 faiss_gpu_ivf_tune_policy <- function(tuning = "auto") {
   tuning <- normalize_nn_tuning(tuning)
   if (!identical(tuning, "auto")) return(tuning)
-  policy <- getOption("fastEmbedR.faiss_gpu_ivf_tune_policy", "cache")
+  policy <- faissr_option("faiss_gpu_ivf_tune_policy", "cache")
   policy <- tolower(as.character(policy)[1L])
   if (!policy %in% c("cache", "pilot", "fixed", "off")) {
     policy <- "cache"
@@ -3237,11 +3242,11 @@ faiss_gpu_ivf_tune_policy <- function(tuning = "auto") {
 }
 
 faiss_gpu_ivf_tune_cache_file <- function() {
-  path <- getOption("fastEmbedR.faiss_gpu_ivf_tune_cache_file", NULL)
+  path <- faissr_option("faiss_gpu_ivf_tune_cache_file", NULL)
   if (!is.null(path)) return(path)
   root <- tryCatch(
-    tools::R_user_dir("fastEmbedR", which = "cache"),
-    error = function(e) file.path(tempdir(), "fastEmbedR-cache")
+    tools::R_user_dir("faissR", which = "cache"),
+    error = function(e) file.path(tempdir(), "faissR-cache")
   )
   file.path(root, "faiss_gpu_ivf_tuning.rds")
 }
@@ -3252,9 +3257,9 @@ faiss_gpu_ivf_should_tune <- function(data, k, self_query, tuning = "auto") {
   if (!isTRUE(self_query)) return(FALSE)
   if (!isTRUE(faiss_available())) return(FALSE)
   if (isTRUE(faiss_ivf_manual_params())) return(FALSE)
-  enabled <- getOption("fastEmbedR.faiss_gpu_ivf_tune", TRUE)
+  enabled <- faissr_option("faiss_gpu_ivf_tune", TRUE)
   if (!isTRUE(enabled)) return(FALSE)
-  threshold <- getOption("fastEmbedR.faiss_gpu_ivf_tune_threshold", 20000L)
+  threshold <- faissr_option("faiss_gpu_ivf_tune_threshold", 20000L)
   threshold <- suppressWarnings(as.integer(threshold))
   if (length(threshold) != 1L || is.na(threshold) || !is.finite(threshold)) {
     threshold <- 20000L
@@ -3369,16 +3374,16 @@ faiss_gpu_ivf_tune_params <- function(data, k, base_params, tuning = "auto") {
       tuning = list(status = "disabled", policy = policy)
     ))
   }
-  sample_size <- getOption("fastEmbedR.faiss_gpu_ivf_tune_sample", 10000L)
+  sample_size <- faissr_option("faiss_gpu_ivf_tune_sample", 10000L)
   sample_size <- suppressWarnings(as.integer(sample_size))
   if (length(sample_size) != 1L || is.na(sample_size) || !is.finite(sample_size) || sample_size < 1000L) {
     sample_size <- 10000L
   }
   sample_size <- as.integer(min(nrow(data), sample_size))
-  seed <- getOption("fastEmbedR.faiss_gpu_ivf_tune_seed", 7L)
+  seed <- faissr_option("faiss_gpu_ivf_tune_seed", 7L)
   seed <- suppressWarnings(as.integer(seed))
   if (length(seed) != 1L || is.na(seed) || !is.finite(seed)) seed <- 7L
-  target <- getOption("fastEmbedR.faiss_gpu_ivf_tune_recall", 0.985)
+  target <- faissr_option("faiss_gpu_ivf_tune_recall", 0.985)
   target <- suppressWarnings(as.numeric(target))
   if (length(target) != 1L || is.na(target) || !is.finite(target)) target <- 0.985
   target <- max(0, min(1, target))
@@ -3508,7 +3513,7 @@ faiss_gpu_ivf_tune_params <- function(data, k, base_params, tuning = "auto") {
 }
 
 faiss_option_int <- function(name, default, min_value = 1L, max_value = .Machine$integer.max) {
-  value <- getOption(paste0("fastEmbedR.faiss_", name), NULL)
+  value <- faissr_option(paste0("faiss_", name), NULL)
   value <- if (is.null(value)) default else suppressWarnings(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- default
   as.integer(max(min_value, min(max_value, value)))
@@ -3565,14 +3570,14 @@ faiss_nndescent_params <- function(k) {
 }
 
 cuvs_option_int <- function(name, default, min_value = 1L, max_value = .Machine$integer.max) {
-  value <- getOption(paste0("fastEmbedR.cuvs_", name), NULL)
+  value <- faissr_option(paste0("cuvs_", name), NULL)
   value <- if (is.null(value)) default else suppressWarnings(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- default
   as.integer(max(min_value, min(max_value, value)))
 }
 
 cuvs_requested_option_int <- function(name, default) {
-  value <- getOption(paste0("fastEmbedR.cuvs_", name), NULL)
+  value <- faissr_option(paste0("cuvs_", name), NULL)
   value <- if (is.null(value)) default else suppressWarnings(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- default
   as.integer(value)
@@ -3636,7 +3641,7 @@ cuvs_cagra_params <- function(n, k) {
 cuvs_cagra_manual_params <- function() {
   any(vapply(
     c("graph_degree", "intermediate_graph_degree", "search_width", "itopk_size"),
-    function(name) !is.null(getOption(paste0("fastEmbedR.cuvs_", name), NULL)),
+    function(name) !is.null(faissr_option(paste0("cuvs_", name), NULL)),
     logical(1)
   ))
 }
@@ -3647,9 +3652,9 @@ cuvs_cagra_should_tune <- function(data, k, self_query, tuning = "auto") {
   if (!isTRUE(self_query)) return(FALSE)
   if (!isTRUE(cuvs_available())) return(FALSE)
   if (isTRUE(cuvs_cagra_manual_params())) return(FALSE)
-  enabled <- getOption("fastEmbedR.cuvs_cagra_tune", TRUE)
+  enabled <- faissr_option("cuvs_cagra_tune", TRUE)
   if (!isTRUE(enabled)) return(FALSE)
-  threshold <- getOption("fastEmbedR.cuvs_cagra_tune_threshold", 20000L)
+  threshold <- faissr_option("cuvs_cagra_tune_threshold", 20000L)
   threshold <- suppressWarnings(as.integer(threshold))
   if (length(threshold) != 1L || is.na(threshold) || !is.finite(threshold)) {
     threshold <- 20000L
@@ -3660,7 +3665,7 @@ cuvs_cagra_should_tune <- function(data, k, self_query, tuning = "auto") {
 cuvs_cagra_tune_policy <- function(tuning = "auto") {
   tuning <- normalize_nn_tuning(tuning)
   if (!identical(tuning, "auto")) return(tuning)
-  policy <- getOption("fastEmbedR.cuvs_cagra_tune_policy", "cache")
+  policy <- faissr_option("cuvs_cagra_tune_policy", "cache")
   policy <- tolower(as.character(policy)[1L])
   if (!policy %in% c("cache", "pilot", "fixed", "off")) {
     policy <- "cache"
@@ -3669,11 +3674,11 @@ cuvs_cagra_tune_policy <- function(tuning = "auto") {
 }
 
 cuvs_cagra_tune_cache_file <- function() {
-  path <- getOption("fastEmbedR.cuvs_cagra_tune_cache_file", NULL)
+  path <- faissr_option("cuvs_cagra_tune_cache_file", NULL)
   if (!is.null(path)) return(path)
   root <- tryCatch(
-    tools::R_user_dir("fastEmbedR", which = "cache"),
-    error = function(e) file.path(tempdir(), "fastEmbedR-cache")
+    tools::R_user_dir("faissR", which = "cache"),
+    error = function(e) file.path(tempdir(), "faissR-cache")
   )
   file.path(root, "cuvs_cagra_tuning.rds")
 }
@@ -3766,16 +3771,16 @@ cuvs_cagra_tune_params <- function(data, k, base_params, tuning = "auto") {
       tuning = list(status = "disabled", policy = policy)
     ))
   }
-  sample_size <- getOption("fastEmbedR.cuvs_cagra_tune_sample", 2048L)
+  sample_size <- faissr_option("cuvs_cagra_tune_sample", 2048L)
   sample_size <- suppressWarnings(as.integer(sample_size))
   if (length(sample_size) != 1L || is.na(sample_size) || !is.finite(sample_size) || sample_size < 256L) {
     sample_size <- 2048L
   }
   sample_size <- as.integer(min(nrow(data), sample_size))
-  seed <- getOption("fastEmbedR.cuvs_cagra_tune_seed", 4L)
+  seed <- faissr_option("cuvs_cagra_tune_seed", 4L)
   seed <- suppressWarnings(as.integer(seed))
   if (length(seed) != 1L || is.na(seed) || !is.finite(seed)) seed <- 4L
-  target <- getOption("fastEmbedR.cuvs_cagra_tune_recall", 0.985)
+  target <- faissr_option("cuvs_cagra_tune_recall", 0.985)
   target <- suppressWarnings(as.numeric(target))
   if (length(target) != 1L || is.na(target) || !is.finite(target)) target <- 0.985
   target <- max(0, min(1, target))
@@ -3941,7 +3946,7 @@ cuvs_nndescent_params <- function(n, k) {
 }
 
 cuvs_nndescent_threshold <- function() {
-  value <- getOption("fastEmbedR.cuvs_nndescent_threshold", 50000L)
+  value <- faissr_option("cuvs_nndescent_threshold", 50000L)
   value <- suppressWarnings(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- 50000L
   as.integer(max(2L, value))
@@ -3977,8 +3982,8 @@ ivf_self_knn <- function(data,
     stop("`k` must be in [1, nrow(data) - 1].", call. = FALSE)
   }
   n_threads <- normalize_nn_threads(n_threads)
-  nlist <- getOption("fastEmbedR.ivf_nlist", NULL)
-  nprobe <- getOption("fastEmbedR.ivf_nprobe", NULL)
+  nlist <- faissr_option("ivf_nlist", NULL)
+  nprobe <- faissr_option("ivf_nprobe", NULL)
   nlist <- if (is.null(nlist)) ivf_list_count(n, k) else as.integer(nlist)
   if (length(nlist) != 1L || is.na(nlist) || !is.finite(nlist)) {
     nlist <- ivf_list_count(n, k)
@@ -4279,6 +4284,9 @@ grid_self_knn <- function(data,
 #'   tuned default for the resolved method, `"cache"` reuses/stores pilot
 #'   results, `"pilot"` tunes for this call without persisting, `"fixed"` uses
 #'   fixed defaults with tuning metadata, and `"off"`/`"none"` disables tuning.
+#'   Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.
+#'   Legacy `fastEmbedR.<name>` option keys are still accepted as fallbacks, but
+#'   `faissR.*` takes precedence.
 #' @param n_threads Number of CPU worker threads for CPU backends. GPU backends
 #'   ignore this argument.
 #' @return A list with integer matrix `indices` and numeric matrix `distances`.

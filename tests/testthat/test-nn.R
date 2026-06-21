@@ -135,6 +135,45 @@ test_that("nn_capabilities agrees with public backend resolver", {
   }
 })
 
+test_that("faissR option namespace takes precedence over legacy fastEmbedR options", {
+  old <- options(
+    faissR.cpu_auto_exact_work = NULL,
+    fastEmbedR.cpu_auto_exact_work = NULL,
+    faissR.faiss_nlist = NULL,
+    fastEmbedR.faiss_nlist = NULL
+  )
+  on.exit(options(old), add = TRUE)
+
+  options(fastEmbedR.cpu_auto_exact_work = 1)
+  legacy <- faissR:::select_cpu_auto_backend(
+    self_query = TRUE,
+    n = 10000L,
+    p = 20L,
+    n_points = 10000L,
+    k = 50L,
+    work_size = 100,
+    metric = "euclidean"
+  )
+  expect_true(legacy %in% c("faiss_hnsw", "hnsw", "cpu"))
+
+  options(faissR.cpu_auto_exact_work = 1e9)
+  current <- faissR:::select_cpu_auto_backend(
+    self_query = TRUE,
+    n = 10000L,
+    p = 20L,
+    n_points = 10000L,
+    k = 50L,
+    work_size = 100,
+    metric = "euclidean"
+  )
+  expect_equal(current, "cpu")
+
+  options(fastEmbedR.faiss_nlist = 16L)
+  expect_equal(faissR:::faiss_ivf_params(1000L, 10L)$requested_nlist, 16L)
+  options(faissR.faiss_nlist = 32L)
+  expect_equal(faissR:::faiss_ivf_params(1000L, 10L)$requested_nlist, 32L)
+})
+
 test_that("nn accepts sparse Matrix inputs on the native sparse CPU path", {
   skip_if_not_installed("Matrix")
   x <- matrix(c(
@@ -931,15 +970,15 @@ test_that("public tuning policy normalizes and can override defaults", {
   expect_equal(faissR:::normalize_nn_tuning("pilot"), "pilot")
   expect_error(faissR:::normalize_nn_tuning("aggressive"), "tuning")
 
-  old_ivf <- getOption("fastEmbedR.faiss_gpu_ivf_tune_policy")
-  old_cagra <- getOption("fastEmbedR.cuvs_cagra_tune_policy")
+  old_ivf <- getOption("faissR.faiss_gpu_ivf_tune_policy")
+  old_cagra <- getOption("faissR.cuvs_cagra_tune_policy")
   on.exit(options(
-    fastEmbedR.faiss_gpu_ivf_tune_policy = old_ivf,
-    fastEmbedR.cuvs_cagra_tune_policy = old_cagra
+    faissR.faiss_gpu_ivf_tune_policy = old_ivf,
+    faissR.cuvs_cagra_tune_policy = old_cagra
   ), add = TRUE)
   options(
-    fastEmbedR.faiss_gpu_ivf_tune_policy = "fixed",
-    fastEmbedR.cuvs_cagra_tune_policy = "fixed"
+    faissR.faiss_gpu_ivf_tune_policy = "fixed",
+    faissR.cuvs_cagra_tune_policy = "fixed"
   )
 
   expect_equal(faissR:::faiss_gpu_ivf_tune_policy("auto"), "fixed")
@@ -1137,9 +1176,9 @@ test_that("RcppHNSW backend supports inner-product metric", {
   ), ncol = 2, byrow = TRUE)
 
   old_options <- options(
-    fastEmbedR.hnsw_m = 8L,
-    fastEmbedR.hnsw_ef_construction = 100L,
-    fastEmbedR.hnsw_ef = 100L
+    faissR.hnsw_m = 8L,
+    faissR.hnsw_ef_construction = 100L,
+    faissR.hnsw_ef = 100L
   )
   on.exit(options(old_options), add = TRUE)
 
@@ -1184,8 +1223,8 @@ test_that("real FAISS IVF backend records approximate index metadata", {
 
   if (faiss_available()) {
     old_options <- options(
-      fastEmbedR.faiss_nlist = 16L,
-      fastEmbedR.faiss_nprobe = 4L
+      faissR.faiss_nlist = 16L,
+      faissR.faiss_nprobe = 4L
     )
     on.exit(options(old_options), add = TRUE)
 
@@ -1202,8 +1241,8 @@ test_that("real FAISS IVF backend records approximate index metadata", {
     expect_false(attr(out, "approximation")$ivf_parameters_adjusted)
 
     options(
-      fastEmbedR.faiss_nlist = 9999L,
-      fastEmbedR.faiss_nprobe = 9999L
+      faissR.faiss_nlist = 9999L,
+      faissR.faiss_nprobe = 9999L
     )
     clamped <- internal_nn(x, k = k + 1L, backend = "faiss_ivf", n_threads = 2L)
     expect_equal(attr(clamped, "approximation")$nlist, nrow(x))
@@ -1270,9 +1309,9 @@ test_that("FAISS HNSW reports actual and requested parameters", {
 
   if (faiss_available()) {
     old_options <- options(
-      fastEmbedR.faiss_hnsw_m = 128L,
-      fastEmbedR.faiss_hnsw_ef_construction = 2L,
-      fastEmbedR.faiss_hnsw_ef_search = 2L
+      faissR.faiss_hnsw_m = 128L,
+      faissR.faiss_hnsw_ef_construction = 2L,
+      faissR.faiss_hnsw_ef_search = 2L
     )
     on.exit(options(old_options), add = TRUE)
 
@@ -1554,10 +1593,10 @@ test_that("cuVS CAGRA reports actual and requested graph parameters", {
   set.seed(839)
   x <- matrix(rnorm(40L * 8L), nrow = 40L)
   old_options <- options(
-    fastEmbedR.cuvs_graph_degree = 128L,
-    fastEmbedR.cuvs_intermediate_graph_degree = 512L,
-    fastEmbedR.cuvs_search_width = 0L,
-    fastEmbedR.cuvs_itopk_size = 8L
+    faissR.cuvs_graph_degree = 128L,
+    faissR.cuvs_intermediate_graph_degree = 512L,
+    faissR.cuvs_search_width = 0L,
+    faissR.cuvs_itopk_size = 8L
   )
   on.exit(options(old_options), add = TRUE)
 
@@ -1585,9 +1624,9 @@ test_that("CUDA backend reports unavailable runtime clearly", {
 
 test_that("CAGRA tuning cache can round-trip without CUDA", {
   cache_file <- tempfile(fileext = ".rds")
-  old_file <- getOption("fastEmbedR.cuvs_cagra_tune_cache_file")
-  on.exit(options(fastEmbedR.cuvs_cagra_tune_cache_file = old_file), add = TRUE)
-  options(fastEmbedR.cuvs_cagra_tune_cache_file = cache_file)
+  old_file <- getOption("faissR.cuvs_cagra_tune_cache_file")
+  on.exit(options(faissR.cuvs_cagra_tune_cache_file = old_file), add = TRUE)
+  options(faissR.cuvs_cagra_tune_cache_file = cache_file)
 
   key <- "unit-test-cagra-cache"
   value <- list(
@@ -1609,9 +1648,9 @@ test_that("CAGRA tuning cache can round-trip without CUDA", {
 
 test_that("FAISS GPU IVF tuning cache can round-trip without CUDA", {
   cache_file <- tempfile(fileext = ".rds")
-  old_file <- getOption("fastEmbedR.faiss_gpu_ivf_tune_cache_file")
-  on.exit(options(fastEmbedR.faiss_gpu_ivf_tune_cache_file = old_file), add = TRUE)
-  options(fastEmbedR.faiss_gpu_ivf_tune_cache_file = cache_file)
+  old_file <- getOption("faissR.faiss_gpu_ivf_tune_cache_file")
+  on.exit(options(faissR.faiss_gpu_ivf_tune_cache_file = old_file), add = TRUE)
+  options(faissR.faiss_gpu_ivf_tune_cache_file = cache_file)
 
   key <- "unit-test-faiss-gpu-ivf-cache"
   value <- list(

@@ -551,9 +551,9 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
                     timeout, reference, seed) {
   started <- proc.time()[["elapsed"]]
   old_options <- options(
-    fastEmbedR.approx_knn_seed = as.integer(seed),
-    fastEmbedR.faiss_gpu_ivf_tune_seed = as.integer(seed + 11L),
-    fastEmbedR.cuvs_cagra_tune_seed = as.integer(seed + 23L)
+    faissR.approx_knn_seed = as.integer(seed),
+    faissR.faiss_gpu_ivf_tune_seed = as.integer(seed + 11L),
+    faissR.cuvs_cagra_tune_seed = as.integer(seed + 23L)
   )
   on.exit(options(old_options), add = TRUE)
   set.seed(as.integer(seed))
