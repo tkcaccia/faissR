@@ -28,6 +28,37 @@ test_that("NN metric benchmark preflights unsupported NSG metrics as expected sk
   }
 })
 
+test_that("NN metric benchmark recommendations are grouped by backend metric and k", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = c("A", "A", "A", "A", "A", "A"),
+    backend = c("cpu", "cpu", "cpu", "cpu", "cuda", "cuda"),
+    method = c("exact", "hnsw", "exact", "hnsw", "flat", "cagra"),
+    metric = c("euclidean", "euclidean", "cosine", "cosine", "euclidean", "euclidean"),
+    k = c(15L, 15L, 15L, 15L, 50L, 50L),
+    median_elapsed_sec = c(10, 2, 8, 3, 4, 1),
+    median_recall_at_k = c(1.00, 0.99, 1.00, 0.97, 1.00, 0.99),
+    min_recall_at_k = c(1.00, 0.98, 1.00, 0.96, 1.00, 0.98),
+    median_min_recall_at_k = c(1.00, 0.98, 1.00, 0.96, 1.00, 0.98),
+    recall_reference = c("exact", "exact", "exact", "exact", "exact", "exact"),
+    median_recall_query_n = c(100, 100, 100, 100, 100, 100),
+    result_backend = c("cpu", "faiss_hnsw", "cpu", "faiss_hnsw", "faiss_gpu_flat_l2", "faiss_gpu_cagra"),
+    resolved_backend = c("cpu", "faiss_hnsw", "cpu", "faiss_hnsw", "faiss_gpu_flat_l2", "faiss_gpu_cagra"),
+    implementation_backend = c("cpu", "faiss_hnsw", "cpu", "faiss_hnsw", "faiss_gpu_flat_l2", "faiss_gpu_cagra"),
+    success_cycles = c(2L, 2L, 2L, 2L, 2L, 2L)
+  )
+
+  out <- env$recommend_nn_methods(cycle_summary, recall_threshold = 0.98)
+  expect_equal(nrow(out), 3L)
+  expect_equal(out$backend, c("cpu", "cpu", "cuda"))
+  expect_equal(out$metric, c("cosine", "euclidean", "euclidean"))
+  expect_equal(as.integer(out$k), c(15L, 15L, 50L))
+  expect_equal(out$method, c("exact", "hnsw", "cagra"))
+})
+
 test_that("k-means benchmark recommendations are grouped by dataset and centers", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_kmeans.R"),
