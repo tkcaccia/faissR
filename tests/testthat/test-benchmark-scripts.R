@@ -410,6 +410,26 @@ test_that("k-means benchmark recommendations are grouped by dataset and centers"
   )
 })
 
+test_that("k-means benchmark recommendation ties prefer higher ARI then lower withinss", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = c("A", "A", "B", "B"),
+    centers = c(2L, 2L, 2L, 2L),
+    method = c("lower_ari", "higher_ari", "higher_withinss", "lower_withinss"),
+    backend = c("cpu", "cpu", "cpu", "cpu"),
+    metric = c("euclidean", "euclidean", "euclidean", "euclidean"),
+    median_ari = c(0.89, 0.90, 0.90, 0.90),
+    median_elapsed_sec = c(1, 1, 1, 1),
+    median_tot_withinss = c(10, 12, 20, 15)
+  )
+
+  out <- env$recommend_kmeans_methods(cycle_summary, ari_tolerance = 0.02)
+  expect_equal(out$method, c("higher_ari", "lower_withinss"))
+})
+
 test_that("k-means fast comparison is ordered by dataset centers and backend", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_kmeans.R"),
@@ -504,6 +524,38 @@ test_that("graph benchmark recommendations are grouped by target cluster count",
     out$recommendation_basis,
     c("fastest_within_ari_tolerance", "fastest_within_ari_tolerance", "speed_only_no_ari")
   )
+})
+
+test_that("graph benchmark recommendation ties prefer higher ARI then modularity", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = c("A", "A", "B", "B"),
+    k = c(15L, 15L, 15L, 15L),
+    graph_backend = c("cpu", "cpu", "cpu", "cpu"),
+    graph_resolved_backend = c("cpu", "cpu", "cpu", "cpu"),
+    cluster_backend = c("cpu", "cpu", "cpu", "cpu"),
+    cluster_resolved_backend = c("cpu", "cpu", "cpu", "cpu"),
+    method = c("lower_ari", "higher_ari", "lower_modularity", "higher_modularity"),
+    weight = c("snn", "snn", "snn", "snn"),
+    success_cycles = c(1L, 1L, 1L, 1L),
+    median_graph_sec = c(0.5, 0.5, 0.5, 0.5),
+    median_cluster_sec = c(0.5, 0.5, 0.5, 0.5),
+    median_total_sec = c(1, 1, 1, 1),
+    median_ari = c(0.89, 0.90, 0.90, 0.90),
+    min_ari = c(0.89, 0.90, 0.90, 0.90),
+    median_modularity = c(0.5, 0.4, 0.3, 0.4),
+    median_n_communities = c(3, 3, 3, 3),
+    median_selected_resolution = c(1, 1, 1, 1),
+    n_clusters_requested = c(3L, 3L, 3L, 3L),
+    n_clusters_source = c("labels", "labels", "labels", "labels"),
+    graph_cached = c(TRUE, TRUE, TRUE, TRUE)
+  )
+
+  out <- env$recommend_graph_cluster_methods(cycle_summary, ari_tolerance = 0.02)
+  expect_equal(out$method, c("higher_ari", "higher_modularity"))
 })
 
 test_that("graph benchmark cycle summaries preserve target cluster count", {

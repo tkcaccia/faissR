@@ -184,7 +184,9 @@ summaries.
 `graph_cluster_recommendations_from_cycles.csv` selects the fastest successful
 graph/clustering/backend/method row within `ari_tolerance` of the best median
 ARI for each dataset/k/target-cluster-count combination; when ARI is
-unavailable it selects the fastest median total-time row. The
+available and median total times tie, higher median ARI and then higher median
+modularity break the tie. When ARI is unavailable it selects the fastest median
+total-time row. The
 `recommendation_basis` column records whether the row was selected as
 `"fastest_within_ari_tolerance"` or `"speed_only_no_ari"`.
 `graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where
@@ -353,7 +355,9 @@ stability, iteration counts, and resolved backend metadata.
 after ranking by ARI and elapsed time for backward-compatible summaries.
 `kmeans_recommendations_from_cycles.csv` selects the fastest row within
 `ari_tolerance` of the best median ARI for each dataset/centers combination;
-when ARI is unavailable it selects the fastest median-time row. The
+when ARI is available and median times tie, higher median ARI and then lower
+median total within-cluster sum of squares break the tie. When ARI is
+unavailable it selects the fastest median-time row. The
 `recommendation_basis` column records whether the row was selected as
 `"fastest_within_ari_tolerance"` or `"speed_only_no_ari"`.
 `kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()`

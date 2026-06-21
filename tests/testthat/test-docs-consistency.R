@@ -294,6 +294,17 @@ test_that("graph cluster target documentation states integer and graph-size cons
   }
 })
 
+test_that("benchmark docs describe deterministic ARI recommendation tie-breaks", {
+  docs_file <- test_path("../../docs/benchmarks.md")
+  if (!file.exists(docs_file)) {
+    skip("Benchmark documentation is not available in this installed-package test context.")
+  }
+
+  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  expect_true(grepl("higher median ARI and then higher median modularity", prose, fixed = TRUE))
+  expect_true(grepl("higher median ARI and then lower median total within-cluster sum of squares", prose, fixed = TRUE))
+})
+
 test_that("backend auto documentation states the CUDA runtime requirement", {
   docs_files <- test_path("../../docs", c(
     "backend-capabilities.md",
