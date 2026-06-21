@@ -155,3 +155,37 @@ Rscript benchmark_scripts/benchmark_nn_metrics.R \
   --recall_threshold=0.98 \
   --threads=2
 ```
+
+## K-Means
+
+`benchmark_scripts/benchmark_kmeans.R` compares `fast_kmeans()` CPU/CUDA
+backends with base `stats::kmeans`. It records elapsed time, peak resident
+memory when available, backend used, total within-cluster sum of squares,
+iterations, selected k-means parameters, tuning policy, and ARI against
+`dataset$labels` when labels are available.
+
+Example CPU run:
+
+```sh
+Rscript benchmark_scripts/benchmark_kmeans.R \
+  --data_root=/path/to/Data \
+  --out_dir=/path/to/faissR_KMEANS_CPU \
+  --datasets=COIL20,USPS,FashionMNIST,MNIST \
+  --methods=fast_kmeans,stats \
+  --backends=cpu \
+  --centers=10 \
+  --threads=12
+```
+
+Example CUDA run:
+
+```sh
+Rscript benchmark_scripts/benchmark_kmeans.R \
+  --data_root=/path/to/Data \
+  --out_dir=/path/to/faissR_KMEANS_CUDA \
+  --datasets=COIL20,USPS,FashionMNIST,MNIST \
+  --methods=fast_kmeans \
+  --backends=cuda \
+  --centers=10 \
+  --threads=2
+```
