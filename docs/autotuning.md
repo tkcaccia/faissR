@@ -60,8 +60,8 @@ Use these rules for `backend = "auto"` and for explicit backend recommendations:
 | `cuda_cuvs_ivfpq` | CUDA memory-pressure tier | Better than FAISS GPU IVFPQ on some datasets but still not an accuracy-first default. |
 | `faiss_nsg_fast` | CPU graph candidate | Can be accurate but failed on some datasets with fewer than k neighbours; use safer params or retry. |
 | `faiss_nsg_balanced` | CPU graph candidate | Safer than fast but still had a failure; default params increased to r = 48 and search_l = 200. |
-| `faiss_nndescent_fast` | CPU graph speed tier | Fast, but recall was usually lower than HNSW. |
-| `faiss_nndescent_balanced` | CPU graph candidate | Defaults increased to graph_k = 100, iter = 20, search_l = 100 for k = 50; still not the CPU auto default. |
+| `cpu_nndescent_fast` | CPU graph speed tier | Native faissR NN-descent route; useful as an explicit Euclidean graph-search candidate, but recall was usually lower than HNSW. |
+| `cpu_nndescent_balanced` | CPU graph candidate | Native pool/iteration defaults are used for public `method = "nndescent"`; still not the CPU auto default. FAISS NNDescent is experimental opt-in only because linked FAISS builds can abort during graph construction. |
 | `cuda_cuvs_nndescent` | CUDA graph speed tier | Fast and useful at around 0.99 recall on some datasets; failed on COIL20. |
 | `faiss_gpu_cagra` | CUDA graph high-recall tier | Reliable high-recall CAGRA path through FAISS/cuVS integration [13-15]. |
 | `cuda_cuvs_cagra` | Direct cuVS CAGRA | Guarded by pilot recall. Direct cuVS CAGRA had anomalously poor MNIST recall; do not trust without pilot success. |
