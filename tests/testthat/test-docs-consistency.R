@@ -42,6 +42,38 @@ test_that("NN methods documentation metric table agrees with nn_capabilities", {
   expect_equal(documented, supported)
 })
 
+test_that("public NN method and metric labels are unique canonical labels", {
+  methods <- faissR:::nn_method_labels()
+  metrics <- faissR:::nn_metric_labels()
+
+  expect_equal(methods, unique(methods))
+  expect_equal(metrics, unique(metrics))
+  expect_equal(methods, unname(vapply(methods, faissR:::normalize_nn_method, character(1L))))
+  expect_equal(metrics, unname(vapply(metrics, faissR:::normalize_nn_metric, character(1L))))
+  expect_false(any(grepl("^faiss_|^cuda_|^cpu_", methods)))
+  expect_false("manhattan" %in% metrics)
+})
+
+test_that("usage API NN method documentation agrees with live signatures", {
+  docs_file <- test_path("../../docs/usage-api.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  lines <- readLines(docs_file, warn = FALSE)
+  method_rows <- grep("^\\| `method` \\| Algorithm selector:", lines, value = TRUE)
+  expect_length(method_rows, 1L)
+  documented <- regmatches(method_rows, gregexpr('`"[^"]+"`', method_rows))[[1L]]
+  documented <- gsub('`|"', "", documented)
+
+  live <- eval(formals(nn)$method, envir = baseenv())
+  expect_equal(documented, live)
+
+  nn_without_self_rows <- grep("^\\| `method` \\| Same algorithm selector as `nn\\(\\)`\\.", lines, value = TRUE)
+  expect_length(nn_without_self_rows, 1L)
+  expect_equal(eval(formals(nn_without_self)$method, envir = baseenv()), live)
+})
+
 test_that("usage API graph_cluster signature shows the live default method", {
   docs_file <- test_path("../../docs/usage-api.md")
   if (!file.exists(docs_file)) {
