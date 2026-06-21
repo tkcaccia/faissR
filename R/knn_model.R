@@ -54,7 +54,7 @@ knn <- function(Xtrain,
                 ...) {
   vote <- match.arg(vote)
   type <- match.arg(type)
-  backend <- as.character(backend)[1L]
+  backend <- normalize_public_backend_arg(backend)
   method <- as.character(method)[1L]
   tuning <- as.character(tuning)[1L]
   model <- knn_model_fit(
@@ -84,7 +84,7 @@ knn_model_fit <- function(Xtrain,
                           task = c("auto", "classification", "regression"),
                           k = 15L,
                           n_threads = NULL) {
-  backend <- as.character(backend)[1L]
+  backend <- normalize_public_backend_arg(backend)
   method <- as.character(method)[1L]
   tuning <- as.character(tuning)[1L]
   metric <- match.arg(metric)
@@ -165,7 +165,7 @@ predict.faissR_knn_model <- function(object,
   backend <- if (is.null(backend)) {
     object$backend %||% "auto"
   } else {
-    as.character(backend)[1L]
+    normalize_public_backend_arg(backend)
   }
   tuning <- as.character(tuning)[1L]
   vote <- match.arg(vote)

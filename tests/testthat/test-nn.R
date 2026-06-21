@@ -1,3 +1,43 @@
+internal_nn <- function(data,
+                        points = data,
+                        k,
+                        backend,
+                        exclude_self = FALSE,
+                        n_threads = NULL,
+                        metric = "euclidean",
+                        tuning = "auto") {
+  faissR:::nn_compute(
+    data = data,
+    points = points,
+    k = k,
+    backend = backend,
+    points_missing = missing(points),
+    exclude_self = exclude_self,
+    n_threads = n_threads,
+    metric = metric,
+    tuning = tuning
+  )
+}
+
+internal_nn_without_self <- function(data,
+                                     k,
+                                     backend,
+                                     n_threads = NULL,
+                                     metric = "euclidean",
+                                     tuning = "auto") {
+  faissR:::nn_compute(
+    data = data,
+    points = data,
+    k = k,
+    backend = backend,
+    points_missing = TRUE,
+    exclude_self = TRUE,
+    n_threads = n_threads,
+    metric = metric,
+    tuning = tuning
+  )
+}
+
 test_that("nn returns exact euclidean neighbors", {
   x <- matrix(c(
     0, 0,
@@ -96,7 +136,7 @@ test_that("nn sparse query path matches dense query path", {
   ), ncol = 3, byrow = TRUE)
 
   dense <- nn(data, points, k = 2L, backend = "cpu")
-  sparse <- nn(
+  sparse <- internal_nn(
     Matrix::Matrix(data, sparse = TRUE),
     Matrix::Matrix(points, sparse = TRUE),
     k = 2L,
@@ -119,17 +159,17 @@ test_that("nn sparse cosine and correlation match dense CPU", {
   sx <- Matrix::Matrix(x, sparse = TRUE)
 
   dense_cos <- nn(x, k = 3L, backend = "cpu", metric = "cosine")
-  sparse_cos <- nn(sx, k = 3L, backend = "cpu_sparse", metric = "cosine")
+  sparse_cos <- internal_nn(sx, k = 3L, backend = "cpu_sparse", metric = "cosine")
   expect_equal(unname(sparse_cos$indices), unname(dense_cos$indices))
   expect_equal(unname(sparse_cos$distances), unname(dense_cos$distances), tolerance = 1e-12)
 
   dense_cor <- nn(x, k = 3L, backend = "cpu", metric = "correlation")
-  sparse_cor <- nn(sx, k = 3L, backend = "cpu_sparse", metric = "correlation")
+  sparse_cor <- internal_nn(sx, k = 3L, backend = "cpu_sparse", metric = "correlation")
   expect_equal(unname(sparse_cor$indices), unname(dense_cor$indices))
   expect_equal(unname(sparse_cor$distances), unname(dense_cor$distances), tolerance = 1e-12)
 
   dense_ip <- nn(x, k = 3L, backend = "cpu", metric = "inner_product")
-  sparse_ip <- nn(sx, k = 3L, backend = "cpu_sparse", metric = "inner_product")
+  sparse_ip <- internal_nn(sx, k = 3L, backend = "cpu_sparse", metric = "inner_product")
   expect_equal(unname(sparse_ip$indices), unname(dense_ip$indices))
   expect_equal(unname(sparse_ip$distances), unname(dense_ip$distances), tolerance = 1e-12)
 })
@@ -259,16 +299,16 @@ test_that("non-euclidean metrics use only validated backend paths", {
     )
   }
   expect_error(
-    nn(x, k = 4L, backend = "cuda_cuvs_nndescent", metric = "correlation"),
+    internal_nn(x, k = 4L, backend = "cuda_cuvs_nndescent", metric = "correlation"),
     "validated Euclidean-distance semantics only"
   )
   if (requireNamespace("RcppHNSW", quietly = TRUE)) {
-    hnsw_ip <- nn(x, k = 4L, backend = "hnsw", metric = "inner_product", n_threads = 2L)
+    hnsw_ip <- internal_nn(x, k = 4L, backend = "hnsw", metric = "inner_product", n_threads = 2L)
     expect_equal(attr(hnsw_ip, "metric"), "inner_product")
     expect_equal(attr(hnsw_ip, "backend"), "hnsw")
   } else {
     expect_error(
-      nn(x, k = 4L, backend = "hnsw", metric = "inner_product"),
+      internal_nn(x, k = 4L, backend = "hnsw", metric = "inner_product"),
       "RcppHNSW"
     )
   }
@@ -374,7 +414,7 @@ test_that("2D grid self KNN matches exact CPU neighbors", {
   k <- 16L
 
   exact <- nn(x, k = k, backend = "cpu", n_threads = 2L)
-  grid <- nn(x, k = k, backend = "cpu_grid2d", n_threads = 2L)
+  grid <- internal_nn(x, k = k, backend = "cpu_grid2d", n_threads = 2L)
 
   expect_equal(attr(grid, "backend"), "cpu_grid2d")
   expect_true(isTRUE(attr(grid, "exact")))
@@ -389,7 +429,7 @@ test_that("3D grid self KNN matches exact CPU neighbors", {
   k <- 14L
 
   exact <- nn(x, k = k, backend = "cpu", n_threads = 2L)
-  grid <- nn(x, k = k, backend = "cpu_grid", n_threads = 2L)
+  grid <- internal_nn(x, k = k, backend = "cpu_grid", n_threads = 2L)
 
   expect_equal(attr(grid, "backend"), "cpu_grid3d")
   expect_true(isTRUE(attr(grid, "exact")))
@@ -404,7 +444,7 @@ test_that("VP-tree self KNN matches exact CPU neighbors", {
   k <- 9L
 
   exact <- nn(x, k = k, backend = "cpu", n_threads = 2L)
-  tree <- nn(x, k = k, backend = "vptree", n_threads = 2L)
+  tree <- internal_nn(x, k = k, backend = "vptree", n_threads = 2L)
 
   expect_equal(attr(tree, "backend"), "cpu_vptree")
   expect_true(isTRUE(attr(tree, "exact")))
@@ -420,7 +460,7 @@ test_that("VP-tree query KNN matches exact CPU neighbors", {
   k <- 11L
 
   exact <- nn(data, points, k = k, backend = "cpu", n_threads = 2L)
-  tree <- nn(data, points, k = k, backend = "cpu_vptree", n_threads = 2L)
+  tree <- internal_nn(data, points, k = k, backend = "cpu_vptree", n_threads = 2L)
 
   expect_equal(attr(tree, "backend"), "cpu_vptree")
   expect_true(isTRUE(attr(tree, "exact")))
@@ -448,7 +488,7 @@ test_that("VP-tree supports exact cosine and correlation metrics", {
     expect_equal(unname(tree_self$distances), unname(exact_self$distances), tolerance = 1e-5)
 
     exact_query <- nn(x, points, k = k, backend = "cpu", method = "exact", metric = metric, n_threads = 2L)
-    tree_query <- nn(x, points, k = k, backend = "cpu_vptree", metric = metric, n_threads = 2L)
+    tree_query <- internal_nn(x, points, k = k, backend = "cpu_vptree", metric = metric, n_threads = 2L)
     expect_equal(unname(tree_query$indices), unname(exact_query$indices))
     expect_equal(unname(tree_query$distances), unname(exact_query$distances), tolerance = 1e-5)
   }
@@ -479,7 +519,7 @@ test_that("VP-tree cosine and correlation use exact fallback for zero-normalized
     expect_equal(unname(tree_self$distances), unname(exact_self$distances), tolerance = 1e-12)
 
     exact_query <- nn(x, points, k = k, backend = "cpu", method = "exact", metric = metric, n_threads = 2L)
-    tree_query <- nn(x, points, k = k, backend = "cpu_vptree", metric = metric, n_threads = 2L)
+    tree_query <- internal_nn(x, points, k = k, backend = "cpu_vptree", metric = metric, n_threads = 2L)
     expect_true(isTRUE(attr(tree_query, "spatial_index")$fallback))
     expect_equal(unname(tree_query$indices), unname(exact_query$indices))
     expect_equal(unname(tree_query$distances), unname(exact_query$distances), tolerance = 1e-12)
@@ -491,8 +531,8 @@ test_that("generic CPU spatial KNN falls back to VP-tree for thin data", {
   x <- cbind(runif(3000L), rnorm(3000L, sd = 1e-5), rnorm(3000L, sd = 1e-5))
   k <- 12L
 
-  exact <- faissR:::nn_without_self(x, k = k, backend = "cpu", n_threads = 2L)
-  spatial <- faissR:::nn_without_self(x, k = k, backend = "cpu_grid", n_threads = 2L)
+  exact <- nn_without_self(x, k = k, backend = "cpu", n_threads = 2L)
+  spatial <- internal_nn_without_self(x, k = k, backend = "cpu_grid", n_threads = 2L)
 
   expect_equal(attr(spatial, "backend"), "cpu_vptree")
   expect_equal(attr(spatial, "spatial_index")$strategy, "native_exact_vptree")
@@ -511,8 +551,8 @@ test_that("generic CPU spatial KNN keeps duplicate-heavy data on grid", {
   x <- base[sample.int(nrow(base), 3000L, replace = TRUE), , drop = FALSE]
   k <- 12L
 
-  exact <- faissR:::nn_without_self(x, k = k, backend = "cpu", n_threads = 2L)
-  spatial <- faissR:::nn_without_self(x, k = k, backend = "cpu_grid", n_threads = 2L)
+  exact <- nn_without_self(x, k = k, backend = "cpu", n_threads = 2L)
+  spatial <- internal_nn_without_self(x, k = k, backend = "cpu_grid", n_threads = 2L)
 
   expect_equal(attr(spatial, "backend"), "cpu_grid2d")
   expect_equal(attr(spatial, "spatial_index")$strategy, "native_exact_uniform_grid_2d")
@@ -644,10 +684,10 @@ test_that("clustered self KNN is not selected automatically", {
 
 test_that("removed CPU approximation backends are not public nn choices", {
   x <- matrix(rnorm(120L), nrow = 30L)
-  expect_error(nn(x, k = 5L, backend = "cpu_clustered"), "should be one of")
-  expect_error(nn(x, k = 5L, backend = "cpu_nndescent"), "should be one of")
-  expect_error(nn(x, k = 5L, backend = "cpu_ivf"), "should be one of")
-  expect_error(nn(x, k = 5L, backend = "cpu_annoy"), "should be one of")
+  expect_error(nn(x, k = 5L, backend = "cpu_clustered"), "must be one of")
+  expect_error(nn(x, k = 5L, backend = "cpu_nndescent"), "must be one of")
+  expect_error(nn(x, k = 5L, backend = "cpu_ivf"), "must be one of")
+  expect_error(nn(x, k = 5L, backend = "cpu_annoy"), "must be one of")
 })
 
 test_that("CPU approximate selector chooses FAISS HNSW, RcppHNSW, or exact CPU", {
@@ -965,14 +1005,14 @@ test_that("CUDA auto selector is shape-aware", {
   if (faiss_available()) expect_equal(large, "faiss_gpu_cagra")
 })
 
-test_that("RcppHNSW backend is public when installed", {
+test_that("RcppHNSW implementation backend is available when installed", {
   skip_if_not_installed("RcppHNSW")
   set.seed(127)
   x <- rbind(
     matrix(rnorm(400, -2, 0.4), ncol = 8),
     matrix(rnorm(400, 2, 0.4), ncol = 8)
   )
-  out <- nn(x, k = 10L, backend = "hnsw", n_threads = 2L)
+  out <- internal_nn(x, k = 10L, backend = "hnsw", n_threads = 2L)
 
   expect_equal(dim(out$indices), c(nrow(x), 10L))
   expect_equal(out$indices[, 1L], seq_len(nrow(x)))
@@ -986,7 +1026,7 @@ test_that("RcppHNSW backend supports correlation metric", {
   set.seed(128)
   x <- matrix(rnorm(80L * 10L), nrow = 80L)
 
-  out <- nn(x, k = 6L, backend = "hnsw", metric = "correlation", n_threads = 2L)
+  out <- internal_nn(x, k = 6L, backend = "hnsw", metric = "correlation", n_threads = 2L)
 
   expect_equal(dim(out$indices), c(nrow(x), 6L))
   expect_equal(attr(out, "backend"), "hnsw")
@@ -1011,7 +1051,7 @@ test_that("RcppHNSW backend supports inner-product metric", {
   )
   on.exit(options(old_options), add = TRUE)
 
-  out <- nn(x, k = 3L, backend = "hnsw", metric = "inner_product", n_threads = 2L)
+  out <- internal_nn(x, k = 3L, backend = "hnsw", metric = "inner_product", n_threads = 2L)
   public <- nn(x, k = 3L, backend = "cpu", method = "HNSW", metric = "inner_product", n_threads = 2L)
 
   expect_equal(dim(out$indices), c(nrow(x), 3L))
@@ -1031,8 +1071,8 @@ test_that("real FAISS C++ backend is either exact or clearly unavailable", {
   k <- 7L
 
   if (faiss_available()) {
-    exact <- faissR:::nn_without_self(x, k = k, backend = "cpu", n_threads = 2L)
-    out <- faissR:::nn_without_self(x, k = k, backend = "faiss", n_threads = 2L)
+    exact <- nn_without_self(x, k = k, backend = "cpu", n_threads = 2L)
+    out <- internal_nn_without_self(x, k = k, backend = "faiss", n_threads = 2L)
     recall <- faissR:::.knn_recall_summary(out, exact, k = k)
 
     expect_equal(dim(out$indices), c(nrow(x), k))
@@ -1041,7 +1081,7 @@ test_that("real FAISS C++ backend is either exact or clearly unavailable", {
     expect_equal(attr(out, "faiss")$index_type, "IndexFlatL2")
     expect_equal(recall$recall_at_k, 1)
   } else {
-    expect_error(nn(x, k = k + 1L, backend = "faiss"), "FAISS")
+    expect_error(internal_nn(x, k = k + 1L, backend = "faiss"), "FAISS")
   }
 })
 
@@ -1057,7 +1097,7 @@ test_that("real FAISS IVF backend records approximate index metadata", {
     )
     on.exit(options(old_options), add = TRUE)
 
-    out <- nn(x, k = k + 1L, backend = "faiss_ivf", n_threads = 2L)
+    out <- internal_nn(x, k = k + 1L, backend = "faiss_ivf", n_threads = 2L)
     expect_equal(dim(out$indices), c(nrow(x), k + 1L))
     expect_equal(out$indices[, 1L], seq_len(nrow(x)))
     expect_equal(attr(out, "backend"), "faiss_ivf")
@@ -1073,14 +1113,14 @@ test_that("real FAISS IVF backend records approximate index metadata", {
       fastEmbedR.faiss_nlist = 9999L,
       fastEmbedR.faiss_nprobe = 9999L
     )
-    clamped <- nn(x, k = k + 1L, backend = "faiss_ivf", n_threads = 2L)
+    clamped <- internal_nn(x, k = k + 1L, backend = "faiss_ivf", n_threads = 2L)
     expect_equal(attr(clamped, "approximation")$nlist, nrow(x))
     expect_equal(attr(clamped, "approximation")$nprobe, nrow(x))
     expect_equal(attr(clamped, "approximation")$requested_nlist, 9999L)
     expect_equal(attr(clamped, "approximation")$requested_nprobe, 9999L)
     expect_true(attr(clamped, "approximation")$ivf_parameters_adjusted)
   } else {
-    expect_error(nn(x, k = k + 1L, backend = "faiss_ivf"), "FAISS")
+    expect_error(internal_nn(x, k = k + 1L, backend = "faiss_ivf"), "FAISS")
   }
 })
 
@@ -1090,16 +1130,16 @@ test_that("FAISS graph backends reject too-small training sets clearly", {
 
   if (faiss_available()) {
     expect_error(
-      faissR:::nn_without_self(x, k = 10L, backend = "faiss_nsg", n_threads = 2L),
+      internal_nn_without_self(x, k = 10L, backend = "faiss_nsg", n_threads = 2L),
       "more than 100 training rows"
     )
     expect_error(
-      faissR:::nn_without_self(x, k = 10L, backend = "faiss_nndescent", n_threads = 2L),
+      internal_nn_without_self(x, k = 10L, backend = "faiss_nndescent", n_threads = 2L),
       "more than 100 training rows"
     )
   } else {
-    expect_error(nn(x, k = 10L, backend = "faiss_nsg"), "FAISS")
-    expect_error(nn(x, k = 10L, backend = "faiss_nndescent"), "FAISS")
+    expect_error(internal_nn(x, k = 10L, backend = "faiss_nsg"), "FAISS")
+    expect_error(internal_nn(x, k = 10L, backend = "faiss_nndescent"), "FAISS")
   }
 })
 
@@ -1108,7 +1148,7 @@ test_that("FAISS graph backends report actual and requested parameters", {
   x <- matrix(rnorm(200L * 8L), nrow = 200L)
 
   if (faiss_available()) {
-    nsg <- faissR:::nn_without_self(x, k = 10L, backend = "faiss_nsg", n_threads = 2L)
+    nsg <- internal_nn_without_self(x, k = 10L, backend = "faiss_nsg", n_threads = 2L)
     nsg_approx <- attr(nsg, "approximation")
     expect_equal(dim(nsg$indices), c(nrow(x), 10L))
     expect_equal(nsg_approx$r, 48L)
@@ -1118,7 +1158,7 @@ test_that("FAISS graph backends report actual and requested parameters", {
     expect_equal(nsg_approx$gk, max(64L, 2L * 10L, 2L * nsg_approx$r))
     expect_false(nsg_approx$nsg_parameters_adjusted)
 
-    nnd <- faissR:::nn_without_self(x, k = 10L, backend = "faiss_nndescent", n_threads = 2L)
+    nnd <- internal_nn_without_self(x, k = 10L, backend = "faiss_nndescent", n_threads = 2L)
     nnd_approx <- attr(nnd, "approximation")
     expect_equal(dim(nnd$indices), c(nrow(x), 10L))
     expect_equal(nnd_approx$graph_k, 100L)
@@ -1127,8 +1167,8 @@ test_that("FAISS graph backends report actual and requested parameters", {
     expect_equal(nnd_approx$requested_n_iter, 20L)
     expect_false(nnd_approx$nndescent_parameters_adjusted)
   } else {
-    expect_error(nn(x, k = 10L, backend = "faiss_nsg"), "FAISS")
-    expect_error(nn(x, k = 10L, backend = "faiss_nndescent"), "FAISS")
+    expect_error(internal_nn(x, k = 10L, backend = "faiss_nsg"), "FAISS")
+    expect_error(internal_nn(x, k = 10L, backend = "faiss_nndescent"), "FAISS")
   }
 })
 
@@ -1144,7 +1184,7 @@ test_that("FAISS HNSW reports actual and requested parameters", {
     )
     on.exit(options(old_options), add = TRUE)
 
-    out <- faissR:::nn_without_self(x, k = 10L, backend = "faiss_hnsw", n_threads = 2L)
+    out <- internal_nn_without_self(x, k = 10L, backend = "faiss_hnsw", n_threads = 2L)
     approx <- attr(out, "approximation")
     expect_equal(dim(out$indices), c(nrow(x), 10L))
     expect_equal(approx$m, nrow(x))
@@ -1153,7 +1193,7 @@ test_that("FAISS HNSW reports actual and requested parameters", {
     expect_equal(approx$requested_ef_search, 10L)
     expect_true(approx$hnsw_parameters_adjusted)
   } else {
-    expect_error(nn(x, k = 10L, backend = "faiss_hnsw"), "FAISS")
+    expect_error(internal_nn(x, k = 10L, backend = "faiss_hnsw"), "FAISS")
   }
 })
 
@@ -1168,7 +1208,7 @@ test_that("FAISS GPU backends are explicit and do not fall back to CPU", {
     "faiss_gpu_ivfpq"
   )) {
     out <- tryCatch(
-      nn(x, k = 8L, backend = backend),
+      internal_nn(x, k = 8L, backend = backend),
       error = identity
     )
     if (inherits(out, "error")) {
@@ -1346,17 +1386,17 @@ test_that("CUDA grid auto does not silently fall back to CPU", {
 
   x <- matrix(runif(40L), ncol = 2L)
   expect_error(
-    nn(x, k = 4L, backend = "cuda_grid_auto"),
+    internal_nn(x, k = 4L, backend = "cuda_grid_auto"),
     "No CUDA GPU backend is available"
   )
 })
 
-test_that("RcppHNSW backend is available when the suggested package is installed", {
+test_that("RcppHNSW implementation backend is available when the suggested package is installed", {
   skip_if_not_installed("RcppHNSW")
 
   set.seed(144)
   x <- matrix(rnorm(120L * 6L), nrow = 120L)
-  out <- nn(x, k = 8L, backend = "hnsw", n_threads = 2L)
+  out <- internal_nn(x, k = 8L, backend = "hnsw", n_threads = 2L)
 
   expect_equal(dim(out$indices), c(nrow(x), 8L))
   expect_equal(attr(out, "backend"), "hnsw")
@@ -1384,8 +1424,8 @@ test_that("CUDA grid auto matches exact CPU grid results", {
 
   set.seed(151)
   x <- matrix(runif(3000L), ncol = 3L)
-  cpu <- nn(x, k = 8L, backend = "cpu_grid", n_threads = 2L)
-  gpu <- nn(x, k = 8L, backend = "cuda_grid_auto")
+  cpu <- internal_nn(x, k = 8L, backend = "cpu_grid", n_threads = 2L)
+  gpu <- internal_nn(x, k = 8L, backend = "cuda_grid_auto")
 
   expect_equal(attr(gpu, "backend"), "cuda_grid3d")
   expect_true(isTRUE(attr(gpu, "exact")))
@@ -1402,8 +1442,8 @@ test_that("CUDA NN-descent requests use RAPIDS cuVS", {
     matrix(rnorm(300, 1.4, 0.35), ncol = 5)
   )
   k <- 8L
-  exact <- faissR:::nn_without_self(x, k = k, backend = "cpu", n_threads = 4L)
-  refined <- faissR:::nn_without_self(x, k = k, backend = "cuda_cuvs_nndescent")
+  exact <- nn_without_self(x, k = k, backend = "cpu", n_threads = 4L)
+  refined <- internal_nn_without_self(x, k = k, backend = "cuda_cuvs_nndescent")
   recall <- faissR:::.knn_recall_summary(refined, exact, k)
 
   expect_equal(dim(refined$indices), c(nrow(x), k))
@@ -1429,7 +1469,7 @@ test_that("cuVS CAGRA reports actual and requested graph parameters", {
   )
   on.exit(options(old_options), add = TRUE)
 
-  out <- faissR:::nn_without_self(x, k = 10L, backend = "cuda_cuvs_cagra")
+  out <- internal_nn_without_self(x, k = 10L, backend = "cuda_cuvs_cagra")
   approx <- attr(out, "approximation")
   expect_equal(dim(out$indices), c(nrow(x), 10L))
   expect_equal(approx$graph_degree, nrow(x) - 1L)
@@ -1446,9 +1486,9 @@ test_that("CUDA backend reports unavailable runtime clearly", {
 
   x <- matrix(rnorm(30), ncol = 3)
   expect_error(nn(x, x, k = 2, backend = "cuda"), "No CUDA GPU backend")
-  expect_error(nn(x, x, k = 2, backend = "gpu"), "No CUDA GPU backend")
-  expect_error(nn(x, x, k = 2, backend = "cuda_ivf"), "No CUDA")
-  expect_error(nn(x, x, k = 2, backend = "cuda_faiss"), "No CUDA")
+  expect_error(nn(x, x, k = 2, backend = "gpu"), "must be one of")
+  expect_error(nn(x, x, k = 2, backend = "cuda_ivf"), "must be one of")
+  expect_error(nn(x, x, k = 2, backend = "cuda_faiss"), "must be one of")
 })
 
 test_that("CAGRA tuning cache can round-trip without CUDA", {
@@ -1499,13 +1539,13 @@ test_that("cuVS backend reports unavailable runtime clearly", {
   skip_if(cuvs_available())
 
   x <- matrix(rnorm(30), ncol = 3)
-  expect_error(nn(x, x, k = 2, backend = "cuda_cuvs"), "cuVS")
-  expect_error(nn(x, x, k = 2, backend = "cuda_cagra"), "cuVS")
-  expect_error(nn(x, x, k = 2, backend = "gpu_cagra"), "cuVS")
-  expect_error(nn(x, x, k = 2, backend = "cuda_cuvs_ivf_flat"), "cuVS")
-  expect_error(nn(x, x, k = 2, backend = "cuda_cuvs_ivfpq"), "cuVS")
-  expect_error(nn(x, x, k = 2, backend = "cuda_cuvs_bruteforce"), "cuVS")
-  expect_error(nn(x, x, k = 2, backend = "cuda_cuvs_nndescent"), "cuVS")
-  expect_error(nn(x, x, k = 2, backend = "cuda_approx"), "cuVS")
-  expect_error(nn(x, x, k = 2, backend = "cuda_nndescent"), "cuVS")
+  expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs"), "cuVS")
+  expect_error(internal_nn(x, x, k = 2, backend = "cuda_cagra"), "cuVS")
+  expect_error(internal_nn(x, x, k = 2, backend = "gpu_cagra"), "cuVS")
+  expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs_ivf_flat"), "cuVS")
+  expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs_ivfpq"), "cuVS")
+  expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs_bruteforce"), "cuVS")
+  expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs_nndescent"), "cuVS")
+  expect_error(internal_nn(x, x, k = 2, backend = "cuda_approx"), "cuVS")
+  expect_error(internal_nn(x, x, k = 2, backend = "cuda_nndescent"), "cuVS")
 })

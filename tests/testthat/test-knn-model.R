@@ -50,21 +50,18 @@ test_that("knn supports regression", {
   expect_error(predict(fit, x, type = "prob"), "classification")
 })
 
-test_that("knn preserves explicit backend requests", {
+test_that("knn rejects implementation backend labels", {
   x <- matrix(rnorm(30), ncol = 3)
   y <- rep(c("a", "b"), length.out = nrow(x))
 
-  faiss_model <- knn(x, y, backend = "faiss", k = 3L)
-  expect_equal(faiss_model$backend, "faiss")
-  if (!faiss_available()) {
-    expect_error(predict(faiss_model, x[1:2, , drop = FALSE]), "FAISS")
-  }
+  expect_error(knn(x, y, backend = "faiss", k = 3L), "must be one of")
+  expect_error(knn(x, y, backend = "cuda_cuvs", k = 3L), "must be one of")
 
-  cuvs_model <- knn(x, y, backend = "cuda_cuvs", k = 3L)
-  expect_equal(cuvs_model$backend, "cuda_cuvs")
-  if (!cuvs_available()) {
-    expect_error(predict(cuvs_model, x[1:2, , drop = FALSE]), "cuVS")
-  }
+  model <- knn(x, y, backend = "cpu", k = 3L)
+  expect_error(
+    predict(model, x[1:2, , drop = FALSE], backend = "faiss"),
+    "must be one of"
+  )
 })
 
 test_that("knn immediately predicts when Xtest is supplied", {

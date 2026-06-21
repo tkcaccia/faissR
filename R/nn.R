@@ -1124,6 +1124,16 @@ normalize_public_compute_backend <- function(backend, arg = "backend") {
   backend
 }
 
+normalize_public_backend_arg <- function(backend, arg = "backend") {
+  backend <- as.character(backend)[1L]
+  if (is.na(backend) || !nzchar(backend)) backend <- "auto"
+  backend <- tolower(backend)
+  if (!backend %in% c("auto", "cpu", "cuda")) {
+    stop("`", arg, "` must be one of \"auto\", \"cpu\", or \"cuda\".", call. = FALSE)
+  }
+  backend
+}
+
 normalize_nn_method <- function(method) {
   method <- as.character(method)[1L]
   if (is.na(method) || !nzchar(method)) method <- "auto"
@@ -4134,7 +4144,7 @@ nn <- function(data,
                metric = c("euclidean", "cosine", "correlation", "inner_product"),
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                n_threads = NULL) {
-  backend <- as.character(backend)[1L]
+  backend <- normalize_public_backend_arg(backend)
   method <- as.character(method)[1L]
   tuning <- as.character(tuning)[1L]
   metric <- match.arg(metric)
@@ -4183,7 +4193,7 @@ nn_without_self <- function(data,
                             metric = c("euclidean", "cosine", "correlation", "inner_product"),
                             tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                             n_threads = NULL) {
-  backend <- as.character(backend)[1L]
+  backend <- normalize_public_backend_arg(backend)
   method <- as.character(method)[1L]
   tuning <- as.character(tuning)[1L]
   metric <- match.arg(metric)
