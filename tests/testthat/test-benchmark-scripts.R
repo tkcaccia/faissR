@@ -80,6 +80,36 @@ test_that("k-means benchmark recommendations are grouped by dataset and centers"
   expect_equal(out$method, c("m2", "m2"))
 })
 
+test_that("k-means fast comparison is ordered by dataset centers and backend", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = c("A", "A", "A", "A", "A", "A"),
+    method = c("fast_kmeans", "fast_kmeans", "fast_kmeans", "fast_kmeans", "stats", "stats"),
+    backend = c("cuda", "cpu", "cuda", "cpu", "stats", "stats"),
+    backend_used = c("cuda_faiss", "faiss", "cuda_faiss", "faiss", "stats", "stats"),
+    resolved_backend = c("cuda", "cpu", "cuda", "cpu", "stats", "stats"),
+    centers = c(3L, 3L, 5L, 5L, 3L, 5L),
+    success_cycles = c(1L, 1L, 1L, 1L, 1L, 1L),
+    median_elapsed_sec = c(3, 4, 5, 6, 7, 8),
+    median_ari = c(0.9, 0.91, 0.8, 0.81, 0.89, 0.79),
+    min_ari = c(0.9, 0.91, 0.8, 0.81, 0.89, 0.79),
+    median_tot_withinss = c(10, 11, 20, 21, 12, 22),
+    median_iter = c(5, 5, 5, 5, 5, 5),
+    median_max_iter = c(100, 100, 100, 100, 100, 100),
+    median_n_init = c(3, 3, 3, 3, 1, 1),
+    median_tol = c(1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4),
+    tuning_policy = c("auto", "auto", "auto", "auto", "stats", "stats")
+  )
+  recommendations <- cycle_summary[cycle_summary$method == "stats", , drop = FALSE]
+
+  out <- env$compare_fast_kmeans_to_recommendations(cycle_summary, recommendations)
+  expect_equal(as.integer(out$centers), c(3L, 3L, 5L, 5L))
+  expect_equal(out$fast_backend, c("cpu", "cuda", "cpu", "cuda"))
+})
+
 test_that("graph benchmark recommendations are grouped by target cluster count", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),

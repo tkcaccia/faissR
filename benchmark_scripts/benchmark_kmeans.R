@@ -359,7 +359,7 @@ compare_fast_kmeans_to_recommendations <- function(cycle_summary, recommendation
   )
   comparison$fast_median_ari_gap <- comparison$recommended_median_ari - comparison$fast_median_ari
   comparison$fast_withinss_ratio <- comparison$fast_median_tot_withinss / comparison$recommended_median_tot_withinss
-  comparison[order(comparison$dataset, comparison$fast_backend), , drop = FALSE]
+  comparison[order(comparison$dataset, comparison$centers, comparison$fast_backend), , drop = FALSE]
 }
 
 kmeans_faiss_gpu_available <- function() {
