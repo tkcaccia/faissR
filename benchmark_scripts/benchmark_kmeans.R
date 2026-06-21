@@ -39,6 +39,26 @@ default_kmeans_backend_values <- function() {
   c("auto", "cpu", "cuda")
 }
 
+validate_choice_values <- function(values, valid, arg_name) {
+  values <- unique(trimws(as.character(values)))
+  values <- values[nzchar(values)]
+  invalid <- values[!values %in% valid]
+  if (length(invalid)) {
+    stop(
+      "`", arg_name, "` must contain only: ",
+      paste(valid, collapse = ", "),
+      ". Invalid value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  if (!length(values)) {
+    stop("`", arg_name, "` must contain at least one value.", call. = FALSE)
+  }
+  values
+}
+
 configure_threads <- function(n_threads) {
   value <- as.character(as.integer(n_threads))
   Sys.setenv(
@@ -606,8 +626,16 @@ tol <- args$tol %||% "auto"
 tuning <- args$tuning %||% "auto"
 
 datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "SimulatedTiny3Clusters"), collapse = ","))
-methods <- split_arg(args$methods, paste(default_kmeans_method_values(), collapse = ","))
-backends <- split_arg(args$backends, paste(default_kmeans_backend_values(), collapse = ","))
+methods <- validate_choice_values(
+  split_arg(args$methods, paste(default_kmeans_method_values(), collapse = ",")),
+  default_kmeans_method_values(),
+  "methods"
+)
+backends <- validate_choice_values(
+  split_arg(args$backends, paste(default_kmeans_backend_values(), collapse = ",")),
+  default_kmeans_backend_values(),
+  "backends"
+)
 
 suppressPackageStartupMessages(library(faissR))
 

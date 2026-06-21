@@ -42,6 +42,26 @@ default_graph_backends <- function() {
   c("auto", "cpu", "cuda")
 }
 
+validate_choice_values <- function(values, valid, arg_name) {
+  values <- unique(trimws(as.character(values)))
+  values <- values[nzchar(values)]
+  invalid <- values[!values %in% valid]
+  if (length(invalid)) {
+    stop(
+      "`", arg_name, "` must contain only: ",
+      paste(valid, collapse = ", "),
+      ". Invalid value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  if (!length(values)) {
+    stop("`", arg_name, "` must contain at least one value.", call. = FALSE)
+  }
+  values
+}
+
 configure_threads <- function(n_threads) {
   vars <- c(
     "OMP_NUM_THREADS",
@@ -691,9 +711,21 @@ datasets <- split_arg(args$datasets, paste(c(
   "SimulatedUniform2D",
   "SimulatedUniform3D"
 ), collapse = ","))
-methods <- split_arg(args$methods, paste(default_graph_cluster_methods(), collapse = ","))
-graph_backends <- split_arg(args$graph_backends, paste(default_graph_backends(), collapse = ","))
-cluster_backends <- split_arg(args$cluster_backends, paste(default_graph_backends(), collapse = ","))
+methods <- validate_choice_values(
+  split_arg(args$methods, paste(default_graph_cluster_methods(), collapse = ",")),
+  default_graph_cluster_methods(),
+  "methods"
+)
+graph_backends <- validate_choice_values(
+  split_arg(args$graph_backends, paste(default_graph_backends(), collapse = ",")),
+  default_graph_backends(),
+  "graph_backends"
+)
+cluster_backends <- validate_choice_values(
+  split_arg(args$cluster_backends, paste(default_graph_backends(), collapse = ",")),
+  default_graph_backends(),
+  "cluster_backends"
+)
 weight <- args$weight %||% "auto"
 target_mode <- normalize_target_clusters_mode(args$target_clusters %||% "labels")
 

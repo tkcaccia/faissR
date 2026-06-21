@@ -268,7 +268,9 @@ Rscript benchmark_scripts/benchmark_graph_clustering.R \
 ```
 
 `--target_clusters` is normalized to either `labels` or `none`, and invalid
-values stop before the benchmark starts. When `--target_clusters=labels` is
+values stop before the benchmark starts. Method, graph-backend, and
+cluster-backend selectors are also validated against the public benchmark
+choices before any dataset is loaded. When `--target_clusters=labels` is
 used, Louvain and Leiden use `n_clusters = length(unique(dataset$labels))`. If
 the selected method set contains only Louvain and Leiden, the benchmark stores
 that target on the graph with `knn_graph(n_clusters = ...)` and lets
@@ -377,6 +379,9 @@ audited directly. The run configuration is saved as
 `kmeans_benchmark_results.csv`. `--centers` must be a positive integer; when
 dataset labels are available, the benchmark uses the label-derived cluster
 count for that dataset and otherwise uses the validated `--centers` fallback.
+Method and backend selectors are validated before loading datasets, so typos in
+`--methods` or `--backends` stop the run instead of becoming failed benchmark
+rows.
 When `stats` is part of the run,
 `kmeans_fast_vs_stats.csv` compares
 each successful `fast_kmeans()` row against `stats::kmeans` for the same

@@ -765,6 +765,42 @@ test_that("k-means benchmark defaults cover fast_kmeans stats and public backend
   )
 })
 
+test_that("k-means benchmark validates method and backend selectors", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+
+  expect_equal(
+    env$validate_choice_values(
+      c("fast_kmeans", "stats", "fast_kmeans"),
+      env$default_kmeans_method_values(),
+      "methods"
+    ),
+    c("fast_kmeans", "stats")
+  )
+  expect_equal(
+    env$validate_choice_values(
+      c("auto", "cpu", "cuda"),
+      env$default_kmeans_backend_values(),
+      "backends"
+    ),
+    c("auto", "cpu", "cuda")
+  )
+  expect_error(
+    env$validate_choice_values(c("fast_kmeans", "kmeanspp"), env$default_kmeans_method_values(), "methods"),
+    "Invalid value\\(s\\): kmeanspp"
+  )
+  expect_error(
+    env$validate_choice_values(c("gpu"), env$default_kmeans_backend_values(), "backends"),
+    "Invalid value\\(s\\): gpu"
+  )
+  expect_error(
+    env$validate_choice_values(character(), env$default_kmeans_backend_values(), "backends"),
+    "at least one value"
+  )
+})
+
 test_that("k-means benchmark centers argument is explicit", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_kmeans.R"),
@@ -1017,6 +1053,42 @@ test_that("graph benchmark defaults cover requested methods backends and k grid"
   expect_equal(
     env$as_int_vec_arg(c("unknown"), env$default_graph_k_values()),
     env$default_graph_k_values()
+  )
+})
+
+test_that("graph benchmark validates method and backend selectors", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+
+  expect_equal(
+    env$validate_choice_values(
+      c("random_walking", "louvain", "leiden", "louvain"),
+      env$default_graph_cluster_methods(),
+      "methods"
+    ),
+    c("random_walking", "louvain", "leiden")
+  )
+  expect_equal(
+    env$validate_choice_values(
+      c("auto", "cpu", "cuda"),
+      env$default_graph_backends(),
+      "graph_backends"
+    ),
+    c("auto", "cpu", "cuda")
+  )
+  expect_error(
+    env$validate_choice_values(c("walktrap"), env$default_graph_cluster_methods(), "methods"),
+    "Invalid value\\(s\\): walktrap"
+  )
+  expect_error(
+    env$validate_choice_values(c("gpu"), env$default_graph_backends(), "cluster_backends"),
+    "Invalid value\\(s\\): gpu"
+  )
+  expect_error(
+    env$validate_choice_values(character(), env$default_graph_backends(), "graph_backends"),
+    "at least one value"
   )
 })
 
