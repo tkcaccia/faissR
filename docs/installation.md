@@ -138,3 +138,14 @@ cuda_available()
 cuvs_available()
 cugraph_available()
 ```
+
+For CRAN-style checks, run from a source tarball and use a valid UTF-8 locale.
+Some R installations emit startup locale warnings under `LC_ALL=C`; those
+warnings can be counted during metadata checks even when `DESCRIPTION` itself is
+valid.
+
+```sh
+R CMD build .
+LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
+R CMD check --no-manual --no-build-vignettes faissR_0.1.0.tar.gz
+```
