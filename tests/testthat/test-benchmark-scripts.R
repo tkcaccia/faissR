@@ -537,6 +537,20 @@ test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
   expect_false(isTRUE(env$method_is_exact("faissR_cuda_cuvs_bruteforce", "inner_product")))
 })
 
+test_that("legacy Benchmark #1 uses canonical direct cuVS IVF row", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
+    "if (worker)"
+  )
+
+  methods <- env$method_table()
+  expect_false("faissR_cuda_ivf" %in% methods$method)
+  expect_true("faissR_cuda_cuvs_ivf_flat" %in% methods$method)
+
+  aliases <- env$benchmark_method_aliases(c("cuda_ivf", "faissR_cuda_ivf", "faissR_cuda_cuvs_ivf_flat"))
+  expect_equal(aliases, "faissR_cuda_cuvs_ivf_flat")
+})
+
 test_that("legacy Benchmark #1 defaults to all four public metrics", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),

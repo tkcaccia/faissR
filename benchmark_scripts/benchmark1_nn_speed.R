@@ -736,7 +736,6 @@ method_table <- function() {
       "faissR_cpu_nndescent",
       "faissR_cpu_grid",
       "faissR_cuda_exact",
-      "faissR_cuda_ivf",
       "faissR_cuda_grid_auto",
       "faissR_cuda_cuvs_ivf_flat",
       "faissR_cuda_cuvs_ivfpq",
@@ -764,7 +763,7 @@ method_table <- function() {
       "Rtsne_neighbors"
     ),
     implementation = c(
-      rep("faissR", 21),
+      rep("faissR", 20),
       "Rnanoflann", "RANN", "RANN",
       "rnndescent", "rnndescent", "rnndescent", "rnndescent",
       "RcppHNSW", "RcppAnnoy",
@@ -775,13 +774,13 @@ method_table <- function() {
     ),
     backend = c(
       "CPU", "CPU", "CPU", "CUDA", "CPU", "CPU", "CUDA", "CUDA", "CUDA", "CPU", "CPU", "CPU",
-      "CPU", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA",
+      "CPU", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA",
       rep("CPU", 16),
       "CUDA",
       "CPU", "CPU"
     ),
     kind = c(
-      rep("knn_search", 38),
+      rep("knn_search", 37),
       "knn_consumer",
       "not_applicable"
     ),
@@ -831,6 +830,8 @@ benchmark_method_aliases <- function(methods) {
     nsg = "faissR_faiss_nsg",
     nndescent = "faissR_cpu_nndescent",
     cagra = "faissR_faiss_gpu_cagra",
+    cuda_ivf = "faissR_cuda_cuvs_ivf_flat",
+    faissR_cuda_ivf = "faissR_cuda_cuvs_ivf_flat",
     faiss_flat_ip = "faissR_faiss_flat_l2",
     faiss_gpu_flat_ip = "faissR_faiss_gpu_flat_l2",
     faissR_faiss_flat_ip = "faissR_faiss_flat_l2",
