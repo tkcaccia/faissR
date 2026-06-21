@@ -214,6 +214,37 @@ test_that("NN metric benchmark recommendations are grouped by backend metric and
   )
 })
 
+test_that("NN metric benchmark recommendation ties prefer stronger recall stability", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = c("A", "A", "B", "B"),
+    backend = c("cpu", "cpu", "cpu", "cpu"),
+    method = c("lower_recall", "higher_recall", "lower_min_recall", "higher_min_recall"),
+    metric = c("euclidean", "euclidean", "cosine", "cosine"),
+    k = c(15L, 15L, 15L, 15L),
+    median_elapsed_sec = c(1, 1, 1, 1),
+    median_recall_at_k = c(0.985, 0.990, 0.960, 0.960),
+    min_recall_at_k = c(0.980, 0.980, 0.940, 0.950),
+    median_min_recall_at_k = c(0.980, 0.980, 0.940, 0.950),
+    recall_reference = c("exact", "exact", "exact", "exact"),
+    median_recall_query_n = c(100, 100, 100, 100),
+    result_backend = c("cpu", "cpu", "cpu", "cpu"),
+    resolved_backend = c("cpu", "cpu", "cpu", "cpu"),
+    implementation_backend = c("cpu", "cpu", "cpu", "cpu"),
+    success_cycles = c(2L, 2L, 2L, 2L)
+  )
+
+  out <- env$recommend_nn_methods(cycle_summary, recall_threshold = 0.98)
+  expect_equal(out$method, c("higher_recall", "higher_min_recall"))
+  expect_equal(
+    out$recommendation_basis,
+    c("fastest_at_recall_threshold", "best_recall_below_threshold")
+  )
+})
+
 test_that("NN metric benchmark canonicalizes metric aliases before preflight", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),

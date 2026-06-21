@@ -109,7 +109,10 @@ elapsed time, recall stability, and the dominant implementation backend.
 dataset/backend/metric/k. When recall is available, it selects the fastest
 method whose median recall is at least the configured `recall_threshold`; if no
 method reaches that threshold it selects the highest-recall row and marks
-`recommendation_basis = "best_recall_below_threshold"`. When recall is
+`recommendation_basis = "best_recall_below_threshold"`. Above-threshold speed
+ties are broken by higher median recall, minimum recall, and median minimum
+recall; below-threshold median-recall ties are broken by minimum recall, median
+minimum recall, and then speed. When recall is
 unavailable for the group, it selects the fastest successful row and marks
 `recommendation_basis = "speed_only_no_recall"`.
 `nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate
@@ -298,7 +301,9 @@ implementation labels such as `"faiss_gpu_cagra"` or `"cuda_cuvs_cagra"`.
 The aggregate file `nn_metric_recommendations_from_cycles.csv` emits one row
 per dataset/backend/metric/k: it chooses the fastest median row above the recall
 threshold when possible, the best-recall row when all measured methods are below
-threshold, and the fastest successful row when recall is unavailable. The
+threshold, and the fastest successful row when recall is unavailable. Ties are
+resolved deterministically with minimum-recall stability before falling back to
+speed for below-threshold groups. The
 `recommendation_basis` column records which rule was used.
 `nn_metric_auto_vs_cycle_recommendation.csv` carries this value as
 `recommended_recommendation_basis` so auto comparisons can be interpreted as
