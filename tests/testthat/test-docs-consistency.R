@@ -4,6 +4,31 @@ parse_metric_list <- function(value) {
   trimws(strsplit(value, ",", fixed = TRUE)[[1L]])
 }
 
+rd_file_text <- function(topic) {
+  rd_file <- test_path("../../man", paste0(topic, ".Rd"))
+  if (!file.exists(rd_file)) {
+    skip("Manual files are not available in this installed-package test context.")
+  }
+  paste(readLines(rd_file, warn = FALSE), collapse = "\n")
+}
+
+expect_rd_documents_formals <- function(topic, fun) {
+  rd <- rd_file_text(topic)
+  args <- names(formals(fun))
+  for (arg in args) {
+    expect_true(
+      grepl(paste0("\\item{", arg, "}"), rd, fixed = TRUE),
+      info = paste(topic, "argument", arg)
+    )
+    if (!identical(arg, "...")) {
+      expect_true(
+        grepl(arg, rd, fixed = TRUE),
+        info = paste(topic, "usage/formal", arg)
+      )
+    }
+  }
+}
+
 test_that("NN methods documentation metric table agrees with nn_capabilities", {
   docs_file <- test_path("../../docs/nn-methods.md")
   if (!file.exists(docs_file)) {
@@ -90,6 +115,37 @@ test_that("public API excludes retired wrapper and platform-specific helper name
   man_topics <- sub("\\.Rd$", "", basename(list.files(man_dir, pattern = "\\.Rd$")))
   expect_false(any(retired_exports %in% man_topics))
   expect_false(any(grepl("metal", man_topics, ignore.case = TRUE)))
+})
+
+test_that("reference manual documents live public function arguments", {
+  expect_rd_documents_formals("nn", nn)
+  expect_rd_documents_formals("nn_without_self", nn_without_self)
+  expect_rd_documents_formals("knn", knn)
+  expect_rd_documents_formals("knn_graph", knn_graph)
+  expect_rd_documents_formals("graph_cluster", graph_cluster)
+  expect_rd_documents_formals("fast_kmeans", fast_kmeans)
+  expect_rd_documents_formals("candidate_knn", candidate_knn)
+  expect_rd_documents_formals(
+    "predict.faissR_knn_model",
+    getS3method("predict", "faissR_knn_model")
+  )
+})
+
+test_that("reference manual keeps probability prediction inside predict", {
+  knn_rd <- rd_file_text("knn")
+  predict_rd <- rd_file_text("predict.faissR_knn_model")
+  manual_text <- paste(
+    vapply(
+      list.files(test_path("../../man"), pattern = "\\.Rd$", full.names = TRUE),
+      function(path) paste(readLines(path, warn = FALSE), collapse = "\n"),
+      character(1L)
+    ),
+    collapse = "\n"
+  )
+
+  expect_true(grepl('type = c\\("response", "prob"\\)', knn_rd))
+  expect_true(grepl('type = c\\("response", "prob"\\)', predict_rd))
+  expect_false(grepl("predict_proba", manual_text, fixed = TRUE))
 })
 
 test_that("README describes public NN metrics and correlation semantics", {

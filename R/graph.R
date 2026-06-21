@@ -215,7 +215,10 @@ resolve_graph_cluster_backend <- function(backend) {
 #' @param tuning Tuning policy passed to \code{\link{nn_without_self}()} when
 #'   `graph` is a matrix or embedding.
 #' @param weight KNN graph weighting. See \code{\link{knn_graph}()}.
-#' @param mutual,prune Graph-construction options.
+#' @param mutual If `TRUE`, keep only reciprocal nearest-neighbour edges when a
+#'   graph must be built from data or a KNN object.
+#' @param prune Drop graph edges with weight less than or equal to this value
+#'   when a graph must be built from data or a KNN object.
 #' @param n_threads CPU threads for KNN construction and native CPU clustering.
 #' @param n_runs Number of independent native runs. The best modularity is kept.
 #' @param resolution Modularity resolution for Louvain/Leiden-style scoring.

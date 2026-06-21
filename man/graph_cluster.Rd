@@ -43,7 +43,8 @@ libcugraph was detected at build time; random-walking is CPU-only.}
 \item{metric}{Distance metric passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding. Aliases such as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as canonical metric labels.}
 \item{tuning}{Tuning policy passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding.}
 \item{weight}{KNN graph weighting used when a graph must be built.}
-\item{mutual, prune}{Native graph-construction options.}
+\item{mutual}{If \code{TRUE}, keep only reciprocal nearest-neighbour edges when a graph must be built from data or a KNN object.}
+\item{prune}{Drop graph edges with weight less than or equal to this value when a graph must be built from data or a KNN object.}
 \item{n_threads}{CPU threads. Used by KNN construction and native CPU clustering.}
 \item{n_runs}{Number of independent native clustering runs. The result with the largest modularity is returned. Values greater than one can use several CPU cores.}
 \item{resolution}{Modularity resolution for Louvain/Leiden-style scoring.}
