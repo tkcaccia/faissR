@@ -91,6 +91,10 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_setequal(caps$method, methods)
   expect_setequal(caps$backend, c("cpu", "cuda"))
   expect_setequal(caps$metric, metrics)
+  expect_identical(
+    names(caps),
+    c("method", "backend", "metric", "supported", "exact", "implementation", "notes")
+  )
   expect_equal(nrow(caps), length(methods) * 2L * length(metrics))
   expect_equal(anyDuplicated(caps[c("method", "backend", "metric")]), 0L)
 
