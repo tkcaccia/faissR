@@ -70,6 +70,23 @@ test_that("NN metric benchmark recommendations are grouped by backend metric and
   expect_equal(out$method, c("exact", "hnsw", "cagra"))
 })
 
+test_that("NN metric benchmark canonicalizes metric aliases before preflight", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  caps <- nn_capabilities()
+
+  expect_equal(
+    env$canonical_metric_values(c("l2", "pearson", "ip", "dot-product", "unknown")),
+    c("euclidean", "correlation", "inner_product")
+  )
+  expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "l2")$supported))
+  expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "pearson")$supported))
+  expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "ip")$supported))
+  expect_false(isTRUE(env$capability_status(caps, "cpu", "nsg", "ip")$supported))
+})
+
 test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),

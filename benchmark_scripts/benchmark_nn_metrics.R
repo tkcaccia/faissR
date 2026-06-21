@@ -18,6 +18,35 @@ split_arg <- function(x, default) {
   trimws(strsplit(x %||% default, ",", fixed = TRUE)[[1L]])
 }
 
+canonical_metric_key <- function(metric) {
+  aliases <- c(
+    euclidean = "euclidean",
+    l2 = "euclidean",
+    cosine = "cosine",
+    cos = "cosine",
+    correlation = "correlation",
+    cor = "correlation",
+    pearson = "correlation",
+    inner_product = "inner_product",
+    innerproduct = "inner_product",
+    ip = "inner_product",
+    dot = "inner_product",
+    dot_product = "inner_product",
+    dotproduct = "inner_product"
+  )
+  key <- tolower(trimws(as.character(metric)))
+  key <- gsub("[[:space:]-]+", "_", key)
+  out <- unname(aliases[key])
+  out[is.na(out)] <- key[is.na(out)]
+  out
+}
+
+canonical_metric_values <- function(metrics) {
+  metrics <- canonical_metric_key(metrics)
+  metrics <- metrics[metrics %in% c("euclidean", "cosine", "correlation", "inner_product")]
+  unique(metrics)
+}
+
 as_int_vec_arg <- function(x, default) {
   value <- suppressWarnings(as.integer(x %||% default))
   value <- value[!is.na(value) & value > 0L]
@@ -390,7 +419,7 @@ canonical_method_key <- function(method) {
 
 capability_row <- function(caps, backend, method, metric) {
   backend <- tolower(as.character(backend)[1L])
-  metric <- tolower(as.character(metric)[1L])
+  metric <- canonical_metric_key(metric)[[1L]]
   method_key <- canonical_method_key(method)
   caps_key <- canonical_method_key(caps$method)
   hit <- caps[caps$backend == backend & caps_key == method_key & caps$metric == metric, , drop = FALSE]
@@ -666,7 +695,8 @@ if (length(recall_threshold) != 1L || is.na(recall_threshold) || !is.finite(reca
 datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "SimulatedUniform2D", "SimulatedUniform3D"), collapse = ","))
 backends <- split_arg(args$backends, "auto,cpu,cuda")
 methods <- split_arg(args$methods, "auto,exact,flat,bruteforce,grid,vptree,hnsw,ivf,ivfpq,nsg,nndescent,cagra")
-metrics <- split_arg(args$metrics, "euclidean,cosine,correlation,inner_product")
+metrics <- canonical_metric_values(split_arg(args$metrics, "euclidean,cosine,correlation,inner_product"))
+if (!length(metrics)) metrics <- c("euclidean", "cosine", "correlation", "inner_product")
 k_values <- as_int_vec_arg(split_arg(args$k_values, "5,10,15,50,100"), c(5L, 10L, 15L, 50L, 100L))
 
 suppressPackageStartupMessages(library(faissR))
