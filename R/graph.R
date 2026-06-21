@@ -18,11 +18,15 @@
 #'   `"distance"` uses `1 / (1 + distance)`. `"binary"` gives every edge weight 1.
 #' @param mutual If `TRUE`, keep only reciprocal nearest-neighbour edges.
 #' @param prune Drop edges with weight less than or equal to this value.
+#' @param n_clusters Optional target number of communities to store with the
+#'   graph. When this graph is later passed to [graph_cluster()] with
+#'   `method = "louvain"` or `"leiden"` and no explicit `n_clusters`, the
+#'   stored target is used instead of relying only on `resolution`.
 #' @param n_threads CPU threads passed to [nn()] when KNN is computed here.
 #' @return A native `faissR_graph` edge-list object.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
-#' g <- knn_graph(x, k = 15, backend = "cpu")
+#' g <- knn_graph(x, k = 15, backend = "cpu", n_clusters = 3)
 #' cl <- graph_cluster(g, method = "louvain", backend = "cpu")
 #' table(cl$membership)
 #' @export
@@ -33,6 +37,7 @@ knn_graph <- function(data,
                       weight = c("auto", "snn", "adaptive", "distance", "binary"),
                       mutual = FALSE,
                       prune = 0,
+                      n_clusters = NULL,
                       n_threads = NULL) {
   backend <- as.character(backend)[1L]
   weight <- match.arg(weight)
@@ -45,6 +50,7 @@ knn_graph <- function(data,
   if (length(prune) != 1L || is.na(prune) || !is.finite(prune) || prune < 0) {
     stop("`prune` must be a non-negative number.", call. = FALSE)
   }
+  n_clusters <- normalize_graph_target_clusters(n_clusters, method = NULL)
 
   input_backend <- NA_character_
   graph_space <- "input"
@@ -95,6 +101,7 @@ knn_graph <- function(data,
     prune = prune,
     nn_backend = input_backend,
     input_method = input_method,
+    target_n_clusters = n_clusters,
     n_vertices = edges$n_vertices,
     n_edges = edges$n_edges
   )
@@ -239,6 +246,12 @@ graph_cluster <- function(graph,
   input_method <- NA_character_
   input_backend <- NA_character_
   if (inherits(graph, "faissR_graph")) {
+    meta <- attr(graph, "faissR_graph") %||% list()
+    graph_n_clusters <- n_clusters
+    if (is.null(graph_n_clusters) && !is.null(meta$target_n_clusters)) {
+      graph_n_clusters <- meta$target_n_clusters
+    }
+    graph_n_clusters <- normalize_graph_target_clusters(graph_n_clusters, method)
     ans <- graph_cluster_edges_target(
       graph,
       method = method,
@@ -246,17 +259,16 @@ graph_cluster <- function(graph,
       n_threads = n_threads,
       n_runs = n_runs,
       resolution = resolution,
-      n_clusters = n_clusters,
+      n_clusters = graph_n_clusters,
       n_iterations = n_iterations,
       steps = steps,
       seed = seed
     )
-    meta <- attr(graph, "faissR_graph") %||% list()
     ans$parameters <- c(
       meta,
       list(
         resolution = resolution,
-        n_clusters = n_clusters,
+        n_clusters = graph_n_clusters,
         selected_resolution = ans$selected_resolution %||% resolution,
         objective_function = objective_function,
         n_iterations = as.integer(n_iterations),
@@ -335,7 +347,7 @@ graph_cluster <- function(graph,
 
 normalize_graph_target_clusters <- function(n_clusters, method) {
   if (is.null(n_clusters)) return(NULL)
-  if (identical(method, "random_walking")) {
+  if (!is.null(method) && identical(method, "random_walking")) {
     stop("`n_clusters` is available for `method = \"louvain\"` or `\"leiden\"`, not `\"random_walking\"`.", call. = FALSE)
   }
   n_clusters <- suppressWarnings(as.integer(n_clusters))

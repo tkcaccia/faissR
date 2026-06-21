@@ -117,7 +117,7 @@ by another method.
 ```r
 knn_graph(data, knn = NULL, k = 50L, backend = "auto",
           weight = "auto", mutual = FALSE, prune = 0,
-          n_threads = NULL)
+          n_clusters = NULL, n_threads = NULL)
 ```
 
 | Argument | Description |
@@ -129,6 +129,7 @@ knn_graph(data, knn = NULL, k = 50L, backend = "auto",
 | `weight` | Edge weighting: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. `"auto"` uses shared-nearest-neighbour weights for input space and distance weights for embedding space. |
 | `mutual` | If `TRUE`, keep only reciprocal nearest-neighbour edges. |
 | `prune` | Drop edges with weight less than or equal to this non-negative threshold. |
+| `n_clusters` | Optional target number of communities to store with the graph. `graph_cluster()` uses this target for Louvain/Leiden when no explicit `n_clusters` is supplied. |
 | `n_threads` | CPU worker threads for neighbour search when KNN is computed inside the function. |
 
 Returns a native `faissR_graph` edge-list object. No `igraph` dependency is

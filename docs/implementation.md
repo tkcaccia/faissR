@@ -236,8 +236,8 @@ object into a native `faissR_graph` edge list. When KNN is not supplied, it call
 - `"auto"`: SNN for input-space graphs and distance-style weights for
   embedding-space graphs.
 
-The graph object stores `k`, weighting, pruning, mutual-edge filtering, and KNN
-backend metadata. It does not require `igraph`.
+The graph object stores `k`, weighting, pruning, mutual-edge filtering, optional
+target community count, and KNN backend metadata. It does not require `igraph`.
 
 The graph construction layer deliberately accepts precomputed KNN output. This
 allows expensive FAISS/cuVS searches to be reused across clustering, embedding,
@@ -268,12 +268,13 @@ fall back to CPU for an explicit CUDA request. CUDA random-walking remains
 unavailable until a dedicated CUDA implementation is added.
 
 `graph_cluster(n_clusters = m)` provides a target-community-count convenience
-for Louvain and Leiden. The graph is built once, then faissR evaluates a small
-deterministic grid of resolution values around the supplied `resolution` and
-keeps the result whose number of communities is closest to `m`, breaking ties by
-modularity. The selected resolution and search table are returned in the result
-metadata. `knn_graph()` itself still only constructs the weighted graph; cluster
-count targets belong to `graph_cluster()`, where resolution is applied.
+for Louvain and Leiden. The same target can also be stored on the graph with
+`knn_graph(n_clusters = m)` and will be used by `graph_cluster()` unless the
+caller supplies a different target. The graph is built once, then faissR
+evaluates a small deterministic grid of resolution values around the supplied
+`resolution` and keeps the result whose number of communities is closest to
+`m`, breaking ties by modularity. The selected resolution and search table are
+returned in the result metadata.
 
 Native graph clustering does not depend on `igraph`. This keeps the graph API
 under faissR's control and avoids a large mandatory graph dependency. The

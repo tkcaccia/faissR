@@ -52,6 +52,31 @@ test_that("knn_graph supports adaptive weights and mutual edges natively", {
   expect_true(all(g_mutual$weight > 0))
 })
 
+test_that("knn_graph stores an optional cluster-count target for graph_cluster", {
+  set.seed(509)
+  x <- rbind(
+    matrix(rnorm(80, -3, 0.15), ncol = 4),
+    matrix(rnorm(80, 0, 0.15), ncol = 4),
+    matrix(rnorm(80, 3, 0.15), ncol = 4)
+  )
+
+  g <- knn_graph(x, k = 8L, backend = "cpu", n_clusters = 3L)
+  expect_s3_class(g, "faissR_graph")
+  expect_equal(attr(g, "faissR_graph")$target_n_clusters, 3L)
+
+  cl <- graph_cluster(g, method = "louvain", backend = "cpu", n_threads = 2L, seed = 1L)
+  expect_s3_class(cl, "faissR_graph_cluster")
+  expect_equal(cl$target_n_clusters, 3L)
+  expect_equal(cl$parameters$n_clusters, 3L)
+  expect_s3_class(cl$resolution_search, "data.frame")
+  expect_lte(abs(cl$n_communities - 3L), 1L)
+
+  expect_error(
+    graph_cluster(g, method = "random_walking", backend = "cpu", n_threads = 2L),
+    "n_clusters"
+  )
+})
+
 test_that("graph_cluster runs native CPU random-walk and Louvain clustering without igraph", {
   set.seed(505)
   x <- rbind(

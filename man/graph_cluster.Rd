@@ -50,11 +50,11 @@ the target. This is a convenience target, not a hard guarantee.}
 \code{graph_cluster()} runs native faissR community detection on a KNN graph. The graph can be supplied as a precomputed \code{nn()} result or built from a matrix/data frame using any faissR nearest-neighbour backend, including FAISS and cuVS KNN backends. CPU clustering is native C++/OpenMP code and does not depend on igraph. CUDA graph clustering uses native RAPIDS libcugraph for Louvain and Leiden when faissR was built against libcugraph. Random-walking currently remains CPU-only. CUDA graph clustering never calls Python and never silently falls back to CPU.
 }
 \details{
-\code{n_clusters} is implemented in \code{graph_cluster()}, not
-\code{knn_graph()}, because \code{knn_graph()} only builds the weighted
-nearest-neighbour graph. When a target count is supplied for Louvain or Leiden,
-faissR builds or reuses the graph once, evaluates a small resolution grid, and
-records the selected resolution and search table in the returned object.
+\code{n_clusters} can be supplied directly to \code{graph_cluster()} or stored
+on a graph with \code{knn_graph(n_clusters = ...)}. When a target count is
+available for Louvain or Leiden, faissR builds or reuses the graph once,
+evaluates a small resolution grid, and records the selected resolution and
+search table in the returned object.
 
 Method descriptions:
 \itemize{
