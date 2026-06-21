@@ -201,6 +201,15 @@ test_that("nn sparse cosine and correlation match dense CPU", {
   sparse_ip <- internal_nn(sx, k = 3L, backend = "cpu_sparse", metric = "inner_product")
   expect_equal(unname(sparse_ip$indices), unname(dense_ip$indices))
   expect_equal(unname(sparse_ip$distances), unname(dense_ip$distances), tolerance = 1e-12)
+
+  for (metric in c("cosine", "correlation", "inner_product")) {
+    public_sparse <- nn(x, k = 3L, backend = "auto", method = "sparse", metric = metric)
+    public_exact <- nn(x, k = 3L, backend = "cpu", method = "exact", metric = metric)
+    expect_equal(attr(public_sparse, "backend"), "cpu_sparse")
+    expect_equal(attr(public_sparse, "metric"), metric)
+    expect_equal(unname(public_sparse$indices), unname(public_exact$indices))
+    expect_equal(unname(public_sparse$distances), unname(public_exact$distances), tolerance = 1e-12)
+  }
 })
 
 test_that("nn_without_self works with sparse Matrix input", {
@@ -745,6 +754,22 @@ test_that("public backend and method resolver maps device plus method", {
   expect_equal(
     faissR:::resolve_public_nn_backend("auto", "auto", "cosine"),
     "cpu_auto"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("auto", "hnsw", "euclidean"),
+    if (faiss_available()) "faiss_hnsw" else "hnsw"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("auto", "vptree", "cosine"),
+    "cpu_vptree"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("auto", "sparse", "inner_product"),
+    "cpu_sparse"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("auto", "nsg", "euclidean"),
+    "faiss_nsg"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "grid", "euclidean"),

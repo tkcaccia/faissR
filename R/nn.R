@@ -82,6 +82,17 @@ nn_compute <- function(data,
   }
   n_threads <- normalize_nn_threads(n_threads)
   metric <- normalize_nn_metric(metric)
+  if (backend %in% c("sparse", "cpu_sparse", "sparse_cpu")) {
+    return(nn_sparse_compute(
+      data = data,
+      points = points,
+      k = k,
+      backend = backend,
+      points_missing = points_missing,
+      exclude_self = exclude_self,
+      metric = metric
+    ))
+  }
   if (!identical(metric, "euclidean")) {
     if (identical(backend, "auto")) {
       backend <- "cpu"
@@ -118,7 +129,8 @@ nn_compute <- function(data,
     } else if (identical(metric, "inner_product") &&
                backend %in% c("vptree", "cpu_vptree")) {
       backend <- "cpu_vptree"
-    } else if (!backend %in% c("cpu", "cpu_auto", "hnsw", "rcpphnsw", "cpu_hnsw", "faiss_hnsw")) {
+    } else if (!backend %in% c("cpu", "cpu_auto", "hnsw", "rcpphnsw", "cpu_hnsw",
+                               "faiss_hnsw", "cpu_sparse", "sparse", "sparse_cpu")) {
       stop(
         "`metric = \"", metric, "\"` currently supports only `backend = \"cpu\"` ",
         "or a validated metric-specific exact backend. ",
@@ -1384,6 +1396,14 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
   requested_device <- tolower(backend_label)
   device <- normalize_public_compute_backend(backend)
   method <- method_label
+  if (identical(requested_device, "auto") && !identical(method, "auto")) {
+    if (method %in% c("vptree", "sparse", "hnsw", "nsg")) {
+      device <- "cpu"
+    } else if (identical(method, "cagra") &&
+               (isTRUE(cuda_available()) || isTRUE(cuvs_available()))) {
+      device <- "cuda"
+    }
+  }
   if (identical(method, "auto")) {
     if (identical(device, "cuda")) {
       return(switch(
