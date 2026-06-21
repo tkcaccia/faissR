@@ -75,7 +75,7 @@ rather than silently falling back to Euclidean search.
 | `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
 | `"ivfpq"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVFPQ supports L2/IP; cosine/correlation use normalized IVFPQ IP. |
 | `"nsg"` | euclidean, cosine, correlation | unsupported | CPU FAISS NSG uses normalized Euclidean graph search for cosine/correlation; raw inner product is not exposed. |
-| `"nndescent"` | euclidean | euclidean | FAISS/cuVS NN-descent is kept Euclidean-only because linked FAISS builds can abort during non-Euclidean graph construction. |
+| `"nndescent"` | euclidean | euclidean | Native CPU/cuVS NN-descent is kept Euclidean-only; FAISS NNDescent is experimental opt-in because linked FAISS builds can abort during graph construction. |
 | `"cagra"` | unsupported | euclidean, cosine, correlation | CUDA-only FAISS/cuVS graph search; cosine/correlation use normalized Euclidean graph search. |
 
 Programmatic form:
