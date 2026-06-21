@@ -421,6 +421,7 @@ if (nrow(ok)) {
   best$quality_score <- NULL
   utils::write.csv(best, file.path(out_dir, "nn_metric_best_by_dataset_backend_metric_k.csv"), row.names = FALSE)
 
+  fastest <- NULL
   tunable <- ok[!is.na(ok$recall_at_k) & ok$recall_at_k >= recall_threshold, , drop = FALSE]
   if (nrow(tunable)) {
     tunable <- tunable[order(tunable$dataset, tunable$backend, tunable$metric, tunable$k, tunable$elapsed_sec), , drop = FALSE]
@@ -434,6 +435,36 @@ if (nrow(ok)) {
       file.path(out_dir, "nn_metric_fastest_at_recall_threshold.csv"),
       row.names = FALSE
     )
+  }
+
+  auto_rows <- ok[ok$method == "auto", , drop = FALSE]
+  if (nrow(auto_rows) && !is.null(fastest) && nrow(fastest)) {
+    keys <- c("dataset", "backend", "metric", "k")
+    auto_keep <- c(keys, "resolved_backend", "elapsed_sec", "recall_at_k", "recall_reference", "recall_query_n")
+    fastest_keep <- c(keys, "method", "resolved_backend", "elapsed_sec", "recall_at_k", "recall_reference", "recall_query_n")
+    names(auto_rows)[match(auto_keep[-seq_along(keys)], names(auto_rows))] <- paste0("auto_", auto_keep[-seq_along(keys)])
+    names(fastest)[match(fastest_keep[-seq_along(keys)], names(fastest))] <- paste0("fastest_", fastest_keep[-seq_along(keys)])
+    comparison <- merge(
+      auto_rows[, c(keys, paste0("auto_", auto_keep[-seq_along(keys)])), drop = FALSE],
+      fastest[, c(keys, paste0("fastest_", fastest_keep[-seq_along(keys)])), drop = FALSE],
+      by = keys,
+      all = FALSE
+    )
+    if (nrow(comparison)) {
+      comparison$auto_is_fastest_method <- comparison$auto_resolved_backend == comparison$fastest_resolved_backend
+      comparison$auto_speed_ratio <- ifelse(
+        comparison$fastest_elapsed_sec > 0,
+        comparison$auto_elapsed_sec / comparison$fastest_elapsed_sec,
+        ifelse(comparison$auto_elapsed_sec == 0, 1, Inf)
+      )
+      comparison$auto_recall_gap <- comparison$fastest_recall_at_k - comparison$auto_recall_at_k
+      comparison <- comparison[order(comparison$dataset, comparison$backend, comparison$metric, comparison$k), , drop = FALSE]
+      utils::write.csv(
+        comparison,
+        file.path(out_dir, "nn_metric_auto_vs_fastest.csv"),
+        row.names = FALSE
+      )
+    }
   }
 }
 
@@ -455,6 +486,7 @@ materials <- c(
   "Unsupported method/backend/metric combinations are recorded as failed rows with the package error message.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k whose recall is at least `recall_threshold`.",
+  "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row and records speed ratio, recall gap, and whether the resolved backend matches.",
   "The script does not add benchmark-only helpers to the package API."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_nn_metrics.md"))

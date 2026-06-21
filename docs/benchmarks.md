@@ -125,7 +125,10 @@ deterministic sample of query rows when
 full or sampled exact reference. The script also writes
 `nn_metric_fastest_at_recall_threshold.csv`, which records the fastest
 successful method per dataset/backend/metric/k whose recall is at least
-`--recall_threshold` when recall is available.
+`--recall_threshold` when recall is available. When `method = "auto"` is part
+of the run, `nn_metric_auto_vs_fastest.csv` compares auto against that fastest
+high-recall row and reports speed ratio, recall gap, and whether the resolved
+backend matches.
 
 Example CPU run:
 
