@@ -49,7 +49,7 @@ list with method-specific parameters.
 | `"vptree"` | Native exact CPU vantage-point tree for Euclidean, cosine, and correlation; zero-normalized non-Euclidean rows use exact CPU fallback. | Unsupported. | Low-dimensional CPU searches. |
 | `"sparse"` | Native exact sparse `dgCMatrix` CPU route. | Unsupported. | Sparse matrices without densifying. |
 | `"hnsw"` | FAISS CPU HNSW for all four public metrics when FAISS is available; RcppHNSW/hnswlib fallback otherwise. | Unsupported. | High-recall approximate CPU graph search [5,16]. |
-| `"ivf"` | FAISS CPU IVF-Flat. | FAISS GPU IVF-Flat. | Large approximate search with coarse-list probing [1-2,16]. |
+| `"ivf"` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | Large approximate search with coarse-list probing [1-2,16]. |
 | `"ivfpq"` | FAISS CPU IVF-PQ. | FAISS GPU IVF-PQ. | Compressed-memory approximate search [6,16]. |
 | `"nsg"` | FAISS CPU NSG when exposed by FAISS. | Unsupported. | Optional CPU graph-search baseline [16]. |
 | `"nndescent"` | FAISS CPU NNDescent when exposed by FAISS. | Direct RAPIDS cuVS NN-descent. | Approximate KNN graph construction [3-4,16]. |
@@ -68,7 +68,7 @@ a CPU FAISS route in faissR.
 | Native faissR sparse exact | yes | no | Uses sparse `Matrix` input without densifying. |
 | Native faissR grid | yes | optional CUDA | 2D/3D Euclidean self-KNN only. |
 | FAISS Flat | yes | yes, if FAISS GPU is built | Exact L2 search [1-2,16]. |
-| FAISS IVF-Flat | yes | yes, if FAISS GPU is built | Inverted-file approximate search [1-2,16]. |
+| FAISS IVF-Flat | yes | yes, if FAISS GPU is built | Inverted-file approximate L2/IP search; cosine/correlation use normalized IP [1-2,16]. |
 | FAISS IVF-PQ | yes | yes, if FAISS GPU is built | Product-quantized approximate search [6,16]. |
 | FAISS HNSW | yes, if exposed by FAISS | no | Approximate CPU graph-search index [5,16]. |
 | FAISS NSG | yes, if exposed by FAISS | no | Optional CPU graph-search index [16]. |

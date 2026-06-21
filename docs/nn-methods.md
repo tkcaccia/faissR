@@ -72,7 +72,7 @@ rather than silently falling back to Euclidean search.
 | `"vptree"` | euclidean, cosine, correlation | unsupported | Inner product is not a metric for VP-tree pruning. |
 | `"sparse"` | euclidean, cosine, correlation, inner_product | unsupported | Exact sparse CPU route for `Matrix` inputs. |
 | `"hnsw"` | euclidean, cosine, correlation, inner_product | unsupported | FAISS HNSW is used for all metrics when available; cosine/correlation use normalized inner-product search. |
-| `"ivf"` | euclidean | euclidean | FAISS IVF-Flat routes are validated for L2. |
+| `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
 | `"ivfpq"` | euclidean | euclidean | Product-quantized IVF routes are validated for L2. |
 | `"nsg"` | euclidean | unsupported | CPU FAISS NSG route. |
 | `"nndescent"` | euclidean | euclidean | CPU FAISS NNDescent and CUDA cuVS NN-descent routes. |
@@ -223,6 +223,11 @@ should be measured for new datasets when it is used for scientific conclusions.
 - On CUDA, it maps to FAISS GPU IVF-Flat.
 - The main parameters are the number of coarse lists (`nlist`) and searched
   lists (`nprobe`).
+- `metric = "inner_product"` uses FAISS IVF-Flat with `METRIC_INNER_PRODUCT`.
+- `metric = "cosine"` uses row L2 normalization followed by IVF inner-product
+  search and returns `1 - similarity`.
+- `metric = "correlation"` uses row centering plus L2 normalization followed by
+  IVF inner-product search and returns `1 - similarity`.
 
 IVF partitions the vector space into coarse cells and searches a subset of
 cells. It is approximate unless `nprobe` approaches the number of lists. It is

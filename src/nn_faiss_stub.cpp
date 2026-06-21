@@ -30,6 +30,8 @@ List faiss_ivf_knn_impl(NumericMatrix,
                         int,
                         int,
                         int,
+                        std::string,
+                        std::string,
                         bool,
                         int) {
   Rcpp::stop(
@@ -136,6 +138,8 @@ List faiss_gpu_ivf_flat_knn_impl(NumericMatrix,
                                  int,
                                  int,
                                  int,
+                                 std::string,
+                                 std::string,
                                  bool) {
   Rcpp::stop(
     "FAISS GPU IVF Flat backend is not available. Reinstall faissR with "

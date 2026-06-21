@@ -205,8 +205,8 @@ nn_faiss_flat_cpp <- function(data, points, k, exclude_self, n_threads) {
     .Call(`_faissR_nn_faiss_flat_cpp`, data, points, k, exclude_self, n_threads)
 }
 
-nn_faiss_ivf_cpp <- function(data, points, k, nlist, nprobe, exclude_self, n_threads) {
-    .Call(`_faissR_nn_faiss_ivf_cpp`, data, points, k, nlist, nprobe, exclude_self, n_threads)
+nn_faiss_ivf_cpp <- function(data, points, k, nlist, nprobe, metric, distance_output, exclude_self, n_threads) {
+    .Call(`_faissR_nn_faiss_ivf_cpp`, data, points, k, nlist, nprobe, metric, distance_output, exclude_self, n_threads)
 }
 
 nn_faiss_flat_ip_cpp <- function(data, points, k, exclude_self, n_threads) {
@@ -245,8 +245,8 @@ nn_faiss_nndescent_cpp <- function(data, points, k, graph_k, n_iter, search_l, e
     .Call(`_faissR_nn_faiss_nndescent_cpp`, data, points, k, graph_k, n_iter, search_l, exclude_self, n_threads)
 }
 
-nn_faiss_gpu_ivf_flat_cpp <- function(data, points, k, nlist, nprobe, exclude_self) {
-    .Call(`_faissR_nn_faiss_gpu_ivf_flat_cpp`, data, points, k, nlist, nprobe, exclude_self)
+nn_faiss_gpu_ivf_flat_cpp <- function(data, points, k, nlist, nprobe, metric, distance_output, exclude_self) {
+    .Call(`_faissR_nn_faiss_gpu_ivf_flat_cpp`, data, points, k, nlist, nprobe, metric, distance_output, exclude_self)
 }
 
 nn_faiss_gpu_ivfpq_cpp <- function(data, points, k, nlist, nprobe, pq_m, pq_nbits, exclude_self) {

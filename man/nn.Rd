@@ -47,17 +47,17 @@ for example,
 `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
 `"euclidean"` is the validated high-performance default. `"cosine"` and
 `"correlation"` are implemented for exact CPU KNN, FAISS CPU/GPU Flat,
-FAISS HNSW, and RcppHNSW. FAISS Flat and FAISS HNSW use row L2
-normalization for cosine and row centering plus L2 normalization for
-correlation before inner-product search; distances are returned as
-`1 - similarity`. CPU `method = "auto"` can use FAISS Flat for larger
+FAISS CPU/GPU IVF-Flat, FAISS HNSW, and RcppHNSW. FAISS Flat, IVF-Flat,
+and HNSW use row L2 normalization for cosine and row centering plus L2
+normalization for correlation before inner-product search; distances are
+returned as `1 - similarity`. CPU `method = "auto"` can use FAISS Flat for larger
 exact non-Euclidean query workloads and FAISS HNSW or RcppHNSW/hnswlib for
 large non-Euclidean self-search. CPU `method = "hnsw"` uses FAISS HNSW for
 all metrics when available and RcppHNSW/hnswlib when FAISS is unavailable.
-`"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP
-for `method = "flat"` when available. Unsupported backend combinations
-fail clearly instead of returning neighbours computed under a different
-metric.}
+`"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
+FAISS IVF-Flat IP, and FAISS HNSW IP where available. Unsupported backend
+combinations fail clearly instead of returning neighbours computed under a
+different metric.}
 
 \item{tuning}{Tuning policy for approximate GPU methods. `"auto"` uses the
 tuned default for the resolved method, `"cache"` reuses/stores pilot
@@ -111,8 +111,9 @@ Method descriptions:
   `"hnsw"` for inner-product search.
   \item `"sparse"`: native exact sparse `dgCMatrix` CPU search.
   \item `"hnsw"`: FAISS CPU HNSW approximate graph-search index [5,16].
-  \item `"ivf"`: FAISS inverted-file index, trading exhaustive search for
-  coarse-list probing [1-2,16].
+  \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
+  search for coarse-list probing. It supports L2, raw IP, and normalized-IP
+  cosine/correlation routes on CPU and FAISS GPU [1-2,16].
   \item `"ivfpq"`: FAISS inverted-file index with product quantization,
   mainly for compressed-memory approximate search [1-2,6,16].
   \item `"nsg"`: FAISS CPU NSG graph-search index when exposed by the linked

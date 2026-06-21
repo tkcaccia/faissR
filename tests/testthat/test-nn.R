@@ -103,7 +103,8 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(caps$supported[caps$method == "sparse" & caps$metric == "inner_product" & caps$backend == "cpu"])
   expect_true(all(!caps$supported[caps$method == "cagra" & caps$backend == "cpu"]))
   expect_true(all(!caps$supported[caps$method == "hnsw" & caps$backend == "cuda"]))
-  expect_true(all(!caps$supported[caps$method == "ivf" & caps$metric == "cosine"]))
+  expect_true(all(caps$supported[caps$method == "ivf"]))
+  expect_true(all(!caps$supported[caps$method == "ivfpq" & caps$metric != "euclidean"]))
   expect_true(all(!caps$supported[caps$method == "vptree" & caps$metric == "inner_product"]))
 })
 
@@ -919,6 +920,22 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "bruteforce", "correlation"),
     "faiss_gpu_flat_correlation"
   )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "ivf", "inner_product"),
+    "faiss_ivf"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "ivf", "cosine"),
+    "faiss_ivf"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "ivf", "inner_product"),
+    "faiss_gpu_ivf_flat"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "ivf", "correlation"),
+    "faiss_gpu_ivf_flat"
+  )
   expect_error(
     faissR:::resolve_public_nn_backend("cuda", "cagra", "inner_product"),
     "inner_product"
@@ -1239,6 +1256,26 @@ test_that("real FAISS IVF backend records approximate index metadata", {
     expect_equal(attr(out, "approximation")$requested_nlist, 16L)
     expect_equal(attr(out, "approximation")$requested_nprobe, 4L)
     expect_false(attr(out, "approximation")$ivf_parameters_adjusted)
+
+    options(
+      faissR.faiss_nlist = 16L,
+      faissR.faiss_nprobe = 16L
+    )
+    for (metric in c("cosine", "correlation", "inner_product")) {
+      metric_out <- internal_nn(
+        x,
+        k = k + 1L,
+        backend = "faiss_ivf",
+        metric = metric,
+        n_threads = 2L
+      )
+      expect_equal(dim(metric_out$indices), c(nrow(x), k + 1L))
+      expect_equal(attr(metric_out, "backend"), "faiss_ivf")
+      expect_equal(attr(metric_out, "metric"), metric)
+      expect_false(isTRUE(attr(metric_out, "exact")))
+      expect_equal(attr(metric_out, "approximation")$metric, metric)
+      expect_true(all(is.finite(metric_out$distances)))
+    }
 
     options(
       faissR.faiss_nlist = 9999L,

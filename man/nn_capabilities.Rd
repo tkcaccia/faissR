@@ -21,10 +21,10 @@ faissR exposes four public nearest-neighbour metrics: \code{"euclidean"},
 is centered cosine similarity, whereas inner product is the raw dot product.
 
 The capability table reports metric support only when the selected route
-computes neighbours under that metric. For example, FAISS Flat and FAISS HNSW
-support cosine and correlation by using normalized inner-product searches, but
-IVF, IVFPQ, NNDescent, and CAGRA are currently validated only for Euclidean/L2
-search.
+computes neighbours under that metric. For example, FAISS Flat, FAISS IVF-Flat,
+and FAISS HNSW support cosine and correlation by using normalized
+inner-product searches, but IVFPQ, NNDescent, and CAGRA are currently validated
+only for Euclidean/L2 search.
 }
 \examples{
 caps <- nn_capabilities()

@@ -100,12 +100,13 @@ Supported CUDA routes include:
 - native CUDA 2D/3D grid search for low-dimensional Euclidean self-KNN.
 
 The validated high-performance metric is Euclidean/L2. Cosine and correlation
-are exposed for exact CPU, FAISS CPU/GPU Flat, FAISS HNSW, and
-RcppHNSW-compatible paths. FAISS Flat and FAISS HNSW implement cosine by row L2
-normalizing the inputs before inner-product search, and correlation by row
-centering plus L2 normalization before inner-product search; both routes return
-`1 - similarity` distances. Inner-product search is exposed for exact native CPU
-scoring, FAISS Flat IP routes, FAISS HNSW IP, and the RcppHNSW/hnswlib IP
+are exposed for exact CPU, FAISS CPU/GPU Flat, FAISS CPU/GPU IVF-Flat,
+FAISS HNSW, and RcppHNSW-compatible paths. FAISS Flat, IVF-Flat, and HNSW
+implement cosine by row L2 normalizing the inputs before inner-product search,
+and correlation by row centering plus L2 normalization before inner-product
+search; both routes return `1 - similarity` distances. Inner-product search is
+exposed for exact native CPU scoring, FAISS Flat IP routes, FAISS IVF-Flat IP,
+FAISS HNSW IP, and the RcppHNSW/hnswlib IP
 fallback. Approximate accelerator backends reject unsupported metric/backend
 combinations instead of returning neighbours computed under a different metric
 label.
@@ -188,7 +189,7 @@ public method names map to different concrete functions depending on `backend`.
 | `vptree` | Native exact CPU VP-tree for Euclidean, cosine, and correlation; zero-normalized non-Euclidean rows use exact CPU fallback. | Unsupported. | Low-dimensional CPU helper. |
 | `sparse` | Native exact sparse `dgCMatrix` route. | Unsupported. | Avoids densifying sparse matrices. |
 | `hnsw` | FAISS CPU HNSW. | Unsupported. | High-recall CPU graph-search route [5,16]. |
-| `ivf` | FAISS CPU IVF-Flat. | FAISS GPU IVF-Flat. | Coarse-list approximate route [1-2,16]. |
+| `ivf` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | Coarse-list approximate route [1-2,16]. |
 | `ivfpq` | FAISS CPU IVF-PQ. | FAISS GPU IVF-PQ. | Compressed approximate route [6,16]. |
 | `nsg` | FAISS CPU NSG if available. | Unsupported. | Optional FAISS graph-search baseline [16]. |
 | `nndescent` | FAISS CPU NNDescent if available. | Direct cuVS NN-descent. | Approximate KNN graph construction [3-4,16]. |

@@ -311,6 +311,20 @@ bool faiss_gpu_supported_pq_code_size(const int code_size) {
   }
 }
 
+DistanceOutput parse_distance_output(const std::string& distance_output,
+                                     const char* index_type) {
+  if (distance_output == "inner_product") {
+    return DistanceOutput::InnerProduct;
+  }
+  if (distance_output == "one_minus_inner_product") {
+    return DistanceOutput::OneMinusInnerProduct;
+  }
+  if (distance_output == "euclidean") {
+    return DistanceOutput::L2Squared;
+  }
+  Rcpp::stop("Unsupported FAISS %s distance output mode", index_type);
+}
+
 } // namespace
 
 bool faiss_is_available_impl() {
@@ -454,18 +468,34 @@ List faiss_ivf_knn_impl(NumericMatrix data,
                         int k,
                         int nlist,
                         int nprobe,
+                        std::string metric,
+                        std::string distance_output,
                         bool exclude_self,
                         int n_threads) {
   const int n_data = data.nrow();
   const int n_features = data.ncol();
   nlist = std::max(1, std::min(nlist, n_data));
   nprobe = std::max(1, std::min(nprobe, nlist));
-  faiss::IndexFlatL2 quantizer(n_features);
-  faiss::IndexIVFFlat index(&quantizer, n_features, nlist, faiss::METRIC_L2);
+  faiss::MetricType faiss_metric = faiss::METRIC_L2;
+  std::unique_ptr<faiss::Index> quantizer;
+  if (metric == "inner_product") {
+    faiss_metric = faiss::METRIC_INNER_PRODUCT;
+    quantizer.reset(new faiss::IndexFlatIP(n_features));
+  } else if (metric == "euclidean") {
+    quantizer.reset(new faiss::IndexFlatL2(n_features));
+  } else {
+    Rcpp::stop("FAISS IVF supports metric = 'euclidean' or 'inner_product'");
+  }
+  const DistanceOutput output = parse_distance_output(distance_output, "IVF");
+  faiss::IndexIVFFlat index(quantizer.get(), n_features, nlist, faiss_metric);
   index.nprobe = nprobe;
   return search_faiss_index(
     index, data, points, k, exclude_self, n_threads,
-    "IndexIVFFlat", false, DistanceOutput::L2Squared, nlist, nprobe
+    metric == "inner_product" ? "IndexIVFFlatIP" : "IndexIVFFlat",
+    false,
+    output,
+    nlist,
+    nprobe
   );
 }
 
@@ -528,14 +558,7 @@ List faiss_hnsw_knn_impl(NumericMatrix data,
   } else if (metric != "euclidean") {
     Rcpp::stop("FAISS HNSW supports metric = 'euclidean' or 'inner_product'");
   }
-  DistanceOutput output = DistanceOutput::L2Squared;
-  if (distance_output == "inner_product") {
-    output = DistanceOutput::InnerProduct;
-  } else if (distance_output == "one_minus_inner_product") {
-    output = DistanceOutput::OneMinusInnerProduct;
-  } else if (distance_output != "euclidean") {
-    Rcpp::stop("Unsupported FAISS HNSW distance output mode");
-  }
+  const DistanceOutput output = parse_distance_output(distance_output, "HNSW");
   faiss::IndexHNSWFlat index(n_features, m, faiss_metric);
   index.hnsw.efConstruction = ef_construction;
   index.hnsw.efSearch = ef_search;
@@ -639,12 +662,21 @@ List faiss_gpu_ivf_flat_knn_impl(NumericMatrix data,
                                  int k,
                                  int nlist,
                                  int nprobe,
+                                 std::string metric,
+                                 std::string distance_output,
                                  bool exclude_self) {
 #ifdef FASTEMBEDR_HAS_FAISS_GPU
   const int n_data = data.nrow();
   const int n_features = data.ncol();
   nlist = std::max(1, std::min(nlist, n_data));
   nprobe = std::max(1, std::min(nprobe, nlist));
+  faiss::MetricType faiss_metric = faiss::METRIC_L2;
+  if (metric == "inner_product") {
+    faiss_metric = faiss::METRIC_INNER_PRODUCT;
+  } else if (metric != "euclidean") {
+    Rcpp::stop("FAISS GPU IVF Flat supports metric = 'euclidean' or 'inner_product'");
+  }
+  const DistanceOutput output = parse_distance_output(distance_output, "GPU IVF Flat");
   faiss::gpu::StandardGpuResources resources;
   faiss::gpu::GpuIndexIVFFlatConfig config;
   config.device = 0;
@@ -652,12 +684,14 @@ List faiss_gpu_ivf_flat_knn_impl(NumericMatrix data,
     &resources,
     n_features,
     nlist,
-    faiss::METRIC_L2,
+    faiss_metric,
     config
   );
   return search_faiss_index(
     index, data, points, k, exclude_self, 1,
-    "GpuIndexIVFFlat_cuVS", false, DistanceOutput::L2Squared,
+    metric == "inner_product" ? "GpuIndexIVFFlatIP_cuVS" : "GpuIndexIVFFlat_cuVS",
+    false,
+    output,
     nlist, nprobe, NA_INTEGER, NA_INTEGER, true
   );
 #else
@@ -666,6 +700,8 @@ List faiss_gpu_ivf_flat_knn_impl(NumericMatrix data,
   (void)k;
   (void)nlist;
   (void)nprobe;
+  (void)metric;
+  (void)distance_output;
   (void)exclude_self;
   Rcpp::stop(
     "FAISS GPU IVF Flat backend is not available in this build. "
