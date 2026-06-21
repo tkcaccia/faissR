@@ -85,12 +85,23 @@ nn_compute <- function(data,
   if (!identical(metric, "euclidean")) {
     if (backend %in% c("auto", "cpu_auto")) {
       backend <- "cpu"
-    } else if (!backend %in% c("cpu", "hnsw", "rcpphnsw", "cpu_hnsw")) {
+    } else if (identical(metric, "inner_product") &&
+               backend %in% c("faiss_flat_l2", "faiss_flat", "cpu_faiss_flat")) {
+      backend <- "faiss_flat_ip"
+    } else if (identical(metric, "inner_product") &&
+               backend %in% c("faiss_gpu_flat_l2", "faiss_gpu_flat", "cuda_faiss_flat_l2")) {
+      backend <- "faiss_gpu_flat_ip"
+    } else if (identical(metric, "inner_product") &&
+               backend %in% c("faiss_flat_ip", "faiss_gpu_flat_ip", "cuda_faiss_flat_ip")) {
+      backend <- backend
+    } else if (!backend %in% c("cpu", "hnsw", "rcpphnsw", "cpu_hnsw") ||
+               (identical(metric, "inner_product") &&
+                backend %in% c("hnsw", "rcpphnsw", "cpu_hnsw"))) {
       stop(
         "`metric = \"", metric, "\"` currently supports only `backend = \"cpu\"` ",
-        "or `backend = \"hnsw\"`. ",
-        "The FAISS, CUDA, and cuVS KNN paths in this build ",
-        "have validated Euclidean-distance semantics only.",
+        "or a validated metric-specific exact backend. ",
+        "Approximate FAISS, CUDA, and cuVS KNN paths in this build ",
+        "have validated Euclidean-distance semantics only unless explicitly routed.",
         call. = FALSE
       )
     }
@@ -1049,6 +1060,7 @@ normalize_nn_tuning <- function(tuning) {
 resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
   backend_label <- as.character(backend)[1L]
   method_label <- normalize_nn_method(method)
+  metric <- normalize_nn_metric(metric)
   if (!tolower(backend_label) %in% c("auto", "cpu", "cuda")) {
     removed <- c("cpu_clustered", "clustered", "cpu_nndescent", "nndescent",
                  "cpu_ivf", "ivf", "cpu_annoy", "annoy")
@@ -1067,10 +1079,13 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
   }
   device <- normalize_public_compute_backend(backend)
   method <- method_label
-  if (!identical(metric, "euclidean") && identical(device, "cuda")) {
-    stop("CUDA nearest-neighbour methods currently support only `metric = \"euclidean\"`.", call. = FALSE)
+  if (!metric %in% c("euclidean", "inner_product") && identical(device, "cuda")) {
+    stop("CUDA nearest-neighbour methods currently support only `metric = \"euclidean\"` or `metric = \"inner_product\"`.", call. = FALSE)
   }
   if (identical(method, "auto")) {
+    if (identical(metric, "inner_product") && identical(device, "cuda")) {
+      return("faiss_gpu_flat_ip")
+    }
     return(if (identical(device, "cuda")) "cuda_auto" else "cpu_auto")
   }
   if (identical(device, "cpu")) {
@@ -1078,7 +1093,7 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
       method,
       exact = "cpu",
       bruteforce = "cpu",
-      flat = "faiss_flat_l2",
+      flat = if (identical(metric, "inner_product")) "faiss_flat_ip" else "faiss_flat_l2",
       grid = "cpu_grid",
       vptree = "cpu_vptree",
       sparse = "cpu_sparse",
@@ -1091,6 +1106,13 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
       stop("Unsupported CPU nearest-neighbour method.", call. = FALSE)
     )
   } else {
+    if (identical(metric, "inner_product") &&
+        method %in% c("exact", "bruteforce", "flat")) {
+      return("faiss_gpu_flat_ip")
+    }
+    if (identical(metric, "inner_product")) {
+      stop("CUDA `metric = \"inner_product\"` currently supports `method = \"exact\"`, `\"bruteforce\"`, or `\"flat\"`.", call. = FALSE)
+    }
     switch(
       method,
       exact = if (isTRUE(faiss_available())) "faiss_gpu_flat_l2" else if (isTRUE(cuvs_available())) "cuda_cuvs_bruteforce" else "cuda",
@@ -1378,7 +1400,7 @@ normalize_nn_threads <- function(n_threads) {
 
 normalize_nn_metric <- function(metric) {
   metric <- tolower(as.character(metric))
-  match.arg(metric, c("euclidean", "cosine", "correlation"))
+  match.arg(metric, c("euclidean", "cosine", "correlation", "inner_product"))
 }
 
 should_use_grid2d_self_knn <- function(self_query,
@@ -3607,12 +3629,13 @@ grid_self_knn <- function(data,
 #'   backend/method combinations fail clearly; for example,
 #'   `method = "CAGRA", backend = "cpu"` errors because CAGRA is CUDA-only.
 #' @param metric Distance metric. The intentionally small public set is
-#'   `"euclidean"`, `"cosine"`, and `"correlation"`. `"euclidean"` is the
-#'   validated high-performance default. `"cosine"` and `"correlation"` are
-#'   implemented for exact CPU KNN and RcppHNSW; with `backend = "auto"` they
-#'   select the exact CPU path. FAISS, CUDA, and cuVS backends fail clearly for
-#'   non-Euclidean metrics instead of returning Euclidean neighbours under a
-#'   different label.
+#'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
+#'   `"euclidean"` is the validated high-performance default. `"cosine"` and
+#'   `"correlation"` are implemented for exact CPU KNN and RcppHNSW; with
+#'   `backend = "auto"` they select the exact CPU path. `"inner_product"` is
+#'   exact on native CPU routes and maps to FAISS Flat IP for `method = "flat"`
+#'   when available. Unsupported backend combinations fail clearly instead of
+#'   returning neighbours computed under a different metric.
 #' @param tuning Tuning policy for approximate GPU methods. `"auto"` uses the
 #'   tuned default for the resolved method, `"cache"` reuses/stores pilot
 #'   results, `"pilot"` tunes for this call without persisting, `"fixed"` uses
@@ -3627,6 +3650,7 @@ grid_self_knn <- function(data,
 #' knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu")
 #' knn_cosine <- nn(x, k = 16, metric = "cosine", backend = "cpu")
 #' knn_correlation <- nn(x, k = 16, metric = "correlation", backend = "cpu")
+#' knn_ip <- nn(x, k = 16, metric = "inner_product", backend = "cpu")
 #' @export
 nn <- function(data,
                points = data,
@@ -3634,7 +3658,7 @@ nn <- function(data,
                backend = c("auto", "cpu", "cuda"),
                method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree",
                           "sparse", "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
-               metric = c("euclidean", "cosine", "correlation"),
+               metric = c("euclidean", "cosine", "correlation", "inner_product"),
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                n_threads = NULL) {
   backend <- as.character(backend)[1L]
@@ -3669,8 +3693,8 @@ nn <- function(data,
 #'   uses CUDA when available and CPU otherwise.
 #' @param method Algorithm selector passed through the same resolver as [nn()].
 #'   See [nn()] for method descriptions and references.
-#' @param metric Distance metric: `"euclidean"`, `"cosine"`, or
-#'   `"correlation"`.
+#' @param metric Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`,
+#'   or `"inner_product"`.
 #' @param tuning Tuning policy passed to [nn()]. `"auto"` uses the tuned default
 #'   for the resolved method.
 #' @param n_threads Number of CPU worker threads used by CPU backends.
@@ -3681,7 +3705,7 @@ nn_without_self <- function(data,
                             backend = c("auto", "cpu", "cuda"),
                             method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree",
                                        "sparse", "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
-                            metric = c("euclidean", "cosine", "correlation"),
+                            metric = c("euclidean", "cosine", "correlation", "inner_product"),
                             tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                             n_threads = NULL) {
   backend <- as.character(backend)[1L]

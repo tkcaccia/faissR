@@ -10,7 +10,7 @@ nn_without_self(
   backend = c("auto", "cpu", "cuda"),
   method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse", "HNSW",
     "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
-  metric = c("euclidean", "cosine", "correlation"),
+  metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   n_threads = NULL
 )
@@ -27,8 +27,8 @@ uses CUDA when available and CPU otherwise.}
 \item{method}{Algorithm selector passed through the same resolver as [nn()].
 See [nn()] for method descriptions and references.}
 
-\item{metric}{Distance metric: `"euclidean"`, `"cosine"`, or
-`"correlation"`.}
+\item{metric}{Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`,
+or `"inner_product"`.}
 
 \item{tuning}{Tuning policy passed to [nn()]. `"auto"` uses the tuned default
 for the resolved method.}

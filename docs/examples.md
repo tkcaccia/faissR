@@ -23,13 +23,15 @@ head(nn_res$indices)
 head(nn_res$distances)
 ```
 
-## Cosine Search
+## Non-Euclidean Metrics
 
-Cosine search is implemented by row-normalizing the input and using
-inner-product search where supported.
+Cosine and correlation use validated CPU paths. Inner-product search is
+available for exact CPU scoring and FAISS Flat IP routes where supported.
 
 ```r
 knn_cos <- nn(x, k = 15, backend = "auto", metric = "cosine", n_threads = 4)
+knn_ip <- nn(x, k = 15, backend = "cpu", method = "flat",
+             metric = "inner_product", n_threads = 4)
 ```
 
 ## Shared Nearest-Neighbour Graph And Leiden Clustering

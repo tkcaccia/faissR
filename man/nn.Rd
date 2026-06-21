@@ -11,7 +11,7 @@ nn(
   backend = c("auto", "cpu", "cuda"),
   method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse", "HNSW",
     "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
-  metric = c("euclidean", "cosine", "correlation"),
+  metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   n_threads = NULL
 )
@@ -39,12 +39,13 @@ backend/method combinations fail clearly; for example,
 `method = "CAGRA", backend = "cpu"` errors because CAGRA is CUDA-only.}
 
 \item{metric}{Distance metric. The intentionally small public set is
-`"euclidean"`, `"cosine"`, and `"correlation"`. `"euclidean"` is the
-validated high-performance default. `"cosine"` and `"correlation"` are
-implemented for exact CPU KNN and RcppHNSW; with `backend = "auto"` they
-select the exact CPU path. FAISS, CUDA, and cuVS backends fail clearly for
-non-Euclidean metrics instead of returning Euclidean neighbours under a
-different label.}
+`"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
+`"euclidean"` is the validated high-performance default. `"cosine"` and
+`"correlation"` are implemented for exact CPU KNN and RcppHNSW; with
+`backend = "auto"` they select the exact CPU path. `"inner_product"` is
+exact on native CPU routes and maps to FAISS Flat IP for `method = "flat"`
+when available. Unsupported backend combinations fail clearly instead of
+returning neighbours computed under a different metric.}
 
 \item{tuning}{Tuning policy for approximate GPU methods. `"auto"` uses the
 tuned default for the resolved method, `"cache"` reuses/stores pilot
@@ -107,6 +108,7 @@ x <- scale(as.matrix(iris[, 1:4]))
 knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu")
 knn_cosine <- nn(x, k = 16, metric = "cosine", backend = "cpu")
 knn_correlation <- nn(x, k = 16, metric = "correlation", backend = "cpu")
+knn_ip <- nn(x, k = 16, metric = "inner_product", backend = "cpu")
 }
 \references{
 Johnson J, Douze M, Jegou H. Billion-scale similarity search with GPUs. IEEE

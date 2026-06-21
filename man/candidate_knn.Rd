@@ -10,7 +10,7 @@ candidate_knn(
   points = data,
   k,
   backend = c("auto", "cpu", "cuda"),
-  metric = c("euclidean", "cosine", "correlation"),
+  metric = c("euclidean", "cosine", "correlation", "inner_product"),
   n_threads = NULL,
   exclude_self = FALSE
 )
@@ -31,8 +31,8 @@ entries are ignored.}
 `"cuda"` for the native CUDA row-candidate kernel. GPU backends currently require
 self-query Euclidean candidates with `exclude_self = TRUE`.}
 
-\item{metric}{`"euclidean"`, `"cosine"`, or `"correlation"`. GPU candidate
-kernels currently support Euclidean only.}
+\item{metric}{`"euclidean"`, `"cosine"`, `"correlation"`, or
+`"inner_product"`. GPU candidate kernels currently support Euclidean only.}
 
 \item{n_threads}{CPU threads for the CPU backend.}
 

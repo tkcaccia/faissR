@@ -154,6 +154,9 @@ double sparse_distance(const SparseRows& data,
     sim = std::max(-1.0, std::min(1.0, sim));
     return 1.0 - sim;
   }
+  if (metric == "inner_product") {
+    return -dot;
+  }
   Rcpp::stop("unsupported sparse KNN metric");
 }
 
@@ -177,7 +180,8 @@ List sparse_nn_cpp(S4 data,
   if (exclude_self && !self_query) {
     Rcpp::stop("self-neighbor exclusion requires a self-KNN search");
   }
-  if (metric != "euclidean" && metric != "cosine" && metric != "correlation") {
+  if (metric != "euclidean" && metric != "cosine" &&
+      metric != "correlation" && metric != "inner_product") {
     Rcpp::stop("unsupported sparse KNN metric");
   }
 
@@ -212,7 +216,9 @@ List sparse_nn_cpp(S4 data,
     std::sort(best.begin(), best.end(), best_less);
     for (int j = 0; j < k; ++j) {
       indices(query, j) = best[j].index + 1;
-      distances(query, j) = best[j].distance;
+      distances(query, j) = metric == "inner_product" ?
+        std::max(best[j].distance - best.front().distance, 0.0) :
+        best[j].distance;
     }
   }
 

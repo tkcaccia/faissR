@@ -16,8 +16,8 @@
 #' @param backend `"auto"`/`"cpu"` for the general CPU implementation,
 #'   `"cuda"` for the native CUDA row-candidate kernel. GPU backends currently require
 #'   self-query Euclidean candidates with `exclude_self = TRUE`.
-#' @param metric `"euclidean"`, `"cosine"`, or `"correlation"`. GPU candidate
-#'   kernels currently support Euclidean only.
+#' @param metric `"euclidean"`, `"cosine"`, `"correlation"`, or
+#'   `"inner_product"`. GPU candidate kernels currently support Euclidean only.
 #' @param n_threads CPU threads for the CPU backend.
 #' @param exclude_self If `TRUE`, remove each query row from its own candidate
 #'   set. This is valid only for self-query candidate KNN.
@@ -35,7 +35,7 @@ candidate_knn <- function(data,
                           points = data,
                           k,
                           backend = c("auto", "cpu", "cuda"),
-                          metric = c("euclidean", "cosine", "correlation"),
+                          metric = c("euclidean", "cosine", "correlation", "inner_product"),
                           n_threads = NULL,
                           exclude_self = FALSE) {
   backend <- match.arg(backend)

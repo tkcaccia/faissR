@@ -87,6 +87,11 @@ test_that("nn sparse cosine and correlation match dense CPU", {
   sparse_cor <- nn(sx, k = 3L, backend = "cpu_sparse", metric = "correlation")
   expect_equal(unname(sparse_cor$indices), unname(dense_cor$indices))
   expect_equal(unname(sparse_cor$distances), unname(dense_cor$distances), tolerance = 1e-12)
+
+  dense_ip <- nn(x, k = 3L, backend = "cpu", metric = "inner_product")
+  sparse_ip <- nn(sx, k = 3L, backend = "cpu_sparse", metric = "inner_product")
+  expect_equal(unname(sparse_ip$indices), unname(dense_ip$indices))
+  expect_equal(unname(sparse_ip$distances), unname(dense_ip$distances), tolerance = 1e-12)
 })
 
 test_that("nn_without_self works with sparse Matrix input", {
@@ -157,6 +162,29 @@ test_that("nn returns exact correlation neighbors on CPU", {
   }
 })
 
+test_that("nn returns exact inner-product neighbors on CPU", {
+  x <- matrix(c(
+    2, 0,
+    0, 3,
+    1, 1,
+    -1, 0
+  ), ncol = 2, byrow = TRUE)
+
+  dots <- x %*% t(x)
+  expected_idx <- t(apply(-dots, 1, order))[, 1:3]
+
+  out <- nn(x, k = 3L, backend = "cpu", metric = "inner_product")
+
+  expect_equal(attr(out, "backend"), "cpu")
+  expect_equal(attr(out, "metric"), "inner_product")
+  expect_true(isTRUE(attr(out, "exact")))
+  expect_equal(unname(out$indices), unname(expected_idx))
+  for (i in seq_len(nrow(x))) {
+    best <- dots[i, expected_idx[i, 1L]]
+    expect_equal(out$distances[i, ], best - dots[i, out$indices[i, ]], tolerance = 1e-12)
+  }
+})
+
 test_that("non-euclidean metrics use only validated backend paths", {
   x <- scale(as.matrix(iris[1:20, 1:4]))
 
@@ -175,6 +203,10 @@ test_that("non-euclidean metrics use only validated backend paths", {
   expect_error(
     nn(x, k = 4L, backend = "cuda_cuvs_nndescent", metric = "correlation"),
     "validated Euclidean-distance semantics only"
+  )
+  expect_error(
+    nn(x, k = 4L, backend = "hnsw", metric = "inner_product"),
+    "metric"
   )
 })
 
@@ -525,6 +557,18 @@ test_that("public backend and method resolver maps device plus method", {
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "IVF", "euclidean"),
     "faiss_ivf"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "flat", "inner_product"),
+    "faiss_flat_ip"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "flat", "inner_product"),
+    "faiss_gpu_flat_ip"
+  )
+  expect_error(
+    faissR:::resolve_public_nn_backend("cuda", "CAGRA", "inner_product"),
+    "inner_product"
   )
   expect_error(
     faissR:::resolve_public_nn_backend("cpu", "faiss_hnsw", "euclidean"),

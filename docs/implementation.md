@@ -38,7 +38,7 @@ route was attempted, not that the package silently ran a CPU fallback.
 7. External libraries are linked as system dependencies and are not vendored
    into the package.
 8. Distance semantics are explicit: algorithm choice belongs in `method`, while
-   Euclidean/cosine/correlation choices belong in `metric`.
+   Euclidean/cosine/correlation/inner-product choices belong in `metric`.
 9. Approximate routes should expose enough metadata to make speed/quality
    trade-offs auditable.
 
@@ -98,9 +98,10 @@ Supported CUDA routes include:
 - native CUDA 2D/3D grid search for low-dimensional Euclidean self-KNN.
 
 The validated high-performance metric is Euclidean/L2. Cosine and correlation
-are exposed for exact CPU and RcppHNSW-compatible paths; accelerator backends
-reject unsupported metric/backend combinations instead of returning Euclidean
-neighbours under a different label.
+are exposed for exact CPU and RcppHNSW-compatible paths. Inner-product search
+is exposed for exact native CPU scoring and FAISS Flat IP routes. Accelerator
+and approximate backends reject unsupported metric/backend combinations instead
+of returning neighbours computed under a different metric label.
 
 ### Result Metadata
 
