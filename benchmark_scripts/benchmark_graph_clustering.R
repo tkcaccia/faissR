@@ -238,7 +238,8 @@ finite_max <- function(x) {
 }
 
 summarize_graph_cycles <- function(ok) {
-  parts <- split(ok, paste(ok$dataset, ok$k, ok$graph_backend, ok$cluster_backend, ok$method, ok$weight, sep = "__"))
+  cluster_key <- ifelse(is.na(ok$n_clusters_requested), "NA", as.character(ok$n_clusters_requested))
+  parts <- split(ok, paste(ok$dataset, ok$k, ok$graph_backend, ok$cluster_backend, ok$method, ok$weight, cluster_key, sep = "__"))
   summary <- lapply(parts, function(x) {
     data.frame(
       dataset = x$dataset[[1L]],

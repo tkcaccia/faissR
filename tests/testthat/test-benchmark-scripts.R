@@ -204,6 +204,48 @@ test_that("graph benchmark recommendations are grouped by target cluster count",
   expect_equal(out$method, c("leiden", "leiden"))
 })
 
+test_that("graph benchmark cycle summaries preserve target cluster count", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  ok <- data.frame(
+    dataset = c("A", "A"),
+    n = c(100L, 100L),
+    p = c(4L, 4L),
+    cycle = c(1L, 1L),
+    k = c(15L, 15L),
+    graph_backend = c("cpu", "cpu"),
+    graph_resolved_backend = c("cpu", "cpu"),
+    graph_preflight_route = c("cpu", "cpu"),
+    cluster_backend = c("cpu", "cpu"),
+    cluster_resolved_backend = c("cpu", "cpu"),
+    cluster_preflight_route = c("cpu", "cpu"),
+    method = c("louvain", "louvain"),
+    weight = c("snn", "snn"),
+    n_clusters_requested = c(3L, 5L),
+    n_threads = c(2L, 2L),
+    status = c("success", "success"),
+    error = c(NA_character_, NA_character_),
+    load_sec = c(0.1, 0.1),
+    graph_sec = c(1, 1),
+    cluster_sec = c(2, 3),
+    total_sec = c(3, 4),
+    peak_rss_gb = c(1, 1),
+    n_edges = c(500L, 500L),
+    n_communities = c(3L, 5L),
+    modularity = c(0.4, 0.35),
+    ari = c(0.9, 0.8),
+    selected_resolution = c(1, 2),
+    graph_cached = c(TRUE, TRUE),
+    expected_skip = c(FALSE, FALSE)
+  )
+
+  out <- env$summarize_graph_cycles(ok)
+  expect_equal(nrow(out), 2L)
+  expect_equal(sort(as.integer(out$n_clusters_requested)), c(3L, 5L))
+})
+
 test_that("graph benchmark auto comparison has unique schema columns", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
