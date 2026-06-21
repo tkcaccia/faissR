@@ -886,3 +886,40 @@ test_that("graph benchmark auto comparison has unique schema columns", {
   expect_equal(out$auto_method, "louvain")
   expect_equal(out$recommended_method, "leiden")
 })
+
+test_that("graph benchmark auto comparison guards speed and quality gaps", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = c("A", "A", "B", "B"),
+    k = c(15L, 15L, 15L, 15L),
+    n_clusters_requested = c(3L, 3L, 3L, 3L),
+    graph_backend = c("auto", "cpu", "auto", "cpu"),
+    graph_resolved_backend = c("cpu", "cpu", "cpu", "cpu"),
+    cluster_backend = c("auto", "cpu", "auto", "cpu"),
+    cluster_resolved_backend = c("cpu", "cpu", "cpu", "cpu"),
+    method = c("louvain", "leiden", "louvain", "leiden"),
+    weight = c("snn", "snn", "snn", "snn"),
+    success_cycles = c(1L, 1L, 1L, 1L),
+    median_graph_sec = c(1, 1, 1, 1),
+    median_cluster_sec = c(1, 0, 1, 1),
+    median_total_sec = c(2, 0, 2, 3),
+    median_ari = c(0.90, 0.91, NA, 0.91),
+    min_ari = c(0.89, 0.90, NA, 0.90),
+    median_modularity = c(0.40, 0.41, NA, 0.41),
+    median_n_communities = c(3, 3, 3, 3),
+    median_selected_resolution = c(1, 1, 1, 1),
+    n_clusters_source = c("labels", "labels", "labels", "labels"),
+    graph_cached = c(TRUE, TRUE, TRUE, TRUE)
+  )
+  recommendations <- cycle_summary[c(2, 4), , drop = FALSE]
+  recommendations$recommendation_basis <- "fastest_within_ari_tolerance"
+
+  out <- env$compare_auto_graph_to_recommendations(cycle_summary, recommendations)
+  expect_true(is.na(out$auto_median_speed_ratio[out$dataset == "A"]))
+  expect_true(is.na(out$auto_median_ari_gap[out$dataset == "B"]))
+  expect_true(is.na(out$auto_modularity_gap[out$dataset == "B"]))
+  expect_true(is.finite(out$auto_median_speed_ratio[out$dataset == "B"]))
+})

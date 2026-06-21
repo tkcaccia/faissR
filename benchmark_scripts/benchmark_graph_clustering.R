@@ -351,14 +351,41 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
   comparison$auto_uses_recommended_graph_backend <- comparison$auto_graph_backend == comparison$recommended_graph_backend
   comparison$auto_uses_recommended_cluster_backend <- comparison$auto_cluster_backend == comparison$recommended_cluster_backend
   comparison$auto_uses_recommended_method <- comparison$auto_method == comparison$recommended_method
-  comparison$auto_median_speed_ratio <- ifelse(
-    comparison$recommended_median_total_sec > 0,
-    comparison$auto_median_total_sec / comparison$recommended_median_total_sec,
-    ifelse(comparison$auto_median_total_sec == 0, 1, Inf)
+  comparison$auto_median_speed_ratio <- safe_positive_ratio(
+    comparison$auto_median_total_sec,
+    comparison$recommended_median_total_sec
   )
-  comparison$auto_median_ari_gap <- comparison$recommended_median_ari - comparison$auto_median_ari
-  comparison$auto_modularity_gap <- comparison$recommended_median_modularity - comparison$auto_median_modularity
+  comparison$auto_median_ari_gap <- safe_difference(
+    comparison$recommended_median_ari,
+    comparison$auto_median_ari
+  )
+  comparison$auto_modularity_gap <- safe_difference(
+    comparison$recommended_median_modularity,
+    comparison$auto_median_modularity
+  )
   comparison[order(comparison$dataset, comparison$k, comparison$n_clusters_requested, comparison$auto_graph_backend, comparison$auto_cluster_backend, comparison$auto_method), , drop = FALSE]
+}
+
+safe_positive_ratio <- function(numerator, denominator) {
+  numerator <- suppressWarnings(as.numeric(numerator))
+  denominator <- suppressWarnings(as.numeric(denominator))
+  out <- rep(NA_real_, max(length(numerator), length(denominator)))
+  numerator <- rep(numerator, length.out = length(out))
+  denominator <- rep(denominator, length.out = length(out))
+  ok <- is.finite(numerator) & is.finite(denominator) & denominator > 0
+  out[ok] <- numerator[ok] / denominator[ok]
+  out
+}
+
+safe_difference <- function(left, right) {
+  left <- suppressWarnings(as.numeric(left))
+  right <- suppressWarnings(as.numeric(right))
+  out <- rep(NA_real_, max(length(left), length(right)))
+  left <- rep(left, length.out = length(out))
+  right <- rep(right, length.out = length(out))
+  ok <- is.finite(left) & is.finite(right)
+  out[ok] <- left[ok] - right[ok]
+  out
 }
 
 graph_rank_value <- function(data, column, default, higher_is_better = FALSE) {
@@ -882,7 +909,7 @@ materials <- c(
   "`graph_cluster_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, modularity, and total time for a compact backwards-compatible summary.",
   "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, community counts, and resolved backend metadata.",
   "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering/backend/method row within `ari_tolerance` of the best median ARI for each dataset/k/target-cluster-count combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median total times are broken by higher median ARI and then higher median modularity. When ARI is unavailable it selects the fastest median total-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
-  "`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where graph or clustering backend was `auto` with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median ARI gap, modularity gap, and backend/method agreement.",
+  "`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where graph or clustering backend was `auto` with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median ARI gap, modularity gap, and backend/method agreement. Speed ratios and quality gaps are `NA` when the required timing, ARI, or modularity values are unavailable or invalid.",
   "`graph_backend` and `cluster_backend` record the requested public backends. `graph_preflight_route` and `cluster_preflight_route` record the public resolver decision before runtime availability checks; `graph_resolved_backend` and `cluster_resolved_backend` record the resolved device policy from successful result objects, so CPU/CUDA rows can be audited without opening the R objects.",
   "Unsupported graph-clustering combinations known from the public API, such as CUDA random_walking, are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. If every row in a graph-build block is an expected skip, graph construction is skipped and graph timing/edge columns remain `NA`.",
   "CUDA rows are recorded as expected skips when faissR was not built with the required CUDA/cuGraph support; unexpected CUDA runtime errors remain failed rows. The benchmark does not silently replace explicit CUDA clustering with CPU clustering."
