@@ -17,8 +17,10 @@
 - `backend = "cpu"` forces CPU execution.
 - `backend = "cuda"` forces CUDA execution and errors if no compatible CUDA
   backend is available.
-- `method` selects the algorithm family, for example `"auto"`, `"flat"`,
-  `"hnsw"`, `"ivf"`, `"cagra"`, or `"grid"`.
+- `method` selects one canonical lowercase public algorithm family, for example
+  `"auto"`, `"flat"`, `"hnsw"`, `"ivf"`, `"cagra"`, or `"grid"`.
+  Resolved implementation labels such as `faiss_hnsw` or `cuda_cuvs_cagra`
+  are backend metadata, not additional public method names.
 
 FAISS is the required compiled vector-search dependency. CUDA, FAISS GPU,
 RAPIDS cuVS, and RAPIDS libcugraph are optional compiled/runtime capabilities

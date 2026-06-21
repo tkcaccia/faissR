@@ -1104,13 +1104,13 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cpu", "hnsw", "euclidean"),
     "faiss_hnsw"
   )
-  expect_equal(
+  expect_error(
     faissR:::resolve_public_nn_backend("cpu", "HNSW", "euclidean"),
-    "faiss_hnsw"
+    "canonical lowercase"
   )
-  expect_true(
-    faissR:::resolve_public_nn_backend("cuda", "CAGRA", "euclidean") %in%
-      c("faiss_gpu_cagra", "cuda_cuvs_cagra")
+  expect_error(
+    faissR:::resolve_public_nn_backend("cuda", "CAGRA", "euclidean"),
+    "canonical lowercase"
   )
   if (faiss_available()) {
     x_hnsw <- matrix(rnorm(240L), nrow = 40L)
@@ -1872,7 +1872,7 @@ test_that("removed nn compatibility options are not accepted", {
   point <- matrix(c(0, 0), nrow = 1)
 
   expect_error(nn(data, point, k = 3, square = TRUE), "unused")
-  expect_error(nn(data, point, k = 3, method = "not_a_method"), "should be one of")
+  expect_error(nn(data, point, k = 3, method = "not_a_method"), "must be one of")
 })
 
 test_that("cuda availability helper returns a logical scalar", {

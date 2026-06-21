@@ -37,10 +37,10 @@ support or the selected CUDA combination is unavailable.}
 \item{method}{Algorithm selector. `"auto"` chooses a shape-aware default for
 the selected backend. Other values include `"exact"`, `"flat"`,
 `"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"hnsw"`, `"ivf"`,
-`"ivfpq"`, `"nsg"`, `"nndescent"`, and `"cagra"`. Older uppercase
-spellings are accepted as compatibility aliases but are not listed as
-separate methods. Unsupported backend/method combinations fail clearly;
-for example,
+`"ivfpq"`, `"nsg"`, `"nndescent"`, and `"cagra"`. Use these canonical
+lowercase method labels; resolved implementation labels such as
+`"faiss_hnsw"` are not public `method` values. Unsupported
+backend/method combinations fail clearly; for example,
 `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only.}
 
 \item{metric}{Distance metric. The intentionally small public set is

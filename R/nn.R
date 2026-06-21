@@ -1387,32 +1387,19 @@ normalize_public_backend_arg <- function(backend, arg = "backend") {
 normalize_nn_method <- function(method) {
   method <- as.character(method)[1L]
   if (is.na(method) || !nzchar(method)) method <- "auto"
-  method <- tolower(gsub("[[:space:]_-]+", "", method))
-  aliases <- c(
-    exact = "exact",
-    flat = "flat",
-    bruteforce = "bruteforce",
-    grid = "grid",
-    vptree = "vptree",
-    sparse = "sparse",
-    hnsw = "hnsw",
-    ivf = "ivf",
-    ivfpq = "ivfpq",
-    nsg = "nsg",
-    nndescent = "nndescent",
-    cagra = "cagra",
-    auto = "auto"
-  )
-  if (!method %in% names(aliases)) {
+  method <- trimws(method)
+  labels <- nn_method_labels()
+  if (!method %in% labels) {
     stop(
       "`method` must be one of \"auto\", \"exact\", \"flat\", \"bruteforce\", ",
       "\"grid\", \"vptree\", \"sparse\", \"hnsw\", \"ivf\", \"ivfpq\", ",
       "\"nsg\", \"nndescent\", or \"cagra\".",
-      " It should be one of the supported method labels.",
+      " Use these canonical lowercase method labels; internal backend route ",
+      "labels such as \"faiss_hnsw\" are not public `method` values.",
       call. = FALSE
     )
   }
-  unname(aliases[[method]])
+  method
 }
 
 nn_metric_labels <- function() {
@@ -4881,10 +4868,10 @@ grid_self_knn <- function(data,
 #' @param method Algorithm selector. `"auto"` chooses a shape-aware default for
 #'   the selected backend. Other values include `"exact"`, `"flat"`,
 #'   `"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"hnsw"`, `"ivf"`,
-#'   `"ivfpq"`, `"nsg"`, `"nndescent"`, and `"cagra"`. Older uppercase
-#'   spellings are accepted as compatibility aliases but are not listed as
-#'   separate methods. Unsupported backend/method combinations fail clearly;
-#'   for example,
+#'   `"ivfpq"`, `"nsg"`, `"nndescent"`, and `"cagra"`. Use these canonical
+#'   lowercase method labels; resolved implementation labels such as
+#'   `"faiss_hnsw"` are not public `method` values. Unsupported
+#'   backend/method combinations fail clearly; for example,
 #'   `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only.
 #' @param metric Distance metric. The intentionally small public set is
 #'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`;
