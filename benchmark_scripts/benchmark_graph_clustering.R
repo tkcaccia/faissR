@@ -169,7 +169,8 @@ result_row <- function(dataset, n, p, k, graph_backend, cluster_backend, method,
                        peak_rss_gb = NA_real_, n_edges = NA_integer_,
                        n_communities = NA_integer_, modularity = NA_real_,
                        ari = NA_real_, selected_resolution = NA_real_,
-                       graph_cached = NA) {
+                       graph_cached = NA,
+                       expected_skip = FALSE) {
   data.frame(
     dataset = dataset,
     n = as.integer(n),
@@ -194,8 +195,18 @@ result_row <- function(dataset, n, p, k, graph_backend, cluster_backend, method,
     ari = ari,
     selected_resolution = selected_resolution,
     graph_cached = if (is.na(graph_cached)) NA else isTRUE(graph_cached),
+    expected_skip = isTRUE(expected_skip),
     stringsAsFactors = FALSE
   )
+}
+
+graph_cluster_expected_skip <- function(cluster_backend, method) {
+  cluster_backend <- tolower(as.character(cluster_backend)[1L])
+  method <- tolower(as.character(method)[1L])
+  if (identical(cluster_backend, "cuda") && identical(method, "random_walking")) {
+    return("CUDA random_walking is not enabled; graph_cluster(method = \"random_walking\", backend = \"auto\") stays on CPU.")
+  }
+  NULL
 }
 
 build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
@@ -414,7 +425,29 @@ for (dataset_name in datasets) {
       for (cluster_backend in cluster_backends) {
         for (method in methods) {
           row_id <- row_id + 1L
-          if (!identical(graph_build$status, "success")) {
+          skip_reason <- graph_cluster_expected_skip(cluster_backend, method)
+          if (!is.null(skip_reason)) {
+            row <- result_row(
+              dataset = dataset_name,
+              n = nrow(loaded$data),
+              p = ncol(loaded$data),
+              k = k,
+              graph_backend = graph_backend,
+              cluster_backend = cluster_backend,
+              method = method,
+              weight = if (identical(graph_build$status, "success")) graph_build$weight else weight,
+              n_clusters = NULL,
+              n_threads = n_threads,
+              status = "expected_skip",
+              error = skip_reason,
+              graph_sec = if (identical(graph_build$status, "success")) graph_build$graph_sec else NA_real_,
+              total_sec = if (identical(graph_build$status, "success")) graph_build$graph_sec else NA_real_,
+              peak_rss_gb = read_peak_rss_gb(),
+              n_edges = if (identical(graph_build$status, "success")) graph_build$n_edges else NA_integer_,
+              graph_cached = identical(graph_build$status, "success"),
+              expected_skip = TRUE
+            )
+          } else if (!identical(graph_build$status, "success")) {
             row <- result_row(
               dataset = dataset_name,
               n = nrow(loaded$data),
@@ -503,6 +536,7 @@ materials <- c(
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
   "When `target_clusters = \"labels\"`, Louvain and Leiden receive `n_clusters = length(unique(labels))`; random-walking is benchmarked without a cluster-count target because the public API does not support that option for random-walking.",
   "Each KNN graph is built once per dataset/k/graph-backend/weight combination and reused across clustering methods and clustering backends. The `graph_cached` column records this reuse; `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
+  "Unsupported graph-clustering combinations known from the public API, such as CUDA random_walking, are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
   "CUDA rows are recorded as failed when faissR was not built with the required CUDA/cuGraph support; the benchmark does not silently replace CUDA clustering with CPU clustering."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_graph_clustering.md"))

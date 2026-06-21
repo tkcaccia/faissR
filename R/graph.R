@@ -156,9 +156,10 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   moving. `"leiden"` adds a native refinement pass that splits disconnected
 #'   communities after local moving.
 #' @param backend Community-detection backend. `"auto"` uses CUDA when
-#'   libcugraph is available and CPU otherwise. `"cpu"` uses native C++/OpenMP.
-#'   `"cuda"` uses native RAPIDS libcugraph for Louvain and Leiden when
-#'   libcugraph was detected at build time; random-walking is CPU-only.
+#'   libcugraph is available for Louvain/Leiden and CPU otherwise; auto keeps
+#'   `"random_walking"` on CPU. `"cpu"` uses native C++/OpenMP. `"cuda"` uses
+#'   native RAPIDS libcugraph for Louvain and Leiden when libcugraph was
+#'   detected at build time; random-walking is CPU-only.
 #' @param k Number of neighbours when `graph` is not already a KNN object.
 #' @param graph_backend Backend passed to [nn_without_self()] for neighbour
 #'   search when `graph` is a matrix or embedding.
@@ -222,7 +223,19 @@ graph_cluster <- function(graph,
                           seed = NULL,
                           ...) {
   method <- match.arg(method)
-  backend <- resolve_graph_cluster_backend(match.arg(backend))
+  requested_backend <- match.arg(backend)
+  backend <- resolve_graph_cluster_backend(requested_backend)
+  if (identical(method, "random_walking") && identical(backend, "cuda")) {
+    if (identical(requested_backend, "auto")) {
+      backend <- "cpu"
+    } else {
+      stop(
+        "`method = \"random_walking\"` is currently CPU-only. ",
+        "Use `backend = \"cpu\"` or `backend = \"auto\"`.",
+        call. = FALSE
+      )
+    }
+  }
   weight <- match.arg(weight)
   objective_function <- match.arg(objective_function)
   n_threads <- normalize_nn_threads(n_threads)
@@ -438,7 +451,7 @@ graph_cluster_sources <- function(method, backend) {
     base <- c(base, "Kapralov et al. (2021) for local parallel random-walk motivation")
   }
   if (identical(backend, "cuda")) {
-    base <- c(base, "RAPIDS libcugraph/cuGraph for native CUDA Louvain, Leiden, and random-walk algorithms")
+    base <- c(base, "RAPIDS libcugraph/cuGraph for native CUDA Louvain and Leiden algorithms")
   }
   unique(base)
 }

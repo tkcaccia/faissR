@@ -273,7 +273,9 @@ Implemented methods are:
 CPU graph clustering uses faissR C++/OpenMP code and honors `n_threads` where
 OpenMP is available. CUDA Louvain and Leiden require RAPIDS libcugraph and never
 fall back to CPU for an explicit CUDA request. CUDA random-walking remains
-unavailable until a dedicated CUDA implementation is added.
+unavailable until a dedicated CUDA implementation is added; with
+`backend = "auto"`, random-walking stays on the CPU even when libcugraph is
+available.
 
 `graph_cluster(n_clusters = m)` provides a target-community-count convenience
 for Louvain and Leiden. The same target can also be stored on the graph with

@@ -151,7 +151,7 @@ graph_cluster(graph, method = "leiden", backend = "auto",
 | --- | --- |
 | `graph` | A `faissR_graph`, a KNN object returned by `nn()`, a numeric matrix/data frame, or an embedding object with `layout`. |
 | `method` | Clustering algorithm: `"random_walking"`, `"louvain"`, or `"leiden"`. |
-| `backend` | `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA when libcugraph is available and CPU otherwise. `"cuda"` uses RAPIDS libcugraph Louvain/Leiden when compiled and available [9-12]. CUDA random-walking is not enabled yet. |
+| `backend` | `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA when libcugraph is available for Louvain/Leiden and CPU otherwise; auto keeps `"random_walking"` on CPU. `"cuda"` uses RAPIDS libcugraph Louvain/Leiden when compiled and available [9-12]. CUDA random-walking is not enabled yet. |
 | `k` | Number of neighbours when `graph` is raw data or an embedding rather than a graph/KNN object. |
 | `graph_backend` | Backend passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
 | `weight` | Graph edge weighting passed to `knn_graph()`: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. |

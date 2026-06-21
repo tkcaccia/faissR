@@ -99,6 +99,24 @@ test_that("graph_cluster runs native CPU random-walk and Louvain clustering with
   expect_gte(length(unique(louvain$membership)), 2L)
 })
 
+test_that("graph_cluster keeps random-walking on CPU", {
+  set.seed(5051)
+  x <- rbind(
+    matrix(rnorm(60, -2, 0.2), ncol = 4),
+    matrix(rnorm(60, 2, 0.2), ncol = 4)
+  )
+  g <- knn_graph(x, k = 6L, backend = "cpu")
+
+  auto <- graph_cluster(g, method = "random_walking", backend = "auto", n_threads = 2L)
+  expect_equal(auto$backend, "cpu")
+  expect_equal(auto$method, "random_walking")
+
+  expect_error(
+    graph_cluster(g, method = "random_walking", backend = "cuda", n_threads = 2L),
+    "CPU-only"
+  )
+})
+
 test_that("graph_cluster runs native CPU Leiden-style refinement without igraph", {
   set.seed(506)
   x <- rbind(
