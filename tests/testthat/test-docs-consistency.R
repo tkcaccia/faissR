@@ -161,6 +161,55 @@ test_that("README describes public NN metrics and correlation semantics", {
   expect_true(grepl("distance choices belong in `metric`", prose, fixed = TRUE))
 })
 
+test_that("GitHub documentation pages do not duplicate headings", {
+  docs_files <- c(
+    test_path("../../README.md"),
+    list.files(test_path("../../docs"), pattern = "\\.md$", full.names = TRUE)
+  )
+  docs_files <- docs_files[file.exists(docs_files)]
+  if (!length(docs_files)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  for (docs_file in docs_files) {
+    lines <- readLines(docs_file, warn = FALSE)
+    headings <- grep("^#{1,3}[[:space:]]+", lines, value = TRUE)
+    duplicated_headings <- unique(headings[duplicated(headings)])
+    expect_equal(
+      duplicated_headings,
+      character(),
+      info = basename(docs_file)
+    )
+  }
+})
+
+test_that("usage API includes all exported public workflow sections", {
+  docs_file <- test_path("../../docs/usage-api.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  lines <- readLines(docs_file, warn = FALSE)
+  expected_sections <- paste0("## `", c(
+    "nn",
+    "nn_without_self",
+    "candidate_knn",
+    "knn_graph",
+    "graph_cluster",
+    "fast_kmeans",
+    "knn",
+    "predict"
+  ), "()`")
+
+  for (section in expected_sections) {
+    expect_equal(
+      sum(lines == section),
+      1L,
+      info = section
+    )
+  }
+})
+
 test_that("usage API NN method documentation agrees with live signatures", {
   docs_file <- test_path("../../docs/usage-api.md")
   if (!file.exists(docs_file)) {
