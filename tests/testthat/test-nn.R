@@ -1837,6 +1837,32 @@ test_that("approximate KNN recall metadata is attached against exact subset", {
   expect_output(print(approx), "recall@6")
 })
 
+test_that("KNN recall summary ignores missing neighbour padding", {
+  approx <- list(indices = matrix(
+    c(1L, NA_integer_, 2L, NA_integer_),
+    nrow = 2L,
+    byrow = TRUE
+  ))
+  exact <- list(indices = matrix(
+    c(1L, NA_integer_, 3L, NA_integer_),
+    nrow = 2L,
+    byrow = TRUE
+  ))
+
+  recall <- faissR:::.knn_recall_summary(approx, exact, k = 2L)
+
+  expect_equal(recall$recall_at_k, 0.5)
+  expect_equal(recall$median_recall_at_k, 0.5)
+  expect_equal(recall$min_recall_at_k, 0)
+  expect_error(
+    faissR:::.knn_recall_summary(
+      matrix(integer(), nrow = 2L, ncol = 0L),
+      matrix(integer(), nrow = 2L, ncol = 0L)
+    ),
+    "at least one neighbour column"
+  )
+})
+
 test_that("nn matches brute-force euclidean neighbors for query points", {
   set.seed(13)
   data <- matrix(rnorm(120), ncol = 6)

@@ -5028,20 +5028,33 @@ nn_without_self <- function(data,
   if (nrow(approx_idx) != nrow(exact_idx)) {
     stop("Approximate and exact KNN must have the same number of rows.", call. = FALSE)
   }
-  k <- if (is.null(k)) min(ncol(approx_idx), ncol(exact_idx)) else as.integer(k)
-  if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L) {
+  k_is_auto <- is.null(k)
+  k <- if (k_is_auto) min(ncol(approx_idx), ncol(exact_idx)) else as.integer(k)
+  if (length(k) != 1L || is.na(k) || !is.finite(k) || (!k_is_auto && k < 1L)) {
     stop("`k` must be a positive integer.", call. = FALSE)
   }
   k <- min(k, ncol(approx_idx), ncol(exact_idx))
+  if (k < 1L) {
+    stop("KNN matrices must have at least one neighbour column.", call. = FALSE)
+  }
   recall <- numeric(nrow(approx_idx))
   for (i in seq_len(nrow(approx_idx))) {
-    recall[[i]] <- mean(approx_idx[i, seq_len(k)] %in% exact_idx[i, seq_len(k)])
+    approx_row <- approx_idx[i, seq_len(k)]
+    exact_row <- exact_idx[i, seq_len(k)]
+    approx_row <- approx_row[!is.na(approx_row) & is.finite(approx_row)]
+    exact_row <- exact_row[!is.na(exact_row) & is.finite(exact_row)]
+    recall[[i]] <- if (length(exact_row)) {
+      sum(approx_row %in% exact_row) / length(exact_row)
+    } else {
+      NA_real_
+    }
   }
+  recall <- recall[is.finite(recall)]
   data.frame(
     k = k,
-    recall_at_k = mean(recall),
-    median_recall_at_k = median(recall),
-    min_recall_at_k = min(recall),
+    recall_at_k = if (length(recall)) mean(recall) else NA_real_,
+    median_recall_at_k = if (length(recall)) median(recall) else NA_real_,
+    min_recall_at_k = if (length(recall)) min(recall) else NA_real_,
     stringsAsFactors = FALSE
   )
 }

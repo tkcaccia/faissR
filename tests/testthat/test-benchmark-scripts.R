@@ -623,6 +623,39 @@ test_that("legacy Benchmark #1 quality metrics guard invalid finite means", {
   expect_true(is.na(env$knn_rank_correlation(candidate, reference, k = 2L)))
 })
 
+test_that("benchmark KNN recall ignores missing neighbour padding", {
+  source_file <- test_path("../../benchmark_scripts/source.R")
+  if (!file.exists(source_file)) {
+    skip("Benchmark scripts are not available in this installed-package test context.")
+  }
+  env <- new.env(parent = globalenv())
+  source(source_file, local = env)
+
+  approx <- list(indices = matrix(
+    c(1L, NA_integer_, 2L, NA_integer_),
+    nrow = 2L,
+    byrow = TRUE
+  ))
+  exact <- list(indices = matrix(
+    c(1L, NA_integer_, 3L, NA_integer_),
+    nrow = 2L,
+    byrow = TRUE
+  ))
+
+  out <- env$benchmark_knn_recall(approx, exact, k = 2L)
+
+  expect_equal(out$recall_at_k, 0.5)
+  expect_equal(out$median_recall_at_k, 0.5)
+  expect_equal(out$min_recall_at_k, 0)
+  expect_error(
+    env$benchmark_knn_recall(
+      matrix(integer(), nrow = 2L, ncol = 0L),
+      matrix(integer(), nrow = 2L, ncol = 0L)
+    ),
+    "at least one neighbour column"
+  )
+})
+
 test_that("legacy Benchmark #1 quality evaluation handles short KNN outputs", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
