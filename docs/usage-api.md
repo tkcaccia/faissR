@@ -6,6 +6,7 @@
 [Examples](examples.md) |
 [Benchmarks](benchmarks.md) |
 **API** |
+[NN Methods](nn-methods.md) |
 [Backends](backend-capabilities.md) |
 [References](references.md)
 

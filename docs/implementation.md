@@ -7,6 +7,7 @@
 [Benchmarks](benchmarks.md) |
 [Autotuning](autotuning.md) |
 [API](usage-api.md) |
+[NN Methods](nn-methods.md) |
 [Backends](backend-capabilities.md) |
 [References](references.md)
 

@@ -6,6 +6,7 @@
 [Examples](examples.md) |
 [Benchmarks](benchmarks.md) |
 [API](usage-api.md) |
+[NN Methods](nn-methods.md) |
 [Backends](backend-capabilities.md) |
 **References**
 
@@ -28,6 +29,8 @@
 17. Sahu S. GVE-Leiden: Fast Leiden Algorithm for Community Detection in Shared Memory Setting. arXiv:2312.13936.
 18. Sahu S. Heuristic-based Dynamic Leiden Algorithm for Efficient Tracking of Communities on Evolving Graphs. arXiv:2410.15451.
 19. Kapralov M, Lattanzi S, Nouri N, Tardos J. Efficient and Local Parallel Random Walks. arXiv:2112.00655.
+20. Yianilos PN. Data structures and algorithms for nearest neighbor search in general metric spaces. In: Proceedings of the Fourth Annual ACM-SIAM Symposium on Discrete Algorithms; 1993. p. 311-21.
+21. Fu C, Xiang C, Wang C, Cai D. Fast approximate nearest neighbor search with the navigating spreading-out graph. Proc VLDB Endow 2019;12:461-74.
 
 ## Software Acknowledgements
 
@@ -35,7 +38,7 @@
 rather than vendoring those libraries [1-3,12-16]. HNSW, NN-descent, IVF,
 product quantization, flat search, k-means, Louvain, Leiden, and random-walk
 clustering are acknowledged as algorithmic and software foundations where the
-compiled backend exposes them [1-11,16].
+compiled backend exposes them [1-11,16,20-21].
 
 Native CPU graph clustering is faissR C++/OpenMP code inspired by the Louvain,
 Leiden, walktrap/random-walk, and multicore graph-clustering literature

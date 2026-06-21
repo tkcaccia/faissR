@@ -7,6 +7,7 @@
 [Benchmarks](benchmarks.md) |
 [Autotuning](autotuning.md) |
 [API](usage-api.md) |
+[NN Methods](nn-methods.md) |
 [Backends](backend-capabilities.md) |
 [References](references.md)
 
@@ -26,6 +27,8 @@ backends [3,12-15].
   downstream embedding checks.
 - [Autotuning](autotuning.md): empirical backend roles, defaults, and guardrails.
 - [API](usage-api.md): function and argument reference.
+- [NN Methods](nn-methods.md): detailed descriptions and literature for every
+  `nn()` method.
 - [Backends](backend-capabilities.md): supported CPU and CUDA paths.
 - [References](references.md): references, software acknowledgements, and
   implementation inspirations.
