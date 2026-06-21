@@ -966,6 +966,31 @@ test_that("non-Euclidean CUDA auto requires FAISS GPU Flat support", {
   )
 })
 
+test_that("explicit FAISS GPU NN backends require FAISS GPU availability", {
+  if (faiss_gpu_available()) {
+    skip("FAISS GPU is available; unavailable-runtime guard is not exercised here.")
+  }
+
+  x <- matrix(rnorm(80L), nrow = 20L)
+  gpu_backends <- c(
+    "faiss_gpu_flat_l2",
+    "faiss_gpu_flat_ip",
+    "faiss_gpu_flat_cosine",
+    "faiss_gpu_flat_correlation",
+    "faiss_gpu_ivf_flat",
+    "faiss_gpu_ivfpq",
+    "faiss_gpu_cagra"
+  )
+
+  for (backend in gpu_backends) {
+    expect_error(
+      internal_nn(x, k = 4L, backend = backend, n_threads = 2L),
+      "FAISS.*GPU|GPU.*FAISS",
+      info = backend
+    )
+  }
+})
+
 
 test_that("public backend and method resolver maps device plus method", {
   expect_equal(

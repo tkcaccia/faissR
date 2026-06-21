@@ -338,7 +338,7 @@ nn_compute <- function(data,
   }
 
   if (backend %in% c("faiss_gpu_flat", "faiss_gpu_flat_l2", "cuda_faiss_flat_l2")) {
-    if (!isTRUE(faiss_available())) {
+    if (!isTRUE(faiss_gpu_available())) {
       stop(
         "The real FAISS C++ GPU Flat L2 backend is not available in this build. ",
         "Reinstall faissR with FAISS GPU/cuVS headers ",
@@ -364,7 +364,7 @@ nn_compute <- function(data,
   }
 
   if (backend %in% c("faiss_gpu_flat_ip", "cuda_faiss_flat_ip")) {
-    if (!isTRUE(faiss_available())) {
+    if (!isTRUE(faiss_gpu_available())) {
       stop(
         "The real FAISS C++ GPU Flat IP backend is not available in this build. ",
         "Reinstall faissR with FAISS GPU/cuVS headers ",
@@ -398,7 +398,7 @@ nn_compute <- function(data,
 
   if (backend %in% c("faiss_gpu_flat_cosine", "cuda_faiss_flat_cosine",
                      "faiss_gpu_flat_correlation", "cuda_faiss_flat_correlation")) {
-    if (!isTRUE(faiss_available())) {
+    if (!isTRUE(faiss_gpu_available())) {
       stop(
         "The real FAISS C++ GPU Flat IP backend is not available in this build. ",
         "Reinstall faissR with FAISS GPU/cuVS headers ",
@@ -536,7 +536,7 @@ nn_compute <- function(data,
   }
 
   if (backend %in% c("faiss_gpu_ivf", "faiss_gpu_ivf_flat", "cuda_faiss_ivf_flat")) {
-    if (!isTRUE(faiss_available())) {
+    if (!isTRUE(faiss_gpu_available())) {
       stop(
         "The real FAISS C++ GPU IVF Flat backend is not available in this build. ",
         "Reinstall faissR with FAISS GPU/cuVS headers ",
@@ -595,7 +595,7 @@ nn_compute <- function(data,
   }
 
   if (backend %in% c("faiss_gpu_ivfpq", "cuda_faiss_ivfpq")) {
-    if (!isTRUE(faiss_available())) {
+    if (!isTRUE(faiss_gpu_available())) {
       stop(
         "The real FAISS C++ GPU IVF-PQ backend is not available in this build. ",
         "Reinstall faissR with FAISS GPU/cuVS headers ",
@@ -657,7 +657,7 @@ nn_compute <- function(data,
   }
 
   if (backend %in% c("faiss_gpu_cagra", "cuda_faiss_cagra")) {
-    if (!isTRUE(faiss_available())) {
+    if (!isTRUE(faiss_gpu_available())) {
       stop(
         "The real FAISS GPU CAGRA backend is not available in this build. ",
         "Reinstall faissR with FAISS GPU/cuVS headers ",
