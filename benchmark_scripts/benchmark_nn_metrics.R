@@ -946,6 +946,8 @@ materials <- c(
   "",
   sprintf("- Output directory: `%s`", out_dir),
   sprintf("- Data root: `%s`", data_root),
+  sprintf("- Default real datasets: `%s`", paste(dataset_index(data_root)$dataset, collapse = "`, `")),
+  "- Default simulated datasets: `SimulatedUniform2D`, `SimulatedUniform3D`",
   sprintf("- Backends: `%s`", paste(backends, collapse = "`, `")),
   sprintf("- Methods: `%s`", paste(methods, collapse = "`, `")),
   sprintf("- Metrics: `%s`", paste(metrics, collapse = "`, `")),

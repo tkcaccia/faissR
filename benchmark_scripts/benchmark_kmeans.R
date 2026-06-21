@@ -674,6 +674,8 @@ materials <- c(
   "",
   sprintf("- Output directory: `%s`", out_dir),
   sprintf("- Data root: `%s`", data_root),
+  sprintf("- Default real datasets: `%s`", paste(dataset_index(data_root)$dataset, collapse = "`, `")),
+  "- Default simulated datasets: `SimulatedTiny3Clusters`",
   sprintf("- Methods: `%s`", paste(methods, collapse = "`, `")),
   sprintf("- Backends: `%s`", paste(backends, collapse = "`, `")),
   sprintf("- CPU thread cap: `%s`", n_threads),

@@ -93,7 +93,10 @@ test_that("benchmark dataset defaults use the requested real and simulated datas
   for (name in names(scripts)) {
     script <- scripts[[name]]
     env <- source_benchmark_helpers(script$path, script$stop)
+    script_text <- paste(readLines(script$path, warn = FALSE), collapse = "\n")
     expect_equal(env$dataset_index("/data")$dataset, real_datasets, info = name)
+    expect_true(grepl("- Default real datasets:", script_text, fixed = TRUE), info = name)
+    expect_true(grepl("- Default simulated datasets:", script_text, fixed = TRUE), info = name)
     default_datasets <- env$split_arg(
       NULL,
       paste(c(env$dataset_index("/data")$dataset, script$simulated), collapse = ",")
