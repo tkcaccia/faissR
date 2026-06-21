@@ -23,7 +23,8 @@
 \item{k}{Number of neighbours.}
 
 \item{backend}{Device backend used for this prediction call: `"auto"`,
-`"cpu"`, or `"cuda"`. Defaults to `"auto"`.}
+`"cpu"`, or `"cuda"`. \code{NULL} reuses the backend stored in the fitted
+model. The fitted model's method and metric are always reused.}
 
 \item{tuning}{Tuning policy used for this prediction call. `"auto"` uses the
 tuned default for the resolved method.}

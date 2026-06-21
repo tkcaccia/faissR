@@ -144,7 +144,8 @@ knn_model_fit <- function(Xtrain,
 #' @param newdata Numeric query matrix with observations in rows.
 #' @param k Number of neighbours.
 #' @param backend Device backend used for this prediction call: `"auto"`,
-#'   `"cpu"`, or `"cuda"`. Defaults to `"auto"`.
+#'   `"cpu"`, or `"cuda"`. `NULL` reuses the backend stored in the fitted
+#'   model. The fitted model's method and metric are always reused.
 #' @param tuning Tuning policy used for this prediction call. `"auto"` uses the
 #'   tuned default for the resolved method.
 #' @param vote `"majority"` or `"weighted"` for classification; `"majority"`

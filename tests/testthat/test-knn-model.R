@@ -64,6 +64,23 @@ test_that("knn rejects implementation backend labels", {
   )
 })
 
+test_that("predict reuses fitted backend and allows explicit public override", {
+  x <- rbind(
+    matrix(c(0, 0, 0.2, 0.1, 0.3, 0.2), ncol = 2, byrow = TRUE),
+    matrix(c(5, 5, 5.1, 5.2, 5.3, 5.1), ncol = 2, byrow = TRUE)
+  )
+  y <- factor(rep(c("a", "b"), each = 3L))
+
+  model <- knn(x, y, backend = "cpu", method = "exact", k = 3L)
+  expect_equal(model$backend, "cpu")
+  expect_equal(model$method, "exact")
+
+  implicit <- predict(model, x[1:2, , drop = FALSE])
+  explicit <- predict(model, x[1:2, , drop = FALSE], backend = "cpu")
+
+  expect_equal(implicit, explicit)
+})
+
 test_that("knn immediately predicts when Xtest is supplied", {
   x <- matrix(c(
     0, 0,
