@@ -106,6 +106,20 @@ test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
   expect_true(isTRUE(env$method_is_exact("faissR_faiss_gpu_flat_l2", "inner_product")))
 })
 
+test_that("legacy Benchmark #1 exposes normalized faissR NNDescent metrics", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
+    "if (worker)"
+  )
+
+  for (method in c("faissR_cpu_nndescent", "faissR_cuda_cuvs_nndescent")) {
+    expect_true(isTRUE(env$method_metric_applicable(method, "l2")$ok))
+    expect_true(isTRUE(env$method_metric_applicable(method, "cosine")$ok))
+    expect_true(isTRUE(env$method_metric_applicable(method, "correlation")$ok))
+    expect_false(isTRUE(env$method_metric_applicable(method, "inner_product")$ok))
+  }
+})
+
 test_that("k-means benchmark recommendations are grouped by dataset and centers", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_kmeans.R"),

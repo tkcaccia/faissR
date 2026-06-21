@@ -181,6 +181,8 @@ method_metric_applicable <- function(method, metric) {
     "faissR_faiss_gpu_ivf_flat",
     "faissR_faiss_gpu_ivfpq",
     "faissR_faiss_hnsw",
+    "faissR_cpu_nndescent",
+    "faissR_cuda_cuvs_nndescent",
     "RcppHNSW_hnsw",
     "BiocNeighbors_hnsw",
     "BiocNeighbors_annoy",
@@ -199,7 +201,9 @@ method_metric_applicable <- function(method, metric) {
       "faissR_faiss_ivfpq",
       "faissR_faiss_gpu_ivf_flat",
       "faissR_faiss_gpu_ivfpq",
-      "faissR_faiss_hnsw"
+      "faissR_faiss_hnsw",
+      "faissR_cpu_nndescent",
+      "faissR_cuda_cuvs_nndescent"
     )
   }
   if (method %in% non_euclidean_methods) return(list(ok = TRUE, reason = ""))
