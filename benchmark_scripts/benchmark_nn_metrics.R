@@ -47,6 +47,28 @@ canonical_metric_values <- function(metrics) {
   unique(metrics)
 }
 
+validate_metric_values <- function(metrics, arg_name = "metrics") {
+  raw <- trimws(as.character(metrics))
+  raw <- raw[nzchar(raw)]
+  metrics <- unique(canonical_metric_key(raw))
+  valid <- c("euclidean", "cosine", "correlation", "inner_product")
+  invalid <- metrics[!metrics %in% valid]
+  if (length(invalid)) {
+    stop(
+      "`", arg_name, "` must contain only faissR public metrics: ",
+      paste(valid, collapse = ", "),
+      ". Invalid value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  if (!length(metrics)) {
+    stop("`", arg_name, "` must contain at least one metric.", call. = FALSE)
+  }
+  metrics
+}
+
 default_nn_metric_values <- function() {
   c("euclidean", "cosine", "correlation", "inner_product")
 }
@@ -60,6 +82,27 @@ default_nn_method_values <- function() {
 
 default_nn_backend_values <- function() {
   c("auto", "cpu", "cuda")
+}
+
+validate_backend_values <- function(backends, arg_name = "backends") {
+  backends <- unique(trimws(as.character(backends)))
+  backends <- backends[nzchar(backends)]
+  valid <- default_nn_backend_values()
+  invalid <- backends[!backends %in% valid]
+  if (length(invalid)) {
+    stop(
+      "`", arg_name, "` must contain only: ",
+      paste(valid, collapse = ", "),
+      ". Invalid value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  if (!length(backends)) {
+    stop("`", arg_name, "` must contain at least one backend.", call. = FALSE)
+  }
+  backends
 }
 
 default_nn_k_values <- function() {
@@ -861,10 +904,9 @@ if (length(recall_threshold) != 1L || is.na(recall_threshold) || !is.finite(reca
 }
 
 datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "SimulatedUniform2D", "SimulatedUniform3D"), collapse = ","))
-backends <- split_arg(args$backends, paste(default_nn_backend_values(), collapse = ","))
+backends <- validate_backend_values(split_arg(args$backends, paste(default_nn_backend_values(), collapse = ",")))
 methods <- canonical_method_values(split_arg(args$methods, paste(default_nn_method_values(), collapse = ",")))
-metrics <- canonical_metric_values(split_arg(args$metrics, paste(default_nn_metric_values(), collapse = ",")))
-if (!length(metrics)) metrics <- default_nn_metric_values()
+metrics <- validate_metric_values(split_arg(args$metrics, paste(default_nn_metric_values(), collapse = ",")))
 k_values <- as_int_vec_arg(split_arg(args$k_values, paste(default_nn_k_values(), collapse = ",")), default_nn_k_values())
 
 suppressPackageStartupMessages(library(faissR))

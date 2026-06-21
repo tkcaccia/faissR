@@ -336,10 +336,42 @@ test_that("NN metric benchmark canonicalizes metric aliases before preflight", {
     env$canonical_metric_values(c("l2", "pearson", "ip", "dot-product", "unknown")),
     c("euclidean", "correlation", "inner_product")
   )
+  expect_equal(
+    env$validate_metric_values(c("l2", "pearson", "ip", "dot-product")),
+    c("euclidean", "correlation", "inner_product")
+  )
+  expect_error(
+    env$validate_metric_values(c("euclidean", "manhattan")),
+    "Invalid value\\(s\\): manhattan"
+  )
+  expect_error(
+    env$validate_metric_values(character()),
+    "at least one metric"
+  )
   expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "l2")$supported))
   expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "pearson")$supported))
   expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "ip")$supported))
   expect_false(isTRUE(env$capability_status(caps, "cpu", "nsg", "ip")$supported))
+})
+
+test_that("NN metric benchmark validates public backend labels", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+
+  expect_equal(
+    env$validate_backend_values(c("auto", "cpu", "cuda", "cpu")),
+    c("auto", "cpu", "cuda")
+  )
+  expect_error(
+    env$validate_backend_values(c("cpu", "gpu")),
+    "Invalid value\\(s\\): gpu"
+  )
+  expect_error(
+    env$validate_backend_values(character()),
+    "at least one backend"
+  )
 })
 
 test_that("NN metric benchmark requires canonical public method labels", {
