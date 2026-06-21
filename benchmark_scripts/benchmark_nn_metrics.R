@@ -685,31 +685,13 @@ route_runtime_skip <- function(backend, method, metric) {
 }
 
 auto_expected_skip <- function(caps, method, metric) {
-  cpu <- capability_status(caps, "cpu", method, metric)
-  cuda <- capability_status(caps, "cuda", method, metric)
-  cuda_runtime <- isTRUE(faissR::cuda_available()) || isTRUE(faissR::cuvs_available())
+  auto <- capability_status(caps, "auto", method, metric)
+  if (!isTRUE(auto$supported)) {
+    return(list(skip = TRUE, notes = auto$notes))
+  }
   runtime <- route_runtime_skip("auto", method, metric)
   if (!is.null(runtime)) return(runtime)
-  if (isTRUE(cpu$supported) || (cuda_runtime && isTRUE(cuda$supported))) {
-    return(NULL)
-  }
-  if (!cuda_runtime && isTRUE(cuda$supported) && !isTRUE(cpu$supported)) {
-    return(list(
-      skip = TRUE,
-      notes = paste(
-        "backend = \"auto\" would need CUDA/cuVS for this method/metric,",
-        "but CUDA/cuVS is unavailable in the current runtime.",
-        sprintf("CPU: %s CUDA: %s", cpu$notes, cuda$notes)
-      )
-    ))
-  }
-  list(
-    skip = TRUE,
-    notes = paste(
-      "backend = \"auto\" has no supported route for this method/metric in the current runtime.",
-      sprintf("CPU: %s CUDA: %s", cpu$notes, cuda$notes)
-    )
-  )
+  NULL
 }
 
 is_expected_skip <- function(caps, backend, method, metric) {

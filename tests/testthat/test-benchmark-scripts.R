@@ -117,8 +117,29 @@ test_that("NN metric benchmark preflights unsupported NSG metrics as expected sk
       skip <- env$is_expected_skip(caps, backend, "nsg", metric)
       expect_type(skip, "list")
       expect_true(isTRUE(skip$skip))
-      expect_match(skip$notes, "euclidean|non-Euclidean|unsupported|rejected", ignore.case = TRUE)
+      expect_match(skip$notes, "euclidean|non-Euclidean|unsupported|rejected|No CPU or CUDA route", ignore.case = TRUE)
     }
+  }
+})
+
+test_that("NN metric benchmark preflights auto rows from nn_capabilities", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  caps <- nn_capabilities()
+
+  skip <- env$is_expected_skip(caps, "auto", "nsg", "inner_product")
+  expect_type(skip, "list")
+  expect_true(isTRUE(skip$skip))
+  expect_match(skip$notes, "No CPU or CUDA route|unsupported|not exposed", ignore.case = TRUE)
+
+  auto_cap <- env$capability_status(caps, "auto", "flat", "inner_product")
+  expect_true(isTRUE(auto_cap$supported))
+  skip <- env$is_expected_skip(caps, "auto", "flat", "inner_product")
+  if (!is.null(skip)) {
+    expect_true(isTRUE(skip$skip))
+    expect_match(skip$notes, "requires|unavailable|resolver", ignore.case = TRUE)
   }
 })
 

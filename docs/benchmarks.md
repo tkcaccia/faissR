@@ -291,10 +291,11 @@ the public backend resolver, then saved as `status = "expected_skip"` rows with
 `expected_skip = TRUE`. The run configuration is saved as
 `nn_metric_benchmark_config.csv`, the raw row-level result table is saved as
 `nn_metric_benchmark_results.csv`, and the design-level capability table used
-for the run is saved as `nn_metric_capabilities.csv`. For `backend = "auto"`,
-the preflight
-checks the resolved CPU/CUDA route and records expected skips when that route
-requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.
+for the run is saved as `nn_metric_capabilities.csv`, including public
+`backend = "auto"`, `"cpu"`, and `"cuda"` rows. For `backend = "auto"`, the
+preflight first checks the explicit auto capability row, then checks the
+resolved CPU/CUDA route and records expected skips when that route requires
+unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.
 The sparse route is also recorded as an expected skip for dense benchmark
 matrices so dense datasets are not converted just to exercise a sparse-specific
 method.
