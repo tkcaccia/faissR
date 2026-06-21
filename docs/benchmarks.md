@@ -99,9 +99,13 @@ contains one row per dataset/backend/method/metric/k/cycle combination.
 `nn_metric_cycle_summary.csv` aggregates successful rows across cycles by
 dataset/backend/method/metric/k and reports success counts, median/min/max
 elapsed time, recall stability, and the dominant implementation backend.
-`nn_metric_recommendations_from_cycles.csv` selects the fastest method by
-median elapsed time among rows whose median recall is at least the configured
-`recall_threshold`, grouped by dataset/backend/metric/k.
+`nn_metric_recommendations_from_cycles.csv` emits one row per
+dataset/backend/metric/k. When recall is available, it selects the fastest
+method whose median recall is at least the configured `recall_threshold`; if no
+method reaches that threshold it selects the highest-recall row and marks
+`recommendation_basis = "best_recall_below_threshold"`. When recall is
+unavailable for the group, it selects the fastest successful row and marks
+`recommendation_basis = "speed_only_no_recall"`.
 `nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate
 `method = "auto"` rows with those recommendations and reports median speed
 ratio, median recall gap, and backend/implementation agreement.
@@ -269,6 +273,11 @@ whether the concrete implementation backend matches. The result table separates
 `result_backend`, `resolved_backend`, and `implementation_backend` so public
 device labels such as `"cuda"` can be distinguished from concrete FAISS/cuVS
 implementation labels such as `"faiss_gpu_cagra"` or `"cuda_cuvs_cagra"`.
+The aggregate file `nn_metric_recommendations_from_cycles.csv` emits one row
+per dataset/backend/metric/k: it chooses the fastest median row above the recall
+threshold when possible, the best-recall row when all measured methods are below
+threshold, and the fastest successful row when recall is unavailable. The
+`recommendation_basis` column records which rule was used.
 
 Example CPU run:
 

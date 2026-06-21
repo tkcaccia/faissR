@@ -346,20 +346,26 @@ summarize_nn_cycles <- function(ok) {
 }
 
 recommend_nn_methods <- function(cycle_summary, recall_threshold) {
-  keep <- !is.na(cycle_summary$median_recall_at_k) &
-    cycle_summary$median_recall_at_k >= recall_threshold
-  candidates <- cycle_summary[keep, , drop = FALSE]
-  if (!nrow(candidates)) return(candidates)
-  candidates <- candidates[order(
-    candidates$dataset,
-    candidates$backend,
-    candidates$metric,
-    candidates$k,
-    candidates$median_elapsed_sec
-  ), , drop = FALSE]
   out <- do.call(rbind, lapply(
-    split(candidates, paste(candidates$dataset, candidates$backend, candidates$metric, candidates$k, sep = "__")),
-    function(x) x[1L, , drop = FALSE]
+    split(cycle_summary, paste(cycle_summary$dataset, cycle_summary$backend, cycle_summary$metric, cycle_summary$k, sep = "__")),
+    function(x) {
+      has_recall <- is.finite(x$median_recall_at_k)
+      if (any(has_recall)) {
+        candidates <- x[has_recall & x$median_recall_at_k >= recall_threshold, , drop = FALSE]
+        if (nrow(candidates)) {
+          candidates <- candidates[order(candidates$median_elapsed_sec), , drop = FALSE]
+          candidates$recommendation_basis <- "fastest_at_recall_threshold"
+          return(candidates[1L, , drop = FALSE])
+        }
+        candidates <- x[has_recall, , drop = FALSE]
+        candidates <- candidates[order(-candidates$median_recall_at_k, candidates$median_elapsed_sec), , drop = FALSE]
+        candidates$recommendation_basis <- "best_recall_below_threshold"
+        return(candidates[1L, , drop = FALSE])
+      }
+      candidates <- x[order(x$median_elapsed_sec), , drop = FALSE]
+      candidates$recommendation_basis <- "speed_only_no_recall"
+      candidates[1L, , drop = FALSE]
+    }
   ))
   row.names(out) <- NULL
   out[order(out$dataset, out$backend, out$metric, out$k), , drop = FALSE]
@@ -938,7 +944,7 @@ materials <- c(
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",
   "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches.",
   "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/metric/k and reports success counts, median/min/max elapsed time, recall stability, and the dominant implementation backend.",
-  "`nn_metric_recommendations_from_cycles.csv` selects the fastest method by median elapsed time among rows whose median recall is at least `recall_threshold`, grouped by dataset/backend/metric/k.",
+  "`nn_metric_recommendations_from_cycles.csv` selects one method per dataset/backend/metric/k. When recall is available, it selects the fastest method whose median recall is at least `recall_threshold`; if no method reaches that threshold it selects the best-recall row and marks it as below threshold. When recall is unavailable for the group, it selects the fastest successful row and marks the recommendation as speed-only.",
   "`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate `method = \"auto\"` rows with those cycle-summary recommendations and reports median speed ratio, median recall gap, and backend/implementation agreement.",
   "`nn_metric_best_by_dataset_backend_metric_k_cycle.csv` stores the best row within each cycle; `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the overall best row across cycles for backward-compatible summaries.",
   "The script does not add benchmark-only helpers to the package API."
