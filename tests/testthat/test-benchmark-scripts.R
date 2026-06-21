@@ -644,6 +644,38 @@ test_that("legacy Benchmark #1 defaults to all four public metrics", {
   )
 })
 
+test_that("legacy Benchmark #1 validates k-value grids", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
+    "if (worker)"
+  )
+
+  expect_equal(
+    env$benchmark1_k_values(k_values = NULL, env_k_values = NA_character_),
+    c(5L, 10L, 15L, 50L, 100L)
+  )
+  expect_equal(
+    env$benchmark1_k_values("5,10,10", env_k_values = NA_character_),
+    c(5L, 10L)
+  )
+  expect_equal(
+    env$benchmark1_k_values(k_values = NULL, env_k_values = "15,50"),
+    c(15L, 50L)
+  )
+  expect_error(
+    env$benchmark1_k_values("5,bad", env_k_values = NA_character_),
+    "Invalid value\\(s\\): bad"
+  )
+  expect_error(
+    env$benchmark1_k_values("0", env_k_values = NA_character_),
+    "Invalid value\\(s\\): 0"
+  )
+  expect_error(
+    env$benchmark1_k_values("", env_k_values = ""),
+    "at least one positive integer"
+  )
+})
+
 test_that("legacy Benchmark #1 exposes normalized faissR NNDescent metrics", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),

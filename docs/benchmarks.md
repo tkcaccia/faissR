@@ -92,7 +92,8 @@ time, and peak memory. The companion
 all successful rows. This means the "best" row is not simply the fastest row
 when a slower method has better measured nearest-neighbour quality. Invalid or
 non-finite distance/rank quality summaries are recorded as `NA` and therefore
-do not masquerade as successful quality measurements.
+do not masquerade as successful quality measurements. Its `--k_values` grid
+follows the same positive-integer validation as the newer NN metric benchmark.
 
 ## NN Metric Cycles
 

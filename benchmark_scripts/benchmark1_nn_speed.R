@@ -90,6 +90,32 @@ benchmark1_metric_values <- function(metrics = NULL,
   if (!length(values)) values <- c("l2", "cosine", "correlation", "inner_product")
   values
 }
+
+benchmark1_k_values <- function(k_values = NULL,
+                                env_k_values = Sys.getenv("FAISSR_BENCHMARK1_K_VALUES", unset = NA_character_)) {
+  raw <- k_values %||% env_k_values
+  if (length(raw) != 1L || is.na(raw)) {
+    raw <- "5,10,15,50,100"
+  }
+  values <- trimws(strsplit(raw, ",", fixed = TRUE)[[1L]])
+  values <- values[nzchar(values)]
+  parsed <- suppressWarnings(as.integer(values))
+  invalid <- values[is.na(parsed) | parsed < 1L]
+  if (length(invalid)) {
+    stop(
+      "`k_values` must contain only positive integers. Invalid value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  parsed <- unique(parsed)
+  if (!length(parsed)) {
+    stop("`k_values` must contain at least one positive integer.", call. = FALSE)
+  }
+  parsed
+}
+
 timeout_sec <- as.integer(args$timeout %||% "600")
 worker <- isTRUE(as.logical(args$worker %||% FALSE))
 quality_eval_max_n <- as.integer(args$quality_n %||% Sys.getenv("FAISSR_BENCHMARK1_QUALITY_N", "512"))
@@ -1029,9 +1055,7 @@ dir.create(file.path(out_dir, "worker_results"), recursive = TRUE, showWarnings 
 
 utils::write.csv(datasets, file.path(out_dir, "benchmark1_datasets.csv"), row.names = FALSE)
 utils::write.csv(methods, file.path(out_dir, "benchmark1_methods.csv"), row.names = FALSE)
-k_values <- as.integer(strsplit(args$k_values %||% Sys.getenv("FAISSR_BENCHMARK1_K_VALUES", "5,10,15,50,100"), ",", fixed = TRUE)[[1L]])
-k_values <- unique(k_values[is.finite(k_values) & !is.na(k_values) & k_values > 0L])
-if (!length(k_values)) k_values <- c(5L, 10L, 15L, 50L, 100L)
+k_values <- benchmark1_k_values(args$k_values)
 metric_values <- benchmark1_metric_values(args$metrics)
 utils::write.csv(
   expand.grid(k = k_values, metric = metric_values, stringsAsFactors = FALSE),
