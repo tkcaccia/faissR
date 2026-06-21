@@ -1484,9 +1484,9 @@ nn_capability_row <- function(method, backend, metric) {
       notes <- if (euclidean) {
         "Can resolve to CUDA grid, FAISS GPU Flat, cuVS brute force, FAISS GPU CAGRA, or cuVS approximate routes depending on shape and availability."
       } else if (metric %in% c("cosine", "correlation")) {
-        "CUDA auto uses validated FAISS GPU Flat normalized-IP search for cosine/correlation."
+        "CUDA auto uses validated FAISS GPU Flat normalized-IP search for cosine/correlation when FAISS GPU Flat is available; otherwise backend auto uses CPU."
       } else {
-        "CUDA auto uses FAISS GPU Flat IP for inner-product search."
+        "CUDA auto uses FAISS GPU Flat IP for inner-product search when FAISS GPU Flat is available; otherwise backend auto uses CPU."
       }
     }
   } else if (method %in% c("exact", "bruteforce")) {
@@ -1640,13 +1640,9 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
   }
   if (identical(method, "auto")) {
     if (identical(device, "cuda")) {
-      return(switch(
-        metric,
-        cosine = "faiss_gpu_flat_cosine",
-        correlation = "faiss_gpu_flat_correlation",
-        inner_product = "faiss_gpu_flat_ip",
-        "cuda_auto"
-      ))
+      non_euclidean_auto <- cuda_auto_non_euclidean_backend(metric, requested_device = requested_device)
+      if (!is.na(non_euclidean_auto)) return(non_euclidean_auto)
+      return("cuda_auto")
     }
     return("cpu_auto")
   }
@@ -1863,6 +1859,15 @@ resolve_auto_knn_gpu_backend <- function(backend,
                                          work_size,
                                          metric = "euclidean") {
   if (!identical(backend, "auto")) return(NA_character_)
+  metric <- normalize_nn_metric(metric)
+  non_euclidean_auto <- cuda_auto_non_euclidean_backend(
+    metric,
+    requested_device = "auto",
+    faiss_gpu_available_value = faiss_gpu_available()
+  )
+  if (!is.na(non_euclidean_auto)) {
+    return(if (identical(non_euclidean_auto, "cpu_auto")) NA_character_ else non_euclidean_auto)
+  }
   if (!isTRUE(self_query)) return(NA_character_)
   if (k > 256L) return(NA_character_)
   if (work_size < 5e8) return(NA_character_)
@@ -1894,14 +1899,12 @@ select_cuda_auto_backend <- function(self_query,
   if (!isTRUE(cuda_available()) && !isTRUE(cuvs_available())) {
     stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
   }
-  if (!identical(metric, "euclidean")) {
-    return(switch(
-      metric,
-      cosine = "faiss_gpu_flat_cosine",
-      correlation = "faiss_gpu_flat_correlation",
-      inner_product = "faiss_gpu_flat_ip"
-    ))
-  }
+  non_euclidean_auto <- cuda_auto_non_euclidean_backend(
+    metric,
+    requested_device = "cuda",
+    require_available = TRUE
+  )
+  if (!is.na(non_euclidean_auto)) return(non_euclidean_auto)
   if (isTRUE(self_query) && p %in% c(2L, 3L) && isTRUE(cuda_available()) && n >= 10000L) {
     return("cuda_grid")
   }
@@ -1935,6 +1938,31 @@ select_cuda_auto_backend <- function(self_query,
     ))
   }
   "cuda"
+}
+
+cuda_auto_non_euclidean_backend <- function(metric,
+                                            requested_device = "cuda",
+                                            faiss_gpu_available_value = faiss_gpu_available(),
+                                            require_available = identical(requested_device, "auto")) {
+  metric <- normalize_nn_metric(metric)
+  if (identical(metric, "euclidean")) return(NA_character_)
+  if (!isTRUE(faiss_gpu_available_value)) {
+    if (identical(requested_device, "auto")) return("cpu_auto")
+    if (isTRUE(require_available)) {
+      stop(
+        "CUDA auto for non-Euclidean metrics requires FAISS GPU Flat support. ",
+        "Use `backend = \"auto\"` to fall back to CPU, or rebuild faissR with ",
+        "FAISS GPU support.",
+        call. = FALSE
+      )
+    }
+  }
+  switch(
+    metric,
+    cosine = "faiss_gpu_flat_cosine",
+    correlation = "faiss_gpu_flat_correlation",
+    inner_product = "faiss_gpu_flat_ip"
+  )
 }
 
 select_cuvs_auto_backend <- function(self_query,
@@ -4686,8 +4714,9 @@ grid_self_knn <- function(data,
 #'   uses exact, grid, FAISS IVF, or FAISS HNSW depending on data shape and
 #'   size. CUDA auto uses CUDA grid, exact FAISS GPU Flat/cuVS brute force, or
 #'   FAISS GPU CAGRA for Euclidean searches when appropriate, and FAISS GPU Flat
-#'   IP routes for cosine, correlation, and inner-product searches
-#'   [1-3,5,13-15].
+#'   IP routes for cosine, correlation, and inner-product searches only when
+#'   FAISS GPU Flat is available [1-3,5,13-15]. On cuVS-only runtimes,
+#'   `backend = "auto"` keeps those non-Euclidean metrics on CPU.
 #'   \item `"exact"`: exact nearest-neighbour search. CPU uses faissR's native
 #'   exact route; CUDA uses FAISS GPU Flat or cuVS brute force when available
 #'   [1-3,16].

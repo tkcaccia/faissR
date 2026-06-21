@@ -108,8 +108,9 @@ expected skips, not algorithmic failures.
 - CUDA auto uses CUDA grid for large 2D/3D Euclidean self-search, exact FAISS
   GPU Flat or cuVS brute force for small/medium Euclidean searches, FAISS GPU
   CAGRA for very large Euclidean self-search when available, and FAISS GPU
-  Flat IP routes for cosine, correlation, and inner-product searches
-  [1-3,13-16].
+  Flat IP routes for cosine, correlation, and inner-product searches only when
+  FAISS GPU Flat is available [1-3,13-16]. On cuVS-only runtimes,
+  `backend = "auto"` keeps those non-Euclidean metrics on CPU.
 
 `auto` is intended as a balanced default, not a guarantee of the fastest method
 for every dataset. For benchmarking, report the resolved backend stored in the

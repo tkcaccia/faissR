@@ -41,7 +41,7 @@ list with method-specific parameters.
 
 | `method` | CPU route | CUDA route | Main use |
 | --- | --- | --- | --- |
-| `"auto"` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, or FAISS GPU CAGRA for Euclidean; FAISS GPU Flat IP routes for cosine, correlation, and inner product. | Default general-purpose choice. |
+| `"auto"` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, or FAISS GPU CAGRA for Euclidean; FAISS GPU Flat IP routes for cosine, correlation, and inner product when FAISS GPU Flat is available. | Default general-purpose choice. |
 | `"exact"` | Native exact CPU KNN. | FAISS GPU Flat if available, otherwise direct cuVS brute force. | Exact/high-recall baseline [1-3,16]. |
 | `"flat"` | FAISS Flat L2/IP; cosine and correlation use normalized Flat IP. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP. | Exact FAISS exhaustive search [1-2,16]. |
 | `"bruteforce"` | Native exact CPU KNN. | Direct RAPIDS cuVS brute force. | Direct exhaustive route, useful for FAISS/cuVS comparisons [3]. |
@@ -110,6 +110,12 @@ availability at execution time.
 `nn_capabilities()` returns a data frame with one row per public
 method/backend/metric combination and marks unsupported combinations before a
 benchmark tries to run them.
+
+The capability table is design-level. Runtime auto-selection can still choose
+CPU when the public CUDA design route needs a missing optional component. For
+example, CUDA cosine, correlation, and inner-product auto routes require FAISS
+GPU Flat; on a cuVS-only runtime, `backend = "auto"` keeps those metrics on CPU
+instead of selecting an unavailable FAISS GPU index.
 
 ## Tuning And Approximation Metadata
 

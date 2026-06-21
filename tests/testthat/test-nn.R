@@ -842,6 +842,51 @@ test_that("auto GPU preselector does not require CUDA when only CPU FAISS is ava
   }
 })
 
+test_that("non-Euclidean CUDA auto requires FAISS GPU Flat support", {
+  expect_equal(
+    faissR:::cuda_auto_non_euclidean_backend(
+      "cosine",
+      requested_device = "auto",
+      faiss_gpu_available_value = FALSE
+    ),
+    "cpu_auto"
+  )
+  expect_equal(
+    faissR:::cuda_auto_non_euclidean_backend(
+      "correlation",
+      requested_device = "cuda",
+      faiss_gpu_available_value = TRUE
+    ),
+    "faiss_gpu_flat_correlation"
+  )
+  expect_equal(
+    faissR:::cuda_auto_non_euclidean_backend(
+      "inner_product",
+      requested_device = "cuda",
+      faiss_gpu_available_value = TRUE
+    ),
+    "faiss_gpu_flat_ip"
+  )
+  expect_error(
+    faissR:::cuda_auto_non_euclidean_backend(
+      "cosine",
+      requested_device = "cuda",
+      faiss_gpu_available_value = FALSE,
+      require_available = TRUE
+    ),
+    "FAISS GPU Flat"
+  )
+  expect_equal(
+    faissR:::cuda_auto_non_euclidean_backend(
+      "cosine",
+      requested_device = "cuda",
+      faiss_gpu_available_value = FALSE,
+      require_available = FALSE
+    ),
+    "faiss_gpu_flat_cosine"
+  )
+})
+
 
 test_that("public backend and method resolver maps device plus method", {
   expect_equal(

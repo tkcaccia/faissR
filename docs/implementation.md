@@ -153,7 +153,10 @@ RcppHNSW/hnswlib for large non-Euclidean self-search when FAISS is unavailable
 2D/3D Euclidean self-KNN, exact FAISS GPU Flat or cuVS brute force for small and
 medium Euclidean searches, FAISS GPU CAGRA for very large Euclidean self-KNN
 when FAISS GPU/cuVS integration is available, and FAISS GPU Flat inner-product
-routes for cosine, correlation, and raw inner-product searches [13-15].
+routes for cosine, correlation, and raw inner-product searches when FAISS GPU
+Flat is available [13-15]. If CUDA/cuVS is present but FAISS GPU Flat is not,
+`backend = "auto"` keeps those non-Euclidean searches on CPU instead of
+selecting an unavailable GPU index.
 The public `tuning` argument controls method-specific pilot tuning. The default
 `tuning = "auto"` uses the recommended tuning policy for the resolved method;
 `"cache"`, `"pilot"`, and `"fixed"` can be selected explicitly, and
