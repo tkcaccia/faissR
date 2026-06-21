@@ -15,6 +15,10 @@
 #' @param nn_method Nearest-neighbour method passed to
 #'   \code{\link{nn_without_self}()} when `knn` is not supplied. The default
 #'   `"auto"` uses the shape-aware selector for the chosen backend.
+#' @param method Backward-compatible alias for `nn_method`, provided so
+#'   `knn_graph()` accepts the same nearest-neighbour method argument name as
+#'   `nn()` and `knn()`. If both `method` and `nn_method` are supplied they must
+#'   resolve to the same public method label.
 #' @param metric Distance metric passed to \code{\link{nn_without_self}()} when
 #'   `knn` is not supplied. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and
 #'   `"ip"` are accepted and stored as canonical metric labels.
@@ -54,6 +58,7 @@ knn_graph <- function(data,
                       backend = c("auto", "cpu", "cuda"),
                       nn_method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree",
                                     "sparse", "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"),
+                      method = NULL,
                       metric = c("euclidean", "cosine", "correlation", "inner_product"),
                       tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                       weight = c("auto", "snn", "adaptive", "distance", "binary"),
@@ -62,7 +67,18 @@ knn_graph <- function(data,
                       n_clusters = NULL,
                       n_threads = NULL) {
   backend <- as.character(backend)[1L]
-  nn_method <- public_nn_method_label(normalize_nn_method(nn_method))
+  if (!is.null(method)) {
+    method <- public_nn_method_label(normalize_nn_method(method))
+    if (!missing(nn_method)) {
+      nn_method_requested <- public_nn_method_label(normalize_nn_method(nn_method))
+      if (!identical(method, nn_method_requested)) {
+        stop("`method` and `nn_method` must resolve to the same nearest-neighbour method.", call. = FALSE)
+      }
+    }
+    nn_method <- method
+  } else {
+    nn_method <- public_nn_method_label(normalize_nn_method(nn_method))
+  }
   metric <- normalize_nn_metric(metric)
   tuning <- normalize_nn_tuning(tuning)
   weight <- match.arg(weight)

@@ -121,7 +121,8 @@ by another method.
 
 ```r
 knn_graph(data, knn = NULL, k = 50L, backend = "auto",
-          nn_method = "auto", metric = "euclidean", tuning = "auto",
+          method = NULL, nn_method = "auto",
+          metric = "euclidean", tuning = "auto",
           weight = "auto", mutual = FALSE, prune = 0,
           n_clusters = NULL, n_threads = NULL)
 ```
@@ -132,7 +133,8 @@ knn_graph(data, knn = NULL, k = 50L, backend = "auto",
 | `knn` | Optional precomputed KNN object. If supplied, faissR reuses it instead of recomputing neighbours from `data`. |
 | `k` | Number of neighbours used in the graph. If `knn` has fewer columns, faissR uses the available columns. |
 | `backend` | Device backend passed to `nn_without_self()` when neighbours must be computed from `data`: `"auto"`, `"cpu"`, or `"cuda"`. |
-| `nn_method` | Nearest-neighbour method passed to `nn_without_self()` when neighbours must be computed from `data`. |
+| `method` | Alias for `nn_method`, matching the public method argument used by `nn()` and `knn()`. If both are supplied they must agree after alias normalization. |
+| `nn_method` | Nearest-neighbour method passed to `nn_without_self()` when neighbours must be computed from `data`; kept for existing graph-specific code. |
 | `metric` | Distance metric passed to `nn_without_self()` when neighbours must be computed from `data`; aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. |
 | `tuning` | Tuning policy passed to `nn_without_self()` when neighbours must be computed from `data`. |
 | `weight` | Edge weighting: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. `"auto"` uses shared-nearest-neighbour weights for input space and distance weights for embedding space. |

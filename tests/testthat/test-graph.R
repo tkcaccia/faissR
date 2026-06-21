@@ -101,6 +101,44 @@ test_that("knn_graph passes method metric and tuning to internal KNN", {
   expect_equal(meta$resolved_backend, "cpu")
 })
 
+test_that("knn_graph accepts method as an alias for nn_method", {
+  set.seed(50411)
+  x <- matrix(rnorm(80), ncol = 4)
+
+  g <- knn_graph(
+    x,
+    k = 5L,
+    backend = "cpu",
+    method = "exact",
+    metric = "euclidean",
+    n_threads = 2L
+  )
+  expect_equal(attr(g, "faissR_graph")$nn_method, "exact")
+
+  g_same <- knn_graph(
+    x,
+    k = 5L,
+    backend = "cpu",
+    method = "exact",
+    nn_method = "exact",
+    metric = "euclidean",
+    n_threads = 2L
+  )
+  expect_equal(attr(g_same, "faissR_graph")$nn_method, "exact")
+
+  expect_error(
+    knn_graph(
+      x,
+      k = 5L,
+      backend = "cpu",
+      method = "exact",
+      nn_method = "hnsw",
+      n_threads = 2L
+    ),
+    "`method` and `nn_method`"
+  )
+})
+
 test_that("knn_graph lets auto backend resolve CPU-only NN methods", {
   set.seed(5042)
   x <- matrix(rnorm(160), ncol = 4)
