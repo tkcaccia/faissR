@@ -27,6 +27,7 @@ expected to set. For the full R help page after installation, use
 | `knn()` | Fit a reusable kNN classifier/regressor or fit and predict immediately. |
 | `predict()` | Predict labels, numeric responses, or class probabilities from `knn()`. |
 | `backend_info()` | Report available CPU, FAISS, CUDA, cuVS, and cuGraph capabilities. |
+| `nn_capabilities()` | Report supported nearest-neighbour method/backend/metric combinations for preflight checks. |
 
 ## `nn()`
 

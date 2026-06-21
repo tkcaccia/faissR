@@ -39,6 +39,29 @@ test_that("native exact KNN only accepts the documented metrics", {
   )
 })
 
+test_that("nn_capabilities documents the public method metric matrix", {
+  caps <- nn_capabilities()
+  methods <- c(
+    "auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
+    "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"
+  )
+  metrics <- c("euclidean", "cosine", "correlation", "inner_product")
+
+  expect_s3_class(caps, "data.frame")
+  expect_setequal(caps$method, methods)
+  expect_setequal(caps$backend, c("cpu", "cuda"))
+  expect_setequal(caps$metric, metrics)
+  expect_equal(nrow(caps), length(methods) * 2L * length(metrics))
+  expect_equal(anyDuplicated(caps[c("method", "backend", "metric")]), 0L)
+
+  expect_true(caps$supported[caps$method == "flat" & caps$metric == "correlation" & caps$backend == "cuda"])
+  expect_true(caps$supported[caps$method == "sparse" & caps$metric == "inner_product" & caps$backend == "cpu"])
+  expect_true(all(!caps$supported[caps$method == "CAGRA" & caps$backend == "cpu"]))
+  expect_true(all(!caps$supported[caps$method == "HNSW" & caps$backend == "cuda"]))
+  expect_true(all(!caps$supported[caps$method == "IVF" & caps$metric == "cosine"]))
+  expect_true(all(!caps$supported[caps$method == "vptree" & caps$metric == "inner_product"]))
+})
+
 test_that("nn accepts sparse Matrix inputs on the native sparse CPU path", {
   skip_if_not_installed("Matrix")
   x <- matrix(c(

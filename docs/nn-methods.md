@@ -32,6 +32,8 @@ Distance choices belong in `metric`, not in `method`.
 
 Use `backend_info()` to inspect which compiled CPU, FAISS, CUDA, cuVS, and
 cuGraph capabilities are available on a given machine.
+Use `nn_capabilities()` to return the same method/backend/metric support matrix
+as a data frame for benchmark preflight checks.
 
 ## Method Summary
 
@@ -50,6 +52,40 @@ cuGraph capabilities are available on a given machine.
 | `"NSG"` | approximate | FAISS NSG when exposed | unsupported | NSG/FAISS [16,21] |
 | `"NNDescent"` | approximate | FAISS NNDescent when exposed | cuVS NN-descent | NN-descent/cuVS [3-4,16] |
 | `"CAGRA"` | approximate | unsupported | FAISS GPU CAGRA or cuVS CAGRA | FAISS/cuVS CAGRA [3,13-16] |
+
+## Metric Support Matrix
+
+faissR intentionally exposes four public metrics for nearest-neighbour search:
+`"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`. Correlation
+is not the same as inner product: correlation is centered cosine similarity,
+whereas inner product is the raw dot product. The package only reports a metric
+as supported for a method when that route computes neighbours under that metric
+rather than silently falling back to Euclidean search.
+
+| Method | CPU metrics | CUDA metrics | Notes |
+| --- | --- | --- | --- |
+| `"auto"` | euclidean, cosine, correlation, inner_product | euclidean, inner_product | `backend = "auto"` may choose CPU for cosine/correlation when CUDA does not have a validated approximate route. |
+| `"exact"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA cosine/correlation/IP use FAISS GPU Flat variants when available. |
+| `"flat"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS Flat L2/IP plus normalized Flat IP transforms. |
+| `"bruteforce"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA Euclidean can use cuVS brute force; non-Euclidean routes use FAISS GPU Flat. |
+| `"grid"` | euclidean | euclidean | 2D/3D self-KNN only. |
+| `"vptree"` | euclidean, cosine, correlation | unsupported | Inner product is not a metric for VP-tree pruning. |
+| `"sparse"` | euclidean, cosine, correlation, inner_product | unsupported | Exact sparse CPU route for `Matrix` inputs. |
+| `"HNSW"` | euclidean, cosine, correlation, inner_product | unsupported | Euclidean uses FAISS HNSW when available; non-Euclidean uses RcppHNSW/hnswlib. |
+| `"IVF"` | euclidean | euclidean | FAISS IVF-Flat routes are validated for L2. |
+| `"IVFPQ"` | euclidean | euclidean | Product-quantized IVF routes are validated for L2. |
+| `"NSG"` | euclidean | unsupported | CPU FAISS NSG route. |
+| `"NNDescent"` | euclidean | euclidean | CPU FAISS NNDescent and CUDA cuVS NN-descent routes. |
+| `"CAGRA"` | unsupported | euclidean | CUDA-only FAISS/cuVS graph search. |
+
+Programmatic form:
+
+```r
+nn_capabilities()
+```
+
+Benchmark scripts should treat `supported = FALSE` rows from this table as
+expected skips, not algorithmic failures.
 
 ## `"auto"`
 

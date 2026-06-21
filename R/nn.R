@@ -1155,6 +1155,159 @@ normalize_nn_method <- function(method) {
   unname(aliases[[method]])
 }
 
+nn_metric_labels <- function() {
+  c("euclidean", "cosine", "correlation", "inner_product")
+}
+
+nn_method_labels <- function() {
+  c(
+    "auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
+    "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"
+  )
+}
+
+#' Nearest-neighbour method capabilities
+#'
+#' `nn_capabilities()` returns the public method/backend/metric support table
+#' used by the nearest-neighbour API. It separates combinations that are
+#' supported by design from combinations that should be treated as expected
+#' skips in benchmarks.
+#'
+#' @return A data frame with one row per public `method`, `backend`, and
+#'   `metric` combination. Columns include `supported`, `exact`,
+#'   `implementation`, and `notes`.
+#' @examples
+#' caps <- nn_capabilities()
+#' subset(caps, method == "flat" & supported)
+#' @export
+nn_capabilities <- function() {
+  methods <- nn_method_labels()
+  backends <- c("cpu", "cuda")
+  metrics <- nn_metric_labels()
+  rows <- vector("list", length(methods) * length(backends) * length(metrics))
+  i <- 0L
+  for (method in methods) {
+    for (backend in backends) {
+      for (metric in metrics) {
+        i <- i + 1L
+        rows[[i]] <- nn_capability_row(method, backend, metric)
+      }
+    }
+  }
+  out <- do.call(rbind.data.frame, rows)
+  row.names(out) <- NULL
+  out
+}
+
+nn_capability_row <- function(method, backend, metric) {
+  supported <- FALSE
+  exact <- NA
+  implementation <- NA_character_
+  notes <- NA_character_
+
+  all_metrics <- metric %in% nn_metric_labels()
+  euclidean <- identical(metric, "euclidean")
+  non_ip_metric <- metric %in% c("euclidean", "cosine", "correlation")
+
+  if (identical(method, "auto")) {
+    if (identical(backend, "cpu")) {
+      supported <- all_metrics
+      exact <- NA
+      implementation <- "shape-aware CPU selector"
+      notes <- "Euclidean can resolve to exact, grid, FAISS IVF, or FAISS HNSW; non-Euclidean resolves to exact, FAISS Flat, or RcppHNSW/hnswlib when available."
+    } else if (euclidean || identical(metric, "inner_product")) {
+      supported <- TRUE
+      exact <- NA
+      implementation <- "shape-aware CUDA selector"
+      notes <- if (euclidean) {
+        "Can resolve to CUDA grid, FAISS GPU Flat, cuVS brute force, FAISS GPU CAGRA, or cuVS approximate routes depending on shape and availability."
+      } else {
+        "CUDA auto uses FAISS GPU Flat IP for inner-product search."
+      }
+    } else {
+      notes <- "Explicit CUDA auto is limited to Euclidean and inner-product metrics; use backend = \"auto\" to fall back to CPU for cosine/correlation."
+    }
+  } else if (method %in% c("exact", "bruteforce")) {
+    supported <- all_metrics
+    exact <- TRUE
+    if (identical(backend, "cpu")) {
+      implementation <- "native CPU exact"
+      notes <- "CPU exact scorer supports all public metrics."
+    } else {
+      implementation <- "FAISS GPU Flat or cuVS brute force"
+      notes <- "Cosine/correlation and inner-product route through FAISS GPU Flat; Euclidean brute force can use cuVS when available."
+    }
+  } else if (identical(method, "flat")) {
+    supported <- all_metrics
+    exact <- TRUE
+    implementation <- if (identical(backend, "cpu")) "FAISS CPU Flat" else "FAISS GPU Flat"
+    notes <- "Cosine uses row L2 normalization plus Flat IP; correlation uses row centering plus L2 normalization plus Flat IP."
+  } else if (identical(method, "grid")) {
+    supported <- euclidean
+    exact <- if (supported) TRUE else NA
+    implementation <- if (identical(backend, "cpu")) "native CPU 2D/3D grid" else "native CUDA 2D/3D grid"
+    notes <- if (supported) "Only valid for 2D/3D self-KNN." else "Grid search supports only Euclidean distances."
+  } else if (identical(method, "vptree")) {
+    supported <- identical(backend, "cpu") && non_ip_metric
+    exact <- if (supported) TRUE else NA
+    implementation <- if (identical(backend, "cpu")) "native CPU VP-tree" else NA_character_
+    notes <- if (identical(backend, "cpu")) {
+      "Supports Euclidean directly and cosine/correlation by normalized Euclidean search; raw inner product is unsupported."
+    } else {
+      "VP-tree is CPU-only."
+    }
+  } else if (identical(method, "sparse")) {
+    supported <- identical(backend, "cpu") && all_metrics
+    exact <- if (supported) TRUE else NA
+    implementation <- if (identical(backend, "cpu")) "native sparse CPU exact" else NA_character_
+    notes <- if (identical(backend, "cpu")) "Requires sparse Matrix input to avoid dense conversion." else "Sparse exact search is CPU-only."
+  } else if (identical(method, "HNSW")) {
+    supported <- identical(backend, "cpu") && all_metrics
+    exact <- if (supported) FALSE else NA
+    implementation <- if (identical(backend, "cpu")) "FAISS HNSW or RcppHNSW/hnswlib" else NA_character_
+    notes <- if (identical(backend, "cpu")) {
+      "Euclidean uses FAISS HNSW when available; cosine, correlation, and inner product use RcppHNSW/hnswlib."
+    } else {
+      "HNSW is CPU-only in the public API."
+    }
+  } else if (method %in% c("IVF", "IVFPQ")) {
+    supported <- euclidean
+    exact <- if (supported) FALSE else NA
+    implementation <- if (identical(backend, "cpu")) {
+      if (identical(method, "IVF")) "FAISS CPU IVF-Flat" else "FAISS CPU IVF-PQ"
+    } else {
+      if (identical(method, "IVF")) "FAISS GPU IVF-Flat" else "FAISS GPU IVF-PQ"
+    }
+    notes <- if (supported) "Validated for Euclidean/L2 search." else "FAISS IVF routes are currently validated only for Euclidean/L2 search."
+  } else if (identical(method, "NSG")) {
+    supported <- identical(backend, "cpu") && euclidean
+    exact <- if (supported) FALSE else NA
+    implementation <- if (identical(backend, "cpu")) "FAISS CPU NSG" else NA_character_
+    notes <- if (identical(backend, "cpu")) "Validated for Euclidean/L2 search." else "NSG is CPU-only in the public API."
+  } else if (identical(method, "NNDescent")) {
+    supported <- euclidean
+    exact <- if (supported) FALSE else NA
+    implementation <- if (identical(backend, "cpu")) "FAISS CPU NNDescent" else "cuVS CUDA NN-descent"
+    notes <- if (supported) "Validated for Euclidean/L2 self-KNN search." else "NNDescent routes are currently validated only for Euclidean/L2 search."
+  } else if (identical(method, "CAGRA")) {
+    supported <- identical(backend, "cuda") && euclidean
+    exact <- if (supported) FALSE else NA
+    implementation <- if (identical(backend, "cuda")) "FAISS GPU CAGRA or cuVS CAGRA" else NA_character_
+    notes <- if (identical(backend, "cuda")) "CUDA-only approximate graph search, validated for Euclidean/L2." else "CAGRA is CUDA-only."
+  }
+
+  data.frame(
+    method = method,
+    backend = backend,
+    metric = metric,
+    supported = isTRUE(supported),
+    exact = if (is.na(exact)) NA else isTRUE(exact),
+    implementation = implementation,
+    notes = notes,
+    stringsAsFactors = FALSE
+  )
+}
+
 normalize_nn_tuning <- function(tuning) {
   tuning <- as.character(tuning)[1L]
   if (is.na(tuning) || !nzchar(tuning)) tuning <- "auto"
