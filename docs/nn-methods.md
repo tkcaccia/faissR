@@ -46,7 +46,7 @@ as a data frame for benchmark preflight checks.
 | `"grid"` | yes | native 2D/3D grid | native CUDA 2D/3D grid | native faissR implementation |
 | `"vptree"` | yes | native CPU VP-tree | unsupported | VP-tree/metric search [20] |
 | `"sparse"` | yes | native sparse CPU | unsupported | native faissR sparse implementation |
-| `"HNSW"` | approximate | FAISS HNSW for Euclidean; RcppHNSW/hnswlib for cosine, correlation, and inner product | unsupported | HNSW [5,16] |
+| `"HNSW"` | approximate | FAISS HNSW for all metrics when FAISS is available; RcppHNSW/hnswlib fallback | unsupported | HNSW [5,16] |
 | `"IVF"` | approximate | FAISS IVF-Flat | FAISS GPU IVF-Flat | FAISS IVF [1-2,16] |
 | `"IVFPQ"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
 | `"NSG"` | approximate | FAISS NSG when exposed | unsupported | NSG/FAISS [16,21] |
@@ -71,7 +71,7 @@ rather than silently falling back to Euclidean search.
 | `"grid"` | euclidean | euclidean | 2D/3D self-KNN only. |
 | `"vptree"` | euclidean, cosine, correlation | unsupported | Inner product is not a metric for VP-tree pruning. |
 | `"sparse"` | euclidean, cosine, correlation, inner_product | unsupported | Exact sparse CPU route for `Matrix` inputs. |
-| `"HNSW"` | euclidean, cosine, correlation, inner_product | unsupported | Euclidean uses FAISS HNSW when available; non-Euclidean uses RcppHNSW/hnswlib. |
+| `"HNSW"` | euclidean, cosine, correlation, inner_product | unsupported | FAISS HNSW is used for all metrics when available; cosine/correlation use normalized inner-product search. |
 | `"IVF"` | euclidean | euclidean | FAISS IVF-Flat routes are validated for L2. |
 | `"IVFPQ"` | euclidean | euclidean | Product-quantized IVF routes are validated for L2. |
 | `"NSG"` | euclidean | unsupported | CPU FAISS NSG route. |
@@ -110,13 +110,14 @@ result attributes.
 
 ## `"HNSW"` Metrics
 
-CPU `method = "HNSW"` is metric-aware. For Euclidean/L2 search, faissR uses the
-FAISS HNSW implementation when FAISS is available. For cosine, correlation, and
-inner-product search, faissR routes to RcppHNSW/hnswlib because hnswlib exposes
-cosine and IP spaces directly [5]. Correlation is implemented as cosine search
-after row centering and L2 normalization. Inner-product HNSW uses hnswlib's
-`ip` space and faissR normalizes returned distances to the package convention
-`best_dot - dot`, so the first returned neighbour has distance zero.
+CPU `method = "HNSW"` is metric-aware. When FAISS is available, faissR uses
+FAISS HNSW for Euclidean/L2 and raw inner-product search. Cosine is implemented
+by row L2 normalization followed by FAISS HNSW inner-product search, and
+correlation is implemented by row centering plus L2 normalization followed by
+FAISS HNSW inner-product search [5,16]. Inner-product HNSW normalizes returned
+distances to the package convention `best_dot - dot`, so the first returned
+neighbour has distance zero. If FAISS is unavailable, faissR falls back to
+RcppHNSW/hnswlib for the HNSW route.
 
 ## `"exact"`
 

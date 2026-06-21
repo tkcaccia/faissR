@@ -93,6 +93,8 @@ List faiss_hnsw_knn_impl(NumericMatrix,
                          int,
                          int,
                          int,
+                         std::string,
+                         std::string,
                          bool,
                          int) {
   Rcpp::stop(

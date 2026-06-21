@@ -56,6 +56,8 @@ List faiss_hnsw_knn_impl(NumericMatrix data,
                          int m,
                          int ef_construction,
                          int ef_search,
+                         std::string metric,
+                         std::string distance_output,
                          bool exclude_self,
                          int n_threads);
 List faiss_nsg_knn_impl(NumericMatrix data,
@@ -212,10 +214,13 @@ List nn_faiss_hnsw_cpp(NumericMatrix data,
                        int m,
                        int ef_construction,
                        int ef_search,
+                       std::string metric,
+                       std::string distance_output,
                        bool exclude_self,
                        int n_threads) {
   return faiss_hnsw_knn_impl(
-    data, points, k, m, ef_construction, ef_search, exclude_self, n_threads
+    data, points, k, m, ef_construction, ef_search, metric, distance_output,
+    exclude_self, n_threads
   );
 }
 

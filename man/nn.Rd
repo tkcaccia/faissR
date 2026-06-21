@@ -45,13 +45,13 @@ backend/method combinations fail clearly; for example,
 `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
 `"euclidean"` is the validated high-performance default. `"cosine"` and
 `"correlation"` are implemented for exact CPU KNN, FAISS CPU/GPU Flat,
-and RcppHNSW. FAISS Flat uses row L2 normalization for cosine and row
-centering plus L2 normalization for correlation before Flat IP search;
-distances are returned as `1 - similarity`. CPU `method = "auto"` can use
-FAISS Flat for larger exact non-Euclidean query workloads and
-RcppHNSW/hnswlib for large non-Euclidean self-search. CPU `method = "HNSW"`
-uses FAISS HNSW for Euclidean search when available and RcppHNSW/hnswlib
-for cosine, correlation, and inner-product search.
+FAISS HNSW, and RcppHNSW. FAISS Flat and FAISS HNSW use row L2
+normalization for cosine and row centering plus L2 normalization for
+correlation before inner-product search; distances are returned as
+`1 - similarity`. CPU `method = "auto"` can use FAISS Flat for larger
+exact non-Euclidean query workloads and FAISS HNSW or RcppHNSW/hnswlib for
+large non-Euclidean self-search. CPU `method = "HNSW"` uses FAISS HNSW for
+all metrics when available and RcppHNSW/hnswlib when FAISS is unavailable.
 `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP
 for `method = "flat"` when available. Unsupported backend combinations
 fail clearly instead of returning neighbours computed under a different

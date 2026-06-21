@@ -100,16 +100,15 @@ Supported CUDA routes include:
 - native CUDA 2D/3D grid search for low-dimensional Euclidean self-KNN.
 
 The validated high-performance metric is Euclidean/L2. Cosine and correlation
-are exposed for exact CPU, FAISS CPU/GPU Flat, and RcppHNSW-compatible paths.
-FAISS Flat implements cosine by row L2 normalizing the inputs before
-`IndexFlatIP`, and correlation by row centering plus L2 normalization before
-`IndexFlatIP`; both routes return `1 - similarity` distances. Inner-product
-search is exposed for exact native CPU scoring, FAISS Flat IP routes, and the
-RcppHNSW/hnswlib IP path. CPU `method = "HNSW"` uses FAISS HNSW for Euclidean
-search when available and RcppHNSW/hnswlib for cosine, correlation, and
-inner-product search. Approximate accelerator backends reject unsupported
-metric/backend combinations instead of returning neighbours computed under a
-different metric label.
+are exposed for exact CPU, FAISS CPU/GPU Flat, FAISS HNSW, and
+RcppHNSW-compatible paths. FAISS Flat and FAISS HNSW implement cosine by row L2
+normalizing the inputs before inner-product search, and correlation by row
+centering plus L2 normalization before inner-product search; both routes return
+`1 - similarity` distances. Inner-product search is exposed for exact native CPU
+scoring, FAISS Flat IP routes, FAISS HNSW IP, and the RcppHNSW/hnswlib IP
+fallback. Approximate accelerator backends reject unsupported metric/backend
+combinations instead of returning neighbours computed under a different metric
+label.
 
 ### Result Metadata
 

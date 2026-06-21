@@ -874,8 +874,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // nn_faiss_hnsw_cpp
-List nn_faiss_hnsw_cpp(NumericMatrix data, NumericMatrix points, int k, int m, int ef_construction, int ef_search, bool exclude_self, int n_threads);
-RcppExport SEXP _faissR_nn_faiss_hnsw_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP mSEXP, SEXP ef_constructionSEXP, SEXP ef_searchSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP) {
+List nn_faiss_hnsw_cpp(NumericMatrix data, NumericMatrix points, int k, int m, int ef_construction, int ef_search, std::string metric, std::string distance_output, bool exclude_self, int n_threads);
+RcppExport SEXP _faissR_nn_faiss_hnsw_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP mSEXP, SEXP ef_constructionSEXP, SEXP ef_searchSEXP, SEXP metricSEXP, SEXP distance_outputSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -885,9 +885,11 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type m(mSEXP);
     Rcpp::traits::input_parameter< int >::type ef_construction(ef_constructionSEXP);
     Rcpp::traits::input_parameter< int >::type ef_search(ef_searchSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< std::string >::type distance_output(distance_outputSEXP);
     Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_faiss_hnsw_cpp(data, points, k, m, ef_construction, ef_search, exclude_self, n_threads));
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_hnsw_cpp(data, points, k, m, ef_construction, ef_search, metric, distance_output, exclude_self, n_threads));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1090,7 +1092,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_faiss_gpu_flat_ip_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_flat_ip_cpp, 4},
     {"_faissR_nn_faiss_gpu_flat_normalized_ip_distance_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_flat_normalized_ip_distance_cpp, 4},
     {"_faissR_nn_faiss_ivfpq_cpp", (DL_FUNC) &_faissR_nn_faiss_ivfpq_cpp, 9},
-    {"_faissR_nn_faiss_hnsw_cpp", (DL_FUNC) &_faissR_nn_faiss_hnsw_cpp, 8},
+    {"_faissR_nn_faiss_hnsw_cpp", (DL_FUNC) &_faissR_nn_faiss_hnsw_cpp, 10},
     {"_faissR_nn_faiss_nsg_cpp", (DL_FUNC) &_faissR_nn_faiss_nsg_cpp, 8},
     {"_faissR_nn_faiss_nndescent_cpp", (DL_FUNC) &_faissR_nn_faiss_nndescent_cpp, 8},
     {"_faissR_nn_faiss_gpu_ivf_flat_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_ivf_flat_cpp, 6},

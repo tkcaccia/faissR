@@ -233,8 +233,8 @@ nn_faiss_ivfpq_cpp <- function(data, points, k, nlist, nprobe, pq_m, pq_nbits, e
     .Call(`_faissR_nn_faiss_ivfpq_cpp`, data, points, k, nlist, nprobe, pq_m, pq_nbits, exclude_self, n_threads)
 }
 
-nn_faiss_hnsw_cpp <- function(data, points, k, m, ef_construction, ef_search, exclude_self, n_threads) {
-    .Call(`_faissR_nn_faiss_hnsw_cpp`, data, points, k, m, ef_construction, ef_search, exclude_self, n_threads)
+nn_faiss_hnsw_cpp <- function(data, points, k, m, ef_construction, ef_search, metric, distance_output, exclude_self, n_threads) {
+    .Call(`_faissR_nn_faiss_hnsw_cpp`, data, points, k, m, ef_construction, ef_search, metric, distance_output, exclude_self, n_threads)
 }
 
 nn_faiss_nsg_cpp <- function(data, points, k, r, search_l, build_type, exclude_self, n_threads) {

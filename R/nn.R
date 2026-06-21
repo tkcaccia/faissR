@@ -116,7 +116,7 @@ nn_compute <- function(data,
     } else if (identical(metric, "inner_product") &&
                backend %in% c("vptree", "cpu_vptree")) {
       backend <- "cpu_vptree"
-    } else if (!backend %in% c("cpu", "cpu_auto", "hnsw", "rcpphnsw", "cpu_hnsw")) {
+    } else if (!backend %in% c("cpu", "cpu_auto", "hnsw", "rcpphnsw", "cpu_hnsw", "faiss_hnsw")) {
       stop(
         "`metric = \"", metric, "\"` currently supports only `backend = \"cpu\"` ",
         "or a validated metric-specific exact backend. ",
@@ -605,6 +605,17 @@ nn_compute <- function(data,
         call. = FALSE
       )
     }
+    if (metric %in% c("cosine", "correlation")) {
+      return(faiss_hnsw_normalized_metric_result(
+        data = data,
+        points = points,
+        k = k,
+        self_query = self_query,
+        exclude_self = isTRUE(exclude_self),
+        metric = metric,
+        n_threads = n_threads
+      ))
+    }
     params <- faiss_hnsw_params(k)
     out <- nn_faiss_hnsw_cpp(
       data,
@@ -613,14 +624,17 @@ nn_compute <- function(data,
       as.integer(params$m),
       as.integer(params$ef_construction),
       as.integer(params$ef_search),
+      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
+      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
       isTRUE(exclude_self),
       as.integer(n_threads)
     )
-    result <- finish_nn_result(out, "faiss_hnsw", k, self_query, exact = FALSE)
+    result <- finish_nn_result(out, "faiss_hnsw", k, self_query, exact = FALSE, metric = metric)
     attr(result, "approximation") <- list(
       strategy = "faiss_IndexHNSWFlat",
       backend = "faiss_hnsw",
       library = "faiss",
+      metric = metric,
       m = as.integer(out$m),
       ef_construction = as.integer(out$ef_construction),
       ef_search = as.integer(out$ef_search),
@@ -1276,7 +1290,7 @@ nn_capability_row <- function(method, backend, metric) {
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) "FAISS HNSW or RcppHNSW/hnswlib" else NA_character_
     notes <- if (identical(backend, "cpu")) {
-      "Euclidean uses FAISS HNSW when available; cosine, correlation, and inner product use RcppHNSW/hnswlib."
+      "Uses FAISS HNSW for all metrics when available; cosine and correlation use normalized inner-product HNSW. Falls back to RcppHNSW/hnswlib when FAISS is unavailable."
     } else {
       "HNSW is CPU-only in the public API."
     }
@@ -1414,7 +1428,7 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
       grid = "cpu_grid",
       vptree = "cpu_vptree",
       sparse = "cpu_sparse",
-      hnsw = if (identical(metric, "euclidean")) "faiss_hnsw" else "hnsw",
+      hnsw = if (isTRUE(faiss_available())) "faiss_hnsw" else "hnsw",
       ivf = "faiss_ivf",
       ivfpq = "faiss_ivfpq",
       nsg = "faiss_nsg",
@@ -1992,6 +2006,65 @@ faiss_flat_normalized_metric_result <- function(data,
   )
   if (!is.null(accelerator)) faiss_meta$accelerator <- accelerator
   attr(result, "faiss") <- faiss_meta
+  result
+}
+
+faiss_hnsw_normalized_metric_result <- function(data,
+                                                points,
+                                                k,
+                                                self_query,
+                                                exclude_self,
+                                                metric,
+                                                n_threads = NULL) {
+  metric <- normalize_nn_metric(metric)
+  params <- faiss_hnsw_params(k)
+  data_metric <- if (identical(metric, "correlation")) {
+    row_center_l2_normalize(data)
+  } else {
+    row_l2_normalize(data)
+  }
+  points_metric <- if (isTRUE(self_query)) {
+    data_metric
+  } else if (identical(metric, "correlation")) {
+    row_center_l2_normalize(points)
+  } else {
+    row_l2_normalize(points)
+  }
+  out <- nn_faiss_hnsw_cpp(
+    data_metric,
+    points_metric,
+    as.integer(k),
+    as.integer(params$m),
+    as.integer(params$ef_construction),
+    as.integer(params$ef_search),
+    "inner_product",
+    "one_minus_inner_product",
+    isTRUE(exclude_self),
+    as.integer(normalize_nn_threads(n_threads))
+  )
+  result <- finish_nn_result(out, "faiss_hnsw", k, self_query, exact = FALSE, metric = metric)
+  data_zero <- rowSums(data_metric * data_metric) <= 0
+  points_zero <- if (isTRUE(self_query)) data_zero else rowSums(points_metric * points_metric) <= 0
+  result <- restore_zero_zero_normalized_ip_distances(result, data_zero, points_zero)
+  result <- sort_knn_rows_by_distance_index(result)
+  attr(result, "approximation") <- list(
+    strategy = "faiss_IndexHNSWFlat",
+    backend = "faiss_hnsw",
+    library = "faiss",
+    metric = metric,
+    transform = if (identical(metric, "correlation")) {
+      "row_center_l2_normalize_then_IndexHNSWFlat_METRIC_INNER_PRODUCT"
+    } else {
+      "row_l2_normalize_then_IndexHNSWFlat_METRIC_INNER_PRODUCT"
+    },
+    m = as.integer(out$m),
+    ef_construction = as.integer(out$ef_construction),
+    ef_search = as.integer(out$ef_search),
+    requested_m = as.integer(out$requested_m),
+    requested_ef_construction = as.integer(out$requested_ef_construction),
+    requested_ef_search = as.integer(out$requested_ef_search),
+    hnsw_parameters_adjusted = isTRUE(out$hnsw_parameters_adjusted)
+  )
   result
 }
 
@@ -2589,6 +2662,8 @@ faiss_self_knn <- function(data,
       as.integer(params$m),
       as.integer(params$ef_construction),
       as.integer(params$ef_search),
+      "euclidean",
+      "euclidean",
       TRUE,
       as.integer(n_threads)
     )
@@ -4140,13 +4215,13 @@ grid_self_knn <- function(data,
 #'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
 #'   `"euclidean"` is the validated high-performance default. `"cosine"` and
 #'   `"correlation"` are implemented for exact CPU KNN, FAISS CPU/GPU Flat,
-#'   and RcppHNSW. FAISS Flat uses row L2 normalization for cosine and row
-#'   centering plus L2 normalization for correlation before Flat IP search;
-#'   distances are returned as `1 - similarity`. CPU `method = "auto"` can use
-#'   FAISS Flat for larger exact non-Euclidean query workloads and
-#'   RcppHNSW/hnswlib for large non-Euclidean self-search. CPU `method = "HNSW"`
-#'   uses FAISS HNSW for Euclidean search when available and RcppHNSW/hnswlib
-#'   for cosine, correlation, and inner-product search.
+#'   FAISS HNSW, and RcppHNSW. FAISS Flat and FAISS HNSW use row L2
+#'   normalization for cosine and row centering plus L2 normalization for
+#'   correlation before inner-product search; distances are returned as
+#'   `1 - similarity`. CPU `method = "auto"` can use FAISS Flat for larger
+#'   exact non-Euclidean query workloads and FAISS HNSW or RcppHNSW/hnswlib for
+#'   large non-Euclidean self-search. CPU `method = "HNSW"` uses FAISS HNSW for
+#'   all metrics when available and RcppHNSW/hnswlib when FAISS is unavailable.
 #'   `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP
 #'   for `method = "flat"` when available. Unsupported backend combinations
 #'   fail clearly instead of returning neighbours computed under a different

@@ -775,16 +775,25 @@ test_that("public backend and method resolver maps device plus method", {
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "HNSW", "cosine"),
-    "hnsw"
+    if (faiss_available()) "faiss_hnsw" else "hnsw"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "HNSW", "correlation"),
-    "hnsw"
+    if (faiss_available()) "faiss_hnsw" else "hnsw"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "HNSW", "inner_product"),
-    "hnsw"
+    if (faiss_available()) "faiss_hnsw" else "hnsw"
   )
+  if (faiss_available()) {
+    x_hnsw <- matrix(rnorm(240L), nrow = 40L)
+    for (metric in c("cosine", "correlation", "inner_product")) {
+      out <- nn(x_hnsw, k = 5L, backend = "cpu", method = "HNSW", metric = metric, n_threads = 2L)
+      expect_equal(attr(out, "backend"), "faiss_hnsw")
+      expect_equal(attr(out, "metric"), metric)
+      expect_equal(attr(out, "approximation")$library, "faiss")
+    }
+  }
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "flat", "inner_product"),
     "faiss_flat_ip"
@@ -1086,7 +1095,7 @@ test_that("RcppHNSW backend supports inner-product metric", {
   expect_equal(attr(out, "backend"), "hnsw")
   expect_equal(attr(out, "metric"), "inner_product")
   expect_equal(attr(out, "approximation")$metric, "inner_product")
-  expect_equal(attr(public, "backend"), "hnsw")
+  expect_equal(attr(public, "backend"), if (faiss_available()) "faiss_hnsw" else "hnsw")
   expect_equal(attr(public, "metric"), "inner_product")
   expect_equal(out$indices[1, 1L], 1L)
   expect_equal(out$distances[, 1L], rep(0, nrow(x)), tolerance = 1e-12)

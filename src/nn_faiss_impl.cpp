@@ -511,6 +511,8 @@ List faiss_hnsw_knn_impl(NumericMatrix data,
                          int m,
                          int ef_construction,
                          int ef_search,
+                         std::string metric,
+                         std::string distance_output,
                          bool exclude_self,
                          int n_threads) {
   const int n_features = data.ncol();
@@ -520,12 +522,26 @@ List faiss_hnsw_knn_impl(NumericMatrix data,
   m = clamp_positive(m, 32, data.nrow());
   ef_construction = std::max(ef_construction, m);
   ef_search = std::max(ef_search, k);
-  faiss::IndexHNSWFlat index(n_features, m, faiss::METRIC_L2);
+  faiss::MetricType faiss_metric = faiss::METRIC_L2;
+  if (metric == "inner_product") {
+    faiss_metric = faiss::METRIC_INNER_PRODUCT;
+  } else if (metric != "euclidean") {
+    Rcpp::stop("FAISS HNSW supports metric = 'euclidean' or 'inner_product'");
+  }
+  DistanceOutput output = DistanceOutput::L2Squared;
+  if (distance_output == "inner_product") {
+    output = DistanceOutput::InnerProduct;
+  } else if (distance_output == "one_minus_inner_product") {
+    output = DistanceOutput::OneMinusInnerProduct;
+  } else if (distance_output != "euclidean") {
+    Rcpp::stop("Unsupported FAISS HNSW distance output mode");
+  }
+  faiss::IndexHNSWFlat index(n_features, m, faiss_metric);
   index.hnsw.efConstruction = ef_construction;
   index.hnsw.efSearch = ef_search;
   List out = search_faiss_index(
     index, data, points, k, exclude_self, n_threads,
-    "IndexHNSWFlat", false, DistanceOutput::L2Squared,
+    "IndexHNSWFlat", false, output,
     NA_INTEGER, NA_INTEGER, m, ef_search
   );
   out["m"] = m;
