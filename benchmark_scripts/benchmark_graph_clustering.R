@@ -339,7 +339,7 @@ graph_cluster_expected_skip <- function(cluster_backend, method) {
   cluster_backend <- tolower(as.character(cluster_backend)[1L])
   method <- tolower(as.character(method)[1L])
   if (identical(cluster_backend, "cuda") && identical(method, "random_walking")) {
-    return("CUDA random_walking is not enabled; graph_cluster(method = \"random_walking\", backend = \"auto\") stays on CPU.")
+    return("CUDA random_walking is not enabled; graph_cluster(method = \"random_walking\", backend = \"cuda\") is an expected skip. With backend = \"auto\", random_walking stays on CPU.")
   }
   if (identical(cluster_backend, "cuda") &&
       method %in% c("louvain", "leiden") &&
