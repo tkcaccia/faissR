@@ -167,8 +167,10 @@ reports median speed ratio, median ARI gap, modularity gap, and
 backend/method agreement.
 The result table stores both requested and resolved public backend metadata:
 `graph_backend`/`cluster_backend` are the user requests, while
+`graph_preflight_route`/`cluster_preflight_route` show the resolver decision
+before runtime availability checks and
 `graph_resolved_backend`/`cluster_resolved_backend` show the public device
-policy after `"auto"` resolution.
+policy recorded by successful result objects after `"auto"` resolution.
 By default, graph construction and graph clustering are each tested with
 `"auto"`, `"cpu"`, and `"cuda"` backends. `backend = "auto"` may resolve to CPU
 when CUDA/cuGraph support is not available.

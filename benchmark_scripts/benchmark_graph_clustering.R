@@ -171,6 +171,8 @@ result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, 
                        ari = NA_real_, selected_resolution = NA_real_,
                        graph_resolved_backend = NA_character_,
                        cluster_resolved_backend = NA_character_,
+                       graph_preflight_route = NA_character_,
+                       cluster_preflight_route = NA_character_,
                        graph_cached = NA,
                        expected_skip = FALSE) {
   data.frame(
@@ -181,8 +183,10 @@ result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, 
     k = as.integer(k),
     graph_backend = graph_backend,
     graph_resolved_backend = graph_resolved_backend,
+    graph_preflight_route = graph_preflight_route,
     cluster_backend = cluster_backend,
     cluster_resolved_backend = cluster_resolved_backend,
+    cluster_preflight_route = cluster_preflight_route,
     method = method,
     weight = weight,
     n_clusters_requested = if (is.null(n_clusters)) NA_integer_ else as.integer(n_clusters),
@@ -345,6 +349,18 @@ graph_cluster_expected_skip <- function(cluster_backend, method) {
   NULL
 }
 
+graph_build_preflight_route <- function(graph_backend) {
+  helper <- tryCatch(getFromNamespace("resolve_knn_graph_backend", "faissR"), error = function(e) NULL)
+  if (!is.function(helper)) return(NA_character_)
+  tryCatch(as.character(helper(graph_backend))[1L], error = function(e) NA_character_)
+}
+
+graph_cluster_preflight_route <- function(cluster_backend) {
+  helper <- tryCatch(getFromNamespace("resolve_graph_cluster_backend", "faissR"), error = function(e) NULL)
+  if (!is.function(helper)) return(NA_character_)
+  tryCatch(as.character(helper(cluster_backend))[1L], error = function(e) NA_character_)
+}
+
 all_graph_cluster_expected_skips <- function(cluster_backends, methods) {
   checks <- unlist(lapply(cluster_backends, function(cluster_backend) {
     vapply(methods, function(method) {
@@ -375,6 +391,7 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
   n <- nrow(data_obj$data)
   p <- ncol(data_obj$data)
   started <- proc.time()[["elapsed"]]
+  graph_preflight_route <- graph_build_preflight_route(graph_backend)
   tryCatch({
     graph <- with_elapsed_limit({
       faissR::knn_graph(
@@ -394,6 +411,7 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
       graph_sec = elapsed,
       n_edges = graph$n_edges %||% NA_integer_,
       graph_resolved_backend = graph_meta$resolved_backend %||% graph_backend,
+      graph_preflight_route = graph_preflight_route,
       weight = attr(graph, "faissR_graph")$weight %||% weight,
       error = NA_character_
     )
@@ -421,6 +439,7 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
         error = conditionMessage(e),
         graph_sec = proc.time()[["elapsed"]] - started,
         peak_rss_gb = read_peak_rss_gb(),
+        graph_preflight_route = graph_preflight_route,
         graph_cached = FALSE
       )
     )
@@ -435,6 +454,8 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
   p <- ncol(data_obj$data)
   labels <- data_obj$labels
   graph_meta <- attr(graph_obj, "faissR_graph") %||% list()
+  graph_preflight_route <- graph_build_preflight_route(graph_backend)
+  cluster_preflight_route <- graph_cluster_preflight_route(cluster_backend)
   graph_target <- graph_meta$target_n_clusters %||% NULL
   n_clusters <- NULL
   if (!identical(method, "random_walking")) {
@@ -490,6 +511,8 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       selected_resolution = cluster$selected_resolution %||% NA_real_,
       graph_resolved_backend = attr(graph_obj, "faissR_graph")$resolved_backend %||% graph_backend,
       cluster_resolved_backend = cluster_params$resolved_backend %||% (cluster$backend %||% cluster_backend),
+      graph_preflight_route = graph_meta$resolved_backend %||% graph_preflight_route,
+      cluster_preflight_route = cluster_preflight_route,
       graph_cached = graph_cached
     )
   }, error = function(e) {
@@ -511,6 +534,8 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       total_sec = graph_sec + (proc.time()[["elapsed"]] - started),
       peak_rss_gb = read_peak_rss_gb(),
       n_edges = n_edges,
+      graph_preflight_route = graph_meta$resolved_backend %||% graph_preflight_route,
+      cluster_preflight_route = cluster_preflight_route,
       graph_cached = graph_cached
     )
   })
@@ -599,6 +624,7 @@ for (dataset_name in datasets) {
         if (!"random_walking" %in% methods) {
           graph_target_clusters <- label_target_clusters(loaded$labels, target_mode)
         }
+        graph_preflight_route <- graph_build_preflight_route(graph_backend)
         graph_skip_reason <- graph_build_expected_skip(graph_backend)
         if (!is.null(graph_skip_reason)) {
           graph_build <- list(
@@ -606,6 +632,7 @@ for (dataset_name in datasets) {
             graph = NULL,
             graph_sec = NA_real_,
             n_edges = NA_integer_,
+            graph_preflight_route = graph_preflight_route,
             weight = weight,
             error = graph_skip_reason
           )
@@ -615,6 +642,7 @@ for (dataset_name in datasets) {
             graph = NULL,
             graph_sec = NA_real_,
             n_edges = NA_integer_,
+            graph_preflight_route = graph_preflight_route,
             weight = weight,
             error = "Graph construction skipped because every clustering row in this block is an expected skip."
           )
@@ -634,6 +662,7 @@ for (dataset_name in datasets) {
         for (cluster_backend in cluster_backends) {
           for (method in methods) {
             row_id <- row_id + 1L
+            cluster_preflight_route <- graph_cluster_preflight_route(cluster_backend)
             skip_reason <- graph_cluster_expected_skip(cluster_backend, method)
             row_target_clusters <- if (identical(method, "random_walking")) {
               NULL
@@ -660,6 +689,8 @@ for (dataset_name in datasets) {
                 peak_rss_gb = read_peak_rss_gb(),
                 n_edges = if (identical(graph_build$status, "success")) graph_build$n_edges else NA_integer_,
                 graph_resolved_backend = if (identical(graph_build$status, "success")) graph_build$graph_resolved_backend else NA_character_,
+                graph_preflight_route = graph_build$graph_preflight_route %||% graph_preflight_route,
+                cluster_preflight_route = cluster_preflight_route,
                 graph_cached = identical(graph_build$status, "success"),
                 expected_skip = TRUE
               )
@@ -682,6 +713,8 @@ for (dataset_name in datasets) {
                 total_sec = graph_build$graph_sec,
                 peak_rss_gb = read_peak_rss_gb(),
                 graph_resolved_backend = if (identical(graph_build$status, "success")) graph_build$graph_resolved_backend else NA_character_,
+                graph_preflight_route = graph_build$graph_preflight_route %||% graph_preflight_route,
+                cluster_preflight_route = cluster_preflight_route,
                 graph_cached = FALSE,
                 expected_skip = identical(graph_build$status, "expected_skip")
               )
@@ -787,7 +820,7 @@ materials <- c(
   "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, community counts, and resolved backend metadata.",
   "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering/backend/method row within `ari_tolerance` of the best median ARI for each dataset and k; when ARI is unavailable it selects the fastest median total-time row.",
   "`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where graph or clustering backend was `auto` with those cycle-summary recommendations and reports median speed ratio, median ARI gap, modularity gap, and backend/method agreement.",
-  "`graph_backend` and `cluster_backend` record the requested public backends. `graph_resolved_backend` and `cluster_resolved_backend` record the resolved public device policy after `auto` selection, so CPU/CUDA rows can be audited without opening the R objects.",
+  "`graph_backend` and `cluster_backend` record the requested public backends. `graph_preflight_route` and `cluster_preflight_route` record the public resolver decision before runtime availability checks; `graph_resolved_backend` and `cluster_resolved_backend` record the resolved device policy from successful result objects, so CPU/CUDA rows can be audited without opening the R objects.",
   "Unsupported graph-clustering combinations known from the public API, such as CUDA random_walking, are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. If every row in a graph-build block is an expected skip, graph construction is skipped and graph timing/edge columns remain `NA`.",
   "CUDA rows are recorded as expected skips when faissR was not built with the required CUDA/cuGraph support; unexpected CUDA runtime errors remain failed rows. The benchmark does not silently replace explicit CUDA clustering with CPU clustering."
 )
