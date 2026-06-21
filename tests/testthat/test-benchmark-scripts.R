@@ -723,6 +723,18 @@ test_that("k-means benchmark defaults cover fast_kmeans stats and public backend
   )
 })
 
+test_that("k-means benchmark centers argument is explicit", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+
+  expect_equal(env$required_positive_int_arg(10L, "centers"), 10L)
+  expect_equal(env$required_positive_int_arg("3", "centers"), 3L)
+  expect_error(env$required_positive_int_arg("auto", "centers"), "positive integer")
+  expect_error(env$required_positive_int_arg(0L, "centers"), "positive integer")
+})
+
 test_that("k-means benchmark recommendations are grouped by dataset and centers", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_kmeans.R"),

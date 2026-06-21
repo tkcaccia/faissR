@@ -369,7 +369,10 @@ and `backend_used`, so `"auto"` device policy and the actual implementation
 (`"faiss"`, `"cpu"`, `"cuda_faiss"`, `"cuda_cuvs"`, or `"stats"`) can be
 audited directly. The run configuration is saved as
 `kmeans_benchmark_config.csv`, and the raw row-level result table is saved as
-`kmeans_benchmark_results.csv`. When `stats` is part of the run,
+`kmeans_benchmark_results.csv`. `--centers` must be a positive integer; when
+dataset labels are available, the benchmark uses the label-derived cluster
+count for that dataset and otherwise uses the validated `--centers` fallback.
+When `stats` is part of the run,
 `kmeans_fast_vs_stats.csv` compares
 each successful `fast_kmeans()` row against `stats::kmeans` for the same
 dataset, cycle, and number of centers, reporting speedup, ARI delta, and

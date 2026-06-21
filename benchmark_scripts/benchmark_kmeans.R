@@ -23,6 +23,14 @@ as_int_arg <- function(x, default) {
   if (length(value) != 1L || is.na(value) || value < 1L) as.integer(default) else value
 }
 
+required_positive_int_arg <- function(x, arg) {
+  value <- suppressWarnings(as.integer(x))
+  if (length(value) != 1L || is.na(value) || value < 1L) {
+    stop("`", arg, "` must be a positive integer.", call. = FALSE)
+  }
+  value
+}
+
 default_kmeans_method_values <- function() {
   c("fast_kmeans", "stats")
 }
@@ -586,7 +594,7 @@ n_threads <- as_int_arg(args$threads, 4L)
 configure_threads(n_threads)
 seed <- as_int_arg(args$seed, 1L)
 timeout <- as_int_arg(args$timeout, 600L)
-fallback_centers <- as_int_arg(args$centers, 10L)
+fallback_centers <- required_positive_int_arg(args$centers %||% 10L, "centers")
 cycles <- as_int_arg(args$cycles, 1L)
 ari_tolerance <- suppressWarnings(as.numeric(args$ari_tolerance %||% "0.01"))
 if (length(ari_tolerance) != 1L || is.na(ari_tolerance) || !is.finite(ari_tolerance) || ari_tolerance < 0) {
@@ -760,7 +768,7 @@ materials <- c(
   sprintf("- Timeout per combination: `%s` seconds", timeout),
   sprintf("- Cycles: `%s`", cycles),
   sprintf("- ARI tolerance for cycle recommendations: `%s`", ari_tolerance),
-  sprintf("- Requested centers fallback: `%s`; labels override this when available", fallback_centers),
+  sprintf("- Requested centers fallback: `%s`; `--centers` must be a positive integer and labels override this fallback when available", fallback_centers),
   "",
   "`kmeans_benchmark_config.csv` records the run configuration. `kmeans_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, selected parameters, ARI, within-cluster sums of squares, and backend metadata.",
   "The result table records cycle, elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, total within-cluster sum of squares, iterations, selected k-means parameters, tuning policy, and ARI against dataset labels when labels are available.",
