@@ -38,7 +38,8 @@ test_that("benchmark materials document key row-level and summary outputs", {
     kmeans = c(
       "kmeans_benchmark_config.csv",
       "kmeans_benchmark_results.csv",
-      "kmeans_best_by_dataset.csv"
+      "kmeans_best_by_dataset.csv",
+      "kmeans_best_by_dataset_centers.csv"
     )
   )
   scripts <- c(
@@ -722,6 +723,32 @@ test_that("k-means benchmark best-row ranking uses withinss after quality and sp
   ranked <- env$rank_kmeans_success(ok)
   best <- ranked[!duplicated(ranked$dataset), , drop = FALSE]
   expect_equal(best$method, c("fast_low_withinss", "fast_missing_quality"))
+})
+
+test_that("k-means benchmark best rows can preserve centers dimension", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+  ok <- data.frame(
+    dataset = c("A", "A", "A", "B"),
+    centers = c(2L, 2L, 3L, 2L),
+    method = c("fast_low_ari", "slow_high_ari", "centers3", "b_best"),
+    ari = c(0.80, 0.90, 0.70, 0.95),
+    elapsed_sec = c(1, 2, 1, 1),
+    tot_withinss = c(20, 10, 5, 1),
+    stringsAsFactors = FALSE
+  )
+
+  compact <- env$select_kmeans_best_rows(ok, group_cols = "dataset")
+  by_centers <- env$select_kmeans_best_rows(ok, group_cols = c("dataset", "centers"))
+
+  expect_equal(compact$method, c("slow_high_ari", "b_best"))
+  expect_setequal(by_centers$method, c("slow_high_ari", "centers3", "b_best"))
+  expect_equal(
+    nrow(unique(by_centers[, c("dataset", "centers"), drop = FALSE])),
+    3L
+  )
 })
 
 test_that("k-means fast comparison is ordered by dataset centers and backend", {

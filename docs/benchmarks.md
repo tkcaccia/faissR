@@ -381,7 +381,9 @@ reports success counts, median/min/max elapsed time, ARI stability, withinss
 stability, iteration counts, and resolved backend metadata.
 `kmeans_best_by_dataset.csv` keeps a compact best successful row per dataset
 after ranking by ARI, elapsed time, and total within-cluster sum of squares for
-backward-compatible summaries.
+backward-compatible summaries. `kmeans_best_by_dataset_centers.csv` keeps the
+same best-row ranking per dataset/centers combination, which is the safer table
+for comparing different requested cluster counts.
 `kmeans_recommendations_from_cycles.csv` selects the fastest row within
 `ari_tolerance` of the best median ARI for each dataset/centers combination;
 when ARI is available and median times tie, higher median ARI and then lower

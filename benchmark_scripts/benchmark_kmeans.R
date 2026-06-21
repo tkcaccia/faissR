@@ -452,6 +452,22 @@ rank_kmeans_success <- function(ok) {
   ), , drop = FALSE]
 }
 
+select_kmeans_best_rows <- function(ok, group_cols = c("dataset")) {
+  ranked <- rank_kmeans_success(ok)
+  if (!nrow(ranked)) return(ranked)
+  key <- do.call(
+    paste,
+    c(
+      lapply(group_cols, function(col) {
+        value <- ranked[[col]]
+        ifelse(is.na(value), "NA", as.character(value))
+      }),
+      sep = "\r"
+    )
+  )
+  ranked[!duplicated(key), , drop = FALSE]
+}
+
 kmeans_faiss_gpu_available <- function() {
   helper <- tryCatch(
     getFromNamespace("faiss_gpu_available", "faissR"),
@@ -685,9 +701,14 @@ utils::write.csv(results_df, file.path(out_dir, "kmeans_benchmark_results.csv"),
 
 ok <- results_df[results_df$status == "success", , drop = FALSE]
 if (nrow(ok)) {
-  ok_ranked <- rank_kmeans_success(ok)
-  best <- do.call(rbind, lapply(split(ok_ranked, ok_ranked$dataset), function(x) x[1L, , drop = FALSE]))
+  best <- select_kmeans_best_rows(ok, group_cols = "dataset")
   utils::write.csv(best, file.path(out_dir, "kmeans_best_by_dataset.csv"), row.names = FALSE)
+  best_by_centers <- select_kmeans_best_rows(ok, group_cols = c("dataset", "centers"))
+  utils::write.csv(
+    best_by_centers,
+    file.path(out_dir, "kmeans_best_by_dataset_centers.csv"),
+    row.names = FALSE
+  )
 
   cycle_summary <- summarize_kmeans_cycles(ok)
   utils::write.csv(
@@ -743,7 +764,7 @@ materials <- c(
   "",
   "`kmeans_benchmark_config.csv` records the run configuration. `kmeans_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, selected parameters, ARI, within-cluster sums of squares, and backend metadata.",
   "The result table records cycle, elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, total within-cluster sum of squares, iterations, selected k-means parameters, tuning policy, and ARI against dataset labels when labels are available.",
-  "`kmeans_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, elapsed time, and total within-cluster sum of squares for a compact backwards-compatible summary.",
+  "`kmeans_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, elapsed time, and total within-cluster sum of squares for a compact backwards-compatible summary. `kmeans_best_by_dataset_centers.csv` keeps the best successful row per dataset/centers combination so different requested cluster counts remain auditable.",
   "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. Speedups, ARI deltas, and withinss ratios are `NA` when the required timing or quality values are missing or invalid. The `cycle` column supports repeated benchmark cycles such as `--cycles=10` for speed/ARI tuning.",
   "`kmeans_cycle_summary.csv` aggregates successful rows across cycles by dataset/method/backend/centers and reports success counts, median/min/max elapsed time, ARI stability, withinss stability, iteration counts, and resolved backend metadata.",
   "`kmeans_recommendations_from_cycles.csv` selects the fastest row within `ari_tolerance` of the best median ARI for each dataset/centers combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median times are broken by higher median ARI and then lower median total within-cluster sum of squares. When ARI is unavailable it selects the fastest median-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
