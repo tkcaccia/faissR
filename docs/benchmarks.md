@@ -145,6 +145,10 @@ improvement runs. The `graph_cached` column records reuse within a cycle.
 `graph_sec` is the shared graph-construction time, `cluster_sec` is
 clustering-only time, and `total_sec` is `graph_sec + cluster_sec` for the
 complete graph-plus-clustering workflow represented by the row.
+`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by
+dataset/k/graph-backend/cluster-backend/method/weight and reports success
+counts, median/min/max graph, clustering, and total time, ARI stability,
+modularity stability, community counts, and resolved backend metadata.
 The result table stores both requested and resolved public backend metadata:
 `graph_backend`/`cluster_backend` are the user requests, while
 `graph_resolved_backend`/`cluster_resolved_backend` show the public device

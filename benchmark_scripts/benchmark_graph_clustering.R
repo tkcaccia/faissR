@@ -205,6 +205,79 @@ result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, 
   )
 }
 
+dominant_value <- function(x) {
+  x <- as.character(x)
+  x <- x[!is.na(x) & nzchar(x)]
+  if (!length(x)) return(NA_character_)
+  names(sort(table(x), decreasing = TRUE))[[1L]]
+}
+
+finite_median <- function(x) {
+  x <- suppressWarnings(as.numeric(x))
+  x <- x[is.finite(x)]
+  if (!length(x)) return(NA_real_)
+  stats::median(x)
+}
+
+finite_min <- function(x) {
+  x <- suppressWarnings(as.numeric(x))
+  x <- x[is.finite(x)]
+  if (!length(x)) return(NA_real_)
+  min(x)
+}
+
+finite_max <- function(x) {
+  x <- suppressWarnings(as.numeric(x))
+  x <- x[is.finite(x)]
+  if (!length(x)) return(NA_real_)
+  max(x)
+}
+
+summarize_graph_cycles <- function(ok) {
+  parts <- split(ok, paste(ok$dataset, ok$k, ok$graph_backend, ok$cluster_backend, ok$method, ok$weight, sep = "__"))
+  summary <- lapply(parts, function(x) {
+    data.frame(
+      dataset = x$dataset[[1L]],
+      k = as.integer(x$k[[1L]]),
+      graph_backend = x$graph_backend[[1L]],
+      graph_resolved_backend = dominant_value(x$graph_resolved_backend),
+      cluster_backend = x$cluster_backend[[1L]],
+      cluster_resolved_backend = dominant_value(x$cluster_resolved_backend),
+      method = x$method[[1L]],
+      weight = x$weight[[1L]],
+      n = as.integer(x$n[[1L]]),
+      p = as.integer(x$p[[1L]]),
+      n_threads = as.integer(x$n_threads[[1L]]),
+      success_cycles = length(unique(x$cycle)),
+      success_rows = nrow(x),
+      median_load_sec = finite_median(x$load_sec),
+      median_graph_sec = finite_median(x$graph_sec),
+      min_graph_sec = finite_min(x$graph_sec),
+      max_graph_sec = finite_max(x$graph_sec),
+      median_cluster_sec = finite_median(x$cluster_sec),
+      min_cluster_sec = finite_min(x$cluster_sec),
+      max_cluster_sec = finite_max(x$cluster_sec),
+      median_total_sec = finite_median(x$total_sec),
+      min_total_sec = finite_min(x$total_sec),
+      max_total_sec = finite_max(x$total_sec),
+      median_ari = finite_median(x$ari),
+      min_ari = finite_min(x$ari),
+      max_ari = finite_max(x$ari),
+      median_modularity = finite_median(x$modularity),
+      min_modularity = finite_min(x$modularity),
+      max_modularity = finite_max(x$modularity),
+      median_n_edges = finite_median(x$n_edges),
+      median_n_communities = finite_median(x$n_communities),
+      median_selected_resolution = finite_median(x$selected_resolution),
+      n_clusters_requested = dominant_value(x$n_clusters_requested),
+      graph_cached = any(as.logical(x$graph_cached), na.rm = TRUE),
+      stringsAsFactors = FALSE
+    )
+  })
+  out <- do.call(rbind, summary)
+  out[order(out$dataset, -out$median_ari, out$median_total_sec), , drop = FALSE]
+}
+
 graph_cluster_expected_skip <- function(cluster_backend, method) {
   cluster_backend <- tolower(as.character(cluster_backend)[1L])
   method <- tolower(as.character(method)[1L])
@@ -588,6 +661,13 @@ if (nrow(ok)) {
   best <- do.call(rbind, lapply(split(ok, ok$dataset), function(x) x[1L, , drop = FALSE]))
   best$order_score <- NULL
   utils::write.csv(best, file.path(out_dir, "graph_cluster_best_by_dataset.csv"), row.names = FALSE)
+
+  cycle_summary <- summarize_graph_cycles(ok)
+  utils::write.csv(
+    cycle_summary,
+    file.path(out_dir, "graph_cluster_cycle_summary.csv"),
+    row.names = FALSE
+  )
 }
 
 materials <- c(
@@ -607,6 +687,7 @@ materials <- c(
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
   "When `target_clusters = \"labels\"`, Louvain and Leiden receive `n_clusters = length(unique(labels))`; random-walking is benchmarked without a cluster-count target because the public API does not support that option for random-walking.",
   "Each KNN graph is built once per dataset/cycle/k/graph-backend/weight combination and reused across clustering methods and clustering backends within that cycle. The `cycle` column supports repeated benchmark cycles such as `--cycles=10`; `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
+  "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, community counts, and resolved backend metadata.",
   "`graph_backend` and `cluster_backend` record the requested public backends. `graph_resolved_backend` and `cluster_resolved_backend` record the resolved public device policy after `auto` selection, so CPU/CUDA rows can be audited without opening the R objects.",
   "Unsupported graph-clustering combinations known from the public API, such as CUDA random_walking, are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. If every row in a graph-build block is an expected skip, graph construction is skipped and graph timing/edge columns remain `NA`.",
   "CUDA rows are recorded as failed when faissR was not built with the required CUDA/cuGraph support; the benchmark does not silently replace CUDA clustering with CPU clustering."
