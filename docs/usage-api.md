@@ -31,7 +31,8 @@ expected to set. For the full R help page after installation, use
 
 ```r
 nn(data, points = data, k = NULL, backend = "auto",
-   method = "auto", metric = "euclidean", n_threads = NULL)
+   method = "auto", metric = "euclidean", tuning = "auto",
+   n_threads = NULL)
 ```
 
 | Argument | Description |
@@ -42,6 +43,7 @@ nn(data, points = data, k = NULL, backend = "auto",
 | `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA when CUDA/cuVS is available and CPU otherwise. Explicit `"cuda"` fails clearly when CUDA support is unavailable. |
 | `method` | Algorithm selector: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"HNSW"`, `"IVF"`, `"IVFPQ"`, `"NSG"`, `"NNDescent"`, or `"CAGRA"` [1-6,13-16]. For example, `method = "grid", backend = "cpu"` maps to the CPU grid implementation, while `method = "grid", backend = "cuda"` maps to the CUDA grid implementation. Invalid combinations, such as `method = "CAGRA", backend = "cpu"`, stop with a clear error. |
 | `metric` | Distance metric: `"euclidean"`, `"cosine"`, or `"correlation"`. Euclidean/L2 is the validated high-performance route for FAISS/CUDA/cuVS. Non-Euclidean metrics use supported CPU paths. |
+| `tuning` | Tuning policy for approximate GPU methods: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. `"auto"` uses the appropriate tuned default for the resolved method. |
 | `n_threads` | Number of CPU worker threads for CPU/FAISS CPU backends. GPU backends ignore this argument. |
 
 Returns a `faissR_nn` list with `indices` and `distances` matrices. Indices are
@@ -52,7 +54,8 @@ Returns a `faissR_nn` list with `indices` and `distances` matrices. Indices are
 
 ```r
 nn_without_self(data, k, backend = "auto",
-                method = "auto", metric = "euclidean", n_threads = NULL)
+                method = "auto", metric = "euclidean",
+                tuning = "auto", n_threads = NULL)
 ```
 
 | Argument | Description |
@@ -62,6 +65,7 @@ nn_without_self(data, k, backend = "auto",
 | `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. This wrapper always performs self-search and removes the diagonal self match. |
 | `method` | Same algorithm selector as `nn()`. |
 | `metric` | `"euclidean"`, `"cosine"`, or `"correlation"`. |
+| `tuning` | Same tuning policy as `nn()`. |
 | `n_threads` | CPU worker threads for CPU/FAISS CPU backends. |
 
 Use this for graph construction and embedding workflows where each row should
@@ -172,7 +176,8 @@ iteration count, backend, and parameters.
 ## `knn()`
 
 ```r
-model <- knn(Xtrain, Ytrain, backend = "auto", k = 15L)
+model <- knn(Xtrain, Ytrain, backend = "auto", method = "auto",
+             tuning = "auto", k = 15L)
 pred  <- knn(Xtrain, Ytrain, Xtest, type = "response")
 prob  <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 ```
@@ -183,8 +188,9 @@ prob  <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 | `Ytrain` | Training labels for classification or numeric response for regression. Must have one value per row of `Xtrain`. |
 | `Xtest` | Optional query matrix. If supplied, `knn()` fits and predicts immediately; otherwise it returns a reusable model. |
 | `backend` | Device backend passed to `nn()`: `"auto"`, `"cpu"`, or `"cuda"`. |
-| `method` | Nearest-neighbour algorithm selector passed to `nn()`. |
+| `method` | Nearest-neighbour algorithm selector passed to `nn()`. `"auto"` chooses the most appropriate method for the selected backend. |
 | `metric` | Distance metric passed to `nn()`: `"euclidean"`, `"cosine"`, or `"correlation"`. |
+| `tuning` | Tuning policy passed to `nn()`. `"auto"` uses the tuned default for the resolved method. |
 | `task` | `"auto"`, `"classification"`, or `"regression"`. `"auto"` treats numeric `Ytrain` as regression and non-numeric `Ytrain` as classification. |
 | `k` | Default number of neighbours used for prediction. |
 | `n_threads` | CPU worker threads passed to `nn()`. |
@@ -198,7 +204,8 @@ When `Xtest` is omitted, the return value is a `faissR_knn_model`.
 
 ```r
 predict(object, newdata, k = NULL,
-        backend = "auto", vote = "majority", type = "response", ...)
+        backend = "auto", tuning = NULL,
+        vote = "majority", type = "response", ...)
 ```
 
 | Argument | Description |
@@ -207,6 +214,7 @@ predict(object, newdata, k = NULL,
 | `newdata` | Numeric query matrix with the same number of columns as the training matrix. |
 | `k` | Number of neighbours for this prediction call. If `NULL`, uses the model default. |
 | `backend` | Device backend for the prediction-time neighbour search: `"auto"`, `"cpu"`, or `"cuda"`. |
+| `tuning` | Prediction-time tuning policy. If `NULL`, uses the policy stored in the model, or `"auto"`. |
 | `vote` | `"majority"` for unweighted classification votes or regression means; `"weighted"` for inverse-distance weighting. |
 | `type` | `"response"` for predicted labels/values or `"prob"` for classification probabilities. |
 | `...` | Reserved for future options. |

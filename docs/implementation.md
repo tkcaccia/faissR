@@ -76,6 +76,10 @@ FAISS HNSW for large high-dimensional self-KNN when FAISS is available [1-2,5].
 On CUDA, it uses CUDA grid search for large 2D/3D Euclidean self-KNN, exact FAISS
 GPU Flat or cuVS brute force for small and medium searches, and FAISS GPU CAGRA
 for very large self-KNN when FAISS GPU/cuVS integration is available [13-15].
+The public `tuning` argument controls method-specific pilot tuning. The default
+`tuning = "auto"` uses the recommended tuning policy for the resolved method;
+`"cache"`, `"pilot"`, and `"fixed"` can be selected explicitly, and
+`"off"`/`"none"` disables tuning.
 
 Explicit methods map to the selected backend. For example,
 `method = "grid", backend = "cpu"` resolves to the CPU grid implementation,

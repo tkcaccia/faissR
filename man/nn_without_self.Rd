@@ -11,6 +11,7 @@ nn_without_self(
   method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse", "HNSW",
     "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
   metric = c("euclidean", "cosine", "correlation"),
+  tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   n_threads = NULL
 )
 }
@@ -27,6 +28,9 @@ uses CUDA when available and CPU otherwise.}
 
 \item{metric}{Distance metric: `"euclidean"`, `"cosine"`, or
 `"correlation"`.}
+
+\item{tuning}{Tuning policy passed to [nn()]. `"auto"` uses the tuned default
+for the resolved method.}
 
 \item{n_threads}{Number of CPU worker threads used by CPU backends.}
 }

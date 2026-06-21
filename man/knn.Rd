@@ -8,8 +8,11 @@ knn(
   Xtrain,
   Ytrain,
   Xtest = NULL,
-  backend = "auto",
+  backend = c("auto", "cpu", "cuda"),
+  method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse", "HNSW",
+    "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
   metric = c("euclidean", "cosine", "correlation"),
+  tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   task = c("auto", "classification", "regression"),
   k = 15L,
   n_threads = NULL,
@@ -22,8 +25,10 @@ knn(
 \item{Xtrain}{Numeric training matrix with observations in rows.}
 \item{Ytrain}{Training labels or numeric response.}
 \item{Xtest}{Optional numeric query matrix. If supplied, \code{knn()} returns predictions for \code{Xtest}; otherwise it returns a fitted model.}
-\item{backend}{Neighbour backend passed to \code{nn()}. Use \code{"faiss"} for FAISS CPU search or \code{"cuda"}/\code{"cuda_cuvs"} for CUDA/cuVS when available.}
+\item{backend}{Device backend passed to \code{nn()}: \code{"auto"}, \code{"cpu"}, or \code{"cuda"}. \code{"auto"} uses CUDA when available and CPU otherwise.}
+\item{method}{Nearest-neighbour algorithm selector passed to \code{nn()}. \code{"auto"} chooses the most appropriate method for the selected backend.}
 \item{metric}{Distance metric passed to \code{nn()}.}
+\item{tuning}{Tuning policy passed to \code{nn()}. \code{"auto"} uses the tuned default for the resolved method.}
 \item{task}{\code{"auto"}, \code{"classification"}, or \code{"regression"}. \code{"auto"} treats numeric responses as regression and other response types as classification.}
 \item{k}{Default number of neighbours used by \code{predict()} and by immediate predictions when \code{Xtest} is supplied.}
 \item{n_threads}{CPU threads passed to \code{nn()} for CPU backends.}

@@ -13,6 +13,8 @@
 #'   `"cuda"`. `"auto"` uses CUDA when available and CPU otherwise.
 #' @param method Nearest-neighbour algorithm selector passed to [nn()].
 #' @param metric Distance metric passed to [nn()].
+#' @param tuning Tuning policy passed to [nn()]. `"auto"` uses the tuned default
+#'   for the resolved method.
 #' @param task `"auto"`, `"classification"`, or `"regression"`. `"auto"` treats
 #'   numeric responses as regression and other response types as classification.
 #' @param k Default number of neighbours used by [predict()] and by immediate
@@ -41,6 +43,7 @@ knn <- function(Xtrain,
                 method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree",
                            "sparse", "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
                 metric = c("euclidean", "cosine", "correlation"),
+                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                 task = c("auto", "classification", "regression"),
                 k = 15L,
                 n_threads = NULL,
@@ -51,12 +54,14 @@ knn <- function(Xtrain,
   type <- match.arg(type)
   backend <- as.character(backend)[1L]
   method <- as.character(method)[1L]
+  tuning <- as.character(tuning)[1L]
   model <- knn_model_fit(
     Xtrain = Xtrain,
     Ytrain = Ytrain,
     backend = backend,
     method = method,
     metric = metric,
+    tuning = tuning,
     task = task,
     k = k,
     n_threads = n_threads
@@ -64,7 +69,7 @@ knn <- function(Xtrain,
   if (is.null(Xtest)) {
     return(model)
   }
-  predict(model, Xtest, k = k, backend = backend, vote = vote, type = type, ...)
+  predict(model, Xtest, k = k, backend = backend, tuning = tuning, vote = vote, type = type, ...)
 }
 
 knn_model_fit <- function(Xtrain,
@@ -73,11 +78,13 @@ knn_model_fit <- function(Xtrain,
                           method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree",
                                      "sparse", "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
                           metric = c("euclidean", "cosine", "correlation"),
+                          tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                           task = c("auto", "classification", "regression"),
                           k = 15L,
                           n_threads = NULL) {
   backend <- as.character(backend)[1L]
   method <- as.character(method)[1L]
+  tuning <- as.character(tuning)[1L]
   metric <- match.arg(metric)
   task <- match.arg(task)
   x <- as.matrix(Xtrain)
@@ -119,6 +126,7 @@ knn_model_fit <- function(Xtrain,
       levels = levels,
       backend = as.character(backend)[1L],
       method = as.character(method)[1L],
+      tuning = as.character(tuning)[1L],
       metric = metric,
       k = k,
       n_threads = n_threads
@@ -134,6 +142,8 @@ knn_model_fit <- function(Xtrain,
 #' @param k Number of neighbours.
 #' @param backend Device backend used for this prediction call: `"auto"`,
 #'   `"cpu"`, or `"cuda"`. Defaults to `"auto"`.
+#' @param tuning Tuning policy used for this prediction call. Defaults to the
+#'   policy stored in the model, or `"auto"`.
 #' @param vote `"majority"` or `"weighted"` for classification; `"majority"`
 #'   means an unweighted neighbour mean for regression.
 #' @param type `"response"` for class/regression predictions or `"prob"` for
@@ -146,6 +156,7 @@ predict.faissR_knn_model <- function(object,
                                       newdata,
                                       k = NULL,
                                       backend = c("auto", "cpu", "cuda"),
+                                      tuning = NULL,
                                       vote = c("majority", "weighted"),
                                       type = c("response", "prob"),
                                       ...) {
@@ -153,6 +164,7 @@ predict.faissR_knn_model <- function(object,
   vote <- match.arg(vote)
   type <- match.arg(type)
   query <- validate_knn_model_query(object, newdata)
+  tuning <- if (is.null(tuning)) object$tuning %||% "auto" else as.character(tuning)[1L]
   train <- model_Xtrain(object)
   response <- model_Ytrain(object)
   k <- normalize_knn_model_k(if (is.null(k)) object$k else k, nrow(train))
@@ -163,6 +175,7 @@ predict.faissR_knn_model <- function(object,
     backend = backend,
     method = object$method %||% "auto",
     metric = object$metric,
+    tuning = tuning,
     n_threads = object$n_threads
   )
   if (identical(object$task, "classification")) {

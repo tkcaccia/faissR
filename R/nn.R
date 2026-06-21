@@ -5,8 +5,10 @@ nn_compute <- function(data,
                        points_missing,
                        exclude_self = FALSE,
                        n_threads = NULL,
-                       metric = "euclidean") {
+                       metric = "euclidean",
+                       tuning = "auto") {
   requested_backend <- backend
+  tuning <- normalize_nn_tuning(tuning)
   data_sparse <- is_sparse_matrix_input(data)
   points_sparse <- if (isTRUE(points_missing)) data_sparse else is_sparse_matrix_input(points)
   if (isTRUE(data_sparse) || isTRUE(points_sparse)) {
@@ -391,8 +393,8 @@ nn_compute <- function(data,
     }
     params <- faiss_ivf_params(nrow(data), k)
     tuning <- NULL
-    if (isTRUE(faiss_gpu_ivf_should_tune(data, k, self_query))) {
-      tuned <- faiss_gpu_ivf_tune_params(data, k, params)
+    if (isTRUE(faiss_gpu_ivf_should_tune(data, k, self_query, tuning = tuning))) {
+      tuned <- faiss_gpu_ivf_tune_params(data, k, params, tuning = tuning)
       params <- tuned$params
       tuning <- tuned$tuning
     }
@@ -637,8 +639,8 @@ nn_compute <- function(data,
     require_cuvs_backend("cuVS CAGRA")
     params <- cuvs_cagra_params(nrow(data), k)
     tuning <- NULL
-    if (isTRUE(cuvs_cagra_should_tune(data, k, self_query))) {
-      tuned <- cuvs_cagra_tune_params(data, k, params)
+    if (isTRUE(cuvs_cagra_should_tune(data, k, self_query, tuning = tuning))) {
+      tuned <- cuvs_cagra_tune_params(data, k, params, tuning = tuning)
       params <- tuned$params
       tuning <- tuned$tuning
       if (is.list(tuning) && !identical(tuning$status, "target_met")) {
@@ -1023,6 +1025,31 @@ normalize_nn_method <- function(method) {
     )
   }
   unname(aliases[[method]])
+}
+
+normalize_nn_tuning <- function(tuning) {
+  tuning <- as.character(tuning)[1L]
+  if (is.na(tuning) || !nzchar(tuning)) tuning <- "auto"
+  tuning <- tolower(gsub("[[:space:]_-]+", "", tuning))
+  aliases <- c(
+    auto = "auto",
+    cache = "cache",
+    cached = "cache",
+    pilot = "pilot",
+    fixed = "fixed",
+    off = "off",
+    none = "off",
+    false = "off",
+    no = "off"
+  )
+  if (!tuning %in% names(aliases)) {
+    stop(
+      "`tuning` must be one of \"auto\", \"cache\", \"pilot\", ",
+      "\"fixed\", \"off\", or \"none\".",
+      call. = FALSE
+    )
+  }
+  unname(aliases[[tuning]])
 }
 
 resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
@@ -2563,7 +2590,9 @@ cuvs_ivfpq_params <- function(p) {
 .faiss_gpu_ivf_tune_disk_cache$file <- NULL
 .faiss_gpu_ivf_tune_disk_cache$entries <- list()
 
-faiss_gpu_ivf_tune_policy <- function() {
+faiss_gpu_ivf_tune_policy <- function(tuning = "auto") {
+  tuning <- normalize_nn_tuning(tuning)
+  if (!identical(tuning, "auto")) return(tuning)
   policy <- getOption("fastEmbedR.faiss_gpu_ivf_tune_policy", "cache")
   policy <- tolower(as.character(policy)[1L])
   if (!policy %in% c("cache", "pilot", "fixed", "off")) {
@@ -2582,7 +2611,9 @@ faiss_gpu_ivf_tune_cache_file <- function() {
   file.path(root, "faiss_gpu_ivf_tuning.rds")
 }
 
-faiss_gpu_ivf_should_tune <- function(data, k, self_query) {
+faiss_gpu_ivf_should_tune <- function(data, k, self_query, tuning = "auto") {
+  tuning <- normalize_nn_tuning(tuning)
+  if (identical(tuning, "off")) return(FALSE)
   if (!isTRUE(self_query)) return(FALSE)
   if (!isTRUE(faiss_available())) return(FALSE)
   if (isTRUE(faiss_ivf_manual_params())) return(FALSE)
@@ -2695,8 +2726,8 @@ faiss_gpu_ivf_candidate_params <- function(n, k, base_params) {
   candidates[order(candidates$nlist, candidates$nprobe), , drop = FALSE]
 }
 
-faiss_gpu_ivf_tune_params <- function(data, k, base_params) {
-  policy <- faiss_gpu_ivf_tune_policy()
+faiss_gpu_ivf_tune_params <- function(data, k, base_params, tuning = "auto") {
+  policy <- faiss_gpu_ivf_tune_policy(tuning)
   if (identical(policy, "off")) {
     return(list(
       params = base_params,
@@ -2975,7 +3006,9 @@ cuvs_cagra_manual_params <- function() {
   ))
 }
 
-cuvs_cagra_should_tune <- function(data, k, self_query) {
+cuvs_cagra_should_tune <- function(data, k, self_query, tuning = "auto") {
+  tuning <- normalize_nn_tuning(tuning)
+  if (identical(tuning, "off")) return(FALSE)
   if (!isTRUE(self_query)) return(FALSE)
   if (!isTRUE(cuvs_available())) return(FALSE)
   if (isTRUE(cuvs_cagra_manual_params())) return(FALSE)
@@ -2989,7 +3022,9 @@ cuvs_cagra_should_tune <- function(data, k, self_query) {
   nrow(data) >= threshold && as.integer(k) >= 10L
 }
 
-cuvs_cagra_tune_policy <- function() {
+cuvs_cagra_tune_policy <- function(tuning = "auto") {
+  tuning <- normalize_nn_tuning(tuning)
+  if (!identical(tuning, "auto")) return(tuning)
   policy <- getOption("fastEmbedR.cuvs_cagra_tune_policy", "cache")
   policy <- tolower(as.character(policy)[1L])
   if (!policy %in% c("cache", "pilot", "fixed", "off")) {
@@ -3088,8 +3123,8 @@ cuvs_cagra_candidate_params <- function(k, n) {
   unique(candidates)
 }
 
-cuvs_cagra_tune_params <- function(data, k, base_params) {
-  policy <- cuvs_cagra_tune_policy()
+cuvs_cagra_tune_params <- function(data, k, base_params, tuning = "auto") {
+  policy <- cuvs_cagra_tune_policy(tuning)
   if (identical(policy, "off")) {
     return(list(
       params = base_params,
@@ -3528,6 +3563,10 @@ grid_self_knn <- function(data,
 #'   select the exact CPU path. FAISS, CUDA, and cuVS backends fail clearly for
 #'   non-Euclidean metrics instead of returning Euclidean neighbours under a
 #'   different label.
+#' @param tuning Tuning policy for approximate GPU methods. `"auto"` uses the
+#'   tuned default for the resolved method, `"cache"` reuses/stores pilot
+#'   results, `"pilot"` tunes for this call without persisting, `"fixed"` uses
+#'   fixed defaults with tuning metadata, and `"off"`/`"none"` disables tuning.
 #' @param n_threads Number of CPU worker threads for CPU backends. GPU backends
 #'   ignore this argument.
 #' @return A list with integer matrix `indices` and numeric matrix `distances`.
@@ -3546,9 +3585,11 @@ nn <- function(data,
                method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree",
                           "sparse", "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
                metric = c("euclidean", "cosine", "correlation"),
+               tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                n_threads = NULL) {
   backend <- as.character(backend)[1L]
   method <- as.character(method)[1L]
+  tuning <- as.character(tuning)[1L]
   metric <- match.arg(metric)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
   nn_compute(
@@ -3559,7 +3600,8 @@ nn <- function(data,
     missing(points),
     exclude_self = FALSE,
     n_threads = n_threads,
-    metric = metric
+    metric = metric,
+    tuning = tuning
   )
 }
 
@@ -3578,6 +3620,8 @@ nn <- function(data,
 #' @param method Algorithm selector passed through the same resolver as [nn()].
 #' @param metric Distance metric: `"euclidean"`, `"cosine"`, or
 #'   `"correlation"`.
+#' @param tuning Tuning policy passed to [nn()]. `"auto"` uses the tuned default
+#'   for the resolved method.
 #' @param n_threads Number of CPU worker threads used by CPU backends.
 #' @return A `faissR_nn` object with `indices` and `distances` matrices.
 #' @export
@@ -3587,9 +3631,11 @@ nn_without_self <- function(data,
                             method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree",
                                        "sparse", "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
                             metric = c("euclidean", "cosine", "correlation"),
+                            tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                             n_threads = NULL) {
   backend <- as.character(backend)[1L]
   method <- as.character(method)[1L]
+  tuning <- as.character(tuning)[1L]
   metric <- match.arg(metric)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
   nn_compute(
@@ -3600,7 +3646,8 @@ nn_without_self <- function(data,
     TRUE,
     exclude_self = TRUE,
     n_threads = n_threads,
-    metric = metric
+    metric = metric,
+    tuning = tuning
   )
 }
 

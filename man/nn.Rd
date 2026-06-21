@@ -12,6 +12,7 @@ nn(
   method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse", "HNSW",
     "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
   metric = c("euclidean", "cosine", "correlation"),
+  tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   n_threads = NULL
 )
 }
@@ -44,6 +45,11 @@ implemented for exact CPU KNN and RcppHNSW; with `backend = "auto"` they
 select the exact CPU path. FAISS, CUDA, and cuVS backends fail clearly for
 non-Euclidean metrics instead of returning Euclidean neighbours under a
 different label.}
+
+\item{tuning}{Tuning policy for approximate GPU methods. `"auto"` uses the
+tuned default for the resolved method, `"cache"` reuses/stores pilot
+results, `"pilot"` tunes for this call without persisting, `"fixed"` uses
+fixed defaults with tuning metadata, and `"off"`/`"none"` disables tuning.}
 
 \item{n_threads}{Number of CPU worker threads for CPU backends. GPU backends
 ignore this argument.}

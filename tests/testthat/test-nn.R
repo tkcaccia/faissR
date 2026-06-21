@@ -499,8 +499,16 @@ test_that("CPU approximate selector chooses FAISS HNSW, RcppHNSW, or exact CPU",
 
 test_that("public backend and method resolver maps device plus method", {
   expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "auto", "euclidean"),
+    "cpu_auto"
+  )
+  expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "grid", "euclidean"),
     "cpu_grid"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "auto", "euclidean"),
+    "cuda_auto"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "grid", "euclidean"),
@@ -522,6 +530,35 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "CAGRA", "euclidean") %in%
       c("faiss_gpu_cagra", "cuda_cuvs_cagra")
   )
+})
+
+test_that("public tuning policy normalizes and can override defaults", {
+  expect_equal(faissR:::normalize_nn_tuning("auto"), "auto")
+  expect_equal(faissR:::normalize_nn_tuning("none"), "off")
+  expect_equal(faissR:::normalize_nn_tuning("pilot"), "pilot")
+  expect_error(faissR:::normalize_nn_tuning("aggressive"), "tuning")
+
+  old_ivf <- getOption("fastEmbedR.faiss_gpu_ivf_tune_policy")
+  old_cagra <- getOption("fastEmbedR.cuvs_cagra_tune_policy")
+  on.exit(options(
+    fastEmbedR.faiss_gpu_ivf_tune_policy = old_ivf,
+    fastEmbedR.cuvs_cagra_tune_policy = old_cagra
+  ), add = TRUE)
+  options(
+    fastEmbedR.faiss_gpu_ivf_tune_policy = "fixed",
+    fastEmbedR.cuvs_cagra_tune_policy = "fixed"
+  )
+
+  expect_equal(faissR:::faiss_gpu_ivf_tune_policy("auto"), "fixed")
+  expect_equal(faissR:::faiss_gpu_ivf_tune_policy("pilot"), "pilot")
+  expect_false(faissR:::faiss_gpu_ivf_should_tune(
+    matrix(0, nrow = 30000L, ncol = 2L),
+    k = 50L,
+    self_query = TRUE,
+    tuning = "off"
+  ))
+  expect_equal(faissR:::cuvs_cagra_tune_policy("auto"), "fixed")
+  expect_equal(faissR:::cuvs_cagra_tune_policy("cache"), "cache")
 })
 
 
