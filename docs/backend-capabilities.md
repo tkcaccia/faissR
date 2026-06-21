@@ -95,6 +95,7 @@ Use these helpers to inspect the build/runtime state:
 
 ```r
 backend_info()
+nn_capabilities()
 faiss_available()
 cuda_available()
 cuvs_available()
@@ -106,6 +107,9 @@ explicit backend labels, device/runtime hints, and notes. The boolean helpers
 return a single `TRUE`/`FALSE` value. They are useful for diagnostics and
 examples, but explicit backend calls still validate availability at execution
 time.
+`nn_capabilities()` returns a data frame with one row per public
+method/backend/metric combination and marks unsupported combinations before a
+benchmark tries to run them.
 
 ## Tuning And Approximation Metadata
 

@@ -28,7 +28,8 @@ backends [3,12-15].
 - [Autotuning](autotuning.md): empirical backend roles, defaults, and guardrails.
 - [API](usage-api.md): function and argument reference.
 - [NN Methods](nn-methods.md): detailed descriptions and literature for every
-  `nn()` method.
+  `nn()` method, including the `nn_capabilities()` method/backend/metric
+  support table.
 - [Backends](backend-capabilities.md): supported CPU and CUDA paths.
 - [References](references.md): references, software acknowledgements, and
   implementation inspirations.

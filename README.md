@@ -42,6 +42,8 @@ headers and libraries discovered by `configure`.
 - `backend_info()`, `faiss_available()`, `cuda_available()`,
   `cuvs_available()`, and `cugraph_available()` to report compiled/runtime
   backend support.
+- `nn_capabilities()` to report supported nearest-neighbour
+  method/backend/metric combinations for benchmark preflight checks.
 
 Explicit GPU requests are honest: if a CUDA/cuVS/cuGraph backend is requested
 and was not compiled or is not available at runtime, faissR reports an error
@@ -104,6 +106,8 @@ See [Installation](docs/installation.md) for CRAN/source-build details.
 
 Use `backend_info()` and the attributes returned by `nn()` to confirm which
 route and parameters a result used.
+Use `nn_capabilities()` to inspect which public `method`, `backend`, and
+`metric` combinations are supported before launching a large benchmark.
 
 ## Quick Example
 
