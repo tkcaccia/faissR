@@ -177,19 +177,24 @@ test_that("k-means benchmark recommendations are grouped by dataset and centers"
     "args <- parse_args()"
   )
   cycle_summary <- data.frame(
-    dataset = c("A", "A", "A", "A"),
-    centers = c(2L, 2L, 3L, 3L),
-    method = c("m1", "m2", "m1", "m2"),
-    backend = c("cpu", "cpu", "cpu", "cpu"),
-    metric = c("euclidean", "euclidean", "euclidean", "euclidean"),
-    median_ari = c(0.90, 0.89, 0.70, 0.69),
-    median_elapsed_sec = c(2, 1, 5, 3)
+    dataset = c("A", "A", "A", "A", "B", "B"),
+    centers = c(2L, 2L, 3L, 3L, 2L, 2L),
+    method = c("m1", "m2", "m1", "m2", "m1", "m2"),
+    backend = c("cpu", "cpu", "cpu", "cpu", "cpu", "cpu"),
+    metric = c("euclidean", "euclidean", "euclidean", "euclidean", "euclidean", "euclidean"),
+    median_ari = c(0.90, 0.89, 0.70, 0.69, NA, NA),
+    median_elapsed_sec = c(2, 1, 5, 3, 4, 2)
   )
 
   out <- env$recommend_kmeans_methods(cycle_summary, ari_tolerance = 0.02)
-  expect_equal(nrow(out), 2L)
-  expect_equal(as.integer(out$centers), c(2L, 3L))
-  expect_equal(out$method, c("m2", "m2"))
+  expect_equal(nrow(out), 3L)
+  expect_equal(out$dataset, c("A", "A", "B"))
+  expect_equal(as.integer(out$centers), c(2L, 3L, 2L))
+  expect_equal(out$method, c("m2", "m2", "m2"))
+  expect_equal(
+    out$recommendation_basis,
+    c("fastest_within_ari_tolerance", "fastest_within_ari_tolerance", "speed_only_no_ari")
+  )
 })
 
 test_that("k-means fast comparison is ordered by dataset centers and backend", {
@@ -228,31 +233,36 @@ test_that("graph benchmark recommendations are grouped by target cluster count",
     "args <- parse_args()"
   )
   cycle_summary <- data.frame(
-    dataset = c("A", "A", "A", "A"),
-    k = c(15L, 15L, 15L, 15L),
-    graph_backend = c("cpu", "cpu", "cpu", "cpu"),
-    graph_resolved_backend = c("cpu", "cpu", "cpu", "cpu"),
-    cluster_backend = c("cpu", "cpu", "cpu", "cpu"),
-    cluster_resolved_backend = c("cpu", "cpu", "cpu", "cpu"),
-    method = c("louvain", "leiden", "louvain", "leiden"),
-    weight = c("snn", "snn", "snn", "snn"),
-    success_cycles = c(1L, 1L, 1L, 1L),
-    median_graph_sec = c(1, 1, 1, 1),
-    median_cluster_sec = c(4, 2, 3, 1),
-    median_total_sec = c(5, 3, 4, 2),
-    median_ari = c(0.91, 0.90, 0.72, 0.71),
-    min_ari = c(0.91, 0.90, 0.72, 0.71),
-    median_modularity = c(0.4, 0.39, 0.3, 0.29),
-    median_n_communities = c(3, 3, 5, 5),
-    median_selected_resolution = c(1, 1, 2, 2),
-    n_clusters_requested = c(3L, 3L, 5L, 5L),
-    graph_cached = c(TRUE, TRUE, TRUE, TRUE)
+    dataset = c("A", "A", "A", "A", "B", "B"),
+    k = c(15L, 15L, 15L, 15L, 15L, 15L),
+    graph_backend = c("cpu", "cpu", "cpu", "cpu", "cpu", "cpu"),
+    graph_resolved_backend = c("cpu", "cpu", "cpu", "cpu", "cpu", "cpu"),
+    cluster_backend = c("cpu", "cpu", "cpu", "cpu", "cpu", "cpu"),
+    cluster_resolved_backend = c("cpu", "cpu", "cpu", "cpu", "cpu", "cpu"),
+    method = c("louvain", "leiden", "louvain", "leiden", "louvain", "leiden"),
+    weight = c("snn", "snn", "snn", "snn", "snn", "snn"),
+    success_cycles = c(1L, 1L, 1L, 1L, 1L, 1L),
+    median_graph_sec = c(1, 1, 1, 1, 1, 1),
+    median_cluster_sec = c(4, 2, 3, 1, 4, 2),
+    median_total_sec = c(5, 3, 4, 2, 5, 3),
+    median_ari = c(0.91, 0.90, 0.72, 0.71, NA, NA),
+    min_ari = c(0.91, 0.90, 0.72, 0.71, NA, NA),
+    median_modularity = c(0.4, 0.39, 0.3, 0.29, 0.2, 0.19),
+    median_n_communities = c(3, 3, 5, 5, 3, 3),
+    median_selected_resolution = c(1, 1, 2, 2, 1, 1),
+    n_clusters_requested = c(3L, 3L, 5L, 5L, 3L, 3L),
+    graph_cached = c(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE)
   )
 
   out <- env$recommend_graph_cluster_methods(cycle_summary, ari_tolerance = 0.02)
-  expect_equal(nrow(out), 2L)
-  expect_equal(as.integer(out$n_clusters_requested), c(3L, 5L))
-  expect_equal(out$method, c("leiden", "leiden"))
+  expect_equal(nrow(out), 3L)
+  expect_equal(out$dataset, c("A", "A", "B"))
+  expect_equal(as.integer(out$n_clusters_requested), c(3L, 5L, 3L))
+  expect_equal(out$method, c("leiden", "leiden", "leiden"))
+  expect_equal(
+    out$recommendation_basis,
+    c("fastest_within_ari_tolerance", "fastest_within_ari_tolerance", "speed_only_no_ari")
+  )
 })
 
 test_that("graph benchmark cycle summaries preserve target cluster count", {
