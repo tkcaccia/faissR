@@ -281,6 +281,7 @@ probabilities.
 ```r
 backend_info()
 faiss_available()
+faiss_gpu_available()
 cuda_available()
 cuvs_available()
 cugraph_available()
@@ -290,6 +291,7 @@ cugraph_available()
 | --- | --- | --- |
 | `backend_info()` | None. | Returns a data frame with backend availability, public call hints, resolved/internal route labels, device/runtime hints, and notes. |
 | `faiss_available()` | None. | Returns `TRUE` when faissR was compiled and linked against FAISS. |
+| `faiss_gpu_available()` | None. | Returns `TRUE` when the linked FAISS build reports GPU support. |
 | `cuda_available()` | None. | Returns `TRUE` when native CUDA support was compiled and a CUDA device/runtime is available. |
 | `cuvs_available()` | None. | Returns `TRUE` when direct RAPIDS cuVS backends were compiled and can be loaded. |
 | `cugraph_available()` | None. | Returns `TRUE` when RAPIDS libcugraph graph clustering support was compiled and can be loaded. |

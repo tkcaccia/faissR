@@ -50,8 +50,9 @@ machines without CUDA, the package can still build with FAISS CPU and native CPU
 code. CUDA/cuVS/cuGraph support is enabled only when the required headers and
 libraries are detected.
 
-At runtime, availability helpers (`faiss_available()`, `cuda_available()`,
-`cuvs_available()`, and `cugraph_available()`) report compiled/runtime support.
+At runtime, availability helpers (`faiss_available()`, `faiss_gpu_available()`,
+`cuda_available()`, `cuvs_available()`, and `cugraph_available()`) report
+compiled/runtime support.
 They are diagnostic helpers, not a substitute for execution-time validation.
 Every explicit backend request is checked again when the method runs. For
 example, `backend = "cuda", method = "cagra"` errors if neither FAISS GPU CAGRA
@@ -389,6 +390,8 @@ kNN prediction.
 ## Availability Helpers
 
 - `faiss_available()` reports whether FAISS support was compiled and linked.
+- `faiss_gpu_available()` reports whether the linked FAISS build reports GPU
+  support.
 - `cuda_available()` reports CUDA build/runtime availability.
 - `cuvs_available()` reports direct RAPIDS cuVS availability.
 - `cugraph_available()` reports RAPIDS libcugraph graph-clustering support.

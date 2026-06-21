@@ -97,6 +97,7 @@ Use these helpers to inspect the build/runtime state:
 backend_info()
 nn_capabilities()
 faiss_available()
+faiss_gpu_available()
 cuda_available()
 cuvs_available()
 cugraph_available()

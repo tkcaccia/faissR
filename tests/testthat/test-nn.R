@@ -1885,6 +1885,11 @@ test_that("faiss availability helper returns a logical scalar", {
   expect_length(faiss_available(), 1L)
 })
 
+test_that("faiss GPU availability helper returns a logical scalar", {
+  expect_type(faiss_gpu_available(), "logical")
+  expect_length(faiss_gpu_available(), 1L)
+})
+
 test_that("cuvs availability helper returns a logical scalar", {
   expect_type(cuvs_available(), "logical")
   expect_length(cuvs_available(), 1L)

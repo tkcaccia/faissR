@@ -134,6 +134,7 @@ library(faissR)
 
 backend_info()
 faiss_available()
+faiss_gpu_available()
 cuda_available()
 cuvs_available()
 cugraph_available()

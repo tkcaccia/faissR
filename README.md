@@ -42,9 +42,9 @@ headers and libraries discovered by `configure`.
 - `knn()` and `predict()` for kNN classification/regression, including
   immediate prediction with `knn(Xtrain, Ytrain, Xtest)` and class
   probabilities with `predict(type = "prob")`.
-- `backend_info()`, `faiss_available()`, `cuda_available()`,
-  `cuvs_available()`, and `cugraph_available()` to report compiled/runtime
-  backend support.
+- `backend_info()`, `faiss_available()`, `faiss_gpu_available()`,
+  `cuda_available()`, `cuvs_available()`, and `cugraph_available()` to report
+  compiled/runtime backend support.
 - `nn_capabilities()` to report supported nearest-neighbour
   method/backend/metric combinations for benchmark preflight checks.
 

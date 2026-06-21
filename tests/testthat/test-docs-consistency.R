@@ -88,6 +88,7 @@ test_that("public API excludes retired wrapper and platform-specific helper name
     "cugraph_available",
     "cuvs_available",
     "faiss_available",
+    "faiss_gpu_available",
     "fast_kmeans",
     "graph_cluster",
     "knn",

@@ -201,6 +201,11 @@ faiss_summary <- function() {
   )
 }
 
+#' Check whether FAISS GPU support is available
+#'
+#' @return `TRUE` when faissR was compiled and linked against a FAISS build
+#'   that reports GPU support.
+#' @export
 faiss_gpu_available <- function() {
   text <- tryCatch(
     faiss_info_json_cpp(),
