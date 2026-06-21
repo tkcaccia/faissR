@@ -88,6 +88,58 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(explicit$parameters$tuning$resolved_from$tol, "explicit")
 })
 
+test_that("fast_kmeans auto backend requires a k-means capable CUDA route", {
+  expect_equal(
+    faissR:::resolve_fast_kmeans_backend(
+      "auto",
+      cuda_available_value = FALSE,
+      faiss_gpu_available_value = TRUE,
+      cuvs_available_value = TRUE
+    ),
+    "cpu"
+  )
+  expect_equal(
+    faissR:::resolve_fast_kmeans_backend(
+      "auto",
+      cuda_available_value = TRUE,
+      faiss_gpu_available_value = FALSE,
+      cuvs_available_value = FALSE
+    ),
+    "cpu"
+  )
+  expect_equal(
+    faissR:::resolve_fast_kmeans_backend(
+      "auto",
+      cuda_available_value = TRUE,
+      faiss_gpu_available_value = TRUE,
+      cuvs_available_value = FALSE
+    ),
+    "cuda"
+  )
+  expect_equal(
+    faissR:::resolve_fast_kmeans_backend(
+      "auto",
+      cuda_available_value = TRUE,
+      faiss_gpu_available_value = FALSE,
+      cuvs_available_value = TRUE
+    ),
+    "cuda"
+  )
+  expect_equal(
+    faissR:::resolve_fast_kmeans_backend(
+      "cuda",
+      cuda_available_value = FALSE,
+      faiss_gpu_available_value = FALSE,
+      cuvs_available_value = FALSE
+    ),
+    "cuda"
+  )
+  expect_error(
+    faissR:::resolve_fast_kmeans_backend("faiss"),
+    "must be one of"
+  )
+})
+
 test_that("fast_kmeans rejects implementation backend labels", {
   x <- matrix(rnorm(40), ncol = 4)
   expect_error(

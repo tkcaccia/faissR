@@ -318,7 +318,18 @@ bool faiss_is_available_impl() {
 }
 
 std::string faiss_info_json_impl() {
-  return "{\"available\":true,\"library\":\"faiss\",\"interface\":\"c++\"}";
+#ifdef FASTEMBEDR_HAS_FAISS_GPU
+  const char* gpu = "true";
+#else
+  const char* gpu = "false";
+#endif
+#ifdef FASTEMBEDR_HAS_FAISS_GPU_CAGRA
+  const char* gpu_cagra = "true";
+#else
+  const char* gpu_cagra = "false";
+#endif
+  return std::string("{\"available\":true,\"library\":\"faiss\",\"interface\":\"c++\",") +
+    "\"gpu\":" + gpu + ",\"gpu_cagra\":" + gpu_cagra + "}";
 }
 
 List faiss_flat_knn_impl(NumericMatrix data,

@@ -192,7 +192,7 @@ fast_kmeans(data, centers, backend = "auto",
 | --- | --- |
 | `data` | Numeric matrix with observations in rows. |
 | `centers` | Number of clusters. Must be between 1 and `nrow(data)`. |
-| `backend` | `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA/cuVS k-means when that backend is compiled and available, and otherwise resolves to CPU [7-8]. |
+| `backend` | `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA only when CUDA plus FAISS GPU k-means or direct cuVS k-means is compiled and available; otherwise it resolves to CPU [7-8]. |
 | `max_iter` | Maximum number of Lloyd iterations, or `"auto"` for a deterministic shape-aware default. |
 | `n_init` | Number of random restarts where the selected backend supports it, or `"auto"` for a deterministic shape-aware default. |
 | `tol` | Non-negative convergence tolerance where supported, or `"auto"` for a deterministic shape-aware default. |

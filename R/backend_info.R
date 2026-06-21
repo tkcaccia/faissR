@@ -19,8 +19,8 @@ backend_info <- function() {
 
   data.frame(
     backend = c("cpu", "faiss", "faiss_gpu_cuvs", "cuvs", "cuda", "cugraph"),
-    available = c(TRUE, faiss_knn, faiss_knn && cuda_knn, cuvs_knn, cuda_knn, cugraph_graph && cuda_knn),
-    knn_available = c(TRUE, faiss_knn, faiss_knn && cuda_knn, cuvs_knn, cuda_knn, FALSE),
+    available = c(TRUE, faiss_knn, faiss$gpu && cuda_knn, cuvs_knn, cuda_knn, cugraph_graph && cuda_knn),
+    knn_available = c(TRUE, faiss_knn, faiss$gpu && cuda_knn, cuvs_knn, cuda_knn, FALSE),
     public_call = c(
       "backend = \"cpu\"",
       "backend = \"cpu\" or \"cuda\", method = \"flat\"/\"IVF\"/\"HNSW\"/\"CAGRA\" as supported",
@@ -48,7 +48,11 @@ backend_info <- function() {
     runtime = c(
       R.version$platform,
       faiss$runtime,
-      combine_nonempty(faiss$runtime, "FAISS GPU IVF and CAGRA indexes backed by NVIDIA cuVS when FAISS is built with cuVS"),
+      if (isTRUE(faiss$gpu)) {
+        combine_nonempty(faiss$runtime, "FAISS GPU IVF and CAGRA indexes backed by NVIDIA cuVS when FAISS is built with cuVS")
+      } else {
+        faiss$runtime
+      },
       cuvs$runtime,
       cuda$runtime,
       combine_nonempty(cuda$runtime, "RAPIDS libcugraph C API")
@@ -60,7 +64,7 @@ backend_info <- function() {
       } else {
         "Real FAISS C++ KNN is unavailable; FAISS-backed method requests will fail."
       },
-      if (faiss_knn && cuda_knn) {
+      if (faiss$gpu && cuda_knn) {
         "FAISS GPU IVF-Flat, IVF-PQ, and CAGRA use FAISS GPU indexes with NVIDIA cuVS integration when the linked FAISS library provides it; result backends report GpuIndexIVFFlat_cuVS, GpuIndexIVFPQ_cuVS, or GpuIndexCagra_cuVS."
       } else {
         "FAISS GPU cuVS-integrated IVF/CAGRA requests are unavailable; public CUDA IVF/CAGRA method requests will fail unless another validated CUDA route is available."
@@ -175,15 +179,34 @@ faiss_summary <- function() {
     error = function(e) NA_character_
   )
   available <- json_get_bool(text, "available")
+  gpu <- json_get_bool(text, "gpu")
+  gpu_cagra <- json_get_bool(text, "gpu_cagra")
   reason <- json_get_string(text, "reason")
   runtime <- if (isTRUE(available)) {
-    "FAISS C++ library"
+    combine_nonempty(
+      "FAISS C++ library",
+      if (isTRUE(gpu)) "FAISS GPU headers" else "CPU-only FAISS headers",
+      if (isTRUE(gpu_cagra)) "GpuIndexCagra available" else NA_character_
+    )
   } else if (!is.na(reason)) {
     reason
   } else {
     NA_character_
   }
-  list(device = "CPU/GPU depending on requested FAISS index", runtime = runtime)
+  list(
+    device = if (isTRUE(gpu)) "CPU/GPU depending on requested FAISS index" else "CPU",
+    runtime = runtime,
+    gpu = isTRUE(gpu),
+    gpu_cagra = isTRUE(gpu_cagra)
+  )
+}
+
+faiss_gpu_available <- function() {
+  text <- tryCatch(
+    faiss_info_json_cpp(),
+    error = function(e) NA_character_
+  )
+  isTRUE(json_get_bool(text, "available")) && isTRUE(json_get_bool(text, "gpu"))
 }
 
 cuvs_summary <- function() {

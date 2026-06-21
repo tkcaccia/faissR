@@ -320,8 +320,8 @@ field records whether `max_iter`, `n_init`, and `tol` were selected by
 auto/default rules or supplied explicitly.
 
 The public backend policy is the same as for KNN: `backend = "auto"` uses
-CUDA k-means when that backend is compiled and available, and otherwise
-resolves to CPU;
+CUDA only when CUDA plus FAISS GPU k-means or direct cuVS k-means is compiled
+and available, and otherwise resolves to CPU;
 `backend = "cpu"` forces the CPU route; `backend = "cuda"` requires an
 accelerated route and errors if unavailable. This makes k-means behavior
 consistent with `nn()`, `knn_graph()`, and `graph_cluster()`.

@@ -10,7 +10,7 @@ bool faiss_is_available_impl() {
 }
 
 std::string faiss_info_json_impl() {
-  return "{\"available\":false,\"reason\":\"package_not_built_with_faiss\"}";
+  return "{\"available\":false,\"gpu\":false,\"gpu_cagra\":false,\"reason\":\"package_not_built_with_faiss\"}";
 }
 
 List faiss_flat_knn_impl(NumericMatrix,
