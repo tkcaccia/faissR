@@ -82,7 +82,9 @@ variables such as `OMP_NUM_THREADS`; the benchmark worker avoids loading
 optional thread-control helper packages before FAISS/cuVS.
 Benchmark #1 accepts the public metric aliases `euclidean`, `pearson`, `cor`,
 `ip`, and `innerproduct`, but unknown metric labels now stop the launcher before
-workers are submitted.
+workers are submitted. Numeric controls that define the timing and quality
+envelope, including `--threads`, `--timeout`, `--quality_n`, and
+`--quality_max_ops`, are validated before workers are submitted.
 
 The same explicit-runtime convention is used by the NN metrics and k-means
 benchmark scripts.

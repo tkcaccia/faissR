@@ -680,6 +680,41 @@ test_that("legacy Benchmark #1 validates k-value grids", {
   )
 })
 
+test_that("legacy Benchmark #1 validates scalar numeric controls", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
+    "if (worker)"
+  )
+
+  expect_equal(env$benchmark1_positive_int_arg(NULL, "threads", "4"), 4L)
+  expect_equal(env$benchmark1_positive_int_arg("12", "threads", "4"), 12L)
+  expect_equal(env$benchmark1_positive_int_arg("600", "timeout", "60"), 600L)
+  expect_error(
+    env$benchmark1_positive_int_arg("zero", "threads", "4"),
+    "positive integer"
+  )
+  expect_error(
+    env$benchmark1_positive_int_arg(0, "timeout", "60"),
+    "positive integer"
+  )
+  expect_equal(
+    env$benchmark1_positive_numeric_arg(NULL, "quality_max_ops", "5e9"),
+    5e9
+  )
+  expect_equal(
+    env$benchmark1_positive_numeric_arg("1e6", "quality_max_ops", "5e9"),
+    1e6
+  )
+  expect_error(
+    env$benchmark1_positive_numeric_arg("many", "quality_max_ops", "5e9"),
+    "positive numeric"
+  )
+  expect_error(
+    env$benchmark1_positive_numeric_arg(0, "quality_max_ops", "5e9"),
+    "positive numeric"
+  )
+})
+
 test_that("legacy Benchmark #1 exposes normalized faissR NNDescent metrics", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),

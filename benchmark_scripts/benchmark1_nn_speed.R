@@ -132,20 +132,39 @@ benchmark1_k_values <- function(k_values = NULL,
   parsed
 }
 
-timeout_sec <- as.integer(args$timeout %||% "600")
+benchmark1_positive_int_arg <- function(value, arg, default = NULL) {
+  raw <- value
+  if (is.null(raw) || length(raw) != 1L || is.na(raw)) raw <- default
+  parsed <- suppressWarnings(as.integer(raw))
+  if (length(parsed) != 1L || is.na(parsed) || !is.finite(parsed) || parsed < 1L) {
+    stop("`", arg, "` must be a positive integer.", call. = FALSE)
+  }
+  parsed
+}
+
+benchmark1_positive_numeric_arg <- function(value, arg, default = NULL) {
+  raw <- value
+  if (is.null(raw) || length(raw) != 1L || is.na(raw)) raw <- default
+  parsed <- suppressWarnings(as.numeric(raw))
+  if (length(parsed) != 1L || is.na(parsed) || !is.finite(parsed) || parsed <= 0) {
+    stop("`", arg, "` must be a positive numeric value.", call. = FALSE)
+  }
+  parsed
+}
+
+timeout_sec <- benchmark1_positive_int_arg(args$timeout, "timeout", "600")
 worker <- isTRUE(as.logical(args$worker %||% FALSE))
-quality_eval_max_n <- as.integer(args$quality_n %||% Sys.getenv("FAISSR_BENCHMARK1_QUALITY_N", "512"))
-if (length(quality_eval_max_n) != 1L || is.na(quality_eval_max_n) || !is.finite(quality_eval_max_n) || quality_eval_max_n < 1L) {
-  quality_eval_max_n <- 512L
-}
-quality_eval_max_ops <- as.numeric(args$quality_max_ops %||% Sys.getenv("FAISSR_BENCHMARK1_QUALITY_MAX_OPS", "5e9"))
-if (length(quality_eval_max_ops) != 1L || is.na(quality_eval_max_ops) || !is.finite(quality_eval_max_ops) || quality_eval_max_ops < 1) {
-  quality_eval_max_ops <- 5e9
-}
-if (length(n_threads) != 1L || is.na(n_threads) || !is.finite(n_threads) || n_threads < 1L) {
-  n_threads <- 4L
-}
-n_threads <- as.integer(n_threads)
+quality_eval_max_n <- benchmark1_positive_int_arg(
+  args$quality_n %||% Sys.getenv("FAISSR_BENCHMARK1_QUALITY_N", unset = NA_character_),
+  "quality_n",
+  "512"
+)
+quality_eval_max_ops <- benchmark1_positive_numeric_arg(
+  args$quality_max_ops %||% Sys.getenv("FAISSR_BENCHMARK1_QUALITY_MAX_OPS", unset = NA_character_),
+  "quality_max_ops",
+  "5e9"
+)
+n_threads <- benchmark1_positive_int_arg(args$threads, "threads", "4")
 
 configure_cpu_threads <- function(n_threads) {
   value <- as.character(as.integer(n_threads))
