@@ -200,12 +200,12 @@ fast_kmeans(data, centers, backend = "auto",
 | `n_threads` | CPU worker threads for FAISS/statistics paths. |
 | `streaming_batch_size` | cuVS host-data streaming batch size. Use `0` to let cuVS choose its default. |
 | `init` | Initialization method: `"kmeans++"` or `"random"` where supported. |
-| `tuning` | `"auto"` uses deterministic rules based on `nrow(data)`, `ncol(data)`, and `centers`; `"fixed"`, `"off"`, and `"none"` keep the historical defaults unless explicit parameter values are supplied. |
+| `tuning` | `"auto"` uses deterministic rules based on `nrow(data)`, `ncol(data)`, `centers`, and `n / centers`; small many-cluster jobs can use extra restarts without pilot runs, while large/high-dimensional jobs use cheaper defaults. `"fixed"`, `"off"`, and `"none"` keep the historical defaults unless explicit parameter values are supplied. |
 
 Returns cluster labels, centers, within-cluster sums of squares, cluster sizes,
 iteration count, backend, and parameters, including the k-means tuning rule used
-and whether `max_iter`, `n_init`, and `tol` were auto-selected or supplied
-explicitly.
+plus shape metadata, and whether `max_iter`, `n_init`, and `tol` were
+auto-selected or supplied explicitly.
 
 ## `knn()`
 

@@ -49,14 +49,17 @@ supported.}
 
 \item{tuning}{Tuning policy. `"auto"` uses deterministic defaults based on
 `nrow(data)`, `ncol(data)`, and `centers` without running pilot searches.
+Small many-cluster jobs can use extra restarts when `n / centers` remains
+large enough; large or high-dimensional jobs use cheaper iteration and
+tolerance defaults.
 `"fixed"`, `"off"`, and `"none"` use the historical fixed defaults unless
 `max_iter`, `n_init`, or `tol` are explicitly supplied.}
 }
 \value{
 A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
-  `size`, `iter`, `backend`, and `parameters`, including the k-means tuning
-  rule used. `parameters$tuning$resolved_from` records whether `max_iter`,
-  `n_init`, and `tol` were auto-selected or supplied explicitly.
+  `size`, `iter`, `backend`, and `parameters`. `parameters$tuning`
+  records the deterministic k-means policy, shape metadata, and whether
+  `max_iter`, `n_init`, and `tol` were auto-selected or supplied explicitly.
 }
 \description{
 Run k-means using the fastest available backend. CPU acceleration uses

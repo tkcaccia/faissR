@@ -26,12 +26,15 @@
 #'   supported.
 #' @param tuning Tuning policy. `"auto"` uses deterministic defaults based on
 #'   `nrow(data)`, `ncol(data)`, and `centers` without running pilot searches.
+#'   Small many-cluster jobs can use extra restarts when `n / centers` remains
+#'   large enough; large or high-dimensional jobs use cheaper iteration and
+#'   tolerance defaults.
 #'   `"fixed"`, `"off"`, and `"none"` use the historical fixed defaults unless
 #'   `max_iter`, `n_init`, or `tol` are explicitly supplied.
 #' @return A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
 #'   `size`, `iter`, `backend`, and `parameters`. `parameters$tuning`
-#'   records the deterministic k-means policy and whether `max_iter`,
-#'   `n_init`, and `tol` were auto-selected or supplied explicitly.
+#'   records the deterministic k-means policy, shape metadata, and whether
+#'   `max_iter`, `n_init`, and `tol` were auto-selected or supplied explicitly.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' fit <- fast_kmeans(x, centers = 3, backend = "cpu", n_threads = 2)
@@ -312,15 +315,19 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
   high_dim <- p >= 256L
   large_n <- n >= 100000L
   many_centers <- centers >= 100L
+  n_per_center <- as.double(n) / as.double(centers)
+  small_many_centers <- many_centers && n <= 50000L && work <= 2e8 && n_per_center >= 20
   max_iter <- if (large_n || work >= 5e9) {
     50L
-  } else if (high_dim || many_centers || work >= 5e8) {
+  } else if (high_dim || (many_centers && !small_many_centers) || work >= 5e8) {
     75L
   } else {
     100L
   }
   n_init <- if (n <= 50000L && centers <= 20L && work <= 2e8) {
     5L
+  } else if (small_many_centers) {
+    3L
   } else if (n <= 100000L && centers <= 50L && work <= 5e8) {
     3L
   } else {
@@ -336,11 +343,19 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
     max_iter = as.integer(max_iter),
     n_init = as.integer(n_init),
     tol = as.numeric(tol),
+    work = as.numeric(work),
+    n_per_center = as.numeric(n_per_center),
+    high_dim = isTRUE(high_dim),
+    large_n = isTRUE(large_n),
+    many_centers = isTRUE(many_centers),
+    small_many_centers = isTRUE(small_many_centers),
     rule = paste(
       "shape",
       paste0("n=", n),
       paste0("p=", p),
       paste0("centers=", centers),
+      paste0("n_per_center=", formatC(n_per_center, digits = 4, format = "fg")),
+      paste0("work=", format(work, scientific = TRUE)),
       sep = ";"
     )
   )

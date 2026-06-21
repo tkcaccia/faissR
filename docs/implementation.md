@@ -308,9 +308,13 @@ the requested number of centres. The function does not run pilot k-means jobs or
 benchmark candidate parameter sets inside a user call. This keeps runtime
 predictable while allowing small problems to use more restarts and large
 high-dimensional problems to use cheaper convergence settings. The selected
-policy is recorded in `result$parameters$tuning`; its `resolved_from` field
-records whether `max_iter`, `n_init`, and `tol` were selected by auto/default
-rules or supplied explicitly.
+policy is recorded in `result$parameters$tuning`; its shape metadata includes
+estimated work, `n_per_center`, and flags such as `many_centers` and
+`small_many_centers`. Small many-cluster problems can keep 100 Lloyd iterations
+and use three restarts when `n / centers` remains large enough, while genuinely
+large or high-dimensional problems keep cheaper settings. The `resolved_from`
+field records whether `max_iter`, `n_init`, and `tol` were selected by
+auto/default rules or supplied explicitly.
 
 The public backend policy is the same as for KNN: `backend = "auto"` uses CUDA
 when a CUDA k-means implementation is available and CPU otherwise;

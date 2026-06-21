@@ -164,15 +164,19 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
     return(list(max_iter = 100L, n_init = 1L, tol = 1e-4, policy = tuning))
   }
   work <- as.double(n) * as.double(p) * as.double(centers)
+  n_per_center <- as.double(n) / as.double(centers)
+  small_many_centers <- centers >= 100L && n <= 50000L && work <= 2e8 && n_per_center >= 20
   max_iter <- if (n >= 100000L || work >= 5e9) {
     50L
-  } else if (p >= 256L || centers >= 100L || work >= 5e8) {
+  } else if (p >= 256L || (centers >= 100L && !small_many_centers) || work >= 5e8) {
     75L
   } else {
     100L
   }
   n_init <- if (n <= 50000L && centers <= 20L && work <= 2e8) {
     5L
+  } else if (small_many_centers) {
+    3L
   } else if (n <= 100000L && centers <= 50L && work <= 5e8) {
     3L
   } else {

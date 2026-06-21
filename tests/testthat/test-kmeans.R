@@ -38,6 +38,32 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(auto$parameters$tuning$resolved_from$tol, "auto")
   expect_equal(auto$parameters$max_iter, 100L)
   expect_equal(auto$parameters$n_init, 5L)
+  expect_equal(auto$parameters$tuning$small_many_centers, FALSE)
+  expect_true(is.finite(auto$parameters$tuning$work))
+  expect_true(is.finite(auto$parameters$tuning$n_per_center))
+
+  small_many <- faissR:::kmeans_auto_params(
+    n = 5000L,
+    p = 10L,
+    centers = 100L,
+    tuning = "auto"
+  )
+  expect_equal(small_many$max_iter, 100L)
+  expect_equal(small_many$n_init, 3L)
+  expect_true(isTRUE(small_many$many_centers))
+  expect_true(isTRUE(small_many$small_many_centers))
+  expect_equal(small_many$n_per_center, 50)
+
+  large_many <- faissR:::kmeans_auto_params(
+    n = 200000L,
+    p = 50L,
+    centers = 100L,
+    tuning = "auto"
+  )
+  expect_equal(large_many$max_iter, 50L)
+  expect_equal(large_many$n_init, 1L)
+  expect_true(isTRUE(large_many$large_n))
+  expect_false(isTRUE(large_many$small_many_centers))
 
   fixed <- fast_kmeans(x, centers = 3, backend = "cpu", tuning = "fixed", seed = 12, n_threads = 2)
   expect_equal(fixed$parameters$tuning$policy, "fixed")
