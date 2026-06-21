@@ -1005,8 +1005,42 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
 
   out <- env$summarize_graph_cycles(ok)
   expect_equal(nrow(out), 2L)
+  expect_type(out$n_clusters_requested, "integer")
   expect_equal(sort(as.integer(out$n_clusters_requested)), c(3L, 5L))
   expect_equal(sort(out$n_clusters_source), c("labels", "stored_graph_target"))
+})
+
+test_that("graph benchmark recommendations preserve integer target counts", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = c("A", "A"),
+    k = c(15L, 15L),
+    graph_backend = c("cpu", "cpu"),
+    graph_resolved_backend = c("cpu", "cpu"),
+    cluster_backend = c("cpu", "cpu"),
+    cluster_resolved_backend = c("cpu", "cpu"),
+    method = c("louvain", "leiden"),
+    weight = c("snn", "snn"),
+    success_cycles = c(1L, 1L),
+    median_graph_sec = c(1, 1),
+    median_cluster_sec = c(2, 1),
+    median_total_sec = c(3, 2),
+    median_ari = c(0.9, 0.9),
+    min_ari = c(0.9, 0.9),
+    median_modularity = c(0.4, 0.4),
+    median_n_communities = c(3, 3),
+    median_selected_resolution = c(1, 1),
+    n_clusters_requested = c(3L, 3L),
+    n_clusters_source = c("labels", "labels"),
+    graph_cached = c(TRUE, TRUE)
+  )
+
+  out <- env$recommend_graph_cluster_methods(cycle_summary, ari_tolerance = 0.01)
+  expect_type(out$n_clusters_requested, "integer")
+  expect_equal(out$n_clusters_requested, 3L)
 })
 
 test_that("graph benchmark auto comparison has unique schema columns", {

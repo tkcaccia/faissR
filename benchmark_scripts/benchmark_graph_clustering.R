@@ -230,6 +230,13 @@ dominant_value <- function(x) {
   names(sort(table(x), decreasing = TRUE))[[1L]]
 }
 
+dominant_integer <- function(x) {
+  x <- suppressWarnings(as.integer(x))
+  x <- x[!is.na(x) & is.finite(x)]
+  if (!length(x)) return(NA_integer_)
+  as.integer(names(sort(table(x), decreasing = TRUE))[[1L]])
+}
+
 finite_median <- function(x) {
   x <- suppressWarnings(as.numeric(x))
   x <- x[is.finite(x)]
@@ -288,7 +295,7 @@ summarize_graph_cycles <- function(ok) {
       median_n_edges = finite_median(x$n_edges),
       median_n_communities = finite_median(x$n_communities),
       median_selected_resolution = finite_median(x$selected_resolution),
-      n_clusters_requested = dominant_value(x$n_clusters_requested),
+      n_clusters_requested = dominant_integer(x$n_clusters_requested),
       n_clusters_source = dominant_value(x$n_clusters_source),
       graph_cached = any(as.logical(x$graph_cached), na.rm = TRUE),
       stringsAsFactors = FALSE
