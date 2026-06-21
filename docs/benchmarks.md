@@ -308,9 +308,12 @@ unavailable it selects the fastest median-time row.
 `kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()`
 rows with those recommendations and reports median speed ratio, median ARI gap,
 withinss ratio, and backend/implementation agreement.
-CUDA/library combinations that are known unavailable before execution are
-recorded as `status = "expected_skip"` with `expected_skip = TRUE`; unexpected
-runtime errors remain failed rows and are not replaced with CPU timings.
+Explicit CUDA/library combinations that are known unavailable before execution
+are recorded as `status = "expected_skip"` with `expected_skip = TRUE`, while
+`resolved_backend` remains `"cuda"` so the skipped public device request is
+auditable. `backend = "auto"` resolves to CPU instead of becoming an expected
+skip when no k-means-capable CUDA route is available. Unexpected runtime errors
+remain failed rows and are not replaced with CPU timings.
 
 Example CPU run:
 

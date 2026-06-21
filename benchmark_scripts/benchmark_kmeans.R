@@ -554,7 +554,7 @@ for (dataset_name in datasets) {
             tol = resolve_kmeans_tol(tol, auto_params$tol),
             tuning_policy = auto_params$policy,
             requested_backend = backend,
-            resolved_backend = NA_character_,
+            resolved_backend = backend,
             expected_skip = TRUE
           )
         } else {
@@ -674,7 +674,7 @@ materials <- c(
   "`kmeans_cycle_summary.csv` aggregates successful rows across cycles by dataset/method/backend/centers and reports success counts, median/min/max elapsed time, ARI stability, withinss stability, iteration counts, and resolved backend metadata.",
   "`kmeans_recommendations_from_cycles.csv` selects the fastest row within `ari_tolerance` of the best median ARI for each dataset; when ARI is unavailable it selects the fastest median-time row.",
   "`kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()` rows with those cycle-summary recommendations and reports median speed ratio, median ARI gap, withinss ratio, and backend/implementation agreement.",
-  "Unsupported CUDA or library combinations known before execution are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
+  "Explicit CUDA requests whose required CUDA, FAISS GPU, or cuVS k-means runtime is unavailable are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`; `resolved_backend` remains `cuda` so the skipped public device request is auditable. `backend = \"auto\"` resolves to CPU instead of becoming an expected skip when no k-means-capable CUDA route is available. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_kmeans.md"))
 
