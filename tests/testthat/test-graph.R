@@ -147,6 +147,13 @@ test_that("graph construction rejects implementation backend labels", {
     faissR:::resolve_knn_graph_backend("cpu_grid"),
     "must be one of"
   )
+  expect_equal(faissR:::resolve_graph_cluster_backend("cpu"), "cpu")
+  expect_equal(faissR:::resolve_graph_cluster_backend("cuda"), "cuda")
+  expect_true(faissR:::resolve_graph_cluster_backend("auto") %in% c("cpu", "cuda"))
+  expect_error(
+    faissR:::resolve_graph_cluster_backend("cugraph"),
+    "must be one of"
+  )
 })
 
 test_that("knn_graph stores an optional cluster-count target for graph_cluster", {
