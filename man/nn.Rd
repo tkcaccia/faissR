@@ -114,7 +114,9 @@ Method descriptions:
   [1-2,16].
   \item `"bruteforce"`: exhaustive brute-force search. CUDA prefers RAPIDS
   cuVS brute force; CPU maps to exact CPU search [3].
-  \item `"grid"`: native exact 2D/3D Euclidean spatial grid search.
+  \item `"grid"`: native exact 2D/3D Euclidean spatial grid search. Explicit
+  grid requests error for higher-dimensional matrices; use `"auto"` to let
+  faissR choose a non-grid method when appropriate.
   \item `"vptree"`: native exact CPU vantage-point-tree search for
   Euclidean, cosine, and correlation. Cosine/correlation use normalized
   Euclidean tree search when rows are nonzero/nonconstant and exact CPU

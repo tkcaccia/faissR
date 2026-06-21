@@ -653,6 +653,20 @@ test_that("3D grid self KNN matches exact CPU neighbors", {
   expect_equal(grid$distances, exact$distances, tolerance = 1e-12)
 })
 
+test_that("public grid method rejects higher-dimensional data explicitly", {
+  set.seed(12130)
+  x <- matrix(runif(600L), nrow = 120L)
+
+  expect_error(
+    nn(x, k = 5L, backend = "cpu", method = "grid", n_threads = 2L),
+    "two- or three-column"
+  )
+  expect_error(
+    nn_without_self(x, k = 5L, backend = "cpu", method = "grid", n_threads = 2L),
+    "two- or three-column"
+  )
+})
+
 test_that("VP-tree self KNN matches exact CPU neighbors", {
   set.seed(12131)
   x <- matrix(runif(1800L), nrow = 300L)

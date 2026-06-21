@@ -1402,6 +1402,20 @@ normalize_nn_method <- function(method) {
   method
 }
 
+validate_public_nn_method_shape <- function(data, method) {
+  if (!identical(method, "grid")) return(invisible(TRUE))
+  p <- suppressWarnings(as.integer(ncol(data)))
+  if (length(p) != 1L || is.na(p) || !p %in% c(2L, 3L)) {
+    stop(
+      "`method = \"grid\"` supports only two- or three-column matrices. ",
+      "Use `method = \"auto\"` to let faissR select a non-grid method for ",
+      "higher-dimensional data.",
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
+}
+
 nn_metric_labels <- function() {
   c("euclidean", "cosine", "correlation", "inner_product")
 }
@@ -4819,7 +4833,9 @@ grid_self_knn <- function(data,
 #'   [1-2,16].
 #'   \item `"bruteforce"`: exhaustive brute-force search. CUDA prefers RAPIDS
 #'   cuVS brute force; CPU maps to exact CPU search [3].
-#'   \item `"grid"`: native exact 2D/3D Euclidean spatial grid search.
+#'   \item `"grid"`: native exact 2D/3D Euclidean spatial grid search. Explicit
+#'   grid requests error for higher-dimensional matrices; use `"auto"` to let
+#'   faissR choose a non-grid method when appropriate.
 #'   \item `"vptree"`: native exact CPU vantage-point-tree search for
 #'   Euclidean, cosine, and correlation. Cosine/correlation use normalized
 #'   Euclidean tree search when rows are nonzero/nonconstant and exact CPU
@@ -4951,9 +4967,10 @@ nn <- function(data,
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                n_threads = NULL) {
   backend <- normalize_public_backend_arg(backend)
-  method <- as.character(method)[1L]
+  method <- normalize_nn_method(method)
   tuning <- as.character(tuning)[1L]
   metric <- normalize_nn_metric(metric)
+  validate_public_nn_method_shape(data, method)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
   nn_compute(
     data,
@@ -5003,9 +5020,10 @@ nn_without_self <- function(data,
                             tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                             n_threads = NULL) {
   backend <- normalize_public_backend_arg(backend)
-  method <- as.character(method)[1L]
+  method <- normalize_nn_method(method)
   tuning <- as.character(tuning)[1L]
   metric <- normalize_nn_metric(metric)
+  validate_public_nn_method_shape(data, method)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
   nn_compute(
     data,
