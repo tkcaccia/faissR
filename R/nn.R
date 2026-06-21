@@ -2365,6 +2365,38 @@ faiss_flat_normalized_metric_result <- function(data,
   } else {
     row_l2_normalize(points)
   }
+  data_zero <- rowSums(data_metric * data_metric) <= 0
+  points_zero <- if (isTRUE(self_query)) data_zero else rowSums(points_metric * points_metric) <= 0
+  if (is.null(accelerator) && (any(data_zero) || any(points_zero))) {
+    out <- nn_cpp(
+      data,
+      points,
+      as.integer(k),
+      metric,
+      FALSE,
+      TRUE,
+      0,
+      TRUE,
+      as.integer(normalize_nn_threads(n_threads)),
+      isTRUE(exclude_self)
+    )
+    result <- finish_nn_result(out, backend, k, self_query, exact = TRUE, metric = metric)
+    faiss_meta <- list(
+      index_type = "IndexFlatIP",
+      library = "faiss",
+      backend = if (identical(accelerator, "cuda")) "cuda" else "cpu",
+      metric = metric,
+      zero_row_exact_fallback = TRUE,
+      transform = if (identical(metric, "correlation")) {
+        "row_center_l2_normalize_then_IndexFlatIP"
+      } else {
+        "row_l2_normalize_then_IndexFlatIP"
+      }
+    )
+    if (!is.null(accelerator)) faiss_meta$accelerator <- accelerator
+    attr(result, "faiss") <- faiss_meta
+    return(result)
+  }
   out <- if (identical(accelerator, "cuda")) {
     nn_faiss_gpu_flat_normalized_ip_distance_cpp(
       data_metric,
@@ -2389,9 +2421,12 @@ faiss_flat_normalized_metric_result <- function(data,
     exact = TRUE,
     metric = metric
   )
-  data_zero <- rowSums(data_metric * data_metric) <= 0
-  points_zero <- if (isTRUE(self_query)) data_zero else rowSums(points_metric * points_metric) <= 0
-  result <- restore_zero_zero_normalized_ip_distances(result, data_zero, points_zero)
+  result <- restore_zero_normalized_ip_distances(
+    result,
+    data_zero = data_zero,
+    points_zero = points_zero,
+    exclude_self = isTRUE(exclude_self)
+  )
   result <- sort_knn_rows_by_distance_index(result)
   faiss_meta <- list(
     index_type = as.character(out$index_type),
@@ -2460,7 +2495,12 @@ faiss_ivf_normalized_metric_result <- function(data,
   result <- finish_nn_result(out, backend, k, self_query, exact = FALSE, metric = metric)
   data_zero <- rowSums(data_metric * data_metric) <= 0
   points_zero <- if (isTRUE(self_query)) data_zero else rowSums(points_metric * points_metric) <= 0
-  result <- restore_zero_zero_normalized_ip_distances(result, data_zero, points_zero)
+  result <- restore_zero_normalized_ip_distances(
+    result,
+    data_zero = data_zero,
+    points_zero = points_zero,
+    exclude_self = isTRUE(exclude_self)
+  )
   result <- sort_knn_rows_by_distance_index(result)
   attr(result, "approximation") <- list(
     strategy = if (identical(accelerator, "cuda")) {
@@ -2544,7 +2584,12 @@ faiss_ivfpq_normalized_metric_result <- function(data,
   result <- finish_nn_result(out, backend, k, self_query, exact = FALSE, metric = metric)
   data_zero <- rowSums(data_metric * data_metric) <= 0
   points_zero <- if (isTRUE(self_query)) data_zero else rowSums(points_metric * points_metric) <= 0
-  result <- restore_zero_zero_normalized_ip_distances(result, data_zero, points_zero)
+  result <- restore_zero_normalized_ip_distances(
+    result,
+    data_zero = data_zero,
+    points_zero = points_zero,
+    exclude_self = isTRUE(exclude_self)
+  )
   result <- sort_knn_rows_by_distance_index(result)
   attr(result, "approximation") <- list(
     strategy = if (identical(accelerator, "cuda")) {
@@ -2617,7 +2662,12 @@ faiss_hnsw_normalized_metric_result <- function(data,
   result <- finish_nn_result(out, "faiss_hnsw", k, self_query, exact = FALSE, metric = metric)
   data_zero <- rowSums(data_metric * data_metric) <= 0
   points_zero <- if (isTRUE(self_query)) data_zero else rowSums(points_metric * points_metric) <= 0
-  result <- restore_zero_zero_normalized_ip_distances(result, data_zero, points_zero)
+  result <- restore_zero_normalized_ip_distances(
+    result,
+    data_zero = data_zero,
+    points_zero = points_zero,
+    exclude_self = isTRUE(exclude_self)
+  )
   result <- sort_knn_rows_by_distance_index(result)
   attr(result, "approximation") <- list(
     strategy = "faiss_IndexHNSWFlat",
@@ -2640,14 +2690,37 @@ faiss_hnsw_normalized_metric_result <- function(data,
   result
 }
 
-restore_zero_zero_normalized_ip_distances <- function(result, data_zero, points_zero) {
+restore_zero_normalized_ip_distances <- function(result,
+                                                 data_zero,
+                                                 points_zero,
+                                                 exclude_self = FALSE) {
   if (!any(points_zero) || !any(data_zero) || ncol(result$indices) < 1L) {
     return(result)
   }
+  k <- ncol(result$indices)
+  n_data <- length(data_zero)
+  data_indices <- seq_len(n_data)
+  self_query <- isTRUE(attr(result, "self_query"))
   for (i in which(points_zero)) {
-    zero_neighbor <- data_zero[result$indices[i, ]]
-    if (any(zero_neighbor)) {
-      result$distances[i, zero_neighbor] <- 0
+    zero_candidates <- data_indices[data_zero]
+    if (isTRUE(self_query) && isTRUE(exclude_self) && i <= n_data) {
+      zero_candidates <- zero_candidates[zero_candidates != i]
+    }
+    nonzero_candidates <- data_indices[!data_zero]
+    ordered <- c(zero_candidates, nonzero_candidates)
+    if (length(ordered) > 0L) {
+      keep <- ordered[seq_len(min(length(ordered), k))]
+      result$indices[i, seq_along(keep)] <- keep
+      zero_count <- min(length(zero_candidates), length(keep))
+      result$distances[i, seq_along(keep)] <- c(
+        rep(0, zero_count),
+        rep(1, length(keep) - zero_count)
+      )
+      if (length(keep) < k) {
+        fill <- seq.int(length(keep) + 1L, k)
+        result$indices[i, fill] <- NA_integer_
+        result$distances[i, fill] <- Inf
+      }
     }
   }
   result

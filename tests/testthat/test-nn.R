@@ -455,6 +455,77 @@ test_that("FAISS Flat cosine and correlation preserve zero-row exact distances",
   }
 })
 
+test_that("normalized IP routes rank zero-normalized rows before arbitrary IP ties", {
+  out <- list(
+    indices = matrix(c(
+      3L, 4L,
+      1L, 4L,
+      1L, 2L,
+      1L, 2L
+    ), nrow = 4L, byrow = TRUE),
+    distances = matrix(1, nrow = 4L, ncol = 2L)
+  )
+  attr(out, "self_query") <- TRUE
+  fixed <- faissR:::restore_zero_normalized_ip_distances(
+    out,
+    data_zero = c(TRUE, TRUE, FALSE, FALSE),
+    points_zero = c(TRUE, TRUE, FALSE, FALSE),
+    exclude_self = FALSE
+  )
+  expect_equal(fixed$indices[1L, ], c(1L, 2L))
+  expect_equal(fixed$distances[1L, ], c(0, 0))
+  expect_equal(fixed$indices[2L, ], c(1L, 2L))
+  expect_equal(fixed$distances[2L, ], c(0, 0))
+
+  fixed_without_self <- faissR:::restore_zero_normalized_ip_distances(
+    out,
+    data_zero = c(TRUE, TRUE, FALSE, FALSE),
+    points_zero = c(TRUE, TRUE, FALSE, FALSE),
+    exclude_self = TRUE
+  )
+  expect_equal(fixed_without_self$indices[1L, ], c(2L, 3L))
+  expect_equal(fixed_without_self$distances[1L, ], c(0, 1))
+  expect_equal(fixed_without_self$indices[2L, ], c(1L, 3L))
+  expect_equal(fixed_without_self$distances[2L, ], c(0, 1))
+})
+
+test_that("FAISS Flat zero-row normalized metrics match exact CPU at small k", {
+  skip_if_not(isTRUE(faiss_available()), "FAISS is not available")
+  x <- matrix(c(
+    0, 0, 0,
+    0, 0, 0,
+    1, 0, 0,
+    1, 2, 3,
+    2, 4, 6
+  ), ncol = 3, byrow = TRUE)
+
+  for (metric in c("cosine", "correlation")) {
+    flat <- nn(x, k = 2L, backend = "cpu", method = "flat", metric = metric, n_threads = 2L)
+    exact <- nn(x, k = 2L, backend = "cpu", method = "exact", metric = metric, n_threads = 2L)
+    expect_equal(unname(flat$indices), unname(exact$indices))
+    expect_equal(unname(flat$distances), unname(exact$distances), tolerance = 1e-5)
+
+    flat_without_self <- nn_without_self(
+      x,
+      k = 1L,
+      backend = "cpu",
+      method = "flat",
+      metric = metric,
+      n_threads = 2L
+    )
+    exact_without_self <- nn_without_self(
+      x,
+      k = 1L,
+      backend = "cpu",
+      method = "exact",
+      metric = metric,
+      n_threads = 2L
+    )
+    expect_equal(unname(flat_without_self$indices), unname(exact_without_self$indices))
+    expect_equal(unname(flat_without_self$distances), unname(exact_without_self$distances), tolerance = 1e-5)
+  }
+})
+
 test_that("nn chooses a practical default k and prints clearly", {
   set.seed(101)
   x <- matrix(rnorm(60), nrow = 20L)
