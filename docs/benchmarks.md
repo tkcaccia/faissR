@@ -126,7 +126,8 @@ unavailable for the group, it selects the fastest successful row and marks
 `nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate
 `method = "auto"` rows with those recommendations and reports median speed
 ratio, median recall gap, backend/implementation agreement, and the
-recommendation basis used for the recommended row.
+recommendation basis used for the recommended row. Speed ratios and recall gaps
+are `NA` when the required timing or recall values are unavailable or invalid.
 `nn_metric_best_by_dataset_backend_metric_k_cycle.csv` keeps the best row within
 each cycle using the same recall-threshold rule: fastest above threshold,
 best recall below threshold, and fastest when recall is unavailable.

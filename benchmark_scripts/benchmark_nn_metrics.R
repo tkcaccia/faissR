@@ -421,13 +421,37 @@ compare_auto_to_recommendations <- function(cycle_summary, recommendations) {
   comparison$auto_uses_recommended_result_backend <- comparison$auto_result_backend == comparison$recommended_result_backend
   comparison$auto_uses_recommended_resolved_backend <- comparison$auto_resolved_backend == comparison$recommended_resolved_backend
   comparison$auto_uses_recommended_implementation <- comparison$auto_implementation_backend == comparison$recommended_implementation_backend
-  comparison$auto_median_speed_ratio <- ifelse(
-    comparison$recommended_median_elapsed_sec > 0,
-    comparison$auto_median_elapsed_sec / comparison$recommended_median_elapsed_sec,
-    ifelse(comparison$auto_median_elapsed_sec == 0, 1, Inf)
+  comparison$auto_median_speed_ratio <- safe_positive_ratio(
+    comparison$auto_median_elapsed_sec,
+    comparison$recommended_median_elapsed_sec
   )
-  comparison$auto_median_recall_gap <- comparison$recommended_median_recall_at_k - comparison$auto_median_recall_at_k
+  comparison$auto_median_recall_gap <- safe_difference(
+    comparison$recommended_median_recall_at_k,
+    comparison$auto_median_recall_at_k
+  )
   comparison[order(comparison$dataset, comparison$backend, comparison$metric, comparison$k), , drop = FALSE]
+}
+
+safe_positive_ratio <- function(numerator, denominator) {
+  numerator <- suppressWarnings(as.numeric(numerator))
+  denominator <- suppressWarnings(as.numeric(denominator))
+  out <- rep(NA_real_, max(length(numerator), length(denominator)))
+  numerator <- rep(numerator, length.out = length(out))
+  denominator <- rep(denominator, length.out = length(out))
+  ok <- is.finite(numerator) & is.finite(denominator) & denominator > 0
+  out[ok] <- numerator[ok] / denominator[ok]
+  out
+}
+
+safe_difference <- function(left, right) {
+  left <- suppressWarnings(as.numeric(left))
+  right <- suppressWarnings(as.numeric(right))
+  out <- rep(NA_real_, max(length(left), length(right)))
+  left <- rep(left, length.out = length(out))
+  right <- rep(right, length.out = length(out))
+  ok <- is.finite(left) & is.finite(right)
+  out[ok] <- left[ok] - right[ok]
+  out
 }
 
 nn_metric_rank_value <- function(data, column, default, higher_is_better = FALSE) {
@@ -1028,7 +1052,7 @@ materials <- c(
   "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches.",
   "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/metric/k and reports success counts, median/min/max elapsed time, recall stability, and the dominant implementation backend.",
   "`nn_metric_recommendations_from_cycles.csv` selects one method per dataset/backend/metric/k. When recall is available, it selects the fastest method whose median recall is at least `recall_threshold`; tied median times are broken by higher median recall, minimum recall, and median minimum recall. If no method reaches the threshold it selects the best-recall row and marks it as below threshold, breaking tied median recall by minimum recall, median minimum recall, and then speed. When recall is unavailable for the group, it selects the fastest successful row and marks the recommendation as speed-only.",
-  "`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate `method = \"auto\"` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median recall gap, and backend/implementation agreement.",
+  "`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate `method = \"auto\"` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median recall gap, and backend/implementation agreement. Speed ratios and recall gaps are `NA` when the required timing or recall values are unavailable or invalid.",
   "`nn_metric_best_by_dataset_backend_metric_k_cycle.csv` stores the best row within each cycle using the same recall-threshold rule as the cycle recommendations: fastest above threshold, best recall below threshold, and fastest when recall is unavailable; `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the overall best row across cycles with the same rule for backward-compatible summaries.",
   "The script does not add benchmark-only helpers to the package API."
 )

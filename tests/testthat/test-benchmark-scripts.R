@@ -402,6 +402,37 @@ test_that("NN metric auto comparison preserves recommendation basis", {
   expect_true("recommended_recommendation_basis" %in% names(out))
 })
 
+test_that("NN metric auto comparison guards speed ratios and recall gaps", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = c("A", "A", "B", "B"),
+    backend = c("cpu", "cpu", "cuda", "cuda"),
+    method = c("auto", "hnsw", "auto", "flat"),
+    metric = c("euclidean", "euclidean", "cosine", "cosine"),
+    k = c(50L, 50L, 15L, 15L),
+    result_backend = c("faiss_hnsw", "faiss_hnsw", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine"),
+    resolved_backend = c("faiss_hnsw", "faiss_hnsw", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine"),
+    implementation_backend = c("faiss_hnsw", "faiss_hnsw", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine"),
+    success_cycles = c(1L, 1L, 1L, 1L),
+    median_elapsed_sec = c(1, 0, 1, 2),
+    median_recall_at_k = c(0.99, 0.99, NA, 0.98),
+    min_recall_at_k = c(0.98, 0.98, NA, 0.97),
+    median_min_recall_at_k = c(0.98, 0.98, NA, 0.97),
+    recall_reference = c("sample", "sample", NA, "sample"),
+    median_recall_query_n = c(512, 512, NA, 512)
+  )
+  recommendations <- cycle_summary[c(2, 4), , drop = FALSE]
+  recommendations$recommendation_basis <- c("fastest_at_recall_threshold", "fastest_at_recall_threshold")
+
+  out <- env$compare_auto_to_recommendations(cycle_summary, recommendations)
+  expect_true(is.na(out$auto_median_speed_ratio[out$dataset == "A"]))
+  expect_true(is.na(out$auto_median_recall_gap[out$dataset == "B"]))
+  expect_true(is.finite(out$auto_median_speed_ratio[out$dataset == "B"]))
+})
+
 test_that("NN metric benchmark accounts for sparse method on dense data", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
