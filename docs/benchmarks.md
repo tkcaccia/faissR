@@ -255,8 +255,11 @@ metric matrix. It runs public `nn()` combinations over:
 
 Unsupported combinations are preflighted with `faissR::nn_capabilities()` and
 the public backend resolver, then saved as `status = "expected_skip"` rows with
-`expected_skip = TRUE`; the design-level capability table used for the run is
-saved as `nn_metric_capabilities.csv`. For `backend = "auto"`, the preflight
+`expected_skip = TRUE`. The run configuration is saved as
+`nn_metric_benchmark_config.csv`, the raw row-level result table is saved as
+`nn_metric_benchmark_results.csv`, and the design-level capability table used
+for the run is saved as `nn_metric_capabilities.csv`. For `backend = "auto"`,
+the preflight
 checks the resolved CPU/CUDA route and records expected skips when that route
 requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.
 The sparse route is also recorded as an expected skip for dense benchmark

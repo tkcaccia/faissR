@@ -22,12 +22,18 @@ source_benchmark_helpers <- function(path, stop_marker) {
   env
 }
 
-test_that("benchmark materials document compact best summary outputs", {
-  files <- c(
+test_that("benchmark materials document key row-level and summary outputs", {
+  files <- list(
+    nn = c(
+      "nn_metric_benchmark_config.csv",
+      "nn_metric_benchmark_results.csv",
+      "nn_metric_capabilities.csv"
+    ),
     graph = "graph_cluster_best_by_dataset.csv",
     kmeans = "kmeans_best_by_dataset.csv"
   )
   scripts <- c(
+    nn = test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
     graph = test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
     kmeans = test_path("../../benchmark_scripts/benchmark_kmeans.R")
   )
@@ -39,8 +45,10 @@ test_that("benchmark materials document compact best summary outputs", {
   docs <- paste(readLines(docs_file, warn = FALSE), collapse = "\n")
   for (name in names(files)) {
     script <- paste(readLines(scripts[[name]], warn = FALSE), collapse = "\n")
-    expect_true(grepl(files[[name]], script, fixed = TRUE), info = scripts[[name]])
-    expect_true(grepl(files[[name]], docs, fixed = TRUE), info = docs_file)
+    for (file in files[[name]]) {
+      expect_true(grepl(file, script, fixed = TRUE), info = scripts[[name]])
+      expect_true(grepl(file, docs, fixed = TRUE), info = docs_file)
+    }
   }
 })
 
