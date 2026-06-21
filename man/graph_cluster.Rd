@@ -31,7 +31,7 @@ graph_cluster(
 }
 \arguments{
 \item{graph}{A numeric matrix/data frame, a KNN object returned by \code{nn()}, or an embedding object with a matrix \code{layout}.}
-\item{method}{One of \code{"random_walking"}, \code{"louvain"}, or \code{"leiden"}. \code{"random_walking"} uses a native random-walk label-propagation pass inspired by walktrap/random-walk clustering. \code{"louvain"} uses modularity local moving. \code{"leiden"} adds a refinement pass intended to split disconnected communities after local moving. See References.}
+\item{method}{One of \code{"random_walking"}, \code{"louvain"}, or \code{"leiden"}. \code{"random_walking"} uses a native random-walk label-propagation pass inspired by walktrap/random-walk clustering. \code{"louvain"} uses native modularity local moving. \code{"leiden"} adds a native refinement pass that splits disconnected communities after local moving. See References.}
 \item{backend}{Community-detection backend. \code{"auto"} uses CUDA when
 libcugraph is available for Louvain/Leiden and CPU otherwise; auto keeps
 \code{"random_walking"} on CPU. \code{"cpu"} uses native faissR C++/OpenMP code.
@@ -45,8 +45,8 @@ libcugraph was detected at build time; random-walking is CPU-only.}
 \item{weight}{KNN graph weighting used when a graph must be built.}
 \item{mutual, prune}{Native graph-construction options.}
 \item{n_threads}{CPU threads. Used by KNN construction and native CPU clustering.}
-\item{n_runs}{Number of repeated CPU community-detection runs. The result with the largest modularity is returned. Values greater than one can use several CPU cores.}
-\item{resolution}{Modularity resolution for Louvain/Leiden.}
+\item{n_runs}{Number of independent native clustering runs. The result with the largest modularity is returned. Values greater than one can use several CPU cores.}
+\item{resolution}{Modularity resolution for Louvain/Leiden-style scoring.}
 \item{n_clusters}{Optional target number of communities for Louvain/Leiden.
 If supplied, faissR evaluates a small deterministic resolution grid on the
 already-built graph and keeps the result whose community count is closest to
@@ -58,7 +58,7 @@ the target. This is a convenience target, not a hard guarantee.}
 \item{...}{Reserved for future backend options.}
 }
 \description{
-\code{graph_cluster()} runs native faissR community detection on a KNN graph. The graph can be supplied as a precomputed \code{nn()} result or built from a matrix/data frame using any faissR nearest-neighbour backend, including FAISS and cuVS KNN backends. CPU clustering is native C++/OpenMP code and does not depend on igraph. CUDA graph clustering uses native RAPIDS libcugraph for Louvain and Leiden when faissR was built against libcugraph. Random-walking currently remains CPU-only. CUDA graph clustering never calls Python and never silently falls back to CPU.
+\code{graph_cluster()} runs native faissR community detection on a KNN graph. The graph can be supplied as a precomputed \code{nn()} result or built from a matrix/data frame using any faissR nearest-neighbour backend, including FAISS and cuVS KNN backends. The CPU clustering backend is implemented in C++ and uses OpenMP when available; it does not depend on igraph. CUDA graph clustering uses native RAPIDS libcugraph for Louvain and Leiden when faissR was built against libcugraph. Random-walking currently remains CPU-only. CUDA graph clustering never calls Python and never silently falls back to CPU.
 }
 \details{
 \code{n_clusters} can be supplied directly to \code{graph_cluster()} or stored
@@ -71,7 +71,7 @@ Method descriptions:
 \itemize{
   \item \code{"random_walking"}: native CPU random-walk label-propagation/community method inspired by walktrap-style random-walk clustering and local parallel random-walk literature. CUDA random-walking is not enabled yet.
   \item \code{"louvain"}: native CPU Louvain modularity local-moving implementation, with optional RAPIDS libcugraph CUDA execution when faissR is built with cuGraph.
-  \item \code{"leiden"}: native CPU Leiden-style local moving plus refinement, with optional RAPIDS libcugraph CUDA execution when available.
+  \item \code{"leiden"}: native CPU Leiden-style local moving plus refinement to split disconnected communities, with optional RAPIDS libcugraph CUDA execution when available.
 }
 }
 \value{
