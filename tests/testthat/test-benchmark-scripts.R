@@ -245,6 +245,33 @@ test_that("NN metric benchmark recommendation ties prefer stronger recall stabil
   )
 })
 
+test_that("NN metric best-row ranking prefers recall stability before speed", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  ok <- data.frame(
+    dataset = c("A", "A", "A", "B", "B"),
+    backend = c("cpu", "cpu", "cpu", "cuda", "cuda"),
+    method = c("fast_unstable", "slow_stable", "lower_recall", "fast_missing_recall", "slow_missing_recall"),
+    metric = c("euclidean", "euclidean", "euclidean", "cosine", "cosine"),
+    k = c(50L, 50L, 50L, 15L, 15L),
+    cycle = c(1L, 1L, 1L, 1L, 1L),
+    recall_at_k = c(0.99, 0.99, 0.98, NA, NA),
+    min_recall_at_k = c(0.80, 0.95, 0.98, NA, NA),
+    elapsed_sec = c(1, 2, 0.5, 1, 2),
+    stringsAsFactors = FALSE
+  )
+
+  ranked <- env$rank_nn_metric_success(ok)
+  best <- ranked[!duplicated(paste(ranked$dataset, ranked$backend, ranked$metric, ranked$k, sep = "__")), ]
+  expect_equal(best$method, c("slow_stable", "fast_missing_recall"))
+
+  ranked_cycle <- env$rank_nn_metric_success(ok, include_cycle = TRUE)
+  best_cycle <- ranked_cycle[!duplicated(paste(ranked_cycle$dataset, ranked_cycle$backend, ranked_cycle$metric, ranked_cycle$k, ranked_cycle$cycle, sep = "__")), ]
+  expect_equal(best_cycle$method, c("slow_stable", "fast_missing_recall"))
+})
+
 test_that("NN metric benchmark canonicalizes metric aliases before preflight", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
