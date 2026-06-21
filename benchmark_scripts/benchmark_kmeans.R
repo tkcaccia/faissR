@@ -204,7 +204,7 @@ infer_kmeans_resolved_backend <- function(backend, backend_used, method) {
   NA_character_
 }
 
-result_row <- function(dataset, n, p, method, backend, centers, n_threads,
+result_row <- function(dataset, n, p, method, backend, centers, cycle, n_threads,
                        status, error = NA_character_, elapsed_sec = NA_real_,
                        peak_rss_gb = NA_real_, backend_used = NA_character_,
                        requested_backend = NA_character_,
@@ -221,6 +221,7 @@ result_row <- function(dataset, n, p, method, backend, centers, n_threads,
     method = method,
     backend = backend,
     centers = as.integer(centers),
+    cycle = as.integer(cycle),
     n_threads = as.integer(n_threads),
     status = status,
     error = error,
@@ -254,7 +255,7 @@ kmeans_expected_skip <- function(method, backend) {
 }
 
 run_one <- function(x, labels, dataset_name, method, backend, centers,
-                    n_threads, seed, timeout, max_iter, n_init, tol, tuning) {
+                    cycle, n_threads, seed, timeout, max_iter, n_init, tol, tuning) {
   started <- proc.time()[["elapsed"]]
   tryCatch({
     auto_params <- kmeans_auto_params(nrow(x), ncol(x), centers, tuning)
@@ -294,6 +295,7 @@ run_one <- function(x, labels, dataset_name, method, backend, centers,
       method = method,
       backend = backend,
       centers = centers,
+      cycle = cycle,
       n_threads = n_threads,
       status = "success",
       elapsed_sec = elapsed,
@@ -317,6 +319,7 @@ run_one <- function(x, labels, dataset_name, method, backend, centers,
       method = method,
       backend = backend,
       centers = centers,
+      cycle = cycle,
       n_threads = n_threads,
       status = "failed",
       error = conditionMessage(e),
@@ -347,6 +350,7 @@ configure_threads(n_threads)
 seed <- as_int_arg(args$seed, 1L)
 timeout <- as_int_arg(args$timeout, 600L)
 fallback_centers <- as_int_arg(args$centers, 10L)
+cycles <- as_int_arg(args$cycles, 1L)
 max_iter <- args$max_iter %||% "auto"
 n_init <- args$n_init %||% "auto"
 tol <- args$tol %||% "auto"
@@ -360,10 +364,10 @@ suppressPackageStartupMessages(library(faissR))
 
 config <- data.frame(
   key = c("data_root", "out_dir", "datasets", "methods", "backends", "centers",
-          "threads", "timeout", "max_iter", "n_init", "tol", "tuning", "seed"),
+          "threads", "timeout", "cycles", "max_iter", "n_init", "tol", "tuning", "seed"),
   value = c(data_root, out_dir, paste(datasets, collapse = ","), paste(methods, collapse = ","),
             paste(backends, collapse = ","), fallback_centers, n_threads, timeout,
-            max_iter, n_init, tol, tuning, seed),
+            cycles, max_iter, n_init, tol, tuning, seed),
   stringsAsFactors = FALSE
 )
 utils::write.csv(config, file.path(out_dir, "kmeans_benchmark_config.csv"), row.names = FALSE)
@@ -381,6 +385,7 @@ for (dataset_name in datasets) {
       method = NA_character_,
       backend = NA_character_,
       centers = fallback_centers,
+      cycle = NA_integer_,
       n_threads = n_threads,
       status = "failed",
       error = conditionMessage(loaded)
@@ -389,56 +394,61 @@ for (dataset_name in datasets) {
   }
   x <- loaded$data
   centers <- label_center_count(loaded$labels, fallback_centers)
-  for (method in methods) {
-    method_backends <- if (identical(method, "stats")) "stats" else backends
-    for (backend in method_backends) {
-      row_id <- row_id + 1L
-      skip_reason <- kmeans_expected_skip(method, backend)
-      if (!is.null(skip_reason)) {
-        auto_params <- kmeans_auto_params(nrow(x), ncol(x), centers, tuning)
-        row <- result_row(
-          dataset = dataset_name,
-          n = nrow(x),
-          p = ncol(x),
-          method = method,
-          backend = backend,
-          centers = centers,
-          n_threads = n_threads,
-          status = "expected_skip",
-          error = skip_reason,
-          max_iter = resolve_kmeans_int(max_iter, auto_params$max_iter),
-          n_init = resolve_kmeans_int(n_init, auto_params$n_init),
-          tol = resolve_kmeans_tol(tol, auto_params$tol),
-          tuning_policy = auto_params$policy,
-          requested_backend = backend,
-          resolved_backend = NA_character_,
-          expected_skip = TRUE
-        )
-      } else {
-        row <- run_one(
-          x = x,
-          labels = loaded$labels,
-          dataset_name = dataset_name,
-          method = method,
-          backend = backend,
-          centers = centers,
-          n_threads = n_threads,
-          seed = seed,
-          timeout = timeout,
-          max_iter = max_iter,
-          n_init = n_init,
-          tol = tol,
-          tuning = tuning
-        )
+  for (cycle in seq_len(cycles)) {
+    cycle_seed <- seed + (cycle - 1L) * 1000003L
+    for (method in methods) {
+      method_backends <- if (identical(method, "stats")) "stats" else backends
+      for (backend in method_backends) {
+        row_id <- row_id + 1L
+        skip_reason <- kmeans_expected_skip(method, backend)
+        if (!is.null(skip_reason)) {
+          auto_params <- kmeans_auto_params(nrow(x), ncol(x), centers, tuning)
+          row <- result_row(
+            dataset = dataset_name,
+            n = nrow(x),
+            p = ncol(x),
+            method = method,
+            backend = backend,
+            centers = centers,
+            cycle = cycle,
+            n_threads = n_threads,
+            status = "expected_skip",
+            error = skip_reason,
+            max_iter = resolve_kmeans_int(max_iter, auto_params$max_iter),
+            n_init = resolve_kmeans_int(n_init, auto_params$n_init),
+            tol = resolve_kmeans_tol(tol, auto_params$tol),
+            tuning_policy = auto_params$policy,
+            requested_backend = backend,
+            resolved_backend = NA_character_,
+            expected_skip = TRUE
+          )
+        } else {
+          row <- run_one(
+            x = x,
+            labels = loaded$labels,
+            dataset_name = dataset_name,
+            method = method,
+            backend = backend,
+            centers = centers,
+            cycle = cycle,
+            n_threads = n_threads,
+            seed = cycle_seed,
+            timeout = timeout,
+            max_iter = max_iter,
+            n_init = n_init,
+            tol = tol,
+            tuning = tuning
+          )
+        }
+        results[[row_id]] <- row
+        utils::write.csv(do.call(rbind, results), file.path(out_dir, "kmeans_benchmark_results.csv"), row.names = FALSE)
+        cat(sprintf(
+          "[%s] dataset=%s cycle=%s method=%s backend=%s centers=%s status=%s elapsed=%.3f\n",
+          format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+          dataset_name, cycle, method, backend, centers, row$status, row$elapsed_sec
+        ))
+        flush.console()
       }
-      results[[row_id]] <- row
-      utils::write.csv(do.call(rbind, results), file.path(out_dir, "kmeans_benchmark_results.csv"), row.names = FALSE)
-      cat(sprintf(
-        "[%s] dataset=%s method=%s backend=%s centers=%s status=%s elapsed=%.3f\n",
-        format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-        dataset_name, method, backend, centers, row$status, row$elapsed_sec
-      ))
-      flush.console()
     }
   }
   rm(x, loaded)
@@ -461,8 +471,8 @@ if (nrow(ok)) {
   if (nrow(fast_rows) && nrow(stats_rows)) {
     comparison <- merge(
       fast_rows,
-      stats_rows[, c("dataset", "centers", "elapsed_sec", "tot_withinss", "ari", "iter"), drop = FALSE],
-      by = c("dataset", "centers"),
+      stats_rows[, c("dataset", "centers", "cycle", "elapsed_sec", "tot_withinss", "ari", "iter"), drop = FALSE],
+      by = c("dataset", "centers", "cycle"),
       suffixes = c("_fast", "_stats"),
       all = FALSE
     )
@@ -495,10 +505,11 @@ materials <- c(
   sprintf("- Backends: `%s`", paste(backends, collapse = "`, `")),
   sprintf("- CPU thread cap: `%s`", n_threads),
   sprintf("- Timeout per combination: `%s` seconds", timeout),
+  sprintf("- Cycles: `%s`", cycles),
   sprintf("- Requested centers fallback: `%s`; labels override this when available", fallback_centers),
   "",
-  "The result table records elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, total within-cluster sum of squares, iterations, selected k-means parameters, tuning policy, and ARI against dataset labels when labels are available.",
-  "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset and number of centers, recording speedup, ARI delta, and withinss ratio.",
+  "The result table records cycle, elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, total within-cluster sum of squares, iterations, selected k-means parameters, tuning policy, and ARI against dataset labels when labels are available.",
+  "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. The `cycle` column supports repeated benchmark cycles such as `--cycles=10` for speed/ARI tuning.",
   "Unsupported CUDA or library combinations known before execution are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_kmeans.md"))

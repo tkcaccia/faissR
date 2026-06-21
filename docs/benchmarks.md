@@ -217,14 +217,15 @@ Rscript benchmark_scripts/benchmark_nn_metrics.R \
 `backend = "auto"`, `"cpu"`, and `"cuda"` against base `stats::kmeans` by
 default. It records elapsed time, peak resident memory when available, backend
 used, total within-cluster sum of squares, iterations, selected k-means
-parameters, tuning policy, and ARI against `dataset$labels` when labels are
+parameters, tuning policy, benchmark cycle, and ARI against `dataset$labels` when labels are
 available. The result table separates `requested_backend`, `resolved_backend`,
 and `backend_used`, so `"auto"` device policy and the actual implementation
 (`"faiss"`, `"cpu"`, `"cuda_faiss"`, `"cuda_cuvs"`, or `"stats"`) can be
 audited directly. When `stats` is part of the run, `kmeans_fast_vs_stats.csv` compares
 each successful `fast_kmeans()` row against `stats::kmeans` for the same
-dataset and number of centers, reporting speedup, ARI delta, and withinss
-ratio.
+dataset, cycle, and number of centers, reporting speedup, ARI delta, and
+withinss ratio. Use `--cycles=10` to repeat speed/ARI measurements without
+hand-launching the same benchmark multiple times.
 CUDA/library combinations that are known unavailable before execution are
 recorded as `status = "expected_skip"` with `expected_skip = TRUE`; unexpected
 runtime errors remain failed rows and are not replaced with CPU timings.
@@ -239,7 +240,8 @@ Rscript benchmark_scripts/benchmark_kmeans.R \
   --methods=fast_kmeans,stats \
   --backends=cpu \
   --centers=10 \
-  --threads=12
+  --threads=12 \
+  --cycles=10
 ```
 
 Example CUDA run:
@@ -252,5 +254,6 @@ Rscript benchmark_scripts/benchmark_kmeans.R \
   --methods=fast_kmeans \
   --backends=cuda \
   --centers=10 \
-  --threads=2
+  --threads=2 \
+  --cycles=10
 ```
