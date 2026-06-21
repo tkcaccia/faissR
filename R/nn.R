@@ -83,7 +83,7 @@ nn_compute <- function(data,
   n_threads <- normalize_nn_threads(n_threads)
   metric <- normalize_nn_metric(metric)
   if (!identical(metric, "euclidean")) {
-    if (backend %in% c("auto", "cpu_auto")) {
+    if (identical(backend, "auto")) {
       backend <- "cpu"
     } else if (identical(metric, "inner_product") &&
                backend %in% c("faiss_flat_l2", "faiss_flat", "cpu_faiss_flat")) {
@@ -94,7 +94,7 @@ nn_compute <- function(data,
     } else if (identical(metric, "inner_product") &&
                backend %in% c("faiss_flat_ip", "faiss_gpu_flat_ip", "cuda_faiss_flat_ip")) {
       backend <- backend
-    } else if (!backend %in% c("cpu", "hnsw", "rcpphnsw", "cpu_hnsw")) {
+    } else if (!backend %in% c("cpu", "cpu_auto", "hnsw", "rcpphnsw", "cpu_hnsw")) {
       stop(
         "`metric = \"", metric, "\"` currently supports only `backend = \"cpu\"` ",
         "or a validated metric-specific exact backend. ",
@@ -1075,10 +1075,15 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
     }
     return(backend_label)
   }
+  requested_device <- tolower(backend_label)
   device <- normalize_public_compute_backend(backend)
   method <- method_label
   if (!metric %in% c("euclidean", "inner_product") && identical(device, "cuda")) {
-    stop("CUDA nearest-neighbour methods currently support only `metric = \"euclidean\"` or `metric = \"inner_product\"`.", call. = FALSE)
+    if (identical(requested_device, "auto")) {
+      device <- "cpu"
+    } else {
+      stop("CUDA nearest-neighbour methods currently support only `metric = \"euclidean\"` or `metric = \"inner_product\"`.", call. = FALSE)
+    }
   }
   if (identical(method, "auto")) {
     if (identical(metric, "inner_product") && identical(device, "cuda")) {
@@ -1331,7 +1336,18 @@ select_cpu_auto_backend <- function(self_query,
                                     k,
                                     work_size,
                                     metric = "euclidean") {
-  if (!identical(metric, "euclidean")) return("cpu")
+  if (!identical(metric, "euclidean")) {
+    exact_work <- getOption("fastEmbedR.cpu_auto_exact_work", 2e8)
+    exact_work <- suppressWarnings(as.numeric(exact_work))
+    if (length(exact_work) != 1L || is.na(exact_work) || !is.finite(exact_work)) {
+      exact_work <- 2e8
+    }
+    if (!isTRUE(self_query) || work_size <= exact_work || n < 5000L || k < 10L || p < 2L) {
+      return("cpu")
+    }
+    if (isTRUE(requireNamespace("RcppHNSW", quietly = TRUE))) return("hnsw")
+    return("cpu")
+  }
   if (isTRUE(self_query) && should_use_grid2d_self_knn(
     self_query = TRUE,
     n = n,
@@ -3623,7 +3639,8 @@ grid_self_knn <- function(data,
 #'   automatic neighborhood size and includes the self-neighbor when `points`
 #'   is `data`.
 #' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
-#'   uses CUDA when a CUDA/cuVS backend is available and CPU otherwise.
+#'   uses CUDA when a CUDA/cuVS backend is available for the requested metric
+#'   and CPU otherwise.
 #' @param method Algorithm selector. `"auto"` chooses a shape-aware default for
 #'   the selected backend. Other values include `"exact"`, `"flat"`,
 #'   `"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"HNSW"`, `"IVF"`,
@@ -3633,9 +3650,11 @@ grid_self_knn <- function(data,
 #' @param metric Distance metric. The intentionally small public set is
 #'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
 #'   `"euclidean"` is the validated high-performance default. `"cosine"` and
-#'   `"correlation"` are implemented for exact CPU KNN and RcppHNSW. CPU
-#'   `method = "HNSW"` uses FAISS HNSW for Euclidean search when available and
-#'   RcppHNSW/hnswlib for cosine, correlation, and inner-product search.
+#'   `"correlation"` are implemented for exact CPU KNN and RcppHNSW; CPU
+#'   `method = "auto"` can select RcppHNSW/hnswlib for large non-Euclidean
+#'   self-search. CPU `method = "HNSW"` uses FAISS HNSW for Euclidean search
+#'   when available and RcppHNSW/hnswlib for cosine, correlation, and
+#'   inner-product search.
 #'   `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP
 #'   for `method = "flat"` when available. Unsupported backend combinations
 #'   fail clearly instead of returning neighbours computed under a different

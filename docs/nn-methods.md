@@ -56,12 +56,13 @@ cuGraph capabilities are available on a given machine.
 `method = "auto"` is the default. It chooses a route from the selected
 `backend` and the data shape:
 
-- `backend = "auto"` first resolves the device family: CUDA/cuVS when available,
-  CPU otherwise.
+- `backend = "auto"` first resolves the device family: CUDA/cuVS when available
+  for validated CUDA metrics, CPU otherwise.
 - CPU auto uses exact CPU for small work, native grid for large 2D/3D
   Euclidean self-search, FAISS IVF for some million-row low-dimensional cases,
-  and FAISS HNSW for large high-dimensional self-search when FAISS exposes it
-  [1-2,5,16].
+  FAISS HNSW for large high-dimensional Euclidean self-search when FAISS
+  exposes it, and RcppHNSW/hnswlib for large cosine, correlation, or
+  inner-product self-search when available [1-2,5,16].
 - CUDA auto uses CUDA grid for large 2D/3D Euclidean self-search, exact FAISS
   GPU Flat or cuVS brute force for small/medium searches, and FAISS GPU CAGRA
   for very large self-search when available [1-3,13-16].

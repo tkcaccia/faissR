@@ -85,6 +85,21 @@ test_that("candidate_knn supports CPU cosine candidates", {
   expect_equal(out$distances[1, ], c(0, 1 - 1 / sqrt(2)), tolerance = 1e-12)
 })
 
+test_that("candidate_knn supports CPU correlation candidates", {
+  x <- matrix(c(
+    1, 2, 3,
+    1, 3, 5,
+    3, 2, 1
+  ), ncol = 3, byrow = TRUE)
+  candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
+
+  out <- candidate_knn(x, candidates, k = 2L, backend = "cpu", metric = "correlation")
+
+  expect_equal(attr(out, "metric"), "correlation")
+  expect_equal(out$indices[1, ], c(1L, 2L))
+  expect_equal(out$distances[1, ], c(0, 0), tolerance = 1e-12)
+})
+
 test_that("candidate_knn supports CPU inner-product candidates", {
   x <- matrix(c(
     2, 0,

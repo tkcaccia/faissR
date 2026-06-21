@@ -107,9 +107,10 @@ selectors on simulated shapes and benchmark dataset folders.
 Policy summary:
 
 - `backend = "cpu", method = "auto"`: exact CPU for small work; CPU grid for
-  large 2D/3D self-KNN; FAISS IVF for million-row self-KNN where HNSW graph
-  construction is too memory-heavy; FAISS HNSW for large high-dimensional CPU
-  self-KNN.
+  large Euclidean 2D/3D self-KNN; FAISS IVF for million-row Euclidean self-KNN
+  where HNSW graph construction is too memory-heavy; FAISS HNSW for large
+  high-dimensional Euclidean CPU self-KNN; RcppHNSW/hnswlib for large
+  cosine/correlation/inner-product self-KNN when available.
 - `backend = "cuda", method = "auto"`: CUDA grid for large 2D/3D self-KNN;
   FAISS GPU Flat for small and medium datasets where exact GPU search is fast;
   FAISS GPU CAGRA for very large self-KNN.

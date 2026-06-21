@@ -541,6 +541,10 @@ test_that("public backend and method resolver maps device plus method", {
     "cpu_auto"
   )
   expect_equal(
+    faissR:::resolve_public_nn_backend("auto", "auto", "cosine"),
+    "cpu_auto"
+  )
+  expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "grid", "euclidean"),
     "cpu_grid"
   )
@@ -702,7 +706,18 @@ test_that("CPU auto selector is shape-aware", {
   expect_true(million_row %in% c("faiss_ivf", "hnsw", "cpu"))
   if (faiss_available()) expect_equal(million_row, "faiss_ivf")
 
-  non_euclidean <- faissR:::select_cpu_auto_backend(
+  small_non_euclidean <- faissR:::select_cpu_auto_backend(
+    self_query = TRUE,
+    n = 1000L,
+    p = 20L,
+    n_points = 1000L,
+    k = 50L,
+    work_size = 1000 * 1000 * 20,
+    metric = "cosine"
+  )
+  expect_equal(small_non_euclidean, "cpu")
+
+  large_non_euclidean <- faissR:::select_cpu_auto_backend(
     self_query = TRUE,
     n = 20000L,
     p = 100L,
@@ -711,7 +726,8 @@ test_that("CPU auto selector is shape-aware", {
     work_size = 20000 * 20000 * 100,
     metric = "cosine"
   )
-  expect_equal(non_euclidean, "cpu")
+  expect_true(large_non_euclidean %in% c("hnsw", "cpu"))
+  if (requireNamespace("RcppHNSW", quietly = TRUE)) expect_equal(large_non_euclidean, "hnsw")
 })
 
 test_that("CUDA auto selector is shape-aware", {
