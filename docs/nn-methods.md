@@ -44,7 +44,7 @@ cuGraph capabilities are available on a given machine.
 | `"grid"` | yes | native 2D/3D grid | native CUDA 2D/3D grid | native faissR implementation |
 | `"vptree"` | yes | native CPU VP-tree | unsupported | VP-tree/metric search [20] |
 | `"sparse"` | yes | native sparse CPU | unsupported | native faissR sparse implementation |
-| `"HNSW"` | approximate | FAISS HNSW | unsupported | HNSW [5,16] |
+| `"HNSW"` | approximate | FAISS HNSW for Euclidean; RcppHNSW/hnswlib for cosine, correlation, and inner product | unsupported | HNSW [5,16] |
 | `"IVF"` | approximate | FAISS IVF-Flat | FAISS GPU IVF-Flat | FAISS IVF [1-2,16] |
 | `"IVFPQ"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
 | `"NSG"` | approximate | FAISS NSG when exposed | unsupported | NSG/FAISS [16,21] |
@@ -69,6 +69,16 @@ cuGraph capabilities are available on a given machine.
 `auto` is intended as a balanced default, not a guarantee of the fastest method
 for every dataset. For benchmarking, report the resolved backend stored in the
 result attributes.
+
+## `"HNSW"` Metrics
+
+CPU `method = "HNSW"` is metric-aware. For Euclidean/L2 search, faissR uses the
+FAISS HNSW implementation when FAISS is available. For cosine, correlation, and
+inner-product search, faissR routes to RcppHNSW/hnswlib because hnswlib exposes
+cosine and IP spaces directly [5]. Correlation is implemented as cosine search
+after row centering and L2 normalization. Inner-product HNSW uses hnswlib's
+`ip` space and faissR normalizes returned distances to the package convention
+`best_dot - dot`, so the first returned neighbour has distance zero.
 
 ## `"exact"`
 

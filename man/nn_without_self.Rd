@@ -28,7 +28,8 @@ uses CUDA when available and CPU otherwise.}
 See [nn()] for method descriptions and references.}
 
 \item{metric}{Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`,
-or `"inner_product"`.}
+or `"inner_product"`. See \code{nn()} for metric/backend support details,
+including metric-aware CPU HNSW routing.}
 
 \item{tuning}{Tuning policy passed to [nn()]. `"auto"` uses the tuned default
 for the resolved method.}

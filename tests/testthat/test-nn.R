@@ -204,10 +204,16 @@ test_that("non-euclidean metrics use only validated backend paths", {
     nn(x, k = 4L, backend = "cuda_cuvs_nndescent", metric = "correlation"),
     "validated Euclidean-distance semantics only"
   )
-  expect_error(
-    nn(x, k = 4L, backend = "hnsw", metric = "inner_product"),
-    "metric"
-  )
+  if (requireNamespace("RcppHNSW", quietly = TRUE)) {
+    hnsw_ip <- nn(x, k = 4L, backend = "hnsw", metric = "inner_product", n_threads = 2L)
+    expect_equal(attr(hnsw_ip, "metric"), "inner_product")
+    expect_equal(attr(hnsw_ip, "backend"), "hnsw")
+  } else {
+    expect_error(
+      nn(x, k = 4L, backend = "hnsw", metric = "inner_product"),
+      "RcppHNSW"
+    )
+  }
 })
 
 test_that("nn chooses a practical default k and prints clearly", {
@@ -559,6 +565,22 @@ test_that("public backend and method resolver maps device plus method", {
     "faiss_ivf"
   )
   expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "HNSW", "euclidean"),
+    "faiss_hnsw"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "HNSW", "cosine"),
+    "hnsw"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "HNSW", "correlation"),
+    "hnsw"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "HNSW", "inner_product"),
+    "hnsw"
+  )
+  expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "flat", "inner_product"),
     "faiss_flat_ip"
   )
@@ -754,6 +776,36 @@ test_that("RcppHNSW backend supports correlation metric", {
   expect_equal(attr(out, "backend"), "hnsw")
   expect_equal(attr(out, "metric"), "correlation")
   expect_equal(attr(out, "approximation")$metric, "correlation")
+  expect_true(all(is.finite(out$distances)))
+})
+
+test_that("RcppHNSW backend supports inner-product metric", {
+  skip_if_not_installed("RcppHNSW")
+  x <- matrix(c(
+    2, 0,
+    0, 3,
+    1, 1,
+    -1, 0
+  ), ncol = 2, byrow = TRUE)
+
+  old_options <- options(
+    fastEmbedR.hnsw_m = 8L,
+    fastEmbedR.hnsw_ef_construction = 100L,
+    fastEmbedR.hnsw_ef = 100L
+  )
+  on.exit(options(old_options), add = TRUE)
+
+  out <- nn(x, k = 3L, backend = "hnsw", metric = "inner_product", n_threads = 2L)
+  public <- nn(x, k = 3L, backend = "cpu", method = "HNSW", metric = "inner_product", n_threads = 2L)
+
+  expect_equal(dim(out$indices), c(nrow(x), 3L))
+  expect_equal(attr(out, "backend"), "hnsw")
+  expect_equal(attr(out, "metric"), "inner_product")
+  expect_equal(attr(out, "approximation")$metric, "inner_product")
+  expect_equal(attr(public, "backend"), "hnsw")
+  expect_equal(attr(public, "metric"), "inner_product")
+  expect_equal(out$indices[1, 1L], 1L)
+  expect_equal(out$distances[, 1L], rep(0, nrow(x)), tolerance = 1e-12)
   expect_true(all(is.finite(out$distances)))
 })
 

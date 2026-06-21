@@ -99,9 +99,12 @@ Supported CUDA routes include:
 
 The validated high-performance metric is Euclidean/L2. Cosine and correlation
 are exposed for exact CPU and RcppHNSW-compatible paths. Inner-product search
-is exposed for exact native CPU scoring and FAISS Flat IP routes. Accelerator
-and approximate backends reject unsupported metric/backend combinations instead
-of returning neighbours computed under a different metric label.
+is exposed for exact native CPU scoring, FAISS Flat IP routes, and the
+RcppHNSW/hnswlib IP path. CPU `method = "HNSW"` uses FAISS HNSW for Euclidean
+search when available and RcppHNSW/hnswlib for cosine, correlation, and
+inner-product search. Accelerator and approximate backends reject unsupported
+metric/backend combinations instead of returning neighbours computed under a
+different metric label.
 
 ### Result Metadata
 

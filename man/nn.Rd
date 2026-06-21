@@ -41,11 +41,13 @@ backend/method combinations fail clearly; for example,
 \item{metric}{Distance metric. The intentionally small public set is
 `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
 `"euclidean"` is the validated high-performance default. `"cosine"` and
-`"correlation"` are implemented for exact CPU KNN and RcppHNSW; with
-`backend = "auto"` they select the exact CPU path. `"inner_product"` is
-exact on native CPU routes and maps to FAISS Flat IP for `method = "flat"`
-when available. Unsupported backend combinations fail clearly instead of
-returning neighbours computed under a different metric.}
+`"correlation"` are implemented for exact CPU KNN and RcppHNSW. CPU
+`method = "HNSW"` uses FAISS HNSW for Euclidean search when available and
+RcppHNSW/hnswlib for cosine, correlation, and inner-product search.
+`"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP
+for `method = "flat"` when available. Unsupported backend combinations
+fail clearly instead of returning neighbours computed under a different
+metric.}
 
 \item{tuning}{Tuning policy for approximate GPU methods. `"auto"` uses the
 tuned default for the resolved method, `"cache"` reuses/stores pilot

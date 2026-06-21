@@ -94,9 +94,7 @@ nn_compute <- function(data,
     } else if (identical(metric, "inner_product") &&
                backend %in% c("faiss_flat_ip", "faiss_gpu_flat_ip", "cuda_faiss_flat_ip")) {
       backend <- backend
-    } else if (!backend %in% c("cpu", "hnsw", "rcpphnsw", "cpu_hnsw") ||
-               (identical(metric, "inner_product") &&
-                backend %in% c("hnsw", "rcpphnsw", "cpu_hnsw"))) {
+    } else if (!backend %in% c("cpu", "hnsw", "rcpphnsw", "cpu_hnsw")) {
       stop(
         "`metric = \"", metric, "\"` currently supports only `backend = \"cpu\"` ",
         "or a validated metric-specific exact backend. ",
@@ -1097,7 +1095,7 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
       grid = "cpu_grid",
       vptree = "cpu_vptree",
       sparse = "cpu_sparse",
-      hnsw = "faiss_hnsw",
+      hnsw = if (identical(metric, "euclidean")) "faiss_hnsw" else "hnsw",
       ivf = "faiss_ivf",
       ivfpq = "faiss_ivfpq",
       nsg = "faiss_nsg",
@@ -2241,7 +2239,8 @@ rcpphnsw_knn <- function(data,
     metric,
     euclidean = "euclidean",
     cosine = "cosine",
-    correlation = "cosine"
+    correlation = "cosine",
+    inner_product = "ip"
   )
   n_threads <- normalize_nn_threads(n_threads)
   params <- rcpphnsw_params(k)
@@ -2288,6 +2287,9 @@ rcpphnsw_knn <- function(data,
   out <- list(indices = as.matrix(raw$idx), distances = as.matrix(raw$dist))
   storage.mode(out$indices) <- "integer"
   storage.mode(out$distances) <- "double"
+  if (identical(metric, "inner_product") && ncol(out$distances) > 0L) {
+    out$distances <- out$distances - out$distances[, 1L]
+  }
   if (isTRUE(self_query) && isTRUE(exclude_self)) {
     out <- drop_self_knn_result(out, k)
   }
@@ -3631,11 +3633,13 @@ grid_self_knn <- function(data,
 #' @param metric Distance metric. The intentionally small public set is
 #'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
 #'   `"euclidean"` is the validated high-performance default. `"cosine"` and
-#'   `"correlation"` are implemented for exact CPU KNN and RcppHNSW; with
-#'   `backend = "auto"` they select the exact CPU path. `"inner_product"` is
-#'   exact on native CPU routes and maps to FAISS Flat IP for `method = "flat"`
-#'   when available. Unsupported backend combinations fail clearly instead of
-#'   returning neighbours computed under a different metric.
+#'   `"correlation"` are implemented for exact CPU KNN and RcppHNSW. CPU
+#'   `method = "HNSW"` uses FAISS HNSW for Euclidean search when available and
+#'   RcppHNSW/hnswlib for cosine, correlation, and inner-product search.
+#'   `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP
+#'   for `method = "flat"` when available. Unsupported backend combinations
+#'   fail clearly instead of returning neighbours computed under a different
+#'   metric.
 #' @param tuning Tuning policy for approximate GPU methods. `"auto"` uses the
 #'   tuned default for the resolved method, `"cache"` reuses/stores pilot
 #'   results, `"pilot"` tunes for this call without persisting, `"fixed"` uses
@@ -3694,7 +3698,8 @@ nn <- function(data,
 #' @param method Algorithm selector passed through the same resolver as [nn()].
 #'   See [nn()] for method descriptions and references.
 #' @param metric Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`,
-#'   or `"inner_product"`.
+#'   or `"inner_product"`. See [nn()] for metric/backend support details,
+#'   including metric-aware CPU HNSW routing.
 #' @param tuning Tuning policy passed to [nn()]. `"auto"` uses the tuned default
 #'   for the resolved method.
 #' @param n_threads Number of CPU worker threads used by CPU backends.
