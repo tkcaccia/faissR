@@ -51,10 +51,11 @@ FAISS CPU/GPU IVF-Flat, FAISS CPU/GPU IVFPQ, FAISS CPU HNSW,
 and RcppHNSW. FAISS approximate IP-capable routes use row L2 normalization
 for cosine and row centering plus L2 normalization for correlation before
 inner-product search; distances are returned as `1 - similarity`.
-CPU `method = "auto"` can use FAISS Flat for larger
-exact non-Euclidean query workloads and FAISS HNSW or RcppHNSW/hnswlib for
-large non-Euclidean self-search. CPU `method = "hnsw"` uses FAISS HNSW for
-all metrics when available and RcppHNSW/hnswlib when FAISS is unavailable.
+CPU `method = "auto"` can use FAISS Flat for larger exact non-Euclidean
+query workloads, FAISS HNSW for large non-Euclidean self-search when FAISS
+is available, and RcppHNSW/hnswlib only as the fallback when FAISS is
+unavailable. CPU `method = "hnsw"` uses FAISS HNSW for all metrics when
+available and RcppHNSW/hnswlib when FAISS is unavailable.
 `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
 FAISS IVF-Flat/IVFPQ IP, and FAISS HNSW IP where available.
 Unsupported backend combinations fail clearly instead of returning neighbours
