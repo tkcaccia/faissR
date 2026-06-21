@@ -41,3 +41,18 @@ test_that("NN methods documentation metric table agrees with nn_capabilities", {
 
   expect_equal(documented, supported)
 })
+
+test_that("usage API graph_cluster signature shows the live default method", {
+  docs_file <- test_path("../../docs/usage-api.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  lines <- readLines(docs_file, warn = FALSE)
+  signature_line <- grep("^graph_cluster\\(graph, method =", lines, value = TRUE)
+  expect_length(signature_line, 1L)
+
+  documented_method <- sub('^.*method = "([^"]+)".*$', "\\1", signature_line)
+  live_method <- eval(formals(graph_cluster)$method, envir = baseenv())[[1L]]
+  expect_equal(documented_method, live_method)
+})

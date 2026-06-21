@@ -149,7 +149,7 @@ policy.
 ## `graph_cluster()`
 
 ```r
-graph_cluster(graph, method = "leiden", backend = "auto",
+graph_cluster(graph, method = "random_walking", backend = "auto",
               k = 50L, graph_backend = "auto", graph_method = "auto",
               metric = "euclidean", tuning = "auto", weight = "auto",
               mutual = FALSE, prune = 0, n_threads = NULL,
