@@ -64,7 +64,7 @@ rather than silently falling back to Euclidean search.
 
 | Method | CPU metrics | CUDA metrics | Notes |
 | --- | --- | --- | --- |
-| `"auto"` | euclidean, cosine, correlation, inner_product | euclidean, inner_product | `backend = "auto"` may choose CPU for cosine/correlation when CUDA does not have a validated approximate route. |
+| `"auto"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA auto uses FAISS GPU Flat for cosine/correlation/IP and shape-aware CUDA routes for Euclidean. |
 | `"exact"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA cosine/correlation/IP use FAISS GPU Flat variants when available. |
 | `"flat"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS Flat L2/IP plus normalized Flat IP transforms. |
 | `"bruteforce"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA Euclidean can use cuVS brute force; non-Euclidean routes use FAISS GPU Flat. |
@@ -102,8 +102,10 @@ expected skips, not algorithmic failures.
   the large non-Euclidean self-search fallback when FAISS is unavailable
   [1-2,5,16].
 - CUDA auto uses CUDA grid for large 2D/3D Euclidean self-search, exact FAISS
-  GPU Flat or cuVS brute force for small/medium searches, and FAISS GPU CAGRA
-  for very large self-search when available [1-3,13-16].
+  GPU Flat or cuVS brute force for small/medium Euclidean searches, FAISS GPU
+  CAGRA for very large Euclidean self-search when available, and FAISS GPU
+  Flat IP routes for cosine, correlation, and inner-product searches
+  [1-3,13-16].
 
 `auto` is intended as a balanced default, not a guarantee of the fastest method
 for every dataset. For benchmarking, report the resolved backend stored in the

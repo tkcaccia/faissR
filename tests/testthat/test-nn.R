@@ -95,6 +95,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_equal(anyDuplicated(caps[c("method", "backend", "metric")]), 0L)
 
   expect_true(caps$supported[caps$method == "flat" & caps$metric == "correlation" & caps$backend == "cuda"])
+  expect_true(all(caps$supported[caps$method == "auto" & caps$backend == "cuda"]))
   expect_true(caps$supported[caps$method == "sparse" & caps$metric == "inner_product" & caps$backend == "cpu"])
   expect_true(all(!caps$supported[caps$method == "cagra" & caps$backend == "cpu"]))
   expect_true(all(!caps$supported[caps$method == "hnsw" & caps$backend == "cuda"]))
@@ -752,6 +753,18 @@ test_that("public backend and method resolver maps device plus method", {
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "auto", "euclidean"),
     "cuda_auto"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "auto", "cosine"),
+    "faiss_gpu_flat_cosine"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "auto", "correlation"),
+    "faiss_gpu_flat_correlation"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "auto", "inner_product"),
+    "faiss_gpu_flat_ip"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "grid", "euclidean"),

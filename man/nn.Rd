@@ -88,7 +88,9 @@ Method descriptions:
   \item `"auto"`: shape-aware selector for the selected backend. CPU auto
   uses exact, grid, FAISS IVF, or FAISS HNSW depending on data shape and
   size. CUDA auto uses CUDA grid, exact FAISS GPU Flat/cuVS brute force, or
-  FAISS GPU CAGRA when appropriate [1-3,5,13-15].
+  FAISS GPU CAGRA for Euclidean searches when appropriate, and FAISS GPU Flat
+  IP routes for cosine, correlation, and inner-product searches
+  [1-3,5,13-15].
   \item `"exact"`: exact nearest-neighbour search. CPU uses faissR's native
   exact route; CUDA uses FAISS GPU Flat or cuVS brute force when available
   [1-3,16].
