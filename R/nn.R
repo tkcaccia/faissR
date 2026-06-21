@@ -131,8 +131,10 @@ nn_compute <- function(data,
       backend <- "cpu_vptree"
     } else if (!backend %in% c("cpu", "cpu_auto", "hnsw", "rcpphnsw", "cpu_hnsw",
                                "faiss_hnsw", "faiss_ivf", "faiss_ivf_flat",
+                               "faiss_ivfpq", "faiss_nsg", "faiss_nndescent",
                                "cpu_faiss_index_ivf", "faiss_gpu_ivf",
                                "faiss_gpu_ivf_flat", "cuda_faiss_ivf_flat",
+                               "faiss_gpu_ivfpq", "cuda_faiss_ivfpq",
                                "cpu_sparse", "sparse", "sparse_cpu")) {
       stop(
         "`metric = \"", metric, "\"` currently supports only `backend = \"cpu\"` ",
@@ -469,6 +471,21 @@ nn_compute <- function(data,
     }
     params <- faiss_ivf_params(nrow(data), k)
     pq <- faiss_pq_params(ncol(data))
+    if (metric %in% c("cosine", "correlation")) {
+      return(faiss_ivfpq_normalized_metric_result(
+        data = data,
+        points = points,
+        k = k,
+        self_query = self_query,
+        exclude_self = isTRUE(exclude_self),
+        metric = metric,
+        backend = "faiss_ivfpq",
+        accelerator = NULL,
+        n_threads = n_threads,
+        params = params,
+        pq = pq
+      ))
+    }
     out <- nn_faiss_ivfpq_cpp(
       data,
       points,
@@ -477,14 +494,17 @@ nn_compute <- function(data,
       as.integer(params$nprobe),
       as.integer(pq$m),
       as.integer(pq$nbits),
+      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
+      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
       isTRUE(exclude_self),
       as.integer(n_threads)
     )
-    result <- finish_nn_result(out, "faiss_ivfpq", k, self_query, exact = FALSE)
+    result <- finish_nn_result(out, "faiss_ivfpq", k, self_query, exact = FALSE, metric = metric)
     attr(result, "approximation") <- list(
       strategy = "faiss_IndexIVFPQ",
       backend = "faiss_ivfpq",
       library = "faiss",
+      metric = metric,
       nlist = as.integer(out$nlist),
       nprobe = as.integer(out$nprobe),
       requested_nlist = as.integer(params$requested_nlist),
@@ -570,6 +590,21 @@ nn_compute <- function(data,
     }
     params <- faiss_ivf_params(nrow(data), k)
     pq <- faiss_pq_params(ncol(data))
+    if (metric %in% c("cosine", "correlation")) {
+      return(faiss_ivfpq_normalized_metric_result(
+        data = data,
+        points = points,
+        k = k,
+        self_query = self_query,
+        exclude_self = isTRUE(exclude_self),
+        metric = metric,
+        backend = "faiss_gpu_ivfpq",
+        accelerator = "cuda",
+        n_threads = n_threads,
+        params = params,
+        pq = pq
+      ))
+    }
     out <- nn_faiss_gpu_ivfpq_cpp(
       data,
       points,
@@ -578,14 +613,17 @@ nn_compute <- function(data,
       as.integer(params$nprobe),
       as.integer(pq$m),
       as.integer(pq$nbits),
+      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
+      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
       isTRUE(exclude_self)
     )
-    result <- finish_nn_result(out, "faiss_gpu_ivfpq", k, self_query, exact = FALSE)
+    result <- finish_nn_result(out, "faiss_gpu_ivfpq", k, self_query, exact = FALSE, metric = metric)
     attr(result, "approximation") <- list(
       strategy = "faiss_gpu_IndexIVFPQ_cuVS",
       backend = "faiss_gpu_ivfpq",
       library = "faiss",
       accelerator = "cuda",
+      metric = metric,
       role = "explicit_memory_pressure_backend",
       default_candidate = FALSE,
       nlist = as.integer(out$nlist),
@@ -709,6 +747,13 @@ nn_compute <- function(data,
         call. = FALSE
       )
     }
+    if (!identical(metric, "euclidean")) {
+      stop(
+        "`backend = \"faiss_nsg\"` is currently validated only for ",
+        "`metric = \"euclidean\"` in this FAISS build.",
+        call. = FALSE
+      )
+    }
     params <- faiss_nsg_params(k)
     out <- nn_faiss_nsg_cpp(
       data,
@@ -717,14 +762,17 @@ nn_compute <- function(data,
       as.integer(params$r),
       as.integer(params$search_l),
       as.integer(params$build_type),
+      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
+      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
       isTRUE(exclude_self),
       as.integer(n_threads)
     )
-    result <- finish_nn_result(out, "faiss_nsg", k, self_query, exact = FALSE)
+    result <- finish_nn_result(out, "faiss_nsg", k, self_query, exact = FALSE, metric = metric)
     attr(result, "approximation") <- list(
       strategy = "faiss_IndexNSGFlat",
       backend = "faiss_nsg",
       library = "faiss",
+      metric = metric,
       r = as.integer(out$r),
       search_l = as.integer(out$search_l),
       build_type = as.integer(out$build_type),
@@ -746,6 +794,13 @@ nn_compute <- function(data,
         call. = FALSE
       )
     }
+    if (!identical(metric, "euclidean")) {
+      stop(
+        "`backend = \"faiss_nndescent\"` is currently validated only for ",
+        "`metric = \"euclidean\"` in this FAISS build.",
+        call. = FALSE
+      )
+    }
     params <- faiss_nndescent_params(k)
     out <- nn_faiss_nndescent_cpp(
       data,
@@ -754,14 +809,17 @@ nn_compute <- function(data,
       as.integer(params$graph_k),
       as.integer(params$n_iter),
       as.integer(params$search_l),
+      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
+      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
       isTRUE(exclude_self),
       as.integer(n_threads)
     )
-    result <- finish_nn_result(out, "faiss_nndescent", k, self_query, exact = FALSE)
+    result <- finish_nn_result(out, "faiss_nndescent", k, self_query, exact = FALSE, metric = metric)
     attr(result, "approximation") <- list(
       strategy = "faiss_IndexNNDescentFlat",
       backend = "faiss_nndescent",
       library = "faiss",
+      metric = metric,
       graph_k = as.integer(out$graph_k),
       n_iter = as.integer(out$n_iter),
       search_l = as.integer(out$search_l),
@@ -1362,7 +1420,7 @@ nn_capability_row <- function(method, backend, metric) {
       "HNSW is CPU-only in the public API."
     }
   } else if (method %in% c("ivf", "ivfpq")) {
-    supported <- if (identical(method, "ivf")) all_metrics else euclidean
+    supported <- all_metrics
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) {
       if (identical(method, "ivf")) "FAISS CPU IVF-Flat" else "FAISS CPU IVF-PQ"
@@ -1371,16 +1429,18 @@ nn_capability_row <- function(method, backend, metric) {
     }
     notes <- if (identical(method, "ivf")) {
       "FAISS IVF-Flat supports Euclidean/L2 and raw inner product; cosine/correlation use row transforms followed by IVF inner-product search."
-    } else if (supported) {
-      "Validated for Euclidean/L2 search."
     } else {
-      "FAISS IVFPQ routes are currently validated only for Euclidean/L2 search."
+      "FAISS IVFPQ supports Euclidean/L2 and raw inner product; cosine/correlation use row transforms followed by IVFPQ inner-product search."
     }
   } else if (identical(method, "nsg")) {
     supported <- identical(backend, "cpu") && euclidean
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) "FAISS CPU NSG" else NA_character_
-    notes <- if (identical(backend, "cpu")) "Validated for Euclidean/L2 search." else "NSG is CPU-only in the public API."
+    notes <- if (identical(backend, "cpu")) {
+      "Validated for Euclidean/L2 search. Inner-product NSG construction is disabled because this FAISS build can abort during graph construction."
+    } else {
+      "NSG is CPU-only in the public API."
+    }
   } else if (identical(method, "nndescent")) {
     supported <- euclidean
     exact <- if (supported) FALSE else NA
@@ -1474,15 +1534,15 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
     return("cpu_auto")
   }
   if (!metric %in% c("euclidean", "inner_product") && identical(device, "cuda") &&
-      !method %in% c("exact", "bruteforce", "flat", "ivf")) {
+      !method %in% c("exact", "bruteforce", "flat", "ivf", "ivfpq")) {
     if (identical(requested_device, "auto")) {
       device <- "cpu"
     } else {
       stop(
         "CUDA nearest-neighbour approximate methods currently support only ",
         "`metric = \"euclidean\"` or `metric = \"inner_product\"`. ",
-        "Use `method = \"flat\"`, `\"ivf\"`, `\"exact\"`, or `\"bruteforce\"` ",
-        "for validated CUDA cosine/correlation search.",
+        "Use `method = \"flat\"`, `\"ivf\"`, `\"ivfpq\"`, `\"exact\"`, ",
+        "or `\"bruteforce\"` for validated CUDA cosine/correlation search.",
         call. = FALSE
       )
     }
@@ -1494,10 +1554,9 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
     if (identical(method, "vptree") && identical(metric, "inner_product")) {
       stop("CPU `method = \"vptree\"` does not support `metric = \"inner_product\"`.", call. = FALSE)
     }
-    if (method %in% c("ivfpq", "nsg", "nndescent") && !identical(metric, "euclidean")) {
+    if (method %in% c("nsg", "nndescent") && !identical(metric, "euclidean")) {
       stop(
-        "CPU `method = \"", public_nn_method_label(method),
-        "\"` is currently validated only for `metric = \"euclidean\"`.",
+        "CPU `method = \"", method, "\"` is currently validated only for `metric = \"euclidean\"`.",
         call. = FALSE
       )
     }
@@ -1532,8 +1591,8 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
         method %in% c("exact", "bruteforce", "flat")) {
       return("faiss_gpu_flat_ip")
     }
-    if (identical(metric, "inner_product") && !identical(method, "ivf")) {
-      stop("CUDA `metric = \"inner_product\"` currently supports `method = \"exact\"`, `\"bruteforce\"`, `\"flat\"`, or `\"ivf\"`.", call. = FALSE)
+    if (identical(metric, "inner_product") && !method %in% c("ivf", "ivfpq")) {
+      stop("CUDA `metric = \"inner_product\"` currently supports `method = \"exact\"`, `\"bruteforce\"`, `\"flat\"`, `\"ivf\"`, or `\"ivfpq\"`.", call. = FALSE)
     }
     switch(
       method,
@@ -2186,6 +2245,98 @@ faiss_ivf_normalized_metric_result <- function(data,
     tuning = tuning_metadata
   )
   if (is.null(accelerator)) attr(result, "approximation")$accelerator <- NULL
+  result
+}
+
+faiss_ivfpq_normalized_metric_result <- function(data,
+                                                 points,
+                                                 k,
+                                                 self_query,
+                                                 exclude_self,
+                                                 metric,
+                                                 backend,
+                                                 accelerator = NULL,
+                                                 n_threads = NULL,
+                                                 params,
+                                                 pq) {
+  metric <- normalize_nn_metric(metric)
+  data_metric <- if (identical(metric, "correlation")) {
+    row_center_l2_normalize(data)
+  } else {
+    row_l2_normalize(data)
+  }
+  points_metric <- if (isTRUE(self_query)) {
+    data_metric
+  } else if (identical(metric, "correlation")) {
+    row_center_l2_normalize(points)
+  } else {
+    row_l2_normalize(points)
+  }
+  out <- if (identical(accelerator, "cuda")) {
+    nn_faiss_gpu_ivfpq_cpp(
+      data_metric,
+      points_metric,
+      as.integer(k),
+      as.integer(params$nlist),
+      as.integer(params$nprobe),
+      as.integer(pq$m),
+      as.integer(pq$nbits),
+      "inner_product",
+      "one_minus_inner_product",
+      isTRUE(exclude_self)
+    )
+  } else {
+    nn_faiss_ivfpq_cpp(
+      data_metric,
+      points_metric,
+      as.integer(k),
+      as.integer(params$nlist),
+      as.integer(params$nprobe),
+      as.integer(pq$m),
+      as.integer(pq$nbits),
+      "inner_product",
+      "one_minus_inner_product",
+      isTRUE(exclude_self),
+      as.integer(normalize_nn_threads(n_threads))
+    )
+  }
+  result <- finish_nn_result(out, backend, k, self_query, exact = FALSE, metric = metric)
+  data_zero <- rowSums(data_metric * data_metric) <= 0
+  points_zero <- if (isTRUE(self_query)) data_zero else rowSums(points_metric * points_metric) <= 0
+  result <- restore_zero_zero_normalized_ip_distances(result, data_zero, points_zero)
+  result <- sort_knn_rows_by_distance_index(result)
+  attr(result, "approximation") <- list(
+    strategy = if (identical(accelerator, "cuda")) {
+      "faiss_gpu_IndexIVFPQ_cuVS"
+    } else {
+      "faiss_IndexIVFPQ"
+    },
+    backend = backend,
+    library = "faiss",
+    accelerator = accelerator,
+    metric = metric,
+    transform = if (identical(metric, "correlation")) {
+      "row_center_l2_normalize_then_IndexIVFPQ_METRIC_INNER_PRODUCT"
+    } else {
+      "row_l2_normalize_then_IndexIVFPQ_METRIC_INNER_PRODUCT"
+    },
+    role = if (identical(accelerator, "cuda")) "explicit_memory_pressure_backend" else NULL,
+    default_candidate = if (identical(accelerator, "cuda")) FALSE else NULL,
+    nlist = as.integer(out$nlist),
+    nprobe = as.integer(out$nprobe),
+    requested_nlist = as.integer(params$requested_nlist),
+    requested_nprobe = as.integer(params$requested_nprobe),
+    ivf_parameters_adjusted = !identical(as.integer(params$requested_nlist), as.integer(out$nlist)) ||
+      !identical(as.integer(params$requested_nprobe), as.integer(out$nprobe)),
+    pq_m = as.integer(out$pq_m),
+    pq_nbits = as.integer(out$pq_nbits),
+    requested_pq_m = as.integer(out$requested_pq_m),
+    requested_pq_nbits = as.integer(out$requested_pq_nbits),
+    pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted)
+  )
+  if (is.null(accelerator)) attr(result, "approximation")$accelerator <- NULL
+  if (is.null(attr(result, "approximation")$role)) attr(result, "approximation")$role <- NULL
+  if (is.null(attr(result, "approximation")$default_candidate)) attr(result, "approximation")$default_candidate <- NULL
   result
 }
 
@@ -2869,6 +3020,8 @@ faiss_self_knn <- function(data,
       as.integer(params$r),
       as.integer(params$search_l),
       as.integer(params$build_type),
+      "euclidean",
+      "euclidean",
       TRUE,
       as.integer(n_threads)
     )
@@ -2899,6 +3052,8 @@ faiss_self_knn <- function(data,
       as.integer(params$graph_k),
       as.integer(params$n_iter),
       as.integer(params$search_l),
+      "euclidean",
+      "euclidean",
       TRUE,
       as.integer(n_threads)
     )
@@ -2925,6 +3080,8 @@ faiss_self_knn <- function(data,
     as.integer(k),
     as.integer(params$nlist),
     as.integer(params$nprobe),
+    "euclidean",
+    "euclidean",
     TRUE,
     as.integer(n_threads)
   )
@@ -4334,9 +4491,10 @@ grid_self_knn <- function(data,
 #'   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
 #'   cosine/correlation routes on CPU and FAISS GPU [1-2,16].
 #'   \item `"ivfpq"`: FAISS inverted-file index with product quantization,
-#'   mainly for compressed-memory approximate search [1-2,6,16].
+#'   mainly for compressed-memory approximate search. It supports L2, raw IP,
+#'   and normalized-IP cosine/correlation routes on CPU and FAISS GPU [1-2,6,16].
 #'   \item `"nsg"`: FAISS CPU NSG graph-search index when exposed by the linked
-#'   FAISS build [16].
+#'   FAISS build. It is currently validated for Euclidean/L2 only [16].
 #'   \item `"nndescent"`: NN-descent approximate graph construction via FAISS
 #'   on CPU or cuVS on CUDA [3-4,16].
 #'   \item `"cagra"`: CUDA-only graph-search method via FAISS GPU CAGRA/cuVS
@@ -4394,17 +4552,18 @@ grid_self_knn <- function(data,
 #'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
 #'   `"euclidean"` is the validated high-performance default. `"cosine"` and
 #'   `"correlation"` are implemented for exact CPU KNN, FAISS CPU/GPU Flat,
-#'   FAISS CPU/GPU IVF-Flat, FAISS HNSW, and RcppHNSW. FAISS Flat, IVF-Flat,
-#'   and HNSW use row L2 normalization for cosine and row centering plus L2
-#'   normalization for correlation before inner-product search; distances are
-#'   returned as `1 - similarity`. CPU `method = "auto"` can use FAISS Flat for larger
+#'   FAISS CPU/GPU IVF-Flat, FAISS CPU/GPU IVFPQ, FAISS CPU HNSW,
+#'   and RcppHNSW. FAISS approximate IP-capable routes use row L2 normalization
+#'   for cosine and row centering plus L2 normalization for correlation before
+#'   inner-product search; distances are returned as `1 - similarity`.
+#'   CPU `method = "auto"` can use FAISS Flat for larger
 #'   exact non-Euclidean query workloads and FAISS HNSW or RcppHNSW/hnswlib for
 #'   large non-Euclidean self-search. CPU `method = "hnsw"` uses FAISS HNSW for
 #'   all metrics when available and RcppHNSW/hnswlib when FAISS is unavailable.
 #'   `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
-#'   FAISS IVF-Flat IP, and FAISS HNSW IP where available. Unsupported backend
-#'   combinations fail clearly instead of returning neighbours computed under a
-#'   different metric.
+#'   FAISS IVF-Flat/IVFPQ IP, and FAISS HNSW IP where available.
+#'   Unsupported backend combinations fail clearly instead of returning neighbours
+#'   computed under a different metric.
 #' @param tuning Tuning policy for approximate GPU methods. `"auto"` uses the
 #'   tuned default for the resolved method, `"cache"` reuses/stores pilot
 #'   results, `"pilot"` tunes for this call without persisting, `"fixed"` uses

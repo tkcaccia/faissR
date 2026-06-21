@@ -50,6 +50,8 @@ List faiss_ivfpq_knn_impl(NumericMatrix data,
                           int nprobe,
                           int pq_m,
                           int pq_nbits,
+                          std::string metric,
+                          std::string distance_output,
                           bool exclude_self,
                           int n_threads);
 List faiss_hnsw_knn_impl(NumericMatrix data,
@@ -68,6 +70,8 @@ List faiss_nsg_knn_impl(NumericMatrix data,
                         int r,
                         int search_l,
                         int build_type,
+                        std::string metric,
+                        std::string distance_output,
                         bool exclude_self,
                         int n_threads);
 List faiss_nndescent_knn_impl(NumericMatrix data,
@@ -76,6 +80,8 @@ List faiss_nndescent_knn_impl(NumericMatrix data,
                               int graph_k,
                               int n_iter,
                               int search_l,
+                              std::string metric,
+                              std::string distance_output,
                               bool exclude_self,
                               int n_threads);
 List faiss_gpu_ivf_flat_knn_impl(NumericMatrix data,
@@ -93,6 +99,8 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
                               int nprobe,
                               int pq_m,
                               int pq_nbits,
+                              std::string metric,
+                              std::string distance_output,
                               bool exclude_self);
 List faiss_gpu_cagra_knn_impl(NumericMatrix data,
                               NumericMatrix points,
@@ -207,10 +215,13 @@ List nn_faiss_ivfpq_cpp(NumericMatrix data,
                         int nprobe,
                         int pq_m,
                         int pq_nbits,
+                        std::string metric,
+                        std::string distance_output,
                         bool exclude_self,
                         int n_threads) {
   return faiss_ivfpq_knn_impl(
-    data, points, k, nlist, nprobe, pq_m, pq_nbits, exclude_self, n_threads
+    data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output,
+    exclude_self, n_threads
   );
 }
 
@@ -238,10 +249,13 @@ List nn_faiss_nsg_cpp(NumericMatrix data,
                       int r,
                       int search_l,
                       int build_type,
+                      std::string metric,
+                      std::string distance_output,
                       bool exclude_self,
                       int n_threads) {
   return faiss_nsg_knn_impl(
-    data, points, k, r, search_l, build_type, exclude_self, n_threads
+    data, points, k, r, search_l, build_type, metric, distance_output,
+    exclude_self, n_threads
   );
 }
 
@@ -252,10 +266,13 @@ List nn_faiss_nndescent_cpp(NumericMatrix data,
                             int graph_k,
                             int n_iter,
                             int search_l,
+                            std::string metric,
+                            std::string distance_output,
                             bool exclude_self,
                             int n_threads) {
   return faiss_nndescent_knn_impl(
-    data, points, k, graph_k, n_iter, search_l, exclude_self, n_threads
+    data, points, k, graph_k, n_iter, search_l, metric, distance_output,
+    exclude_self, n_threads
   );
 }
 
@@ -281,9 +298,12 @@ List nn_faiss_gpu_ivfpq_cpp(NumericMatrix data,
                             int nprobe,
                             int pq_m,
                             int pq_nbits,
+                            std::string metric,
+                            std::string distance_output,
                             bool exclude_self) {
   return faiss_gpu_ivfpq_knn_impl(
-    data, points, k, nlist, nprobe, pq_m, pq_nbits, exclude_self
+    data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output,
+    exclude_self
   );
 }
 

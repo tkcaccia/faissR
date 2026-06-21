@@ -81,6 +81,8 @@ List faiss_ivfpq_knn_impl(NumericMatrix,
                           int,
                           int,
                           int,
+                          std::string,
+                          std::string,
                           bool,
                           int) {
   Rcpp::stop(
@@ -111,6 +113,8 @@ List faiss_nsg_knn_impl(NumericMatrix,
                         int,
                         int,
                         int,
+                        std::string,
+                        std::string,
                         bool,
                         int) {
   Rcpp::stop(
@@ -125,6 +129,8 @@ List faiss_nndescent_knn_impl(NumericMatrix,
                               int,
                               int,
                               int,
+                              std::string,
+                              std::string,
                               bool,
                               int) {
   Rcpp::stop(
@@ -155,6 +161,8 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix,
                               int,
                               int,
                               int,
+                              std::string,
+                              std::string,
                               bool) {
   Rcpp::stop(
     "FAISS GPU IVF-PQ backend is not available. Reinstall faissR with "

@@ -104,7 +104,17 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(all(!caps$supported[caps$method == "cagra" & caps$backend == "cpu"]))
   expect_true(all(!caps$supported[caps$method == "hnsw" & caps$backend == "cuda"]))
   expect_true(all(caps$supported[caps$method == "ivf"]))
-  expect_true(all(!caps$supported[caps$method == "ivfpq" & caps$metric != "euclidean"]))
+  expect_true(all(caps$supported[caps$method == "ivfpq"]))
+  expect_true(all(caps$supported[
+    caps$method == "nsg" & caps$backend == "cpu" & caps$metric == "euclidean"
+  ]))
+  expect_true(all(!caps$supported[
+    caps$method == "nsg" & caps$backend == "cpu" & caps$metric != "euclidean"
+  ]))
+  expect_true(all(!caps$supported[caps$method == "nsg" & caps$backend == "cuda"]))
+  expect_true(all(!caps$supported[
+    caps$method == "nndescent" & caps$metric != "euclidean"
+  ]))
   expect_true(all(!caps$supported[caps$method == "vptree" & caps$metric == "inner_product"]))
 })
 
@@ -936,6 +946,26 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "ivf", "correlation"),
     "faiss_gpu_ivf_flat"
   )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "ivfpq", "inner_product"),
+    "faiss_ivfpq"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "ivfpq", "cosine"),
+    "faiss_gpu_ivfpq"
+  )
+  expect_error(
+    faissR:::resolve_public_nn_backend("cpu", "nsg", "correlation"),
+    "nsg"
+  )
+  expect_error(
+    faissR:::resolve_public_nn_backend("cpu", "nndescent", "inner_product"),
+    "nndescent"
+  )
+  expect_error(
+    faissR:::resolve_public_nn_backend("cuda", "nndescent", "correlation"),
+    "approximate methods"
+  )
   expect_error(
     faissR:::resolve_public_nn_backend("cuda", "cagra", "inner_product"),
     "inner_product"
@@ -1277,6 +1307,22 @@ test_that("real FAISS IVF backend records approximate index metadata", {
       expect_true(all(is.finite(metric_out$distances)))
     }
 
+    for (metric in c("cosine", "correlation", "inner_product")) {
+      metric_out <- internal_nn(
+        x,
+        k = k + 1L,
+        backend = "faiss_ivfpq",
+        metric = metric,
+        n_threads = 2L
+      )
+      expect_equal(dim(metric_out$indices), c(nrow(x), k + 1L))
+      expect_equal(attr(metric_out, "backend"), "faiss_ivfpq")
+      expect_equal(attr(metric_out, "metric"), metric)
+      expect_false(isTRUE(attr(metric_out, "exact")))
+      expect_equal(attr(metric_out, "approximation")$metric, metric)
+      expect_true(all(is.finite(metric_out$distances)))
+    }
+
     options(
       faissR.faiss_nlist = 9999L,
       faissR.faiss_nprobe = 9999L
@@ -1334,6 +1380,29 @@ test_that("FAISS graph backends report actual and requested parameters", {
     expect_equal(nnd_approx$n_iter, 20L)
     expect_equal(nnd_approx$requested_n_iter, 20L)
     expect_false(nnd_approx$nndescent_parameters_adjusted)
+
+    for (metric in c("cosine", "correlation", "inner_product")) {
+      expect_error(
+        internal_nn_without_self(
+          x,
+          k = 5L,
+          backend = "faiss_nsg",
+          metric = metric,
+          n_threads = 2L
+        ),
+        "euclidean"
+      )
+      expect_error(
+        internal_nn_without_self(
+          x,
+          k = 5L,
+          backend = "faiss_nndescent",
+          metric = metric,
+          n_threads = 2L
+        ),
+        "euclidean"
+      )
+    }
   } else {
     expect_error(internal_nn(x, k = 10L, backend = "faiss_nsg"), "FAISS")
     expect_error(internal_nn(x, k = 10L, backend = "faiss_nndescent"), "FAISS")

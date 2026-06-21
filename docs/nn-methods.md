@@ -73,9 +73,9 @@ rather than silently falling back to Euclidean search.
 | `"sparse"` | euclidean, cosine, correlation, inner_product | unsupported | Exact sparse CPU route for `Matrix` inputs. |
 | `"hnsw"` | euclidean, cosine, correlation, inner_product | unsupported | FAISS HNSW is used for all metrics when available; cosine/correlation use normalized inner-product search. |
 | `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
-| `"ivfpq"` | euclidean | euclidean | Product-quantized IVF routes are validated for L2. |
-| `"nsg"` | euclidean | unsupported | CPU FAISS NSG route. |
-| `"nndescent"` | euclidean | euclidean | CPU FAISS NNDescent and CUDA cuVS NN-descent routes. |
+| `"ivfpq"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVFPQ supports L2/IP; cosine/correlation use normalized IVFPQ IP. |
+| `"nsg"` | euclidean | unsupported | CPU FAISS NSG route validated for L2 search. |
+| `"nndescent"` | euclidean | euclidean | FAISS/cuVS NN-descent routes are validated for Euclidean/L2 only. |
 | `"cagra"` | unsupported | euclidean | CUDA-only FAISS/cuVS graph search. |
 
 Programmatic form:
@@ -241,6 +241,9 @@ useful for large datasets where exhaustive search is too expensive.
 - On CUDA, it maps to FAISS GPU IVF-PQ.
 - It compresses vectors using product quantization and searches compressed
   codes.
+- `metric = "inner_product"` uses FAISS IVFPQ with `METRIC_INNER_PRODUCT`.
+- `metric = "cosine"` and `"correlation"` use the same normalized
+  inner-product transforms as IVF-Flat.
 
 IVFPQ is a memory-pressure method. It can be fast and memory-efficient, but
 recall can drop substantially. Treat it as explicit opt-in when memory matters,
@@ -255,6 +258,9 @@ navigating graph with a sparse, search-friendly structure [16,21].
 - It is CPU-only in faissR.
 - Availability depends on the linked FAISS build.
 - It is kept as an optional graph-search baseline.
+- It is currently validated for Euclidean/L2 only; non-Euclidean NSG requests
+  fail before graph construction to avoid FAISS build-time aborts observed for
+  inner-product NSG construction.
 
 When using NSG, check whether the backend returns the requested number of
 neighbours and measure recall on a representative subset.
@@ -267,6 +273,9 @@ construction [4].
 - On CPU, faissR uses FAISS NNDescent when exposed by the linked FAISS build
   [16].
 - On CUDA, faissR maps to direct RAPIDS cuVS NN-descent when available [3].
+- Both routes are currently validated for Euclidean/L2 only. Some FAISS builds
+  expose non-L2 NNDescent constructors, but faissR does not advertise those
+  routes until they are reliable across supported builds.
 
 NN-descent can be fast for building approximate KNN graphs, but recall and
 runtime depend strongly on graph degree, iterations, data shape, and backend.

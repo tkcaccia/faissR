@@ -47,17 +47,18 @@ for example,
 `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
 `"euclidean"` is the validated high-performance default. `"cosine"` and
 `"correlation"` are implemented for exact CPU KNN, FAISS CPU/GPU Flat,
-FAISS CPU/GPU IVF-Flat, FAISS HNSW, and RcppHNSW. FAISS Flat, IVF-Flat,
-and HNSW use row L2 normalization for cosine and row centering plus L2
-normalization for correlation before inner-product search; distances are
-returned as `1 - similarity`. CPU `method = "auto"` can use FAISS Flat for larger
+FAISS CPU/GPU IVF-Flat, FAISS CPU/GPU IVFPQ, FAISS CPU HNSW,
+and RcppHNSW. FAISS approximate IP-capable routes use row L2 normalization
+for cosine and row centering plus L2 normalization for correlation before
+inner-product search; distances are returned as `1 - similarity`.
+CPU `method = "auto"` can use FAISS Flat for larger
 exact non-Euclidean query workloads and FAISS HNSW or RcppHNSW/hnswlib for
 large non-Euclidean self-search. CPU `method = "hnsw"` uses FAISS HNSW for
 all metrics when available and RcppHNSW/hnswlib when FAISS is unavailable.
 `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
-FAISS IVF-Flat IP, and FAISS HNSW IP where available. Unsupported backend
-combinations fail clearly instead of returning neighbours computed under a
-different metric.}
+FAISS IVF-Flat/IVFPQ IP, and FAISS HNSW IP where available.
+Unsupported backend combinations fail clearly instead of returning neighbours
+computed under a different metric.}
 
 \item{tuning}{Tuning policy for approximate GPU methods. `"auto"` uses the
 tuned default for the resolved method, `"cache"` reuses/stores pilot
@@ -115,9 +116,10 @@ Method descriptions:
   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
   cosine/correlation routes on CPU and FAISS GPU [1-2,16].
   \item `"ivfpq"`: FAISS inverted-file index with product quantization,
-  mainly for compressed-memory approximate search [1-2,6,16].
+  mainly for compressed-memory approximate search. It supports L2, raw IP,
+  and normalized-IP cosine/correlation routes on CPU and FAISS GPU [1-2,6,16].
   \item `"nsg"`: FAISS CPU NSG graph-search index when exposed by the linked
-  FAISS build [16].
+  FAISS build. It is currently validated for Euclidean/L2 only [16].
   \item `"nndescent"`: NN-descent approximate graph construction via FAISS
   on CPU or cuVS on CUDA [3-4,16].
   \item `"cagra"`: CUDA-only graph-search method via FAISS GPU CAGRA/cuVS

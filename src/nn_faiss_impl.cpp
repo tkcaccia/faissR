@@ -506,6 +506,8 @@ List faiss_ivfpq_knn_impl(NumericMatrix data,
                           int nprobe,
                           int pq_m,
                           int pq_nbits,
+                          std::string metric,
+                          std::string distance_output,
                           bool exclude_self,
                           int n_threads) {
   const int n_data = data.nrow();
@@ -520,12 +522,28 @@ List faiss_ivfpq_knn_impl(NumericMatrix data,
   while (pq_nbits > 4 && (1 << pq_nbits) > n_data) {
     --pq_nbits;
   }
-  faiss::IndexFlatL2 quantizer(n_features);
-  faiss::IndexIVFPQ index(&quantizer, n_features, nlist, pq_m, pq_nbits, faiss::METRIC_L2);
+  faiss::MetricType faiss_metric = faiss::METRIC_L2;
+  std::unique_ptr<faiss::Index> quantizer;
+  if (metric == "inner_product") {
+    faiss_metric = faiss::METRIC_INNER_PRODUCT;
+    quantizer.reset(new faiss::IndexFlatIP(n_features));
+  } else if (metric == "euclidean") {
+    quantizer.reset(new faiss::IndexFlatL2(n_features));
+  } else {
+    Rcpp::stop("FAISS IVFPQ supports metric = 'euclidean' or 'inner_product'");
+  }
+  const DistanceOutput output = parse_distance_output(distance_output, "IVFPQ");
+  faiss::IndexIVFPQ index(
+    quantizer.get(), n_features, nlist, pq_m, pq_nbits, faiss_metric
+  );
   index.nprobe = nprobe;
   List out = search_faiss_index(
     index, data, points, k, exclude_self, n_threads,
-    "IndexIVFPQ", false, DistanceOutput::L2Squared, nlist, nprobe
+    metric == "inner_product" ? "IndexIVFPQIP" : "IndexIVFPQ",
+    false,
+    output,
+    nlist,
+    nprobe
   );
   out["pq_m"] = pq_m;
   out["pq_nbits"] = pq_nbits;
@@ -584,6 +602,8 @@ List faiss_nsg_knn_impl(NumericMatrix data,
                         int r,
                         int search_l,
                         int build_type,
+                        std::string metric,
+                        std::string distance_output,
                         bool exclude_self,
                         int n_threads) {
   const int n_data = data.nrow();
@@ -597,6 +617,10 @@ List faiss_nsg_knn_impl(NumericMatrix data,
   r = clamp_positive(r, 32, n_data);
   search_l = std::max(search_l, k);
   build_type = build_type == 1 ? 1 : 0;
+  if (metric != "euclidean") {
+    Rcpp::stop("FAISS NSG is currently validated only for metric = 'euclidean'");
+  }
+  const DistanceOutput output = parse_distance_output(distance_output, "NSG");
   faiss::IndexNSGFlat index(n_features, r, faiss::METRIC_L2);
   index.nsg.search_L = search_l;
   index.build_type = static_cast<char>(build_type);
@@ -604,7 +628,9 @@ List faiss_nsg_knn_impl(NumericMatrix data,
   index.GK = gk;
   List out = search_faiss_index(
     index, data, points, k, exclude_self, n_threads,
-    "IndexNSGFlat", false, DistanceOutput::L2Squared,
+    "IndexNSGFlat",
+    false,
+    output,
     NA_INTEGER, NA_INTEGER, r, search_l
   );
   out["r"] = r;
@@ -625,6 +651,8 @@ List faiss_nndescent_knn_impl(NumericMatrix data,
                               int graph_k,
                               int n_iter,
                               int search_l,
+                              std::string metric,
+                              std::string distance_output,
                               bool exclude_self,
                               int n_threads) {
   const int n_data = data.nrow();
@@ -638,12 +666,18 @@ List faiss_nndescent_knn_impl(NumericMatrix data,
   graph_k = std::max(graph_k, k);
   n_iter = std::max(1, n_iter);
   search_l = std::max(search_l, k);
+  if (metric != "euclidean") {
+    Rcpp::stop("FAISS NNDescent is currently validated only for metric = 'euclidean'");
+  }
+  const DistanceOutput output = parse_distance_output(distance_output, "NNDescent");
   faiss::IndexNNDescentFlat index(n_features, graph_k, faiss::METRIC_L2);
   index.nndescent.iter = n_iter;
   index.nndescent.search_L = search_l;
   List out = search_faiss_index(
     index, data, points, k, exclude_self, n_threads,
-    "IndexNNDescentFlat", false, DistanceOutput::L2Squared,
+    "IndexNNDescentFlat",
+    false,
+    output,
     NA_INTEGER, NA_INTEGER, graph_k, search_l
   );
   out["graph_k"] = graph_k;
@@ -717,6 +751,8 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
                               int nprobe,
                               int pq_m,
                               int pq_nbits,
+                              std::string metric,
+                              std::string distance_output,
                               bool exclude_self) {
 #ifdef FASTEMBEDR_HAS_FAISS_GPU
   const int n_data = data.nrow();
@@ -725,6 +761,13 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
   const int requested_pq_nbits = pq_nbits;
   nlist = std::max(1, std::min(nlist, n_data));
   nprobe = std::max(1, std::min(nprobe, nlist));
+  faiss::MetricType faiss_metric = faiss::METRIC_L2;
+  if (metric == "inner_product") {
+    faiss_metric = faiss::METRIC_INNER_PRODUCT;
+  } else if (metric != "euclidean") {
+    Rcpp::stop("FAISS GPU IVFPQ supports metric = 'euclidean' or 'inner_product'");
+  }
+  const DistanceOutput output = parse_distance_output(distance_output, "GPU IVFPQ");
   pq_m = clamp_positive(pq_m, 8, n_features);
   while (pq_m > 1 && (n_features % pq_m) != 0) --pq_m;
   if (n_data < 256) {
@@ -750,12 +793,14 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
     nlist,
     pq_m,
     pq_nbits,
-    faiss::METRIC_L2,
+    faiss_metric,
     config
   );
   List out = search_faiss_index(
     index, data, points, k, exclude_self, 1,
-    "GpuIndexIVFPQ_cuVS", false, DistanceOutput::L2Squared,
+    metric == "inner_product" ? "GpuIndexIVFPQIP_cuVS" : "GpuIndexIVFPQ_cuVS",
+    false,
+    output,
     nlist, nprobe, NA_INTEGER, NA_INTEGER, true
   );
   out["pq_m"] = pq_m;
@@ -772,6 +817,8 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
   (void)nprobe;
   (void)pq_m;
   (void)pq_nbits;
+  (void)metric;
+  (void)distance_output;
   (void)exclude_self;
   Rcpp::stop(
     "FAISS GPU IVF-PQ backend is not available in this build. "
