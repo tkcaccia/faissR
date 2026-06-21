@@ -1259,6 +1259,14 @@ test_that("public tuning policy normalizes and can override defaults", {
     self_query = TRUE,
     tuning = "off"
   ))
+  if (!faiss_gpu_available()) {
+    expect_false(faissR:::faiss_gpu_ivf_should_tune(
+      matrix(0, nrow = 30000L, ncol = 2L),
+      k = 50L,
+      self_query = TRUE,
+      tuning = "auto"
+    ))
+  }
   expect_equal(faissR:::cuvs_cagra_tune_policy("auto"), "fixed")
   expect_equal(faissR:::cuvs_cagra_tune_policy("cache"), "cache")
 })

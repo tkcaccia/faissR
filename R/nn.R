@@ -3866,7 +3866,7 @@ faiss_gpu_ivf_should_tune <- function(data, k, self_query, tuning = "auto") {
   tuning <- normalize_nn_tuning(tuning)
   if (identical(tuning, "off")) return(FALSE)
   if (!isTRUE(self_query)) return(FALSE)
-  if (!isTRUE(faiss_available())) return(FALSE)
+  if (!isTRUE(faiss_gpu_available())) return(FALSE)
   if (isTRUE(faiss_ivf_manual_params())) return(FALSE)
   enabled <- faissr_option("faiss_gpu_ivf_tune", TRUE)
   if (!isTRUE(enabled)) return(FALSE)
