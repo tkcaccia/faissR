@@ -194,9 +194,21 @@ resolve_kmeans_tol <- function(x, fallback) {
   if (length(out) != 1L || is.na(out) || !is.finite(out) || out < 0) as.numeric(fallback) else out
 }
 
+infer_kmeans_resolved_backend <- function(backend, backend_used, method) {
+  if (identical(method, "stats")) return("stats")
+  backend <- tolower(as.character(backend)[1L])
+  backend_used <- tolower(as.character(backend_used)[1L])
+  if (backend %in% c("cpu", "cuda")) return(backend)
+  if (backend_used %in% c("cuda_faiss", "cuda_cuvs")) return("cuda")
+  if (backend_used %in% c("faiss", "cpu")) return("cpu")
+  NA_character_
+}
+
 result_row <- function(dataset, n, p, method, backend, centers, n_threads,
                        status, error = NA_character_, elapsed_sec = NA_real_,
                        peak_rss_gb = NA_real_, backend_used = NA_character_,
+                       requested_backend = NA_character_,
+                       resolved_backend = NA_character_,
                        iter = NA_integer_, tot_withinss = NA_real_,
                        ari = NA_real_, max_iter = NA_integer_,
                        n_init = NA_integer_, tol = NA_real_,
@@ -215,6 +227,8 @@ result_row <- function(dataset, n, p, method, backend, centers, n_threads,
     elapsed_sec = elapsed_sec,
     peak_rss_gb = peak_rss_gb,
     backend_used = backend_used,
+    requested_backend = requested_backend,
+    resolved_backend = resolved_backend,
     iter = as.integer(iter),
     tot_withinss = tot_withinss,
     ari = ari,
@@ -272,6 +286,7 @@ run_one <- function(x, labels, dataset_name, method, backend, centers,
     }, timeout)
     elapsed <- proc.time()[["elapsed"]] - started
     params <- fit$parameters %||% list()
+    backend_used <- fit$backend %||% if (identical(method, "stats")) "stats" else NA_character_
     result_row(
       dataset = dataset_name,
       n = nrow(x),
@@ -283,7 +298,9 @@ run_one <- function(x, labels, dataset_name, method, backend, centers,
       status = "success",
       elapsed_sec = elapsed,
       peak_rss_gb = read_peak_rss_gb(),
-      backend_used = fit$backend %||% if (identical(method, "stats")) "stats" else NA_character_,
+      backend_used = backend_used,
+      requested_backend = params$requested_backend %||% if (identical(method, "stats")) "stats" else backend,
+      resolved_backend = params$resolved_backend %||% infer_kmeans_resolved_backend(backend, backend_used, method),
       iter = fit$iter %||% NA_integer_,
       tot_withinss = fit$tot.withinss %||% NA_real_,
       ari = benchmark_adjusted_rand_index(labels, fit$cluster),
@@ -304,7 +321,9 @@ run_one <- function(x, labels, dataset_name, method, backend, centers,
       status = "failed",
       error = conditionMessage(e),
       elapsed_sec = proc.time()[["elapsed"]] - started,
-      peak_rss_gb = read_peak_rss_gb()
+      peak_rss_gb = read_peak_rss_gb(),
+      requested_backend = if (identical(method, "stats")) "stats" else backend,
+      resolved_backend = if (identical(method, "stats")) "stats" else NA_character_
     )
   })
 }
@@ -391,6 +410,8 @@ for (dataset_name in datasets) {
           n_init = resolve_kmeans_int(n_init, auto_params$n_init),
           tol = resolve_kmeans_tol(tol, auto_params$tol),
           tuning_policy = auto_params$policy,
+          requested_backend = backend,
+          resolved_backend = NA_character_,
           expected_skip = TRUE
         )
       } else {
@@ -476,7 +497,7 @@ materials <- c(
   sprintf("- Timeout per combination: `%s` seconds", timeout),
   sprintf("- Requested centers fallback: `%s`; labels override this when available", fallback_centers),
   "",
-  "The result table records elapsed time, peak resident memory when available, backend used, total within-cluster sum of squares, iterations, selected k-means parameters, tuning policy, and ARI against dataset labels when labels are available.",
+  "The result table records elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, total within-cluster sum of squares, iterations, selected k-means parameters, tuning policy, and ARI against dataset labels when labels are available.",
   "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset and number of centers, recording speedup, ARI delta, and withinss ratio.",
   "Unsupported CUDA or library combinations known before execution are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
 )

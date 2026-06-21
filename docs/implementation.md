@@ -309,7 +309,10 @@ once the graph edges have been built.
 FAISS/native numeric paths. CUDA builds try FAISS GPU k-means and direct cuVS
 k-means when those libraries are available [7-8]. Results include cluster
 assignments, centres, within-cluster sums of squares, cluster sizes, iteration
-count, selected backend, and run parameters.
+count, selected backend, and run parameters. The top-level `backend` field is
+the implementation that actually ran, while `parameters$requested_backend` and
+`parameters$resolved_backend` preserve the public backend request and resolved
+device policy.
 
 With `tuning = "auto"`, omitted `max_iter`, `n_init`, and `tol` values are
 chosen by deterministic shape rules based on `nrow(data)`, `ncol(data)`, and

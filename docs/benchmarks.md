@@ -210,7 +210,10 @@ Rscript benchmark_scripts/benchmark_nn_metrics.R \
 default. It records elapsed time, peak resident memory when available, backend
 used, total within-cluster sum of squares, iterations, selected k-means
 parameters, tuning policy, and ARI against `dataset$labels` when labels are
-available. When `stats` is part of the run, `kmeans_fast_vs_stats.csv` compares
+available. The result table separates `requested_backend`, `resolved_backend`,
+and `backend_used`, so `"auto"` device policy and the actual implementation
+(`"faiss"`, `"cpu"`, `"cuda_faiss"`, `"cuda_cuvs"`, or `"stats"`) can be
+audited directly. When `stats` is part of the run, `kmeans_fast_vs_stats.csv` compares
 each successful `fast_kmeans()` row against `stats::kmeans` for the same
 dataset and number of centers, reporting speedup, ARI delta, and withinss
 ratio.
