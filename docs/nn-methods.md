@@ -50,7 +50,7 @@ as a data frame for benchmark preflight checks.
 | `"ivf"` | approximate | FAISS IVF-Flat | FAISS GPU IVF-Flat | FAISS IVF [1-2,16] |
 | `"ivfpq"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
 | `"nsg"` | approximate | FAISS NSG when exposed | unsupported | NSG/FAISS [16,21] |
-| `"nndescent"` | approximate | FAISS NNDescent when exposed | cuVS NN-descent | NN-descent/cuVS [3-4,16] |
+| `"nndescent"` | approximate | native CPU NNDescent | cuVS NN-descent | NN-descent/cuVS [3-4,16] |
 | `"cagra"` | approximate | unsupported | FAISS GPU CAGRA or cuVS CAGRA | FAISS/cuVS CAGRA [3,13-16] |
 
 ## Metric Support Matrix
@@ -74,9 +74,9 @@ rather than silently falling back to Euclidean search.
 | `"hnsw"` | euclidean, cosine, correlation, inner_product | unsupported | FAISS HNSW is used for all metrics when available; cosine/correlation use normalized inner-product search. |
 | `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
 | `"ivfpq"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVFPQ supports L2/IP; cosine/correlation use normalized IVFPQ IP. |
-| `"nsg"` | euclidean | unsupported | CPU FAISS NSG route validated for L2 search. |
-| `"nndescent"` | euclidean | euclidean | FAISS/cuVS NN-descent routes are validated for Euclidean/L2 only. |
-| `"cagra"` | unsupported | euclidean | CUDA-only FAISS/cuVS graph search. |
+| `"nsg"` | euclidean, cosine, correlation | unsupported | CPU FAISS NSG uses normalized Euclidean graph search for cosine/correlation; raw inner product is not exposed. |
+| `"nndescent"` | euclidean | euclidean | FAISS/cuVS NN-descent is kept Euclidean-only because linked FAISS builds can abort during non-Euclidean graph construction. |
+| `"cagra"` | unsupported | euclidean, cosine, correlation | CUDA-only FAISS/cuVS graph search; cosine/correlation use normalized Euclidean graph search. |
 
 Programmatic form:
 
@@ -258,9 +258,11 @@ navigating graph with a sparse, search-friendly structure [16,21].
 - It is CPU-only in faissR.
 - Availability depends on the linked FAISS build.
 - It is kept as an optional graph-search baseline.
-- It is currently validated for Euclidean/L2 only; non-Euclidean NSG requests
-  fail before graph construction to avoid FAISS build-time aborts observed for
-  inner-product NSG construction.
+- It supports Euclidean/L2 directly. Cosine and correlation use row
+  normalization, or row centering plus normalization, followed by Euclidean NSG
+  search; returned distances are converted back to `1 - similarity`.
+- Raw inner-product NSG is not exposed because some linked FAISS graph builders
+  can abort during non-L2 construction.
 
 When using NSG, check whether the backend returns the requested number of
 neighbours and measure recall on a representative subset.
@@ -270,12 +272,13 @@ neighbours and measure recall on a representative subset.
 `method = "nndescent"` requests NN-descent style approximate KNN graph
 construction [4].
 
-- On CPU, faissR uses FAISS NNDescent when exposed by the linked FAISS build
-  [16].
+- On CPU, faissR uses its native CPU NNDescent implementation by default.
 - On CUDA, faissR maps to direct RAPIDS cuVS NN-descent when available [3].
-- Both routes are currently validated for Euclidean/L2 only. Some FAISS builds
-  expose non-L2 NNDescent constructors, but faissR does not advertise those
-  routes until they are reliable across supported builds.
+- Public NNDescent routes are currently kept Euclidean/L2-only.
+- FAISS NNDescent is disabled by default because linked FAISS builds could
+  abort the R process during graph construction. The explicit FAISS backend is
+  available only behind `options(faissR.enable_faiss_nndescent = TRUE)` for
+  local experiments.
 
 NN-descent can be fast for building approximate KNN graphs, but recall and
 runtime depend strongly on graph degree, iterations, data shape, and backend.
@@ -291,6 +294,9 @@ RAPIDS cuVS CAGRA when available [3,13-16].
 - `backend = "cpu", method = "cagra"` errors.
 - `backend = "cuda", method = "cagra"` requires CUDA plus FAISS GPU CAGRA or
   cuVS CAGRA.
+- `metric = "cosine"` and `metric = "correlation"` use normalized Euclidean
+  graph search and return `1 - similarity` distances.
+- Raw inner-product CAGRA is not exposed.
 - Direct cuVS CAGRA is guarded by pilot recall tuning.
 
 CAGRA is an important CUDA graph-search method. In faissR, it should be treated

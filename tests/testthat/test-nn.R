@@ -108,8 +108,11 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(all(caps$supported[
     caps$method == "nsg" & caps$backend == "cpu" & caps$metric == "euclidean"
   ]))
+  expect_true(all(caps$supported[
+    caps$method == "nsg" & caps$backend == "cpu" & caps$metric %in% c("cosine", "correlation")
+  ]))
   expect_true(all(!caps$supported[
-    caps$method == "nsg" & caps$backend == "cpu" & caps$metric != "euclidean"
+    caps$method == "nsg" & caps$backend == "cpu" & caps$metric == "inner_product"
   ]))
   expect_true(all(!caps$supported[caps$method == "nsg" & caps$backend == "cuda"]))
   expect_true(all(!caps$supported[
@@ -392,7 +395,7 @@ test_that("non-euclidean metrics use only validated backend paths", {
   }
   expect_error(
     internal_nn(x, k = 4L, backend = "cuda_cuvs_nndescent", metric = "correlation"),
-    "validated Euclidean-distance semantics only"
+    "validated only"
   )
   if (requireNamespace("RcppHNSW", quietly = TRUE)) {
     hnsw_ip <- internal_nn(x, k = 4L, backend = "hnsw", metric = "inner_product", n_threads = 2L)
@@ -954,9 +957,9 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "ivfpq", "cosine"),
     "faiss_gpu_ivfpq"
   )
-  expect_error(
+  expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "nsg", "correlation"),
-    "nsg"
+    "faiss_nsg"
   )
   expect_error(
     faissR:::resolve_public_nn_backend("cpu", "nndescent", "inner_product"),
@@ -964,15 +967,15 @@ test_that("public backend and method resolver maps device plus method", {
   )
   expect_error(
     faissR:::resolve_public_nn_backend("cuda", "nndescent", "correlation"),
-    "approximate methods"
+    "nndescent"
   )
   expect_error(
     faissR:::resolve_public_nn_backend("cuda", "cagra", "inner_product"),
     "inner_product"
   )
-  expect_error(
-    faissR:::resolve_public_nn_backend("cuda", "cagra", "cosine"),
-    "approximate methods"
+  expect_true(
+    faissR:::resolve_public_nn_backend("cuda", "cagra", "cosine") %in%
+    c("faiss_gpu_cagra", "cuda_cuvs_cagra")
   )
   expect_error(
     faissR:::resolve_public_nn_backend("cpu", "faiss_hnsw", "euclidean"),
@@ -1349,7 +1352,7 @@ test_that("FAISS graph backends reject too-small training sets clearly", {
     )
     expect_error(
       internal_nn_without_self(x, k = 10L, backend = "faiss_nndescent", n_threads = 2L),
-      "more than 100 training rows"
+      "disabled"
     )
   } else {
     expect_error(internal_nn(x, k = 10L, backend = "faiss_nsg"), "FAISS")
@@ -1372,37 +1375,47 @@ test_that("FAISS graph backends report actual and requested parameters", {
     expect_equal(nsg_approx$gk, max(64L, 2L * 10L, 2L * nsg_approx$r))
     expect_false(nsg_approx$nsg_parameters_adjusted)
 
-    nnd <- internal_nn_without_self(x, k = 10L, backend = "faiss_nndescent", n_threads = 2L)
+    nnd <- nn_without_self(x, k = 10L, backend = "cpu", method = "nndescent", n_threads = 2L)
     nnd_approx <- attr(nnd, "approximation")
     expect_equal(dim(nnd$indices), c(nrow(x), 10L))
-    expect_equal(nnd_approx$graph_k, 100L)
-    expect_equal(nnd_approx$requested_graph_k, 100L)
-    expect_equal(nnd_approx$n_iter, 20L)
-    expect_equal(nnd_approx$requested_n_iter, 20L)
-    expect_false(nnd_approx$nndescent_parameters_adjusted)
+    expect_equal(attr(nnd, "backend"), "cpu_nndescent")
+    expect_equal(nnd_approx$strategy, "native_cpu_nndescent")
+    expect_equal(nnd_approx$backend, "cpu")
 
-    for (metric in c("cosine", "correlation", "inner_product")) {
-      expect_error(
-        internal_nn_without_self(
-          x,
-          k = 5L,
-          backend = "faiss_nsg",
-          metric = metric,
-          n_threads = 2L
-        ),
-        "euclidean"
+    for (metric in c("cosine", "correlation")) {
+      nsg_metric <- internal_nn_without_self(
+        x,
+        k = 5L,
+        backend = "faiss_nsg",
+        metric = metric,
+        n_threads = 2L
       )
+      expect_equal(dim(nsg_metric$indices), c(nrow(x), 5L))
+      expect_equal(attr(nsg_metric, "metric"), metric)
+      expect_match(attr(nsg_metric, "approximation")$transform, "normalize")
       expect_error(
         internal_nn_without_self(
           x,
           k = 5L,
-          backend = "faiss_nndescent",
+          backend = "cpu_nndescent",
           metric = metric,
           n_threads = 2L
         ),
         "euclidean"
       )
     }
+    expect_error(
+      internal_nn_without_self(x, k = 5L, backend = "faiss_nsg", metric = "inner_product", n_threads = 2L),
+      "inner_product"
+    )
+    expect_error(
+      internal_nn_without_self(x, k = 5L, backend = "faiss_nndescent", metric = "inner_product", n_threads = 2L),
+      "disabled"
+    )
+    expect_error(
+      internal_nn_without_self(x, k = 5L, backend = "faiss_nndescent", metric = "euclidean", n_threads = 2L),
+      "disabled"
+    )
   } else {
     expect_error(internal_nn(x, k = 10L, backend = "faiss_nsg"), "FAISS")
     expect_error(internal_nn(x, k = 10L, backend = "faiss_nndescent"), "FAISS")
