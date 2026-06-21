@@ -140,7 +140,8 @@ not built with the required CUDA/cuGraph support.
 `benchmark_scripts/benchmark_nn_metrics.R` is a faissR-only nearest-neighbour
 metric matrix. It runs public `nn()` combinations over:
 
-- backends: `"cpu"`, `"cuda"`, or any subset passed with `--backends`;
+- backends: `"auto"`, `"cpu"`, `"cuda"`, or any subset passed with
+  `--backends`;
 - methods: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`,
   `"vptree"`, `"HNSW"`, `"IVF"`, `"IVFPQ"`, `"NSG"`, `"NNDescent"`, and
   `"CAGRA"`;
@@ -151,6 +152,9 @@ metric matrix. It runs public `nn()` combinations over:
 Unsupported combinations are preflighted with `faissR::nn_capabilities()` and
 saved as `status = "expected_skip"` rows with `expected_skip = TRUE`; the
 capability table used for the run is saved as `nn_metric_capabilities.csv`.
+For `backend = "auto"`, the preflight checks CPU support and CUDA/cuVS runtime
+availability before deciding whether the combination should run or be recorded
+as an expected skip.
 Unexpected runtime errors remain ordinary failed rows. Recall is computed
 against exact CPU references when feasible. Small datasets use a full exact
 self-KNN reference; larger datasets use a deterministic sample of query rows

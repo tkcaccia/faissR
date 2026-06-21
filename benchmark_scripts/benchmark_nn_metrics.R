@@ -266,15 +266,59 @@ capability_row <- function(caps, backend, method, metric) {
   hit[1L, , drop = FALSE]
 }
 
-is_expected_skip <- function(caps, backend, method, metric) {
-  if (!tolower(as.character(backend)[1L]) %in% c("cpu", "cuda")) return(NULL)
+capability_status <- function(caps, backend, method, metric) {
   cap <- capability_row(caps, backend, method, metric)
   if (is.null(cap)) {
-    return(list(skip = TRUE, notes = "Combination is not listed in faissR::nn_capabilities()."))
+    return(list(
+      listed = FALSE,
+      supported = FALSE,
+      notes = sprintf(
+        "%s/%s/%s is not listed in faissR::nn_capabilities().",
+        backend, method, metric
+      )
+    ))
   }
-  if (!isTRUE(cap$supported[[1L]])) {
-    return(list(skip = TRUE, notes = cap$notes[[1L]] %||% "Unsupported by faissR::nn_capabilities()."))
+  list(
+    listed = TRUE,
+    supported = isTRUE(cap$supported[[1L]]),
+    notes = cap$notes[[1L]] %||% "Unsupported by faissR::nn_capabilities()."
+  )
+}
+
+auto_expected_skip <- function(caps, method, metric) {
+  cpu <- capability_status(caps, "cpu", method, metric)
+  cuda <- capability_status(caps, "cuda", method, metric)
+  cuda_runtime <- isTRUE(faissR::cuda_available()) || isTRUE(faissR::cuvs_available())
+  if (isTRUE(cpu$supported) || (cuda_runtime && isTRUE(cuda$supported))) {
+    return(NULL)
   }
+  if (!cuda_runtime && isTRUE(cuda$supported) && !isTRUE(cpu$supported)) {
+    return(list(
+      skip = TRUE,
+      notes = paste(
+        "backend = \"auto\" would need CUDA/cuVS for this method/metric,",
+        "but CUDA/cuVS is unavailable in the current runtime.",
+        sprintf("CPU: %s CUDA: %s", cpu$notes, cuda$notes)
+      )
+    ))
+  }
+  list(
+    skip = TRUE,
+    notes = paste(
+      "backend = \"auto\" has no supported route for this method/metric in the current runtime.",
+      sprintf("CPU: %s CUDA: %s", cpu$notes, cuda$notes)
+    )
+  )
+}
+
+is_expected_skip <- function(caps, backend, method, metric) {
+  backend <- tolower(as.character(backend)[1L])
+  if (identical(backend, "auto")) {
+    return(auto_expected_skip(caps, method, metric))
+  }
+  if (!backend %in% c("cpu", "cuda")) return(NULL)
+  cap <- capability_status(caps, backend, method, metric)
+  if (!isTRUE(cap$supported)) return(list(skip = TRUE, notes = cap$notes))
   NULL
 }
 
@@ -370,7 +414,7 @@ if (length(recall_threshold) != 1L || is.na(recall_threshold) || !is.finite(reca
 }
 
 datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "SimulatedUniform2D", "SimulatedUniform3D"), collapse = ","))
-backends <- split_arg(args$backends, "cpu,cuda")
+backends <- split_arg(args$backends, "auto,cpu,cuda")
 methods <- split_arg(args$methods, "auto,exact,flat,bruteforce,grid,vptree,HNSW,IVF,IVFPQ,NSG,NNDescent,CAGRA")
 metrics <- split_arg(args$metrics, "euclidean,cosine,correlation,inner_product")
 k_values <- as_int_vec_arg(split_arg(args$k_values, "5,10,15,50,100"), c(5L, 10L, 15L, 50L, 100L))
