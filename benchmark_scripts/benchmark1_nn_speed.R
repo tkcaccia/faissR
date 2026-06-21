@@ -105,6 +105,17 @@ write_csv_one <- function(path, row) {
   utils::write.csv(row, path, row.names = FALSE)
 }
 
+read_result_csvs <- function(files) {
+  rows <- lapply(files, read.csv, stringsAsFactors = FALSE)
+  cols <- unique(unlist(lapply(rows, names), use.names = FALSE))
+  rows <- lapply(rows, function(x) {
+    missing <- setdiff(cols, names(x))
+    for (col in missing) x[[col]] <- NA
+    x[, cols, drop = FALSE]
+  })
+  do.call(rbind, rows)
+}
+
 read_peak_rss_gb <- function() {
   status <- "/proc/self/status"
   if (!file.exists(status)) return(NA_real_)
@@ -468,43 +479,51 @@ annoy_knn <- function(x, k, n_trees = 50L, n_threads = 1L) {
   list(indices = idx, distances = dst)
 }
 
+faissr_benchmark_route <- function(method) {
+  key <- sub("^faissR_", "", method)
+  route <- switch(
+    key,
+    cpu_exact = list(execution_backend = "cpu", public_backend = "cpu", public_method = "exact"),
+    rcpphnsw = list(execution_backend = "hnsw", public_backend = "cpu", public_method = "hnsw"),
+    faiss_flat_l2 = list(execution_backend = "faiss_flat_l2", public_backend = "cpu", public_method = "flat"),
+    faiss_flat_ip = list(execution_backend = "faiss_flat_ip", public_backend = "cpu", public_method = "flat"),
+    faiss_gpu_flat_l2 = list(execution_backend = "faiss_gpu_flat_l2", public_backend = "cuda", public_method = "flat"),
+    faiss_gpu_flat_ip = list(execution_backend = "faiss_gpu_flat_ip", public_backend = "cuda", public_method = "flat"),
+    faiss_ivf = list(execution_backend = "faiss_ivf", public_backend = "cpu", public_method = "ivf"),
+    faiss_ivfpq = list(execution_backend = "faiss_ivfpq", public_backend = "cpu", public_method = "ivfpq"),
+    faiss_gpu_ivf_flat = list(execution_backend = "faiss_gpu_ivf_flat", public_backend = "cuda", public_method = "ivf"),
+    faiss_gpu_ivfpq = list(execution_backend = "faiss_gpu_ivfpq", public_backend = "cuda", public_method = "ivfpq"),
+    faiss_gpu_cagra = list(execution_backend = "faiss_gpu_cagra", public_backend = "cuda", public_method = "cagra"),
+    faiss_hnsw = list(execution_backend = "faiss_hnsw", public_backend = "cpu", public_method = "hnsw"),
+    faiss_nsg = list(execution_backend = "faiss_nsg", public_backend = "cpu", public_method = "nsg"),
+    faiss_nndescent = list(execution_backend = "faiss_nndescent", public_backend = "cpu", public_method = "nndescent"),
+    cpu_grid = list(execution_backend = "cpu_grid", public_backend = "cpu", public_method = "grid"),
+    cuda_exact = list(execution_backend = "cuda_cuvs_bruteforce", public_backend = "cuda", public_method = "bruteforce"),
+    cuda_ivf = list(execution_backend = "cuda_ivf", public_backend = "cuda", public_method = "ivf"),
+    cuda_grid_auto = list(execution_backend = "cuda_grid_auto", public_backend = "cuda", public_method = "grid"),
+    cuda_cuvs_ivf_flat = list(execution_backend = "cuda_cuvs_ivf_flat", public_backend = "cuda", public_method = "ivf"),
+    cuda_cuvs_ivfpq = list(execution_backend = "cuda_cuvs_ivfpq", public_backend = "cuda", public_method = "ivfpq"),
+    cuda_cuvs_bruteforce = list(execution_backend = "cuda_cuvs_bruteforce", public_backend = "cuda", public_method = "bruteforce"),
+    cuda_cuvs_cagra = list(execution_backend = "cuda_cuvs_cagra", public_backend = "cuda", public_method = "cagra"),
+    cuda_cuvs_nndescent = list(execution_backend = "cuda_cuvs_nndescent", public_backend = "cuda", public_method = "nndescent"),
+    NULL
+  )
+  if (is.null(route)) {
+    route <- list(execution_backend = key, public_backend = NA_character_, public_method = NA_character_)
+  }
+  route
+}
+
 run_method <- function(method, x, k, n_threads, dataset, out_dir, metric) {
   configure_cpu_threads(n_threads)
   if (startsWith(method, "faissR_")) {
     if (!available_pkg("faissR")) stop("faissR unavailable")
-    backend <- sub("^faissR_", "", method)
-    backend <- switch(
-      backend,
-      cpu_exact = "cpu",
-      rcpphnsw = "hnsw",
-      faiss_flat_l2 = "faiss_flat_l2",
-      faiss_flat_ip = "faiss_flat_ip",
-      faiss_gpu_flat_l2 = "faiss_gpu_flat_l2",
-      faiss_gpu_flat_ip = "faiss_gpu_flat_ip",
-      faiss_ivf = "faiss_ivf",
-      faiss_ivfpq = "faiss_ivfpq",
-      faiss_gpu_ivf_flat = "faiss_gpu_ivf_flat",
-      faiss_gpu_ivfpq = "faiss_gpu_ivfpq",
-      faiss_gpu_cagra = "faiss_gpu_cagra",
-      faiss_hnsw = "faiss_hnsw",
-      faiss_nsg = "faiss_nsg",
-      faiss_nndescent = "faiss_nndescent",
-      cpu_grid = "cpu_grid",
-      cuda_exact = "cuda_cuvs_bruteforce",
-      cuda_ivf = "cuda_ivf",
-      cuda_grid_auto = "cuda_grid_auto",
-      cuda_cuvs_ivf_flat = "cuda_cuvs_ivf_flat",
-      cuda_cuvs_ivfpq = "cuda_cuvs_ivfpq",
-      cuda_cuvs_bruteforce = "cuda_cuvs_bruteforce",
-      cuda_cuvs_cagra = "cuda_cuvs_cagra",
-      cuda_cuvs_nndescent = "cuda_cuvs_nndescent",
-      backend
-    )
+    route <- faissr_benchmark_route(method)
     obj <- faissR:::nn_compute(
       data = x,
       points = x,
       k = k,
-      backend = backend,
+      backend = route$execution_backend,
       points_missing = TRUE,
       exclude_self = TRUE,
       n_threads = n_threads,
@@ -708,6 +727,20 @@ method_table <- function() {
     "faissR_faiss_gpu_flat_l2",
     "faissR_faiss_gpu_flat_ip"
   )] <- "FAISS GPU Flat"
+  route_rows <- lapply(methods$method, function(method) {
+    if (startsWith(method, "faissR_")) {
+      faissr_benchmark_route(method)
+    } else {
+      list(
+        execution_backend = NA_character_,
+        public_backend = NA_character_,
+        public_method = NA_character_
+      )
+    }
+  })
+  methods$execution_backend <- vapply(route_rows, `[[`, character(1L), "execution_backend")
+  methods$public_backend <- vapply(route_rows, `[[`, character(1L), "public_backend")
+  methods$public_method <- vapply(route_rows, `[[`, character(1L), "public_method")
   methods
 }
 
@@ -726,6 +759,9 @@ if (worker) {
     implementation = mm$implementation %||% NA_character_,
     backend = mm$backend %||% NA_character_,
     backend_detail = mm$backend_detail %||% NA_character_,
+    execution_backend = mm$execution_backend %||% NA_character_,
+    public_backend = mm$public_backend %||% NA_character_,
+    public_method = mm$public_method %||% NA_character_,
     kind = mm$kind %||% NA_character_,
     n = NA_integer_,
     p = NA_integer_,
@@ -955,6 +991,9 @@ for (di in seq_len(nrow(datasets))) {
             implementation = methods$implementation[[mi]],
             backend = methods$backend[[mi]],
             backend_detail = methods$backend_detail[[mi]],
+            execution_backend = methods$execution_backend[[mi]],
+            public_backend = methods$public_backend[[mi]],
+            public_method = methods$public_method[[mi]],
             kind = methods$kind[[mi]],
             n = datasets$n[[di]],
             p = datasets$p[[di]],
@@ -987,7 +1026,7 @@ for (di in seq_len(nrow(datasets))) {
 }
 
 files <- list.files(file.path(out_dir, "worker_results"), pattern = "[.]csv$", full.names = TRUE)
-results <- do.call(rbind, lapply(files, read.csv, stringsAsFactors = FALSE))
+results <- read_result_csvs(files)
 results <- results[order(results$dataset, results$backend, results$implementation, results$method), ]
 utils::write.csv(results, file.path(out_dir, "benchmark1_nn_speed_results.csv"), row.names = FALSE)
 
@@ -1040,6 +1079,7 @@ materials <- c(
   "The faissR CUDA/cuVS NN-descent output was saved for every dataset where the method completed successfully.",
   "",
   "faissR methods tested: exact CPU, RcppHNSW wrapper, FAISS Flat L2, FAISS Flat IP, FAISS CPU IVF/IVF-Flat, FAISS CPU IVFPQ, FAISS GPU Flat, FAISS GPU IVF-Flat with NVIDIA cuVS integration, FAISS GPU IVF-PQ with NVIDIA cuVS integration, FAISS HNSW, FAISS NSG, FAISS NNDescent, CPU grid on simulated 2D/3D only, native CUDA exact, native CUDA IVF, CUDA grid on simulated 2D/3D only, direct RAPIDS cuVS IVF-Flat, direct RAPIDS cuVS IVF-PQ, direct cuVS brute force, direct cuVS CAGRA, and direct cuVS NN-descent.",
+  "For faissR rows, `execution_backend` records the internal backend label used by `nn_compute()`, while `public_backend` and `public_method` record the equivalent public `nn(..., backend = , method = )` route. This separates legacy benchmark labels from the public API.",
   "The benchmark result table includes `backend_detail` to distinguish FAISS GPU indexes that use NVIDIA cuVS internally from direct RAPIDS cuVS API calls.",
   "External R package methods tested: Rnanoflann, RANN kd-tree and bd-tree, rnndescent RPF/RNND/NND/brute-force, RcppHNSW, RcppAnnoy, BiocNeighbors VP-tree/HNSW/Annoy, uwot::similarity_graph with nn_method = fnn, annoy, hnsw, and nndescent, and cuda.ml KNN if an installed cuda.ml package exposes a recognised KNN routine.",
   "umap::umap.knn was included as a precomputed-neighbour consumer test, not as a standalone KNN search algorithm. Rtsne::Rtsne_neighbors was marked not applicable because it consumes precomputed neighbours and optimizes t-SNE rather than exporting a standalone KNN search.",
