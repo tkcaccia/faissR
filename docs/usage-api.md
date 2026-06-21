@@ -138,7 +138,7 @@ knn_graph(data, knn = NULL, k = 50L, backend = "auto",
 | `weight` | Edge weighting: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. `"auto"` uses shared-nearest-neighbour weights for input space and distance weights for embedding space. |
 | `mutual` | If `TRUE`, keep only reciprocal nearest-neighbour edges. |
 | `prune` | Drop edges with weight less than or equal to this non-negative threshold. |
-| `n_clusters` | Optional target number of communities to store with the graph. `graph_cluster()` uses this target for Louvain/Leiden when no explicit `n_clusters` is supplied. |
+| `n_clusters` | Optional target number of communities to store with the graph. `graph_cluster()` uses this target for Louvain/Leiden when no explicit `n_clusters` is supplied. The target must be a positive integer and cannot exceed the graph vertex count. |
 | `n_threads` | CPU worker threads for neighbour search when KNN is computed inside the function. |
 
 Returns a native `faissR_graph` edge-list object. No `igraph` dependency is
@@ -174,7 +174,7 @@ graph_cluster(graph, method = "random_walking", backend = "auto",
 | `n_threads` | CPU threads for KNN construction and native CPU clustering. |
 | `n_runs` | Number of independent clustering runs. faissR keeps the best modularity run. |
 | `resolution` | Positive resolution parameter for Louvain/Leiden-style modularity scoring. Larger values tend to produce more communities. |
-| `n_clusters` | Optional target number of communities for Louvain/Leiden. If supplied, faissR builds the KNN graph once, evaluates a small deterministic resolution grid, and keeps the result closest to the requested count. This is a convenience target, not a hard guarantee. |
+| `n_clusters` | Optional target number of communities for Louvain/Leiden. If supplied, faissR builds the KNN graph once, evaluates a small deterministic resolution grid, and keeps the result closest to the requested count. This is a convenience target, not a hard guarantee. The target must be a positive integer and cannot exceed the graph vertex count. |
 | `objective_function` | Reserved Leiden-compatible option. Currently accepts `"modularity"` or `"CPM"`. |
 | `n_iterations` | Maximum native clustering iterations. |
 | `steps` | Random-walk propagation depth for `method = "random_walking"`. |

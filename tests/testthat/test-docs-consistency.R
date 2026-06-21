@@ -272,6 +272,28 @@ test_that("usage API graph_cluster signature shows the live default method", {
   expect_equal(documented_method, live_method)
 })
 
+test_that("graph cluster target documentation states integer and graph-size constraints", {
+  docs_files <- c(
+    test_path("../../docs", c(
+      "usage-api.md",
+      "implementation.md",
+      "benchmarks.md"
+    )),
+    test_path("../../man", c("knn_graph.Rd", "graph_cluster.Rd"))
+  )
+  missing <- !file.exists(docs_files)
+  if (any(missing)) {
+    skip("Graph documentation files are not available in this installed-package test context.")
+  }
+
+  for (docs_file in docs_files) {
+    prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+    expect_true(grepl("positive integer", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("graph vertices", prose, fixed = TRUE) || grepl("graph vertex count", prose, fixed = TRUE),
+                info = basename(docs_file))
+  }
+})
+
 test_that("backend auto documentation states the CUDA runtime requirement", {
   docs_files <- test_path("../../docs", c(
     "backend-capabilities.md",

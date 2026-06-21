@@ -304,7 +304,9 @@ caller supplies a different target. The graph is built once, then faissR
 evaluates a small deterministic grid of resolution values around the supplied
 `resolution` and keeps the result whose number of communities is closest to
 `m`, breaking ties by modularity. The selected resolution and search table are
-returned in the result metadata.
+returned in the result metadata. The target must be a positive integer and
+cannot exceed the graph vertex count; fractional targets and impossible targets
+fail before the resolution-search loop.
 
 Native graph clustering does not depend on `igraph`. This keeps the graph API
 under faissR's control and avoids a large mandatory graph dependency. The

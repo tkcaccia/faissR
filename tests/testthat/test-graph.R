@@ -183,6 +183,42 @@ test_that("knn_graph stores an optional cluster-count target for graph_cluster",
   )
 })
 
+test_that("graph cluster-count targets are strict positive whole numbers", {
+  set.seed(5091)
+  x <- matrix(rnorm(40), ncol = 4)
+
+  expect_error(
+    knn_graph(x, k = 4L, backend = "cpu", n_clusters = 2.5),
+    "positive integer"
+  )
+  expect_error(
+    graph_cluster(
+      x,
+      method = "louvain",
+      backend = "cpu",
+      graph_backend = "cpu",
+      k = 4L,
+      n_clusters = 2.5
+    ),
+    "positive integer"
+  )
+  expect_error(
+    knn_graph(x, k = 4L, backend = "cpu", n_clusters = nrow(x) + 1L),
+    "larger than the number of graph vertices"
+  )
+  expect_error(
+    graph_cluster(
+      x,
+      method = "leiden",
+      backend = "cpu",
+      graph_backend = "cpu",
+      k = 4L,
+      n_clusters = nrow(x) + 1L
+    ),
+    "larger than the number of graph vertices"
+  )
+})
+
 test_that("graph_cluster runs native CPU random-walk and Louvain clustering without igraph", {
   set.seed(505)
   x <- rbind(

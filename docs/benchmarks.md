@@ -246,8 +246,10 @@ contains only Louvain and Leiden, the benchmark stores that target on the graph
 with `knn_graph(n_clusters = ...)` and lets `graph_cluster()` reuse it. Mixed
 method sets that include random-walking pass the target only to Louvain/Leiden
 rows because the public API intentionally reserves `n_clusters` for Louvain and
-Leiden. CUDA rows fail explicitly when faissR was not built with the required
-CUDA/cuGraph support.
+Leiden. The target is validated as a positive integer no larger than the
+graph vertex count, so malformed label-derived targets fail clearly before
+clustering. CUDA rows fail explicitly when faissR was not built with the
+required CUDA/cuGraph support.
 
 ## NN Metrics File Layout
 

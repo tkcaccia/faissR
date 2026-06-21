@@ -30,7 +30,8 @@
 #' @param n_clusters Optional target number of communities to store with the
 #'   graph. When this graph is later passed to \code{\link{graph_cluster}()} with
 #'   `method = "louvain"` or `"leiden"` and no explicit `n_clusters`, the
-#'   stored target is used instead of relying only on `resolution`.
+#'   stored target is used instead of relying only on `resolution`. The target
+#'   must be a positive integer and cannot exceed the number of graph vertices.
 #' @param n_threads CPU threads passed to `nn()` when KNN is computed here.
 #' @return A native `faissR_graph` edge-list object. The `faissR_graph`
 #'   attribute stores graph-construction metadata, including `requested_backend`
@@ -135,6 +136,7 @@ knn_graph <- function(data,
     prune,
     mutual
   )
+  n_clusters <- validate_graph_target_cluster_count(n_clusters, edges$n_vertices)
   metadata <- list(
     k = as.integer(k),
     space = graph_space,
@@ -226,7 +228,8 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   If supplied, faissR evaluates a small deterministic resolution grid around
 #'   `resolution` on the already-built graph and keeps the result whose
 #'   community count is closest to `n_clusters`. This is a convenience target,
-#'   not a hard guarantee.
+#'   not a hard guarantee. The target must be a positive integer and cannot
+#'   exceed the number of graph vertices.
 #' @param objective_function Reserved for Leiden-compatible APIs.
 #' @param n_iterations Native clustering iterations.
 #' @param steps Random-walk propagation depth.
@@ -337,6 +340,7 @@ graph_cluster <- function(graph,
       graph_n_clusters <- meta$target_n_clusters
     }
     graph_n_clusters <- normalize_graph_target_clusters(graph_n_clusters, method)
+    graph_n_clusters <- validate_graph_target_cluster_count(graph_n_clusters, graph$n_vertices)
     ans <- graph_cluster_edges_target(
       graph,
       method = method,
@@ -415,6 +419,7 @@ graph_cluster <- function(graph,
     prune = prune,
     mutual = isTRUE(mutual)
   )
+  n_clusters <- validate_graph_target_cluster_count(n_clusters, graph_edges$n_vertices)
   ans <- graph_cluster_edges_target(
     graph_edges,
     method = method,
@@ -458,9 +463,22 @@ normalize_graph_target_clusters <- function(n_clusters, method) {
   if (!is.null(method) && identical(method, "random_walking")) {
     stop("`n_clusters` is available for `method = \"louvain\"` or `\"leiden\"`, not `\"random_walking\"`.", call. = FALSE)
   }
-  n_clusters <- suppressWarnings(as.integer(n_clusters))
-  if (length(n_clusters) != 1L || is.na(n_clusters) || !is.finite(n_clusters) || n_clusters < 1L) {
+  value <- suppressWarnings(as.numeric(n_clusters))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 1L ||
+      abs(value - round(value)) > sqrt(.Machine$double.eps)) {
     stop("`n_clusters` must be a positive integer.", call. = FALSE)
+  }
+  as.integer(round(value))
+}
+
+validate_graph_target_cluster_count <- function(n_clusters, n_vertices) {
+  if (is.null(n_clusters)) return(NULL)
+  n_vertices <- suppressWarnings(as.integer(n_vertices))
+  if (length(n_vertices) != 1L || is.na(n_vertices) || !is.finite(n_vertices) || n_vertices < 1L) {
+    return(n_clusters)
+  }
+  if (n_clusters > n_vertices) {
+    stop("`n_clusters` cannot be larger than the number of graph vertices.", call. = FALSE)
   }
   n_clusters
 }

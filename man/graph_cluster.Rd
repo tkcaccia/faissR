@@ -51,7 +51,8 @@ libcugraph was detected at build time; random-walking is CPU-only.}
 \item{n_clusters}{Optional target number of communities for Louvain/Leiden.
 If supplied, faissR evaluates a small deterministic resolution grid on the
 already-built graph and keeps the result whose community count is closest to
-the target. This is a convenience target, not a hard guarantee.}
+the target. This is a convenience target, not a hard guarantee. The target
+must be a positive integer and cannot exceed the number of graph vertices.}
 \item{objective_function}{Reserved for Leiden-compatible APIs; currently recorded in parameters.}
 \item{n_iterations}{Native clustering iteration count.}
 \item{steps}{Random-walk propagation depth.}
@@ -66,7 +67,8 @@ the target. This is a convenience target, not a hard guarantee.}
 on a graph with \code{knn_graph(n_clusters = ...)}. When a target count is
 available for Louvain or Leiden, faissR builds or reuses the graph once,
 evaluates a small resolution grid, and records the selected resolution and
-search table in the returned object.
+search table in the returned object. The target must be a positive integer and
+cannot exceed the number of graph vertices.
 
 Method descriptions:
 \itemize{
