@@ -118,6 +118,38 @@ test_that("public API excludes retired wrapper and platform-specific helper name
   expect_false(any(grepl("metal", man_topics, ignore.case = TRUE)))
 })
 
+test_that("GitHub docs list all public availability helpers", {
+  files <- test_path("../../", c(
+    "README.md",
+    "docs/backend-capabilities.md",
+    "docs/implementation.md",
+    "docs/installation.md",
+    "docs/usage-api.md"
+  ))
+  missing_files <- files[!file.exists(files)]
+  if (length(missing_files)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  availability_helpers <- c(
+    "backend_info()",
+    "faiss_available()",
+    "faiss_gpu_available()",
+    "cuda_available()",
+    "cuvs_available()",
+    "cugraph_available()"
+  )
+  for (file in files) {
+    prose <- paste(readLines(file, warn = FALSE), collapse = " ")
+    for (helper in availability_helpers) {
+      expect_true(
+        grepl(helper, prose, fixed = TRUE),
+        info = paste(basename(file), helper)
+      )
+    }
+  }
+})
+
 test_that("reference manual documents live public function arguments", {
   expect_rd_documents_formals("nn", nn)
   expect_rd_documents_formals("nn_without_self", nn_without_self)

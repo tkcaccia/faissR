@@ -4802,8 +4802,8 @@ grid_self_knn <- function(data,
 #'   FAISS GPU Flat is available [1-3,5,13-15]. On cuVS-only runtimes,
 #'   `backend = "auto"` keeps those non-Euclidean metrics on CPU.
 #'   \item `"exact"`: exact nearest-neighbour search. CPU uses faissR's native
-#'   exact route; CUDA uses FAISS GPU Flat or cuVS brute force when available
-#'   [1-3,16].
+#'   exact route; CUDA uses FAISS GPU Flat only when the linked FAISS build
+#'   reports GPU support, otherwise cuVS brute force when available [1-3,16].
 #'   \item `"flat"`: FAISS Flat exhaustive index. CPU and FAISS GPU support
 #'   L2, IP, and normalized-IP cosine/correlation routes when available
 #'   [1-2,16].

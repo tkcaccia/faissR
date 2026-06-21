@@ -138,8 +138,8 @@ RcppHNSW/hnswlib for the HNSW route.
 `method = "exact"` requests exhaustive exact KNN.
 
 - On CPU, faissR uses the native exact CPU route.
-- On CUDA, faissR uses FAISS GPU Flat when available, otherwise direct cuVS
-  brute force when available [1-3,16].
+- On CUDA, faissR uses FAISS GPU Flat only when the linked FAISS build reports
+  GPU support, otherwise direct cuVS brute force when available [1-3,16].
 
 Exact search is the best reference for recall and correctness checks. It can be
 too slow or too memory-heavy for full all-pairs self-KNN on very large datasets.
