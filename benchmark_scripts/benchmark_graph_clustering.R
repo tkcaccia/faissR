@@ -168,7 +168,8 @@ result_row <- function(dataset, n, p, k, graph_backend, cluster_backend, method,
                        cluster_sec = NA_real_, total_sec = NA_real_,
                        peak_rss_gb = NA_real_, n_edges = NA_integer_,
                        n_communities = NA_integer_, modularity = NA_real_,
-                       ari = NA_real_, selected_resolution = NA_real_) {
+                       ari = NA_real_, selected_resolution = NA_real_,
+                       graph_cached = NA) {
   data.frame(
     dataset = dataset,
     n = as.integer(n),
@@ -192,12 +193,68 @@ result_row <- function(dataset, n, p, k, graph_backend, cluster_backend, method,
     modularity = modularity,
     ari = ari,
     selected_resolution = selected_resolution,
+    graph_cached = if (is.na(graph_cached)) NA else isTRUE(graph_cached),
     stringsAsFactors = FALSE
   )
 }
 
-run_one <- function(data_obj, dataset_name, k, graph_backend, cluster_backend,
-                    method, weight, n_threads, target_mode, seed, timeout) {
+build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
+                             n_threads, timeout) {
+  n <- nrow(data_obj$data)
+  p <- ncol(data_obj$data)
+  started <- proc.time()[["elapsed"]]
+  tryCatch({
+    graph <- with_elapsed_limit({
+      faissR::knn_graph(
+        data_obj$data,
+        k = k,
+        backend = graph_backend,
+        weight = weight,
+        n_threads = n_threads
+      )
+    }, timeout)
+    elapsed <- proc.time()[["elapsed"]] - started
+    list(
+      status = "success",
+      graph = graph,
+      graph_sec = elapsed,
+      n_edges = graph$n_edges %||% NA_integer_,
+      weight = attr(graph, "faissR_graph")$weight %||% weight,
+      error = NA_character_
+    )
+  }, error = function(e) {
+    list(
+      status = "failed",
+      graph = NULL,
+      graph_sec = proc.time()[["elapsed"]] - started,
+      n_edges = NA_integer_,
+      weight = weight,
+      error = conditionMessage(e),
+      row = result_row(
+        dataset = dataset_name,
+        n = n,
+        p = p,
+        k = k,
+        graph_backend = graph_backend,
+        cluster_backend = NA_character_,
+        method = NA_character_,
+        weight = weight,
+        n_clusters = NULL,
+        n_threads = n_threads,
+        status = "failed",
+        error = conditionMessage(e),
+        graph_sec = proc.time()[["elapsed"]] - started,
+        peak_rss_gb = read_peak_rss_gb(),
+        graph_cached = FALSE
+      )
+    )
+  })
+}
+
+run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
+                            graph_cached, n_edges, k, graph_backend,
+                            cluster_backend, method, weight, n_threads,
+                            target_mode, seed, timeout) {
   n <- nrow(data_obj$data)
   p <- ncol(data_obj$data)
   labels <- data_obj$labels
@@ -212,31 +269,23 @@ run_one <- function(data_obj, dataset_name, k, graph_backend, cluster_backend,
 
   started <- proc.time()[["elapsed"]]
   tryCatch({
-    out <- with_elapsed_limit({
-      graph_started <- proc.time()[["elapsed"]]
-      graph <- faissR::knn_graph(
-        data_obj$data,
-        k = k,
-        backend = graph_backend,
-        weight = weight,
-        n_threads = n_threads
-      )
-      graph_sec <- proc.time()[["elapsed"]] - graph_started
-
+    cluster <- with_elapsed_limit({
       cluster_started <- proc.time()[["elapsed"]]
-      cluster <- faissR::graph_cluster(
-        graph,
+      out <- faissR::graph_cluster(
+        graph_obj,
         method = method,
         backend = cluster_backend,
         n_threads = n_threads,
         n_clusters = n_clusters,
         seed = seed
       )
-      cluster_sec <- proc.time()[["elapsed"]] - cluster_started
-      list(graph = graph, cluster = cluster, graph_sec = graph_sec, cluster_sec = cluster_sec)
+      attr(out, "cluster_sec") <- proc.time()[["elapsed"]] - cluster_started
+      out
     }, timeout)
 
-    total_sec <- proc.time()[["elapsed"]] - started
+    cluster_wall <- proc.time()[["elapsed"]] - started
+    cluster_sec <- attr(cluster, "cluster_sec") %||% cluster_wall
+    total_sec <- graph_sec + cluster_wall
     result_row(
       dataset = dataset_name,
       n = n,
@@ -249,15 +298,16 @@ run_one <- function(data_obj, dataset_name, k, graph_backend, cluster_backend,
       n_clusters = n_clusters,
       n_threads = n_threads,
       status = "success",
-      graph_sec = out$graph_sec,
-      cluster_sec = out$cluster_sec,
+      graph_sec = graph_sec,
+      cluster_sec = cluster_sec,
       total_sec = total_sec,
       peak_rss_gb = read_peak_rss_gb(),
-      n_edges = out$graph$n_edges %||% NA_integer_,
-      n_communities = out$cluster$n_communities %||% length(unique(out$cluster$membership)),
-      modularity = out$cluster$modularity %||% NA_real_,
-      ari = benchmark_adjusted_rand_index(labels, out$cluster$membership),
-      selected_resolution = out$cluster$selected_resolution %||% NA_real_
+      n_edges = n_edges,
+      n_communities = cluster$n_communities %||% length(unique(cluster$membership)),
+      modularity = cluster$modularity %||% NA_real_,
+      ari = benchmark_adjusted_rand_index(labels, cluster$membership),
+      selected_resolution = cluster$selected_resolution %||% NA_real_,
+      graph_cached = graph_cached
     )
   }, error = function(e) {
     result_row(
@@ -273,8 +323,11 @@ run_one <- function(data_obj, dataset_name, k, graph_backend, cluster_backend,
       n_threads = n_threads,
       status = "failed",
       error = conditionMessage(e),
-      total_sec = proc.time()[["elapsed"]] - started,
-      peak_rss_gb = read_peak_rss_gb()
+      graph_sec = graph_sec,
+      total_sec = graph_sec + (proc.time()[["elapsed"]] - started),
+      peak_rss_gb = read_peak_rss_gb(),
+      n_edges = n_edges,
+      graph_cached = graph_cached
     )
   })
 }
@@ -349,22 +402,56 @@ for (dataset_name in datasets) {
   }
   for (k in k_values) {
     for (graph_backend in graph_backends) {
+      graph_build <- build_graph_once(
+        data_obj = loaded,
+        dataset_name = dataset_name,
+        k = k,
+        graph_backend = graph_backend,
+        weight = weight,
+        n_threads = n_threads,
+        timeout = timeout
+      )
       for (cluster_backend in cluster_backends) {
         for (method in methods) {
           row_id <- row_id + 1L
-          row <- run_one(
-            data_obj = loaded,
-            dataset_name = dataset_name,
-            k = k,
-            graph_backend = graph_backend,
-            cluster_backend = cluster_backend,
-            method = method,
-            weight = weight,
-            n_threads = n_threads,
-            target_mode = target_mode,
-            seed = seed,
-            timeout = timeout
-          )
+          if (!identical(graph_build$status, "success")) {
+            row <- result_row(
+              dataset = dataset_name,
+              n = nrow(loaded$data),
+              p = ncol(loaded$data),
+              k = k,
+              graph_backend = graph_backend,
+              cluster_backend = cluster_backend,
+              method = method,
+              weight = weight,
+              n_clusters = NULL,
+              n_threads = n_threads,
+              status = "failed",
+              error = graph_build$error,
+              graph_sec = graph_build$graph_sec,
+              total_sec = graph_build$graph_sec,
+              peak_rss_gb = read_peak_rss_gb(),
+              graph_cached = FALSE
+            )
+          } else {
+            row <- run_cluster_one(
+              data_obj = loaded,
+              dataset_name = dataset_name,
+              graph_obj = graph_build$graph,
+              graph_sec = graph_build$graph_sec,
+              graph_cached = TRUE,
+              n_edges = graph_build$n_edges,
+              k = k,
+              graph_backend = graph_backend,
+              cluster_backend = cluster_backend,
+              method = method,
+              weight = graph_build$weight,
+              n_threads = n_threads,
+              target_mode = target_mode,
+              seed = seed,
+              timeout = timeout
+            )
+          }
           row$load_sec <- load_sec
           results[[row_id]] <- row
           utils::write.csv(
@@ -413,8 +500,9 @@ materials <- c(
   sprintf("- k values: `%s`", paste(k_values, collapse = "`, `")),
   sprintf("- CPU thread cap: `%s`", n_threads),
   "",
-  "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable or simulated data are unlabelled.",
+  "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
   "When `target_clusters = \"labels\"`, Louvain and Leiden receive `n_clusters = length(unique(labels))`; random-walking is benchmarked without a cluster-count target because the public API does not support that option for random-walking.",
+  "Each KNN graph is built once per dataset/k/graph-backend/weight combination and reused across clustering methods and clustering backends. The `graph_cached` column records this reuse; `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
   "CUDA rows are recorded as failed when faissR was not built with the required CUDA/cuGraph support; the benchmark does not silently replace CUDA clustering with CPU clustering."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_graph_clustering.md"))

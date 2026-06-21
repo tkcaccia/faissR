@@ -68,6 +68,12 @@ resident memory when available, number of edges, number of communities,
 modularity, and adjusted Rand index (ARI) against `dataset$labels` when labels
 are present. ARI is computed by the benchmark helper in
 `benchmark_scripts/source.R`; it is not part of the public package API.
+For reproducibility and speed, each KNN graph is built once per
+dataset/k/graph-backend/weight combination and reused across clustering
+methods and clustering backends. The `graph_cached` column records this reuse.
+`graph_sec` is the shared graph-construction time, `cluster_sec` is
+clustering-only time, and `total_sec` is `graph_sec + cluster_sec` for the
+complete graph-plus-clustering workflow represented by the row.
 
 Example CPU run:
 
