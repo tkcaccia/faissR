@@ -164,17 +164,41 @@ with_elapsed_limit <- function(expr, timeout) {
   force(expr)
 }
 
-metric_reference <- function(x, k, metric, quality_n, quality_max_ops, n_threads) {
-  if (nrow(x) > quality_n) return(NULL)
-  ops <- as.double(nrow(x)) * as.double(nrow(x)) * as.double(ncol(x))
-  if (ops > quality_max_ops) return(NULL)
-  faissR::nn(
-    x,
-    k = k,
-    backend = "cpu",
-    method = "exact",
-    metric = metric,
-    n_threads = n_threads
+metric_reference <- function(x, k, metric, quality_n, quality_max_ops, n_threads, seed) {
+  n <- nrow(x)
+  p <- ncol(x)
+  full_ops <- as.double(n) * as.double(n) * as.double(p)
+  if (n <= quality_n && full_ops <= quality_max_ops) {
+    return(list(
+      knn = faissR::nn(
+        x,
+        k = k,
+        backend = "cpu",
+        method = "exact",
+        metric = metric,
+        n_threads = n_threads
+      ),
+      rows = NULL,
+      mode = "full"
+    ))
+  }
+  sample_n <- min(as.integer(quality_n), n)
+  sample_ops <- as.double(sample_n) * as.double(n) * as.double(p)
+  if (sample_n < 1L || sample_ops > quality_max_ops) return(NULL)
+  set.seed(seed + as.integer(k) + match(metric, c("euclidean", "cosine", "correlation", "inner_product")))
+  rows <- sort(sample.int(n, sample_n))
+  list(
+    knn = faissR::nn(
+      x,
+      points = x[rows, , drop = FALSE],
+      k = k,
+      backend = "cpu",
+      method = "exact",
+      metric = metric,
+      n_threads = n_threads
+    ),
+    rows = rows,
+    mode = "sample"
   )
 }
 
@@ -183,7 +207,9 @@ result_row <- function(dataset, n, p, backend, method, metric, k, n_threads,
                        peak_rss_gb = NA_real_, resolved_backend = NA_character_,
                        exact = NA, recall_at_k = NA_real_,
                        median_recall_at_k = NA_real_,
-                       min_recall_at_k = NA_real_) {
+                       min_recall_at_k = NA_real_,
+                       recall_reference = NA_character_,
+                       recall_query_n = NA_integer_) {
   data.frame(
     dataset = dataset,
     n = as.integer(n),
@@ -202,6 +228,8 @@ result_row <- function(dataset, n, p, backend, method, metric, k, n_threads,
     recall_at_k = recall_at_k,
     median_recall_at_k = median_recall_at_k,
     min_recall_at_k = min_recall_at_k,
+    recall_reference = recall_reference,
+    recall_query_n = as.integer(recall_query_n),
     stringsAsFactors = FALSE
   )
 }
@@ -223,8 +251,14 @@ run_one <- function(x, dataset_name, backend, method, metric, k, n_threads,
     elapsed <- proc.time()[["elapsed"]] - started
     recall <- if (is.null(reference)) {
       data.frame(recall_at_k = NA_real_, median_recall_at_k = NA_real_, min_recall_at_k = NA_real_)
+    } else if (is.null(reference$rows)) {
+      benchmark_knn_recall(out, reference$knn, k = k)
     } else {
-      benchmark_knn_recall(out, reference, k = k)
+      sampled <- list(
+        indices = out$indices[reference$rows, , drop = FALSE],
+        distances = out$distances[reference$rows, , drop = FALSE]
+      )
+      benchmark_knn_recall(sampled, reference$knn, k = k)
     }
     result_row(
       dataset = dataset_name,
@@ -242,7 +276,9 @@ run_one <- function(x, dataset_name, backend, method, metric, k, n_threads,
       exact = isTRUE(attr(out, "exact")),
       recall_at_k = recall$recall_at_k[[1L]],
       median_recall_at_k = recall$median_recall_at_k[[1L]],
-      min_recall_at_k = recall$min_recall_at_k[[1L]]
+      min_recall_at_k = recall$min_recall_at_k[[1L]],
+      recall_reference = if (is.null(reference)) NA_character_ else reference$mode,
+      recall_query_n = if (is.null(reference)) NA_integer_ else if (is.null(reference$rows)) nrow(x) else length(reference$rows)
     )
   }, error = function(e) {
     result_row(
@@ -331,7 +367,7 @@ for (dataset_name in datasets) {
     for (k in k_values) {
       ref_key <- paste(metric, k, sep = "__")
       references[[ref_key]] <- tryCatch(
-        metric_reference(x, k, metric, quality_n, quality_max_ops, n_threads),
+        metric_reference(x, k, metric, quality_n, quality_max_ops, n_threads, seed),
         error = function(e) NULL
       )
       for (backend in backends) {
@@ -395,7 +431,7 @@ materials <- c(
   sprintf("- Timeout per combination: `%s` seconds", timeout),
   "",
   "Unsupported method/backend/metric combinations are recorded as failed rows with the package error message.",
-  "Recall is computed against exact CPU references only when the full dataset is small enough for the configured `quality_n` and `quality_max_ops` limits; otherwise recall fields are `NA`.",
+  "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used.",
   "The script does not add benchmark-only helpers to the package API."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_nn_metrics.md"))

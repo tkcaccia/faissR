@@ -117,9 +117,12 @@ metric matrix. It runs public `nn()` combinations over:
 - k values: `5`, `10`, `15`, `50`, and `100` by default.
 
 Unsupported combinations are saved as failed rows with the package error
-message. Recall is computed against exact CPU references only when the full
-dataset fits the configured `--quality_n` and `--quality_max_ops` limits; large
-datasets still contribute speed, memory, and availability rows.
+message. Recall is computed against exact CPU references when feasible. Small
+datasets use a full exact self-KNN reference; larger datasets use a
+deterministic sample of query rows when
+`quality_n * nrow(data) * ncol(data)` fits `--quality_max_ops`. The
+`recall_reference` and `recall_query_n` columns record whether recall used a
+full or sampled exact reference.
 
 Example CPU run:
 
