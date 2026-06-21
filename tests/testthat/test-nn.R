@@ -961,7 +961,7 @@ test_that("removed nn compatibility options are not accepted", {
   point <- matrix(c(0, 0), nrow = 1)
 
   expect_error(nn(data, point, k = 3, square = TRUE), "unused")
-  expect_error(nn(data, point, k = 3, method = "manhattan"), "should be one of")
+  expect_error(nn(data, point, k = 3, method = "not_a_method"), "should be one of")
 })
 
 test_that("cuda availability helper returns a logical scalar", {
