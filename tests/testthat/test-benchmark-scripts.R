@@ -2,6 +2,17 @@ source_benchmark_helpers <- function(path, stop_marker) {
   if (!file.exists(path)) {
     testthat::skip("Benchmark scripts are not available in this installed-package test context.")
   }
+  old_out <- Sys.getenv("FAISSR_BENCHMARK_OUT", unset = NA_character_)
+  tmp_out <- tempfile("faissR_benchmark_test_")
+  Sys.setenv(FAISSR_BENCHMARK_OUT = tmp_out)
+  on.exit({
+    if (is.na(old_out)) {
+      Sys.unsetenv("FAISSR_BENCHMARK_OUT")
+    } else {
+      Sys.setenv(FAISSR_BENCHMARK_OUT = old_out)
+    }
+    unlink(tmp_out, recursive = TRUE, force = TRUE)
+  }, add = TRUE)
   lines <- readLines(path, warn = FALSE)
   stop_at <- grep(stop_marker, lines, fixed = TRUE)[1L] - 1L
   env <- new.env(parent = globalenv())
@@ -57,6 +68,25 @@ test_that("NN metric benchmark recommendations are grouped by backend metric and
   expect_equal(out$metric, c("cosine", "euclidean", "euclidean"))
   expect_equal(as.integer(out$k), c(15L, 15L, 50L))
   expect_equal(out$method, c("exact", "hnsw", "cagra"))
+})
+
+test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
+    "if (worker)"
+  )
+
+  methods <- env$method_table()
+  expect_false(any(methods$method %in% c("faissR_faiss_flat_ip", "faissR_faiss_gpu_flat_ip")))
+  expect_true(all(c("faissR_faiss_flat_l2", "faissR_faiss_gpu_flat_l2") %in% methods$method))
+
+  aliases <- env$benchmark_method_aliases(c("flat", "faissR_faiss_flat_ip", "faissR_faiss_gpu_flat_ip"))
+  expect_equal(aliases, c("faissR_faiss_flat_l2", "faissR_faiss_gpu_flat_l2"))
+
+  expect_true(isTRUE(env$method_metric_applicable("faissR_faiss_flat_l2", "inner_product")$ok))
+  expect_true(isTRUE(env$method_metric_applicable("faissR_faiss_gpu_flat_l2", "inner_product")$ok))
+  expect_true(isTRUE(env$method_is_exact("faissR_faiss_flat_l2", "inner_product")))
+  expect_true(isTRUE(env$method_is_exact("faissR_faiss_gpu_flat_l2", "inner_product")))
 })
 
 test_that("k-means benchmark recommendations are grouped by dataset and centers", {

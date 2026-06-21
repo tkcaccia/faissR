@@ -59,12 +59,14 @@ pipelines, and recall diagnostics without paying the KNN cost repeatedly.
 
 `benchmark_scripts/benchmark1_nn_speed.R` is the broad nearest-neighbour speed
 benchmark that includes faissR implementation labels, external R KNN packages,
-and selected KNN consumers. It defaults to `k = 5, 10, 15, 50, 100` and the four
-public faissR metrics: L2/Euclidean, cosine, correlation, and inner product.
-Implementation-specific faissR rows, such as FAISS Flat IP, FAISS GPU IVF, and
-direct cuVS rows, are timed through faissR's internal benchmark route so the
-table can distinguish FAISS GPU indexes that use NVIDIA cuVS internally from
-direct RAPIDS cuVS API calls.
+and selected KNN consumers. It defaults to `k = 5, 10, 15, 50, 100` and the
+non-inner-product metrics L2/Euclidean, cosine, and correlation. Inner product
+can still be requested explicitly with `--metrics=inner_product`, but Flat
+inner-product searches are reported under the same public `method = "flat"`
+row rather than duplicate Flat-IP rows. Implementation-specific faissR rows,
+such as FAISS GPU IVF and direct cuVS rows, are timed through faissR's internal
+benchmark route so the table can distinguish FAISS GPU indexes that use NVIDIA
+cuVS internally from direct RAPIDS cuVS API calls.
 
 If a non-standard runtime library directory is needed, set `FAISSR_ENV_DIR`
 explicitly before launch. The script no longer treats an unrelated active
