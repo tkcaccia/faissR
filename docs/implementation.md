@@ -346,14 +346,14 @@ than pretending to preserve sparse semantics.
 
 ## Large Data And ImageNet
 
-The ImageNet feature file tested on chiamaka contains 1,281,167 rows by 1,024
-features. It is stored as a double `data.table`, about 10 GB in R. Before FAISS
-or cuVS can index it, R must create a contiguous numeric matrix and the backend
-then creates float/index buffers. On the 31 GB RAM chiamaka host, full-reference
-1.28M-row query tests were killed by the OS for FAISS HNSW, FAISS IVF, FAISS GPU
-CAGRA, and direct cuVS IVF-Flat. This is a data representation and host-memory
-limit, not evidence that those algorithms cannot handle ImageNet on a larger or
-more memory-efficient setup.
+The ImageNet feature file used in package benchmarks contains 1,281,167 rows by
+1,024 features. In the tested representation it was stored as a double
+`data.table`, about 10 GB in R. Before FAISS or cuVS can index it, R must create
+a contiguous numeric matrix and the backend then creates float/index buffers. On
+a memory-limited workstation, full-reference 1.28M-row query tests were killed
+by the OS for FAISS HNSW, FAISS IVF, FAISS GPU CAGRA, and direct cuVS IVF-Flat.
+This is a data representation and host-memory limit, not evidence that those
+algorithms cannot handle ImageNet on a larger or more memory-efficient setup.
 
 Bounded ImageNet samples did work. On a 50,000-row sample with `k = 50`,
 `faiss_gpu_flat_l2` completed in 1.208 seconds with exact recall, direct

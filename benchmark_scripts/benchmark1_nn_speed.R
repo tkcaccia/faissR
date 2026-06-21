@@ -22,39 +22,41 @@ source(file.path(script_dir, "source.R"))
 
 args <- parse_args(commandArgs(trailingOnly = TRUE))
 
-faiss_env_dir <- Sys.getenv("FAISSR_CONDA_ENV", "/home/chiamaka/.fastEmbedR/micromamba/envs/fastembedr-faissgpu-cuvs")
-cuda_lib_dir <- Sys.getenv("FAISSR_CUDA_LIB_DIR", "/usr/local/cuda-13.0/targets/x86_64-linux/lib")
-faiss_library_path <- paste(
-  c(
-    file.path(faiss_env_dir, "lib"),
-    file.path(faiss_env_dir, "targets/x86_64-linux/lib"),
-    cuda_lib_dir,
-    Sys.getenv("LD_LIBRARY_PATH")
-  ),
-  collapse = ":"
+faiss_env_dir <- Sys.getenv("FAISSR_ENV_DIR", Sys.getenv("CONDA_PREFIX", ""))
+cuda_lib_dir <- Sys.getenv("FAISSR_CUDA_LIB_DIR", Sys.getenv("CUDA_HOME", ""))
+cuda_lib_dir <- if (nzchar(cuda_lib_dir)) file.path(cuda_lib_dir, "targets/x86_64-linux/lib") else ""
+library_candidates <- c(
+  if (nzchar(faiss_env_dir)) file.path(faiss_env_dir, "lib") else "",
+  if (nzchar(faiss_env_dir)) file.path(faiss_env_dir, "targets/x86_64-linux/lib") else "",
+  cuda_lib_dir,
+  Sys.getenv("LD_LIBRARY_PATH")
 )
-faiss_preload <- paste(
-  c(file.path(faiss_env_dir, "lib/libstdc++.so.6"), Sys.getenv("LD_PRELOAD"))[
-    nzchar(c(file.path(faiss_env_dir, "lib/libstdc++.so.6"), Sys.getenv("LD_PRELOAD")))
-  ],
-  collapse = ":"
+faiss_library_path <- paste(library_candidates[nzchar(library_candidates)], collapse = ":")
+preload_candidates <- c(
+  Sys.getenv("FAISSR_LD_PRELOAD"),
+  if (nzchar(faiss_env_dir)) file.path(faiss_env_dir, "lib/libstdc++.so.6") else "",
+  Sys.getenv("LD_PRELOAD")
 )
-Sys.setenv(
-  CONDA_PREFIX = faiss_env_dir,
-  LD_LIBRARY_PATH = faiss_library_path,
-  LD_PRELOAD = faiss_preload
-)
+faiss_preload <- paste(preload_candidates[nzchar(preload_candidates)], collapse = ":")
+env_updates <- list()
+if (nzchar(faiss_env_dir)) env_updates$CONDA_PREFIX <- faiss_env_dir
+if (nzchar(faiss_library_path)) env_updates$LD_LIBRARY_PATH <- faiss_library_path
+if (nzchar(faiss_preload)) env_updates$LD_PRELOAD <- faiss_preload
+do.call(Sys.setenv, env_updates)
 
 benchmark_env <- function() {
-  c(
-    paste0("CONDA_PREFIX=", faiss_env_dir),
-    paste0("LD_LIBRARY_PATH=", faiss_library_path),
-    paste0("LD_PRELOAD=", faiss_preload)
-  )
+  env <- character()
+  if (nzchar(faiss_env_dir)) env <- c(env, paste0("FAISSR_ENV_DIR=", faiss_env_dir))
+  if (nzchar(faiss_library_path)) env <- c(env, paste0("LD_LIBRARY_PATH=", faiss_library_path))
+  if (nzchar(faiss_preload)) env <- c(env, paste0("LD_PRELOAD=", faiss_preload))
+  env
 }
 
-data_root <- args$data_root %||% "/mnt/sata_ssd/fastEmbedR/Data"
-out_dir <- args$out_dir %||% file.path("/mnt/sata_ssd", paste0("faissR_BENCHMARK1_", format(Sys.time(), "%Y%m%d_%H%M%S")))
+data_root <- args$data_root %||% Sys.getenv("FAISSR_BENCHMARK_DATA", file.path(getwd(), "Data"))
+out_dir <- args$out_dir %||% Sys.getenv(
+  "FAISSR_BENCHMARK_OUT",
+  file.path(getwd(), paste0("faissR_BENCHMARK1_", format(Sys.time(), "%Y%m%d_%H%M%S")))
+)
 k <- as.integer(args$k %||% "50")
 n_threads <- as.integer(args$threads %||% "4")
 metric <- tolower(args$metric %||% "l2")
@@ -973,7 +975,7 @@ materials <- c(
   "",
   paste0("Datasets were read from `", data_root, "`. The required datasets were COIL20, USPS, FashionMNIST, FlowRepository_FR-FCM-ZYRM_files, flow18, MNIST, imagenet, MetRef, and mass41. Each dataset file was loaded from its dataset folder as an `.RData` object named `dataset` containing `dataset$data` and `dataset$labels`. Two simulated reference datasets were generated as `matrix(runif(2000000), ncol = 2)` and `matrix(runif(3000000), ncol = 3)`, giving 1,000,000 observations with 2 and 3 variables, respectively."),
   paste0("All methods were tested over k = ", paste(k_values, collapse = ", "), " and metrics = ", paste(metric_values, collapse = ", "), ". CPU methods were run with n_threads/cores = ", n_threads, " when the package exposed a thread argument. Each dataset-method-parameter combination was executed in a separate R process with GNU `timeout` set to ", timeout_sec, " seconds."),
-  paste0("Workers were launched with `CONDA_PREFIX=", faiss_env_dir, "` and with `LD_LIBRARY_PATH` preferring the conda FAISS/cuVS libraries and CUDA target libraries before system libraries."),
+    "Workers were launched with the configured FAISS/cuVS/CUDA library paths before system library paths when those variables were supplied.",
   paste0("Nearest-neighbour quality was evaluated against an exact subset reference where feasible. The reference subset used at most ", quality_eval_max_n, " rows and was automatically reduced when the estimated operation count exceeded ", format(quality_eval_max_ops, scientific = TRUE), ". Reported quality metrics are recall@k, median recall@k, minimum recall@k, mean relative distance error, and Spearman rank correlation of neighbour ranks."),
   "The faissR CUDA/cuVS NN-descent output was saved for every dataset where the method completed successfully.",
   "",

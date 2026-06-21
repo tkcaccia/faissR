@@ -10,13 +10,9 @@
 [Backends](backend-capabilities.md) |
 [References](references.md)
 
-These notes summarize the empirical `nn()` tuning run on chiamaka for k = 50,
-Euclidean/L2 search, raw unscaled data, and all benchmark datasets except
-imagenet. The full result files are in:
-
-`/mnt/sata_ssd/faissR_AUTOTUNE_ALLMETHODS_20260620_224207`
-
-Important files:
+These notes summarize empirical `nn()` tuning runs for k = 50, Euclidean/L2
+search, raw unscaled data, and the package benchmark datasets. Important
+benchmark artifacts include:
 
 - `autotune_results.csv`: one row per dataset and method label.
 - `autotune_method_summary.csv`: method-level speed/recall/failure summary.
@@ -69,23 +65,14 @@ Use these rules for `backend = "auto"` and for explicit backend recommendations:
 | `faiss_gpu_cagra` | CUDA graph high-recall tier | Reliable high-recall CAGRA path through FAISS/cuVS integration [13-15]. |
 | `cuda_cuvs_cagra` | Direct cuVS CAGRA | Guarded by pilot recall. Direct cuVS CAGRA had anomalously poor MNIST recall; do not trust without pilot success. |
 | `cpu_grid` | Exact 2D/3D spatial path | Best for simulated 2D/3D Euclidean data; unavailable by design outside 2D/3D. |
-| `cuda_grid` | CUDA 2D/3D spatial path | Correct for 2D/3D but slower than CPU grid on chiamaka in this run. |
+| `cuda_grid` | CUDA 2D/3D spatial path | Correct for 2D/3D, but benchmark speed depends strongly on GPU model and transfer overhead. |
 
 
-## ImageNet Probe On Chiamaka
+## ImageNet Probe
 
-Additional ImageNet probes were run on chiamaka after installing the current
-working tree. The dataset was found at:
-
-`/mnt/sata_ssd/fastEmbedR_Data/imagenet/imagenet.RData`
-
-The object contains `imagenet$data` and `imagenet$labels`. The data table has
-1,281,167 rows and 1,024 columns and occupies about 10 GB as double-precision R
-columns. Probe outputs were saved in:
-
-`/mnt/sata_ssd/faissR_IMAGENET_PROBE_20260621_000829`
-
-Important files:
+Additional ImageNet probes used a dataset object with `data` and `labels`
+fields. The data table had 1,281,167 rows and 1,024 columns and occupied about
+10 GB as double-precision R columns. Important probe artifacts include:
 
 - `imagenet_probe_results.csv`: 10k and 50k self-KNN sample results with exact
   FAISS GPU Flat as the recall reference.
@@ -113,11 +100,8 @@ from a memory-efficient matrix/float32 representation or on a host with more RAM
 
 ## Shape-Aware `backend` Plus `method = "auto"`
 
-A follow-up auto-policy run tested the new CPU-only and CUDA-only automatic
-selectors on simulated shapes and all available dataset folders. The result CSV
-is in:
-
-`/mnt/sata_ssd/faissR_AUTO_POLICY_TIMEOUT_20260621_072805/auto_policy_results.csv`
+A follow-up auto-policy run tested the CPU-only and CUDA-only automatic
+selectors on simulated shapes and benchmark dataset folders.
 
 Policy summary:
 
@@ -171,6 +155,6 @@ CPU-auto default.
 
 ## Reproducibility
 
-The run used isolated worker processes with a 900 second timeout per
+The run used isolated worker processes with a fixed timeout per
 method/dataset row. Failures and timeouts were recorded and did not stop the
-matrix. CPU methods used 12 OpenMP/MKL threads on chiamaka.
+benchmark matrix. CPU methods used a fixed OpenMP/BLAS thread count.

@@ -53,9 +53,3 @@ saveRDS(knn, "knn_k100.rds")
 
 The same object can then feed `fastEmbedR`, graph construction, classifier
 tests, and recall diagnostics without paying the KNN cost repeatedly.
-
-## HPC Note
-
-When running many datasets and backends on a shared HPC, submit CPU and GPU
-jobs separately and throttle job arrays. One failed method should write a
-failure row and continue with the next method/dataset.
