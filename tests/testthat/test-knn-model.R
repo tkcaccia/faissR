@@ -67,6 +67,22 @@ test_that("knn stores canonical metric labels for aliases", {
   expect_s3_class(pred, "factor")
 })
 
+test_that("knn validates method and tuning before returning a model", {
+  x <- matrix(rnorm(40), ncol = 4)
+  y <- rep(c("a", "b"), length.out = nrow(x))
+
+  expect_error(knn(x, y, backend = "cpu", method = "faiss_hnsw", k = 3L), "method")
+  expect_error(knn(x, y, backend = "cpu", tuning = "aggressive", k = 3L), "tuning")
+  expect_error(knn(x, y, backend = "cpu", method = "grid", k = 3L), "grid")
+
+  model <- knn(x, y, backend = "cpu", tuning = "none", k = 3L)
+  expect_equal(model$tuning, "off")
+  expect_error(
+    predict(model, x[1:2, , drop = FALSE], tuning = "aggressive"),
+    "tuning"
+  )
+})
+
 test_that("knn rejects implementation backend labels", {
   x <- matrix(rnorm(30), ncol = 3)
   y <- rep(c("a", "b"), length.out = nrow(x))

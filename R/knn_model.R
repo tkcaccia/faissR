@@ -59,8 +59,8 @@ knn <- function(Xtrain,
   vote <- match.arg(vote)
   type <- match.arg(type)
   backend <- normalize_public_backend_arg(backend)
-  method <- as.character(method)[1L]
-  tuning <- as.character(tuning)[1L]
+  method <- normalize_nn_method(method)
+  tuning <- normalize_nn_tuning(tuning)
   model <- knn_model_fit(
     Xtrain = Xtrain,
     Ytrain = Ytrain,
@@ -89,8 +89,8 @@ knn_model_fit <- function(Xtrain,
                           k = 15L,
                           n_threads = NULL) {
   backend <- normalize_public_backend_arg(backend)
-  method <- as.character(method)[1L]
-  tuning <- as.character(tuning)[1L]
+  method <- normalize_nn_method(method)
+  tuning <- normalize_nn_tuning(tuning)
   metric <- normalize_nn_metric(metric)
   task <- match.arg(task)
   x <- as.matrix(Xtrain)
@@ -101,6 +101,7 @@ knn_model_fit <- function(Xtrain,
   if (!all(is.finite(x))) {
     stop("`Xtrain` must contain only finite values.", call. = FALSE)
   }
+  validate_public_nn_method_shape(x, method)
   if (NROW(Ytrain) != nrow(x)) {
     stop("`Ytrain` must have one value for each row of `Xtrain`.", call. = FALSE)
   }
@@ -131,8 +132,8 @@ knn_model_fit <- function(Xtrain,
       task = task,
       levels = levels,
       backend = as.character(backend)[1L],
-      method = as.character(method)[1L],
-      tuning = as.character(tuning)[1L],
+      method = method,
+      tuning = tuning,
       metric = metric,
       k = k,
       n_threads = n_threads
@@ -172,7 +173,7 @@ predict.faissR_knn_model <- function(object,
   } else {
     normalize_public_backend_arg(backend)
   }
-  tuning <- as.character(tuning)[1L]
+  tuning <- normalize_nn_tuning(tuning)
   vote <- match.arg(vote)
   type <- match.arg(type)
   query <- validate_knn_model_query(object, newdata)
