@@ -122,6 +122,9 @@ test_that("benchmark documentation describes canonical metric aliases once", {
   expect_length(grep("^## NN Metrics File Layout$", lines), 1L)
   prose <- paste(lines, collapse = " ")
   expect_true(grepl('"l2".*"cor".*"pearson".*"ip"', prose))
+  expect_false(grepl("non-inner-product metrics", prose, fixed = TRUE))
+  expect_true(grepl("four public metrics L2/Euclidean, cosine, correlation, and inner product", prose, fixed = TRUE))
+  expect_true(grepl("--metrics=euclidean,cosine,correlation,inner_product", prose, fixed = TRUE))
 })
 
 test_that("autotuning method settings table keeps public and implementation labels separate", {
