@@ -30,7 +30,10 @@
 #'   `method = "louvain"` or `"leiden"` and no explicit `n_clusters`, the
 #'   stored target is used instead of relying only on `resolution`.
 #' @param n_threads CPU threads passed to `nn()` when KNN is computed here.
-#' @return A native `faissR_graph` edge-list object.
+#' @return A native `faissR_graph` edge-list object. The `faissR_graph`
+#'   attribute stores graph-construction metadata, including `requested_backend`
+#'   and `resolved_backend` for the public KNN backend policy used when faissR
+#'   computes neighbours internally.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' g <- knn_graph(x, k = 15, backend = "cpu", n_clusters = 3)
@@ -67,6 +70,8 @@ knn_graph <- function(data,
   n_clusters <- normalize_graph_target_clusters(n_clusters, method = NULL)
 
   input_backend <- NA_character_
+  requested_graph_backend <- normalize_public_backend_arg(backend)
+  resolved_graph_backend <- NA_character_
   graph_space <- "input"
   input_method <- NA_character_
   if (is.null(knn)) {
@@ -83,7 +88,8 @@ knn_graph <- function(data,
         stop("Embedding objects passed to `knn_graph()` must contain a matrix `layout`.", call. = FALSE)
       }
       graph_space <- "embedding"
-      graph_backend <- resolve_knn_graph_backend(as.character(backend)[1L])
+      graph_backend <- resolve_knn_graph_backend(requested_graph_backend)
+      resolved_graph_backend <- graph_backend
       knn <- nn_without_self(
         data$layout,
         k = k,
@@ -95,7 +101,8 @@ knn_graph <- function(data,
       )
       input_backend <- attr(knn, "backend") %||% graph_backend
     } else {
-      graph_backend <- resolve_knn_graph_backend(as.character(backend)[1L])
+      graph_backend <- resolve_knn_graph_backend(requested_graph_backend)
+      resolved_graph_backend <- graph_backend
       knn <- nn_without_self(
         data,
         k = k,
@@ -130,6 +137,8 @@ knn_graph <- function(data,
     mutual = mutual,
     prune = prune,
     nn_backend = input_backend,
+    requested_backend = requested_graph_backend,
+    resolved_backend = resolved_graph_backend,
     nn_method = nn_method,
     metric = attr(knn, "metric") %||% metric,
     tuning = tuning,
@@ -305,6 +314,14 @@ graph_cluster <- function(graph,
   input_backend <- NA_character_
   if (inherits(graph, "faissR_graph")) {
     meta <- attr(graph, "faissR_graph") %||% list()
+    if (!is.null(meta$requested_backend)) {
+      meta$graph_requested_backend <- meta$requested_backend
+      meta$requested_backend <- NULL
+    }
+    if (!is.null(meta$resolved_backend)) {
+      meta$graph_resolved_backend <- meta$resolved_backend
+      meta$resolved_backend <- NULL
+    }
     graph_n_clusters <- n_clusters
     if (is.null(graph_n_clusters) && !is.null(meta$target_n_clusters)) {
       graph_n_clusters <- meta$target_n_clusters

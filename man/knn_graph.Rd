@@ -38,7 +38,10 @@ the stored target is used instead of relying only on \code{resolution}.}
 \item{n_threads}{CPU threads passed to \code{nn()} when KNN is computed here.}
 }
 \value{
-A native \code{faissR_graph} edge-list object.
+A native \code{faissR_graph} edge-list object. The \code{faissR_graph}
+attribute stores graph-construction metadata, including
+\code{requested_backend} and \code{resolved_backend} for the public KNN backend
+policy used when faissR computes neighbours internally.
 }
 \description{
 \code{knn_graph()} turns a data matrix, a precomputed \code{nn()} result, or a \code{fastEmbedR_embedding} object into a weighted nearest-neighbour graph. It returns a native \code{faissR_graph} edge-list object and does not require igraph.

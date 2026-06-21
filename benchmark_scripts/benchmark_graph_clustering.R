@@ -169,6 +169,8 @@ result_row <- function(dataset, n, p, k, graph_backend, cluster_backend, method,
                        peak_rss_gb = NA_real_, n_edges = NA_integer_,
                        n_communities = NA_integer_, modularity = NA_real_,
                        ari = NA_real_, selected_resolution = NA_real_,
+                       graph_resolved_backend = NA_character_,
+                       cluster_resolved_backend = NA_character_,
                        graph_cached = NA,
                        expected_skip = FALSE) {
   data.frame(
@@ -177,7 +179,9 @@ result_row <- function(dataset, n, p, k, graph_backend, cluster_backend, method,
     p = as.integer(p),
     k = as.integer(k),
     graph_backend = graph_backend,
+    graph_resolved_backend = graph_resolved_backend,
     cluster_backend = cluster_backend,
+    cluster_resolved_backend = cluster_resolved_backend,
     method = method,
     weight = weight,
     n_clusters_requested = if (is.null(n_clusters)) NA_integer_ else as.integer(n_clusters),
@@ -249,11 +253,13 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
       )
     }, timeout)
     elapsed <- proc.time()[["elapsed"]] - started
+    graph_meta <- attr(graph, "faissR_graph") %||% list()
     list(
       status = "success",
       graph = graph,
       graph_sec = elapsed,
       n_edges = graph$n_edges %||% NA_integer_,
+      graph_resolved_backend = graph_meta$resolved_backend %||% graph_backend,
       weight = attr(graph, "faissR_graph")$weight %||% weight,
       error = NA_character_
     )
@@ -321,6 +327,7 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
     cluster_wall <- proc.time()[["elapsed"]] - started
     cluster_sec <- attr(cluster, "cluster_sec") %||% cluster_wall
     total_sec <- graph_sec + cluster_wall
+    cluster_params <- cluster$parameters %||% list()
     result_row(
       dataset = dataset_name,
       n = n,
@@ -342,6 +349,8 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       modularity = cluster$modularity %||% NA_real_,
       ari = benchmark_adjusted_rand_index(labels, cluster$membership),
       selected_resolution = cluster$selected_resolution %||% NA_real_,
+      graph_resolved_backend = attr(graph_obj, "faissR_graph")$resolved_backend %||% graph_backend,
+      cluster_resolved_backend = cluster_params$resolved_backend %||% (cluster$backend %||% cluster_backend),
       graph_cached = graph_cached
     )
   }, error = function(e) {
@@ -489,6 +498,7 @@ for (dataset_name in datasets) {
               total_sec = if (identical(graph_build$status, "success")) graph_build$graph_sec else NA_real_,
               peak_rss_gb = read_peak_rss_gb(),
               n_edges = if (identical(graph_build$status, "success")) graph_build$n_edges else NA_integer_,
+              graph_resolved_backend = if (identical(graph_build$status, "success")) graph_build$graph_resolved_backend else NA_character_,
               graph_cached = identical(graph_build$status, "success"),
               expected_skip = TRUE
             )
@@ -509,6 +519,7 @@ for (dataset_name in datasets) {
               graph_sec = graph_build$graph_sec,
               total_sec = graph_build$graph_sec,
               peak_rss_gb = read_peak_rss_gb(),
+              graph_resolved_backend = if (identical(graph_build$status, "success")) graph_build$graph_resolved_backend else NA_character_,
               graph_cached = FALSE,
               expected_skip = identical(graph_build$status, "expected_skip")
             )
@@ -582,6 +593,7 @@ materials <- c(
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
   "When `target_clusters = \"labels\"`, Louvain and Leiden receive `n_clusters = length(unique(labels))`; random-walking is benchmarked without a cluster-count target because the public API does not support that option for random-walking.",
   "Each KNN graph is built once per dataset/k/graph-backend/weight combination and reused across clustering methods and clustering backends. The `graph_cached` column records this reuse; `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
+  "`graph_backend` and `cluster_backend` record the requested public backends. `graph_resolved_backend` and `cluster_resolved_backend` record the resolved public device policy after `auto` selection, so CPU/CUDA rows can be audited without opening the R objects.",
   "Unsupported graph-clustering combinations known from the public API, such as CUDA random_walking, are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. If every row in a graph-build block is an expected skip, graph construction is skipped and graph timing/edge columns remain `NA`.",
   "CUDA rows are recorded as failed when faissR was not built with the required CUDA/cuGraph support; the benchmark does not silently replace CUDA clustering with CPU clustering."
 )

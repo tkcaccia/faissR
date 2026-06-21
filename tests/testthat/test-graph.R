@@ -72,6 +72,8 @@ test_that("knn_graph passes method metric and tuning to internal KNN", {
   expect_equal(meta$metric, "cosine")
   expect_equal(meta$tuning, "off")
   expect_equal(meta$nn_backend, "cpu")
+  expect_equal(meta$requested_backend, "cpu")
+  expect_equal(meta$resolved_backend, "cpu")
 })
 
 test_that("graph construction rejects implementation backend labels", {

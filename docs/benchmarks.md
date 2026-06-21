@@ -95,6 +95,10 @@ methods and clustering backends. The `graph_cached` column records this reuse.
 `graph_sec` is the shared graph-construction time, `cluster_sec` is
 clustering-only time, and `total_sec` is `graph_sec + cluster_sec` for the
 complete graph-plus-clustering workflow represented by the row.
+The result table stores both requested and resolved public backend metadata:
+`graph_backend`/`cluster_backend` are the user requests, while
+`graph_resolved_backend`/`cluster_resolved_backend` show the public device
+policy after `"auto"` resolution.
 By default, graph construction and graph clustering are each tested with
 `"auto"`, `"cpu"`, and `"cuda"` backends. `backend = "auto"` may resolve to CPU
 when CUDA/cuGraph support is not available.

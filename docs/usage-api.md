@@ -138,7 +138,9 @@ knn_graph(data, knn = NULL, k = 50L, backend = "auto",
 | `n_threads` | CPU worker threads for neighbour search when KNN is computed inside the function. |
 
 Returns a native `faissR_graph` edge-list object. No `igraph` dependency is
-required.
+required. When faissR builds neighbours internally, the `faissR_graph` metadata
+includes `requested_backend` and `resolved_backend` for the public KNN backend
+policy.
 
 ## `graph_cluster()`
 
