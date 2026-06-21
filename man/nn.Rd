@@ -8,22 +8,23 @@ nn(
   data,
   points = data,
   k = NULL,
-  backend = c("auto", "cpu", "cpu_approx", "cpu_grid", "grid", "cpu_sparse", "sparse",
-    "sparse_cpu", "cpu_grid2d", "grid2d", "cpu_grid3d", "grid3d", "vptree", "cpu_vptree",
-    "hnsw", "rcpphnsw", "cpu_hnsw", "faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat",
-    "faiss_flat_l2", "faiss_flat_ip", "faiss_ivf", "faiss_ivf_flat",
+  backend = c("auto", "cpu", "cpu_auto", "cpu_approx", "cpu_grid", "grid", "cpu_sparse",
+    "sparse", "sparse_cpu", "cpu_grid2d", "grid2d", "cpu_grid3d", "grid3d", "vptree",
+    "cpu_vptree", "hnsw", "rcpphnsw", "cpu_hnsw", "faiss", "cpu_faiss", "cpu_faiss_flat",
+    "faiss_flat", "faiss_flat_l2", "faiss_flat_ip", "faiss_ivf", "faiss_ivf_flat",
     "cpu_faiss_index_ivf", "faiss_ivfpq", "faiss_hnsw", "faiss_nsg", "faiss_nndescent",
     "faiss_gpu_flat", "faiss_gpu_flat_l2", "faiss_gpu_flat_ip", "cuda_faiss_flat_l2",
-    "cuda_faiss_flat_ip", "faiss_gpu_ivf",
-     "faiss_gpu_ivf_flat", "faiss_gpu_ivfpq",
+    "cuda_faiss_flat_ip",
+     "faiss_gpu_ivf", "faiss_gpu_ivf_flat", "faiss_gpu_ivfpq",
     "faiss_gpu_cagra", "cuda_faiss_cagra", "cuda_faiss_ivf_flat", "cuda_faiss_ivfpq",
     "cuvs", "gpu_cuvs", "cuda_cuvs", "cuda_cuvs_cagra", "cuda_cagra", "gpu_cagra",
     "cuvs_ivf", "cuda_cuvs_ivf", "cuvs_ivf_flat", "cuda_cuvs_ivf_flat", "cuvs_ivfpq",
     "cuda_cuvs_ivfpq", "cuvs_ivf_pq", "cuda_cuvs_ivf_pq", "cuvs_bruteforce",
     "cuda_cuvs_bruteforce", "cuda_cuvs_exact", "cuvs_nndescent", "cuda_cuvs_nndescent",
-    "cuda_grid", "cuda_grid_auto", "gpu_grid", "cuda_grid2d",
-     "cuda_grid3d", "gpu",
-    "cuda", "cuda_approx", "cuda_nndescent", "cuda_ivf", "cuda_faiss"),
+    "cuda_grid", "cuda_grid_auto", "gpu_grid",
+     "cuda_grid2d", "cuda_grid3d", "gpu",
+    "cuda", "cuda_auto", "gpu_auto", "cuda_approx", "cuda_nndescent", "cuda_ivf",
+    "cuda_faiss"),
   metric = c("euclidean", "cosine", "correlation"),
   n_threads = NULL
 )
@@ -42,12 +43,19 @@ is `data`.}
 
 \item{backend}{Execution backend. `"auto"` records the selected fast backend
 in `attr(result, "backend")`. `"cpu"` always uses the exact C++ CPU path.
+`"cpu_auto"` chooses exact CPU, CPU grid, FAISS IVF for million-row
+self-KNN, FAISS HNSW, RcppHNSW, or exact CPU based on the number of
+rows, columns, queries, and `k`.
 `"cpu_approx"` chooses FAISS HNSW, RcppHNSW, or exact CPU depending
 on what is available; for large 2D Euclidean self-KNN it chooses
 `"cpu_grid2d"` and for large 3D Euclidean self-KNN it chooses
 `"cpu_grid"`. Explicit `"cpu_grid2d"`/`"cpu_grid3d"` force the exact
 grid implementation, while `"cpu_vptree"` forces the exact VP-tree for
 Euclidean self-KNN or reference/query KNN.
+`"cuda_auto"`/`"gpu_auto"` chooses a CUDA-only backend from the
+dataset shape: CUDA grid for large 2D/3D self-KNN, exact FAISS GPU Flat
+or cuVS brute force for small and medium searches, and FAISS GPU CAGRA
+or direct cuVS graph/IVF routes for very large searches.
 `"cuda_grid_auto"`/`"cuda_grid"` chooses the native CUDA exact 2D or 3D
 grid implementation for Euclidean self-KNN only; it does not silently
 fall back to CPU.
@@ -122,8 +130,9 @@ small data or recall checks. `backend = "auto"` chooses a recorded fast path
 for large self-KNN searches: CUDA routes use explicit cuVS/FAISS GPU
 backends when requested and available; CPU approximate routing prefers FAISS
 HNSW when FAISS is compiled in, otherwise the optional CRAN-friendly RcppHNSW
-backend when installed, otherwise exact CPU. Use `backend = "cpu_approx"` to
-force the non-CUDA part of that selector. `backend = "cpu_grid"` is a native exact
+backend when installed, otherwise exact CPU. Use `backend = "cpu_auto"` to
+force the CPU-only shape-aware selector and `backend = "cpu_approx"` to
+force the approximate-only CPU selector. `backend = "cpu_grid"` is a native exact
 two- or three-dimensional Euclidean self-KNN spatial selector: it uses a
 fast grid for uniform-like clouds and a VP-tree for thin or imbalanced
 clouds. `backend = "vptree"`/`"cpu_vptree"` builds an exact VP-tree on

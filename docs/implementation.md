@@ -61,17 +61,32 @@ neighbours under a different label.
 
 ### Automatic Backend Policy
 
-`backend = "cpu_approx"` now prefers FAISS HNSW when FAISS is available,
-then RcppHNSW, then exact CPU. This follows the chiamaka autotuning run where
-FAISS HNSW gave the best CPU speed/recall balance on image and flow datasets.
+`backend = "cpu_auto"` is the CPU-only shape-aware selector. It uses exact CPU
+for small work, exact grid search for large 2D/3D Euclidean self-KNN, FAISS IVF
+for million-row self-KNN where HNSW graph construction is too memory-heavy, and
+FAISS HNSW for large high-dimensional self-KNN when FAISS is available. It is a
+balanced speed/recall selector, not an accuracy-first promise; users who need
+exact or near-exact CPU recall should request `backend = "cpu"`,
+`backend = "faiss"`, or tune explicit IVF/HNSW options.
 
-`backend = "cuda_cuvs"`, `"cuda"`, and explicit CUDA aliases use CUDA-only
-routes. Exact CUDA references are `faiss_gpu_flat_l2` and
-`cuda_cuvs_bruteforce`. FAISS GPU CAGRA uses the FAISS/cuVS integration path.
-Direct cuVS CAGRA is guarded by pilot recall tuning; if the pilot does not meet
-the configured recall target, the function stops and recommends
-`faiss_gpu_cagra` or `cuda_cuvs_bruteforce` rather than silently returning a
-poor graph-search result.
+`backend = "cpu_approx"` remains the approximate-only CPU selector. It prefers
+FAISS HNSW when FAISS is available, then RcppHNSW, then exact CPU. This follows
+the chiamaka autotuning run where FAISS HNSW gave the best practical CPU
+speed/recall balance on image and flow datasets.
+
+`backend = "cuda_auto"` and `backend = "gpu_auto"` are CUDA-only shape-aware
+selectors. They use CUDA grid search for large 2D/3D Euclidean self-KNN, exact
+FAISS GPU Flat or cuVS brute force for small and medium searches, and FAISS GPU
+CAGRA for very large self-KNN when FAISS GPU/cuVS integration is available.
+Plain `backend = "cuda"` remains the explicit native CUDA route for backwards
+compatibility.
+
+`backend = "cuda_cuvs"` uses only direct cuVS routes. Exact CUDA references are
+`faiss_gpu_flat_l2` and `cuda_cuvs_bruteforce`. FAISS GPU CAGRA uses the
+FAISS/cuVS integration path. Direct cuVS CAGRA is guarded by pilot recall tuning;
+if the pilot does not meet the configured recall target, the function stops and
+recommends `faiss_gpu_cagra` or `cuda_cuvs_bruteforce` rather than silently
+returning a poor graph-search result.
 
 IVF probe defaults are conservative enough to avoid misleading speed-only
 results. IVFPQ is treated as an explicit memory-pressure backend because product

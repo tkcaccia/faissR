@@ -108,6 +108,49 @@ The common failure mode was host-memory pressure from loading a 10 GB double
 backend-side float/index buffers. On this machine, full ImageNet should be run
 from a memory-efficient matrix/float32 representation or on a host with more RAM.
 
+
+## Shape-Aware `cpu_auto` And `cuda_auto`
+
+A follow-up auto-policy run tested the new CPU-only and CUDA-only automatic
+selectors on simulated shapes and all available dataset folders. The result CSV
+is in:
+
+`/mnt/sata_ssd/faissR_AUTO_POLICY_TIMEOUT_20260621_072805/auto_policy_results.csv`
+
+Policy summary:
+
+- `cpu_auto`: exact CPU for small work; CPU grid for large 2D/3D self-KNN;
+  FAISS IVF for million-row self-KNN where HNSW graph construction is too
+  memory-heavy; FAISS HNSW for large high-dimensional CPU self-KNN.
+- `cuda_auto`: CUDA grid for large 2D/3D self-KNN; FAISS GPU Flat for small and
+  medium datasets where exact GPU search is fast; FAISS GPU CAGRA for very
+  large self-KNN.
+
+Observed examples from the run:
+
+| Dataset | n x p | `cpu_auto` selected | CPU seconds | CPU recall | `cuda_auto` selected | CUDA seconds | CUDA recall |
+|---|---:|---|---:|---:|---|---:|---:|
+| simulated2d | 20000 x 2 | `cpu_grid2d` | 0.782 | 0.999963 | `cuda_grid2d` | 0.697 | 0.999965 |
+| COIL20 | 1440 x 16384 | `cpu` | 4.877 | 1.000000 | `faiss_gpu_flat_l2` | 1.914 | 1.000000 |
+| FashionMNIST | 70000 x 784 | `faiss_hnsw` | 20.879 | 0.998682 | `faiss_gpu_flat_l2` | 6.455 | 1.000000 |
+| FlowRepository | 5220347 x 32 | timeout | NA | NA | `faiss_gpu_cagra` | 118.268 | NA |
+| flow18 | 1000021 x 11 | `faiss_ivf` | 35.165 | NA | `faiss_gpu_cagra` | 8.181 | NA |
+| MNIST | 70000 x 784 | `faiss_hnsw` | 21.602 | 0.996334 | `faiss_gpu_flat_l2` | 6.197 | 1.000000 |
+| TabulaMuris | 70118 x 50 | `faiss_hnsw` | 3.246 | 0.998619 | `faiss_gpu_flat_l2` | 2.314 | 1.000000 |
+| ImageNet sample | 50000 x 1024 | `faiss_hnsw` | 93.956 | 0.999436 | `faiss_gpu_flat_l2` | 62.963 | 1.000000 |
+
+The simulated random high-dimensional datasets exposed an important limitation:
+FAISS HNSW is fast but may have low recall on noise-like high-dimensional data.
+For MNIST, FAISS IVF with `nprobe = 64` reached about 0.99999 recall but took
+about 365 seconds, so it is better treated as an explicit accuracy-first CPU
+setting rather than the default balanced `cpu_auto` route.
+
+FlowRepository remains a CPU stress case. The full 5.2M x 32 matrix timed out
+with `cpu_auto`; a follow-up probe with FAISS IVF and `nprobe = 4` also failed
+to return in a practical interactive window. On the same dataset, `cuda_auto`
+selected FAISS GPU CAGRA and completed, so this shape is currently a GPU-first
+case rather than a reliable CPU-auto default.
+
 ## Known Issues From The Run
 
 - Direct cuVS CAGRA can produce very low recall on high-dimensional raw MNIST.
@@ -123,6 +166,6 @@ from a memory-efficient matrix/float32 representation or on a host with more RAM
 
 ## Reproducibility
 
-The run used isolated worker processes with a 240 second timeout per
+The run used isolated worker processes with a 900 second timeout per
 method/dataset row. Failures and timeouts were recorded and did not stop the
 matrix. CPU methods used 12 OpenMP/MKL threads on chiamaka.

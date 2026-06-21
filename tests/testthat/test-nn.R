@@ -496,6 +496,97 @@ test_that("CPU approximate selector chooses FAISS HNSW, RcppHNSW, or exact CPU",
   ))
 })
 
+
+test_that("CPU auto selector is shape-aware", {
+  small <- faissR:::select_cpu_auto_backend(
+    self_query = TRUE,
+    n = 1000L,
+    p = 20L,
+    n_points = 1000L,
+    k = 50L,
+    work_size = 1000 * 1000 * 20
+  )
+  expect_equal(small, "cpu")
+
+  low_dim <- faissR:::select_cpu_auto_backend(
+    self_query = TRUE,
+    n = 20000L,
+    p = 2L,
+    n_points = 20000L,
+    k = 50L,
+    work_size = 20000 * 20000 * 2
+  )
+  expect_equal(low_dim, "cpu_grid")
+
+  large <- faissR:::select_cpu_auto_backend(
+    self_query = TRUE,
+    n = 20000L,
+    p = 100L,
+    n_points = 20000L,
+    k = 50L,
+    work_size = 20000 * 20000 * 100
+  )
+  expect_true(large %in% c("faiss_hnsw", "hnsw", "cpu"))
+  if (faiss_available()) expect_equal(large, "faiss_hnsw")
+
+  million_row <- faissR:::select_cpu_auto_backend(
+    self_query = TRUE,
+    n = 1200000L,
+    p = 32L,
+    n_points = 1200000L,
+    k = 50L,
+    work_size = 1200000 * 1200000 * 32
+  )
+  expect_true(million_row %in% c("faiss_ivf", "hnsw", "cpu"))
+  if (faiss_available()) expect_equal(million_row, "faiss_ivf")
+
+  non_euclidean <- faissR:::select_cpu_auto_backend(
+    self_query = TRUE,
+    n = 20000L,
+    p = 100L,
+    n_points = 20000L,
+    k = 50L,
+    work_size = 20000 * 20000 * 100,
+    metric = "cosine"
+  )
+  expect_equal(non_euclidean, "cpu")
+})
+
+test_that("CUDA auto selector is shape-aware", {
+  skip_if_not(cuda_available() || cuvs_available() || faiss_available())
+
+  medium <- faissR:::select_cuda_auto_backend(
+    self_query = TRUE,
+    n = 50000L,
+    p = 784L,
+    n_points = 50000L,
+    k = 50L,
+    work_size = 50000 * 50000 * 784
+  )
+  expect_true(medium %in% c("faiss_gpu_flat_l2", "cuda_cuvs_bruteforce", "cuda"))
+
+  low_dim <- faissR:::select_cuda_auto_backend(
+    self_query = TRUE,
+    n = 20000L,
+    p = 3L,
+    n_points = 20000L,
+    k = 50L,
+    work_size = 20000 * 20000 * 3
+  )
+  if (cuda_available()) expect_equal(low_dim, "cuda_grid")
+
+  large <- faissR:::select_cuda_auto_backend(
+    self_query = TRUE,
+    n = 500000L,
+    p = 512L,
+    n_points = 500000L,
+    k = 50L,
+    work_size = 500000 * 500000 * 512
+  )
+  expect_true(large %in% c("faiss_gpu_cagra", "cuda_cuvs_nndescent", "cuda"))
+  if (faiss_available()) expect_equal(large, "faiss_gpu_cagra")
+})
+
 test_that("RcppHNSW backend is public when installed", {
   skip_if_not_installed("RcppHNSW")
   set.seed(127)

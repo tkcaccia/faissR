@@ -10,7 +10,7 @@ nn_compute <- function(data,
   data_sparse <- is_sparse_matrix_input(data)
   points_sparse <- if (isTRUE(points_missing)) data_sparse else is_sparse_matrix_input(points)
   if (isTRUE(data_sparse) || isTRUE(points_sparse)) {
-    sparse_native <- backend %in% c("auto", "cpu", "sparse", "cpu_sparse", "sparse_cpu")
+    sparse_native <- backend %in% c("auto", "cpu", "cpu_auto", "sparse", "cpu_sparse", "sparse_cpu")
     if (isTRUE(sparse_native)) {
       return(nn_sparse_compute(
         data = data,
@@ -81,7 +81,7 @@ nn_compute <- function(data,
   n_threads <- normalize_nn_threads(n_threads)
   metric <- normalize_nn_metric(metric)
   if (!identical(metric, "euclidean")) {
-    if (identical(backend, "auto")) {
+    if (backend %in% c("auto", "cpu_auto")) {
       backend <- "cpu"
     } else if (!backend %in% c("cpu", "hnsw", "rcpphnsw", "cpu_hnsw")) {
       stop(
@@ -109,56 +109,62 @@ nn_compute <- function(data,
     stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
   }
 
-  auto_gpu <- resolve_auto_knn_gpu_backend(
-    backend = backend,
-    self_query = self_query,
-    n_points = nrow(points),
-    n = nrow(data),
-    k = k,
-    work_size = work_size
-  )
-  if (!is.na(auto_gpu)) {
-    backend <- auto_gpu
-  } else if (backend %in% c("cuda", "gpu") && isTRUE(self_query)) {
+  if (identical(backend, "cpu_auto")) {
+    backend <- select_cpu_auto_backend(
+      self_query = self_query,
+      n = nrow(data),
+      p = ncol(data),
+      n_points = nrow(points),
+      k = k,
+      work_size = work_size,
+      metric = metric
+    )
+  } else if (backend %in% c("cuda_auto", "gpu_auto")) {
     backend <- select_cuda_auto_backend(
       self_query = self_query,
       n = nrow(data),
+      p = ncol(data),
       n_points = nrow(points),
       k = k,
       work_size = work_size
     )
-  } else if (backend %in% c("cuda", "gpu") && !isTRUE(self_query)) {
-    backend <- select_cuda_auto_backend(
+  } else {
+    auto_gpu <- resolve_auto_knn_gpu_backend(
+      backend = backend,
       self_query = self_query,
-      n = nrow(data),
       n_points = nrow(points),
+      n = nrow(data),
+      p = ncol(data),
       k = k,
       work_size = work_size
     )
-  } else if (identical(backend, "auto") &&
-             should_use_grid2d_self_knn(
-               self_query = self_query,
-               n = nrow(data),
-               p = ncol(data),
-               k = k,
-               exclude_self = isTRUE(exclude_self),
-               metric = metric
-             )) {
-    backend <- "cpu_grid"
-  } else if (identical(backend, "auto") &&
-             should_use_auto_cpu_approx_self_knn(
-               self_query = self_query,
-               n = nrow(data),
-               p = ncol(data),
-               k = k,
-               work_size = work_size
-             )) {
-    backend <- select_cpu_approx_backend(nrow(data), ncol(data), k)
-  } else if (identical(backend, "cpu_approx")) {
-    if (!isTRUE(self_query)) {
-      stop("`backend = \"cpu_approx\"` is only available for self-KNN searches.", call. = FALSE)
+    if (!is.na(auto_gpu)) {
+      backend <- auto_gpu
+    } else if (identical(backend, "auto") &&
+               should_use_grid2d_self_knn(
+                 self_query = self_query,
+                 n = nrow(data),
+                 p = ncol(data),
+                 k = k,
+                 exclude_self = isTRUE(exclude_self),
+                 metric = metric
+               )) {
+      backend <- "cpu_grid"
+    } else if (identical(backend, "auto") &&
+               should_use_auto_cpu_approx_self_knn(
+                 self_query = self_query,
+                 n = nrow(data),
+                 p = ncol(data),
+                 k = k,
+                 work_size = work_size
+               )) {
+      backend <- select_cpu_approx_backend(nrow(data), ncol(data), k)
+    } else if (identical(backend, "cpu_approx")) {
+      if (!isTRUE(self_query)) {
+        stop("`backend = \"cpu_approx\"` is only available for self-KNN searches.", call. = FALSE)
+      }
+      backend <- select_cpu_approx_backend(nrow(data), ncol(data), k)
     }
-    backend <- select_cpu_approx_backend(nrow(data), ncol(data), k)
   }
 
   gpu_ivf <- resolve_gpu_ivf_backend(
@@ -620,6 +626,7 @@ nn_compute <- function(data,
     backend <- select_cuvs_auto_backend(
       self_query = self_query,
       n = nrow(data),
+      p = ncol(data),
       n_points = nrow(points),
       k = k,
       work_size = work_size
@@ -1061,58 +1068,91 @@ resolve_auto_knn_gpu_backend <- function(backend,
                                          self_query,
                                          n_points,
                                          n,
+                                         p,
                                          k,
                                          work_size) {
   if (!identical(backend, "auto")) return(NA_character_)
   if (!isTRUE(self_query)) return(NA_character_)
   if (k > 256L) return(NA_character_)
   if (work_size < 5e8) return(NA_character_)
-  if (isTRUE(cuvs_available())) {
-    return(select_cuvs_auto_backend(
-      self_query = self_query,
-      n = n,
-      n_points = n_points,
-      k = k,
-      work_size = work_size
-    ))
+  if (!isTRUE(cuda_available()) && !isTRUE(cuvs_available()) && !isTRUE(faiss_available())) {
+    return(NA_character_)
   }
-  NA_character_
+  select_cuda_auto_backend(
+    self_query = self_query,
+    n = n,
+    p = p,
+    n_points = n_points,
+    k = k,
+    work_size = work_size
+  )
 }
 
 select_cuda_auto_backend <- function(self_query,
                                      n,
+                                     p,
                                      n_points,
                                      k,
                                      work_size) {
+  if (k > 256L) {
+    stop("CUDA auto backends currently support `k <= 256`.", call. = FALSE)
+  }
+  if (!isTRUE(cuda_available()) && !isTRUE(cuvs_available()) && !isTRUE(faiss_available())) {
+    stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
+  }
+  if (isTRUE(self_query) && p %in% c(2L, 3L) && isTRUE(cuda_available()) && n >= 10000L) {
+    return("cuda_grid")
+  }
+  if (!isTRUE(self_query)) {
+    if (isTRUE(faiss_available())) return("faiss_gpu_flat_l2")
+    if (isTRUE(cuvs_available())) return("cuda_cuvs_bruteforce")
+    return("cuda")
+  }
+  exact_n <- faiss_option_int("cuda_auto_exact_n", 100000L, min_value = 1000L, max_value = 10000000L)
+  exact_work <- getOption("fastEmbedR.cuda_auto_exact_work", 5e12)
+  exact_work <- suppressWarnings(as.numeric(exact_work))
+  if (length(exact_work) != 1L || is.na(exact_work) || !is.finite(exact_work)) {
+    exact_work <- 5e12
+  }
+  if (n <= exact_n || work_size <= exact_work || k <= 8L) {
+    if (isTRUE(faiss_available())) return("faiss_gpu_flat_l2")
+    if (isTRUE(cuvs_available())) return("cuda_cuvs_bruteforce")
+    return("cuda")
+  }
+  if (isTRUE(faiss_available())) {
+    return("faiss_gpu_cagra")
+  }
   if (isTRUE(cuvs_available())) {
     return(select_cuvs_auto_backend(
       self_query = self_query,
       n = n,
+      p = p,
       n_points = n_points,
       k = k,
       work_size = work_size
     ))
-  }
-  if (!isTRUE(cuda_available())) {
-    stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
   }
   "cuda"
 }
 
 select_cuvs_auto_backend <- function(self_query,
                                      n,
+                                     p,
                                      n_points,
                                      k,
                                      work_size) {
-  small_threshold <- getOption("fastEmbedR.cuvs_bruteforce_work_threshold", 2e8)
+  small_threshold <- getOption("fastEmbedR.cuvs_bruteforce_work_threshold", 5e12)
   small_threshold <- suppressWarnings(as.numeric(small_threshold))
   if (length(small_threshold) != 1L || is.na(small_threshold) || !is.finite(small_threshold)) {
-    small_threshold <- 2e8
+    small_threshold <- 5e12
   }
-  if (work_size <= small_threshold || k <= 8L || n <= 5000L || n_points <= 5000L) {
+  if (!isTRUE(self_query) || work_size <= small_threshold || k <= 8L || n <= 100000L || n_points <= 5000L) {
     return("cuda_cuvs_bruteforce")
   }
-  "cuda_cagra"
+  if (p <= 64L) {
+    return("cuda_cuvs_ivf_flat")
+  }
+  "cuda_cuvs_nndescent"
 }
 
 should_use_auto_cpu_approx_self_knn <- function(self_query,
@@ -1124,6 +1164,40 @@ should_use_auto_cpu_approx_self_knn <- function(self_query,
   if (n < 5000L || k < 10L || p < 2L) return(FALSE)
   if (work_size < 5e8) return(FALSE)
   TRUE
+}
+
+select_cpu_auto_backend <- function(self_query,
+                                    n,
+                                    p,
+                                    n_points,
+                                    k,
+                                    work_size,
+                                    metric = "euclidean") {
+  if (!identical(metric, "euclidean")) return("cpu")
+  if (isTRUE(self_query) && should_use_grid2d_self_knn(
+    self_query = TRUE,
+    n = n,
+    p = p,
+    k = k,
+    exclude_self = FALSE,
+    metric = "euclidean"
+  )) {
+    return("cpu_grid")
+  }
+  exact_work <- getOption("fastEmbedR.cpu_auto_exact_work", 2e8)
+  exact_work <- suppressWarnings(as.numeric(exact_work))
+  if (length(exact_work) != 1L || is.na(exact_work) || !is.finite(exact_work)) {
+    exact_work <- 2e8
+  }
+  if (work_size <= exact_work || n < 5000L || k < 10L || p < 2L) {
+    return("cpu")
+  }
+  if (isTRUE(self_query) && n >= 1000000L && isTRUE(faiss_available())) {
+    return("faiss_ivf")
+  }
+  if (isTRUE(faiss_available())) return("faiss_hnsw")
+  if (isTRUE(requireNamespace("RcppHNSW", quietly = TRUE))) return("hnsw")
+  "cpu"
 }
 
 select_cpu_approx_backend <- function(n, p, k) {
@@ -3312,8 +3386,9 @@ grid_self_knn <- function(data,
 #' for large self-KNN searches: CUDA routes use explicit cuVS/FAISS GPU
 #' backends when requested and available; CPU approximate routing prefers FAISS
 #' HNSW when FAISS is compiled in, otherwise the optional CRAN-friendly RcppHNSW
-#' backend when installed, otherwise exact CPU. Use `backend = "cpu_approx"` to
-#' force the non-CUDA part of that selector. `backend = "cpu_grid"` is a native exact
+#' backend when installed, otherwise exact CPU. Use `backend = "cpu_auto"` to
+#' force the CPU-only shape-aware selector and `backend = "cpu_approx"` to
+#' force the approximate-only CPU selector. `backend = "cpu_grid"` is a native exact
 #' two- or three-dimensional Euclidean self-KNN spatial selector: it uses a
 #' fast grid for uniform-like clouds and a VP-tree for thin or imbalanced
 #' clouds. `backend = "vptree"`/`"cpu_vptree"` builds an exact VP-tree on
@@ -3332,12 +3407,19 @@ grid_self_knn <- function(data,
 #'   is `data`.
 #' @param backend Execution backend. `"auto"` records the selected fast backend
 #'   in `attr(result, "backend")`. `"cpu"` always uses the exact C++ CPU path.
+#'   `"cpu_auto"` chooses exact CPU, CPU grid, FAISS IVF for million-row
+#'   self-KNN, FAISS HNSW, RcppHNSW, or exact CPU based on the number of
+#'   rows, columns, queries, and `k`.
 #'   `"cpu_approx"` chooses FAISS HNSW, RcppHNSW, or exact CPU depending
 #'   on what is available; for large 2D Euclidean self-KNN it chooses
 #'   `"cpu_grid2d"` and for large 3D Euclidean self-KNN it chooses
 #'   `"cpu_grid"`. Explicit `"cpu_grid2d"`/`"cpu_grid3d"` force the exact
 #'   grid implementation, while `"cpu_vptree"` forces the exact VP-tree for
 #'   Euclidean self-KNN or reference/query KNN.
+#'   `"cuda_auto"`/`"gpu_auto"` chooses a CUDA-only backend from the
+#'   dataset shape: CUDA grid for large 2D/3D self-KNN, exact FAISS GPU Flat
+#'   or cuVS brute force for small and medium searches, and FAISS GPU CAGRA
+#'   or direct cuVS graph/IVF routes for very large searches.
 #'   `"cuda_grid_auto"`/`"cuda_grid"` chooses the native CUDA exact 2D or 3D
 #'   grid implementation for Euclidean self-KNN only; it does not silently
 #'   fall back to CPU.
@@ -3409,7 +3491,7 @@ nn <- function(data,
                points = data,
                k = NULL,
                backend = c(
-                 "auto", "cpu", "cpu_approx", "cpu_grid", "grid",
+                 "auto", "cpu", "cpu_auto", "cpu_approx", "cpu_grid", "grid",
                  "cpu_sparse", "sparse", "sparse_cpu",
                  "cpu_grid2d", "grid2d", "cpu_grid3d", "grid3d",
                  "vptree", "cpu_vptree", "hnsw", "rcpphnsw", "cpu_hnsw",
@@ -3429,7 +3511,7 @@ nn <- function(data,
                  "cuvs_nndescent", "cuda_cuvs_nndescent",
                  "cuda_grid", "cuda_grid_auto", "gpu_grid",
                  "cuda_grid2d", "cuda_grid3d",
-                 "gpu", "cuda", "cuda_approx", "cuda_nndescent",
+                 "gpu", "cuda", "cuda_auto", "gpu_auto", "cuda_approx", "cuda_nndescent",
                  "cuda_ivf", "cuda_faiss"
 		               ),
                metric = c("euclidean", "cosine", "correlation"),
@@ -3468,7 +3550,7 @@ nn <- function(data,
 nn_without_self <- function(data,
                             k,
                             backend = c(
-                              "auto", "cpu", "cpu_approx", "cpu_grid", "grid",
+                              "auto", "cpu", "cpu_auto", "cpu_approx", "cpu_grid", "grid",
                               "cpu_sparse", "sparse", "sparse_cpu",
                               "cpu_grid2d", "grid2d", "cpu_grid3d", "grid3d",
                               "vptree", "cpu_vptree", "hnsw", "rcpphnsw", "cpu_hnsw",
@@ -3488,7 +3570,7 @@ nn_without_self <- function(data,
                               "cuvs_nndescent", "cuda_cuvs_nndescent",
                               "cuda_grid", "cuda_grid_auto", "gpu_grid",
                               "cuda_grid2d", "cuda_grid3d",
-                              "gpu", "cuda", "cuda_approx", "cuda_nndescent",
+                              "gpu", "cuda", "cuda_auto", "gpu_auto", "cuda_approx", "cuda_nndescent",
                               "cuda_ivf", "cuda_faiss"
                             ),
                             metric = c("euclidean", "cosine", "correlation"),
