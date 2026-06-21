@@ -23,6 +23,14 @@ as_int_arg <- function(x, default) {
   if (length(value) != 1L || is.na(value) || value < 1L) as.integer(default) else value
 }
 
+default_kmeans_method_values <- function() {
+  c("fast_kmeans", "stats")
+}
+
+default_kmeans_backend_values <- function() {
+  c("auto", "cpu", "cuda")
+}
+
 configure_threads <- function(n_threads) {
   value <- as.character(as.integer(n_threads))
   Sys.setenv(
@@ -497,8 +505,8 @@ tol <- args$tol %||% "auto"
 tuning <- args$tuning %||% "auto"
 
 datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "SimulatedTiny3Clusters"), collapse = ","))
-methods <- split_arg(args$methods, "fast_kmeans,stats")
-backends <- split_arg(args$backends, "auto,cpu,cuda")
+methods <- split_arg(args$methods, paste(default_kmeans_method_values(), collapse = ","))
+backends <- split_arg(args$backends, paste(default_kmeans_backend_values(), collapse = ","))
 
 suppressPackageStartupMessages(library(faissR))
 

@@ -235,6 +235,22 @@ test_that("legacy Benchmark #1 exposes normalized faissR NNDescent metrics", {
   }
 })
 
+test_that("k-means benchmark defaults cover fast_kmeans stats and public backends", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+
+  expect_equal(
+    env$default_kmeans_method_values(),
+    c("fast_kmeans", "stats")
+  )
+  expect_equal(
+    env$default_kmeans_backend_values(),
+    c("auto", "cpu", "cuda")
+  )
+})
+
 test_that("k-means benchmark recommendations are grouped by dataset and centers", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_kmeans.R"),
