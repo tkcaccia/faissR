@@ -30,6 +30,18 @@ as_int_vec_arg <- function(x, default) {
   if (!length(value)) suppressWarnings(as.integer(default)) else value
 }
 
+default_graph_k_values <- function() {
+  c(15L, 50L, 100L)
+}
+
+default_graph_cluster_methods <- function() {
+  c("random_walking", "louvain", "leiden")
+}
+
+default_graph_backends <- function() {
+  c("auto", "cpu", "cuda")
+}
+
 configure_threads <- function(n_threads) {
   vars <- c(
     "OMP_NUM_THREADS",
@@ -579,15 +591,18 @@ ari_tolerance <- suppressWarnings(as.numeric(args$ari_tolerance %||% "0.01"))
 if (length(ari_tolerance) != 1L || is.na(ari_tolerance) || !is.finite(ari_tolerance) || ari_tolerance < 0) {
   ari_tolerance <- 0.01
 }
-k_values <- as_int_vec_arg(split_arg(args$k_values, "15,50,100"), 50L)
+k_values <- as_int_vec_arg(
+  split_arg(args$k_values, paste(default_graph_k_values(), collapse = ",")),
+  default_graph_k_values()
+)
 datasets <- split_arg(args$datasets, paste(c(
   dataset_index(data_root)$dataset,
   "SimulatedUniform2D",
   "SimulatedUniform3D"
 ), collapse = ","))
-methods <- split_arg(args$methods, "random_walking,louvain,leiden")
-graph_backends <- split_arg(args$graph_backends, "auto,cpu,cuda")
-cluster_backends <- split_arg(args$cluster_backends, "auto,cpu,cuda")
+methods <- split_arg(args$methods, paste(default_graph_cluster_methods(), collapse = ","))
+graph_backends <- split_arg(args$graph_backends, paste(default_graph_backends(), collapse = ","))
+cluster_backends <- split_arg(args$cluster_backends, paste(default_graph_backends(), collapse = ","))
 weight <- args$weight %||% "auto"
 target_mode <- args$target_clusters %||% "labels"
 

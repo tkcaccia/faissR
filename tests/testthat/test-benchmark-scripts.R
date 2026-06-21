@@ -286,6 +286,30 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
   expect_equal(unique(out$recommended_recommendation_basis), "fastest_within_ari_tolerance")
 })
 
+test_that("graph benchmark defaults cover requested methods backends and k grid", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+
+  expect_equal(
+    env$default_graph_cluster_methods(),
+    c("random_walking", "louvain", "leiden")
+  )
+  expect_equal(
+    env$default_graph_backends(),
+    c("auto", "cpu", "cuda")
+  )
+  expect_equal(
+    env$default_graph_k_values(),
+    c(15L, 50L, 100L)
+  )
+  expect_equal(
+    env$as_int_vec_arg(c("unknown"), env$default_graph_k_values()),
+    env$default_graph_k_values()
+  )
+})
+
 test_that("graph benchmark recommendations are grouped by target cluster count", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
