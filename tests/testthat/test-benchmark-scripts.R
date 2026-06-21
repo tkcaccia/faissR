@@ -538,6 +538,28 @@ test_that("k-means benchmark recommendation ties prefer higher ARI then lower wi
   expect_equal(out$method, c("higher_ari", "lower_withinss"))
 })
 
+test_that("k-means benchmark best-row ranking uses withinss after quality and speed", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+  ok <- data.frame(
+    dataset = c("A", "A", "A", "B", "B"),
+    method = c(
+      "fast_high_withinss", "fast_low_withinss", "lower_ari",
+      "fast_missing_quality", "slow_missing_quality"
+    ),
+    ari = c(0.95, 0.95, 0.94, NA, NA),
+    elapsed_sec = c(1, 1, 0.5, 1, 2),
+    tot_withinss = c(20, 10, 1, NA, NA),
+    stringsAsFactors = FALSE
+  )
+
+  ranked <- env$rank_kmeans_success(ok)
+  best <- ranked[!duplicated(ranked$dataset), , drop = FALSE]
+  expect_equal(best$method, c("fast_low_withinss", "fast_missing_quality"))
+})
+
 test_that("k-means fast comparison is ordered by dataset centers and backend", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_kmeans.R"),

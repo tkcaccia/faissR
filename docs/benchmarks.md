@@ -367,7 +367,8 @@ aggregates successful rows across cycles by dataset/method/backend/centers and
 reports success counts, median/min/max elapsed time, ARI stability, withinss
 stability, iteration counts, and resolved backend metadata.
 `kmeans_best_by_dataset.csv` keeps a compact best successful row per dataset
-after ranking by ARI and elapsed time for backward-compatible summaries.
+after ranking by ARI, elapsed time, and total within-cluster sum of squares for
+backward-compatible summaries.
 `kmeans_recommendations_from_cycles.csv` selects the fastest row within
 `ari_tolerance` of the best median ARI for each dataset/centers combination;
 when ARI is available and median times tie, higher median ARI and then lower
