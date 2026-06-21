@@ -23,6 +23,8 @@ test_that("fast_kmeans works on the CPU path", {
   expect_equal(sum(fit$size), nrow(x))
   expect_true(is.finite(fit$tot.withinss))
   expect_true(fit$backend %in% c("cpu", "faiss"))
+  expect_equal(fit$parameters$requested_backend, "cpu")
+  expect_equal(fit$parameters$resolved_backend, "cpu")
 })
 
 test_that("fast_kmeans records deterministic auto tuning policy", {
@@ -41,6 +43,11 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(auto$parameters$tuning$small_many_centers, FALSE)
   expect_true(is.finite(auto$parameters$tuning$work))
   expect_true(is.finite(auto$parameters$tuning$n_per_center))
+
+  auto_backend <- fast_kmeans(x, centers = 3, backend = "auto", seed = 12, n_threads = 2)
+  expect_equal(auto_backend$parameters$requested_backend, "auto")
+  expect_true(auto_backend$parameters$resolved_backend %in% c("cpu", "cuda"))
+  expect_true(auto_backend$backend %in% c("cpu", "faiss", "cuda_faiss", "cuda_cuvs"))
 
   small_many <- faissR:::kmeans_auto_params(
     n = 5000L,

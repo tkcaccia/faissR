@@ -58,9 +58,12 @@ tolerance defaults.
 }
 \value{
 A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
-  `size`, `iter`, `backend`, and `parameters`. `parameters$tuning`
-  records the deterministic k-means policy, shape metadata, and whether
-  `max_iter`, `n_init`, and `tol` were auto-selected or supplied explicitly.
+  `size`, `iter`, `backend`, and `parameters`. `backend` records the
+  implementation that actually ran, while `parameters$requested_backend` and
+  `parameters$resolved_backend` record the public backend request and device
+  policy result. `parameters$tuning` records the deterministic k-means policy,
+  shape metadata, and whether `max_iter`, `n_init`, and `tol` were
+  auto-selected or supplied explicitly.
 }
 \description{
 Run k-means using the fastest available backend. CPU acceleration uses

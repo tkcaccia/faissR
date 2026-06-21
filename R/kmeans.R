@@ -33,9 +33,12 @@
 #'   `"fixed"`, `"off"`, and `"none"` use the historical fixed defaults unless
 #'   `max_iter`, `n_init`, or `tol` are explicitly supplied.
 #' @return A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
-#'   `size`, `iter`, `backend`, and `parameters`. `parameters$tuning`
-#'   records the deterministic k-means policy, shape metadata, and whether
-#'   `max_iter`, `n_init`, and `tol` were auto-selected or supplied explicitly.
+#'   `size`, `iter`, `backend`, and `parameters`. `backend` records the
+#'   implementation that actually ran, while `parameters$requested_backend` and
+#'   `parameters$resolved_backend` record the public backend request and device
+#'   policy result. `parameters$tuning` records the deterministic k-means policy,
+#'   shape metadata, and whether `max_iter`, `n_init`, and `tol` were
+#'   auto-selected or supplied explicitly.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' fit <- fast_kmeans(x, centers = 3, backend = "cpu", n_threads = 2)
@@ -52,7 +55,8 @@ fast_kmeans <- function(data,
                         streaming_batch_size = 0L,
                         init = c("kmeans++", "random"),
                         tuning = c("auto", "fixed", "off", "none")) {
-  backend <- normalize_public_backend_arg(backend)
+  requested_backend <- normalize_public_backend_arg(backend)
+  backend <- requested_backend
   init <- match.arg(init)
   tuning <- normalize_kmeans_tuning(tuning)
   x <- as.matrix(data)
@@ -104,7 +108,9 @@ fast_kmeans <- function(data,
       streaming_batch_size = streaming_batch_size,
       init = init,
       tuning_metadata = auto_params,
-      allow_cuvs_fallback = TRUE
+      allow_cuvs_fallback = TRUE,
+      requested_backend = requested_backend,
+      resolved_backend = backend
     ))
   }
 
@@ -119,7 +125,14 @@ fast_kmeans <- function(data,
       as.integer(n_threads),
       identical(init, "kmeans++")
     )
-    return(finish_fast_kmeans(out, backend = "faiss", init = init, tuning_metadata = auto_params))
+    return(finish_fast_kmeans(
+      out,
+      backend = "faiss",
+      init = init,
+      tuning_metadata = auto_params,
+      requested_backend = requested_backend,
+      resolved_backend = backend
+    ))
   }
 
   set.seed(seed)
@@ -147,6 +160,8 @@ fast_kmeans <- function(data,
       seed = as.integer(seed),
       n_threads = as.integer(n_threads),
       init = "stats_default",
+      requested_backend = requested_backend,
+      resolved_backend = backend,
       tuning = auto_params
     )
   )
@@ -178,7 +193,9 @@ run_cuda_kmeans <- function(x,
                             streaming_batch_size,
                             init,
                             tuning_metadata,
-                            allow_cuvs_fallback = TRUE) {
+                            allow_cuvs_fallback = TRUE,
+                            requested_backend = "cuda",
+                            resolved_backend = "cuda") {
   faiss_error <- NULL
   if (isTRUE(faiss_gpu_available())) {
     out <- tryCatch(
@@ -198,7 +215,14 @@ run_cuda_kmeans <- function(x,
       }
     )
     if (!is.null(out)) {
-      return(finish_fast_kmeans(out, backend = "cuda_faiss", init = init, tuning_metadata = tuning_metadata))
+      return(finish_fast_kmeans(
+        out,
+        backend = "cuda_faiss",
+        init = init,
+        tuning_metadata = tuning_metadata,
+        requested_backend = requested_backend,
+        resolved_backend = resolved_backend
+      ))
     }
   }
 
@@ -212,7 +236,14 @@ run_cuda_kmeans <- function(x,
       as.integer(streaming_batch_size),
       identical(init, "kmeans++")
     )
-    return(finish_fast_kmeans(out, backend = "cuda_cuvs", init = init, tuning_metadata = tuning_metadata))
+    return(finish_fast_kmeans(
+      out,
+      backend = "cuda_cuvs",
+      init = init,
+      tuning_metadata = tuning_metadata,
+      requested_backend = requested_backend,
+      resolved_backend = resolved_backend
+    ))
   }
 
   cuvs_note <- if (isTRUE(cuvs_available()) && isTRUE(cuda_available())) {
@@ -264,7 +295,12 @@ run_faiss_gpu_kmeans <- function(x,
   )
 }
 
-finish_fast_kmeans <- function(out, backend, init, tuning_metadata = NULL) {
+finish_fast_kmeans <- function(out,
+                               backend,
+                               init,
+                               tuning_metadata = NULL,
+                               requested_backend = NULL,
+                               resolved_backend = NULL) {
   out$cluster <- as.integer(out$cluster)
   out$centers <- unname(as.matrix(out$centers))
   out$withinss <- as.numeric(out$withinss)
@@ -274,6 +310,8 @@ finish_fast_kmeans <- function(out, backend, init, tuning_metadata = NULL) {
   out$backend <- backend
   if (is.null(out$parameters)) out$parameters <- list()
   out$parameters$init <- init
+  if (!is.null(requested_backend)) out$parameters$requested_backend <- requested_backend
+  if (!is.null(resolved_backend)) out$parameters$resolved_backend <- resolved_backend
   if (!is.null(tuning_metadata)) out$parameters$tuning <- tuning_metadata
   class(out) <- c("faissR_kmeans", "fastEmbedR_kmeans", "kmeans")
   out
