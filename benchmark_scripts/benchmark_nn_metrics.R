@@ -200,7 +200,10 @@ metric_reference <- function(x, k, metric, quality_n, quality_max_ops, n_threads
 
 result_row <- function(dataset, n, p, backend, method, metric, k, n_threads,
                        status, error = NA_character_, elapsed_sec = NA_real_,
-                       peak_rss_gb = NA_real_, resolved_backend = NA_character_,
+                       peak_rss_gb = NA_real_,
+                       result_backend = NA_character_,
+                       resolved_backend = NA_character_,
+                       implementation_backend = NA_character_,
                        exact = NA, recall_at_k = NA_real_,
                        median_recall_at_k = NA_real_,
                        min_recall_at_k = NA_real_,
@@ -221,7 +224,9 @@ result_row <- function(dataset, n, p, backend, method, metric, k, n_threads,
     error = error,
     elapsed_sec = elapsed_sec,
     peak_rss_gb = peak_rss_gb,
+    result_backend = result_backend,
     resolved_backend = resolved_backend,
+    implementation_backend = implementation_backend,
     exact = exact,
     recall_at_k = recall_at_k,
     median_recall_at_k = median_recall_at_k,
@@ -232,6 +237,18 @@ result_row <- function(dataset, n, p, backend, method, metric, k, n_threads,
     capability_notes = capability_notes,
     stringsAsFactors = FALSE
   )
+}
+
+nn_implementation_backend <- function(out) {
+  approx <- attr(out, "approximation") %||% list()
+  cuvs <- attr(out, "cuvs") %||% list()
+  faiss <- attr(out, "faiss") %||% list()
+  attr(out, "resolved_backend") %||%
+    approx$backend %||%
+    cuvs$resolved_backend %||%
+    faiss$backend %||%
+    attr(out, "backend") %||%
+    NA_character_
 }
 
 canonical_method_key <- function(method) {
@@ -360,7 +377,9 @@ run_one <- function(x, dataset_name, backend, method, metric, k, n_threads,
       status = "success",
       elapsed_sec = elapsed,
       peak_rss_gb = read_peak_rss_gb(),
-      resolved_backend = attr(out, "backend") %||% NA_character_,
+      result_backend = attr(out, "backend") %||% NA_character_,
+      resolved_backend = attr(out, "resolved_backend") %||% attr(out, "backend") %||% NA_character_,
+      implementation_backend = nn_implementation_backend(out),
       exact = isTRUE(attr(out, "exact")),
       recall_at_k = recall$recall_at_k[[1L]],
       median_recall_at_k = recall$median_recall_at_k[[1L]],
@@ -549,8 +568,8 @@ if (nrow(ok)) {
   auto_rows <- ok[ok$method == "auto", , drop = FALSE]
   if (nrow(auto_rows) && !is.null(fastest) && nrow(fastest)) {
     keys <- c("dataset", "backend", "metric", "k")
-    auto_keep <- c(keys, "resolved_backend", "elapsed_sec", "recall_at_k", "recall_reference", "recall_query_n")
-    fastest_keep <- c(keys, "method", "resolved_backend", "elapsed_sec", "recall_at_k", "recall_reference", "recall_query_n")
+    auto_keep <- c(keys, "result_backend", "resolved_backend", "implementation_backend", "elapsed_sec", "recall_at_k", "recall_reference", "recall_query_n")
+    fastest_keep <- c(keys, "method", "result_backend", "resolved_backend", "implementation_backend", "elapsed_sec", "recall_at_k", "recall_reference", "recall_query_n")
     names(auto_rows)[match(auto_keep[-seq_along(keys)], names(auto_rows))] <- paste0("auto_", auto_keep[-seq_along(keys)])
     names(fastest)[match(fastest_keep[-seq_along(keys)], names(fastest))] <- paste0("fastest_", fastest_keep[-seq_along(keys)])
     comparison <- merge(
@@ -561,7 +580,9 @@ if (nrow(ok)) {
     )
     if (nrow(comparison)) {
       comparison$auto_is_fastest_method <- comparison$fastest_method == "auto"
-      comparison$auto_uses_fastest_backend <- comparison$auto_resolved_backend == comparison$fastest_resolved_backend
+      comparison$auto_uses_fastest_result_backend <- comparison$auto_result_backend == comparison$fastest_result_backend
+      comparison$auto_uses_fastest_resolved_backend <- comparison$auto_resolved_backend == comparison$fastest_resolved_backend
+      comparison$auto_uses_fastest_implementation <- comparison$auto_implementation_backend == comparison$fastest_implementation_backend
       comparison$auto_speed_ratio <- ifelse(
         comparison$fastest_elapsed_sec > 0,
         comparison$auto_elapsed_sec / comparison$fastest_elapsed_sec,
@@ -595,9 +616,10 @@ materials <- c(
   "",
   "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities()` and recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
   "`nn_metric_capabilities.csv` stores the capability table used for that preflight.",
+  "`result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k whose recall is at least `recall_threshold`.",
-  "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, and whether the resolved backend matches.",
+  "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches.",
   "The script does not add benchmark-only helpers to the package API."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_nn_metrics.md"))
