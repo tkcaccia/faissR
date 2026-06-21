@@ -73,6 +73,9 @@ pollution on local machines. CPU worker threads are controlled with environment
 variables such as `OMP_NUM_THREADS`; the benchmark worker avoids loading
 optional thread-control helper packages before FAISS/cuVS.
 
+The same explicit-runtime convention is used by the NN metrics and k-means
+benchmark scripts.
+
 ## Graph Clustering
 
 `benchmark_scripts/benchmark_graph_clustering.R` measures the two-stage graph

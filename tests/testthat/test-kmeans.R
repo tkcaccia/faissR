@@ -88,23 +88,15 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(explicit$parameters$tuning$resolved_from$tol, "explicit")
 })
 
-test_that("fast_kmeans explicit FAISS request fails clearly when unavailable", {
-  skip_if(faiss_available())
-
+test_that("fast_kmeans rejects implementation backend labels", {
   x <- matrix(rnorm(40), ncol = 4)
   expect_error(
     fast_kmeans(x, centers = 2, backend = "faiss"),
-    "FAISS k-means"
+    "must be one of"
   )
-})
-
-test_that("fast_kmeans explicit cuVS request fails clearly when unavailable", {
-  skip_if(cuvs_available())
-
-  x <- matrix(rnorm(40), ncol = 4)
   expect_error(
     fast_kmeans(x, centers = 2, backend = "cuda_cuvs"),
-    "cuVS"
+    "must be one of"
   )
 })
 

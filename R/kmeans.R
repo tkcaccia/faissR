@@ -52,7 +52,7 @@ fast_kmeans <- function(data,
                         streaming_batch_size = 0L,
                         init = c("kmeans++", "random"),
                         tuning = c("auto", "fixed", "off", "none")) {
-  backend <- as.character(backend)[1L]
+  backend <- normalize_public_backend_arg(backend)
   init <- match.arg(init)
   tuning <- normalize_kmeans_tuning(tuning)
   x <- as.matrix(data)
@@ -91,13 +91,7 @@ fast_kmeans <- function(data,
     streaming_batch_size <- 0L
   }
 
-  if (backend %in% c("faiss")) {
-    backend <- "cpu"
-  } else if (backend %in% c("cuda_faiss", "faiss_gpu", "cuda_cuvs", "cuvs")) {
-    backend <- "cuda"
-  } else {
-    backend <- normalize_public_compute_backend(backend)
-  }
+  backend <- normalize_public_compute_backend(backend)
 
   if (identical(backend, "cuda")) {
     return(run_cuda_kmeans(

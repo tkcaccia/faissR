@@ -34,14 +34,10 @@ configure_threads <- function(n_threads) {
     RCPP_PARALLEL_NUM_THREADS = value
   )
   options(Ncpus = as.integer(n_threads))
-  if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
-    try(RhpcBLASctl::blas_set_num_threads(as.integer(n_threads)), silent = TRUE)
-    try(RhpcBLASctl::omp_set_num_threads(as.integer(n_threads)), silent = TRUE)
-  }
 }
 
 configure_native_libs <- function() {
-  env_dir <- Sys.getenv("FAISSR_ENV_DIR", Sys.getenv("CONDA_PREFIX", unset = ""))
+  env_dir <- Sys.getenv("FAISSR_ENV_DIR", unset = "")
   cuda_home <- Sys.getenv("FAISSR_CUDA_LIB_DIR", Sys.getenv("CUDA_HOME", unset = ""))
   cuda_lib <- if (nzchar(cuda_home) && !grepl("/lib$", cuda_home)) {
     file.path(cuda_home, "targets/x86_64-linux/lib")
