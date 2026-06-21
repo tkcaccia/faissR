@@ -1591,12 +1591,12 @@ IntegerMatrix nndescent_candidate_matrix_cpp(IntegerMatrix indices,
 }
 
 // [[Rcpp::export]]
-IntegerMatrix nndescent_candidate_matrix_mlx_cpp(IntegerMatrix indices,
-                                                 LogicalMatrix flags,
-                                                 int n_sources,
-                                                 int n_neighbors,
-                                                 bool use_reverse,
-                                                 bool active_only) {
+IntegerMatrix nndescent_candidate_matrix_adaptive_cpp(IntegerMatrix indices,
+                                                      LogicalMatrix flags,
+                                                      int n_sources,
+                                                      int n_neighbors,
+                                                      bool use_reverse,
+                                                      bool active_only) {
   const int n = indices.nrow();
   const int k = indices.ncol();
   if (n < 1 || k < 1) Rcpp::stop("indices must be a non-empty matrix");
@@ -1606,10 +1606,9 @@ IntegerMatrix nndescent_candidate_matrix_mlx_cpp(IntegerMatrix indices,
   n_sources = std::max(1, std::min(n_sources, k));
   n_neighbors = std::max(1, std::min(n_neighbors, k));
 
-  // Adapted from the Apache-2.0 mlx-vis NNDescent schedule
-  // (https://github.com/hanxiao/mlx-vis, mlx_vis/_nndescent/nndescent.py):
-  // keep NEW-neighbour expansion when converging and skip reverse candidates
-  // once the graph is nearly stable. The implementation below is native C++
+  // Adaptive native C++ NN-descent schedule: expand aggressively while the
+  // graph is moving, then keep NEW-neighbour expansion and skip reverse
+  // candidates once the graph is nearly stable.
   const int reverse_limit = use_reverse ? std::max(1, std::min(k, n_sources)) : 0;
   std::vector<std::vector<int> > reverse_lists;
   if (use_reverse) {
@@ -1756,11 +1755,11 @@ IntegerMatrix nndescent_candidate_matrix_mlx_cpp(IntegerMatrix indices,
 }
 
 // [[Rcpp::export]]
-List nndescent_candidate_matrix_mlx_subset_cpp(IntegerMatrix indices,
-                                               LogicalMatrix flags,
-                                               int n_sources,
-                                               int n_neighbors,
-                                               bool use_reverse) {
+List nndescent_candidate_matrix_adaptive_subset_cpp(IntegerMatrix indices,
+                                                    LogicalMatrix flags,
+                                                    int n_sources,
+                                                    int n_neighbors,
+                                                    bool use_reverse) {
   const int n = indices.nrow();
   const int k = indices.ncol();
   if (n < 1 || k < 1) Rcpp::stop("indices must be a non-empty matrix");

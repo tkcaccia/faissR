@@ -2745,9 +2745,9 @@ gpu_nndescent_self_knn <- function(data,
 
   for (iter in seq_len(params$n_iters)) {
     if (identical(backend, "cuda")) {
-      # Native port of the mlx-vis NN-descent schedule: expand aggressively
-      # while the graph is moving, then use only NEW-neighbour sources and
-      # skip reverse candidates near convergence.
+      # Native adaptive NN-descent schedule: expand aggressively while the graph
+      # is moving, then use only NEW-neighbour sources and skip reverse
+      # candidates near convergence.
       adaptive_scale <- min(1, sqrt(max(update_frac, 0)) * 3)
       min_sources <- min(work_k, 3L)
       iter_sources <- min(
@@ -2762,7 +2762,7 @@ gpu_nndescent_self_knn <- function(data,
       active_only <- isTRUE(update_frac < 0.5)
       use_reverse <- isTRUE(update_frac >= 0.10)
       query_rows <- NULL
-      candidate_indices <- nndescent_candidate_matrix_mlx_cpp(
+      candidate_indices <- nndescent_candidate_matrix_adaptive_cpp(
         indices,
         flags,
         as.integer(iter_sources),
@@ -2815,7 +2815,7 @@ gpu_nndescent_self_knn <- function(data,
   out <- list(indices = indices, distances = distances)
   attr(out, "cuda_kernel") <- "row_candidate_knn"
   attr(out, "approximation") <- list(
-    strategy = paste0("mlx_vis_adaptive_seeded_nndescent_native_", backend),
+    strategy = paste0("adaptive_seeded_nndescent_native_", backend),
     backend = backend,
     seed_backend = paste0(backend, "_ivf"),
     seed_bucket_cols = as.integer(attr(base, "approximation")$bucket_cols),

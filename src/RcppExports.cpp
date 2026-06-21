@@ -321,9 +321,9 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// nndescent_candidate_matrix_mlx_cpp
-IntegerMatrix nndescent_candidate_matrix_mlx_cpp(IntegerMatrix indices, LogicalMatrix flags, int n_sources, int n_neighbors, bool use_reverse, bool active_only);
-RcppExport SEXP _faissR_nndescent_candidate_matrix_mlx_cpp(SEXP indicesSEXP, SEXP flagsSEXP, SEXP n_sourcesSEXP, SEXP n_neighborsSEXP, SEXP use_reverseSEXP, SEXP active_onlySEXP) {
+// nndescent_candidate_matrix_adaptive_cpp
+IntegerMatrix nndescent_candidate_matrix_adaptive_cpp(IntegerMatrix indices, LogicalMatrix flags, int n_sources, int n_neighbors, bool use_reverse, bool active_only);
+RcppExport SEXP _faissR_nndescent_candidate_matrix_adaptive_cpp(SEXP indicesSEXP, SEXP flagsSEXP, SEXP n_sourcesSEXP, SEXP n_neighborsSEXP, SEXP use_reverseSEXP, SEXP active_onlySEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -333,13 +333,13 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type n_neighbors(n_neighborsSEXP);
     Rcpp::traits::input_parameter< bool >::type use_reverse(use_reverseSEXP);
     Rcpp::traits::input_parameter< bool >::type active_only(active_onlySEXP);
-    rcpp_result_gen = Rcpp::wrap(nndescent_candidate_matrix_mlx_cpp(indices, flags, n_sources, n_neighbors, use_reverse, active_only));
+    rcpp_result_gen = Rcpp::wrap(nndescent_candidate_matrix_adaptive_cpp(indices, flags, n_sources, n_neighbors, use_reverse, active_only));
     return rcpp_result_gen;
 END_RCPP
 }
-// nndescent_candidate_matrix_mlx_subset_cpp
-List nndescent_candidate_matrix_mlx_subset_cpp(IntegerMatrix indices, LogicalMatrix flags, int n_sources, int n_neighbors, bool use_reverse);
-RcppExport SEXP _faissR_nndescent_candidate_matrix_mlx_subset_cpp(SEXP indicesSEXP, SEXP flagsSEXP, SEXP n_sourcesSEXP, SEXP n_neighborsSEXP, SEXP use_reverseSEXP) {
+// nndescent_candidate_matrix_adaptive_subset_cpp
+List nndescent_candidate_matrix_adaptive_subset_cpp(IntegerMatrix indices, LogicalMatrix flags, int n_sources, int n_neighbors, bool use_reverse);
+RcppExport SEXP _faissR_nndescent_candidate_matrix_adaptive_subset_cpp(SEXP indicesSEXP, SEXP flagsSEXP, SEXP n_sourcesSEXP, SEXP n_neighborsSEXP, SEXP use_reverseSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -348,7 +348,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type n_sources(n_sourcesSEXP);
     Rcpp::traits::input_parameter< int >::type n_neighbors(n_neighborsSEXP);
     Rcpp::traits::input_parameter< bool >::type use_reverse(use_reverseSEXP);
-    rcpp_result_gen = Rcpp::wrap(nndescent_candidate_matrix_mlx_subset_cpp(indices, flags, n_sources, n_neighbors, use_reverse));
+    rcpp_result_gen = Rcpp::wrap(nndescent_candidate_matrix_adaptive_subset_cpp(indices, flags, n_sources, n_neighbors, use_reverse));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1067,8 +1067,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_graph_cluster_edges_cpp", (DL_FUNC) &_faissR_graph_cluster_edges_cpp, 9},
     {"_faissR_nn_cpp", (DL_FUNC) &_faissR_nn_cpp, 10},
     {"_faissR_nndescent_candidate_matrix_cpp", (DL_FUNC) &_faissR_nndescent_candidate_matrix_cpp, 3},
-    {"_faissR_nndescent_candidate_matrix_mlx_cpp", (DL_FUNC) &_faissR_nndescent_candidate_matrix_mlx_cpp, 6},
-    {"_faissR_nndescent_candidate_matrix_mlx_subset_cpp", (DL_FUNC) &_faissR_nndescent_candidate_matrix_mlx_subset_cpp, 5},
+    {"_faissR_nndescent_candidate_matrix_adaptive_cpp", (DL_FUNC) &_faissR_nndescent_candidate_matrix_adaptive_cpp, 6},
+    {"_faissR_nndescent_candidate_matrix_adaptive_subset_cpp", (DL_FUNC) &_faissR_nndescent_candidate_matrix_adaptive_subset_cpp, 5},
     {"_faissR_landmark_candidate_knn_cpp", (DL_FUNC) &_faissR_landmark_candidate_knn_cpp, 7},
     {"_faissR_landmark_candidate_knn_subset_cpp", (DL_FUNC) &_faissR_landmark_candidate_knn_subset_cpp, 8},
     {"_faissR_landmark_projection_knn_approx_cpp", (DL_FUNC) &_faissR_landmark_projection_knn_approx_cpp, 8},

@@ -85,12 +85,12 @@ nndescent_candidate_matrix_cpp <- function(indices, n_sources, n_neighbors) {
     .Call(`_faissR_nndescent_candidate_matrix_cpp`, indices, n_sources, n_neighbors)
 }
 
-nndescent_candidate_matrix_mlx_cpp <- function(indices, flags, n_sources, n_neighbors, use_reverse, active_only) {
-    .Call(`_faissR_nndescent_candidate_matrix_mlx_cpp`, indices, flags, n_sources, n_neighbors, use_reverse, active_only)
+nndescent_candidate_matrix_adaptive_cpp <- function(indices, flags, n_sources, n_neighbors, use_reverse, active_only) {
+    .Call(`_faissR_nndescent_candidate_matrix_adaptive_cpp`, indices, flags, n_sources, n_neighbors, use_reverse, active_only)
 }
 
-nndescent_candidate_matrix_mlx_subset_cpp <- function(indices, flags, n_sources, n_neighbors, use_reverse) {
-    .Call(`_faissR_nndescent_candidate_matrix_mlx_subset_cpp`, indices, flags, n_sources, n_neighbors, use_reverse)
+nndescent_candidate_matrix_adaptive_subset_cpp <- function(indices, flags, n_sources, n_neighbors, use_reverse) {
+    .Call(`_faissR_nndescent_candidate_matrix_adaptive_subset_cpp`, indices, flags, n_sources, n_neighbors, use_reverse)
 }
 
 landmark_candidate_knn_cpp <- function(data, projection_indices, k, bucket_cols, query_cols, parallel, cores) {
