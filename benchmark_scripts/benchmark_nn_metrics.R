@@ -47,6 +47,14 @@ canonical_metric_values <- function(metrics) {
   unique(metrics)
 }
 
+default_nn_metric_values <- function() {
+  c("euclidean", "cosine", "correlation", "inner_product")
+}
+
+default_nn_k_values <- function() {
+  c(5L, 10L, 15L, 50L, 100L)
+}
+
 as_int_vec_arg <- function(x, default) {
   value <- suppressWarnings(as.integer(x %||% default))
   value <- value[!is.na(value) & value > 0L]
@@ -716,9 +724,9 @@ if (length(recall_threshold) != 1L || is.na(recall_threshold) || !is.finite(reca
 datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "SimulatedUniform2D", "SimulatedUniform3D"), collapse = ","))
 backends <- split_arg(args$backends, "auto,cpu,cuda")
 methods <- split_arg(args$methods, "auto,exact,flat,bruteforce,grid,vptree,sparse,hnsw,ivf,ivfpq,nsg,nndescent,cagra")
-metrics <- canonical_metric_values(split_arg(args$metrics, "euclidean,cosine,correlation,inner_product"))
-if (!length(metrics)) metrics <- c("euclidean", "cosine", "correlation", "inner_product")
-k_values <- as_int_vec_arg(split_arg(args$k_values, "5,10,15,50,100"), c(5L, 10L, 15L, 50L, 100L))
+metrics <- canonical_metric_values(split_arg(args$metrics, paste(default_nn_metric_values(), collapse = ",")))
+if (!length(metrics)) metrics <- default_nn_metric_values()
+k_values <- as_int_vec_arg(split_arg(args$k_values, paste(default_nn_k_values(), collapse = ",")), default_nn_k_values())
 
 suppressPackageStartupMessages(library(faissR))
 capabilities <- faissR::nn_capabilities()

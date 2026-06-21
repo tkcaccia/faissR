@@ -98,6 +98,30 @@ test_that("NN metric benchmark canonicalizes metric aliases before preflight", {
   expect_false(isTRUE(env$capability_status(caps, "cpu", "nsg", "ip")$supported))
 })
 
+test_that("NN metric benchmark defaults cover requested metrics and k grid", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+
+  expect_equal(
+    env$default_nn_metric_values(),
+    c("euclidean", "cosine", "correlation", "inner_product")
+  )
+  expect_equal(
+    env$default_nn_k_values(),
+    c(5L, 10L, 15L, 50L, 100L)
+  )
+  expect_equal(
+    env$canonical_metric_values(c("unknown")),
+    character()
+  )
+  expect_equal(
+    env$as_int_vec_arg(c("unknown"), env$default_nn_k_values()),
+    env$default_nn_k_values()
+  )
+})
+
 test_that("NN metric auto comparison preserves recommendation basis", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
