@@ -196,14 +196,15 @@ Rscript benchmark_scripts/benchmark_nn_metrics.R \
 
 ## K-Means
 
-`benchmark_scripts/benchmark_kmeans.R` compares `fast_kmeans()` CPU/CUDA
-backends with base `stats::kmeans`. It records elapsed time, peak resident
-memory when available, backend used, total within-cluster sum of squares,
-iterations, selected k-means parameters, tuning policy, and ARI against
-`dataset$labels` when labels are available. When `stats` is part of the run,
-`kmeans_fast_vs_stats.csv` compares each successful `fast_kmeans()` row against
-`stats::kmeans` for the same dataset and number of centers, reporting speedup,
-ARI delta, and withinss ratio.
+`benchmark_scripts/benchmark_kmeans.R` compares `fast_kmeans()` with
+`backend = "auto"`, `"cpu"`, and `"cuda"` against base `stats::kmeans` by
+default. It records elapsed time, peak resident memory when available, backend
+used, total within-cluster sum of squares, iterations, selected k-means
+parameters, tuning policy, and ARI against `dataset$labels` when labels are
+available. When `stats` is part of the run, `kmeans_fast_vs_stats.csv` compares
+each successful `fast_kmeans()` row against `stats::kmeans` for the same
+dataset and number of centers, reporting speedup, ARI delta, and withinss
+ratio.
 CUDA/library combinations that are known unavailable before execution are
 recorded as `status = "expected_skip"` with `expected_skip = TRUE`; unexpected
 runtime errors remain failed rows and are not replaced with CPU timings.

@@ -335,7 +335,7 @@ tuning <- args$tuning %||% "auto"
 
 datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "SimulatedTiny3Clusters"), collapse = ","))
 methods <- split_arg(args$methods, "fast_kmeans,stats")
-backends <- split_arg(args$backends, "cpu,cuda")
+backends <- split_arg(args$backends, "auto,cpu,cuda")
 
 suppressPackageStartupMessages(library(faissR))
 
