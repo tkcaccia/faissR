@@ -210,11 +210,14 @@ Rscript benchmark_scripts/benchmark_graph_clustering.R \
   --threads=2
 ```
 
-When `--target_clusters=labels` is used, Louvain and Leiden receive
-`n_clusters = length(unique(dataset$labels))`. Random-walking is run without a
-cluster-count target because the public API intentionally reserves
-`n_clusters` for Louvain and Leiden. CUDA rows fail explicitly when faissR was
-not built with the required CUDA/cuGraph support.
+When `--target_clusters=labels` is used, Louvain and Leiden use
+`n_clusters = length(unique(dataset$labels))`. If the selected method set
+contains only Louvain and Leiden, the benchmark stores that target on the graph
+with `knn_graph(n_clusters = ...)` and lets `graph_cluster()` reuse it. Mixed
+method sets that include random-walking pass the target only to Louvain/Leiden
+rows because the public API intentionally reserves `n_clusters` for Louvain and
+Leiden. CUDA rows fail explicitly when faissR was not built with the required
+CUDA/cuGraph support.
 
 ## NN Metrics
 

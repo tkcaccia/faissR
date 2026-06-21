@@ -364,8 +364,14 @@ graph_build_expected_skip <- function(graph_backend) {
   NULL
 }
 
+label_target_clusters <- function(labels, target_mode) {
+  if (!identical(target_mode, "labels") || is.null(labels)) return(NULL)
+  label_count <- length(unique(labels[!is.na(labels)]))
+  if (is.finite(label_count) && label_count > 1L) as.integer(label_count) else NULL
+}
+
 build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
-                             n_threads, timeout, cycle = 1L) {
+                             n_clusters, n_threads, timeout, cycle = 1L) {
   n <- nrow(data_obj$data)
   p <- ncol(data_obj$data)
   started <- proc.time()[["elapsed"]]
@@ -376,6 +382,7 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
         k = k,
         backend = graph_backend,
         weight = weight,
+        n_clusters = n_clusters,
         n_threads = n_threads
       )
     }, timeout)
@@ -408,7 +415,7 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
         cluster_backend = NA_character_,
         method = NA_character_,
         weight = weight,
-        n_clusters = NULL,
+        n_clusters = n_clusters,
         n_threads = n_threads,
         status = "failed",
         error = conditionMessage(e),
@@ -427,14 +434,17 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
   n <- nrow(data_obj$data)
   p <- ncol(data_obj$data)
   labels <- data_obj$labels
-  label_count <- if (is.null(labels)) NA_integer_ else length(unique(labels[!is.na(labels)]))
+  graph_meta <- attr(graph_obj, "faissR_graph") %||% list()
+  graph_target <- graph_meta$target_n_clusters %||% NULL
   n_clusters <- NULL
-  if (!identical(method, "random_walking") &&
-      identical(target_mode, "labels") &&
-      is.finite(label_count) &&
-      label_count > 1L) {
-    n_clusters <- as.integer(label_count)
+  if (!identical(method, "random_walking")) {
+    if (is.null(graph_target)) {
+      n_clusters <- label_target_clusters(labels, target_mode)
+    } else {
+      n_clusters <- NULL
+    }
   }
+  n_clusters_requested <- graph_target %||% n_clusters
 
   started <- proc.time()[["elapsed"]]
   tryCatch({
@@ -466,7 +476,7 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       cluster_backend = cluster_backend,
       method = method,
       weight = weight,
-      n_clusters = n_clusters,
+      n_clusters = n_clusters_requested,
       n_threads = n_threads,
       status = "success",
       graph_sec = graph_sec,
@@ -493,7 +503,7 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       cluster_backend = cluster_backend,
       method = method,
       weight = weight,
-      n_clusters = n_clusters,
+      n_clusters = n_clusters_requested,
       n_threads = n_threads,
       status = "failed",
       error = conditionMessage(e),
@@ -585,6 +595,10 @@ for (dataset_name in datasets) {
     for (graph_backend in graph_backends) {
       for (cycle in seq_len(cycles)) {
         cycle_seed <- seed + (cycle - 1L) * 1000003L
+        graph_target_clusters <- NULL
+        if (!"random_walking" %in% methods) {
+          graph_target_clusters <- label_target_clusters(loaded$labels, target_mode)
+        }
         graph_skip_reason <- graph_build_expected_skip(graph_backend)
         if (!is.null(graph_skip_reason)) {
           graph_build <- list(
@@ -611,6 +625,7 @@ for (dataset_name in datasets) {
             k = k,
             graph_backend = graph_backend,
             weight = weight,
+            n_clusters = graph_target_clusters,
             n_threads = n_threads,
             timeout = timeout,
             cycle = cycle
@@ -620,6 +635,11 @@ for (dataset_name in datasets) {
           for (method in methods) {
             row_id <- row_id + 1L
             skip_reason <- graph_cluster_expected_skip(cluster_backend, method)
+            row_target_clusters <- if (identical(method, "random_walking")) {
+              NULL
+            } else {
+              graph_target_clusters %||% label_target_clusters(loaded$labels, target_mode)
+            }
             if (!is.null(skip_reason)) {
               row <- result_row(
                 dataset = dataset_name,
@@ -631,7 +651,7 @@ for (dataset_name in datasets) {
                 cluster_backend = cluster_backend,
                 method = method,
                 weight = if (identical(graph_build$status, "success")) graph_build$weight else weight,
-                n_clusters = NULL,
+                n_clusters = row_target_clusters,
                 n_threads = n_threads,
                 status = "expected_skip",
                 error = skip_reason,
@@ -654,7 +674,7 @@ for (dataset_name in datasets) {
                 cluster_backend = cluster_backend,
                 method = method,
                 weight = weight,
-                n_clusters = NULL,
+                n_clusters = row_target_clusters,
                 n_threads = n_threads,
                 status = if (identical(graph_build$status, "expected_skip")) "expected_skip" else "failed",
                 error = graph_build$error,
@@ -762,7 +782,7 @@ materials <- c(
   sprintf("- CPU thread cap: `%s`", n_threads),
   "",
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
-  "When `target_clusters = \"labels\"`, Louvain and Leiden receive `n_clusters = length(unique(labels))`; random-walking is benchmarked without a cluster-count target because the public API does not support that option for random-walking.",
+  "When `target_clusters = \"labels\"`, Louvain and Leiden use `n_clusters = length(unique(labels))`. If a benchmark block contains only Louvain/Leiden, this target is stored on the graph with `knn_graph(n_clusters = ...)` and reused by `graph_cluster()`; mixed blocks that include random-walking pass the target only to Louvain/Leiden rows because random-walking intentionally has no cluster-count target.",
   "Each KNN graph is built once per dataset/cycle/k/graph-backend/weight combination and reused across clustering methods and clustering backends within that cycle. The `cycle` column supports repeated benchmark cycles such as `--cycles=10`; `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
   "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, community counts, and resolved backend metadata.",
   "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering/backend/method row within `ari_tolerance` of the best median ARI for each dataset and k; when ARI is unavailable it selects the fastest median total-time row.",
