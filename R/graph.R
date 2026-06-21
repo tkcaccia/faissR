@@ -89,8 +89,7 @@ knn_graph <- function(data,
         stop("Embedding objects passed to `knn_graph()` must contain a matrix `layout`.", call. = FALSE)
       }
       graph_space <- "embedding"
-      graph_backend <- resolve_knn_graph_backend(requested_graph_backend)
-      resolved_graph_backend <- graph_backend
+      graph_backend <- requested_graph_backend
       knn <- nn_without_self(
         data$layout,
         k = k,
@@ -100,10 +99,10 @@ knn_graph <- function(data,
         tuning = tuning,
         n_threads = n_threads
       )
-      input_backend <- attr(knn, "backend") %||% graph_backend
+      resolved_graph_backend <- attr(knn, "resolved_backend") %||% attr(knn, "backend") %||% graph_backend
+      input_backend <- attr(knn, "backend") %||% resolved_graph_backend
     } else {
-      graph_backend <- resolve_knn_graph_backend(requested_graph_backend)
-      resolved_graph_backend <- graph_backend
+      graph_backend <- requested_graph_backend
       knn <- nn_without_self(
         data,
         k = k,
@@ -113,7 +112,8 @@ knn_graph <- function(data,
         tuning = tuning,
         n_threads = n_threads
       )
-      input_backend <- attr(knn, "backend") %||% graph_backend
+      resolved_graph_backend <- attr(knn, "resolved_backend") %||% attr(knn, "backend") %||% graph_backend
+      input_backend <- attr(knn, "backend") %||% resolved_graph_backend
     }
   }
 
@@ -367,7 +367,7 @@ graph_cluster <- function(graph,
     }
     graph_space <- "embedding"
     input_method <- as.character(graph$method %||% "embedding")[1L]
-    resolved <- resolve_knn_graph_backend(as.character(graph_backend)[1L])
+    resolved <- normalize_public_backend_arg(graph_backend, arg = "graph_backend")
     knn <- nn_without_self(
       graph$layout,
       k = k,
@@ -377,9 +377,9 @@ graph_cluster <- function(graph,
       tuning = tuning,
       n_threads = n_threads
     )
-    input_backend <- attr(knn, "backend") %||% resolved
+    input_backend <- attr(knn, "backend") %||% attr(knn, "resolved_backend") %||% resolved
   } else {
-    resolved <- resolve_knn_graph_backend(as.character(graph_backend)[1L])
+    resolved <- normalize_public_backend_arg(graph_backend, arg = "graph_backend")
     knn <- nn_without_self(
       graph,
       k = k,
@@ -389,7 +389,7 @@ graph_cluster <- function(graph,
       tuning = tuning,
       n_threads = n_threads
     )
-    input_backend <- attr(knn, "backend") %||% resolved
+    input_backend <- attr(knn, "backend") %||% attr(knn, "resolved_backend") %||% resolved
   }
 
   knn_input <- coerce_knn_input(knn, arg_name = "graph")
