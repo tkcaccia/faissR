@@ -92,8 +92,8 @@ expected skips, not algorithmic failures.
 `method = "auto"` is the default. It chooses a route from the selected
 `backend` and the data shape:
 
-- `backend = "auto"` first resolves the device family: CUDA/cuVS when available
-  for validated CUDA metrics, CPU otherwise.
+- `backend = "auto"` first resolves the device family: CUDA/cuVS only when the
+  selected method and metric have a validated CUDA route, CPU otherwise.
 - CPU auto uses exact CPU for small work, native grid for large 2D/3D
   Euclidean self-search, FAISS IVF for some million-row low-dimensional cases,
   FAISS HNSW for large high-dimensional Euclidean self-search when FAISS

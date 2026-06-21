@@ -22,7 +22,8 @@ observations in rows.}
 \item{k}{Number of non-self neighbours to return.}
 
 \item{backend}{Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
-uses CUDA when available and CPU otherwise.}
+follows \code{nn()} backend/method/metric resolution, using CUDA only for
+validated CUDA combinations and CPU otherwise.}
 
 \item{method}{Algorithm selector passed through the same resolver as [nn()].
 See [nn()] for method descriptions and references.}

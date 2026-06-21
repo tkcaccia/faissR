@@ -29,8 +29,9 @@ automatic neighborhood size and includes the self-neighbor when `points`
 is `data`.}
 
 \item{backend}{Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
-uses CUDA when a CUDA/cuVS backend is available for the requested metric and
-CPU otherwise.}
+uses a validated CUDA route only when the requested method/metric combination
+is supported, and otherwise resolves to CPU. Explicit `"cuda"` fails clearly
+when CUDA support or the selected CUDA combination is unavailable.}
 
 \item{method}{Algorithm selector. `"auto"` chooses a shape-aware default for
 the selected backend. Other values include `"exact"`, `"flat"`,

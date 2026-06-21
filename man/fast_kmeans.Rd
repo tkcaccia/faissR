@@ -24,7 +24,8 @@ fast_kmeans(
 \item{centers}{Number of clusters.}
 
 \item{backend}{Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
-uses CUDA when CUDA/cuVS k-means is available and CPU otherwise.}
+uses CUDA/cuVS k-means when that backend is compiled and available, and
+otherwise resolves to CPU.}
 
 \item{max_iter}{Maximum number of Lloyd iterations, or `"auto"` for a
 deterministic shape-aware default.}

@@ -10,7 +10,8 @@
 #' @param Xtest Optional numeric query matrix. If supplied, `knn()` returns
 #'   predictions for `Xtest`; otherwise it returns a fitted model.
 #' @param backend Device backend passed to [nn()]: `"auto"`, `"cpu"`, or
-#'   `"cuda"`. `"auto"` uses CUDA when available and CPU otherwise.
+#'   `"cuda"`. `"auto"` follows [nn()] backend/method/metric resolution,
+#'   using CUDA only for validated CUDA combinations and CPU otherwise.
 #' @param method Nearest-neighbour algorithm selector passed to [nn()]. See
 #'   [nn()] for method descriptions and references.
 #' @param metric Distance metric passed to [nn()].

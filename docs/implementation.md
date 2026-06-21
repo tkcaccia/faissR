@@ -134,7 +134,8 @@ construction, clustering, benchmarking, and supervised prediction.
 
 The public KNN API separates device choice from algorithm choice:
 
-- `backend = "auto"` uses CUDA when CUDA/cuVS is available and CPU otherwise;
+- `backend = "auto"` uses a validated CUDA route only when the requested
+  method/metric combination is supported, and otherwise resolves to CPU;
 - `backend = "cpu"` forces CPU execution;
 - `backend = "cuda"` forces CUDA execution and fails clearly if unavailable.
 
@@ -318,8 +319,9 @@ large or high-dimensional problems keep cheaper settings. The `resolved_from`
 field records whether `max_iter`, `n_init`, and `tol` were selected by
 auto/default rules or supplied explicitly.
 
-The public backend policy is the same as for KNN: `backend = "auto"` uses CUDA
-when a CUDA k-means implementation is available and CPU otherwise;
+The public backend policy is the same as for KNN: `backend = "auto"` uses
+CUDA k-means when that backend is compiled and available, and otherwise
+resolves to CPU;
 `backend = "cpu"` forces the CPU route; `backend = "cuda"` requires an
 accelerated route and errors if unavailable. This makes k-means behavior
 consistent with `nn()`, `knn_graph()`, and `graph_cluster()`.

@@ -12,8 +12,8 @@
 
 `faissR` separates the public device selector from the algorithm selector:
 
-- `backend = "auto"` uses CUDA when CUDA/cuVS support is available, otherwise
-  CPU.
+- `backend = "auto"` uses CUDA only for validated CUDA method/metric
+  combinations, otherwise CPU.
 - `backend = "cpu"` forces CPU execution.
 - `backend = "cuda"` forces CUDA execution and errors if no compatible CUDA
   backend is available.
@@ -29,7 +29,7 @@ explicit CUDA request with CPU work.
 
 | Public backend | Meaning | Failure behavior |
 | --- | --- | --- |
-| `"auto"` | Prefer CUDA/cuVS when available; otherwise use CPU. | Falls back to CPU only because the user requested automatic device selection. |
+| `"auto"` | Prefer CUDA/cuVS for validated CUDA method/metric combinations; otherwise use CPU. | Falls back to CPU only because the user requested automatic device selection. |
 | `"cpu"` | Use CPU/native/FAISS CPU routes. | Errors for CUDA-only methods such as `method = "CAGRA"`. |
 | `"cuda"` | Use CUDA/FAISS GPU/cuVS routes. | Errors if CUDA/cuVS support is unavailable or if the selected method is CPU-only. |
 

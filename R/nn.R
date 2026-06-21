@@ -4084,8 +4084,10 @@ grid_self_knn <- function(data,
 #'   automatic neighborhood size and includes the self-neighbor when `points`
 #'   is `data`.
 #' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
-#'   uses CUDA when a CUDA/cuVS backend is available for the requested metric
-#'   and CPU otherwise.
+#'   uses a validated CUDA route only when the requested method/metric
+#'   combination is supported, and otherwise resolves to CPU. Explicit
+#'   `"cuda"` fails clearly when CUDA support or the selected CUDA combination
+#'   is unavailable.
 #' @param method Algorithm selector. `"auto"` chooses a shape-aware default for
 #'   the selected backend. Other values include `"exact"`, `"flat"`,
 #'   `"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"HNSW"`, `"IVF"`,
@@ -4161,7 +4163,8 @@ nn <- function(data,
 #'   observations in rows.
 #' @param k Number of non-self neighbours to return.
 #' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
-#'   uses CUDA when available and CPU otherwise.
+#'   follows [nn()] backend/method/metric resolution, using CUDA only for
+#'   validated CUDA combinations and CPU otherwise.
 #' @param method Algorithm selector passed through the same resolver as [nn()].
 #'   See [nn()] for method descriptions and references.
 #' @param metric Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`,

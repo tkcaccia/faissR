@@ -9,7 +9,8 @@
 #' @param data Numeric matrix with observations in rows.
 #' @param centers Number of clusters.
 #' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
-#'   uses CUDA when CUDA/cuVS k-means is available and CPU otherwise.
+#'   uses CUDA/cuVS k-means when that backend is compiled and available, and
+#'   otherwise resolves to CPU.
 #' @param max_iter Maximum number of Lloyd iterations, or `"auto"` for a
 #'   deterministic shape-aware default.
 #' @param n_init Number of random restarts where supported, or `"auto"` for a

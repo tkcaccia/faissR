@@ -42,7 +42,7 @@ nn(data, points = data, k = NULL, backend = "auto",
 | `data` | Numeric matrix, data frame, or sparse `Matrix` object with reference observations in rows and features in columns. |
 | `points` | Optional query matrix/data frame/sparse matrix with the same number of columns as `data`. Defaults to `data` for self-search. |
 | `k` | Number of neighbours to return. If `NULL`, faissR chooses an automatic neighbourhood size. |
-| `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA when CUDA/cuVS is available and CPU otherwise. Explicit `"cuda"` fails clearly when CUDA support is unavailable. |
+| `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses a validated CUDA route only when the requested method/metric combination is supported, and otherwise resolves to CPU. Explicit `"cuda"` fails clearly when CUDA support or the selected CUDA combination is unavailable. |
 | `method` | Algorithm selector: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"HNSW"`, `"IVF"`, `"IVFPQ"`, `"NSG"`, `"NNDescent"`, or `"CAGRA"` [1-6,13-16]. For example, `method = "grid", backend = "cpu"` maps to the CPU grid implementation, while `method = "grid", backend = "cuda"` maps to the CUDA grid implementation. Distance choices belong in `metric`, not `method`. Invalid backend/method combinations, such as `method = "CAGRA", backend = "cpu"`, stop with a clear error. |
 | `metric` | Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Euclidean/L2 is the validated high-performance route for approximate FAISS/CUDA/cuVS. Cosine and correlation use validated exact paths, including FAISS CPU/GPU Flat through normalized `IndexFlatIP` and CPU auto selection of RcppHNSW/hnswlib for large self-search. Inner product is supported by native exact CPU scoring, FAISS Flat IP for Flat/exact routes where available, and RcppHNSW/hnswlib when CPU `method = "HNSW"` is used with a non-Euclidean metric. |
 | `tuning` | Tuning policy for approximate GPU methods: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. `"auto"` uses the appropriate tuned default for the resolved method. |
@@ -82,7 +82,7 @@ nn_without_self(data, k, backend = "auto",
 | --- | --- |
 | `data` | Numeric matrix, data frame, or sparse `Matrix` object with observations in rows. |
 | `k` | Number of non-self neighbours to return per row. |
-| `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. This wrapper always performs self-search and removes the diagonal self match. |
+| `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. This wrapper uses the same backend/method/metric resolver as `nn()`, always performs self-search, and removes the diagonal self match. |
 | `method` | Same algorithm selector as `nn()`. |
 | `metric` | `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. |
 | `tuning` | Same tuning policy as `nn()`. |
@@ -192,7 +192,7 @@ fast_kmeans(data, centers, backend = "auto",
 | --- | --- |
 | `data` | Numeric matrix with observations in rows. |
 | `centers` | Number of clusters. Must be between 1 and `nrow(data)`. |
-| `backend` | `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA/cuVS k-means when available and CPU otherwise [7-8]. |
+| `backend` | `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA/cuVS k-means when that backend is compiled and available, and otherwise resolves to CPU [7-8]. |
 | `max_iter` | Maximum number of Lloyd iterations, or `"auto"` for a deterministic shape-aware default. |
 | `n_init` | Number of random restarts where the selected backend supports it, or `"auto"` for a deterministic shape-aware default. |
 | `tol` | Non-negative convergence tolerance where supported, or `"auto"` for a deterministic shape-aware default. |
@@ -221,7 +221,7 @@ prob  <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 | `Xtrain` | Numeric training matrix with observations in rows. |
 | `Ytrain` | Training labels for classification or numeric response for regression. Must have one value per row of `Xtrain`. |
 | `Xtest` | Optional query matrix. If supplied, `knn()` fits and predicts immediately; otherwise it returns a reusable model. |
-| `backend` | Device backend passed to `nn()`: `"auto"`, `"cpu"`, or `"cuda"`. |
+| `backend` | Device backend passed to `nn()`: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` follows `nn()` backend/method/metric resolution, using CUDA only for validated CUDA combinations and CPU otherwise. |
 | `method` | Nearest-neighbour algorithm selector passed to `nn()`. `"auto"` chooses the most appropriate method for the selected backend. |
 | `metric` | Distance metric passed to `nn()`: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. |
 | `tuning` | Tuning policy passed to `nn()`. `"auto"` uses the tuned default for the resolved method. |
