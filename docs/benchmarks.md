@@ -159,8 +159,8 @@ counts, median/min/max graph, clustering, and total time, ARI stability,
 modularity stability, community counts, and resolved backend metadata.
 `graph_cluster_recommendations_from_cycles.csv` selects the fastest successful
 graph/clustering/backend/method row within `ari_tolerance` of the best median
-ARI for each dataset and k; when ARI is unavailable it selects the fastest
-median total-time row.
+ARI for each dataset/k/target-cluster-count combination; when ARI is
+unavailable it selects the fastest median total-time row.
 `graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where
 the graph or clustering backend was `"auto"` against those recommendations and
 reports median speed ratio, median ARI gap, modularity gap, and

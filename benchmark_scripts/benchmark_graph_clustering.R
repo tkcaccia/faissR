@@ -283,7 +283,8 @@ summarize_graph_cycles <- function(ok) {
 }
 
 recommend_graph_cluster_methods <- function(cycle_summary, ari_tolerance) {
-  parts <- split(cycle_summary, paste(cycle_summary$dataset, cycle_summary$k, sep = "__"))
+  cluster_key <- ifelse(is.na(cycle_summary$n_clusters_requested), "NA", as.character(cycle_summary$n_clusters_requested))
+  parts <- split(cycle_summary, paste(cycle_summary$dataset, cycle_summary$k, cluster_key, sep = "__"))
   recommendations <- lapply(parts, function(x) {
     has_ari <- is.finite(x$median_ari)
     candidates <- if (any(has_ari)) {
@@ -297,7 +298,7 @@ recommend_graph_cluster_methods <- function(cycle_summary, ari_tolerance) {
   })
   out <- do.call(rbind, recommendations)
   row.names(out) <- NULL
-  out[order(out$dataset, out$k), , drop = FALSE]
+  out[order(out$dataset, out$k, out$n_clusters_requested), , drop = FALSE]
 }
 
 compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations) {
@@ -308,7 +309,7 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
     drop = FALSE
   ]
   if (!nrow(auto)) return(data.frame())
-  keys <- c("dataset", "k")
+  keys <- c("dataset", "k", "n_clusters_requested")
   keep <- c(
     keys, "graph_backend", "graph_resolved_backend", "cluster_backend",
     "cluster_resolved_backend", "method", "weight", "success_cycles",
@@ -332,7 +333,7 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
   )
   comparison$auto_median_ari_gap <- comparison$recommended_median_ari - comparison$auto_median_ari
   comparison$auto_modularity_gap <- comparison$recommended_median_modularity - comparison$auto_median_modularity
-  comparison[order(comparison$dataset, comparison$k, comparison$auto_graph_backend, comparison$auto_cluster_backend, comparison$auto_method), , drop = FALSE]
+  comparison[order(comparison$dataset, comparison$k, comparison$n_clusters_requested, comparison$auto_graph_backend, comparison$auto_cluster_backend, comparison$auto_method), , drop = FALSE]
 }
 
 graph_cluster_expected_skip <- function(cluster_backend, method) {
@@ -818,7 +819,7 @@ materials <- c(
   "When `target_clusters = \"labels\"`, Louvain and Leiden use `n_clusters = length(unique(labels))`. If a benchmark block contains only Louvain/Leiden, this target is stored on the graph with `knn_graph(n_clusters = ...)` and reused by `graph_cluster()`; mixed blocks that include random-walking pass the target only to Louvain/Leiden rows because random-walking intentionally has no cluster-count target.",
   "Each KNN graph is built once per dataset/cycle/k/graph-backend/weight combination and reused across clustering methods and clustering backends within that cycle. The `cycle` column supports repeated benchmark cycles such as `--cycles=10`; `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
   "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, community counts, and resolved backend metadata.",
-  "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering/backend/method row within `ari_tolerance` of the best median ARI for each dataset and k; when ARI is unavailable it selects the fastest median total-time row.",
+  "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering/backend/method row within `ari_tolerance` of the best median ARI for each dataset/k/target-cluster-count combination; when ARI is unavailable it selects the fastest median total-time row.",
   "`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where graph or clustering backend was `auto` with those cycle-summary recommendations and reports median speed ratio, median ARI gap, modularity gap, and backend/method agreement.",
   "`graph_backend` and `cluster_backend` record the requested public backends. `graph_preflight_route` and `cluster_preflight_route` record the public resolver decision before runtime availability checks; `graph_resolved_backend` and `cluster_resolved_backend` record the resolved device policy from successful result objects, so CPU/CUDA rows can be audited without opening the R objects.",
   "Unsupported graph-clustering combinations known from the public API, such as CUDA random_walking, are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. If every row in a graph-build block is an expected skip, graph construction is skipped and graph timing/edge columns remain `NA`.",
