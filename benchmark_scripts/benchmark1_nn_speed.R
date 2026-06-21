@@ -22,7 +22,7 @@ source(file.path(script_dir, "source.R"))
 
 args <- parse_args(commandArgs(trailingOnly = TRUE))
 
-faiss_env_dir <- Sys.getenv("FAISSR_ENV_DIR", Sys.getenv("CONDA_PREFIX", ""))
+faiss_env_dir <- Sys.getenv("FAISSR_ENV_DIR", "")
 cuda_lib_dir <- Sys.getenv("FAISSR_CUDA_LIB_DIR", Sys.getenv("CUDA_HOME", ""))
 cuda_lib_dir <- if (nzchar(cuda_lib_dir)) file.path(cuda_lib_dir, "targets/x86_64-linux/lib") else ""
 library_candidates <- c(
@@ -42,7 +42,7 @@ env_updates <- list()
 if (nzchar(faiss_env_dir)) env_updates$CONDA_PREFIX <- faiss_env_dir
 if (nzchar(faiss_library_path)) env_updates$LD_LIBRARY_PATH <- faiss_library_path
 if (nzchar(faiss_preload)) env_updates$LD_PRELOAD <- faiss_preload
-do.call(Sys.setenv, env_updates)
+if (length(env_updates)) do.call(Sys.setenv, env_updates)
 
 benchmark_env <- function() {
   env <- character()
@@ -62,7 +62,8 @@ n_threads <- as.integer(args$threads %||% "4")
 metric <- tolower(args$metric %||% "l2")
 if (metric %in% c("euclidean", "l2")) metric <- "l2"
 if (metric %in% c("ip", "innerproduct", "inner_product")) metric <- "inner_product"
-if (!metric %in% c("l2", "cosine", "inner_product")) metric <- "l2"
+if (metric %in% c("cor", "pearson")) metric <- "correlation"
+if (!metric %in% c("l2", "cosine", "correlation", "inner_product")) metric <- "l2"
 timeout_sec <- as.integer(args$timeout %||% "600")
 worker <- isTRUE(as.logical(args$worker %||% FALSE))
 quality_eval_max_n <- as.integer(args$quality_n %||% Sys.getenv("FAISSR_BENCHMARK1_QUALITY_N", "512"))
@@ -89,13 +90,6 @@ configure_cpu_threads <- function(n_threads) {
     RCPP_PARALLEL_NUM_THREADS = value
   )
   options(Ncpus = as.integer(n_threads))
-  if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
-    try(RhpcBLASctl::blas_set_num_threads(as.integer(n_threads)), silent = TRUE)
-    try(RhpcBLASctl::omp_set_num_threads(as.integer(n_threads)), silent = TRUE)
-  }
-  if (requireNamespace("data.table", quietly = TRUE)) {
-    try(data.table::setDTthreads(as.integer(n_threads)), silent = TRUE)
-  }
   invisible(as.integer(n_threads))
 }
 configure_cpu_threads(n_threads)
@@ -124,22 +118,37 @@ read_peak_rss_gb <- function() {
 available_pkg <- function(pkg) requireNamespace(pkg, quietly = TRUE)
 
 metric_arg_for_label <- function(metric) {
-  if (identical(metric, "cosine")) "cosine" else "euclidean"
+  switch(
+    metric,
+    l2 = "euclidean",
+    cosine = "cosine",
+    correlation = "correlation",
+    inner_product = "inner_product",
+    "euclidean"
+  )
 }
 
 method_metric_applicable <- function(method, metric) {
-  if (identical(metric, "l2")) return(list(ok = TRUE, reason = ""))
-  if (identical(metric, "inner_product")) {
-    ip_methods <- c(
-      "faissR_faiss_flat_ip",
-      "faissR_faiss_gpu_flat_ip"
-    )
-    if (method %in% ip_methods) return(list(ok = TRUE, reason = ""))
-    return(list(ok = FALSE, reason = "inner-product search is benchmarked only with FAISS IP methods"))
-  }
-  cosine_methods <- c(
+  ip_methods <- c(
     "faissR_cpu_exact",
     "faissR_rcpphnsw",
+    "faissR_faiss_flat_ip",
+    "faissR_faiss_gpu_flat_ip",
+    "RcppHNSW_hnsw"
+  )
+  if (grepl("_ip$", method) && !identical(metric, "inner_product")) {
+    return(list(ok = FALSE, reason = "inner-product FAISS Flat methods are benchmarked only with `metric = inner_product`"))
+  }
+  if (identical(metric, "l2")) return(list(ok = TRUE, reason = ""))
+  if (identical(metric, "inner_product")) {
+    if (method %in% ip_methods) return(list(ok = TRUE, reason = ""))
+    return(list(ok = FALSE, reason = "inner-product search is benchmarked only with exact/IP-capable methods"))
+  }
+  non_euclidean_methods <- c(
+    "faissR_cpu_exact",
+    "faissR_rcpphnsw",
+    "faissR_faiss_flat_l2",
+    "faissR_faiss_gpu_flat_l2",
     "RcppHNSW_hnsw",
     "BiocNeighbors_hnsw",
     "BiocNeighbors_annoy",
@@ -148,8 +157,16 @@ method_metric_applicable <- function(method, metric) {
     "uwot_similarity_graph_hnsw",
     "uwot_similarity_graph_nndescent"
   )
-  if (method %in% cosine_methods) return(list(ok = TRUE, reason = ""))
-  list(ok = FALSE, reason = paste0("method `", method, "` does not expose a validated cosine/IP mode in this benchmark"))
+  if (identical(metric, "correlation")) {
+    non_euclidean_methods <- c(
+      "faissR_cpu_exact",
+      "faissR_rcpphnsw",
+      "faissR_faiss_flat_l2",
+      "faissR_faiss_gpu_flat_l2"
+    )
+  }
+  if (method %in% non_euclidean_methods) return(list(ok = TRUE, reason = ""))
+  list(ok = FALSE, reason = paste0("method `", method, "` does not expose a validated ", metric, " mode in this benchmark"))
 }
 
 method_dataset_applicable <- function(method, dataset) {
@@ -182,7 +199,7 @@ method_dataset_applicable <- function(method, dataset) {
 
 method_is_exact <- function(method, metric) {
   if (identical(metric, "inner_product")) {
-    return(method %in% c("faissR_faiss_flat_ip", "faissR_faiss_gpu_flat_ip"))
+    return(method %in% c("faissR_cpu_exact", "faissR_faiss_flat_ip", "faissR_faiss_gpu_flat_ip"))
   }
   method %in% c(
     "faissR_cpu_exact",
@@ -262,12 +279,17 @@ exact_subset_knn <- function(x, rows, k, metric) {
     norms <- sqrt(rowSums(x * x))
     norms[!is.finite(norms) | norms <= 0] <- 1
     z <- x / norms
+  } else if (identical(metric, "correlation")) {
+    z <- x - rowMeans(x)
+    norms <- sqrt(rowSums(z * z))
+    norms[!is.finite(norms) | norms <= 0] <- 1
+    z <- z / norms
   } else {
     z <- x
   }
   for (ii in seq_along(rows)) {
     r <- rows[[ii]]
-    if (identical(metric, "cosine")) {
+    if (metric %in% c("cosine", "correlation")) {
       score <- drop(z %*% z[r, ])
       dist <- 1 - score
       dist[r] <- Inf
@@ -463,7 +485,17 @@ run_method <- function(method, x, k, n_threads, dataset, out_dir, metric) {
       cuda_cuvs_nndescent = "cuda_cuvs_nndescent",
       backend
     )
-    obj <- faissR::nn_without_self(x, k = k, backend = backend, n_threads = n_threads, metric = metric_arg_for_label(metric))
+    obj <- faissR:::nn_compute(
+      data = x,
+      points = x,
+      k = k,
+      backend = backend,
+      points_missing = TRUE,
+      exclude_self = TRUE,
+      n_threads = n_threads,
+      metric = metric_arg_for_label(metric),
+      tuning = "auto"
+    )
     if (identical(method, "faissR_cuda_cuvs_nndescent") && identical(metric, "l2")) {
       save_cuvs_knn(obj, dataset, out_dir)
     }
@@ -555,7 +587,17 @@ run_method <- function(method, x, k, n_threads, dataset, out_dir, metric) {
     umap_umap_knn_from_cuvs = {
       if (!available_pkg("umap")) stop("umap unavailable")
       if (!available_pkg("faissR")) stop("faissR unavailable")
-      knn <- faissR::nn(x, k = k, backend = "cuda_cuvs_nndescent", n_threads = n_threads)
+      knn <- faissR:::nn_compute(
+        data = x,
+        points = x,
+        k = k,
+        backend = "cuda_cuvs_nndescent",
+        points_missing = TRUE,
+        exclude_self = TRUE,
+        n_threads = n_threads,
+        metric = "euclidean",
+        tuning = "auto"
+      )
       sx <- standardize_knn(knn)
       umap::umap.knn(sx$indices, sx$distances)
     },
@@ -572,7 +614,9 @@ method_table <- function() {
       "faissR_cpu_exact",
       "faissR_rcpphnsw",
       "faissR_faiss_flat_l2",
+      "faissR_faiss_flat_ip",
       "faissR_faiss_gpu_flat_l2",
+      "faissR_faiss_gpu_flat_ip",
       "faissR_faiss_ivf",
       "faissR_faiss_ivfpq",
       "faissR_faiss_gpu_ivf_flat",
@@ -611,7 +655,7 @@ method_table <- function() {
       "Rtsne_neighbors"
     ),
     implementation = c(
-      rep("faissR", 21),
+      rep("faissR", 23),
       "Rnanoflann", "RANN", "RANN",
       "rnndescent", "rnndescent", "rnndescent", "rnndescent",
       "RcppHNSW", "RcppAnnoy",
@@ -621,14 +665,14 @@ method_table <- function() {
       "umap", "Rtsne"
     ),
     backend = c(
-      "CPU", "CPU", "CPU", "CUDA", "CPU", "CPU", "CUDA", "CUDA", "CUDA", "CPU", "CPU", "CPU",
+      "CPU", "CPU", "CPU", "CPU", "CUDA", "CUDA", "CPU", "CPU", "CUDA", "CUDA", "CUDA", "CPU", "CPU", "CPU",
       "CPU", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA",
       rep("CPU", 16),
       "CUDA",
       "CPU", "CPU"
     ),
     kind = c(
-      rep("knn_search", 38),
+      rep("knn_search", 40),
       "knn_consumer",
       "not_applicable"
     ),
@@ -646,7 +690,8 @@ method_table <- function() {
     "faissR_cuda_cuvs_nndescent"
   )] <- "Direct RAPIDS cuVS"
   methods$backend_detail[methods$method %in% c(
-    "faissR_faiss_gpu_flat_l2"
+    "faissR_faiss_gpu_flat_l2",
+    "faissR_faiss_gpu_flat_ip"
   )] <- "FAISS GPU Flat"
   methods
 }
@@ -833,16 +878,16 @@ dir.create(file.path(out_dir, "worker_results"), recursive = TRUE, showWarnings 
 
 utils::write.csv(datasets, file.path(out_dir, "benchmark1_datasets.csv"), row.names = FALSE)
 utils::write.csv(methods, file.path(out_dir, "benchmark1_methods.csv"), row.names = FALSE)
-k_values <- as.integer(strsplit(args$k_values %||% Sys.getenv("FAISSR_BENCHMARK1_K_VALUES", "50"), ",", fixed = TRUE)[[1L]])
+k_values <- as.integer(strsplit(args$k_values %||% Sys.getenv("FAISSR_BENCHMARK1_K_VALUES", "5,10,15,50,100"), ",", fixed = TRUE)[[1L]])
 k_values <- unique(k_values[is.finite(k_values) & !is.na(k_values) & k_values > 0L])
-k_values <- intersect(k_values, 50L)
-if (!length(k_values)) k_values <- 50L
-metric_values <- strsplit(args$metrics %||% Sys.getenv("FAISSR_BENCHMARK1_METRICS", "l2,cosine"), ",", fixed = TRUE)[[1L]]
+if (!length(k_values)) k_values <- c(5L, 10L, 15L, 50L, 100L)
+metric_values <- strsplit(args$metrics %||% Sys.getenv("FAISSR_BENCHMARK1_METRICS", "l2,cosine,correlation,inner_product"), ",", fixed = TRUE)[[1L]]
 metric_values <- unique(tolower(trimws(metric_values)))
 metric_values[metric_values %in% c("euclidean")] <- "l2"
 metric_values[metric_values %in% c("ip", "innerproduct")] <- "inner_product"
-metric_values <- unique(metric_values[metric_values %in% c("l2", "cosine")])
-if (!length(metric_values)) metric_values <- c("l2", "cosine")
+metric_values[metric_values %in% c("cor", "pearson")] <- "correlation"
+metric_values <- unique(metric_values[metric_values %in% c("l2", "cosine", "correlation", "inner_product")])
+if (!length(metric_values)) metric_values <- c("l2", "cosine", "correlation", "inner_product")
 utils::write.csv(
   expand.grid(k = k_values, metric = metric_values, stringsAsFactors = FALSE),
   file.path(out_dir, "benchmark1_parameter_grid.csv"),
