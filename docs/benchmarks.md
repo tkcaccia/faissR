@@ -95,10 +95,15 @@ methods and clustering backends. The `graph_cached` column records this reuse.
 `graph_sec` is the shared graph-construction time, `cluster_sec` is
 clustering-only time, and `total_sec` is `graph_sec + cluster_sec` for the
 complete graph-plus-clustering workflow represented by the row.
+By default, graph construction and graph clustering are each tested with
+`"auto"`, `"cpu"`, and `"cuda"` backends. `backend = "auto"` may resolve to CPU
+when CUDA/cuGraph support is not available.
 Known unsupported graph-clustering combinations from the public API, such as
-CUDA random-walking, are recorded as `status = "expected_skip"` with
-`expected_skip = TRUE`; if every row in a graph-build block is an expected
-skip, graph construction is skipped and graph timing/edge columns remain `NA`.
+CUDA random-walking or explicit CUDA clustering without libcugraph, are
+recorded as `status = "expected_skip"` with `expected_skip = TRUE`; if every
+row in a graph-build block is an expected skip, graph construction is skipped
+and graph timing/edge columns remain `NA`. Explicit CUDA graph construction
+without a CUDA-capable faissR runtime is also recorded as an expected skip.
 Unexpected runtime errors remain failed rows.
 
 Example CPU run:

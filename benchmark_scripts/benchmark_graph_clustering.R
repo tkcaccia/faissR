@@ -206,6 +206,11 @@ graph_cluster_expected_skip <- function(cluster_backend, method) {
   if (identical(cluster_backend, "cuda") && identical(method, "random_walking")) {
     return("CUDA random_walking is not enabled; graph_cluster(method = \"random_walking\", backend = \"auto\") stays on CPU.")
   }
+  if (identical(cluster_backend, "cuda") &&
+      method %in% c("louvain", "leiden") &&
+      !isTRUE(faissR::cugraph_available())) {
+    return("CUDA graph clustering requires faissR built with RAPIDS libcugraph; explicit CUDA clustering requests are expected skips.")
+  }
   NULL
 }
 
@@ -216,6 +221,16 @@ all_graph_cluster_expected_skips <- function(cluster_backends, methods) {
     }, logical(1))
   }), use.names = FALSE)
   length(checks) > 0L && all(checks)
+}
+
+graph_build_expected_skip <- function(graph_backend) {
+  graph_backend <- tolower(as.character(graph_backend)[1L])
+  if (identical(graph_backend, "cuda") &&
+      !isTRUE(faissR::cuda_available()) &&
+      !isTRUE(faissR::cuvs_available())) {
+    return("CUDA graph construction requires a CUDA-capable faissR runtime; explicit CUDA graph requests are expected skips.")
+  }
+  NULL
 }
 
 build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
@@ -377,8 +392,8 @@ datasets <- split_arg(args$datasets, paste(c(
   "SimulatedUniform3D"
 ), collapse = ","))
 methods <- split_arg(args$methods, "random_walking,louvain,leiden")
-graph_backends <- split_arg(args$graph_backends, "cpu,cuda")
-cluster_backends <- split_arg(args$cluster_backends, "cpu,cuda")
+graph_backends <- split_arg(args$graph_backends, "auto,cpu,cuda")
+cluster_backends <- split_arg(args$cluster_backends, "auto,cpu,cuda")
 weight <- args$weight %||% "auto"
 target_mode <- args$target_clusters %||% "labels"
 
@@ -422,7 +437,17 @@ for (dataset_name in datasets) {
   }
   for (k in k_values) {
     for (graph_backend in graph_backends) {
-      if (all_graph_cluster_expected_skips(cluster_backends, methods)) {
+      graph_skip_reason <- graph_build_expected_skip(graph_backend)
+      if (!is.null(graph_skip_reason)) {
+        graph_build <- list(
+          status = "expected_skip",
+          graph = NULL,
+          graph_sec = NA_real_,
+          n_edges = NA_integer_,
+          weight = weight,
+          error = graph_skip_reason
+        )
+      } else if (all_graph_cluster_expected_skips(cluster_backends, methods)) {
         graph_build <- list(
           status = "skipped",
           graph = NULL,
@@ -479,12 +504,13 @@ for (dataset_name in datasets) {
               weight = weight,
               n_clusters = NULL,
               n_threads = n_threads,
-              status = "failed",
+              status = if (identical(graph_build$status, "expected_skip")) "expected_skip" else "failed",
               error = graph_build$error,
               graph_sec = graph_build$graph_sec,
               total_sec = graph_build$graph_sec,
               peak_rss_gb = read_peak_rss_gb(),
-              graph_cached = FALSE
+              graph_cached = FALSE,
+              expected_skip = identical(graph_build$status, "expected_skip")
             )
           } else {
             row <- run_cluster_one(
