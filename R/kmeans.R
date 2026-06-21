@@ -328,21 +328,27 @@ normalize_kmeans_tuning <- function(tuning) {
 }
 
 kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
-  if (!identical(tuning, "auto")) {
-    return(list(
-      policy = tuning,
-      max_iter = 100L,
-      n_init = 1L,
-      tol = 1e-4,
-      rule = "fixed_defaults"
-    ))
-  }
   work <- as.double(n) * as.double(p) * as.double(centers)
   high_dim <- p >= 256L
   large_n <- n >= 100000L
   many_centers <- centers >= 100L
   n_per_center <- as.double(n) / as.double(centers)
   small_many_centers <- many_centers && n <= 50000L && work <= 2e8 && n_per_center >= 20
+  if (!identical(tuning, "auto")) {
+    return(list(
+      policy = tuning,
+      max_iter = 100L,
+      n_init = 1L,
+      tol = 1e-4,
+      work = as.numeric(work),
+      n_per_center = as.numeric(n_per_center),
+      high_dim = isTRUE(high_dim),
+      large_n = isTRUE(large_n),
+      many_centers = isTRUE(many_centers),
+      small_many_centers = isTRUE(small_many_centers),
+      rule = "fixed_defaults"
+    ))
+  }
   max_iter <- if (large_n || work >= 5e9) {
     50L
   } else if (high_dim || (many_centers && !small_many_centers) || work >= 5e8) {

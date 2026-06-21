@@ -76,6 +76,10 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(fixed$parameters$tuning$policy, "fixed")
   expect_equal(fixed$parameters$max_iter, 100L)
   expect_equal(fixed$parameters$n_init, 1L)
+  expect_true(is.finite(fixed$parameters$tuning$work))
+  expect_true(is.finite(fixed$parameters$tuning$n_per_center))
+  expect_false(isTRUE(fixed$parameters$tuning$high_dim))
+  expect_false(isTRUE(fixed$parameters$tuning$large_n))
 
   explicit <- fast_kmeans(
     x,
