@@ -4213,7 +4213,8 @@ grid_self_knn <- function(data,
 #'   `"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"hnsw"`, `"ivf"`,
 #'   `"ivfpq"`, `"nsg"`, `"nndescent"`, and `"cagra"`. Older uppercase
 #'   spellings are accepted as compatibility aliases but are not listed as
-#'   separate methods. Unsupported backend/method combinations fail clearly; for example,
+#'   separate methods. Unsupported backend/method combinations fail clearly;
+#'   for example,
 #'   `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only.
 #' @param metric Distance metric. The intentionally small public set is
 #'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.

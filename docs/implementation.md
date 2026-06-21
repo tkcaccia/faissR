@@ -186,12 +186,12 @@ public method names map to different concrete functions depending on `backend`.
 | `grid` | Native 2D/3D exact spatial grid. | CUDA 2D/3D grid. | Errors outside two or three columns. |
 | `vptree` | Native exact CPU VP-tree for Euclidean, cosine, and correlation; zero-normalized non-Euclidean rows use exact CPU fallback. | Unsupported. | Low-dimensional CPU helper. |
 | `sparse` | Native exact sparse `dgCMatrix` route. | Unsupported. | Avoids densifying sparse matrices. |
-| `HNSW` | FAISS CPU HNSW. | Unsupported. | High-recall CPU graph-search route [5,16]. |
-| `IVF` | FAISS CPU IVF-Flat. | FAISS GPU IVF-Flat. | Coarse-list approximate route [1-2,16]. |
-| `IVFPQ` | FAISS CPU IVF-PQ. | FAISS GPU IVF-PQ. | Compressed approximate route [6,16]. |
-| `NSG` | FAISS CPU NSG if available. | Unsupported. | Optional FAISS graph-search baseline [16]. |
-| `NNDescent` | FAISS CPU NNDescent if available. | Direct cuVS NN-descent. | Approximate KNN graph construction [3-4,16]. |
-| `CAGRA` | Unsupported. | FAISS GPU CAGRA preferred, direct cuVS CAGRA fallback. | CUDA-only graph-search method [3,13-16]. |
+| `hnsw` | FAISS CPU HNSW. | Unsupported. | High-recall CPU graph-search route [5,16]. |
+| `ivf` | FAISS CPU IVF-Flat. | FAISS GPU IVF-Flat. | Coarse-list approximate route [1-2,16]. |
+| `ivfpq` | FAISS CPU IVF-PQ. | FAISS GPU IVF-PQ. | Compressed approximate route [6,16]. |
+| `nsg` | FAISS CPU NSG if available. | Unsupported. | Optional FAISS graph-search baseline [16]. |
+| `nndescent` | FAISS CPU NNDescent if available. | Direct cuVS NN-descent. | Approximate KNN graph construction [3-4,16]. |
+| `cagra` | Unsupported. | FAISS GPU CAGRA preferred, direct cuVS CAGRA fallback. | CUDA-only graph-search method [3,13-16]. |
 
 Unsupported method/backend pairs stop before computation. This makes benchmark
 failures interpretable: a row marked unavailable or unsupported means the

@@ -449,6 +449,17 @@ is_expected_skip <- function(caps, backend, method, metric) {
   if (!backend %in% c("cpu", "cuda")) return(NULL)
   cap <- capability_status(caps, backend, method, metric)
   if (!isTRUE(cap$supported)) return(list(skip = TRUE, notes = cap$notes))
+  if (identical(backend, "cuda") &&
+      !isTRUE(faissR::cuda_available()) &&
+      !isTRUE(faissR::cuvs_available())) {
+    return(list(
+      skip = TRUE,
+      notes = paste(
+        "backend = \"cuda\" is supported by design for this method/metric,",
+        "but CUDA/cuVS is unavailable in the current runtime."
+      )
+    ))
+  }
   NULL
 }
 
@@ -557,7 +568,7 @@ if (length(recall_threshold) != 1L || is.na(recall_threshold) || !is.finite(reca
 
 datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "SimulatedUniform2D", "SimulatedUniform3D"), collapse = ","))
 backends <- split_arg(args$backends, "auto,cpu,cuda")
-methods <- split_arg(args$methods, "auto,exact,flat,bruteforce,grid,vptree,HNSW,IVF,IVFPQ,NSG,NNDescent,CAGRA")
+methods <- split_arg(args$methods, "auto,exact,flat,bruteforce,grid,vptree,hnsw,ivf,ivfpq,nsg,nndescent,cagra")
 metrics <- split_arg(args$metrics, "euclidean,cosine,correlation,inner_product")
 k_values <- as_int_vec_arg(split_arg(args$k_values, "5,10,15,50,100"), c(5L, 10L, 15L, 50L, 100L))
 

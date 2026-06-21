@@ -108,7 +108,7 @@ Rscript benchmark_scripts/benchmark_nn_metrics.R \
   --out_dir=/path/to/faissR_NN_METRICS_CPU \
   --datasets=COIL20,USPS,FashionMNIST,MNIST \
   --backends=cpu \
-  --methods=auto,exact,flat,HNSW,IVF,IVFPQ,NSG,NNDescent \
+  --methods=auto,exact,flat,hnsw,ivf,ivfpq,nsg,nndescent \
   --metrics=euclidean,cosine,correlation,inner_product \
   --k_values=5,10,15,50,100 \
   --threads=12 \
@@ -123,7 +123,7 @@ Rscript benchmark_scripts/benchmark_nn_metrics.R \
   --out_dir=/path/to/faissR_NN_METRICS_CUDA \
   --datasets=COIL20,USPS,FashionMNIST,MNIST \
   --backends=cuda \
-  --methods=auto,exact,flat,grid,IVF,IVFPQ,NNDescent,CAGRA \
+  --methods=auto,exact,flat,grid,ivf,ivfpq,nndescent,cagra \
   --metrics=euclidean,cosine,correlation,inner_product \
   --k_values=5,10,15,50,100 \
   --threads=2 \

@@ -23,9 +23,9 @@ backend_info <- function() {
     knn_available = c(TRUE, faiss_knn, faiss$gpu && cuda_knn, cuvs_knn, cuda_knn, FALSE),
     public_call = c(
       "backend = \"cpu\"",
-      "backend = \"cpu\" or \"cuda\", method = \"flat\"/\"IVF\"/\"HNSW\"/\"CAGRA\" as supported",
-      "backend = \"cuda\", method = \"IVF\"/\"IVFPQ\"/\"CAGRA\"",
-      "backend = \"cuda\", method = \"bruteforce\"/\"NNDescent\"/\"CAGRA\"",
+      "backend = \"cpu\" or \"cuda\", method = \"flat\"/\"ivf\"/\"hnsw\"/\"cagra\" as supported",
+      "backend = \"cuda\", method = \"ivf\"/\"ivfpq\"/\"cagra\"",
+      "backend = \"cuda\", method = \"bruteforce\"/\"nndescent\"/\"cagra\"",
       "backend = \"cuda\"",
       "graph_cluster(..., backend = \"cuda\")"
     ),
