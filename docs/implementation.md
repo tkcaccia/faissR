@@ -300,9 +300,11 @@ available.
 
 `graph_cluster(n_clusters = m)` provides a target-community-count convenience
 for Louvain and Leiden. The same target can also be stored on the graph with
-`knn_graph(n_clusters = m)` and will be used by `graph_cluster()` unless the
-caller supplies a different target. The graph is built once, then faissR
-evaluates a small deterministic grid of resolution values around the supplied
+`knn_graph(n_clusters = m)` and will be used by Louvain/Leiden
+`graph_cluster()` calls unless the caller supplies a different target. Stored
+targets are ignored by `method = "random_walking"`; explicitly passing
+`n_clusters` to random-walking remains an error. The graph is built once, then
+faissR evaluates a small deterministic grid of resolution values around the supplied
 `resolution` and keeps the result whose number of communities is closest to
 `m`, breaking ties by modularity. The selected resolution and search table are
 returned in the result metadata. The target must be a positive integer and

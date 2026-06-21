@@ -34,9 +34,10 @@ knn_graph(
 \item{n_clusters}{Optional target number of communities to store with the
 graph. When this graph is later passed to \code{graph_cluster()} with
 \code{method = "louvain"} or \code{"leiden"} and no explicit \code{n_clusters},
-the stored target is used instead of relying only on \code{resolution}. The
-target must be a positive integer and cannot exceed the number of graph
-vertices.}
+the stored target is used instead of relying only on \code{resolution}. Stored
+targets are ignored by \code{method = "random_walking"}; explicitly passing
+\code{n_clusters} to random-walking still errors. The target must be a
+positive integer and cannot exceed the number of graph vertices.}
 \item{n_threads}{CPU threads passed to \code{nn()} when KNN is computed here.}
 }
 \value{

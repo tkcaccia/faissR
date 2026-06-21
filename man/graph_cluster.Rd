@@ -67,8 +67,10 @@ must be a positive integer and cannot exceed the number of graph vertices.}
 on a graph with \code{knn_graph(n_clusters = ...)}. When a target count is
 available for Louvain or Leiden, faissR builds or reuses the graph once,
 evaluates a small resolution grid, and records the selected resolution and
-search table in the returned object. The target must be a positive integer and
-cannot exceed the number of graph vertices.
+search table in the returned object. Stored graph targets are ignored by
+\code{method = "random_walking"}; explicitly passing \code{n_clusters} to
+random-walking still errors. The target must be a positive integer and cannot
+exceed the number of graph vertices.
 
 Method descriptions:
 \itemize{

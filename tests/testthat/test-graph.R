@@ -177,8 +177,12 @@ test_that("knn_graph stores an optional cluster-count target for graph_cluster",
   expect_s3_class(cl$resolution_search, "data.frame")
   expect_lte(abs(cl$n_communities - 3L), 1L)
 
+  walk <- graph_cluster(g, method = "random_walking", backend = "cpu", n_threads = 2L)
+  expect_s3_class(walk, "faissR_graph_cluster")
+  expect_null(walk$target_n_clusters)
+  expect_null(walk$parameters$n_clusters)
   expect_error(
-    graph_cluster(g, method = "random_walking", backend = "cpu", n_threads = 2L),
+    graph_cluster(g, method = "random_walking", backend = "cpu", n_threads = 2L, n_clusters = 3L),
     "n_clusters"
   )
 })

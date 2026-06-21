@@ -30,8 +30,10 @@
 #' @param n_clusters Optional target number of communities to store with the
 #'   graph. When this graph is later passed to \code{\link{graph_cluster}()} with
 #'   `method = "louvain"` or `"leiden"` and no explicit `n_clusters`, the
-#'   stored target is used instead of relying only on `resolution`. The target
-#'   must be a positive integer and cannot exceed the number of graph vertices.
+#'   stored target is used instead of relying only on `resolution`. Stored
+#'   targets are ignored by `method = "random_walking"`; explicitly passing
+#'   `n_clusters` to random-walking still errors. The target must be a positive
+#'   integer and cannot exceed the number of graph vertices.
 #' @param n_threads CPU threads passed to `nn()` when KNN is computed here.
 #' @return A native `faissR_graph` edge-list object. The `faissR_graph`
 #'   attribute stores graph-construction metadata, including `requested_backend`
@@ -336,7 +338,8 @@ graph_cluster <- function(graph,
       meta$resolved_backend <- NULL
     }
     graph_n_clusters <- n_clusters
-    if (is.null(graph_n_clusters) && !is.null(meta$target_n_clusters)) {
+    if (is.null(graph_n_clusters) && !identical(method, "random_walking") &&
+        !is.null(meta$target_n_clusters)) {
       graph_n_clusters <- meta$target_n_clusters
     }
     graph_n_clusters <- normalize_graph_target_clusters(graph_n_clusters, method)
