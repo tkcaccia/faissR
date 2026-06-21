@@ -273,7 +273,10 @@ audited directly. When `stats` is part of the run, `kmeans_fast_vs_stats.csv` co
 each successful `fast_kmeans()` row against `stats::kmeans` for the same
 dataset, cycle, and number of centers, reporting speedup, ARI delta, and
 withinss ratio. Use `--cycles=10` to repeat speed/ARI measurements without
-hand-launching the same benchmark multiple times.
+hand-launching the same benchmark multiple times. `kmeans_cycle_summary.csv`
+aggregates successful rows across cycles by dataset/method/backend/centers and
+reports success counts, median/min/max elapsed time, ARI stability, withinss
+stability, iteration counts, and resolved backend metadata.
 CUDA/library combinations that are known unavailable before execution are
 recorded as `status = "expected_skip"` with `expected_skip = TRUE`; unexpected
 runtime errors remain failed rows and are not replaced with CPU timings.

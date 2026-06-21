@@ -242,6 +242,71 @@ result_row <- function(dataset, n, p, method, backend, centers, cycle, n_threads
   )
 }
 
+dominant_value <- function(x) {
+  x <- as.character(x)
+  x <- x[!is.na(x) & nzchar(x)]
+  if (!length(x)) return(NA_character_)
+  names(sort(table(x), decreasing = TRUE))[[1L]]
+}
+
+finite_median <- function(x) {
+  x <- suppressWarnings(as.numeric(x))
+  x <- x[is.finite(x)]
+  if (!length(x)) return(NA_real_)
+  stats::median(x)
+}
+
+finite_min <- function(x) {
+  x <- suppressWarnings(as.numeric(x))
+  x <- x[is.finite(x)]
+  if (!length(x)) return(NA_real_)
+  min(x)
+}
+
+finite_max <- function(x) {
+  x <- suppressWarnings(as.numeric(x))
+  x <- x[is.finite(x)]
+  if (!length(x)) return(NA_real_)
+  max(x)
+}
+
+summarize_kmeans_cycles <- function(ok) {
+  parts <- split(ok, paste(ok$dataset, ok$method, ok$backend, ok$centers, sep = "__"))
+  summary <- lapply(parts, function(x) {
+    data.frame(
+      dataset = x$dataset[[1L]],
+      method = x$method[[1L]],
+      backend = x$backend[[1L]],
+      centers = as.integer(x$centers[[1L]]),
+      n = as.integer(x$n[[1L]]),
+      p = as.integer(x$p[[1L]]),
+      n_threads = as.integer(x$n_threads[[1L]]),
+      success_cycles = length(unique(x$cycle)),
+      success_rows = nrow(x),
+      median_elapsed_sec = finite_median(x$elapsed_sec),
+      min_elapsed_sec = finite_min(x$elapsed_sec),
+      max_elapsed_sec = finite_max(x$elapsed_sec),
+      median_ari = finite_median(x$ari),
+      min_ari = finite_min(x$ari),
+      max_ari = finite_max(x$ari),
+      median_tot_withinss = finite_median(x$tot_withinss),
+      min_tot_withinss = finite_min(x$tot_withinss),
+      max_tot_withinss = finite_max(x$tot_withinss),
+      median_iter = finite_median(x$iter),
+      median_max_iter = finite_median(x$max_iter),
+      median_n_init = finite_median(x$n_init),
+      median_tol = finite_median(x$tol),
+      backend_used = dominant_value(x$backend_used),
+      requested_backend = dominant_value(x$requested_backend),
+      resolved_backend = dominant_value(x$resolved_backend),
+      tuning_policy = dominant_value(x$tuning_policy),
+      stringsAsFactors = FALSE
+    )
+  })
+  out <- do.call(rbind, summary)
+  out[order(out$dataset, -out$median_ari, out$median_elapsed_sec), , drop = FALSE]
+}
+
 kmeans_expected_skip <- function(method, backend) {
   method <- tolower(as.character(method)[1L])
   backend <- tolower(as.character(backend)[1L])
@@ -466,6 +531,13 @@ if (nrow(ok)) {
   best$quality_score <- NULL
   utils::write.csv(best, file.path(out_dir, "kmeans_best_by_dataset.csv"), row.names = FALSE)
 
+  cycle_summary <- summarize_kmeans_cycles(ok)
+  utils::write.csv(
+    cycle_summary,
+    file.path(out_dir, "kmeans_cycle_summary.csv"),
+    row.names = FALSE
+  )
+
   fast_rows <- ok[ok$method == "fast_kmeans", , drop = FALSE]
   stats_rows <- ok[ok$method == "stats", , drop = FALSE]
   if (nrow(fast_rows) && nrow(stats_rows)) {
@@ -510,6 +582,7 @@ materials <- c(
   "",
   "The result table records cycle, elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, total within-cluster sum of squares, iterations, selected k-means parameters, tuning policy, and ARI against dataset labels when labels are available.",
   "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. The `cycle` column supports repeated benchmark cycles such as `--cycles=10` for speed/ARI tuning.",
+  "`kmeans_cycle_summary.csv` aggregates successful rows across cycles by dataset/method/backend/centers and reports success counts, median/min/max elapsed time, ARI stability, withinss stability, iteration counts, and resolved backend metadata.",
   "Unsupported CUDA or library combinations known before execution are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_kmeans.md"))
