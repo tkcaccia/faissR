@@ -290,6 +290,14 @@ k-means when those libraries are available [7-8]. Results include cluster
 assignments, centres, within-cluster sums of squares, cluster sizes, iteration
 count, selected backend, and run parameters.
 
+With `tuning = "auto"`, omitted `max_iter`, `n_init`, and `tol` values are
+chosen by deterministic shape rules based on `nrow(data)`, `ncol(data)`, and
+the requested number of centres. The function does not run pilot k-means jobs or
+benchmark candidate parameter sets inside a user call. This keeps runtime
+predictable while allowing small problems to use more restarts and large
+high-dimensional problems to use cheaper convergence settings. The selected
+policy is recorded in `result$parameters$tuning`.
+
 The public backend policy is the same as for KNN: `backend = "auto"` uses CUDA
 when a CUDA k-means implementation is available and CPU otherwise;
 `backend = "cpu"` forces the CPU route; `backend = "cuda"` requires an

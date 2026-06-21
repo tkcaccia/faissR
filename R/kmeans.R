@@ -10,9 +10,12 @@
 #' @param centers Number of clusters.
 #' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
 #'   uses CUDA when CUDA/cuVS k-means is available and CPU otherwise.
-#' @param max_iter Maximum number of Lloyd iterations.
-#' @param n_init Number of random restarts where supported.
-#' @param tol Relative convergence tolerance where supported.
+#' @param max_iter Maximum number of Lloyd iterations, or `"auto"` for a
+#'   deterministic shape-aware default.
+#' @param n_init Number of random restarts where supported, or `"auto"` for a
+#'   deterministic shape-aware default.
+#' @param tol Relative convergence tolerance where supported, or `"auto"` for a
+#'   deterministic shape-aware default.
 #' @param seed Random seed for CPU/statistics and FAISS paths. The current
 #'   direct cuVS C API path does not expose an explicit seed in the stable
 #'   params structure.
@@ -21,6 +24,10 @@
 #'   cuVS choose its default.
 #' @param init Initialization method, `"kmeans++"` or `"random"` where
 #'   supported.
+#' @param tuning Tuning policy. `"auto"` uses deterministic defaults based on
+#'   `nrow(data)`, `ncol(data)`, and `centers` without running pilot searches.
+#'   `"fixed"`, `"off"`, and `"none"` use the historical fixed defaults unless
+#'   `max_iter`, `n_init`, or `tol` are explicitly supplied.
 #' @return A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
 #'   `size`, `iter`, `backend`, and `parameters`.
 #' @examples
@@ -31,15 +38,17 @@
 fast_kmeans <- function(data,
                         centers,
                         backend = c("auto", "cpu", "cuda"),
-                        max_iter = 100L,
-                        n_init = 1L,
-                        tol = 1e-4,
+                        max_iter = "auto",
+                        n_init = "auto",
+                        tol = "auto",
                         seed = 1L,
                         n_threads = NULL,
                         streaming_batch_size = 0L,
-                        init = c("kmeans++", "random")) {
+                        init = c("kmeans++", "random"),
+                        tuning = c("auto", "fixed", "off", "none")) {
   backend <- as.character(backend)[1L]
   init <- match.arg(init)
+  tuning <- normalize_kmeans_tuning(tuning)
   x <- as.matrix(data)
   storage.mode(x) <- "double"
   if (nrow(x) < 1L || ncol(x) < 1L) {
@@ -53,13 +62,18 @@ fast_kmeans <- function(data,
       centers < 1L || centers > nrow(x)) {
     stop("`centers` must be an integer in [1, nrow(data)].", call. = FALSE)
   }
-  max_iter <- normalize_positive_int(max_iter, 100L)
-  n_init <- normalize_positive_int(n_init, 1L)
+  auto_params <- kmeans_auto_params(
+    n = nrow(x),
+    p = ncol(x),
+    centers = centers,
+    tuning = tuning
+  )
+  max_iter <- normalize_kmeans_positive_int(max_iter, auto_params$max_iter)
+  n_init <- normalize_kmeans_positive_int(n_init, auto_params$n_init)
   n_threads <- normalize_nn_threads(n_threads)
   seed <- suppressWarnings(as.integer(seed))
   if (length(seed) != 1L || is.na(seed) || !is.finite(seed)) seed <- 1L
-  tol <- suppressWarnings(as.numeric(tol))
-  if (length(tol) != 1L || is.na(tol) || !is.finite(tol) || tol < 0) tol <- 1e-4
+  tol <- normalize_kmeans_tol(tol, auto_params$tol)
   streaming_batch_size <- suppressWarnings(as.integer(streaming_batch_size))
   if (length(streaming_batch_size) != 1L || is.na(streaming_batch_size) ||
       !is.finite(streaming_batch_size) || streaming_batch_size < 0L) {
@@ -84,6 +98,7 @@ fast_kmeans <- function(data,
       seed = seed,
       streaming_batch_size = streaming_batch_size,
       init = init,
+      tuning_metadata = auto_params,
       allow_cuvs_fallback = TRUE
     ))
   }
@@ -96,9 +111,10 @@ fast_kmeans <- function(data,
       n_init = n_init,
       tol = tol,
       seed = seed,
-      init = init
+      init = init,
+      tuning_metadata = auto_params
     )
-    return(finish_fast_kmeans(out, backend = "cuda_faiss", init = init))
+    return(finish_fast_kmeans(out, backend = "cuda_faiss", init = init, tuning_metadata = auto_params))
   }
 
   if (identical(backend, "cuda_cuvs")) {
@@ -112,7 +128,7 @@ fast_kmeans <- function(data,
       as.integer(streaming_batch_size),
       identical(init, "kmeans++")
     )
-    return(finish_fast_kmeans(out, backend = "cuda_cuvs", init = init))
+    return(finish_fast_kmeans(out, backend = "cuda_cuvs", init = init, tuning_metadata = auto_params))
   }
 
   if (identical(backend, "cpu") && isTRUE(faiss_available())) {
@@ -126,7 +142,7 @@ fast_kmeans <- function(data,
       as.integer(n_threads),
       identical(init, "kmeans++")
     )
-    return(finish_fast_kmeans(out, backend = "faiss", init = init))
+    return(finish_fast_kmeans(out, backend = "faiss", init = init, tuning_metadata = auto_params))
   }
 
   set.seed(seed)
@@ -153,7 +169,8 @@ fast_kmeans <- function(data,
       tol = as.numeric(tol),
       seed = as.integer(seed),
       n_threads = as.integer(n_threads),
-      init = "stats_default"
+      init = "stats_default",
+      tuning = auto_params
     )
   )
   class(out) <- c("faissR_kmeans", "fastEmbedR_kmeans", "kmeans")
@@ -168,6 +185,7 @@ run_cuda_kmeans <- function(x,
                             seed,
                             streaming_batch_size,
                             init,
+                            tuning_metadata,
                             allow_cuvs_fallback = TRUE) {
   faiss_error <- NULL
   if (isTRUE(faiss_available())) {
@@ -179,7 +197,8 @@ run_cuda_kmeans <- function(x,
         n_init = n_init,
         tol = tol,
         seed = seed,
-        init = init
+        init = init,
+        tuning_metadata = tuning_metadata
       ),
       error = function(e) {
         faiss_error <<- conditionMessage(e)
@@ -187,7 +206,7 @@ run_cuda_kmeans <- function(x,
       }
     )
     if (!is.null(out)) {
-      return(finish_fast_kmeans(out, backend = "cuda_faiss", init = init))
+      return(finish_fast_kmeans(out, backend = "cuda_faiss", init = init, tuning_metadata = tuning_metadata))
     }
   }
 
@@ -201,7 +220,7 @@ run_cuda_kmeans <- function(x,
       as.integer(streaming_batch_size),
       identical(init, "kmeans++")
     )
-    return(finish_fast_kmeans(out, backend = "cuda_cuvs", init = init))
+    return(finish_fast_kmeans(out, backend = "cuda_cuvs", init = init, tuning_metadata = tuning_metadata))
   }
 
   cuvs_note <- if (isTRUE(cuvs_available()) && isTRUE(cuda_available())) {
@@ -228,7 +247,8 @@ run_faiss_gpu_kmeans <- function(x,
                                  n_init,
                                  tol,
                                  seed,
-                                 init) {
+                                 init,
+                                 tuning_metadata = NULL) {
   if (!isTRUE(faiss_available())) {
     stop(
       "FAISS GPU k-means requires faissR to be built with FAISS.",
@@ -246,7 +266,7 @@ run_faiss_gpu_kmeans <- function(x,
   )
 }
 
-finish_fast_kmeans <- function(out, backend, init) {
+finish_fast_kmeans <- function(out, backend, init, tuning_metadata = NULL) {
   out$cluster <- as.integer(out$cluster)
   out$centers <- unname(as.matrix(out$centers))
   out$withinss <- as.numeric(out$withinss)
@@ -256,8 +276,83 @@ finish_fast_kmeans <- function(out, backend, init) {
   out$backend <- backend
   if (is.null(out$parameters)) out$parameters <- list()
   out$parameters$init <- init
+  if (!is.null(tuning_metadata)) out$parameters$tuning <- tuning_metadata
   class(out) <- c("faissR_kmeans", "fastEmbedR_kmeans", "kmeans")
   out
+}
+
+normalize_kmeans_tuning <- function(tuning) {
+  tuning <- as.character(tuning)[1L]
+  if (is.na(tuning) || !nzchar(tuning)) tuning <- "auto"
+  tuning <- tolower(tuning)
+  if (!tuning %in% c("auto", "fixed", "off", "none")) {
+    stop("`tuning` must be one of \"auto\", \"fixed\", \"off\", or \"none\".", call. = FALSE)
+  }
+  tuning
+}
+
+kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
+  if (!identical(tuning, "auto")) {
+    return(list(
+      policy = tuning,
+      max_iter = 100L,
+      n_init = 1L,
+      tol = 1e-4,
+      rule = "fixed_defaults"
+    ))
+  }
+  work <- as.double(n) * as.double(p) * as.double(centers)
+  high_dim <- p >= 256L
+  large_n <- n >= 100000L
+  many_centers <- centers >= 100L
+  max_iter <- if (large_n || work >= 5e9) {
+    50L
+  } else if (high_dim || many_centers || work >= 5e8) {
+    75L
+  } else {
+    100L
+  }
+  n_init <- if (n <= 50000L && centers <= 20L && work <= 2e8) {
+    5L
+  } else if (n <= 100000L && centers <= 50L && work <= 5e8) {
+    3L
+  } else {
+    1L
+  }
+  tol <- if (large_n || work >= 5e9) {
+    1e-3
+  } else {
+    1e-4
+  }
+  list(
+    policy = "auto",
+    max_iter = as.integer(max_iter),
+    n_init = as.integer(n_init),
+    tol = as.numeric(tol),
+    rule = paste(
+      "shape",
+      paste0("n=", n),
+      paste0("p=", p),
+      paste0("centers=", centers),
+      sep = ";"
+    )
+  )
+}
+
+normalize_kmeans_positive_int <- function(x, fallback) {
+  if (is.character(x) && length(x) == 1L && identical(tolower(x), "auto")) {
+    return(as.integer(fallback))
+  }
+  normalize_positive_int(x, fallback)
+}
+
+normalize_kmeans_tol <- function(x, fallback) {
+  if (is.character(x) && length(x) == 1L && identical(tolower(x), "auto")) {
+    return(as.numeric(fallback))
+  }
+  x <- suppressWarnings(as.numeric(x))
+  if (length(x) != 1L || is.na(x) || !is.finite(x) || x < 0) x <- fallback
+  as.numeric(x)
 }
 
 normalize_positive_int <- function(x, fallback) {

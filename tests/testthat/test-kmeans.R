@@ -25,6 +25,37 @@ test_that("fast_kmeans works on the CPU path", {
   expect_true(fit$backend %in% c("cpu", "faiss"))
 })
 
+test_that("fast_kmeans records deterministic auto tuning policy", {
+  set.seed(202)
+  x <- matrix(rnorm(400), ncol = 4)
+
+  auto <- fast_kmeans(x, centers = 3, backend = "cpu", seed = 12, n_threads = 2)
+  expect_equal(auto$parameters$tuning$policy, "auto")
+  expect_equal(auto$parameters$tuning$max_iter, 100L)
+  expect_equal(auto$parameters$tuning$n_init, 5L)
+  expect_equal(auto$parameters$max_iter, 100L)
+  expect_equal(auto$parameters$n_init, 5L)
+
+  fixed <- fast_kmeans(x, centers = 3, backend = "cpu", tuning = "fixed", seed = 12, n_threads = 2)
+  expect_equal(fixed$parameters$tuning$policy, "fixed")
+  expect_equal(fixed$parameters$max_iter, 100L)
+  expect_equal(fixed$parameters$n_init, 1L)
+
+  explicit <- fast_kmeans(
+    x,
+    centers = 3,
+    backend = "cpu",
+    max_iter = 7L,
+    n_init = 2L,
+    tol = 1e-5,
+    seed = 12,
+    n_threads = 2
+  )
+  expect_equal(explicit$parameters$max_iter, 7L)
+  expect_equal(explicit$parameters$n_init, 2L)
+  expect_equal(explicit$parameters$tol, 1e-5)
+})
+
 test_that("fast_kmeans explicit FAISS request fails clearly when unavailable", {
   skip_if(faiss_available())
 

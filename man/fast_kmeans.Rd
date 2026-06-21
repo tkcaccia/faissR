@@ -8,13 +8,14 @@ fast_kmeans(
   data,
   centers,
   backend = c("auto", "cpu", "cuda"),
-  max_iter = 100L,
-  n_init = 1L,
-  tol = 1e-04,
+  max_iter = "auto",
+  n_init = "auto",
+  tol = "auto",
   seed = 1L,
   n_threads = NULL,
   streaming_batch_size = 0L,
-  init = c("kmeans++", "random")
+  init = c("kmeans++", "random"),
+  tuning = c("auto", "fixed", "off", "none")
 )
 }
 \arguments{
@@ -25,11 +26,14 @@ fast_kmeans(
 \item{backend}{Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
 uses CUDA when CUDA/cuVS k-means is available and CPU otherwise.}
 
-\item{max_iter}{Maximum number of Lloyd iterations.}
+\item{max_iter}{Maximum number of Lloyd iterations, or `"auto"` for a
+deterministic shape-aware default.}
 
-\item{n_init}{Number of random restarts where supported.}
+\item{n_init}{Number of random restarts where supported, or `"auto"` for a
+deterministic shape-aware default.}
 
-\item{tol}{Relative convergence tolerance where supported.}
+\item{tol}{Relative convergence tolerance where supported, or `"auto"` for a
+deterministic shape-aware default.}
 
 \item{seed}{Random seed for CPU/statistics and FAISS paths. The current
 direct cuVS C API path does not expose an explicit seed in the stable
@@ -42,10 +46,16 @@ cuVS choose its default.}
 
 \item{init}{Initialization method, `"kmeans++"` or `"random"` where
 supported.}
+
+\item{tuning}{Tuning policy. `"auto"` uses deterministic defaults based on
+`nrow(data)`, `ncol(data)`, and `centers` without running pilot searches.
+`"fixed"`, `"off"`, and `"none"` use the historical fixed defaults unless
+`max_iter`, `n_init`, or `tol` are explicitly supplied.}
 }
 \value{
 A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
-  `size`, `iter`, `backend`, and `parameters`.
+  `size`, `iter`, `backend`, and `parameters`, including the k-means tuning
+  rule used.
 }
 \description{
 Run k-means using the fastest available backend. CPU acceleration uses

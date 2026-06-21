@@ -84,6 +84,7 @@ pred2 <- knn(x[train, ], labels[train], x[test, ], backend = "auto", k = 5)
 ```r
 km <- fast_kmeans(x, centers = 3, backend = "auto", n_threads = 4)
 table(km$cluster)
+km$parameters$tuning
 ```
 
 ## Reuse KNN In fastEmbedR

@@ -180,9 +180,10 @@ parameters, backend metadata, and source acknowledgements.
 
 ```r
 fast_kmeans(data, centers, backend = "auto",
-            max_iter = 100L, n_init = 1L, tol = 1e-4,
+            max_iter = "auto", n_init = "auto", tol = "auto",
             seed = 1L, n_threads = NULL,
-            streaming_batch_size = 0L, init = "kmeans++")
+            streaming_batch_size = 0L, init = "kmeans++",
+            tuning = "auto")
 ```
 
 | Argument | Description |
@@ -190,16 +191,17 @@ fast_kmeans(data, centers, backend = "auto",
 | `data` | Numeric matrix with observations in rows. |
 | `centers` | Number of clusters. Must be between 1 and `nrow(data)`. |
 | `backend` | `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA/cuVS k-means when available and CPU otherwise [7-8]. |
-| `max_iter` | Maximum number of Lloyd iterations. |
-| `n_init` | Number of random restarts where the selected backend supports it. |
-| `tol` | Non-negative convergence tolerance where supported. |
+| `max_iter` | Maximum number of Lloyd iterations, or `"auto"` for a deterministic shape-aware default. |
+| `n_init` | Number of random restarts where the selected backend supports it, or `"auto"` for a deterministic shape-aware default. |
+| `tol` | Non-negative convergence tolerance where supported, or `"auto"` for a deterministic shape-aware default. |
 | `seed` | Random seed for CPU/statistics and FAISS paths. |
 | `n_threads` | CPU worker threads for FAISS/statistics paths. |
 | `streaming_batch_size` | cuVS host-data streaming batch size. Use `0` to let cuVS choose its default. |
 | `init` | Initialization method: `"kmeans++"` or `"random"` where supported. |
+| `tuning` | `"auto"` uses deterministic rules based on `nrow(data)`, `ncol(data)`, and `centers`; `"fixed"`, `"off"`, and `"none"` keep the historical defaults unless explicit parameter values are supplied. |
 
 Returns cluster labels, centers, within-cluster sums of squares, cluster sizes,
-iteration count, backend, and parameters.
+iteration count, backend, and parameters, including the k-means tuning rule used.
 
 ## `knn()`
 
