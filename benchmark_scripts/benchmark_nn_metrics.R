@@ -204,6 +204,7 @@ result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threa
                        result_backend = NA_character_,
                        resolved_backend = NA_character_,
                        implementation_backend = NA_character_,
+                       preflight_route = NA_character_,
                        exact = NA, recall_at_k = NA_real_,
                        median_recall_at_k = NA_real_,
                        min_recall_at_k = NA_real_,
@@ -228,6 +229,7 @@ result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threa
     result_backend = result_backend,
     resolved_backend = resolved_backend,
     implementation_backend = implementation_backend,
+    preflight_route = preflight_route,
     exact = exact,
     recall_at_k = recall_at_k,
     median_recall_at_k = median_recall_at_k,
@@ -442,6 +444,7 @@ route_runtime_skip <- function(backend, method, metric) {
   if (inherits(route, "error")) {
     return(list(
       skip = TRUE,
+      route = NA_character_,
       notes = paste(
         "faissR backend resolver rejected this method/backend/metric combination:",
         conditionMessage(route)
@@ -455,6 +458,7 @@ route_runtime_skip <- function(backend, method, metric) {
     if (!isTRUE(faiss_gpu_available_runtime())) {
       return(list(
         skip = TRUE,
+        route = route,
         notes = paste(
           "Resolved route `", route, "` requires FAISS GPU support and a CUDA device, ",
           "but that runtime is unavailable.", sep = ""
@@ -465,6 +469,7 @@ route_runtime_skip <- function(backend, method, metric) {
     if (!isTRUE(faissR::cuvs_available())) {
       return(list(
         skip = TRUE,
+        route = route,
         notes = paste(
           "Resolved route `", route, "` requires RAPIDS cuVS, ",
           "but cuVS is unavailable in the current runtime.", sep = ""
@@ -475,6 +480,7 @@ route_runtime_skip <- function(backend, method, metric) {
     if (!isTRUE(faissR::cuda_available())) {
       return(list(
         skip = TRUE,
+        route = route,
         notes = paste(
           "Resolved route `", route, "` requires a CUDA device, ",
           "but CUDA is unavailable in the current runtime.", sep = ""
@@ -485,6 +491,7 @@ route_runtime_skip <- function(backend, method, metric) {
     if (!isTRUE(faissR::faiss_available())) {
       return(list(
         skip = TRUE,
+        route = route,
         notes = paste(
           "Resolved route `", route, "` requires FAISS, ",
           "but FAISS is unavailable in the current runtime.", sep = ""
@@ -557,6 +564,10 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
   )
   on.exit(options(old_options), add = TRUE)
   set.seed(as.integer(seed))
+  preflight_route <- tryCatch(
+    as.character(resolve_public_route(backend, method, metric))[1L],
+    error = function(e) NA_character_
+  )
   tryCatch({
     out <- with_elapsed_limit({
       faissR::nn(
@@ -596,6 +607,7 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
       result_backend = attr(out, "backend") %||% NA_character_,
       resolved_backend = attr(out, "resolved_backend") %||% attr(out, "backend") %||% NA_character_,
       implementation_backend = nn_implementation_backend(out),
+      preflight_route = preflight_route,
       exact = isTRUE(attr(out, "exact")),
       recall_at_k = recall$recall_at_k[[1L]],
       median_recall_at_k = recall$median_recall_at_k[[1L]],
@@ -617,7 +629,8 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
       status = "failed",
       error = conditionMessage(e),
       elapsed_sec = proc.time()[["elapsed"]] - started,
-      peak_rss_gb = read_peak_rss_gb()
+      peak_rss_gb = read_peak_rss_gb(),
+      preflight_route = preflight_route
     )
   })
 }
@@ -724,7 +737,8 @@ for (dataset_name in datasets) {
                 status = "expected_skip",
                 error = expected$notes,
                 expected_skip = TRUE,
-                capability_notes = expected$notes
+                capability_notes = expected$notes,
+                preflight_route = expected$route %||% NA_character_
               )
             } else {
               row <- run_one(
@@ -872,7 +886,7 @@ materials <- c(
   "",
   "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities()` and the public backend resolver, then recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
   "`nn_metric_capabilities.csv` stores the design-level capability table used for that preflight. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
-  "`result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label.",
+  "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",
   "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches.",
