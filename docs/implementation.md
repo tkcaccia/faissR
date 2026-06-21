@@ -14,8 +14,8 @@
 construction, graph clustering, kNN prediction, and k-means. FAISS is the
 required compiled vector-search dependency. CUDA, RAPIDS cuVS, and RAPIDS
 libcugraph are optional compiled backends; the package must still install from
-source on CPU-only systems when FAISS is available. The code does not call
-Python and does not require conda.
+source on CPU-only systems when FAISS is available [1-3,12-16]. The code does
+not call Python and does not require conda.
 
 ## Design Rules
 
@@ -43,15 +43,16 @@ Supported CPU routes include:
 - native exact dense CPU search;
 - native exact sparse `dgCMatrix` search;
 - FAISS CPU Flat, IVF-Flat, IVF-PQ, HNSW, NSG, and NN-Descent when present in
-  the linked FAISS build;
+  the linked FAISS build [1-6,16];
 - RcppHNSW as an optional CRAN-friendly fallback;
 - exact 2D/3D grid and VP-tree routes for low-dimensional Euclidean self-KNN.
 
 Supported CUDA routes include:
 
-- FAISS GPU Flat, IVF-Flat, IVF-PQ, and CAGRA when FAISS GPU support is built;
+- FAISS GPU Flat, IVF-Flat, IVF-PQ, and CAGRA when FAISS GPU support is built
+  [1-2,13-16];
 - direct RAPIDS cuVS brute force, CAGRA, IVF-Flat, IVF-PQ, and NN-Descent when
-  cuVS is available;
+  cuVS is available [3,13-15];
 - native CUDA 2D/3D grid search for low-dimensional Euclidean self-KNN.
 
 The validated high-performance metric is Euclidean/L2. Cosine and correlation
@@ -64,20 +65,21 @@ neighbours under a different label.
 `backend = "cpu_auto"` is the CPU-only shape-aware selector. It uses exact CPU
 for small work, exact grid search for large 2D/3D Euclidean self-KNN, FAISS IVF
 for million-row self-KNN where HNSW graph construction is too memory-heavy, and
-FAISS HNSW for large high-dimensional self-KNN when FAISS is available. It is a
-balanced speed/recall selector, not an accuracy-first promise; users who need
+FAISS HNSW for large high-dimensional self-KNN when FAISS is available [1-2,5].
+It is a balanced speed/recall selector, not an accuracy-first promise; users who need
 exact or near-exact CPU recall should request `backend = "cpu"`,
 `backend = "faiss"`, or tune explicit IVF/HNSW options.
 
 `backend = "cpu_approx"` remains the approximate-only CPU selector. It prefers
 FAISS HNSW when FAISS is available, then RcppHNSW, then exact CPU. This follows
 the chiamaka autotuning run where FAISS HNSW gave the best practical CPU
-speed/recall balance on image and flow datasets.
+speed/recall balance on image and flow datasets [5].
 
 `backend = "cuda_auto"` and `backend = "gpu_auto"` are CUDA-only shape-aware
 selectors. They use CUDA grid search for large 2D/3D Euclidean self-KNN, exact
 FAISS GPU Flat or cuVS brute force for small and medium searches, and FAISS GPU
-CAGRA for very large self-KNN when FAISS GPU/cuVS integration is available.
+CAGRA for very large self-KNN when FAISS GPU/cuVS integration is available
+[13-15].
 Plain `backend = "cuda"` remains the explicit native CUDA route for backwards
 compatibility.
 
@@ -90,7 +92,7 @@ returning a poor graph-search result.
 
 IVF probe defaults are conservative enough to avoid misleading speed-only
 results. IVFPQ is treated as an explicit memory-pressure backend because product
-quantization can reduce recall substantially.
+quantization can reduce recall substantially [6].
 
 ## `nn_without_self()`
 
@@ -132,12 +134,12 @@ with `knn_graph()` first.
 Implemented methods are:
 
 - `method = "random_walking"`: native CPU random-walk label propagation inspired
-  by walktrap/random-walk clustering;
+  by walktrap/random-walk clustering [10];
 - `method = "louvain"`: native CPU modularity local-moving, with optional CUDA
-  libcugraph Louvain when built and requested;
+  libcugraph Louvain when built and requested [9,12];
 - `method = "leiden"`: native CPU local moving plus refinement to split
   disconnected communities, with optional CUDA libcugraph Leiden when built and
-  requested.
+  requested [11-12].
 
 CPU graph clustering uses faissR C++/OpenMP code and honors `n_threads` where
 OpenMP is available. CUDA Louvain and Leiden require RAPIDS libcugraph and never
@@ -148,7 +150,7 @@ unavailable until a dedicated CUDA implementation is added.
 
 `fast_kmeans()` provides CPU and CUDA k-means routes. CPU builds use compiled
 FAISS/native numeric paths. CUDA builds try FAISS GPU k-means and direct cuVS
-k-means when those libraries are available. Results include cluster assignments,
+k-means when those libraries are available [7-8]. Results include cluster assignments,
 centres, within-cluster sums of squares, cluster sizes, iteration count, selected
 backend, and run parameters.
 
@@ -216,6 +218,6 @@ and make FAISS/cuVS index construction more practical.
 faissR is released under the MIT license. The implementation is inspired by and
 links against external work including FAISS, FAISS GPU/cuVS integration, RAPIDS
 cuVS, RAPIDS libcugraph, HNSW, NN-Descent, IVF, product quantization, k-means,
-Louvain, Leiden, and random-walk clustering. See [References](references.md) for
+Louvain, Leiden, and random-walk clustering [1-16]. See [References](references.md) for
 papers, software projects, and acknowledgements. External libraries remain
 separate system dependencies with their own licenses.

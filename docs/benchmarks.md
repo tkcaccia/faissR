@@ -39,8 +39,8 @@ Sys.setenv(
 ```
 
 For CUDA benchmarks, report the GPU model, driver, CUDA version, FAISS build,
-and cuVS version. Explicit CUDA failures should be recorded as failures, not
-silently replaced with CPU timings.
+and cuVS version [1-3,13-15]. Explicit CUDA failures should be recorded as
+failures, not silently replaced with CPU timings.
 
 ## Reuse KNN
 

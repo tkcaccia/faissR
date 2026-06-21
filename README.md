@@ -13,10 +13,10 @@
 `faissR` provides native nearest-neighbour search, graph construction, graph
 clustering, kNN models, and k-means for R workflows that need mandatory
 [FAISS](https://faiss.ai/index.html) support and optional NVIDIA CUDA/RAPIDS
-acceleration. The package is intended for CRAN-style source installation: FAISS
-is required, while CUDA, RAPIDS cuVS, and RAPIDS libcugraph are optional build
-features. A machine without CUDA can still install the package from source and
-use the CPU/FAISS functionality.
+acceleration [1-3,12-16]. The package is intended for CRAN-style source
+installation: FAISS is required, while CUDA, RAPIDS cuVS, and RAPIDS libcugraph
+are optional build features. A machine without CUDA can still install the
+package from source and use the CPU/FAISS functionality.
 
 The package code does not depend on Python or conda. Conda/mamba environments
 can be useful for development or benchmarking because they provide compatible
@@ -26,14 +26,15 @@ headers and libraries discovered by `configure`.
 ## Main Features
 
 - `nn()` for native CPU references, FAISS CPU indexes, FAISS GPU indexes, and
-  optional direct RAPIDS cuVS/CUDA indexes.
+  optional direct RAPIDS cuVS/CUDA indexes [1-6,13-16].
 - `candidate_knn()` for exact top-k ranking inside supplied candidate rows.
 - `knn_graph()` for native weighted KNN graph construction without requiring
   `igraph`.
 - `graph_cluster()` for native C++/OpenMP random-walk, Louvain, and
-  Leiden-style clustering. CUDA Louvain and Leiden use RAPIDS libcugraph when
-  faissR is built with libcugraph; CUDA random-walking is not enabled yet.
-- `fast_kmeans()` for CPU, FAISS CPU/GPU, and optional cuVS k-means.
+  Leiden-style clustering [9-11]. CUDA Louvain and Leiden use RAPIDS libcugraph
+  when faissR is built with libcugraph [12]; CUDA random-walking is not enabled
+  yet.
+- `fast_kmeans()` for CPU, FAISS CPU/GPU, and optional cuVS k-means [7-8].
 - `knn()` and `predict()` for kNN classification/regression, including
   immediate prediction with `knn(Xtrain, Ytrain, Xtest)` and class
   probabilities with `predict(type = "prob")`.
@@ -78,7 +79,7 @@ See [Installation](docs/installation.md) for CRAN/source-build details.
 
 ## FAISS GPU With cuVS
 
-`faissR` distinguishes two GPU/cuVS routes:
+`faissR` distinguishes two GPU/cuVS routes [13-15]:
 
 - FAISS GPU indexes with NVIDIA cuVS integration, exposed through FAISS-backed
   backends such as `faiss_gpu_ivf_flat`, `faiss_gpu_ivfpq`, and
@@ -108,4 +109,4 @@ table(cl$membership)
 
 `faissR` is released under the MIT license. External libraries such as FAISS,
 RAPIDS cuVS, and RAPIDS cuGraph are linked as system dependencies and are not
-vendored into the R package.
+vendored into the R package [1-3,12-16].

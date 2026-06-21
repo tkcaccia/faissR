@@ -46,7 +46,7 @@ table(labels, walk$membership)
 ```
 
 If faissR was compiled with RAPIDS libcugraph, Louvain and Leiden can run on
-CUDA without changing the API:
+CUDA without changing the API [9,11-12]:
 
 ```r
 if (isTRUE(cugraph_available())) {
@@ -74,6 +74,9 @@ pred2 <- knn(x[train, ], labels[train], x[test, ], backend = "auto", k = 5)
 ```
 
 ## k-means
+
+`fast_kmeans()` exposes CPU/FAISS/CUDA/cuVS k-means-style clustering routes
+[7-8].
 
 ```r
 km <- fast_kmeans(x, centers = 3, backend = "auto", n_threads = 4)

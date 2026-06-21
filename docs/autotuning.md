@@ -29,24 +29,26 @@ Use these rules for `backend = "auto"` and for explicit backend recommendations:
 
 - Prefer exact GPU search when the data fits and target recall is very high.
   `faiss_gpu_flat_l2` and `cuda_cuvs_bruteforce` were the most reliable
-  high-recall CUDA paths.
+  high-recall CUDA paths [1-3,13-16].
 - Prefer `faiss_hnsw` for CPU approximate self-KNN. In this benchmark it gave a
-  better speed/accuracy balance than FAISS NN-Descent.
+  better speed/accuracy balance than FAISS NN-Descent [4-5].
 - Prefer `cpu_grid` for 2D/3D Euclidean simulated data. The grid backends are
   intentionally unavailable for higher-dimensional data.
 - Treat IVFPQ backends as memory-pressure tools, not accuracy-first defaults.
+  Product quantization is useful for compression, but it changes recall
+  behaviour [6].
 - Treat direct `cuda_cuvs_cagra` as experimental on high-dimensional raw data
   until pilot tuning proves adequate recall. `faiss_gpu_cagra` was reliable in
-  the same MNIST test where direct cuVS CAGRA was not.
+  the same MNIST test where direct cuVS CAGRA was not [13-15].
 
 ## Method-Specific Settings
 
 | Method label | Role | Current tuning rule |
 |---|---|---|
-| `faiss_flat_exact` | CPU exact baseline | Use for exact CPU reference on small/medium data; avoid as default for large high-dimensional self-search because MNIST/FashionMNIST timed out. |
+| `faiss_flat_exact` | CPU exact baseline | Use for exact CPU reference on small/medium data [1-2,16]; avoid as default for large high-dimensional self-search because MNIST/FashionMNIST timed out. |
 | `faiss_gpu_flat_l2` | CUDA exact/high-recall | Preferred high-recall GPU default when FAISS GPU is available and data fits. |
 | `cuda_cuvs_bruteforce` | CUDA exact/high-recall | Preferred exact cuVS path; consistently recall 1 in this benchmark and often fastest. |
-| `faiss_hnsw_fast` | CPU speed tier | M = 24, efConstruction = 120, efSearch = 80; good speed, but recall can be below 0.999 on image/flow data. |
+| `faiss_hnsw_fast` | CPU speed tier | M = 24, efConstruction = 120, efSearch = 80; good speed, but recall can be below 0.999 on image/flow data [5]. |
 | `faiss_hnsw_balanced` | CPU default tier | M = 32, efConstruction = 200, efSearch = 150; best general CPU balance and used as the default `faiss_hnsw` setting. |
 | `faiss_hnsw_high` | CPU high-recall tier | M = 48, efConstruction = 240, efSearch = 220; use when recall target is about 0.999 or higher. |
 | `rcpphnsw` | CPU fallback | Good fallback when FAISS is unavailable, but FAISS HNSW is preferred when FAISS is built. |
@@ -55,7 +57,7 @@ Use these rules for `backend = "auto"` and for explicit backend recommendations:
 | `faiss_ivf_high` | CPU IVF high-recall tier | nprobe = 16 in the benchmark; often much better recall, but slower on image data. |
 | `faiss_gpu_ivf_flat` | CUDA IVF-Flat | Useful but not consistently faster than exact GPU on these sample sizes; keep pilot/cache tuning enabled. |
 | `cuda_cuvs_ivf_flat` | CUDA cuVS IVF-Flat | Fast on low-dimensional flow/simulated data at about 0.99-0.999 recall; not high-recall default. |
-| `faiss_ivfpq_fast` | CPU memory-pressure tier | Low recall on many datasets; use only when memory reduction is the priority. |
+| `faiss_ivfpq_fast` | CPU memory-pressure tier | Low recall on many datasets; use only when memory reduction is the priority [6]. |
 | `faiss_ivfpq_balanced` | CPU memory-pressure tier | Still low recall on image/low-dimensional flow datasets; explicit opt-in only. |
 | `faiss_gpu_ivfpq` | CUDA memory-pressure tier | Fast but low recall in this benchmark; explicit opt-in only. |
 | `cuda_cuvs_ivfpq` | CUDA memory-pressure tier | Better than FAISS GPU IVFPQ on some datasets but still not an accuracy-first default. |
@@ -64,7 +66,7 @@ Use these rules for `backend = "auto"` and for explicit backend recommendations:
 | `faiss_nndescent_fast` | CPU graph speed tier | Fast, but recall was usually lower than HNSW. |
 | `faiss_nndescent_balanced` | CPU graph candidate | Defaults increased to graph_k = 100, iter = 20, search_l = 100 for k = 50; still not the CPU auto default. |
 | `cuda_cuvs_nndescent` | CUDA graph speed tier | Fast and useful at around 0.99 recall on some datasets; failed on COIL20. |
-| `faiss_gpu_cagra` | CUDA graph high-recall tier | Reliable high-recall CAGRA path through FAISS/cuVS integration. |
+| `faiss_gpu_cagra` | CUDA graph high-recall tier | Reliable high-recall CAGRA path through FAISS/cuVS integration [13-15]. |
 | `cuda_cuvs_cagra` | Direct cuVS CAGRA | Guarded by pilot recall. Direct cuVS CAGRA had anomalously poor MNIST recall; do not trust without pilot success. |
 | `cpu_grid` | Exact 2D/3D spatial path | Best for simulated 2D/3D Euclidean data; unavailable by design outside 2D/3D. |
 | `cuda_grid` | CUDA 2D/3D spatial path | Correct for 2D/3D but slower than CPU grid on chiamaka in this run. |

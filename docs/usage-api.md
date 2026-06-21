@@ -17,12 +17,12 @@ expected to set. For the full R help page after installation, use
 
 | Function | Purpose |
 | --- | --- |
-| `nn()` | Low-level nearest-neighbour search for reference/query matrices. |
+| `nn()` | Low-level nearest-neighbour search for reference/query matrices [1-6,13-16]. |
 | `nn_without_self()` | Self-neighbour search that returns non-self neighbours only. |
 | `candidate_knn()` | Exact top-k ranking inside a supplied candidate-neighbour matrix. |
 | `knn_graph()` | Build a native weighted graph from data, an embedding, or KNN output. |
-| `graph_cluster()` | Run native random-walking, Louvain, or Leiden graph clustering. |
-| `fast_kmeans()` | CPU/FAISS/CUDA/cuVS k-means where available. |
+| `graph_cluster()` | Run native random-walking, Louvain, or Leiden graph clustering [9-12]. |
+| `fast_kmeans()` | CPU/FAISS/CUDA/cuVS k-means where available [7-8]. |
 | `knn()` | Fit a reusable kNN classifier/regressor or fit and predict immediately. |
 | `predict()` | Predict labels, numeric responses, or class probabilities from `knn()`. |
 | `backend_info()` | Report available CPU, FAISS, CUDA, cuVS, and cuGraph capabilities. |
@@ -39,7 +39,7 @@ nn(data, points = data, k = NULL, backend = "auto",
 | `data` | Numeric matrix, data frame, or sparse `Matrix` object with reference observations in rows and features in columns. |
 | `points` | Optional query matrix/data frame/sparse matrix with the same number of columns as `data`. Defaults to `data` for self-search. |
 | `k` | Number of neighbours to return. If `NULL`, faissR chooses an automatic neighbourhood size. |
-| `backend` | Search backend. Use `"auto"` for the general selector, `"cpu_auto"` for shape-aware CPU-only selection, `"cuda_auto"`/`"gpu_auto"` for shape-aware CUDA-only selection, `"cpu"` for exact native CPU, `"faiss"`/`"faiss_flat_l2"` for FAISS CPU Flat, `"faiss_hnsw"`/`"faiss_ivf"` for FAISS approximate CPU indexes, `"faiss_gpu_flat_l2"` for exact FAISS GPU Flat, `"faiss_gpu_cagra"` for FAISS GPU CAGRA with cuVS integration, and `"cuda_cuvs_*"` for direct cuVS backends. Explicit GPU backends fail clearly if unavailable. |
+| `backend` | Search backend. Use `"auto"` for the general selector, `"cpu_auto"` for shape-aware CPU-only selection, `"cuda_auto"`/`"gpu_auto"` for shape-aware CUDA-only selection, `"cpu"` for exact native CPU, `"faiss"`/`"faiss_flat_l2"` for FAISS CPU Flat, `"faiss_hnsw"`/`"faiss_ivf"` for FAISS approximate CPU indexes, `"faiss_gpu_flat_l2"` for exact FAISS GPU Flat, `"faiss_gpu_cagra"` for FAISS GPU CAGRA with cuVS integration, and `"cuda_cuvs_*"` for direct cuVS backends [1-6,13-16]. Explicit GPU backends fail clearly if unavailable. |
 | `metric` | Distance metric: `"euclidean"`, `"cosine"`, or `"correlation"`. Euclidean/L2 is the validated high-performance route for FAISS/CUDA/cuVS. Non-Euclidean metrics use supported CPU paths. |
 | `n_threads` | Number of CPU worker threads for CPU/FAISS CPU backends. GPU backends ignore this argument. |
 
@@ -124,7 +124,7 @@ graph_cluster(graph, method = "leiden", backend = "cpu",
 | --- | --- |
 | `graph` | A `faissR_graph`, a KNN object returned by `nn()`, a numeric matrix/data frame, or an embedding object with `layout`. |
 | `method` | Clustering algorithm: `"random_walking"`, `"louvain"`, or `"leiden"`. |
-| `backend` | `"cpu"` for native C++/OpenMP clustering, or `"cuda"` for RAPIDS libcugraph Louvain/Leiden when compiled and available. CUDA random-walking is not enabled yet. |
+| `backend` | `"cpu"` for native C++/OpenMP clustering, or `"cuda"` for RAPIDS libcugraph Louvain/Leiden when compiled and available [9-12]. CUDA random-walking is not enabled yet. |
 | `k` | Number of neighbours when `graph` is raw data or an embedding rather than a graph/KNN object. |
 | `graph_backend` | Backend passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
 | `weight` | Graph edge weighting passed to `knn_graph()`: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. |
@@ -155,7 +155,7 @@ fast_kmeans(data, centers, backend = "auto",
 | --- | --- |
 | `data` | Numeric matrix with observations in rows. |
 | `centers` | Number of clusters. Must be between 1 and `nrow(data)`. |
-| `backend` | `"auto"`, `"cpu"`, `"faiss"`, `"cuda"`, `"cuda_faiss"`, `"faiss_gpu"`, `"cuda_cuvs"`, or `"cuvs"`. `"auto"` prefers CUDA/cuVS when available, then FAISS, then base CPU. |
+| `backend` | `"auto"`, `"cpu"`, `"faiss"`, `"cuda"`, `"cuda_faiss"`, `"faiss_gpu"`, `"cuda_cuvs"`, or `"cuvs"`. `"auto"` prefers CUDA/cuVS when available, then FAISS, then base CPU [7-8]. |
 | `max_iter` | Maximum number of Lloyd iterations. |
 | `n_init` | Number of random restarts where the selected backend supports it. |
 | `tol` | Non-negative convergence tolerance where supported. |

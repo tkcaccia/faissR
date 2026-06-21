@@ -9,8 +9,6 @@
 [Backends](backend-capabilities.md) |
 **References**
 
-References are listed in AACR journal style.
-
 1. Johnson J, Douze M, Jegou H. Billion-scale similarity search with GPUs. IEEE Trans Big Data 2021;7:535-47.
 2. Douze M, Guzhva A, Deng C, Johnson J, Szilvasy G, Mazaré PE, et al. The FAISS library. arXiv 2024. Available from: https://github.com/facebookresearch/faiss.
 3. RAPIDS Development Team. RAPIDS cuVS: GPU-accelerated vector search and clustering [software]. Available from: https://github.com/rapidsai/cuvs.
@@ -31,14 +29,14 @@ References are listed in AACR journal style.
 ## Software Acknowledgements
 
 `faissR` links to external FAISS and optional RAPIDS cuVS/cuGraph installations
-rather than vendoring those libraries. HNSW, NN-descent, IVF, product
-quantization, flat search, k-means, Louvain, Leiden, and random-walk clustering
-are acknowledged as algorithmic and software foundations where the compiled
-backend exposes them.
+rather than vendoring those libraries [1-3,12-16]. HNSW, NN-descent, IVF,
+product quantization, flat search, k-means, Louvain, Leiden, and random-walk
+clustering are acknowledged as algorithmic and software foundations where the
+compiled backend exposes them [1-11,16].
 
 Native CPU graph clustering is faissR C++/OpenMP code inspired by the Louvain,
-Leiden, walktrap/random-walk, and multicore graph-clustering literature. CUDA
-Louvain and Leiden use RAPIDS libcugraph when available. FAISS GPU CAGRA and
-FAISS GPU IVF routes follow the FAISS GPU/cuVS integration documented by FAISS,
-NVIDIA, and Meta. Direct cuVS routes call RAPIDS cuVS C/C++ libraries. The
-package does not use a Python/cuGraph bridge.
+Leiden, walktrap/random-walk, and multicore graph-clustering literature
+[9-11]. CUDA Louvain and Leiden use RAPIDS libcugraph when available [12].
+FAISS GPU CAGRA and FAISS GPU IVF routes follow the FAISS GPU/cuVS integration
+documented by FAISS, NVIDIA, and Meta [13-15]. Direct cuVS routes call RAPIDS
+cuVS C/C++ libraries [3]. The package does not use a Python/cuGraph bridge.

@@ -10,8 +10,8 @@
 [References](references.md)
 
 `faissR` is designed for source installation with a mandatory FAISS C++
-library and optional CUDA/RAPIDS libraries. The package code does not require
-Python or conda.
+library and optional CUDA/RAPIDS libraries [1-3,12-16]. The package code does
+not require Python or conda.
 
 ## R Package
 
@@ -30,7 +30,7 @@ remotes::install_github("tkcaccia/faissR")
 - `Rcpp`;
 - a FAISS C++ library installation.
 
-FAISS is mandatory. CPU-only machines can install and use `faissR` without
+FAISS is mandatory [1-2,16]. CPU-only machines can install and use `faissR` without
 CUDA, cuVS, or cuGraph. Optional GPU backends compile only when the matching
 headers and libraries are available.
 
@@ -82,7 +82,7 @@ not a package dependency and is not required by faissR code.
 ## Optional CUDA, RAPIDS cuVS, And RAPIDS libcugraph
 
 CUDA nearest-neighbour and k-means backends require compatible NVIDIA drivers,
-the CUDA toolkit, and either a FAISS GPU build or RAPIDS cuVS.
+the CUDA toolkit, and either a FAISS GPU build or RAPIDS cuVS [1-3,13-15].
 
 ```sh
 CUDA_HOME=/usr/local/cuda \
@@ -93,7 +93,8 @@ FAISSR_USE_CUVS=1 \
 R CMD INSTALL .
 ```
 
-CUDA graph clustering uses native RAPIDS libcugraph for Louvain and Leiden:
+CUDA graph clustering uses native RAPIDS libcugraph for Louvain and Leiden
+[9,11-12]:
 
 ```sh
 CUDA_HOME=/usr/local/cuda \
