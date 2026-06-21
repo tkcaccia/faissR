@@ -4403,8 +4403,6 @@ print.faissR_nn <- function(x, ...) {
   invisible(x)
 }
 
-print.fastEmbedR_nn <- print.faissR_nn
-
 #' Check whether the native CUDA backend is available
 #'
 #' @return `TRUE` when the package was built with CUDA support and the CUDA

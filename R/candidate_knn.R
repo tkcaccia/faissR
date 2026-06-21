@@ -21,7 +21,7 @@
 #' @param n_threads CPU threads for the CPU backend.
 #' @param exclude_self If `TRUE`, remove each query row from its own candidate
 #'   set. This is valid only for self-query candidate KNN.
-#' @return A `fastEmbedR_nn` object with `indices` and `distances`. If a row
+#' @return A `faissR_nn` object with `indices` and `distances`. If a row
 #'   has fewer than `k` valid unique candidates, remaining entries are `NA` and
 #'   `Inf`.
 #' @examples

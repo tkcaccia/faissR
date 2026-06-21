@@ -167,6 +167,6 @@ finish_nn_result <- function(out,
   attr(out, "self_query") <- isTRUE(self_query)
   attr(out, "exact") <- isTRUE(exact)
   attr(out, "metric") <- metric
-  class(out) <- c("faissR_nn", "fastEmbedR_nn", "list")
+  class(out) <- c("faissR_nn", "list")
   out
 }

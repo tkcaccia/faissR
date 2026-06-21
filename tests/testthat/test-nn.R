@@ -366,7 +366,7 @@ test_that("nn chooses a practical default k and prints clearly", {
 
   out <- nn(x, backend = "cpu")
 
-  expect_s3_class(out, "fastEmbedR_nn")
+  expect_s3_class(out, "faissR_nn")
   expect_equal(dim(out$indices), c(nrow(x), faissR:::auto_k(x, include_self = TRUE)))
   expect_equal(attr(out, "backend"), "cpu")
   expect_true(isTRUE(attr(out, "exact")))
@@ -1330,7 +1330,7 @@ test_that("approximate KNN recall metadata is attached against exact subset", {
     seed = 131L
   )
   recall <- attr(approx, "recall")
-  expect_s3_class(approx, "fastEmbedR_nn")
+  expect_s3_class(approx, "faissR_nn")
   expect_true(is.data.frame(recall))
   expect_equal(recall$k, 6L)
   expect_equal(recall$recall_at_k, 1)

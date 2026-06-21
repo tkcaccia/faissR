@@ -52,8 +52,8 @@ knn <- nn(x, k = 100, backend = "auto", metric = "euclidean", n_threads = 4)
 saveRDS(knn, "knn_k100.rds")
 ```
 
-The same object can then feed `fastEmbedR`, graph construction, classifier
-tests, and recall diagnostics without paying the KNN cost repeatedly.
+The same object can then feed graph construction, classifier tests, embedding
+pipelines, and recall diagnostics without paying the KNN cost repeatedly.
 
 ## Benchmark #1
 

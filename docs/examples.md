@@ -89,11 +89,10 @@ table(km$cluster)
 km$parameters$tuning
 ```
 
-## Reuse KNN In fastEmbedR
+## Reuse KNN For Clustering
 
 ```r
-library(fastEmbedR)
-
-y <- fastEmbedR::opentsne_knn(nn_res, init_data = x, backend = "cpu")
-plot(y, pch = 21, bg = labels)
+g2 <- knn_graph(nn_res, k = 10, n_clusters = 3)
+cl2 <- graph_cluster(g2, method = "leiden", backend = "cpu", n_threads = 4)
+table(labels, cl2$membership)
 ```

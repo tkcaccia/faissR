@@ -40,7 +40,7 @@ self-query Euclidean candidates with `exclude_self = TRUE`.}
 set. This is valid only for self-query candidate KNN.}
 }
 \value{
-A `fastEmbedR_nn` object with `indices` and `distances`. If a row
+A `faissR_nn` object with `indices` and `distances`. If a row
   has fewer than `k` valid unique candidates, remaining entries are `NA` and
   `Inf`.
 }

@@ -14,7 +14,7 @@ test_that("fast_kmeans works on the CPU path", {
     n_threads = 2
   )
 
-  expect_s3_class(fit, "fastEmbedR_kmeans")
+  expect_s3_class(fit, "faissR_kmeans")
   expect_equal(length(fit$cluster), nrow(x))
   expect_equal(dim(fit$centers), c(2L, ncol(x)))
   expect_equal(length(fit$withinss), 2L)

@@ -134,7 +134,7 @@ knn_model_fit <- function(Xtrain,
       k = k,
       n_threads = n_threads
     ),
-    class = c("faissR_knn_model", "fastEmbedR_knn_model")
+    class = "faissR_knn_model"
   )
 }
 
@@ -210,11 +210,8 @@ predict.faissR_knn_model <- function(object,
   )
 }
 
-#' @export
-predict.fastEmbedR_knn_model <- predict.faissR_knn_model
-
 validate_knn_model_query <- function(object, newdata) {
-  if (!inherits(object, "faissR_knn_model") && !inherits(object, "fastEmbedR_knn_model")) {
+  if (!inherits(object, "faissR_knn_model")) {
     stop("`object` must be a faissR kNN model.", call. = FALSE)
   }
   query <- as.matrix(newdata)

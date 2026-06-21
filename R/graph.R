@@ -1,11 +1,12 @@
 #' Build a native nearest-neighbour graph
 #'
-#' `knn_graph()` turns a data matrix, a precomputed `nn()` result, or a
-#' `fastEmbedR_embedding` object into a weighted nearest-neighbour graph. It returns a native
-#' `faissR_graph` edge-list object and does not require `igraph`.
+#' `knn_graph()` turns a data matrix, a precomputed `nn()` result, or an
+#' embedding object with a matrix `layout` into a weighted nearest-neighbour
+#' graph. It returns a native `faissR_graph` edge-list object and does not
+#' require `igraph`.
 #'
-#' @param data Numeric matrix/data frame, a KNN object returned by `nn()`, or a
-#'   `fastEmbedR_embedding` object.
+#' @param data Numeric matrix/data frame, a KNN object returned by `nn()`, or an
+#'   embedding object with a matrix `layout`.
 #' @param knn Optional precomputed KNN object returned by `nn()`. If supplied,
 #'   `data` is ignored for neighbour search.
 #' @param k Number of non-self neighbours used in the graph.

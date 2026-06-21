@@ -6,7 +6,7 @@ test_that("candidate_knn matches exact self-KNN with full candidate rows", {
   exact <- nn(x, k = 5L, backend = "cpu")
   cand <- candidate_knn(x, candidates, k = 5L, backend = "cpu", n_threads = 2L)
 
-  expect_s3_class(cand, "fastEmbedR_nn")
+  expect_s3_class(cand, "faissR_nn")
   expect_equal(attr(cand, "backend"), "cpu_candidate")
   expect_false(isTRUE(attr(cand, "exact")))
   expect_true(isTRUE(attr(cand, "candidate_knn")$exact_within_candidates))

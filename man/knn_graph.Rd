@@ -21,7 +21,7 @@ knn_graph(
 )
 }
 \arguments{
-\item{data}{Numeric matrix/data frame, a KNN object returned by \code{nn()}, or a \code{fastEmbedR_embedding} object.}
+\item{data}{Numeric matrix/data frame, a KNN object returned by \code{nn()}, or an embedding object with a matrix \code{layout}.}
 \item{knn}{Optional precomputed KNN object returned by \code{nn()}. If supplied, \code{data} is ignored for neighbour search.}
 \item{k}{Number of non-self neighbours used in the graph.}
 \item{backend}{Device backend passed to \code{nn_without_self()} when \code{knn} is not supplied: \code{"auto"}, \code{"cpu"}, or \code{"cuda"}.}
@@ -44,7 +44,7 @@ attribute stores graph-construction metadata, including
 policy used when faissR computes neighbours internally.
 }
 \description{
-\code{knn_graph()} turns a data matrix, a precomputed \code{nn()} result, or a \code{fastEmbedR_embedding} object into a weighted nearest-neighbour graph. It returns a native \code{faissR_graph} edge-list object and does not require igraph.
+\code{knn_graph()} turns a data matrix, a precomputed \code{nn()} result, or an embedding object with a matrix \code{layout} into a weighted nearest-neighbour graph. It returns a native \code{faissR_graph} edge-list object and does not require igraph.
 }
 \examples{
 x <- scale(as.matrix(iris[, 1:4]))

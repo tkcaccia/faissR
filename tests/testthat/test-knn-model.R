@@ -9,7 +9,7 @@ test_that("knn fits models and predicts classes and probabilities", {
   fit <- knn(x, y, backend = "cpu", k = 2L)
 
   pred <- predict(fit, matrix(c(0.1, 0.2, 5.2, 5.4), ncol = 2, byrow = TRUE))
-  expect_s3_class(fit, "fastEmbedR_knn_model")
+  expect_s3_class(fit, "faissR_knn_model")
   expect_equal(as.character(pred), c("a", "b"))
   expect_equal(levels(pred), levels(y))
 

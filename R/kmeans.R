@@ -165,7 +165,7 @@ fast_kmeans <- function(data,
       tuning = auto_params
     )
   )
-  class(out) <- c("faissR_kmeans", "fastEmbedR_kmeans", "kmeans")
+  class(out) <- c("faissR_kmeans", "kmeans")
   out
 }
 
@@ -313,7 +313,7 @@ finish_fast_kmeans <- function(out,
   if (!is.null(requested_backend)) out$parameters$requested_backend <- requested_backend
   if (!is.null(resolved_backend)) out$parameters$resolved_backend <- resolved_backend
   if (!is.null(tuning_metadata)) out$parameters$tuning <- tuning_metadata
-  class(out) <- c("faissR_kmeans", "fastEmbedR_kmeans", "kmeans")
+  class(out) <- c("faissR_kmeans", "kmeans")
   out
 }
 
