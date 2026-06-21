@@ -399,6 +399,33 @@ if (nrow(ok)) {
   best <- do.call(rbind, lapply(split(best, best$dataset), function(x) x[1L, , drop = FALSE]))
   best$quality_score <- NULL
   utils::write.csv(best, file.path(out_dir, "kmeans_best_by_dataset.csv"), row.names = FALSE)
+
+  fast_rows <- ok[ok$method == "fast_kmeans", , drop = FALSE]
+  stats_rows <- ok[ok$method == "stats", , drop = FALSE]
+  if (nrow(fast_rows) && nrow(stats_rows)) {
+    comparison <- merge(
+      fast_rows,
+      stats_rows[, c("dataset", "centers", "elapsed_sec", "tot_withinss", "ari", "iter"), drop = FALSE],
+      by = c("dataset", "centers"),
+      suffixes = c("_fast", "_stats"),
+      all = FALSE
+    )
+    if (nrow(comparison)) {
+      comparison$speedup_vs_stats <- ifelse(
+        comparison$elapsed_sec_fast > 0,
+        comparison$elapsed_sec_stats / comparison$elapsed_sec_fast,
+        ifelse(comparison$elapsed_sec_stats == 0, 1, Inf)
+      )
+      comparison$ari_delta_vs_stats <- comparison$ari_fast - comparison$ari_stats
+      comparison$withinss_ratio_vs_stats <- comparison$tot_withinss_fast / comparison$tot_withinss_stats
+      comparison <- comparison[order(comparison$dataset, comparison$backend), , drop = FALSE]
+      utils::write.csv(
+        comparison,
+        file.path(out_dir, "kmeans_fast_vs_stats.csv"),
+        row.names = FALSE
+      )
+    }
+  }
 }
 
 materials <- c(
@@ -415,6 +442,7 @@ materials <- c(
   sprintf("- Requested centers fallback: `%s`; labels override this when available", fallback_centers),
   "",
   "The result table records elapsed time, peak resident memory when available, backend used, total within-cluster sum of squares, iterations, selected k-means parameters, tuning policy, and ARI against dataset labels when labels are available.",
+  "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset and number of centers, recording speedup, ARI delta, and withinss ratio.",
   "Unsupported CUDA or library combinations are recorded as failed rows rather than replaced with CPU timings."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_kmeans.md"))

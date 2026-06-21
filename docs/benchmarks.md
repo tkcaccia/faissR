@@ -162,7 +162,10 @@ Rscript benchmark_scripts/benchmark_nn_metrics.R \
 backends with base `stats::kmeans`. It records elapsed time, peak resident
 memory when available, backend used, total within-cluster sum of squares,
 iterations, selected k-means parameters, tuning policy, and ARI against
-`dataset$labels` when labels are available.
+`dataset$labels` when labels are available. When `stats` is part of the run,
+`kmeans_fast_vs_stats.csv` compares each successful `fast_kmeans()` row against
+`stats::kmeans` for the same dataset and number of centers, reporting speedup,
+ARI delta, and withinss ratio.
 
 Example CPU run:
 
