@@ -204,7 +204,7 @@ When `Xtest` is omitted, the return value is a `faissR_knn_model`.
 
 ```r
 predict(object, newdata, k = NULL,
-        backend = "auto", tuning = NULL,
+        backend = "auto", tuning = "auto",
         vote = "majority", type = "response", ...)
 ```
 
@@ -214,7 +214,7 @@ predict(object, newdata, k = NULL,
 | `newdata` | Numeric query matrix with the same number of columns as the training matrix. |
 | `k` | Number of neighbours for this prediction call. If `NULL`, uses the model default. |
 | `backend` | Device backend for the prediction-time neighbour search: `"auto"`, `"cpu"`, or `"cuda"`. |
-| `tuning` | Prediction-time tuning policy. If `NULL`, uses the policy stored in the model, or `"auto"`. |
+| `tuning` | Prediction-time tuning policy. `"auto"` uses the tuned default for the resolved method. |
 | `vote` | `"majority"` for unweighted classification votes or regression means; `"weighted"` for inverse-distance weighting. |
 | `type` | `"response"` for predicted labels/values or `"prob"` for classification probabilities. |
 | `...` | Reserved for future options. |

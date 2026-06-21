@@ -142,8 +142,8 @@ knn_model_fit <- function(Xtrain,
 #' @param k Number of neighbours.
 #' @param backend Device backend used for this prediction call: `"auto"`,
 #'   `"cpu"`, or `"cuda"`. Defaults to `"auto"`.
-#' @param tuning Tuning policy used for this prediction call. Defaults to the
-#'   policy stored in the model, or `"auto"`.
+#' @param tuning Tuning policy used for this prediction call. `"auto"` uses the
+#'   tuned default for the resolved method.
 #' @param vote `"majority"` or `"weighted"` for classification; `"majority"`
 #'   means an unweighted neighbour mean for regression.
 #' @param type `"response"` for class/regression predictions or `"prob"` for
@@ -156,15 +156,15 @@ predict.faissR_knn_model <- function(object,
                                       newdata,
                                       k = NULL,
                                       backend = c("auto", "cpu", "cuda"),
-                                      tuning = NULL,
+                                      tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                                       vote = c("majority", "weighted"),
                                       type = c("response", "prob"),
                                       ...) {
   backend <- match.arg(backend)
+  tuning <- as.character(tuning)[1L]
   vote <- match.arg(vote)
   type <- match.arg(type)
   query <- validate_knn_model_query(object, newdata)
-  tuning <- if (is.null(tuning)) object$tuning %||% "auto" else as.character(tuning)[1L]
   train <- model_Xtrain(object)
   response <- model_Ytrain(object)
   k <- normalize_knn_model_k(if (is.null(k)) object$k else k, nrow(train))
