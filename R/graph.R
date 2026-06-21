@@ -11,6 +11,13 @@
 #' @param k Number of non-self neighbours used in the graph.
 #' @param backend Device backend passed to \code{\link{nn_without_self}()} when
 #'   `knn` is not supplied: `"auto"`, `"cpu"`, or `"cuda"`.
+#' @param nn_method Nearest-neighbour method passed to
+#'   \code{\link{nn_without_self}()} when `knn` is not supplied. The default
+#'   `"auto"` uses the shape-aware selector for the chosen backend.
+#' @param metric Distance metric passed to \code{\link{nn_without_self}()} when
+#'   `knn` is not supplied.
+#' @param tuning Tuning policy passed to \code{\link{nn_without_self}()} when
+#'   `knn` is not supplied.
 #' @param weight Graph weighting. `"auto"` uses SNN/Jaccard weights for input
 #'   space and distance weights for embedding space. `"snn"` builds full
 #'   shared-nearest-neighbour Jaccard weights between all rows sharing at least
@@ -34,12 +41,19 @@ knn_graph <- function(data,
                       knn = NULL,
                       k = 50L,
                       backend = c("auto", "cpu", "cuda"),
+                      nn_method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree",
+                                    "sparse", "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
+                      metric = c("euclidean", "cosine", "correlation", "inner_product"),
+                      tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                       weight = c("auto", "snn", "adaptive", "distance", "binary"),
                       mutual = FALSE,
                       prune = 0,
                       n_clusters = NULL,
                       n_threads = NULL) {
   backend <- as.character(backend)[1L]
+  nn_method <- public_nn_method_label(normalize_nn_method(nn_method))
+  metric <- match.arg(metric)
+  tuning <- normalize_nn_tuning(tuning)
   weight <- match.arg(weight)
   k <- as.integer(k)
   if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L) {
@@ -70,11 +84,27 @@ knn_graph <- function(data,
       }
       graph_space <- "embedding"
       graph_backend <- resolve_knn_graph_backend(as.character(backend)[1L])
-      knn <- nn_without_self(data$layout, k = k, backend = graph_backend, n_threads = n_threads)
+      knn <- nn_without_self(
+        data$layout,
+        k = k,
+        backend = graph_backend,
+        method = nn_method,
+        metric = metric,
+        tuning = tuning,
+        n_threads = n_threads
+      )
       input_backend <- attr(knn, "backend") %||% graph_backend
     } else {
       graph_backend <- resolve_knn_graph_backend(as.character(backend)[1L])
-      knn <- nn_without_self(data, k = k, backend = graph_backend, n_threads = n_threads)
+      knn <- nn_without_self(
+        data,
+        k = k,
+        backend = graph_backend,
+        method = nn_method,
+        metric = metric,
+        tuning = tuning,
+        n_threads = n_threads
+      )
       input_backend <- attr(knn, "backend") %||% graph_backend
     }
   }
@@ -100,6 +130,9 @@ knn_graph <- function(data,
     mutual = mutual,
     prune = prune,
     nn_backend = input_backend,
+    nn_method = nn_method,
+    metric = attr(knn, "metric") %||% metric,
+    tuning = tuning,
     input_method = input_method,
     target_n_clusters = n_clusters,
     n_vertices = edges$n_vertices,
@@ -159,6 +192,12 @@ resolve_graph_cluster_backend <- function(backend) {
 #' @param k Number of neighbours when `graph` is not already a KNN object.
 #' @param graph_backend Backend passed to \code{\link{nn_without_self}()} for
 #'   neighbour search when `graph` is a matrix or embedding.
+#' @param graph_method Nearest-neighbour method passed to
+#'   \code{\link{nn_without_self}()} when `graph` is a matrix or embedding.
+#' @param metric Distance metric passed to \code{\link{nn_without_self}()} when
+#'   `graph` is a matrix or embedding.
+#' @param tuning Tuning policy passed to \code{\link{nn_without_self}()} when
+#'   `graph` is a matrix or embedding.
 #' @param weight KNN graph weighting. See \code{\link{knn_graph}()}.
 #' @param mutual,prune Graph-construction options.
 #' @param n_threads CPU threads for KNN construction and native CPU clustering.
@@ -206,6 +245,10 @@ graph_cluster <- function(graph,
                           backend = c("auto", "cpu", "cuda"),
                           k = 50L,
                           graph_backend = "auto",
+                          graph_method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree",
+                                           "sparse", "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
+                          metric = c("euclidean", "cosine", "correlation", "inner_product"),
+                          tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                           weight = c("auto", "snn", "adaptive", "distance", "binary"),
                           mutual = FALSE,
                           prune = 0,
@@ -221,6 +264,9 @@ graph_cluster <- function(graph,
   method <- match.arg(method)
   requested_backend <- match.arg(backend)
   backend <- resolve_graph_cluster_backend(requested_backend)
+  graph_method <- public_nn_method_label(normalize_nn_method(graph_method))
+  metric <- match.arg(metric)
+  tuning <- normalize_nn_tuning(tuning)
   if (identical(method, "random_walking") && identical(backend, "cuda")) {
     if (identical(requested_backend, "auto")) {
       backend <- "cpu"
@@ -299,11 +345,27 @@ graph_cluster <- function(graph,
     graph_space <- "embedding"
     input_method <- as.character(graph$method %||% "embedding")[1L]
     resolved <- resolve_knn_graph_backend(as.character(graph_backend)[1L])
-    knn <- nn_without_self(graph$layout, k = k, backend = resolved, n_threads = n_threads)
+    knn <- nn_without_self(
+      graph$layout,
+      k = k,
+      backend = resolved,
+      method = graph_method,
+      metric = metric,
+      tuning = tuning,
+      n_threads = n_threads
+    )
     input_backend <- attr(knn, "backend") %||% resolved
   } else {
     resolved <- resolve_knn_graph_backend(as.character(graph_backend)[1L])
-    knn <- nn_without_self(graph, k = k, backend = resolved, n_threads = n_threads)
+    knn <- nn_without_self(
+      graph,
+      k = k,
+      backend = resolved,
+      method = graph_method,
+      metric = metric,
+      tuning = tuning,
+      n_threads = n_threads
+    )
     input_backend <- attr(knn, "backend") %||% resolved
   }
 
@@ -336,6 +398,9 @@ graph_cluster <- function(graph,
   ans$parameters <- list(
     k = as.integer(k),
     graph_backend = input_backend,
+    graph_method = graph_method,
+    metric = attr(knn, "metric") %||% metric,
+    tuning = tuning,
     graph_space = graph_space,
     input_method = input_method,
     weight = weight,

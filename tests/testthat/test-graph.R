@@ -52,6 +52,28 @@ test_that("knn_graph supports adaptive weights and mutual edges natively", {
   expect_true(all(g_mutual$weight > 0))
 })
 
+test_that("knn_graph passes method metric and tuning to internal KNN", {
+  set.seed(5041)
+  x <- matrix(rnorm(120), ncol = 4)
+
+  g <- knn_graph(
+    x,
+    k = 6L,
+    backend = "cpu",
+    nn_method = "exact",
+    metric = "cosine",
+    tuning = "off",
+    n_threads = 2L
+  )
+  meta <- attr(g, "faissR_graph")
+
+  expect_s3_class(g, "faissR_graph")
+  expect_equal(meta$nn_method, "exact")
+  expect_equal(meta$metric, "cosine")
+  expect_equal(meta$tuning, "off")
+  expect_equal(meta$nn_backend, "cpu")
+})
+
 test_that("graph construction rejects implementation backend labels", {
   x <- matrix(rnorm(80), ncol = 4)
   expect_error(
@@ -123,6 +145,32 @@ test_that("graph_cluster runs native CPU random-walk and Louvain clustering with
   expect_length(louvain$membership, nrow(x))
   expect_length(louvain$all_modularity, 2L)
   expect_gte(length(unique(louvain$membership)), 2L)
+})
+
+test_that("graph_cluster passes method metric and tuning to internal KNN", {
+  set.seed(5052)
+  x <- rbind(
+    matrix(rnorm(80, -2, 0.2), ncol = 4),
+    matrix(rnorm(80, 2, 0.2), ncol = 4)
+  )
+
+  cl <- graph_cluster(
+    x,
+    method = "louvain",
+    backend = "cpu",
+    graph_backend = "cpu",
+    graph_method = "exact",
+    metric = "correlation",
+    tuning = "off",
+    k = 6L,
+    n_threads = 2L
+  )
+
+  expect_s3_class(cl, "faissR_graph_cluster")
+  expect_equal(cl$parameters$graph_method, "exact")
+  expect_equal(cl$parameters$metric, "correlation")
+  expect_equal(cl$parameters$tuning, "off")
+  expect_equal(cl$parameters$graph_backend, "cpu")
 })
 
 test_that("graph_cluster keeps random-walking on CPU", {

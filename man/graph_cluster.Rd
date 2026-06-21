@@ -11,6 +11,10 @@ graph_cluster(
   backend = c("auto", "cpu", "cuda"),
   k = 50L,
   graph_backend = "auto",
+  graph_method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
+    "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
+  metric = c("euclidean", "cosine", "correlation", "inner_product"),
+  tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   weight = c("auto", "snn", "adaptive", "distance", "binary"),
   mutual = FALSE,
   prune = 0,
@@ -35,6 +39,9 @@ libcugraph is available for Louvain/Leiden and CPU otherwise; auto keeps
 libcugraph was detected at build time; random-walking is CPU-only.}
 \item{k}{Number of neighbours when \code{graph} is not already a KNN object.}
 \item{graph_backend}{Backend passed to \code{nn_without_self()} for neighbour search.}
+\item{graph_method}{Nearest-neighbour method passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding.}
+\item{metric}{Distance metric passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding.}
+\item{tuning}{Tuning policy passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding.}
 \item{weight}{KNN graph weighting used when a graph must be built.}
 \item{mutual, prune}{Native graph-construction options.}
 \item{n_threads}{CPU threads. Used by KNN construction and native CPU clustering.}

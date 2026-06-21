@@ -117,6 +117,7 @@ by another method.
 
 ```r
 knn_graph(data, knn = NULL, k = 50L, backend = "auto",
+          nn_method = "auto", metric = "euclidean", tuning = "auto",
           weight = "auto", mutual = FALSE, prune = 0,
           n_clusters = NULL, n_threads = NULL)
 ```
@@ -127,6 +128,9 @@ knn_graph(data, knn = NULL, k = 50L, backend = "auto",
 | `knn` | Optional precomputed KNN object. If supplied, faissR reuses it instead of recomputing neighbours from `data`. |
 | `k` | Number of neighbours used in the graph. If `knn` has fewer columns, faissR uses the available columns. |
 | `backend` | Device backend passed to `nn_without_self()` when neighbours must be computed from `data`: `"auto"`, `"cpu"`, or `"cuda"`. |
+| `nn_method` | Nearest-neighbour method passed to `nn_without_self()` when neighbours must be computed from `data`. |
+| `metric` | Distance metric passed to `nn_without_self()` when neighbours must be computed from `data`. |
+| `tuning` | Tuning policy passed to `nn_without_self()` when neighbours must be computed from `data`. |
 | `weight` | Edge weighting: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. `"auto"` uses shared-nearest-neighbour weights for input space and distance weights for embedding space. |
 | `mutual` | If `TRUE`, keep only reciprocal nearest-neighbour edges. |
 | `prune` | Drop edges with weight less than or equal to this non-negative threshold. |
@@ -140,7 +144,8 @@ required.
 
 ```r
 graph_cluster(graph, method = "leiden", backend = "auto",
-              k = 50L, graph_backend = "auto", weight = "auto",
+              k = 50L, graph_backend = "auto", graph_method = "auto",
+              metric = "euclidean", tuning = "auto", weight = "auto",
               mutual = FALSE, prune = 0, n_threads = NULL,
               n_runs = 1L, resolution = 1, n_clusters = NULL,
               objective_function = "modularity",
@@ -154,6 +159,9 @@ graph_cluster(graph, method = "leiden", backend = "auto",
 | `backend` | `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA when libcugraph is available for Louvain/Leiden and CPU otherwise; auto keeps `"random_walking"` on CPU. `"cuda"` uses RAPIDS libcugraph Louvain/Leiden when compiled and available [9-12]. CUDA random-walking is not enabled yet. |
 | `k` | Number of neighbours when `graph` is raw data or an embedding rather than a graph/KNN object. |
 | `graph_backend` | Backend passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
+| `graph_method` | Nearest-neighbour method passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
+| `metric` | Distance metric passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
+| `tuning` | Tuning policy passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
 | `weight` | Graph edge weighting passed to `knn_graph()`: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. |
 | `mutual` | If `TRUE`, build a mutual-nearest-neighbour graph. |
 | `prune` | Non-negative edge pruning threshold. |

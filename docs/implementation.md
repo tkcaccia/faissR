@@ -236,7 +236,8 @@ prediction, or diagnostic code.
 
 `knn_graph()` converts a matrix, an existing KNN object, or an embedding-like
 object into a native `faissR_graph` edge list. When KNN is not supplied, it calls
-`nn_without_self()` with the requested backend. Supported edge weights include:
+`nn_without_self()` with the requested backend, NN method, metric, and tuning
+policy. Supported edge weights include:
 
 - `"distance"`: distance-derived edge strengths;
 - `"snn"`: shared-nearest-neighbour/Jaccard weights;
@@ -246,7 +247,8 @@ object into a native `faissR_graph` edge list. When KNN is not supplied, it call
   embedding-space graphs.
 
 The graph object stores `k`, weighting, pruning, mutual-edge filtering, optional
-target community count, and KNN backend metadata. It does not require `igraph`.
+target community count, and KNN backend/method/metric/tuning metadata. It does
+not require `igraph`.
 
 The graph construction layer deliberately accepts precomputed KNN output. This
 allows expensive FAISS/cuVS searches to be reused across clustering, embedding,
@@ -257,8 +259,9 @@ community detection.
 ## `graph_cluster()`
 
 `graph_cluster()` performs community detection on a precomputed `faissR_graph`,
-a KNN object, or a matrix-like input. If a graph is not supplied, it builds one
-with `knn_graph()` first.
+a KNN object, or a matrix-like input. If a graph or KNN object is not supplied,
+it builds the KNN graph internally with the requested `graph_backend`,
+`graph_method`, `metric`, and `tuning` settings.
 
 Implemented methods are:
 
