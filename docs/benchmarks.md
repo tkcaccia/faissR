@@ -127,7 +127,8 @@ Use `--cycles=10` to repeat speed and recall measurements. The raw result table
 contains one row per dataset/backend/method/metric/k/cycle combination.
 `--recall_threshold` must be a numeric value between 0 and 1; invalid values
 stop before the benchmark starts instead of silently changing recommendation
-rules.
+rules. `--threads`, `--timeout`, `--cycles`, `--quality_n`, and
+`--quality_max_ops` are also validated before datasets are loaded.
 `nn_metric_cycle_summary.csv` aggregates successful rows across cycles by
 dataset/backend/method/metric/k and reports success counts, median/min/max
 elapsed time, recall stability, and the dominant implementation backend.

@@ -439,6 +439,22 @@ test_that("NN metric benchmark defaults cover requested metrics and k grid", {
     env$required_positive_int_values(character(), "k_values"),
     "at least one positive integer"
   )
+  expect_equal(env$required_positive_int_arg("12", "threads"), 12L)
+  expect_equal(env$required_positive_int_arg("600", "timeout"), 600L)
+  expect_equal(env$required_positive_int_arg("10", "cycles"), 10L)
+  expect_equal(env$required_positive_int_arg("512", "quality_n"), 512L)
+  expect_error(env$required_positive_int_arg("many", "cycles"), "positive integer")
+  expect_error(env$required_positive_int_arg(0, "quality_n"), "positive integer")
+  expect_equal(env$required_positive_numeric_arg("5e9", "quality_max_ops"), 5e9)
+  expect_equal(env$required_positive_numeric_arg("1000", "quality_max_ops"), 1000)
+  expect_error(
+    env$required_positive_numeric_arg("many", "quality_max_ops"),
+    "positive numeric"
+  )
+  expect_error(
+    env$required_positive_numeric_arg(0, "quality_max_ops"),
+    "positive numeric"
+  )
   expect_equal(env$required_probability_arg("0.98", "recall_threshold"), 0.98)
   expect_equal(env$required_probability_arg(0, "recall_threshold"), 0)
   expect_equal(env$required_probability_arg(1, "recall_threshold"), 1)

@@ -140,6 +140,22 @@ as_int_arg <- function(x, default) {
   if (length(value) != 1L || is.na(value) || value < 1L) as.integer(default) else value
 }
 
+required_positive_int_arg <- function(x, arg) {
+  value <- suppressWarnings(as.integer(x))
+  if (length(value) != 1L || is.na(value) || value < 1L) {
+    stop("`", arg, "` must be a positive integer.", call. = FALSE)
+  }
+  value
+}
+
+required_positive_numeric_arg <- function(x, arg) {
+  value <- suppressWarnings(as.numeric(x))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) || value <= 0) {
+    stop("`", arg, "` must be a positive numeric value.", call. = FALSE)
+  }
+  value
+}
+
 required_probability_arg <- function(x, arg) {
   value <- suppressWarnings(as.numeric(x))
   if (length(value) != 1L || is.na(value) || !is.finite(value) ||
@@ -918,14 +934,13 @@ data_root <- args$data_root %||% Sys.getenv("FAISSR_BENCHMARK_DATA", unset = fil
 out_dir <- args$out_dir %||% Sys.getenv("FAISSR_BENCHMARK_OUT", unset = file.path(getwd(), paste0("faissR_NN_METRICS_", format(Sys.time(), "%Y%m%d_%H%M%S"))))
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-n_threads <- as_int_arg(args$threads, 4L)
+n_threads <- required_positive_int_arg(args$threads %||% 4L, "threads")
 configure_threads(n_threads)
 seed <- as_int_arg(args$seed, 1L)
-timeout <- as_int_arg(args$timeout, 600L)
-cycles <- as_int_arg(args$cycles, 1L)
-quality_n <- as_int_arg(args$quality_n, 512L)
-quality_max_ops <- suppressWarnings(as.numeric(args$quality_max_ops %||% "5e9"))
-if (length(quality_max_ops) != 1L || is.na(quality_max_ops) || !is.finite(quality_max_ops)) quality_max_ops <- 5e9
+timeout <- required_positive_int_arg(args$timeout %||% 600L, "timeout")
+cycles <- required_positive_int_arg(args$cycles %||% 1L, "cycles")
+quality_n <- required_positive_int_arg(args$quality_n %||% 512L, "quality_n")
+quality_max_ops <- required_positive_numeric_arg(args$quality_max_ops %||% "5e9", "quality_max_ops")
 recall_threshold <- required_probability_arg(args$recall_threshold %||% "0.98", "recall_threshold")
 
 datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "SimulatedUniform2D", "SimulatedUniform3D"), collapse = ","))
