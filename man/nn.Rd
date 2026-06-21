@@ -60,6 +60,8 @@ unavailable. CPU `method = "hnsw"` uses FAISS HNSW for all metrics when
 available and RcppHNSW/hnswlib when FAISS is unavailable.
 `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
 FAISS IVF-Flat/IVFPQ IP, and FAISS HNSW IP where available.
+`method = "nndescent"` supports cosine/correlation through normalized
+Euclidean graph search and does not expose raw inner-product search.
 Unsupported backend combinations fail clearly instead of returning neighbours
 computed under a different metric.}
 
@@ -125,11 +127,11 @@ Method descriptions:
   FAISS build. It is exposed for Euclidean/L2 only because linked FAISS
   graph builders can abort during normalized cosine/correlation or raw
   inner-product construction [16].
-  \item `"nndescent"`: NN-descent approximate graph construction via faissR's
-  native CPU route or cuVS on CUDA. The public CPU route uses faissR's native
-  NNDescent by default; FAISS NNDescent is disabled unless explicitly enabled
-  because linked FAISS builds can abort during graph construction. Public
-  NNDescent routes are kept Euclidean/L2-only [3-4,16].
+  \item `"nndescent"`: NN-descent approximate graph construction via
+  faissR's native CPU route or cuVS on CUDA. It supports Euclidean/L2 plus
+  cosine/correlation through normalized Euclidean graph search; raw inner
+  product is not exposed. FAISS NNDescent is experimental opt-in because
+  linked FAISS builds can abort during graph construction [3-4,16].
   \item `"cagra"`: CUDA-only graph-search method via FAISS GPU CAGRA/cuVS
   integration or direct RAPIDS cuVS CAGRA. It supports Euclidean/L2 plus
   cosine/correlation through normalized Euclidean graph search; raw inner

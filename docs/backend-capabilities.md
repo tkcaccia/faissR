@@ -52,7 +52,7 @@ list with method-specific parameters.
 | `"ivf"` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | Large approximate search with coarse-list probing [1-2,16]. |
 | `"ivfpq"` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | Compressed-memory approximate search [6,16]. |
 | `"nsg"` | FAISS CPU NSG for Euclidean/L2 only. | Unsupported. | Optional CPU graph-search baseline; cosine, correlation, and raw inner-product NSG remain disabled because the linked FAISS graph builder can abort during non-L2 construction [16]. |
-| `"nndescent"` | Native CPU NNDescent for Euclidean/L2. | Direct RAPIDS cuVS NN-descent for Euclidean/L2. | Approximate KNN graph construction; FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
+| `"nndescent"` | Native CPU NNDescent for Euclidean/L2, cosine, and correlation. | Direct RAPIDS cuVS NN-descent for Euclidean/L2, cosine, and correlation. | Approximate KNN graph construction; cosine/correlation use normalized Euclidean search, raw inner product is not exposed, and FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
 | `"cagra"` | Unsupported. | FAISS GPU CAGRA preferred; direct RAPIDS cuVS CAGRA when available. Cosine/correlation use normalized Euclidean graph search. | CUDA graph-search method; raw inner-product search is not exposed [3,13-16]. |
 
 Unsupported combinations fail before computation. For example,
@@ -77,7 +77,7 @@ a CPU FAISS route in faissR.
 | RAPIDS cuVS brute force | no | yes, if cuVS is built | Exact direct cuVS route [3]. |
 | RAPIDS cuVS CAGRA | no | yes, if cuVS is built | Direct CUDA graph-search route, guarded by pilot tuning; cosine/correlation use normalized Euclidean search [3]. |
 | RAPIDS cuVS IVF/PQ | no | yes, if cuVS is built | Direct cuVS approximate indexes [3,6]. |
-| RAPIDS cuVS NN-descent | no | yes, if cuVS is built | CUDA NN-descent route for Euclidean/L2 [3-4]. |
+| RAPIDS cuVS NN-descent | no | yes, if cuVS is built | CUDA NN-descent route for Euclidean/L2 plus normalized cosine/correlation [3-4]. |
 
 ## Graph, Clustering, And Model Functions
 

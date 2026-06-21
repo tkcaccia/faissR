@@ -132,8 +132,11 @@ test_that("nn_capabilities documents the public method metric matrix", {
     caps$method == "nsg" & caps$backend == "cpu" & caps$metric != "euclidean"
   ]))
   expect_true(all(!caps$supported[caps$method == "nsg" & caps$backend == "cuda"]))
+  expect_true(all(caps$supported[
+    caps$method == "nndescent" & caps$metric %in% c("euclidean", "cosine", "correlation")
+  ]))
   expect_true(all(!caps$supported[
-    caps$method == "nndescent" & caps$metric != "euclidean"
+    caps$method == "nndescent" & caps$metric == "inner_product"
   ]))
   expect_true(all(!caps$supported[caps$method == "vptree" & caps$metric == "inner_product"]))
 })
@@ -411,8 +414,8 @@ test_that("non-euclidean metrics use only validated backend paths", {
     )
   }
   expect_error(
-    internal_nn(x, k = 4L, backend = "cuda_cuvs_nndescent", metric = "correlation"),
-    "validated only"
+    internal_nn(x, k = 4L, backend = "cuda_cuvs_nndescent", metric = "inner_product"),
+    "inner_product"
   )
   if (requireNamespace("RcppHNSW", quietly = TRUE)) {
     hnsw_ip <- internal_nn(x, k = 4L, backend = "hnsw", metric = "inner_product", n_threads = 2L)
@@ -982,9 +985,9 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cpu", "nndescent", "inner_product"),
     "nndescent"
   )
-  expect_error(
+  expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "nndescent", "correlation"),
-    "nndescent"
+    "cuda_cuvs_nndescent"
   )
   expect_error(
     faissR:::resolve_public_nn_backend("cuda", "cagra", "inner_product"),
@@ -1410,17 +1413,23 @@ test_that("FAISS graph backends report actual and requested parameters", {
         ),
         "euclidean"
       )
-      expect_error(
-        internal_nn_without_self(
-          x,
-          k = 5L,
-          backend = "cpu_nndescent",
-          metric = metric,
-          n_threads = 2L
-        ),
-        "euclidean"
+      nnd_metric <- internal_nn_without_self(
+        x,
+        k = 5L,
+        backend = "cpu_nndescent",
+        metric = metric,
+        n_threads = 2L
       )
+      nnd_metric_approx <- attr(nnd_metric, "approximation")
+      expect_equal(attr(nnd_metric, "backend"), "cpu_nndescent")
+      expect_equal(attr(nnd_metric, "metric"), metric)
+      expect_equal(dim(nnd_metric$indices), c(nrow(x), 5L))
+      expect_match(nnd_metric_approx$transform, "normalize")
     }
+    expect_error(
+      internal_nn_without_self(x, k = 5L, backend = "cpu_nndescent", metric = "inner_product", n_threads = 2L),
+      "inner_product"
+    )
     expect_error(
       internal_nn_without_self(x, k = 5L, backend = "faiss_nsg", metric = "inner_product", n_threads = 2L),
       "euclidean"

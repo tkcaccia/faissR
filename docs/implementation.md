@@ -193,7 +193,7 @@ public method names map to different concrete functions depending on `backend`.
 | `ivf` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | Coarse-list approximate route [1-2,16]. |
 | `ivfpq` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | Compressed approximate route [6,16]. |
 | `nsg` | FAISS CPU NSG for Euclidean/L2 only. | Unsupported. | Optional FAISS graph-search baseline; cosine, correlation, and raw inner product are guarded off because the linked FAISS graph builder can abort during non-L2 construction [16]. |
-| `nndescent` | Native CPU NNDescent for Euclidean/L2. | Direct cuVS NN-descent for Euclidean/L2. | Approximate KNN graph construction; FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
+| `nndescent` | Native CPU NNDescent for Euclidean/L2, cosine, and correlation. | Direct cuVS NN-descent for Euclidean/L2, cosine, and correlation. | Approximate KNN graph construction; cosine/correlation use normalized Euclidean search, raw inner product is not exposed, and FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
 | `cagra` | Unsupported. | FAISS GPU CAGRA preferred, direct cuVS CAGRA fallback. Cosine/correlation use normalized Euclidean graph search. | CUDA-only graph-search method; raw inner product is not exposed [3,13-16]. |
 
 Unsupported method/backend pairs stop before computation. This makes benchmark

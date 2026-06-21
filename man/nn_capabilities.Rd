@@ -23,10 +23,10 @@ is centered cosine similarity, whereas inner product is the raw dot product.
 The capability table reports metric support only when the selected route
 computes neighbours under that metric. FAISS Flat, IVF-Flat, IVFPQ, and HNSW
 support cosine and correlation by using normalized inner-product searches.
-CAGRA supports cosine and correlation by using normalized Euclidean graph
-search. FAISS NSG and NNDescent remain Euclidean-only because linked FAISS
+CAGRA and NNDescent support cosine and correlation by using normalized
+Euclidean graph search. FAISS NSG remains Euclidean-only because linked FAISS
 graph builders can abort during non-Euclidean graph construction. Raw
-inner-product search is not exposed for NSG or CAGRA.
+inner-product search is not exposed for NSG, NNDescent, or CAGRA.
 }
 \examples{
 caps <- nn_capabilities()
