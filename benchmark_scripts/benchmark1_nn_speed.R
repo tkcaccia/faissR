@@ -163,6 +163,13 @@ rank_benchmark1_success <- function(success) {
   ), , drop = FALSE]
 }
 
+benchmark1_finite_mean <- function(x) {
+  x <- suppressWarnings(as.numeric(x))
+  x <- x[is.finite(x)]
+  if (!length(x)) return(NA_real_)
+  mean(x)
+}
+
 read_peak_rss_gb <- function() {
   status <- "/proc/self/status"
   if (!file.exists(status)) return(NA_real_)
@@ -397,6 +404,9 @@ knn_rank_correlation <- function(candidate, reference, k) {
   for (i in seq_len(nrow(reference$indices))) {
     a <- candidate$indices[i, seq_len(k)]
     b <- reference$indices[i, seq_len(k)]
+    a <- a[!is.na(a) & is.finite(a)]
+    b <- b[!is.na(b) & is.finite(b)]
+    if (!length(a) || !length(b)) next
     universe <- unique(c(a, b))
     ra <- match(universe, a)
     rb <- match(universe, b)
@@ -406,7 +416,7 @@ knn_rank_correlation <- function(candidate, reference, k) {
       vals[[i]] <- suppressWarnings(stats::cor(ra, rb, method = "spearman"))
     }
   }
-  mean(vals, na.rm = TRUE)
+  benchmark1_finite_mean(vals)
 }
 
 evaluate_knn_quality <- function(x, obj, k, metric, exact) {
@@ -450,17 +460,32 @@ evaluate_knn_quality <- function(x, obj, k, metric, exact) {
     empty$quality_error <- conditionMessage(ref)
     return(empty)
   }
+  kk <- min(k, ncol(sx$indices), ncol(sx$distances), ncol(ref$indices), ncol(ref$distances))
+  if (!is.finite(kk) || kk < 1L) {
+    empty$quality_status <- "failed"
+    empty$quality_error <- "method returned no usable neighbour columns"
+    return(empty)
+  }
   cand <- list(
-    indices = as.matrix(sx$indices[rows, seq_len(k), drop = FALSE]),
-    distances = as.matrix(sx$distances[rows, seq_len(k), drop = FALSE])
+    indices = as.matrix(sx$indices[rows, seq_len(kk), drop = FALSE]),
+    distances = as.matrix(sx$distances[rows, seq_len(kk), drop = FALSE])
   )
-  rec <- benchmark_knn_recall(cand, ref, k = k)
-  denom <- mean(abs(ref$distances), na.rm = TRUE) + sqrt(.Machine$double.eps)
+  ref_eval <- list(
+    indices = as.matrix(ref$indices[, seq_len(kk), drop = FALSE]),
+    distances = as.matrix(ref$distances[, seq_len(kk), drop = FALSE])
+  )
+  rec <- benchmark_knn_recall(cand, ref_eval, k = kk)
+  abs_ref <- benchmark1_finite_mean(abs(ref_eval$distances))
+  abs_err <- benchmark1_finite_mean(abs(cand$distances - ref_eval$distances))
   empty$recall_at_k <- rec$recall_at_k[[1L]]
   empty$median_recall_at_k <- rec$median_recall_at_k[[1L]]
   empty$min_recall_at_k <- rec$min_recall_at_k[[1L]]
-  empty$mean_relative_distance_error <- mean(abs(cand$distances - ref$distances), na.rm = TRUE) / denom
-  empty$rank_correlation <- knn_rank_correlation(cand, ref, k)
+  empty$mean_relative_distance_error <- if (is.finite(abs_ref) && abs_ref > 0 && is.finite(abs_err)) {
+    abs_err / abs_ref
+  } else {
+    NA_real_
+  }
+  empty$rank_correlation <- knn_rank_correlation(cand, ref_eval, kk)
   empty$quality_status <- "success"
   empty
 }
@@ -1133,7 +1158,7 @@ materials <- c(
   paste0("Datasets were read from `", data_root, "`. The required datasets were COIL20, USPS, FashionMNIST, FlowRepository_FR-FCM-ZYRM_files, flow18, MNIST, imagenet, MetRef, and mass41. Each dataset file was loaded from its dataset folder as an `.RData` object named `dataset` containing `dataset$data` and `dataset$labels`. Two simulated reference datasets were generated as `matrix(runif(2000000), ncol = 2)` and `matrix(runif(3000000), ncol = 3)`, giving 1,000,000 observations with 2 and 3 variables, respectively."),
   paste0("All methods were tested over k = ", paste(k_values, collapse = ", "), " and metrics = ", paste(metric_values, collapse = ", "), ". CPU methods were run with n_threads/cores = ", n_threads, " when the package exposed a thread argument. Each dataset-method-parameter combination was executed in a separate R process with GNU `timeout` set to ", timeout_sec, " seconds."),
     "Workers were launched with the configured FAISS/cuVS/CUDA library paths before system library paths when those variables were supplied.",
-  paste0("Nearest-neighbour quality was evaluated against an exact subset reference where feasible. The reference subset used at most ", quality_eval_max_n, " rows and was automatically reduced when the estimated operation count exceeded ", format(quality_eval_max_ops, scientific = TRUE), ". Reported quality metrics are recall@k, median recall@k, minimum recall@k, mean relative distance error, and Spearman rank correlation of neighbour ranks."),
+  paste0("Nearest-neighbour quality was evaluated against an exact subset reference where feasible. The reference subset used at most ", quality_eval_max_n, " rows and was automatically reduced when the estimated operation count exceeded ", format(quality_eval_max_ops, scientific = TRUE), ". Reported quality metrics are recall@k, median recall@k, minimum recall@k, mean relative distance error, and Spearman rank correlation of neighbour ranks. Invalid or non-finite distance/rank quality summaries are recorded as `NA`."),
   "`benchmark1_best_by_dataset.csv` and `benchmark1_ranked_speed_quality_memory.csv` rank successful KNN-search rows by recall@k, neighbour-rank correlation, mean relative distance error, elapsed time, and peak memory. This keeps fast but low-recall rows from being reported as the best method.",
   "The faissR CUDA/cuVS NN-descent output was saved for every dataset where the method completed successfully.",
   "",

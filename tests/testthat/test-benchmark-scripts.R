@@ -581,6 +581,43 @@ test_that("legacy Benchmark #1 best ranking is quality-aware before speed", {
   expect_equal(best$method, c("same_recall_better_rank", "fast_missing_quality"))
 })
 
+test_that("legacy Benchmark #1 quality metrics guard invalid finite means", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
+    "if (worker)"
+  )
+
+  candidate <- list(
+    indices = matrix(c(NA_integer_, NA_integer_), nrow = 1),
+    distances = matrix(c(Inf, NA_real_), nrow = 1)
+  )
+  reference <- list(
+    indices = matrix(c(1L, 2L), nrow = 1),
+    distances = matrix(c(Inf, NA_real_), nrow = 1)
+  )
+
+  expect_true(is.na(env$benchmark1_finite_mean(c(Inf, NA_real_, NaN))))
+  expect_true(is.na(env$knn_rank_correlation(candidate, reference, k = 2L)))
+})
+
+test_that("legacy Benchmark #1 quality evaluation handles short KNN outputs", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
+    "if (worker)"
+  )
+  x <- matrix(seq_len(20), nrow = 5)
+  obj <- list(
+    indices = matrix(c(2L, 1L, 4L, 5L, 3L), ncol = 1),
+    distances = matrix(rep(1, 5), ncol = 1)
+  )
+
+  out <- env$evaluate_knn_quality(x, obj, k = 3L, metric = "l2", exact = FALSE)
+
+  expect_equal(out$quality_status, "success")
+  expect_equal(out$quality_eval_n, nrow(x))
+  expect_true(is.finite(out$recall_at_k))
+})
+
 test_that("k-means benchmark defaults cover fast_kmeans stats and public backends", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_kmeans.R"),

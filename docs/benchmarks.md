@@ -90,7 +90,9 @@ by recall@k, neighbour-rank correlation, mean relative distance error, elapsed
 time, and peak memory. The companion
 `benchmark1_ranked_speed_quality_memory.csv` preserves the same ordering for
 all successful rows. This means the "best" row is not simply the fastest row
-when a slower method has better measured nearest-neighbour quality.
+when a slower method has better measured nearest-neighbour quality. Invalid or
+non-finite distance/rank quality summaries are recorded as `NA` and therefore
+do not masquerade as successful quality measurements.
 
 ## NN Metric Cycles
 
