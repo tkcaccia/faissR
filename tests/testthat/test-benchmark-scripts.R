@@ -647,6 +647,28 @@ test_that("graph benchmark recommendation ties prefer higher ARI then modularity
   expect_equal(out$method, c("higher_ari", "higher_modularity"))
 })
 
+test_that("graph benchmark best-row ranking uses modularity before speed", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  ok <- data.frame(
+    dataset = c("A", "A", "A", "B", "B"),
+    method = c(
+      "fast_low_modularity", "slow_high_modularity", "lower_ari",
+      "fast_missing_quality", "slow_missing_quality"
+    ),
+    ari = c(0.95, 0.95, 0.94, NA, NA),
+    modularity = c(0.20, 0.40, 0.99, NA, NA),
+    total_sec = c(1, 2, 0.5, 1, 2),
+    stringsAsFactors = FALSE
+  )
+
+  ranked <- env$rank_graph_cluster_success(ok)
+  best <- ranked[!duplicated(ranked$dataset), , drop = FALSE]
+  expect_equal(best$method, c("slow_high_modularity", "fast_missing_quality"))
+})
+
 test_that("graph benchmark cycle summaries preserve target cluster count", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),

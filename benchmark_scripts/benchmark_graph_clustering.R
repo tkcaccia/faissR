@@ -361,6 +361,23 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
   comparison[order(comparison$dataset, comparison$k, comparison$n_clusters_requested, comparison$auto_graph_backend, comparison$auto_cluster_backend, comparison$auto_method), , drop = FALSE]
 }
 
+graph_rank_value <- function(data, column, default, higher_is_better = FALSE) {
+  value <- if (column %in% names(data)) data[[column]] else rep(default, nrow(data))
+  value <- suppressWarnings(as.numeric(value))
+  value[!is.finite(value)] <- default
+  if (higher_is_better) -value else value
+}
+
+rank_graph_cluster_success <- function(ok) {
+  if (!nrow(ok)) return(ok)
+  ok[order(
+    ok$dataset,
+    graph_rank_value(ok, "ari", -Inf, higher_is_better = TRUE),
+    graph_rank_value(ok, "modularity", -Inf, higher_is_better = TRUE),
+    graph_rank_value(ok, "total_sec", Inf)
+  ), , drop = FALSE]
+}
+
 graph_cluster_expected_skip <- function(cluster_backend, method) {
   cluster_backend <- tolower(as.character(cluster_backend)[1L])
   method <- tolower(as.character(method)[1L])
@@ -810,10 +827,8 @@ utils::write.csv(results_df, file.path(out_dir, "graph_cluster_benchmark_results
 
 ok <- results_df[results_df$status == "success", , drop = FALSE]
 if (nrow(ok)) {
-  ok$order_score <- ifelse(is.na(ok$ari), -Inf, ok$ari)
-  ok <- ok[order(ok$dataset, -ok$order_score, ok$total_sec), , drop = FALSE]
-  best <- do.call(rbind, lapply(split(ok, ok$dataset), function(x) x[1L, , drop = FALSE]))
-  best$order_score <- NULL
+  ok_ranked <- rank_graph_cluster_success(ok)
+  best <- do.call(rbind, lapply(split(ok_ranked, ok_ranked$dataset), function(x) x[1L, , drop = FALSE]))
   utils::write.csv(best, file.path(out_dir, "graph_cluster_best_by_dataset.csv"), row.names = FALSE)
 
   cycle_summary <- summarize_graph_cycles(ok)
