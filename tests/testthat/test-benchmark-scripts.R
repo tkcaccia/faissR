@@ -98,6 +98,38 @@ test_that("NN metric benchmark canonicalizes metric aliases before preflight", {
   expect_false(isTRUE(env$capability_status(caps, "cpu", "nsg", "ip")$supported))
 })
 
+test_that("NN metric auto comparison preserves recommendation basis", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = c("A", "A"),
+    backend = c("cpu", "cpu"),
+    method = c("auto", "hnsw"),
+    metric = c("euclidean", "euclidean"),
+    k = c(50L, 50L),
+    result_backend = c("faiss_hnsw", "faiss_hnsw"),
+    resolved_backend = c("faiss_hnsw", "faiss_hnsw"),
+    implementation_backend = c("faiss_hnsw", "faiss_hnsw"),
+    success_cycles = c(2L, 2L),
+    median_elapsed_sec = c(5, 4),
+    median_recall_at_k = c(0.99, 0.99),
+    min_recall_at_k = c(0.98, 0.98),
+    median_min_recall_at_k = c(0.98, 0.98),
+    recall_reference = c("sample", "sample"),
+    median_recall_query_n = c(512, 512)
+  )
+  recommendations <- cycle_summary[2, , drop = FALSE]
+  recommendations$recommendation_basis <- "fastest_at_recall_threshold"
+
+  out <- env$compare_auto_to_recommendations(cycle_summary, recommendations)
+
+  expect_equal(anyDuplicated(names(out)), 0L)
+  expect_equal(out$recommended_recommendation_basis, "fastest_at_recall_threshold")
+  expect_true("recommended_recommendation_basis" %in% names(out))
+})
+
 test_that("NN metric benchmark accounts for sparse method on dense data", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),

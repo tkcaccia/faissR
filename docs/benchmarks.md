@@ -107,7 +107,8 @@ unavailable for the group, it selects the fastest successful row and marks
 `recommendation_basis = "speed_only_no_recall"`.
 `nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate
 `method = "auto"` rows with those recommendations and reports median speed
-ratio, median recall gap, and backend/implementation agreement.
+ratio, median recall gap, backend/implementation agreement, and the
+recommendation basis used for the recommended row.
 `nn_metric_best_by_dataset_backend_metric_k_cycle.csv` keeps the best row within
 each cycle, while `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the
 overall best row across cycles for backward-compatible summaries.
@@ -279,6 +280,9 @@ per dataset/backend/metric/k: it chooses the fastest median row above the recall
 threshold when possible, the best-recall row when all measured methods are below
 threshold, and the fastest successful row when recall is unavailable. The
 `recommendation_basis` column records which rule was used.
+`nn_metric_auto_vs_cycle_recommendation.csv` carries this value as
+`recommended_recommendation_basis` so auto comparisons can be interpreted as
+recall-qualified, below-threshold, or speed-only comparisons.
 
 Example CPU run:
 

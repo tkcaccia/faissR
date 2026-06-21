@@ -381,7 +381,7 @@ compare_auto_to_recommendations <- function(cycle_summary, recommendations) {
     "success_cycles", "median_elapsed_sec", "median_recall_at_k", "min_recall_at_k",
     "median_min_recall_at_k", "recall_reference", "median_recall_query_n"
   )
-  rec_keep <- auto_keep
+  rec_keep <- c(auto_keep, "recommendation_basis")
   auto <- auto[, auto_keep, drop = FALSE]
   recommendations <- recommendations[, rec_keep, drop = FALSE]
   names(auto)[match(auto_keep[-seq_along(keys)], names(auto))] <- paste0("auto_", auto_keep[-seq_along(keys)])
@@ -945,7 +945,7 @@ materials <- c(
   "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches.",
   "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/metric/k and reports success counts, median/min/max elapsed time, recall stability, and the dominant implementation backend.",
   "`nn_metric_recommendations_from_cycles.csv` selects one method per dataset/backend/metric/k. When recall is available, it selects the fastest method whose median recall is at least `recall_threshold`; if no method reaches that threshold it selects the best-recall row and marks it as below threshold. When recall is unavailable for the group, it selects the fastest successful row and marks the recommendation as speed-only.",
-  "`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate `method = \"auto\"` rows with those cycle-summary recommendations and reports median speed ratio, median recall gap, and backend/implementation agreement.",
+  "`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate `method = \"auto\"` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median recall gap, and backend/implementation agreement.",
   "`nn_metric_best_by_dataset_backend_metric_k_cycle.csv` stores the best row within each cycle; `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the overall best row across cycles for backward-compatible summaries.",
   "The script does not add benchmark-only helpers to the package API."
 )
