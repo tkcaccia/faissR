@@ -60,6 +60,10 @@ for example `method = "grid"` or `method = "cagra"`. Thus
 With the default `method = "auto"`, faissR chooses the most appropriate method
 for the selected backend. With `tuning = "auto"`, approximate GPU methods use
 the tuned defaults identified for the resolved method.
+The public nearest-neighbour metrics are `"euclidean"`, `"cosine"`,
+`"correlation"`, and `"inner_product"`. Correlation is centered cosine
+similarity, whereas inner product is the raw dot product; distance choices
+belong in `metric`, not in separate method names.
 The [NN methods guide](docs/nn-methods.md) describes each nearest-neighbour
 method and cites the relevant algorithm/software references.
 

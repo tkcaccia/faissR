@@ -54,6 +54,19 @@ test_that("public NN method and metric labels are unique canonical labels", {
   expect_false("manhattan" %in% metrics)
 })
 
+test_that("README describes public NN metrics and correlation semantics", {
+  readme_file <- test_path("../../README.md")
+  if (!file.exists(readme_file)) {
+    skip("README is not available in this installed-package test context.")
+  }
+
+  prose <- paste(readLines(readme_file, warn = FALSE), collapse = " ")
+  expect_true(grepl('"euclidean".*"cosine".*"correlation".*"inner_product"', prose))
+  expect_true(grepl("Correlation is centered cosine similarity", prose, fixed = TRUE))
+  expect_true(grepl("inner product is the raw dot product", prose, fixed = TRUE))
+  expect_true(grepl("distance choices belong in `metric`", prose, fixed = TRUE))
+})
+
 test_that("usage API NN method documentation agrees with live signatures", {
   docs_file <- test_path("../../docs/usage-api.md")
   if (!file.exists(docs_file)) {
