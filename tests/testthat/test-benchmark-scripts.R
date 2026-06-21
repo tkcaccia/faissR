@@ -105,6 +105,14 @@ test_that("NN metric benchmark defaults cover requested metrics and k grid", {
   )
 
   expect_equal(
+    env$default_nn_method_values(),
+    faissR:::nn_method_labels()
+  )
+  expect_equal(
+    env$default_nn_backend_values(),
+    c("auto", "cpu", "cuda")
+  )
+  expect_equal(
     env$default_nn_metric_values(),
     c("euclidean", "cosine", "correlation", "inner_product")
   )
@@ -160,7 +168,7 @@ test_that("NN metric benchmark accounts for sparse method on dense data", {
     "args <- parse_args()"
   )
 
-  default_methods <- env$split_arg(NULL, "auto,exact,flat,bruteforce,grid,vptree,sparse,hnsw,ivf,ivfpq,nsg,nndescent,cagra")
+  default_methods <- env$default_nn_method_values()
   expect_true("sparse" %in% default_methods)
 
   skip <- env$nn_data_expected_skip(matrix(rnorm(20), ncol = 4), "sparse")
