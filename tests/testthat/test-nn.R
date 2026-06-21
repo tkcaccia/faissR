@@ -1236,6 +1236,50 @@ test_that("CPU auto selector is shape-aware", {
   }
 })
 
+test_that("CPU auto selector is k and metric aware on benchmark k grid", {
+  n <- 70000L
+  p <- 784L
+  work_size <- as.double(n) * as.double(n) * as.double(p)
+  k_values <- c(5L, 10L, 15L, 50L, 100L)
+  metrics <- c("euclidean", "cosine", "correlation", "inner_product")
+  routes <- expand.grid(k = k_values, metric = metrics, stringsAsFactors = FALSE)
+  routes$route <- vapply(seq_len(nrow(routes)), function(i) {
+    faissR:::select_cpu_auto_backend(
+      self_query = TRUE,
+      n = n,
+      p = p,
+      n_points = n,
+      k = routes$k[[i]],
+      work_size = work_size,
+      metric = routes$metric[[i]]
+    )
+  }, character(1L))
+
+  expect_equal(routes$route[routes$metric == "euclidean" & routes$k == 5L], "cpu")
+  expect_equal(
+    routes$route[routes$metric == "euclidean" & routes$k >= 10L],
+    rep(if (faiss_available()) "faiss_hnsw" else if (requireNamespace("RcppHNSW", quietly = TRUE)) "hnsw" else "cpu", 4L)
+  )
+
+  for (metric in c("cosine", "correlation", "inner_product")) {
+    k5_route <- routes$route[routes$metric == metric & routes$k == 5L]
+    if (faiss_available()) {
+      expect_equal(k5_route, switch(
+        metric,
+        cosine = "faiss_flat_cosine",
+        correlation = "faiss_flat_correlation",
+        inner_product = "faiss_flat_ip"
+      ))
+    } else {
+      expect_equal(k5_route, "cpu")
+    }
+    expect_equal(
+      routes$route[routes$metric == metric & routes$k >= 10L],
+      rep(if (faiss_available()) "faiss_hnsw" else if (requireNamespace("RcppHNSW", quietly = TRUE)) "hnsw" else "cpu", 4L)
+    )
+  }
+})
+
 test_that("CUDA auto selector is shape-aware", {
   skip_if_not(cuda_available() || cuvs_available())
 

@@ -119,6 +119,10 @@ Policy summary:
   inner-product HNSW when FAISS is available; FAISS Flat exact search for larger
   non-Euclidean query or exact workloads; RcppHNSW/hnswlib remains the fallback
   for large non-Euclidean self-KNN when FAISS is unavailable.
+  On the benchmark `k` grid, large high-dimensional CPU self-search keeps
+  `k = 5` on an exact route and switches to HNSW from `k = 10` upward when a
+  graph-search backend is available; non-Euclidean `k = 5` can use exact FAISS
+  Flat metric routes when FAISS is available.
 - `backend = "cuda", method = "auto"`: CUDA grid for large 2D/3D self-KNN;
   FAISS GPU Flat for small and medium datasets where exact GPU search is fast;
   FAISS GPU CAGRA for very large self-KNN.
