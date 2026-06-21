@@ -133,6 +133,30 @@ test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
   expect_true(isTRUE(env$method_is_exact("faissR_faiss_gpu_flat_l2", "inner_product")))
 })
 
+test_that("legacy Benchmark #1 defaults to all four public metrics", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
+    "if (worker)"
+  )
+
+  expect_equal(
+    env$benchmark1_metric_values(metrics = NULL, env_metrics = NA_character_),
+    c("l2", "cosine", "correlation", "inner_product")
+  )
+  expect_equal(
+    env$benchmark1_metric_values("euclidean,pearson,ip,unknown", env_metrics = NA_character_),
+    c("l2", "correlation", "inner_product")
+  )
+  expect_equal(
+    env$benchmark1_metric_values(metrics = NULL, env_metrics = "cosine,innerproduct"),
+    c("cosine", "inner_product")
+  )
+  expect_equal(
+    env$benchmark1_metric_values("unknown", env_metrics = NA_character_),
+    c("l2", "cosine", "correlation", "inner_product")
+  )
+})
+
 test_that("legacy Benchmark #1 exposes normalized faissR NNDescent metrics", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),

@@ -75,6 +75,21 @@ if (metric %in% c("euclidean", "l2")) metric <- "l2"
 if (metric %in% c("ip", "innerproduct", "inner_product")) metric <- "inner_product"
 if (metric %in% c("cor", "pearson")) metric <- "correlation"
 if (!metric %in% c("l2", "cosine", "correlation", "inner_product")) metric <- "l2"
+benchmark1_metric_values <- function(metrics = NULL,
+                                     env_metrics = Sys.getenv("FAISSR_BENCHMARK1_METRICS", unset = NA_character_)) {
+  raw <- metrics %||% env_metrics
+  if (length(raw) != 1L || is.na(raw) || !nzchar(raw)) {
+    raw <- "l2,cosine,correlation,inner_product"
+  }
+  values <- strsplit(raw, ",", fixed = TRUE)[[1L]]
+  values <- unique(tolower(trimws(values)))
+  values[values %in% c("euclidean")] <- "l2"
+  values[values %in% c("ip", "innerproduct")] <- "inner_product"
+  values[values %in% c("cor", "pearson")] <- "correlation"
+  values <- unique(values[values %in% c("l2", "cosine", "correlation", "inner_product")])
+  if (!length(values)) values <- c("l2", "cosine", "correlation", "inner_product")
+  values
+}
 timeout_sec <- as.integer(args$timeout %||% "600")
 worker <- isTRUE(as.logical(args$worker %||% FALSE))
 quality_eval_max_n <- as.integer(args$quality_n %||% Sys.getenv("FAISSR_BENCHMARK1_QUALITY_N", "512"))
@@ -968,13 +983,7 @@ utils::write.csv(methods, file.path(out_dir, "benchmark1_methods.csv"), row.name
 k_values <- as.integer(strsplit(args$k_values %||% Sys.getenv("FAISSR_BENCHMARK1_K_VALUES", "5,10,15,50,100"), ",", fixed = TRUE)[[1L]])
 k_values <- unique(k_values[is.finite(k_values) & !is.na(k_values) & k_values > 0L])
 if (!length(k_values)) k_values <- c(5L, 10L, 15L, 50L, 100L)
-metric_values <- strsplit(args$metrics %||% Sys.getenv("FAISSR_BENCHMARK1_METRICS", "l2,cosine,correlation"), ",", fixed = TRUE)[[1L]]
-metric_values <- unique(tolower(trimws(metric_values)))
-metric_values[metric_values %in% c("euclidean")] <- "l2"
-metric_values[metric_values %in% c("ip", "innerproduct")] <- "inner_product"
-metric_values[metric_values %in% c("cor", "pearson")] <- "correlation"
-metric_values <- unique(metric_values[metric_values %in% c("l2", "cosine", "correlation", "inner_product")])
-if (!length(metric_values)) metric_values <- c("l2", "cosine", "correlation")
+metric_values <- benchmark1_metric_values(args$metrics)
 utils::write.csv(
   expand.grid(k = k_values, metric = metric_values, stringsAsFactors = FALSE),
   file.path(out_dir, "benchmark1_parameter_grid.csv"),
