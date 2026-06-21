@@ -179,6 +179,9 @@ iterations, selected k-means parameters, tuning policy, and ARI against
 `kmeans_fast_vs_stats.csv` compares each successful `fast_kmeans()` row against
 `stats::kmeans` for the same dataset and number of centers, reporting speedup,
 ARI delta, and withinss ratio.
+CUDA/library combinations that are known unavailable before execution are
+recorded as `status = "expected_skip"` with `expected_skip = TRUE`; unexpected
+runtime errors remain failed rows and are not replaced with CPU timings.
 
 Example CPU run:
 

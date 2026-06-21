@@ -204,7 +204,8 @@ result_row <- function(dataset, n, p, method, backend, centers, n_threads,
                        iter = NA_integer_, tot_withinss = NA_real_,
                        ari = NA_real_, max_iter = NA_integer_,
                        n_init = NA_integer_, tol = NA_real_,
-                       tuning_policy = NA_character_) {
+                       tuning_policy = NA_character_,
+                       expected_skip = FALSE) {
   data.frame(
     dataset = dataset,
     n = as.integer(n),
@@ -225,8 +226,21 @@ result_row <- function(dataset, n, p, method, backend, centers, n_threads,
     n_init = as.integer(n_init),
     tol = tol,
     tuning_policy = tuning_policy,
+    expected_skip = isTRUE(expected_skip),
     stringsAsFactors = FALSE
   )
+}
+
+kmeans_expected_skip <- function(method, backend) {
+  method <- tolower(as.character(method)[1L])
+  backend <- tolower(as.character(backend)[1L])
+  if (!identical(method, "fast_kmeans")) return(NULL)
+  if (backend %in% c("cuda", "cuda_faiss", "faiss_gpu", "cuda_cuvs", "cuvs") &&
+      !isTRUE(faissR::cuda_available()) &&
+      !isTRUE(faissR::cuvs_available())) {
+    return("CUDA k-means is unavailable in this faissR build/runtime; explicit CUDA requests are expected skips.")
+  }
+  NULL
 }
 
 run_one <- function(x, labels, dataset_name, method, backend, centers,
@@ -364,21 +378,42 @@ for (dataset_name in datasets) {
     method_backends <- if (identical(method, "stats")) "stats" else backends
     for (backend in method_backends) {
       row_id <- row_id + 1L
-      row <- run_one(
-        x = x,
-        labels = loaded$labels,
-        dataset_name = dataset_name,
-        method = method,
-        backend = backend,
-        centers = centers,
-        n_threads = n_threads,
-        seed = seed,
-        timeout = timeout,
-        max_iter = max_iter,
-        n_init = n_init,
-        tol = tol,
-        tuning = tuning
-      )
+      skip_reason <- kmeans_expected_skip(method, backend)
+      if (!is.null(skip_reason)) {
+        auto_params <- kmeans_auto_params(nrow(x), ncol(x), centers, tuning)
+        row <- result_row(
+          dataset = dataset_name,
+          n = nrow(x),
+          p = ncol(x),
+          method = method,
+          backend = backend,
+          centers = centers,
+          n_threads = n_threads,
+          status = "expected_skip",
+          error = skip_reason,
+          max_iter = resolve_kmeans_int(max_iter, auto_params$max_iter),
+          n_init = resolve_kmeans_int(n_init, auto_params$n_init),
+          tol = resolve_kmeans_tol(tol, auto_params$tol),
+          tuning_policy = auto_params$policy,
+          expected_skip = TRUE
+        )
+      } else {
+        row <- run_one(
+          x = x,
+          labels = loaded$labels,
+          dataset_name = dataset_name,
+          method = method,
+          backend = backend,
+          centers = centers,
+          n_threads = n_threads,
+          seed = seed,
+          timeout = timeout,
+          max_iter = max_iter,
+          n_init = n_init,
+          tol = tol,
+          tuning = tuning
+        )
+      }
       results[[row_id]] <- row
       utils::write.csv(do.call(rbind, results), file.path(out_dir, "kmeans_benchmark_results.csv"), row.names = FALSE)
       cat(sprintf(
@@ -447,7 +482,7 @@ materials <- c(
   "",
   "The result table records elapsed time, peak resident memory when available, backend used, total within-cluster sum of squares, iterations, selected k-means parameters, tuning policy, and ARI against dataset labels when labels are available.",
   "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset and number of centers, recording speedup, ARI delta, and withinss ratio.",
-  "Unsupported CUDA or library combinations are recorded as failed rows rather than replaced with CPU timings."
+  "Unsupported CUDA or library combinations known before execution are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_kmeans.md"))
 
