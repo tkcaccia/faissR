@@ -1,16 +1,16 @@
 #' Build a native nearest-neighbour graph
 #'
-#' `knn_graph()` turns a data matrix, a precomputed [nn()] result, or a
+#' `knn_graph()` turns a data matrix, a precomputed `nn()` result, or a
 #' `fastEmbedR_embedding` object into a weighted nearest-neighbour graph. It returns a native
 #' `faissR_graph` edge-list object and does not require `igraph`.
 #'
-#' @param data Numeric matrix/data frame, a KNN object returned by [nn()], or a
-#'   `fastEmbedR_embedding` object returned by [opentsne()] or [umap()].
-#' @param knn Optional precomputed KNN object returned by [nn()]. If supplied,
+#' @param data Numeric matrix/data frame, a KNN object returned by `nn()`, or a
+#'   `fastEmbedR_embedding` object.
+#' @param knn Optional precomputed KNN object returned by `nn()`. If supplied,
 #'   `data` is ignored for neighbour search.
 #' @param k Number of non-self neighbours used in the graph.
-#' @param backend Device backend passed to [nn_without_self()] when `knn` is
-#'   not supplied: `"auto"`, `"cpu"`, or `"cuda"`.
+#' @param backend Device backend passed to \code{\link{nn_without_self}()} when
+#'   `knn` is not supplied: `"auto"`, `"cpu"`, or `"cuda"`.
 #' @param weight Graph weighting. `"auto"` uses SNN/Jaccard weights for input
 #'   space and distance weights for embedding space. `"snn"` builds full
 #'   shared-nearest-neighbour Jaccard weights between all rows sharing at least
@@ -19,10 +19,10 @@
 #' @param mutual If `TRUE`, keep only reciprocal nearest-neighbour edges.
 #' @param prune Drop edges with weight less than or equal to this value.
 #' @param n_clusters Optional target number of communities to store with the
-#'   graph. When this graph is later passed to [graph_cluster()] with
+#'   graph. When this graph is later passed to \code{\link{graph_cluster}()} with
 #'   `method = "louvain"` or `"leiden"` and no explicit `n_clusters`, the
 #'   stored target is used instead of relying only on `resolution`.
-#' @param n_threads CPU threads passed to [nn()] when KNN is computed here.
+#' @param n_threads CPU threads passed to `nn()` when KNN is computed here.
 #' @return A native `faissR_graph` edge-list object.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
@@ -136,7 +136,7 @@ resolve_graph_cluster_backend <- function(backend) {
 #' Cluster a nearest-neighbour graph without igraph
 #'
 #' `graph_cluster()` runs native faissR community detection on a KNN graph.
-#' The graph can be supplied as a precomputed [nn()] result or built from a
+#' The graph can be supplied as a precomputed `nn()` result or built from a
 #' matrix/data frame using any faissR nearest-neighbour backend, including FAISS
 #' and cuVS KNN backends. The CPU clustering backend is implemented in C++ and
 #' uses OpenMP when available. The CUDA clustering backend uses native RAPIDS libcugraph for
@@ -144,7 +144,7 @@ resolve_graph_cluster_backend <- function(backend) {
 #' against libcugraph. `method = "random_walking"` currently remains CPU-only.
 #' CUDA graph clustering never calls Python and never silently falls back to CPU.
 #'
-#' @param graph Numeric matrix/data frame, a KNN object returned by [nn()], or an
+#' @param graph Numeric matrix/data frame, a KNN object returned by `nn()`, or an
 #'   embedding object with a matrix `layout`.
 #' @param method One of `"random_walking"`, `"louvain"`, or `"leiden"`.
 #'   `"random_walking"` uses a native random-walk label propagation pass inspired
@@ -157,9 +157,9 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   native RAPIDS libcugraph for Louvain and Leiden when libcugraph was
 #'   detected at build time; random-walking is CPU-only.
 #' @param k Number of neighbours when `graph` is not already a KNN object.
-#' @param graph_backend Backend passed to [nn_without_self()] for neighbour
-#'   search when `graph` is a matrix or embedding.
-#' @param weight KNN graph weighting. See [knn_graph()].
+#' @param graph_backend Backend passed to \code{\link{nn_without_self}()} for
+#'   neighbour search when `graph` is a matrix or embedding.
+#' @param weight KNN graph weighting. See \code{\link{knn_graph}()}.
 #' @param mutual,prune Graph-construction options.
 #' @param n_threads CPU threads for KNN construction and native CPU clustering.
 #' @param n_runs Number of independent native runs. The best modularity is kept.
