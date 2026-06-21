@@ -293,7 +293,10 @@ returned in the result metadata.
 Native graph clustering does not depend on `igraph`. This keeps the graph API
 under faissR's control and avoids a large mandatory graph dependency. The
 returned object includes membership, modularity, backend, parameters, graph edge
-list, and source acknowledgements.
+list, and source acknowledgements. As with the nearest-neighbour and k-means
+APIs, `backend` records the implementation that actually ran, while
+`parameters$requested_backend` and `parameters$resolved_backend` preserve the
+public backend request and the resolved device policy for benchmark auditing.
 
 The clustering implementation benefits from fast KNN indirectly: FAISS/cuVS can
 build the KNN graph faster, and `graph_cluster()` can then cluster that graph.

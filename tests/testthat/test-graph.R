@@ -116,6 +116,8 @@ test_that("knn_graph stores an optional cluster-count target for graph_cluster",
   expect_s3_class(cl, "faissR_graph_cluster")
   expect_equal(cl$target_n_clusters, 3L)
   expect_equal(cl$parameters$n_clusters, 3L)
+  expect_equal(cl$parameters$requested_backend, "cpu")
+  expect_equal(cl$parameters$resolved_backend, "cpu")
   expect_s3_class(cl$resolution_search, "data.frame")
   expect_lte(abs(cl$n_communities - 3L), 1L)
 
@@ -145,6 +147,8 @@ test_that("graph_cluster runs native CPU random-walk and Louvain clustering with
   expect_length(louvain$membership, nrow(x))
   expect_length(louvain$all_modularity, 2L)
   expect_gte(length(unique(louvain$membership)), 2L)
+  expect_true("Blondel et al. (2008) for Louvain modularity optimization" %in% louvain$sources)
+  expect_false("Pons and Latapy (2006) for random-walk walktrap clustering" %in% louvain$sources)
 })
 
 test_that("graph_cluster passes method metric and tuning to internal KNN", {
@@ -184,6 +188,8 @@ test_that("graph_cluster keeps random-walking on CPU", {
   auto <- graph_cluster(g, method = "random_walking", backend = "auto", n_threads = 2L)
   expect_equal(auto$backend, "cpu")
   expect_equal(auto$method, "random_walking")
+  expect_equal(auto$parameters$requested_backend, "auto")
+  expect_equal(auto$parameters$resolved_backend, "cpu")
 
   expect_error(
     graph_cluster(g, method = "random_walking", backend = "cuda", n_threads = 2L),
@@ -230,6 +236,8 @@ test_that("graph_cluster can target a requested number of communities", {
   expect_true(nrow(cl$resolution_search) > 1L)
   expect_equal(cl$parameters$n_clusters, 3L)
   expect_equal(cl$parameters$selected_resolution, cl$selected_resolution)
+  expect_equal(cl$parameters$requested_backend, "cpu")
+  expect_equal(cl$parameters$resolved_backend, "cpu")
   expect_lte(abs(cl$n_communities - 3L), 1L)
 
   expect_error(

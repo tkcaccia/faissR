@@ -75,7 +75,12 @@ Method descriptions:
 }
 }
 \value{
-A \code{faissR_graph_cluster} list with membership, modularity, method, backend, graph edge list, parameters, and source acknowledgements.
+A \code{faissR_graph_cluster} list with membership, modularity, method,
+backend, graph edge list, parameters, and source acknowledgements.
+\code{backend} records the clustering implementation that actually ran, while
+\code{parameters$requested_backend} and \code{parameters$resolved_backend}
+record the public backend request and the device policy after resolving
+\code{"auto"}.
 }
 \references{
 Blondel VD, Guillaume JL, Lambiotte R, Lefebvre E. Fast unfolding of communities in large networks. Journal of Statistical Mechanics: Theory and Experiment. 2008;2008(10):P10008.

@@ -215,6 +215,9 @@ resolve_graph_cluster_backend <- function(backend) {
 #' @param ... Reserved for future backend options.
 #' @return A `faissR_graph_cluster` list with membership, modularity, method,
 #'   backend, graph edge list, parameters, and source acknowledgements.
+#'   `backend` records the clustering implementation that actually ran, while
+#'   `parameters$requested_backend` and `parameters$resolved_backend` record the
+#'   public backend request and the device policy after resolving `"auto"`.
 #' @references
 #' Blondel VD, Guillaume JL, Lambiotte R, Lefebvre E. Fast unfolding of
 #' communities in large networks. Journal of Statistical Mechanics: Theory and
@@ -325,6 +328,8 @@ graph_cluster <- function(graph,
         resolution = resolution,
         n_clusters = graph_n_clusters,
         selected_resolution = ans$selected_resolution %||% resolution,
+        requested_backend = requested_backend,
+        resolved_backend = backend,
         objective_function = objective_function,
         n_iterations = as.integer(n_iterations),
         steps = as.integer(steps),
@@ -409,6 +414,8 @@ graph_cluster <- function(graph,
     resolution = resolution,
     n_clusters = n_clusters,
     selected_resolution = ans$selected_resolution %||% resolution,
+    requested_backend = requested_backend,
+    resolved_backend = backend,
     objective_function = objective_function,
     n_iterations = as.integer(n_iterations),
     steps = as.integer(steps),
@@ -494,14 +501,16 @@ graph_cluster_edges_target <- function(edge_list,
 
 graph_cluster_sources <- function(method, backend) {
   base <- c(
-    "faissR native C++/OpenMP implementation for CPU graph clustering",
-    "Blondel et al. (2008) for Louvain modularity optimization",
-    "Traag et al. (2019) for Leiden community detection",
-    "Pons and Latapy (2006) for random-walk walktrap clustering"
+    "faissR native C++/OpenMP implementation for CPU graph clustering"
   )
+  if (identical(method, "louvain")) {
+    base <- c(base, "Blondel et al. (2008) for Louvain modularity optimization")
+  }
   if (identical(method, "leiden")) {
     base <- c(
       base,
+      "Blondel et al. (2008) for Louvain modularity optimization",
+      "Traag et al. (2019) for Leiden community detection",
       "Sahu (2024), GVE-Leiden/OpenMP, as multicore Leiden implementation inspiration",
       "Sahu (2024), heuristic dynamic Leiden, as dynamic Leiden inspiration",
       "https://github.com/puzzlef/leiden-communities-openmp",
@@ -509,7 +518,11 @@ graph_cluster_sources <- function(method, backend) {
     )
   }
   if (identical(method, "random_walking")) {
-    base <- c(base, "Kapralov et al. (2021) for local parallel random-walk motivation")
+    base <- c(
+      base,
+      "Pons and Latapy (2006) for random-walk walktrap clustering",
+      "Kapralov et al. (2021) for local parallel random-walk motivation"
+    )
   }
   if (identical(backend, "cuda")) {
     base <- c(base, "RAPIDS libcugraph/cuGraph for native CUDA Louvain and Leiden algorithms")

@@ -176,7 +176,10 @@ graph_cluster(graph, method = "leiden", backend = "auto",
 | `...` | Reserved for future backend-specific options. |
 
 Returns a `faissR_graph_cluster` object with `membership`, `modularity`,
-parameters, backend metadata, and source acknowledgements.
+parameters, backend metadata, and source acknowledgements. `backend` records
+the clustering implementation that actually ran, while
+`parameters$requested_backend` and `parameters$resolved_backend` record the
+public backend request and the device policy after resolving `"auto"`.
 
 ### Graph Clustering Methods
 
