@@ -855,6 +855,42 @@ test_that("CPU auto selector is shape-aware", {
   )
   expect_equal(small_non_euclidean, "cpu")
 
+  large_query_cosine <- faissR:::select_cpu_auto_backend(
+    self_query = FALSE,
+    n = 10000L,
+    p = 100L,
+    n_points = 5000L,
+    k = 50L,
+    work_size = 10000 * 5000 * 100,
+    metric = "cosine"
+  )
+  expect_true(large_query_cosine %in% c("faiss_flat_cosine", "cpu"))
+  if (faiss_available()) expect_equal(large_query_cosine, "faiss_flat_cosine")
+
+  large_query_correlation <- faissR:::select_cpu_auto_backend(
+    self_query = FALSE,
+    n = 10000L,
+    p = 100L,
+    n_points = 5000L,
+    k = 50L,
+    work_size = 10000 * 5000 * 100,
+    metric = "correlation"
+  )
+  expect_true(large_query_correlation %in% c("faiss_flat_correlation", "cpu"))
+  if (faiss_available()) expect_equal(large_query_correlation, "faiss_flat_correlation")
+
+  large_query_inner_product <- faissR:::select_cpu_auto_backend(
+    self_query = FALSE,
+    n = 10000L,
+    p = 100L,
+    n_points = 5000L,
+    k = 50L,
+    work_size = 10000 * 5000 * 100,
+    metric = "inner_product"
+  )
+  expect_true(large_query_inner_product %in% c("faiss_flat_ip", "cpu"))
+  if (faiss_available()) expect_equal(large_query_inner_product, "faiss_flat_ip")
+
   large_non_euclidean <- faissR:::select_cpu_auto_backend(
     self_query = TRUE,
     n = 20000L,
@@ -864,8 +900,11 @@ test_that("CPU auto selector is shape-aware", {
     work_size = 20000 * 20000 * 100,
     metric = "cosine"
   )
-  expect_true(large_non_euclidean %in% c("hnsw", "cpu"))
+  expect_true(large_non_euclidean %in% c("hnsw", "faiss_flat_cosine", "cpu"))
   if (requireNamespace("RcppHNSW", quietly = TRUE)) expect_equal(large_non_euclidean, "hnsw")
+  if (!requireNamespace("RcppHNSW", quietly = TRUE) && faiss_available()) {
+    expect_equal(large_non_euclidean, "faiss_flat_cosine")
+  }
 })
 
 test_that("CUDA auto selector is shape-aware", {

@@ -141,11 +141,14 @@ The public KNN API separates device choice from algorithm choice:
 The public `method` argument selects the algorithm. `method = "auto"` is the
 shape-aware selector for the chosen device. On CPU, it uses exact CPU for small
 work, exact grid search for large 2D/3D Euclidean self-KNN, FAISS IVF for
-million-row self-KNN where HNSW graph construction is too memory-heavy, and
-FAISS HNSW for large high-dimensional self-KNN when FAISS is available [1-2,5].
-On CUDA, it uses CUDA grid search for large 2D/3D Euclidean self-KNN, exact FAISS
-GPU Flat or cuVS brute force for small and medium searches, and FAISS GPU CAGRA
-for very large self-KNN when FAISS GPU/cuVS integration is available [13-15].
+million-row self-KNN where HNSW graph construction is too memory-heavy, FAISS
+HNSW for large high-dimensional Euclidean self-KNN when FAISS is available, and
+FAISS Flat exact search for larger cosine/correlation/inner-product query or
+exact workloads before falling back to RcppHNSW/hnswlib for large
+non-Euclidean self-search [1-2,5]. On CUDA, it uses CUDA grid search for large
+2D/3D Euclidean self-KNN, exact FAISS GPU Flat or cuVS brute force for small and
+medium searches, and FAISS GPU CAGRA for very large self-KNN when FAISS GPU/cuVS
+integration is available [13-15].
 The public `tuning` argument controls method-specific pilot tuning. The default
 `tuning = "auto"` uses the recommended tuning policy for the resolved method;
 `"cache"`, `"pilot"`, and `"fixed"` can be selected explicitly, and

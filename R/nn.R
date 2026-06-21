@@ -1484,10 +1484,20 @@ select_cpu_auto_backend <- function(self_query,
     if (length(exact_work) != 1L || is.na(exact_work) || !is.finite(exact_work)) {
       exact_work <- 2e8
     }
+    faiss_flat_work <- cpu_auto_faiss_flat_work_threshold()
+    faiss_flat_backend <- cpu_auto_metric_faiss_flat_backend(metric)
+    if (!is.na(faiss_flat_backend) && isTRUE(faiss_available()) &&
+        work_size >= faiss_flat_work &&
+        (!isTRUE(self_query) || k < 10L || n < 5000L)) {
+      return(faiss_flat_backend)
+    }
     if (!isTRUE(self_query) || work_size <= exact_work || n < 5000L || k < 10L || p < 2L) {
       return("cpu")
     }
     if (isTRUE(requireNamespace("RcppHNSW", quietly = TRUE))) return("hnsw")
+    if (!is.na(faiss_flat_backend) && isTRUE(faiss_available()) && work_size >= faiss_flat_work) {
+      return(faiss_flat_backend)
+    }
     return("cpu")
   }
   if (isTRUE(self_query) && should_use_grid2d_self_knn(
@@ -1514,6 +1524,26 @@ select_cpu_auto_backend <- function(self_query,
   if (isTRUE(faiss_available())) return("faiss_hnsw")
   if (isTRUE(requireNamespace("RcppHNSW", quietly = TRUE))) return("hnsw")
   "cpu"
+}
+
+cpu_auto_faiss_flat_work_threshold <- function() {
+  value <- getOption("fastEmbedR.cpu_auto_faiss_flat_work", 5e7)
+  value <- suppressWarnings(as.numeric(value))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 0) {
+    value <- 5e7
+  }
+  value
+}
+
+cpu_auto_metric_faiss_flat_backend <- function(metric) {
+  metric <- normalize_nn_metric(metric)
+  switch(
+    metric,
+    cosine = "faiss_flat_cosine",
+    correlation = "faiss_flat_correlation",
+    inner_product = "faiss_flat_ip",
+    NA_character_
+  )
 }
 
 select_cpu_approx_backend <- function(n, p, k) {
@@ -3915,10 +3945,11 @@ grid_self_knn <- function(data,
 #'   `"correlation"` are implemented for exact CPU KNN, FAISS CPU/GPU Flat,
 #'   and RcppHNSW. FAISS Flat uses row L2 normalization for cosine and row
 #'   centering plus L2 normalization for correlation before Flat IP search;
-#'   distances are returned as `1 - similarity`. CPU `method = "auto"` can
-#'   select RcppHNSW/hnswlib for large non-Euclidean self-search. CPU
-#'   `method = "HNSW"` uses FAISS HNSW for Euclidean search when available and
-#'   RcppHNSW/hnswlib for cosine, correlation, and inner-product search.
+#'   distances are returned as `1 - similarity`. CPU `method = "auto"` can use
+#'   FAISS Flat for larger exact non-Euclidean query workloads and
+#'   RcppHNSW/hnswlib for large non-Euclidean self-search. CPU `method = "HNSW"`
+#'   uses FAISS HNSW for Euclidean search when available and RcppHNSW/hnswlib
+#'   for cosine, correlation, and inner-product search.
 #'   `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP
 #'   for `method = "flat"` when available. Unsupported backend combinations
 #'   fail clearly instead of returning neighbours computed under a different
