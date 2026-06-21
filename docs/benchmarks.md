@@ -78,13 +78,15 @@ optional thread-control helper packages before FAISS/cuVS.
 The same explicit-runtime convention is used by the NN metrics and k-means
 benchmark scripts.
 
-## NN Metrics
+## NN Metric Cycles
 
 `benchmark_scripts/benchmark_nn_metrics.R` focuses on faissR's public `nn()`
 method matrix. It benchmarks `backend = "auto"`, `"cpu"`, and `"cuda"` across
 the public methods, the four public metrics (`"euclidean"`, `"cosine"`,
 `"correlation"`, and `"inner_product"`), and `k = 5, 10, 15, 50, 100` by
-default. Unsupported method/backend/metric combinations are preflighted with
+default. Metric aliases accepted by the API, such as `"l2"`, `"cor"`,
+`"pearson"`, and `"ip"`, are canonicalized before preflight and reporting.
+Unsupported method/backend/metric combinations are preflighted with
 `nn_capabilities()` and the public backend resolver, then written as expected
 skips. Runtime expected skips also record when a resolved route requires
 unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.
@@ -225,7 +227,7 @@ rows because the public API intentionally reserves `n_clusters` for Louvain and
 Leiden. CUDA rows fail explicitly when faissR was not built with the required
 CUDA/cuGraph support.
 
-## NN Metrics
+## NN Metrics File Layout
 
 `benchmark_scripts/benchmark_nn_metrics.R` is a faissR-only nearest-neighbour
 metric matrix. It runs public `nn()` combinations over:
@@ -236,7 +238,7 @@ metric matrix. It runs public `nn()` combinations over:
   `"vptree"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"nsg"`, `"nndescent"`, and
   `"cagra"`;
 - metrics: `"euclidean"`, `"cosine"`, `"correlation"`, and
-  `"inner_product"`;
+  `"inner_product"` after alias canonicalization;
 - k values: `5`, `10`, `15`, `50`, and `100` by default.
 
 Unsupported combinations are preflighted with `faissR::nn_capabilities()` and

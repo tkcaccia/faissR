@@ -15,58 +15,64 @@ These notes summarize empirical `nn()` tuning runs for k = 50, Euclidean/L2
 search, raw unscaled data, and the package benchmark datasets. Important
 benchmark artifacts include:
 
-- `autotune_results.csv`: one row per dataset and method label.
+- `autotune_results.csv`: one row per dataset and resolved implementation
+  label.
 - `autotune_method_summary.csv`: method-level speed/recall/failure summary.
 - `autotune_recommendations_by_dataset.csv`: fastest method by recall target.
 - `autotune_issues.csv`: low-recall, unavailable, or failed rows.
 
 ## Default Policy
 
-Use these rules for `backend = "auto"` and for explicit backend recommendations:
+Use these rules for `backend = "auto"` and for explicit backend
+recommendations. Public calls should use canonical method names such as
+`"exact"`, `"flat"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"nndescent"`, or
+`"cagra"`; labels such as `faiss_hnsw` or `cuda_cuvs_cagra` are resolved
+implementation routes recorded in benchmark output, not separate public
+`method` values.
 
-- Prefer exact GPU search when the data fits and target recall is very high.
-  `faiss_gpu_flat_l2` and `cuda_cuvs_bruteforce` were the most reliable
-  high-recall CUDA paths [1-3,13-16].
-- Prefer `faiss_hnsw` for CPU approximate self-KNN. In this benchmark it gave a
-  better speed/accuracy balance than FAISS NN-Descent [4-5].
-- Prefer `cpu_grid` for 2D/3D Euclidean simulated data. The grid backends are
-  intentionally unavailable for higher-dimensional data.
+- Prefer `method = "flat"`/`"exact"` on CUDA when the data fits and target
+  recall is very high. The resolved routes `faiss_gpu_flat_l2` and
+  `cuda_cuvs_bruteforce` were the most reliable high-recall CUDA paths
+  [1-3,13-16].
+- Prefer `method = "hnsw"` for CPU approximate self-KNN. In this benchmark its
+  FAISS HNSW implementation route gave a better speed/accuracy balance than
+  NN-Descent [4-5].
+- Prefer `method = "grid"` for 2D/3D Euclidean simulated data. The grid
+  backends are intentionally unavailable for higher-dimensional data.
 - Treat IVFPQ backends as memory-pressure tools, not accuracy-first defaults.
   Product quantization is useful for compression, but it changes recall
   behaviour [6].
-- Treat direct `cuda_cuvs_cagra` as experimental on high-dimensional raw data
-  until pilot tuning proves adequate recall. `faiss_gpu_cagra` was reliable in
-  the same MNIST test where direct cuVS CAGRA was not [13-15].
+- Treat direct cuVS CAGRA as experimental on high-dimensional raw data until
+  pilot tuning proves adequate recall. The FAISS GPU CAGRA route
+  (`method = "cagra"`, resolved as `faiss_gpu_cagra` when available) was
+  reliable in the same MNIST test where direct cuVS CAGRA was not [13-15].
 
 ## Method-Specific Settings
 
-| Method label | Role | Current tuning rule |
-|---|---|---|
-| `faiss_flat_exact` | CPU exact baseline | Use for exact CPU reference on small/medium data [1-2,16]; avoid as default for large high-dimensional self-search because MNIST/FashionMNIST timed out. |
-| `faiss_gpu_flat_l2` | CUDA exact/high-recall | Preferred high-recall GPU default when FAISS GPU is available and data fits. |
-| `cuda_cuvs_bruteforce` | CUDA exact/high-recall | Preferred exact cuVS path; consistently recall 1 in this benchmark and often fastest. |
-| `faiss_hnsw_fast` | CPU speed tier | M = 24, efConstruction = 120, efSearch = 80; good speed, but recall can be below 0.999 on image/flow data [5]. |
-| `faiss_hnsw_balanced` | CPU default tier | M = 32, efConstruction = 200, efSearch = 150; best general CPU balance and used as the default `faiss_hnsw` setting. |
-| `faiss_hnsw_high` | CPU high-recall tier | M = 48, efConstruction = 240, efSearch = 220; use when recall target is about 0.999 or higher. |
-| `rcpphnsw` | CPU fallback | Good fallback when FAISS is unavailable, but FAISS HNSW is preferred when FAISS is built. |
-| `faiss_ivf_fast` | CPU IVF speed tier | nprobe = 4; too low-recall on many datasets, not a default accuracy path. |
-| `faiss_ivf_balanced` | CPU IVF middle tier | Default `nprobe` now uses at least 16 probes; useful when HNSW is not desired. |
-| `faiss_ivf_high` | CPU IVF high-recall tier | nprobe = 16 in the benchmark; often much better recall, but slower on image data. |
-| `faiss_gpu_ivf_flat` | CUDA IVF-Flat | Useful but not consistently faster than exact GPU on these sample sizes; keep pilot/cache tuning enabled. |
-| `cuda_cuvs_ivf_flat` | CUDA cuVS IVF-Flat | Fast on low-dimensional flow/simulated data at about 0.99-0.999 recall; not high-recall default. |
-| `faiss_ivfpq_fast` | CPU memory-pressure tier | Low recall on many datasets; use only when memory reduction is the priority [6]. |
-| `faiss_ivfpq_balanced` | CPU memory-pressure tier | Still low recall on image/low-dimensional flow datasets; explicit opt-in only. |
-| `faiss_gpu_ivfpq` | CUDA memory-pressure tier | Fast but low recall in this benchmark; explicit opt-in only. |
-| `cuda_cuvs_ivfpq` | CUDA memory-pressure tier | Better than FAISS GPU IVFPQ on some datasets but still not an accuracy-first default. |
-| `faiss_nsg_fast` | CPU graph candidate | Can be accurate but failed on some datasets with fewer than k neighbours; use safer params or retry. |
-| `faiss_nsg_balanced` | CPU graph candidate | Safer than fast but still had a failure; default params increased to r = 48 and search_l = 200. |
-| `cpu_nndescent_fast` | CPU graph speed tier | Native faissR NN-descent route; useful as an explicit Euclidean graph-search candidate, but recall was usually lower than HNSW. |
-| `cpu_nndescent_balanced` | CPU graph candidate | Native pool/iteration defaults are used for public `method = "nndescent"`; still not the CPU auto default. FAISS NNDescent is experimental opt-in only because linked FAISS builds can abort during graph construction. |
-| `cuda_cuvs_nndescent` | CUDA graph speed tier | Fast and useful at around 0.99 recall on some datasets; failed on COIL20. |
-| `faiss_gpu_cagra` | CUDA graph high-recall tier | Reliable high-recall CAGRA path through FAISS/cuVS integration [13-15]. |
-| `cuda_cuvs_cagra` | Direct cuVS CAGRA | Guarded by pilot recall. Direct cuVS CAGRA had anomalously poor MNIST recall; do not trust without pilot success. |
-| `cpu_grid` | Exact 2D/3D spatial path | Best for simulated 2D/3D Euclidean data; unavailable by design outside 2D/3D. |
-| `cuda_grid` | CUDA 2D/3D spatial path | Correct for 2D/3D, but benchmark speed depends strongly on GPU model and transfer overhead. |
+| Public method | Resolved implementation route | Role | Current tuning rule |
+|---|---|---|---|
+| `exact` / `flat` | `faiss_flat_exact`, `faiss_flat_l2` | CPU exact baseline | Use for exact CPU reference on small/medium data [1-2,16]; avoid as default for large high-dimensional self-search because MNIST/FashionMNIST timed out. |
+| `exact` / `flat` | `faiss_gpu_flat_l2` | CUDA exact/high-recall | Preferred high-recall GPU default when FAISS GPU is available and data fits. |
+| `bruteforce` | `cuda_cuvs_bruteforce` | CUDA exact/high-recall | Preferred exact cuVS path; consistently recall 1 in this benchmark and often fastest. |
+| `hnsw` | `faiss_hnsw` speed tier | CPU speed tier | M = 24, efConstruction = 120, efSearch = 80; good speed, but recall can be below 0.999 on image/flow data [5]. |
+| `hnsw` | `faiss_hnsw` balanced tier | CPU default tier | M = 32, efConstruction = 200, efSearch = 150; best general CPU balance and used as the default FAISS HNSW setting. |
+| `hnsw` | `faiss_hnsw` high-recall tier | CPU high-recall tier | M = 48, efConstruction = 240, efSearch = 220; use when recall target is about 0.999 or higher. |
+| `hnsw` | `hnsw`/hnswlib fallback | CPU fallback | Good fallback when FAISS is unavailable, but FAISS HNSW is preferred when FAISS is built. |
+| `ivf` | `faiss_ivf` speed tier | CPU IVF speed tier | nprobe = 4; too low-recall on many datasets, not a default accuracy path. |
+| `ivf` | `faiss_ivf` balanced tier | CPU IVF middle tier | Default `nprobe` now uses at least 16 probes; useful when HNSW is not desired. |
+| `ivf` | `faiss_ivf` high-recall tier | CPU IVF high-recall tier | nprobe = 16 in the benchmark; often much better recall, but slower on image data. |
+| `ivf` | `faiss_gpu_ivf_flat` | CUDA IVF-Flat | Useful but not consistently faster than exact GPU on these sample sizes; keep pilot/cache tuning enabled. |
+| `ivf` | `cuda_cuvs_ivf_flat` | CUDA cuVS IVF-Flat | Fast on low-dimensional flow/simulated data at about 0.99-0.999 recall; not high-recall default. |
+| `ivfpq` | `faiss_ivfpq` speed/balanced tiers | CPU memory-pressure tier | Low recall on many datasets; use only when memory reduction is the priority [6]. |
+| `ivfpq` | `faiss_gpu_ivfpq` | CUDA memory-pressure tier | Fast but low recall in this benchmark; explicit opt-in only. |
+| `ivfpq` | `cuda_cuvs_ivfpq` | CUDA memory-pressure tier | Better than FAISS GPU IVFPQ on some datasets but still not an accuracy-first default. |
+| `nsg` | `faiss_nsg` speed/balanced tiers | CPU graph candidate | Can be accurate but failed on some datasets with fewer than k neighbours; use safer params or retry. |
+| `nndescent` | `cpu_nndescent` speed/balanced tiers | CPU graph speed tier | Native faissR NN-descent route; useful as an explicit Euclidean graph-search candidate, but recall was usually lower than HNSW. |
+| `nndescent` | `cuda_cuvs_nndescent` | CUDA graph speed tier | Fast and useful at around 0.99 recall on some datasets; failed on COIL20. |
+| `cagra` | `faiss_gpu_cagra` | CUDA graph high-recall tier | Reliable high-recall CAGRA path through FAISS/cuVS integration [13-15]. |
+| `cagra` | `cuda_cuvs_cagra` | Direct cuVS CAGRA | Guarded by pilot recall. Direct cuVS CAGRA had anomalously poor MNIST recall; do not trust without pilot success. |
+| `grid` | `cpu_grid` | Exact 2D/3D spatial path | Best for simulated 2D/3D Euclidean data; unavailable by design outside 2D/3D. |
+| `grid` | `cuda_grid` | CUDA 2D/3D spatial path | Correct for 2D/3D, but benchmark speed depends strongly on GPU model and transfer overhead. |
 
 
 ## ImageNet Probe
@@ -80,7 +86,7 @@ fields. The data table had 1,281,167 rows and 1,024 columns and occupied about
 - `imagenet_full_query_results.csv`: full-reference query attempts against
   1,000 sampled queries.
 
-On the 50k sample, the fastest exact/high-recall routes were:
+On the 50k sample, the fastest exact/high-recall implementation routes were:
 
 | Method | Seconds | Recall vs FAISS GPU Flat |
 |---|---:|---:|
@@ -121,14 +127,14 @@ Observed examples from the run:
 
 | Dataset | n x p | CPU auto selected | CPU seconds | CPU recall | CUDA auto selected | CUDA seconds | CUDA recall |
 |---|---:|---|---:|---:|---|---:|---:|
-| simulated2d | 20000 x 2 | `cpu_grid2d` | 0.782 | 0.999963 | `cuda_grid2d` | 0.697 | 0.999965 |
-| COIL20 | 1440 x 16384 | `cpu` | 4.877 | 1.000000 | `faiss_gpu_flat_l2` | 1.914 | 1.000000 |
-| FashionMNIST | 70000 x 784 | `faiss_hnsw` | 20.879 | 0.998682 | `faiss_gpu_flat_l2` | 6.455 | 1.000000 |
-| FlowRepository | 5220347 x 32 | timeout | NA | NA | `faiss_gpu_cagra` | 118.268 | NA |
-| flow18 | 1000021 x 11 | `faiss_ivf` | 35.165 | NA | `faiss_gpu_cagra` | 8.181 | NA |
-| MNIST | 70000 x 784 | `faiss_hnsw` | 21.602 | 0.996334 | `faiss_gpu_flat_l2` | 6.197 | 1.000000 |
-| TabulaMuris | 70118 x 50 | `faiss_hnsw` | 3.246 | 0.998619 | `faiss_gpu_flat_l2` | 2.314 | 1.000000 |
-| ImageNet sample | 50000 x 1024 | `faiss_hnsw` | 93.956 | 0.999436 | `faiss_gpu_flat_l2` | 62.963 | 1.000000 |
+| simulated2d | 20000 x 2 | `method = "grid"` (`cpu_grid2d`) | 0.782 | 0.999963 | `method = "grid"` (`cuda_grid2d`) | 0.697 | 0.999965 |
+| COIL20 | 1440 x 16384 | `method = "exact"` (`cpu`) | 4.877 | 1.000000 | `method = "flat"` (`faiss_gpu_flat_l2`) | 1.914 | 1.000000 |
+| FashionMNIST | 70000 x 784 | `method = "hnsw"` (`faiss_hnsw`) | 20.879 | 0.998682 | `method = "flat"` (`faiss_gpu_flat_l2`) | 6.455 | 1.000000 |
+| FlowRepository | 5220347 x 32 | timeout | NA | NA | `method = "cagra"` (`faiss_gpu_cagra`) | 118.268 | NA |
+| flow18 | 1000021 x 11 | `method = "ivf"` (`faiss_ivf`) | 35.165 | NA | `method = "cagra"` (`faiss_gpu_cagra`) | 8.181 | NA |
+| MNIST | 70000 x 784 | `method = "hnsw"` (`faiss_hnsw`) | 21.602 | 0.996334 | `method = "flat"` (`faiss_gpu_flat_l2`) | 6.197 | 1.000000 |
+| TabulaMuris | 70118 x 50 | `method = "hnsw"` (`faiss_hnsw`) | 3.246 | 0.998619 | `method = "flat"` (`faiss_gpu_flat_l2`) | 2.314 | 1.000000 |
+| ImageNet sample | 50000 x 1024 | `method = "hnsw"` (`faiss_hnsw`) | 93.956 | 0.999436 | `method = "flat"` (`faiss_gpu_flat_l2`) | 62.963 | 1.000000 |
 
 The simulated random high-dimensional datasets exposed an important limitation:
 FAISS HNSW is fast but may have low recall on noise-like high-dimensional data.

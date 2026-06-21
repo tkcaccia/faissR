@@ -56,3 +56,32 @@ test_that("usage API graph_cluster signature shows the live default method", {
   live_method <- eval(formals(graph_cluster)$method, envir = baseenv())[[1L]]
   expect_equal(documented_method, live_method)
 })
+
+test_that("benchmark documentation describes canonical metric aliases once", {
+  docs_file <- test_path("../../docs/benchmarks.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  lines <- readLines(docs_file, warn = FALSE)
+  expect_length(grep("^## NN Metrics$", lines), 0L)
+  expect_length(grep("^## NN Metric Cycles$", lines), 1L)
+  expect_length(grep("^## NN Metrics File Layout$", lines), 1L)
+  prose <- paste(lines, collapse = " ")
+  expect_true(grepl('"l2".*"cor".*"pearson".*"ip"', prose))
+})
+
+test_that("autotuning method settings table keeps public and implementation labels separate", {
+  docs_file <- test_path("../../docs/autotuning.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  lines <- readLines(docs_file, warn = FALSE)
+  header <- grep("^\\| Public method \\| Resolved implementation route \\| Role \\| Current tuning rule \\|$", lines)
+  expect_length(header, 1L)
+  separator_cells <- trimws(strsplit(lines[[header + 1L]], "\\|")[[1L]])
+  separator_cells <- separator_cells[nzchar(separator_cells)]
+  expect_length(separator_cells, 4L)
+  expect_true(any(grepl("not separate public", lines, fixed = TRUE)))
+})
