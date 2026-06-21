@@ -618,12 +618,12 @@ data_root <- args$data_root %||% Sys.getenv("FAISSR_BENCHMARK_DATA", unset = fil
 out_dir <- args$out_dir %||% Sys.getenv("FAISSR_BENCHMARK_OUT", unset = file.path(getwd(), paste0("faissR_KMEANS_", format(Sys.time(), "%Y%m%d_%H%M%S"))))
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-n_threads <- as_int_arg(args$threads, 4L)
+n_threads <- required_positive_int_arg(args$threads %||% 4L, "threads")
 configure_threads(n_threads)
 seed <- as_int_arg(args$seed, 1L)
-timeout <- as_int_arg(args$timeout, 600L)
+timeout <- required_positive_int_arg(args$timeout %||% 600L, "timeout")
 fallback_centers <- required_positive_int_arg(args$centers %||% 10L, "centers")
-cycles <- as_int_arg(args$cycles, 1L)
+cycles <- required_positive_int_arg(args$cycles %||% 1L, "cycles")
 ari_tolerance <- required_nonnegative_numeric_arg(args$ari_tolerance %||% "0.01", "ari_tolerance")
 max_iter <- args$max_iter %||% "auto"
 n_init <- args$n_init %||% "auto"

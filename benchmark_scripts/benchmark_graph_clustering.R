@@ -24,6 +24,14 @@ as_int_arg <- function(x, default) {
   if (length(value) != 1L || is.na(value) || value < 1L) as.integer(default) else value
 }
 
+required_positive_int_arg <- function(x, arg) {
+  value <- suppressWarnings(as.integer(x))
+  if (length(value) != 1L || is.na(value) || value < 1L) {
+    stop("`", arg, "` must be a positive integer.", call. = FALSE)
+  }
+  value
+}
+
 as_int_vec_arg <- function(x, default) {
   value <- suppressWarnings(as.integer(x %||% default))
   value <- value[!is.na(value) & value > 0L]
@@ -721,11 +729,11 @@ helper <- file.path(script_dir, "source.R")
 if (!file.exists(helper)) helper <- file.path(getwd(), "benchmark_scripts/source.R")
 source(helper)
 
-n_threads <- as_int_arg(args$threads, 2L)
+n_threads <- required_positive_int_arg(args$threads %||% 2L, "threads")
 configure_threads(n_threads)
 seed <- as_int_arg(args$seed, 1L)
-timeout <- as_int_arg(args$timeout, 600L)
-cycles <- as_int_arg(args$cycles, 1L)
+timeout <- required_positive_int_arg(args$timeout %||% 600L, "timeout")
+cycles <- required_positive_int_arg(args$cycles %||% 1L, "cycles")
 ari_tolerance <- required_nonnegative_numeric_arg(args$ari_tolerance %||% "0.01", "ari_tolerance")
 k_values <- required_positive_int_values(
   split_arg(args$k_values, paste(default_graph_k_values(), collapse = ",")),

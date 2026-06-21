@@ -220,8 +220,9 @@ graph/clustering/backend/method row within `ari_tolerance` of the best median
 ARI for each dataset/k/target-cluster-count combination; when ARI is
 available and median total times tie, higher median ARI and then higher median
 modularity break the tie. `--ari_tolerance` must be a non-negative number and
-is validated before datasets are loaded. When ARI is unavailable it selects the
-fastest median total-time row. The
+is validated before datasets are loaded. `--threads`, `--timeout`, and
+`--cycles` must be positive integers and are also validated before data loading.
+When ARI is unavailable it selects the fastest median total-time row. The
 `recommendation_basis` column records whether the row was selected as
 `"fastest_within_ari_tolerance"` or `"speed_only_no_ari"`.
 `graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where
@@ -395,7 +396,8 @@ dataset labels are available, the benchmark uses the label-derived cluster
 count for that dataset and otherwise uses the validated `--centers` fallback.
 Method and backend selectors are validated before loading datasets, so typos in
 `--methods` or `--backends` stop the run instead of becoming failed benchmark
-rows.
+rows. `--threads`, `--timeout`, and `--cycles` must be positive integers and
+are also validated before data loading.
 When `stats` is part of the run,
 `kmeans_fast_vs_stats.csv` compares
 each successful `fast_kmeans()` row against `stats::kmeans` for the same

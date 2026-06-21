@@ -909,6 +909,10 @@ test_that("k-means benchmark centers argument is explicit", {
   expect_equal(env$required_positive_int_arg("3", "centers"), 3L)
   expect_error(env$required_positive_int_arg("auto", "centers"), "positive integer")
   expect_error(env$required_positive_int_arg(0L, "centers"), "positive integer")
+  expect_equal(env$required_positive_int_arg("12", "threads"), 12L)
+  expect_equal(env$required_positive_int_arg("600", "timeout"), 600L)
+  expect_equal(env$required_positive_int_arg("10", "cycles"), 10L)
+  expect_error(env$required_positive_int_arg("many", "cycles"), "positive integer")
   expect_equal(env$required_nonnegative_numeric_arg("0.01", "ari_tolerance"), 0.01)
   expect_equal(env$required_nonnegative_numeric_arg(0, "ari_tolerance"), 0)
   expect_error(
@@ -1229,6 +1233,10 @@ test_that("graph benchmark target cluster mode is explicit", {
   expect_null(env$label_target_clusters(rep(letters[1:3], each = 2L), "none"))
   expect_equal(env$label_target_clusters(rep(letters[1:3], each = 2L), "labels"), 3L)
   expect_error(env$normalize_target_clusters_mode("labelled"), "target_clusters")
+  expect_equal(env$required_positive_int_arg("12", "threads"), 12L)
+  expect_equal(env$required_positive_int_arg("600", "timeout"), 600L)
+  expect_equal(env$required_positive_int_arg("10", "cycles"), 10L)
+  expect_error(env$required_positive_int_arg("many", "cycles"), "positive integer")
   expect_equal(env$required_nonnegative_numeric_arg("0.01", "ari_tolerance"), 0.01)
   expect_equal(env$required_nonnegative_numeric_arg(0, "ari_tolerance"), 0)
   expect_error(
