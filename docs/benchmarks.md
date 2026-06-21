@@ -308,7 +308,9 @@ successful method per dataset/backend/metric/k whose recall is at least
 of the run, `nn_metric_auto_vs_fastest.csv` compares auto against that fastest
 high-recall row and reports speed ratio, recall gap, whether auto itself was
 the fastest high-recall method, whether the result-facing backend matches, and
-whether the concrete implementation backend matches. The result table separates
+whether the concrete implementation backend matches. Speed ratios and recall
+gaps are `NA` when the required timing or recall values are missing or invalid.
+The result table separates
 `result_backend`, `resolved_backend`, and `implementation_backend` so public
 device labels such as `"cuda"` can be distinguished from concrete FAISS/cuVS
 implementation labels such as `"faiss_gpu_cagra"` or `"cuda_cuvs_cagra"`.

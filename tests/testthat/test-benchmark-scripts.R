@@ -433,6 +433,50 @@ test_that("NN metric auto comparison guards speed ratios and recall gaps", {
   expect_true(is.finite(out$auto_median_speed_ratio[out$dataset == "B"]))
 })
 
+test_that("NN metric auto-vs-fastest guards speed ratios and recall gaps", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  ok <- data.frame(
+    dataset = c("A", "B"),
+    backend = c("cpu", "cuda"),
+    method = c("auto", "auto"),
+    metric = c("euclidean", "cosine"),
+    k = c(50L, 15L),
+    cycle = c(1L, 1L),
+    result_backend = c("faiss_hnsw", "faiss_gpu_flat_cosine"),
+    resolved_backend = c("faiss_hnsw", "faiss_gpu_flat_cosine"),
+    implementation_backend = c("faiss_hnsw", "faiss_gpu_flat_cosine"),
+    elapsed_sec = c(1, 1),
+    recall_at_k = c(0.99, NA),
+    recall_reference = c("sample", NA),
+    recall_query_n = c(512, NA)
+  )
+  fastest <- data.frame(
+    dataset = c("A", "B"),
+    backend = c("cpu", "cuda"),
+    method = c("hnsw", "flat"),
+    metric = c("euclidean", "cosine"),
+    k = c(50L, 15L),
+    cycle = c(1L, 1L),
+    result_backend = c("faiss_hnsw", "faiss_gpu_flat_cosine"),
+    resolved_backend = c("faiss_hnsw", "faiss_gpu_flat_cosine"),
+    implementation_backend = c("faiss_hnsw", "faiss_gpu_flat_cosine"),
+    elapsed_sec = c(0, 2),
+    recall_at_k = c(0.99, 0.98),
+    recall_reference = c("sample", "sample"),
+    recall_query_n = c(512, 512)
+  )
+
+  out <- env$compare_auto_to_fastest(ok, fastest)
+
+  expect_equal(out$fastest_method, c("hnsw", "flat"))
+  expect_true(is.na(out$auto_speed_ratio[out$dataset == "A"]))
+  expect_true(is.na(out$auto_recall_gap[out$dataset == "B"]))
+  expect_true(is.finite(out$auto_speed_ratio[out$dataset == "B"]))
+})
+
 test_that("NN metric benchmark accounts for sparse method on dense data", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),

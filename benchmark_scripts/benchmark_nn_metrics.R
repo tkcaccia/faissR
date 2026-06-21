@@ -432,6 +432,44 @@ compare_auto_to_recommendations <- function(cycle_summary, recommendations) {
   comparison[order(comparison$dataset, comparison$backend, comparison$metric, comparison$k), , drop = FALSE]
 }
 
+compare_auto_to_fastest <- function(ok, fastest) {
+  auto_rows <- ok[ok$method == "auto", , drop = FALSE]
+  if (!nrow(auto_rows) || is.null(fastest) || !nrow(fastest)) return(data.frame())
+  keys <- c("dataset", "backend", "metric", "k", "cycle")
+  auto_keep <- c(
+    keys, "result_backend", "resolved_backend", "implementation_backend",
+    "elapsed_sec", "recall_at_k", "recall_reference", "recall_query_n"
+  )
+  fastest_keep <- c(
+    keys, "method", "result_backend", "resolved_backend", "implementation_backend",
+    "elapsed_sec", "recall_at_k", "recall_reference", "recall_query_n"
+  )
+  auto_rows <- auto_rows[, auto_keep, drop = FALSE]
+  fastest <- fastest[, fastest_keep, drop = FALSE]
+  names(auto_rows)[match(auto_keep[-seq_along(keys)], names(auto_rows))] <- paste0(
+    "auto_",
+    auto_keep[-seq_along(keys)]
+  )
+  names(fastest)[match(fastest_keep[-seq_along(keys)], names(fastest))] <- paste0(
+    "fastest_",
+    fastest_keep[-seq_along(keys)]
+  )
+  comparison <- merge(
+    auto_rows[, c(keys, paste0("auto_", auto_keep[-seq_along(keys)])), drop = FALSE],
+    fastest[, c(keys, paste0("fastest_", fastest_keep[-seq_along(keys)])), drop = FALSE],
+    by = keys,
+    all = FALSE
+  )
+  if (!nrow(comparison)) return(comparison)
+  comparison$auto_is_fastest_method <- comparison$fastest_method == "auto"
+  comparison$auto_uses_fastest_result_backend <- comparison$auto_result_backend == comparison$fastest_result_backend
+  comparison$auto_uses_fastest_resolved_backend <- comparison$auto_resolved_backend == comparison$fastest_resolved_backend
+  comparison$auto_uses_fastest_implementation <- comparison$auto_implementation_backend == comparison$fastest_implementation_backend
+  comparison$auto_speed_ratio <- safe_positive_ratio(comparison$auto_elapsed_sec, comparison$fastest_elapsed_sec)
+  comparison$auto_recall_gap <- safe_difference(comparison$fastest_recall_at_k, comparison$auto_recall_at_k)
+  comparison[order(comparison$dataset, comparison$backend, comparison$metric, comparison$k, comparison$cycle), , drop = FALSE]
+}
+
 safe_positive_ratio <- function(numerator, denominator) {
   numerator <- suppressWarnings(as.numeric(numerator))
   denominator <- suppressWarnings(as.numeric(denominator))
@@ -990,37 +1028,13 @@ if (nrow(ok)) {
     )
   }
 
-  auto_rows <- ok[ok$method == "auto", , drop = FALSE]
-  if (nrow(auto_rows) && !is.null(fastest) && nrow(fastest)) {
-    keys <- c("dataset", "backend", "metric", "k", "cycle")
-    auto_keep <- c(keys, "result_backend", "resolved_backend", "implementation_backend", "elapsed_sec", "recall_at_k", "recall_reference", "recall_query_n")
-    fastest_keep <- c(keys, "method", "result_backend", "resolved_backend", "implementation_backend", "elapsed_sec", "recall_at_k", "recall_reference", "recall_query_n")
-    names(auto_rows)[match(auto_keep[-seq_along(keys)], names(auto_rows))] <- paste0("auto_", auto_keep[-seq_along(keys)])
-    names(fastest)[match(fastest_keep[-seq_along(keys)], names(fastest))] <- paste0("fastest_", fastest_keep[-seq_along(keys)])
-    comparison <- merge(
-      auto_rows[, c(keys, paste0("auto_", auto_keep[-seq_along(keys)])), drop = FALSE],
-      fastest[, c(keys, paste0("fastest_", fastest_keep[-seq_along(keys)])), drop = FALSE],
-      by = keys,
-      all = FALSE
+  comparison <- compare_auto_to_fastest(ok, fastest)
+  if (nrow(comparison)) {
+    utils::write.csv(
+      comparison,
+      file.path(out_dir, "nn_metric_auto_vs_fastest.csv"),
+      row.names = FALSE
     )
-    if (nrow(comparison)) {
-      comparison$auto_is_fastest_method <- comparison$fastest_method == "auto"
-      comparison$auto_uses_fastest_result_backend <- comparison$auto_result_backend == comparison$fastest_result_backend
-      comparison$auto_uses_fastest_resolved_backend <- comparison$auto_resolved_backend == comparison$fastest_resolved_backend
-      comparison$auto_uses_fastest_implementation <- comparison$auto_implementation_backend == comparison$fastest_implementation_backend
-      comparison$auto_speed_ratio <- ifelse(
-        comparison$fastest_elapsed_sec > 0,
-        comparison$auto_elapsed_sec / comparison$fastest_elapsed_sec,
-        ifelse(comparison$auto_elapsed_sec == 0, 1, Inf)
-      )
-      comparison$auto_recall_gap <- comparison$fastest_recall_at_k - comparison$auto_recall_at_k
-      comparison <- comparison[order(comparison$dataset, comparison$backend, comparison$metric, comparison$k), , drop = FALSE]
-      utils::write.csv(
-        comparison,
-        file.path(out_dir, "nn_metric_auto_vs_fastest.csv"),
-        row.names = FALSE
-      )
-    }
   }
 }
 
@@ -1049,7 +1063,7 @@ materials <- c(
   "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",
-  "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches.",
+  "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches. Speed ratios and recall gaps are reported as `NA` when the required timing or recall values are missing or invalid.",
   "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/metric/k and reports success counts, median/min/max elapsed time, recall stability, and the dominant implementation backend.",
   "`nn_metric_recommendations_from_cycles.csv` selects one method per dataset/backend/metric/k. When recall is available, it selects the fastest method whose median recall is at least `recall_threshold`; tied median times are broken by higher median recall, minimum recall, and median minimum recall. If no method reaches the threshold it selects the best-recall row and marks it as below threshold, breaking tied median recall by minimum recall, median minimum recall, and then speed. When recall is unavailable for the group, it selects the fastest successful row and marks the recommendation as speed-only.",
   "`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate `method = \"auto\"` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median recall gap, and backend/implementation agreement. Speed ratios and recall gaps are `NA` when the required timing or recall values are unavailable or invalid.",
