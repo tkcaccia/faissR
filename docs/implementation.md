@@ -60,35 +60,32 @@ are exposed for exact CPU and RcppHNSW-compatible paths; accelerator backends
 reject unsupported metric/backend combinations instead of returning Euclidean
 neighbours under a different label.
 
-### Automatic Backend Policy
+### Backend And Method Policy
 
-`backend = "cpu_auto"` is the CPU-only shape-aware selector. It uses exact CPU
-for small work, exact grid search for large 2D/3D Euclidean self-KNN, FAISS IVF
-for million-row self-KNN where HNSW graph construction is too memory-heavy, and
+The public KNN API separates device choice from algorithm choice:
+
+- `backend = "auto"` uses CUDA when CUDA/cuVS is available and CPU otherwise;
+- `backend = "cpu"` forces CPU execution;
+- `backend = "cuda"` forces CUDA execution and fails clearly if unavailable.
+
+The public `method` argument selects the algorithm. `method = "auto"` is the
+shape-aware selector for the chosen device. On CPU, it uses exact CPU for small
+work, exact grid search for large 2D/3D Euclidean self-KNN, FAISS IVF for
+million-row self-KNN where HNSW graph construction is too memory-heavy, and
 FAISS HNSW for large high-dimensional self-KNN when FAISS is available [1-2,5].
-It is a balanced speed/recall selector, not an accuracy-first promise; users who need
-exact or near-exact CPU recall should request `backend = "cpu"`,
-`backend = "faiss"`, or tune explicit IVF/HNSW options.
+On CUDA, it uses CUDA grid search for large 2D/3D Euclidean self-KNN, exact FAISS
+GPU Flat or cuVS brute force for small and medium searches, and FAISS GPU CAGRA
+for very large self-KNN when FAISS GPU/cuVS integration is available [13-15].
 
-`backend = "cpu_approx"` remains the approximate-only CPU selector. It prefers
-FAISS HNSW when FAISS is available, then RcppHNSW, then exact CPU. This follows
-the chiamaka autotuning run where FAISS HNSW gave the best practical CPU
-speed/recall balance on image and flow datasets [5].
+Explicit methods map to the selected backend. For example,
+`method = "grid", backend = "cpu"` resolves to the CPU grid implementation,
+whereas `method = "grid", backend = "cuda"` resolves to the CUDA grid
+implementation. Invalid combinations fail before computation; for example,
+`method = "CAGRA", backend = "cpu"` errors because CAGRA is CUDA-only.
 
-`backend = "cuda_auto"` and `backend = "gpu_auto"` are CUDA-only shape-aware
-selectors. They use CUDA grid search for large 2D/3D Euclidean self-KNN, exact
-FAISS GPU Flat or cuVS brute force for small and medium searches, and FAISS GPU
-CAGRA for very large self-KNN when FAISS GPU/cuVS integration is available
-[13-15].
-Plain `backend = "cuda"` remains the explicit native CUDA route for backwards
-compatibility.
-
-`backend = "cuda_cuvs"` uses only direct cuVS routes. Exact CUDA references are
-`faiss_gpu_flat_l2` and `cuda_cuvs_bruteforce`. FAISS GPU CAGRA uses the
-FAISS/cuVS integration path. Direct cuVS CAGRA is guarded by pilot recall tuning;
-if the pilot does not meet the configured recall target, the function stops and
-recommends `faiss_gpu_cagra` or `cuda_cuvs_bruteforce` rather than silently
-returning a poor graph-search result.
+Direct cuVS CAGRA is guarded by pilot recall tuning; if the pilot does not meet
+the configured recall target, the function stops and recommends FAISS GPU CAGRA
+or cuVS brute force rather than silently returning a poor graph-search result.
 
 IVF probe defaults are conservative enough to avoid misleading speed-only
 results. IVFPQ is treated as an explicit memory-pressure backend because product

@@ -7,8 +7,7 @@
 fast_kmeans(
   data,
   centers,
-  backend = c("auto", "cpu", "faiss", "cuda", "cuda_faiss", "faiss_gpu", "cuda_cuvs",
-    "cuvs"),
+  backend = c("auto", "cpu", "cuda"),
   max_iter = 100L,
   n_init = 1L,
   tol = 1e-04,
@@ -23,8 +22,8 @@ fast_kmeans(
 
 \item{centers}{Number of clusters.}
 
-\item{backend}{One of `"auto"`, `"cpu"`, `"faiss"`, `"cuda"`,
-`"cuda_faiss"`, `"faiss_gpu"`, `"cuda_cuvs"`, or `"cuvs"`.}
+\item{backend}{Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
+uses CUDA when CUDA/cuVS k-means is available and CPU otherwise.}
 
 \item{max_iter}{Maximum number of Lloyd iterations.}
 

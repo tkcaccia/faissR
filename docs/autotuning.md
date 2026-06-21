@@ -111,7 +111,7 @@ backend-side float/index buffers. On this machine, full ImageNet should be run
 from a memory-efficient matrix/float32 representation or on a host with more RAM.
 
 
-## Shape-Aware `cpu_auto` And `cuda_auto`
+## Shape-Aware `backend` Plus `method = "auto"`
 
 A follow-up auto-policy run tested the new CPU-only and CUDA-only automatic
 selectors on simulated shapes and all available dataset folders. The result CSV
@@ -121,16 +121,17 @@ is in:
 
 Policy summary:
 
-- `cpu_auto`: exact CPU for small work; CPU grid for large 2D/3D self-KNN;
-  FAISS IVF for million-row self-KNN where HNSW graph construction is too
-  memory-heavy; FAISS HNSW for large high-dimensional CPU self-KNN.
-- `cuda_auto`: CUDA grid for large 2D/3D self-KNN; FAISS GPU Flat for small and
-  medium datasets where exact GPU search is fast; FAISS GPU CAGRA for very
-  large self-KNN.
+- `backend = "cpu", method = "auto"`: exact CPU for small work; CPU grid for
+  large 2D/3D self-KNN; FAISS IVF for million-row self-KNN where HNSW graph
+  construction is too memory-heavy; FAISS HNSW for large high-dimensional CPU
+  self-KNN.
+- `backend = "cuda", method = "auto"`: CUDA grid for large 2D/3D self-KNN;
+  FAISS GPU Flat for small and medium datasets where exact GPU search is fast;
+  FAISS GPU CAGRA for very large self-KNN.
 
 Observed examples from the run:
 
-| Dataset | n x p | `cpu_auto` selected | CPU seconds | CPU recall | `cuda_auto` selected | CUDA seconds | CUDA recall |
+| Dataset | n x p | CPU auto selected | CPU seconds | CPU recall | CUDA auto selected | CUDA seconds | CUDA recall |
 |---|---:|---|---:|---:|---|---:|---:|
 | simulated2d | 20000 x 2 | `cpu_grid2d` | 0.782 | 0.999963 | `cuda_grid2d` | 0.697 | 0.999965 |
 | COIL20 | 1440 x 16384 | `cpu` | 4.877 | 1.000000 | `faiss_gpu_flat_l2` | 1.914 | 1.000000 |
@@ -145,13 +146,15 @@ The simulated random high-dimensional datasets exposed an important limitation:
 FAISS HNSW is fast but may have low recall on noise-like high-dimensional data.
 For MNIST, FAISS IVF with `nprobe = 64` reached about 0.99999 recall but took
 about 365 seconds, so it is better treated as an explicit accuracy-first CPU
-setting rather than the default balanced `cpu_auto` route.
+setting rather than the default balanced `backend = "cpu", method = "auto"`
+route.
 
 FlowRepository remains a CPU stress case. The full 5.2M x 32 matrix timed out
-with `cpu_auto`; a follow-up probe with FAISS IVF and `nprobe = 4` also failed
-to return in a practical interactive window. On the same dataset, `cuda_auto`
-selected FAISS GPU CAGRA and completed, so this shape is currently a GPU-first
-case rather than a reliable CPU-auto default.
+with `backend = "cpu", method = "auto"`; a follow-up probe with FAISS IVF and
+`nprobe = 4` also failed to return in a practical interactive window. On the
+same dataset, `backend = "cuda", method = "auto"` selected FAISS GPU CAGRA and
+completed, so this shape is currently a GPU-first case rather than a reliable
+CPU-auto default.
 
 ## Known Issues From The Run
 

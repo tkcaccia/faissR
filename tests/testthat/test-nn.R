@@ -497,6 +497,34 @@ test_that("CPU approximate selector chooses FAISS HNSW, RcppHNSW, or exact CPU",
 })
 
 
+test_that("public backend and method resolver maps device plus method", {
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "grid", "euclidean"),
+    "cpu_grid"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "grid", "euclidean"),
+    "cuda_grid"
+  )
+  expect_error(
+    faissR:::resolve_public_nn_backend("cpu", "CAGRA", "euclidean"),
+    "CAGRA.*only available.*cuda"
+  )
+  expect_error(
+    faissR:::resolve_public_nn_backend("cuda", "HNSW", "euclidean"),
+    "HNSW.*only available.*cpu"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "IVF", "euclidean"),
+    "faiss_ivf"
+  )
+  expect_true(
+    faissR:::resolve_public_nn_backend("cuda", "CAGRA", "euclidean") %in%
+      c("faiss_gpu_cagra", "cuda_cuvs_cagra")
+  )
+})
+
+
 test_that("CPU auto selector is shape-aware", {
   small <- faissR:::select_cpu_auto_backend(
     self_query = TRUE,
@@ -553,7 +581,7 @@ test_that("CPU auto selector is shape-aware", {
 })
 
 test_that("CUDA auto selector is shape-aware", {
-  skip_if_not(cuda_available() || cuvs_available() || faiss_available())
+  skip_if_not(cuda_available() || cuvs_available())
 
   medium <- faissR:::select_cuda_auto_backend(
     self_query = TRUE,
@@ -896,7 +924,7 @@ test_that("removed nn compatibility options are not accepted", {
   point <- matrix(c(0, 0), nrow = 1)
 
   expect_error(nn(data, point, k = 3, square = TRUE), "unused")
-  expect_error(nn(data, point, k = 3, method = "manhattan"), "unused")
+  expect_error(nn(data, point, k = 3, method = "manhattan"), "should be one of")
 })
 
 test_that("cuda availability helper returns a logical scalar", {

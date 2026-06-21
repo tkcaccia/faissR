@@ -9,8 +9,9 @@
 #' @param Ytrain Training labels or numeric response.
 #' @param Xtest Optional numeric query matrix. If supplied, `knn()` returns
 #'   predictions for `Xtest`; otherwise it returns a fitted model.
-#' @param backend Neighbour backend passed to [nn()]. Use `"faiss"` for FAISS
-#'   CPU search or `"cuda"`/`"cuda_cuvs"` for CUDA/cuVS when available.
+#' @param backend Device backend passed to [nn()]: `"auto"`, `"cpu"`, or
+#'   `"cuda"`. `"auto"` uses CUDA when available and CPU otherwise.
+#' @param method Nearest-neighbour algorithm selector passed to [nn()].
 #' @param metric Distance metric passed to [nn()].
 #' @param task `"auto"`, `"classification"`, or `"regression"`. `"auto"` treats
 #'   numeric responses as regression and other response types as classification.
@@ -36,7 +37,9 @@
 knn <- function(Xtrain,
                 Ytrain,
                 Xtest = NULL,
-                backend = "auto",
+                backend = c("auto", "cpu", "cuda"),
+                method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree",
+                           "sparse", "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
                 metric = c("euclidean", "cosine", "correlation"),
                 task = c("auto", "classification", "regression"),
                 k = 15L,
@@ -46,10 +49,13 @@ knn <- function(Xtrain,
                 ...) {
   vote <- match.arg(vote)
   type <- match.arg(type)
+  backend <- as.character(backend)[1L]
+  method <- as.character(method)[1L]
   model <- knn_model_fit(
     Xtrain = Xtrain,
     Ytrain = Ytrain,
     backend = backend,
+    method = method,
     metric = metric,
     task = task,
     k = k,
@@ -58,16 +64,20 @@ knn <- function(Xtrain,
   if (is.null(Xtest)) {
     return(model)
   }
-  predict(model, Xtest, k = k, vote = vote, type = type, ...)
+  predict(model, Xtest, k = k, backend = backend, vote = vote, type = type, ...)
 }
 
 knn_model_fit <- function(Xtrain,
                           Ytrain,
-                          backend = "auto",
+                          backend = c("auto", "cpu", "cuda"),
+                          method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree",
+                                     "sparse", "HNSW", "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
                           metric = c("euclidean", "cosine", "correlation"),
                           task = c("auto", "classification", "regression"),
                           k = 15L,
                           n_threads = NULL) {
+  backend <- as.character(backend)[1L]
+  method <- as.character(method)[1L]
   metric <- match.arg(metric)
   task <- match.arg(task)
   x <- as.matrix(Xtrain)
@@ -108,6 +118,7 @@ knn_model_fit <- function(Xtrain,
       task = task,
       levels = levels,
       backend = as.character(backend)[1L],
+      method = as.character(method)[1L],
       metric = metric,
       k = k,
       n_threads = n_threads
@@ -121,6 +132,8 @@ knn_model_fit <- function(Xtrain,
 #' @param object A model returned by [knn()].
 #' @param newdata Numeric query matrix with observations in rows.
 #' @param k Number of neighbours.
+#' @param backend Device backend used for this prediction call: `"auto"`,
+#'   `"cpu"`, or `"cuda"`. Defaults to `"auto"`.
 #' @param vote `"majority"` or `"weighted"` for classification; `"majority"`
 #'   means an unweighted neighbour mean for regression.
 #' @param type `"response"` for class/regression predictions or `"prob"` for
@@ -132,9 +145,11 @@ knn_model_fit <- function(Xtrain,
 predict.faissR_knn_model <- function(object,
                                       newdata,
                                       k = NULL,
+                                      backend = c("auto", "cpu", "cuda"),
                                       vote = c("majority", "weighted"),
                                       type = c("response", "prob"),
                                       ...) {
+  backend <- match.arg(backend)
   vote <- match.arg(vote)
   type <- match.arg(type)
   query <- validate_knn_model_query(object, newdata)
@@ -145,7 +160,8 @@ predict.faissR_knn_model <- function(object,
     train,
     query,
     k = k,
-    backend = object$backend,
+    backend = backend,
+    method = object$method %||% "auto",
     metric = object$metric,
     n_threads = object$n_threads
   )

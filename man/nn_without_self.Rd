@@ -7,23 +7,9 @@
 nn_without_self(
   data,
   k,
-  backend = c("auto", "cpu", "cpu_auto", "cpu_approx", "cpu_grid", "grid", "cpu_sparse",
-    "sparse", "sparse_cpu", "cpu_grid2d", "grid2d", "cpu_grid3d", "grid3d", "vptree",
-    "cpu_vptree", "hnsw", "rcpphnsw", "cpu_hnsw", "faiss", "cpu_faiss", "cpu_faiss_flat",
-    "faiss_flat", "faiss_flat_l2", "faiss_flat_ip", "faiss_ivf", "faiss_ivf_flat",
-    "cpu_faiss_index_ivf", "faiss_ivfpq", "faiss_hnsw", "faiss_nsg", "faiss_nndescent",
-    "faiss_gpu_flat", "faiss_gpu_flat_l2", "faiss_gpu_flat_ip", "cuda_faiss_flat_l2",
-    "cuda_faiss_flat_ip",
-     "faiss_gpu_ivf", "faiss_gpu_ivf_flat", "faiss_gpu_ivfpq",
-    "faiss_gpu_cagra", "cuda_faiss_cagra", "cuda_faiss_ivf_flat", "cuda_faiss_ivfpq",
-    "cuvs", "gpu_cuvs", "cuda_cuvs", "cuda_cuvs_cagra", "cuda_cagra", "gpu_cagra",
-    "cuvs_ivf", "cuda_cuvs_ivf", "cuvs_ivf_flat", "cuda_cuvs_ivf_flat", "cuvs_ivfpq",
-    "cuda_cuvs_ivfpq", "cuvs_ivf_pq", "cuda_cuvs_ivf_pq", "cuvs_bruteforce",
-    "cuda_cuvs_bruteforce", "cuda_cuvs_exact", "cuvs_nndescent", "cuda_cuvs_nndescent",
-    "cuda_grid", "cuda_grid_auto", "gpu_grid",
-     "cuda_grid2d", "cuda_grid3d", "gpu",
-    "cuda", "cuda_auto", "gpu_auto", "cuda_approx", "cuda_nndescent", "cuda_ivf",
-    "cuda_faiss"),
+  backend = c("auto", "cpu", "cuda"),
+  method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse", "HNSW",
+    "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
   metric = c("euclidean", "cosine", "correlation"),
   n_threads = NULL
 )
@@ -34,8 +20,10 @@ observations in rows.}
 
 \item{k}{Number of non-self neighbours to return.}
 
-\item{backend}{Nearest-neighbour backend. `"auto"` chooses CUDA/cuVS when
-available, then FAISS, then RcppHNSW/CPU fallbacks.}
+\item{backend}{Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
+uses CUDA when available and CPU otherwise.}
+
+\item{method}{Algorithm selector passed through the same resolver as [nn()].}
 
 \item{metric}{Distance metric: `"euclidean"`, `"cosine"`, or
 `"correlation"`.}

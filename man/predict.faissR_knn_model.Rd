@@ -8,6 +8,7 @@
   object,
   newdata,
   k = NULL,
+  backend = c("auto", "cpu", "cuda"),
   vote = c("majority", "weighted"),
   type = c("response", "prob"),
   ...
@@ -19,6 +20,9 @@
 \item{newdata}{Numeric query matrix with observations in rows.}
 
 \item{k}{Number of neighbours.}
+
+\item{backend}{Device backend used for this prediction call: `"auto"`,
+`"cpu"`, or `"cuda"`. Defaults to `"auto"`.}
 
 \item{vote}{`"majority"` or `"weighted"` for classification; `"majority"`
 means an unweighted neighbour mean for regression.}

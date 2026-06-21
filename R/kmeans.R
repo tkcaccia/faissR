@@ -8,8 +8,8 @@
 #'
 #' @param data Numeric matrix with observations in rows.
 #' @param centers Number of clusters.
-#' @param backend One of `"auto"`, `"cpu"`, `"faiss"`, `"cuda"`,
-#'   `"cuda_faiss"`, `"faiss_gpu"`, `"cuda_cuvs"`, or `"cuvs"`.
+#' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
+#'   uses CUDA when CUDA/cuVS k-means is available and CPU otherwise.
 #' @param max_iter Maximum number of Lloyd iterations.
 #' @param n_init Number of random restarts where supported.
 #' @param tol Relative convergence tolerance where supported.
@@ -30,10 +30,7 @@
 #' @export
 fast_kmeans <- function(data,
                         centers,
-                        backend = c(
-                          "auto", "cpu", "faiss", "cuda", "cuda_faiss",
-                          "faiss_gpu", "cuda_cuvs", "cuvs"
-                        ),
+                        backend = c("auto", "cpu", "cuda"),
                         max_iter = 100L,
                         n_init = 1L,
                         tol = 1e-4,
@@ -41,7 +38,7 @@ fast_kmeans <- function(data,
                         n_threads = NULL,
                         streaming_batch_size = 0L,
                         init = c("kmeans++", "random")) {
-  backend <- match.arg(backend)
+  backend <- as.character(backend)[1L]
   init <- match.arg(init)
   x <- as.matrix(data)
   storage.mode(x) <- "double"
@@ -69,37 +66,12 @@ fast_kmeans <- function(data,
     streaming_batch_size <- 0L
   }
 
-  if (identical(backend, "auto")) {
-    backend <- if (isTRUE(cuvs_available()) && isTRUE(cuda_available())) {
-      "cuda"
-    } else if (isTRUE(faiss_available())) {
-      "faiss"
-    } else {
-      "cpu"
-    }
-  }
-  if (identical(backend, "faiss_gpu")) backend <- "cuda_faiss"
-  if (identical(backend, "cuvs")) backend <- "cuda_cuvs"
-
-  if (identical(backend, "faiss")) {
-    if (!isTRUE(faiss_available())) {
-      stop(
-        "FAISS k-means is not available. Reinstall faissR with ",
-        "FAISS_HOME=/path/to/faiss.",
-        call. = FALSE
-      )
-    }
-    out <- kmeans_faiss_cpp(
-      x,
-      as.integer(centers),
-      as.integer(max_iter),
-      as.integer(n_init),
-      as.numeric(tol),
-      as.integer(seed),
-      as.integer(n_threads),
-      identical(init, "kmeans++")
-    )
-    return(finish_fast_kmeans(out, backend = "faiss", init = init))
+  if (backend %in% c("faiss")) {
+    backend <- "cpu"
+  } else if (backend %in% c("cuda_faiss", "faiss_gpu", "cuda_cuvs", "cuvs")) {
+    backend <- "cuda"
+  } else {
+    backend <- normalize_public_compute_backend(backend)
   }
 
   if (identical(backend, "cuda")) {

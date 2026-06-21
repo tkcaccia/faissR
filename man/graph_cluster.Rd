@@ -8,7 +8,7 @@
 graph_cluster(
   graph,
   method = c("random_walking", "louvain", "leiden"),
-  backend = c("cpu", "cuda"),
+  backend = c("auto", "cpu", "cuda"),
   k = 50L,
   graph_backend = "auto",
   weight = c("auto", "snn", "adaptive", "distance", "binary"),
@@ -27,7 +27,7 @@ graph_cluster(
 \arguments{
 \item{graph}{A numeric matrix/data frame, a KNN object returned by \code{nn()}, or an embedding object with a matrix \code{layout}.}
 \item{method}{One of \code{"random_walking"}, \code{"louvain"}, or \code{"leiden"}. \code{"random_walking"} uses a native random-walk label-propagation pass inspired by walktrap/random-walk clustering.}
-\item{backend}{Community-detection backend. \code{"cpu"} uses native faissR C++/OpenMP code. \code{"cuda"} uses native RAPIDS libcugraph for Louvain and Leiden when libcugraph was detected at build time; random-walking is CPU-only.}
+\item{backend}{Community-detection backend. \code{"auto"} uses CUDA when libcugraph is available and CPU otherwise. \code{"cpu"} uses native faissR C++/OpenMP code. \code{"cuda"} uses native RAPIDS libcugraph for Louvain and Leiden when libcugraph was detected at build time; random-walking is CPU-only.}
 \item{k}{Number of neighbours when \code{graph} is not already a KNN object.}
 \item{graph_backend}{Backend passed to \code{nn_without_self()} for neighbour search.}
 \item{weight}{KNN graph weighting used when a graph must be built.}

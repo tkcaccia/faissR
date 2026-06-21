@@ -8,7 +8,7 @@ knn_graph(
   data,
   knn = NULL,
   k = 50L,
-  backend = "auto",
+  backend = c("auto", "cpu", "cuda"),
   weight = c("auto", "snn", "adaptive", "distance", "binary"),
   mutual = FALSE,
   prune = 0,
@@ -19,7 +19,7 @@ knn_graph(
 \item{data}{Numeric matrix/data frame, a KNN object returned by \code{nn()}, or a \code{fastEmbedR_embedding} object.}
 \item{knn}{Optional precomputed KNN object returned by \code{nn()}. If supplied, \code{data} is ignored for neighbour search.}
 \item{k}{Number of non-self neighbours used in the graph.}
-\item{backend}{KNN backend passed to \code{nn()} when \code{knn} is not supplied.}
+\item{backend}{Device backend passed to \code{nn_without_self()} when \code{knn} is not supplied: \code{"auto"}, \code{"cpu"}, or \code{"cuda"}.}
 \item{weight}{Graph weighting. \code{"auto"} uses SNN/Jaccard weights for input space and distance weights for embedding space. \code{"snn"} builds shared-nearest-neighbour Jaccard weights. \code{"adaptive"} uses a local radius kernel. \code{"distance"} uses \code{1 / (1 + distance)}. \code{"binary"} gives every edge weight 1.}
 \item{mutual}{If \code{TRUE}, keep only reciprocal nearest-neighbour edges.}
 \item{prune}{Drop edges with weight less than or equal to this value.}

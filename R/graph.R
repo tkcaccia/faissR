@@ -9,7 +9,8 @@
 #' @param knn Optional precomputed KNN object returned by [nn()]. If supplied,
 #'   `data` is ignored for neighbour search.
 #' @param k Number of non-self neighbours used in the graph.
-#' @param backend KNN backend passed to [nn()] when `knn` is not supplied.
+#' @param backend Device backend passed to [nn_without_self()] when `knn` is
+#'   not supplied: `"auto"`, `"cpu"`, or `"cuda"`.
 #' @param weight Graph weighting. `"auto"` uses SNN/Jaccard weights for input
 #'   space and distance weights for embedding space. `"snn"` builds full
 #'   shared-nearest-neighbour Jaccard weights between all rows sharing at least
@@ -28,11 +29,12 @@
 knn_graph <- function(data,
                       knn = NULL,
                       k = 50L,
-                      backend = "auto",
+                      backend = c("auto", "cpu", "cuda"),
                       weight = c("auto", "snn", "adaptive", "distance", "binary"),
                       mutual = FALSE,
                       prune = 0,
                       n_threads = NULL) {
+  backend <- as.character(backend)[1L]
   weight <- match.arg(weight)
   k <- as.integer(k)
   if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L) {
@@ -107,13 +109,25 @@ is_fastembedr_embedding <- function(x) {
 }
 
 resolve_knn_graph_backend <- function(backend) {
+  backend_label <- as.character(backend)[1L]
+  if (!tolower(backend_label) %in% c("auto", "cpu", "cuda")) {
+    return(backend_label)
+  }
+  normalize_public_compute_backend(backend)
+}
+
+resolve_graph_cluster_backend <- function(backend) {
   backend <- as.character(backend)[1L]
   if (is.na(backend) || !nzchar(backend)) backend <- "auto"
-  if (!identical(backend, "auto")) return(backend)
-  if (isTRUE(cuvs_available())) return("cuda_cuvs_nndescent")
-  if (isTRUE(faiss_available())) return("faiss_nndescent")
-  if (isTRUE(requireNamespace("RcppHNSW", quietly = TRUE))) return("hnsw")
-  "cpu"
+  backend <- tolower(backend)
+  if (!backend %in% c("auto", "cpu", "cuda")) {
+    stop("`backend` must be one of \"auto\", \"cpu\", or \"cuda\".", call. = FALSE)
+  }
+  if (identical(backend, "auto")) {
+    if (isTRUE(cuda_available()) && isTRUE(cugraph_available())) return("cuda")
+    return("cpu")
+  }
+  backend
 }
 
 #' Cluster a nearest-neighbour graph without igraph
@@ -134,7 +148,8 @@ resolve_knn_graph_backend <- function(backend) {
 #'   by walktrap/random-walk clustering. `"louvain"` uses native modularity local
 #'   moving. `"leiden"` adds a native refinement pass that splits disconnected
 #'   communities after local moving.
-#' @param backend Community-detection backend. `"cpu"` uses native C++/OpenMP.
+#' @param backend Community-detection backend. `"auto"` uses CUDA when
+#'   libcugraph is available and CPU otherwise. `"cpu"` uses native C++/OpenMP.
 #'   `"cuda"` uses native RAPIDS libcugraph for Louvain and Leiden when
 #'   libcugraph was detected at build time; random-walking is CPU-only.
 #' @param k Number of neighbours when `graph` is not already a KNN object.
@@ -179,7 +194,7 @@ resolve_knn_graph_backend <- function(backend) {
 #' @export
 graph_cluster <- function(graph,
                           method = c("random_walking", "louvain", "leiden"),
-                          backend = c("cpu", "cuda"),
+                          backend = c("auto", "cpu", "cuda"),
                           k = 50L,
                           graph_backend = "auto",
                           weight = c("auto", "snn", "adaptive", "distance", "binary"),
@@ -194,7 +209,7 @@ graph_cluster <- function(graph,
                           seed = NULL,
                           ...) {
   method <- match.arg(method)
-  backend <- match.arg(backend)
+  backend <- resolve_graph_cluster_backend(match.arg(backend))
   weight <- match.arg(weight)
   objective_function <- match.arg(objective_function)
   n_threads <- normalize_nn_threads(n_threads)

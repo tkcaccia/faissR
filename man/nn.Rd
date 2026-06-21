@@ -8,23 +8,9 @@ nn(
   data,
   points = data,
   k = NULL,
-  backend = c("auto", "cpu", "cpu_auto", "cpu_approx", "cpu_grid", "grid", "cpu_sparse",
-    "sparse", "sparse_cpu", "cpu_grid2d", "grid2d", "cpu_grid3d", "grid3d", "vptree",
-    "cpu_vptree", "hnsw", "rcpphnsw", "cpu_hnsw", "faiss", "cpu_faiss", "cpu_faiss_flat",
-    "faiss_flat", "faiss_flat_l2", "faiss_flat_ip", "faiss_ivf", "faiss_ivf_flat",
-    "cpu_faiss_index_ivf", "faiss_ivfpq", "faiss_hnsw", "faiss_nsg", "faiss_nndescent",
-    "faiss_gpu_flat", "faiss_gpu_flat_l2", "faiss_gpu_flat_ip", "cuda_faiss_flat_l2",
-    "cuda_faiss_flat_ip",
-     "faiss_gpu_ivf", "faiss_gpu_ivf_flat", "faiss_gpu_ivfpq",
-    "faiss_gpu_cagra", "cuda_faiss_cagra", "cuda_faiss_ivf_flat", "cuda_faiss_ivfpq",
-    "cuvs", "gpu_cuvs", "cuda_cuvs", "cuda_cuvs_cagra", "cuda_cagra", "gpu_cagra",
-    "cuvs_ivf", "cuda_cuvs_ivf", "cuvs_ivf_flat", "cuda_cuvs_ivf_flat", "cuvs_ivfpq",
-    "cuda_cuvs_ivfpq", "cuvs_ivf_pq", "cuda_cuvs_ivf_pq", "cuvs_bruteforce",
-    "cuda_cuvs_bruteforce", "cuda_cuvs_exact", "cuvs_nndescent", "cuda_cuvs_nndescent",
-    "cuda_grid", "cuda_grid_auto", "gpu_grid",
-     "cuda_grid2d", "cuda_grid3d", "gpu",
-    "cuda", "cuda_auto", "gpu_auto", "cuda_approx", "cuda_nndescent", "cuda_ivf",
-    "cuda_faiss"),
+  backend = c("auto", "cpu", "cuda"),
+  method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse", "HNSW",
+    "IVF", "IVFPQ", "NSG", "NNDescent", "CAGRA"),
   metric = c("euclidean", "cosine", "correlation"),
   n_threads = NULL
 )
@@ -41,70 +27,15 @@ observations in rows. Defaults to `data`.}
 automatic neighborhood size and includes the self-neighbor when `points`
 is `data`.}
 
-\item{backend}{Execution backend. `"auto"` records the selected fast backend
-in `attr(result, "backend")`. `"cpu"` always uses the exact C++ CPU path.
-`"cpu_auto"` chooses exact CPU, CPU grid, FAISS IVF for million-row
-self-KNN, FAISS HNSW, RcppHNSW, or exact CPU based on the number of
-rows, columns, queries, and `k`.
-`"cpu_approx"` chooses FAISS HNSW, RcppHNSW, or exact CPU depending
-on what is available; for large 2D Euclidean self-KNN it chooses
-`"cpu_grid2d"` and for large 3D Euclidean self-KNN it chooses
-`"cpu_grid"`. Explicit `"cpu_grid2d"`/`"cpu_grid3d"` force the exact
-grid implementation, while `"cpu_vptree"` forces the exact VP-tree for
-Euclidean self-KNN or reference/query KNN.
-`"cuda_auto"`/`"gpu_auto"` chooses a CUDA-only backend from the
-dataset shape: CUDA grid for large 2D/3D self-KNN, exact FAISS GPU Flat
-or cuVS brute force for small and medium searches, and FAISS GPU CAGRA
-or direct cuVS graph/IVF routes for very large searches.
-`"cuda_grid_auto"`/`"cuda_grid"` chooses the native CUDA exact 2D or 3D
-grid implementation for Euclidean self-KNN only; it does not silently
-fall back to CPU.
-`"cpu_sparse"`/`"sparse"` forces the native exact sparse `dgCMatrix` CPU
-path for Euclidean, cosine, and correlation distances. Explicit dense
-accelerator backends convert sparse input to dense matrices because
-FAISS/cuVS kernels operate on dense row vectors.
-`"hnsw"`/`"rcpphnsw"` uses the optional CRAN package RcppHNSW.
-`"faiss"` uses the real FAISS C++ `IndexFlatL2` backend when faissR was
-built against FAISS. `"faiss_ivf"`, `"faiss_ivfpq"`, `"faiss_hnsw"`,
-`"faiss_nsg"`, and `"faiss_nndescent"` use the corresponding FAISS index
-types when FAISS is available at compile time. `"faiss_gpu_flat_l2"` and
-`"faiss_gpu_flat_ip"` use exact FAISS GPU Flat indexes as CUDA references.
-`"faiss_gpu_ivf_flat"` and `"faiss_gpu_ivfpq"` use FAISS GPU/cuVS IVF
-indexes when the package was built against FAISS GPU headers; they fail
-clearly otherwise. `"faiss_gpu_ivfpq"` is explicit-only: it is useful when
-GPU memory pressure matters, but it is not used by automatic routing
-because product quantization can reduce neighbor recall. For large
-self-KNN, `"faiss_gpu_ivf_flat"` uses
-recall-aware pilot tuning of `nlist`/`nprobe` against exact FAISS GPU Flat
-and caches the chosen values by dataset signature and `k`. Internal option
-`fastEmbedR.faiss_gpu_ivf_tune_policy = "fixed"` skips pilot tuning on a
-cache miss and uses the current deterministic IVF defaults directly.
-`"cuda_cuvs"` uses a RAPIDS-inspired cuVS policy: exact cuVS brute force
-for small searches and cuVS graph/IVF routes for large self-KNN. Use
-`"cuda_cagra"`/`"cuda_cuvs_cagra"` to force direct cuVS CAGRA,
-`"cuda_cuvs_bruteforce"` for
-exact cuVS brute-force search, and `"cuda_cuvs_nndescent"` for cuVS
-NN-descent self-KNN. `"gpu"` is a CUDA-only convenience alias for KNN now.
-For large CUDA self-KNN, direct cuVS CAGRA uses batched search and
-recall-aware pilot tuning. The CAGRA pilot is cached on disk by dataset
-signature and `k`, so repeated benchmark runs reuse the same tuned graph
-parameters instead of rerunning the pilot. If pilot recall does not meet
-the configured target, the backend stops instead of silently returning poor
-neighbours; use `"faiss_gpu_cagra"` or `"cuda_cuvs_bruteforce"` when a
-reliable CUDA route is needed. Internal option
-`fastEmbedR.cuvs_cagra_tune_policy = "fixed"` skips a cache miss and uses
-the current default CAGRA policy directly. `"cuda_cuvs_ivf_flat"` and
-`"cuda_cuvs_ivfpq"` call RAPIDS cuVS IVF-Flat and IVF-PQ directly through
-the cuVS C API when those headers are available. They are explicit
-benchmarking/memory-control backends; automatic CUDA routing continues to
-prefer cuVS CAGRA/NN-descent. `"cuda_cuvs_ivfpq"` is explicit-only because
-product quantization can lower recall.
-`"cuda_nndescent"` and `"cuda_approx"` are
-compatibility aliases for
-`"cuda_cuvs_nndescent"`; CUDA approximate KNN is routed through RAPIDS
-cuVS NN-descent rather than the removed native CUDA NN-descent branch.
-`"cuda_ivf"` and `"cuda_faiss"` request the package's native CUDA
-IVF/FAISS-style IVF-flat search and fail clearly if CUDA is unavailable.}
+\item{backend}{Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
+uses CUDA when a CUDA/cuVS backend is available and CPU otherwise.}
+
+\item{method}{Algorithm selector. `"auto"` chooses a shape-aware default for
+the selected backend. Other values include `"exact"`, `"flat"`,
+`"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"HNSW"`, `"IVF"`,
+`"IVFPQ"`, `"NSG"`, `"NNDescent"`, and `"CAGRA"`. Unsupported
+backend/method combinations fail clearly; for example,
+`method = "CAGRA", backend = "cpu"` errors because CAGRA is CUDA-only.}
 
 \item{metric}{Distance metric. The intentionally small public set is
 `"euclidean"`, `"cosine"`, and `"correlation"`. `"euclidean"` is the
@@ -124,22 +55,13 @@ A list with integer matrix `indices` and numeric matrix `distances`.
 }
 \description{
 `nn()` provides a package-native nearest-neighbor entry point compatible with
-the common `nn(data, points, k)` use case. Explicit `backend = "cpu"`
-performs exact brute-force search in C++ and is mainly a reference path for
-small data or recall checks. `backend = "auto"` chooses a recorded fast path
-for large self-KNN searches: CUDA routes use explicit cuVS/FAISS GPU
-backends when requested and available; CPU approximate routing prefers FAISS
-HNSW when FAISS is compiled in, otherwise the optional CRAN-friendly RcppHNSW
-backend when installed, otherwise exact CPU. Use `backend = "cpu_auto"` to
-force the CPU-only shape-aware selector and `backend = "cpu_approx"` to
-force the approximate-only CPU selector. `backend = "cpu_grid"` is a native exact
-two- or three-dimensional Euclidean self-KNN spatial selector: it uses a
-fast grid for uniform-like clouds and a VP-tree for thin or imbalanced
-clouds. `backend = "vptree"`/`"cpu_vptree"` builds an exact VP-tree on
-`data` and supports both self-KNN and `nn(data, points, k)` query searches.
-`backend = "cuda_grid_auto"`/`"cuda_grid"` is the CUDA equivalent for exact
-two- or three-dimensional Euclidean self-KNN: it chooses the native 2D or 3D
-CUDA grid kernel and errors clearly when CUDA is unavailable.
+the common `nn(data, points, k)` use case. The public API separates device
+selection from algorithm selection. `backend` is one of `"auto"`, `"cpu"`,
+or `"cuda"`; `method` chooses the algorithm. For example,
+`backend = "cpu", method = "grid"` uses the CPU grid implementation, while
+`backend = "cuda", method = "grid"` uses the CUDA grid implementation.
+Invalid combinations stop clearly before computation; for example,
+`backend = "cpu", method = "CAGRA"` errors because CAGRA is CUDA-only.
 }
 \examples{
 x <- scale(as.matrix(iris[, 1:4]))

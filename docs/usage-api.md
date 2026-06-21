@@ -31,7 +31,7 @@ expected to set. For the full R help page after installation, use
 
 ```r
 nn(data, points = data, k = NULL, backend = "auto",
-   metric = "euclidean", n_threads = NULL)
+   method = "auto", metric = "euclidean", n_threads = NULL)
 ```
 
 | Argument | Description |
@@ -39,7 +39,8 @@ nn(data, points = data, k = NULL, backend = "auto",
 | `data` | Numeric matrix, data frame, or sparse `Matrix` object with reference observations in rows and features in columns. |
 | `points` | Optional query matrix/data frame/sparse matrix with the same number of columns as `data`. Defaults to `data` for self-search. |
 | `k` | Number of neighbours to return. If `NULL`, faissR chooses an automatic neighbourhood size. |
-| `backend` | Search backend. Use `"auto"` for the general selector, `"cpu_auto"` for shape-aware CPU-only selection, `"cuda_auto"`/`"gpu_auto"` for shape-aware CUDA-only selection, `"cpu"` for exact native CPU, `"faiss"`/`"faiss_flat_l2"` for FAISS CPU Flat, `"faiss_hnsw"`/`"faiss_ivf"` for FAISS approximate CPU indexes, `"faiss_gpu_flat_l2"` for exact FAISS GPU Flat, `"faiss_gpu_cagra"` for FAISS GPU CAGRA with cuVS integration, and `"cuda_cuvs_*"` for direct cuVS backends [1-6,13-16]. Explicit GPU backends fail clearly if unavailable. |
+| `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA when CUDA/cuVS is available and CPU otherwise. Explicit `"cuda"` fails clearly when CUDA support is unavailable. |
+| `method` | Algorithm selector: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"HNSW"`, `"IVF"`, `"IVFPQ"`, `"NSG"`, `"NNDescent"`, or `"CAGRA"` [1-6,13-16]. For example, `method = "grid", backend = "cpu"` maps to the CPU grid implementation, while `method = "grid", backend = "cuda"` maps to the CUDA grid implementation. Invalid combinations, such as `method = "CAGRA", backend = "cpu"`, stop with a clear error. |
 | `metric` | Distance metric: `"euclidean"`, `"cosine"`, or `"correlation"`. Euclidean/L2 is the validated high-performance route for FAISS/CUDA/cuVS. Non-Euclidean metrics use supported CPU paths. |
 | `n_threads` | Number of CPU worker threads for CPU/FAISS CPU backends. GPU backends ignore this argument. |
 
@@ -51,14 +52,15 @@ Returns a `faissR_nn` list with `indices` and `distances` matrices. Indices are
 
 ```r
 nn_without_self(data, k, backend = "auto",
-                metric = "euclidean", n_threads = NULL)
+                method = "auto", metric = "euclidean", n_threads = NULL)
 ```
 
 | Argument | Description |
 | --- | --- |
 | `data` | Numeric matrix, data frame, or sparse `Matrix` object with observations in rows. |
 | `k` | Number of non-self neighbours to return per row. |
-| `backend` | Same backend choices as `nn()`. This wrapper always performs self-search and removes the diagonal self match. |
+| `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. This wrapper always performs self-search and removes the diagonal self match. |
+| `method` | Same algorithm selector as `nn()`. |
 | `metric` | `"euclidean"`, `"cosine"`, or `"correlation"`. |
 | `n_threads` | CPU worker threads for CPU/FAISS CPU backends. |
 
@@ -100,7 +102,7 @@ knn_graph(data, knn = NULL, k = 50L, backend = "auto",
 | `data` | Numeric matrix/data frame, a `faissR_nn` object from `nn()`, or an embedding object with a matrix `layout`. |
 | `knn` | Optional precomputed KNN object. If supplied, faissR reuses it instead of recomputing neighbours from `data`. |
 | `k` | Number of neighbours used in the graph. If `knn` has fewer columns, faissR uses the available columns. |
-| `backend` | Backend passed to `nn_without_self()` when neighbours must be computed from `data`. |
+| `backend` | Device backend passed to `nn_without_self()` when neighbours must be computed from `data`: `"auto"`, `"cpu"`, or `"cuda"`. |
 | `weight` | Edge weighting: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. `"auto"` uses shared-nearest-neighbour weights for input space and distance weights for embedding space. |
 | `mutual` | If `TRUE`, keep only reciprocal nearest-neighbour edges. |
 | `prune` | Drop edges with weight less than or equal to this non-negative threshold. |
@@ -112,7 +114,7 @@ required.
 ## `graph_cluster()`
 
 ```r
-graph_cluster(graph, method = "leiden", backend = "cpu",
+graph_cluster(graph, method = "leiden", backend = "auto",
               k = 50L, graph_backend = "auto", weight = "auto",
               mutual = FALSE, prune = 0, n_threads = NULL,
               n_runs = 1L, resolution = 1,
@@ -124,7 +126,7 @@ graph_cluster(graph, method = "leiden", backend = "cpu",
 | --- | --- |
 | `graph` | A `faissR_graph`, a KNN object returned by `nn()`, a numeric matrix/data frame, or an embedding object with `layout`. |
 | `method` | Clustering algorithm: `"random_walking"`, `"louvain"`, or `"leiden"`. |
-| `backend` | `"cpu"` for native C++/OpenMP clustering, or `"cuda"` for RAPIDS libcugraph Louvain/Leiden when compiled and available [9-12]. CUDA random-walking is not enabled yet. |
+| `backend` | `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA when libcugraph is available and CPU otherwise. `"cuda"` uses RAPIDS libcugraph Louvain/Leiden when compiled and available [9-12]. CUDA random-walking is not enabled yet. |
 | `k` | Number of neighbours when `graph` is raw data or an embedding rather than a graph/KNN object. |
 | `graph_backend` | Backend passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
 | `weight` | Graph edge weighting passed to `knn_graph()`: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. |
@@ -155,7 +157,7 @@ fast_kmeans(data, centers, backend = "auto",
 | --- | --- |
 | `data` | Numeric matrix with observations in rows. |
 | `centers` | Number of clusters. Must be between 1 and `nrow(data)`. |
-| `backend` | `"auto"`, `"cpu"`, `"faiss"`, `"cuda"`, `"cuda_faiss"`, `"faiss_gpu"`, `"cuda_cuvs"`, or `"cuvs"`. `"auto"` prefers CUDA/cuVS when available, then FAISS, then base CPU [7-8]. |
+| `backend` | `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA/cuVS k-means when available and CPU otherwise [7-8]. |
 | `max_iter` | Maximum number of Lloyd iterations. |
 | `n_init` | Number of random restarts where the selected backend supports it. |
 | `tol` | Non-negative convergence tolerance where supported. |
@@ -180,7 +182,8 @@ prob  <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 | `Xtrain` | Numeric training matrix with observations in rows. |
 | `Ytrain` | Training labels for classification or numeric response for regression. Must have one value per row of `Xtrain`. |
 | `Xtest` | Optional query matrix. If supplied, `knn()` fits and predicts immediately; otherwise it returns a reusable model. |
-| `backend` | Neighbour-search backend passed to `nn()`. |
+| `backend` | Device backend passed to `nn()`: `"auto"`, `"cpu"`, or `"cuda"`. |
+| `method` | Nearest-neighbour algorithm selector passed to `nn()`. |
 | `metric` | Distance metric passed to `nn()`: `"euclidean"`, `"cosine"`, or `"correlation"`. |
 | `task` | `"auto"`, `"classification"`, or `"regression"`. `"auto"` treats numeric `Ytrain` as regression and non-numeric `Ytrain` as classification. |
 | `k` | Default number of neighbours used for prediction. |
@@ -195,7 +198,7 @@ When `Xtest` is omitted, the return value is a `faissR_knn_model`.
 
 ```r
 predict(object, newdata, k = NULL,
-        vote = "majority", type = "response", ...)
+        backend = "auto", vote = "majority", type = "response", ...)
 ```
 
 | Argument | Description |
@@ -203,6 +206,7 @@ predict(object, newdata, k = NULL,
 | `object` | A fitted model returned by `knn(Xtrain, Ytrain, ...)`. |
 | `newdata` | Numeric query matrix with the same number of columns as the training matrix. |
 | `k` | Number of neighbours for this prediction call. If `NULL`, uses the model default. |
+| `backend` | Device backend for the prediction-time neighbour search: `"auto"`, `"cpu"`, or `"cuda"`. |
 | `vote` | `"majority"` for unweighted classification votes or regression means; `"weighted"` for inverse-distance weighting. |
 | `type` | `"response"` for predicted labels/values or `"prob"` for classification probabilities. |
 | `...` | Reserved for future options. |
@@ -235,7 +239,7 @@ library(faissR)
 
 x <- scale(as.matrix(iris[, 1:4]))
 
-nn_res <- nn_without_self(x, k = 15, backend = "cpu_auto", n_threads = 4)
+nn_res <- nn_without_self(x, k = 15, backend = "cpu", method = "auto", n_threads = 4)
 graph <- knn_graph(nn_res, k = 15, weight = "snn")
 leiden <- graph_cluster(graph, method = "leiden", backend = "cpu", n_threads = 4)
 
@@ -245,5 +249,5 @@ table(leiden$membership)
 For CUDA benchmarking on a GPU build:
 
 ```r
-nn_gpu <- nn_without_self(x, k = 15, backend = "cuda_auto")
+nn_gpu <- nn_without_self(x, k = 15, backend = "cuda", method = "auto")
 ```
