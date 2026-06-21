@@ -252,6 +252,68 @@ nn_implementation_backend <- function(out) {
     NA_character_
 }
 
+dominant_value <- function(x) {
+  x <- as.character(x)
+  x <- x[!is.na(x) & nzchar(x)]
+  if (!length(x)) return(NA_character_)
+  names(sort(table(x), decreasing = TRUE))[[1L]]
+}
+
+finite_median <- function(x) {
+  x <- suppressWarnings(as.numeric(x))
+  x <- x[is.finite(x)]
+  if (!length(x)) return(NA_real_)
+  stats::median(x)
+}
+
+finite_min <- function(x) {
+  x <- suppressWarnings(as.numeric(x))
+  x <- x[is.finite(x)]
+  if (!length(x)) return(NA_real_)
+  min(x)
+}
+
+finite_max <- function(x) {
+  x <- suppressWarnings(as.numeric(x))
+  x <- x[is.finite(x)]
+  if (!length(x)) return(NA_real_)
+  max(x)
+}
+
+summarize_nn_cycles <- function(ok) {
+  parts <- split(ok, paste(ok$dataset, ok$backend, ok$method, ok$metric, ok$k, sep = "__"))
+  summary <- lapply(parts, function(x) {
+    data.frame(
+      dataset = x$dataset[[1L]],
+      backend = x$backend[[1L]],
+      method = x$method[[1L]],
+      metric = x$metric[[1L]],
+      k = as.integer(x$k[[1L]]),
+      n = as.integer(x$n[[1L]]),
+      p = as.integer(x$p[[1L]]),
+      n_threads = as.integer(x$n_threads[[1L]]),
+      success_cycles = length(unique(x$cycle)),
+      success_rows = nrow(x),
+      median_elapsed_sec = finite_median(x$elapsed_sec),
+      min_elapsed_sec = finite_min(x$elapsed_sec),
+      max_elapsed_sec = finite_max(x$elapsed_sec),
+      median_recall_at_k = finite_median(x$recall_at_k),
+      min_recall_at_k = finite_min(x$recall_at_k),
+      median_min_recall_at_k = finite_median(x$min_recall_at_k),
+      min_min_recall_at_k = finite_min(x$min_recall_at_k),
+      median_recall_query_n = finite_median(x$recall_query_n),
+      exact = any(as.logical(x$exact), na.rm = TRUE),
+      result_backend = dominant_value(x$result_backend),
+      resolved_backend = dominant_value(x$resolved_backend),
+      implementation_backend = dominant_value(x$implementation_backend),
+      recall_reference = dominant_value(x$recall_reference),
+      stringsAsFactors = FALSE
+    )
+  })
+  out <- do.call(rbind, summary)
+  out[order(out$dataset, out$backend, out$metric, out$k, out$median_elapsed_sec), , drop = FALSE]
+}
+
 canonical_method_key <- function(method) {
   key <- tolower(gsub("[[:space:]_-]+", "", as.character(method)))
   aliases <- c(
@@ -572,6 +634,13 @@ if (nrow(ok)) {
   best_cycle$quality_score <- NULL
   utils::write.csv(best_cycle, file.path(out_dir, "nn_metric_best_by_dataset_backend_metric_k_cycle.csv"), row.names = FALSE)
 
+  cycle_summary <- summarize_nn_cycles(ok)
+  utils::write.csv(
+    cycle_summary,
+    file.path(out_dir, "nn_metric_cycle_summary.csv"),
+    row.names = FALSE
+  )
+
   fastest <- NULL
   tunable <- ok[!is.na(ok$recall_at_k) & ok$recall_at_k >= recall_threshold, , drop = FALSE]
   if (nrow(tunable)) {
@@ -644,6 +713,7 @@ materials <- c(
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",
   "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches.",
+  "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/metric/k and reports success counts, median/min/max elapsed time, recall stability, and the dominant implementation backend.",
   "`nn_metric_best_by_dataset_backend_metric_k_cycle.csv` stores the best row within each cycle; `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the overall best row across cycles for backward-compatible summaries.",
   "The script does not add benchmark-only helpers to the package API."
 )

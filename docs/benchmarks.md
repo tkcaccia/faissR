@@ -87,6 +87,9 @@ default. Unsupported method/backend/metric combinations are preflighted with
 
 Use `--cycles=10` to repeat speed and recall measurements. The raw result table
 contains one row per dataset/backend/method/metric/k/cycle combination.
+`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by
+dataset/backend/method/metric/k and reports success counts, median/min/max
+elapsed time, recall stability, and the dominant implementation backend.
 `nn_metric_best_by_dataset_backend_metric_k_cycle.csv` keeps the best row within
 each cycle, while `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the
 overall best row across cycles for backward-compatible summaries.
