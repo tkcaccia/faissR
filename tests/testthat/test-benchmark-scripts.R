@@ -289,6 +289,25 @@ test_that("NN metric benchmark canonicalizes metric aliases before preflight", {
   expect_false(isTRUE(env$capability_status(caps, "cpu", "nsg", "ip")$supported))
 })
 
+test_that("NN metric benchmark requires canonical public method labels", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  caps <- nn_capabilities()
+
+  expect_equal(
+    env$canonical_method_values(c("exact", "hnsw", "cagra")),
+    c("exact", "hnsw", "cagra")
+  )
+  expect_error(
+    env$canonical_method_values(c("HNSW", "faiss_hnsw")),
+    "canonical lowercase"
+  )
+  expect_false(isTRUE(env$capability_status(caps, "cpu", "HNSW", "euclidean")$supported))
+  expect_false(isTRUE(env$capability_status(caps, "cpu", "faiss_hnsw", "euclidean")$supported))
+})
+
 test_that("NN metric benchmark defaults cover requested metrics and k grid", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),

@@ -457,33 +457,30 @@ rank_nn_metric_success <- function(ok, include_cycle = FALSE) {
 }
 
 canonical_method_key <- function(method) {
-  key <- tolower(gsub("[[:space:]_-]+", "", as.character(method)))
-  aliases <- c(
-    auto = "auto",
-    exact = "exact",
-    flat = "flat",
-    bruteforce = "bruteforce",
-    grid = "grid",
-    vptree = "vptree",
-    sparse = "sparse",
-    hnsw = "hnsw",
-    ivf = "ivf",
-    ivfpq = "ivfpq",
-    nsg = "nsg",
-    nndescent = "nndescent",
-    cagra = "cagra"
-  )
-  out <- unname(aliases[key])
-  out[is.na(out)] <- key[is.na(out)]
-  out
+  trimws(as.character(method))
+}
+
+canonical_method_values <- function(methods) {
+  methods <- unique(canonical_method_key(methods))
+  methods <- methods[nzchar(methods)]
+  invalid <- methods[!methods %in% default_nn_method_values()]
+  if (length(invalid)) {
+    stop(
+      "`methods` must use canonical lowercase public method labels. ",
+      "Invalid value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  methods
 }
 
 capability_row <- function(caps, backend, method, metric) {
   backend <- tolower(as.character(backend)[1L])
   metric <- canonical_metric_key(metric)[[1L]]
   method_key <- canonical_method_key(method)
-  caps_key <- canonical_method_key(caps$method)
-  hit <- caps[caps$backend == backend & caps_key == method_key & caps$metric == metric, , drop = FALSE]
+  hit <- caps[caps$backend == backend & caps$method == method_key & caps$metric == metric, , drop = FALSE]
   if (!nrow(hit)) return(NULL)
   hit[1L, , drop = FALSE]
 }
@@ -770,7 +767,7 @@ if (length(recall_threshold) != 1L || is.na(recall_threshold) || !is.finite(reca
 
 datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "SimulatedUniform2D", "SimulatedUniform3D"), collapse = ","))
 backends <- split_arg(args$backends, paste(default_nn_backend_values(), collapse = ","))
-methods <- split_arg(args$methods, paste(default_nn_method_values(), collapse = ","))
+methods <- canonical_method_values(split_arg(args$methods, paste(default_nn_method_values(), collapse = ",")))
 metrics <- canonical_metric_values(split_arg(args$metrics, paste(default_nn_metric_values(), collapse = ",")))
 if (!length(metrics)) metrics <- default_nn_metric_values()
 k_values <- as_int_vec_arg(split_arg(args$k_values, paste(default_nn_k_values(), collapse = ",")), default_nn_k_values())

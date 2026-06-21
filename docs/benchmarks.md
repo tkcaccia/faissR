@@ -274,7 +274,8 @@ metric matrix. It runs public `nn()` combinations over:
   `--backends`;
 - methods: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`,
   `"vptree"`, `"sparse"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"nsg"`,
-  `"nndescent"`, and `"cagra"`;
+  `"nndescent"`, and `"cagra"`; these must be canonical lowercase public
+  method labels, not resolved backend labels such as `faiss_hnsw`;
 - metrics: `"euclidean"`, `"cosine"`, `"correlation"`, and
   `"inner_product"` after alias canonicalization;
 - k values: `5`, `10`, `15`, `50`, and `100` by default.
