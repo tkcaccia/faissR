@@ -355,14 +355,25 @@ compare_fast_kmeans_to_recommendations <- function(cycle_summary, recommendation
   comparison[order(comparison$dataset, comparison$fast_backend), , drop = FALSE]
 }
 
+kmeans_faiss_gpu_available <- function() {
+  helper <- tryCatch(
+    getFromNamespace("faiss_gpu_available", "faissR"),
+    error = function(e) NULL
+  )
+  is.function(helper) && isTRUE(helper())
+}
+
 kmeans_expected_skip <- function(method, backend) {
   method <- tolower(as.character(method)[1L])
   backend <- tolower(as.character(backend)[1L])
   if (!identical(method, "fast_kmeans")) return(NULL)
   if (backend %in% c("cuda", "cuda_faiss", "faiss_gpu", "cuda_cuvs", "cuvs") &&
-      !isTRUE(faissR::cuda_available()) &&
-      !isTRUE(faissR::cuvs_available())) {
-    return("CUDA k-means is unavailable in this faissR build/runtime; explicit CUDA requests are expected skips.")
+      (!isTRUE(faissR::cuda_available()) ||
+       (!isTRUE(kmeans_faiss_gpu_available()) && !isTRUE(faissR::cuvs_available())))) {
+    return(paste(
+      "CUDA k-means requires a CUDA runtime plus FAISS GPU k-means or direct cuVS k-means;",
+      "explicit CUDA requests are expected skips in this faissR build/runtime."
+    ))
   }
   NULL
 }
