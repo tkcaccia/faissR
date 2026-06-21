@@ -29,9 +29,10 @@ automatic neighborhood size and includes the self-neighbor when `points`
 is `data`.}
 
 \item{backend}{Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
-uses a validated CUDA route only when the requested method/metric combination
-is supported, and otherwise resolves to CPU. Explicit `"cuda"` fails clearly
-when CUDA support or the selected CUDA combination is unavailable.}
+uses a validated CUDA route only when the requested method/metric
+combination is supported, and otherwise resolves to CPU. Explicit
+`"cuda"` fails clearly when CUDA support or the selected CUDA combination
+is unavailable.}
 
 \item{method}{Algorithm selector. `"auto"` chooses a shape-aware default for
 the selected backend. Other values include `"exact"`, `"flat"`,
@@ -43,17 +44,18 @@ backend/method combinations fail clearly; for example,
 \item{metric}{Distance metric. The intentionally small public set is
 `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
 `"euclidean"` is the validated high-performance default. `"cosine"` and
-`"correlation"` are implemented for exact CPU KNN, FAISS CPU/GPU Flat, and
-RcppHNSW. FAISS Flat uses row L2 normalization for cosine and row centering
-plus L2 normalization for correlation before Flat IP search; distances are
-returned as `1 - similarity`. CPU `method = "auto"` can use FAISS Flat for
-larger exact non-Euclidean query workloads and RcppHNSW/hnswlib for large
-non-Euclidean self-search. CPU `method = "HNSW"` uses FAISS HNSW for Euclidean
-search when available and RcppHNSW/hnswlib for cosine, correlation, and
-inner-product search. `"inner_product"` is exact on
-native CPU routes and maps to FAISS Flat IP for `method = "flat"` when
-available. Unsupported backend combinations fail clearly instead of returning
-neighbours computed under a different metric.}
+`"correlation"` are implemented for exact CPU KNN, FAISS CPU/GPU Flat,
+and RcppHNSW. FAISS Flat uses row L2 normalization for cosine and row
+centering plus L2 normalization for correlation before Flat IP search;
+distances are returned as `1 - similarity`. CPU `method = "auto"` can use
+FAISS Flat for larger exact non-Euclidean query workloads and
+RcppHNSW/hnswlib for large non-Euclidean self-search. CPU `method = "HNSW"`
+uses FAISS HNSW for Euclidean search when available and RcppHNSW/hnswlib
+for cosine, correlation, and inner-product search.
+`"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP
+for `method = "flat"` when available. Unsupported backend combinations
+fail clearly instead of returning neighbours computed under a different
+metric.}
 
 \item{tuning}{Tuning policy for approximate GPU methods. `"auto"` uses the
 tuned default for the resolved method, `"cache"` reuses/stores pilot

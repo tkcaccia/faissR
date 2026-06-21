@@ -8,8 +8,8 @@
 \description{
 `faissR` contains FAISS-backed neighbour search, graph construction, graph clustering, k-means,
 and kNN classifier/regressor helpers. The main public entry points are
-[nn()], [candidate_knn()], [knn_graph()], [graph_cluster()], [fast_kmeans()],
-[knn()], [predict()], [backend_info()], and [nn_capabilities()].
+`nn()`, `candidate_knn()`, `knn_graph()`, `graph_cluster()`, `fast_kmeans()`,
+`knn()`, `predict()`, `backend_info()`, and `nn_capabilities()`.
 Classification probabilities
 are returned with `predict(type = "prob")`.
 }

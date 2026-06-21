@@ -268,7 +268,7 @@ cugraph_available()
 
 | Function | Arguments | Description |
 | --- | --- | --- |
-| `backend_info()` | None. | Returns a data frame with backend availability, explicit backend labels, device/runtime hints, and notes. |
+| `backend_info()` | None. | Returns a data frame with backend availability, public call hints, resolved/internal route labels, device/runtime hints, and notes. |
 | `faiss_available()` | None. | Returns `TRUE` when faissR was compiled and linked against FAISS. |
 | `cuda_available()` | None. | Returns `TRUE` when native CUDA support was compiled and a CUDA device/runtime is available. |
 | `cuvs_available()` | None. | Returns `TRUE` when direct RAPIDS cuVS backends were compiled and can be loaded. |

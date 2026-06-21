@@ -103,10 +103,10 @@ cugraph_available()
 ```
 
 `backend_info()` returns a data frame with compiled/runtime availability,
-explicit backend labels, device/runtime hints, and notes. The boolean helpers
-return a single `TRUE`/`FALSE` value. They are useful for diagnostics and
-examples, but explicit backend calls still validate availability at execution
-time.
+public call hints, resolved/internal route labels, device/runtime hints, and
+notes. The boolean helpers return a single `TRUE`/`FALSE` value. They are
+useful for diagnostics and examples, but explicit backend calls still validate
+availability at execution time.
 `nn_capabilities()` returns a data frame with one row per public
 method/backend/metric combination and marks unsupported combinations before a
 benchmark tries to run them.

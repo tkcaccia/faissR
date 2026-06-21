@@ -2,26 +2,27 @@
 #'
 #' `knn()` is the high-level supervised kNN API. With `Xtrain` and `Ytrain`
 #' only, it returns a reusable model. With `Xtest`, it immediately predicts the
-#' query rows by fitting the model and calling [predict()] internally. The
-#' low-level nearest-neighbour search API remains [nn()].
+#' query rows by fitting the model and calling `predict()` internally. The
+#' low-level nearest-neighbour search API remains `nn()`.
 #'
 #' @param Xtrain Numeric training matrix with observations in rows.
 #' @param Ytrain Training labels or numeric response.
 #' @param Xtest Optional numeric query matrix. If supplied, `knn()` returns
 #'   predictions for `Xtest`; otherwise it returns a fitted model.
-#' @param backend Device backend passed to [nn()]: `"auto"`, `"cpu"`, or
-#'   `"cuda"`. `"auto"` follows [nn()] backend/method/metric resolution,
+#' @param backend Device backend passed to \code{\link{nn}()}: `"auto"`, `"cpu"`, or
+#'   `"cuda"`. `"auto"` follows \code{\link{nn}()} backend/method/metric resolution,
 #'   using CUDA only for validated CUDA combinations and CPU otherwise.
-#' @param method Nearest-neighbour algorithm selector passed to [nn()]. See
-#'   [nn()] for method descriptions and references.
-#' @param metric Distance metric passed to [nn()].
-#' @param tuning Tuning policy passed to [nn()]. `"auto"` uses the tuned default
-#'   for the resolved method.
+#' @param method Nearest-neighbour algorithm selector passed to
+#'   \code{\link{nn}()}. See \code{\link{nn}()} for method descriptions and
+#'   references.
+#' @param metric Distance metric passed to \code{\link{nn}()}.
+#' @param tuning Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
+#'   tuned default for the resolved method.
 #' @param task `"auto"`, `"classification"`, or `"regression"`. `"auto"` treats
 #'   numeric responses as regression and other response types as classification.
-#' @param k Default number of neighbours used by [predict()] and by immediate
+#' @param k Default number of neighbours used by `predict()` and by immediate
 #'   predictions when `Xtest` is supplied.
-#' @param n_threads CPU threads passed to [nn()] for CPU backends.
+#' @param n_threads CPU threads passed to \code{\link{nn}()} for CPU backends.
 #' @param vote `"majority"` or `"weighted"` for immediate predictions.
 #' @param type `"response"` for class/regression predictions or `"prob"` for
 #'   class probability matrices from classification models.
@@ -139,7 +140,7 @@ knn_model_fit <- function(Xtrain,
 
 #' Predict from a faissR kNN model
 #'
-#' @param object A model returned by [knn()].
+#' @param object A model returned by \code{\link{knn}()}.
 #' @param newdata Numeric query matrix with observations in rows.
 #' @param k Number of neighbours.
 #' @param backend Device backend used for this prediction call: `"auto"`,

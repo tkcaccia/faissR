@@ -16,7 +16,7 @@
 )
 }
 \arguments{
-\item{object}{A model returned by [knn()].}
+\item{object}{A model returned by \code{\link{knn}()}.}
 
 \item{newdata}{Numeric query matrix with observations in rows.}
 

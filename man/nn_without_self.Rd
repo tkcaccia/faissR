@@ -22,18 +22,19 @@ observations in rows.}
 \item{k}{Number of non-self neighbours to return.}
 
 \item{backend}{Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
-follows \code{nn()} backend/method/metric resolution, using CUDA only for
+follows \code{\link{nn}()} backend/method/metric resolution, using CUDA only for
 validated CUDA combinations and CPU otherwise.}
 
-\item{method}{Algorithm selector passed through the same resolver as [nn()].
-See [nn()] for method descriptions and references.}
+\item{method}{Algorithm selector passed through the same resolver as
+\code{\link{nn}()}. See \code{\link{nn}()} for method descriptions and
+references.}
 
 \item{metric}{Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`,
-or `"inner_product"`. See \code{nn()} for metric/backend support details,
-including metric-aware CPU HNSW routing.}
+or `"inner_product"`. See \code{\link{nn}()} for metric/backend support
+details, including metric-aware CPU HNSW routing.}
 
-\item{tuning}{Tuning policy passed to [nn()]. `"auto"` uses the tuned default
-for the resolved method.}
+\item{tuning}{Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
+tuned default for the resolved method.}
 
 \item{n_threads}{Number of CPU worker threads used by CPU backends.}
 }
@@ -41,7 +42,7 @@ for the resolved method.}
 A `faissR_nn` object with `indices` and `distances` matrices.
 }
 \description{
-`nn_without_self()` is a convenience wrapper around [nn()] for the common
+`nn_without_self()` is a convenience wrapper around `nn()` for the common
 case where the reference and query data are the same matrix and the
 self-neighbour should be removed. It returns exactly `k` non-self neighbours
 per observation.

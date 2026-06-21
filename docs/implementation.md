@@ -363,7 +363,7 @@ kNN prediction.
 - `cuvs_available()` reports direct RAPIDS cuVS availability.
 - `cugraph_available()` reports RAPIDS libcugraph graph-clustering support.
 - `backend_info()` returns a data frame summarizing compiled/runtime backends,
-  explicit backend labels, devices, and notes.
+  public call hints, resolved/internal route labels, devices, and notes.
 
 These helpers are informational; explicit backend calls still validate
 availability at execution time.

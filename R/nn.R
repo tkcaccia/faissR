@@ -4164,7 +4164,7 @@ nn <- function(data,
 
 #' Nearest neighbours excluding the self match
 #'
-#' `nn_without_self()` is a convenience wrapper around [nn()] for the common
+#' `nn_without_self()` is a convenience wrapper around `nn()` for the common
 #' case where the reference and query data are the same matrix and the
 #' self-neighbour should be removed. It returns exactly `k` non-self neighbours
 #' per observation.
@@ -4173,15 +4173,16 @@ nn <- function(data,
 #'   observations in rows.
 #' @param k Number of non-self neighbours to return.
 #' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
-#'   follows [nn()] backend/method/metric resolution, using CUDA only for
+#'   follows \code{\link{nn}()} backend/method/metric resolution, using CUDA only for
 #'   validated CUDA combinations and CPU otherwise.
-#' @param method Algorithm selector passed through the same resolver as [nn()].
-#'   See [nn()] for method descriptions and references.
+#' @param method Algorithm selector passed through the same resolver as
+#'   \code{\link{nn}()}. See \code{\link{nn}()} for method descriptions and
+#'   references.
 #' @param metric Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`,
-#'   or `"inner_product"`. See [nn()] for metric/backend support details,
-#'   including metric-aware CPU HNSW routing.
-#' @param tuning Tuning policy passed to [nn()]. `"auto"` uses the tuned default
-#'   for the resolved method.
+#'   or `"inner_product"`. See \code{\link{nn}()} for metric/backend support
+#'   details, including metric-aware CPU HNSW routing.
+#' @param tuning Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
+#'   tuned default for the resolved method.
 #' @param n_threads Number of CPU worker threads used by CPU backends.
 #' @return A `faissR_nn` object with `indices` and `distances` matrices.
 #' @export

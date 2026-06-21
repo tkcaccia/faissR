@@ -4,8 +4,9 @@
 #' currently run. It never silently falls back from an explicit GPU request to
 #' CPU; this table is informational only.
 #'
-#' @return A data frame with one row per native backend and columns describing
-#'   availability, device/runtime hints, and a short note.
+#' @return A data frame with one row per compiled/runtime backend family and
+#'   columns describing availability, public call hints, resolved/internal route
+#'   labels, device/runtime hints, and a short note.
 #' @export
 backend_info <- function() {
   cuda_knn <- backend_flag(cuda_available)
@@ -20,11 +21,19 @@ backend_info <- function() {
     backend = c("cpu", "faiss", "faiss_gpu_cuvs", "cuvs", "cuda", "cugraph"),
     available = c(TRUE, faiss_knn, faiss_knn && cuda_knn, cuvs_knn, cuda_knn, cugraph_graph && cuda_knn),
     knn_available = c(TRUE, faiss_knn, faiss_knn && cuda_knn, cuvs_knn, cuda_knn, FALSE),
-    explicit_backend = c(
+    public_call = c(
+      "backend = \"cpu\"",
+      "backend = \"cpu\" or \"cuda\", method = \"flat\"/\"IVF\"/\"HNSW\"/\"CAGRA\" as supported",
+      "backend = \"cuda\", method = \"IVF\"/\"IVFPQ\"/\"CAGRA\"",
+      "backend = \"cuda\", method = \"bruteforce\"/\"NNDescent\"/\"CAGRA\"",
+      "backend = \"cuda\"",
+      "graph_cluster(..., backend = \"cuda\")"
+    ),
+    resolved_route = c(
       "cpu",
-      "faiss",
+      "faiss_flat_l2/faiss_ivf/faiss_hnsw/faiss_gpu_*",
       "faiss_gpu_ivf_flat/faiss_gpu_ivfpq/faiss_gpu_cagra",
-      "cuda_cuvs",
+      "cuda_cuvs_bruteforce/cuda_cuvs_nndescent/cuda_cuvs_cagra",
       "cuda",
       "graph_cluster(..., backend = \"cuda\")"
     ),
@@ -47,19 +56,19 @@ backend_info <- function() {
     note = c(
       "Native CPU path is always available.",
       if (faiss_knn) {
-        "Real FAISS C++ KNN is available for explicit FAISS requests."
+        "Real FAISS C++ KNN is available behind public CPU/CUDA method requests."
       } else {
-        "Real FAISS C++ KNN is unavailable; explicit FAISS requests will fail."
+        "Real FAISS C++ KNN is unavailable; FAISS-backed method requests will fail."
       },
       if (faiss_knn && cuda_knn) {
         "FAISS GPU IVF-Flat, IVF-PQ, and CAGRA use FAISS GPU indexes with NVIDIA cuVS integration when the linked FAISS library provides it; result backends report GpuIndexIVFFlat_cuVS, GpuIndexIVFPQ_cuVS, or GpuIndexCagra_cuVS."
       } else {
-        "FAISS GPU cuVS-integrated IVF/CAGRA requests are unavailable; explicit FAISS GPU IVF/CAGRA requests will fail."
+        "FAISS GPU cuVS-integrated IVF/CAGRA requests are unavailable; public CUDA IVF/CAGRA method requests will fail unless another validated CUDA route is available."
       },
       if (cuvs_knn) {
-        "RAPIDS cuVS CUDA KNN is available for explicit cuVS requests."
+        "RAPIDS cuVS CUDA KNN is available behind public CUDA method requests."
       } else {
-        "RAPIDS cuVS CUDA KNN is unavailable; explicit cuVS requests will fail."
+        "RAPIDS cuVS CUDA KNN is unavailable; cuVS-backed public CUDA method requests will fail."
       },
       if (cuda_knn) {
         "Native CUDA KNN path is available for explicit CUDA requests."
