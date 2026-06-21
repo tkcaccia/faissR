@@ -11,7 +11,8 @@
 #'   predictions for `Xtest`; otherwise it returns a fitted model.
 #' @param backend Device backend passed to [nn()]: `"auto"`, `"cpu"`, or
 #'   `"cuda"`. `"auto"` uses CUDA when available and CPU otherwise.
-#' @param method Nearest-neighbour algorithm selector passed to [nn()].
+#' @param method Nearest-neighbour algorithm selector passed to [nn()]. See
+#'   [nn()] for method descriptions and references.
 #' @param metric Distance metric passed to [nn()].
 #' @param tuning Tuning policy passed to [nn()]. `"auto"` uses the tuned default
 #'   for the resolved method.

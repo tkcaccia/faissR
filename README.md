@@ -54,6 +54,8 @@ for example `method = "grid"` or `method = "CAGRA"`. Thus
 With the default `method = "auto"`, faissR chooses the most appropriate method
 for the selected backend. With `tuning = "auto"`, approximate GPU methods use
 the tuned defaults identified for the resolved method.
+The [API guide](docs/usage-api.md) describes each nearest-neighbour and graph
+clustering method and cites the relevant algorithm/software references.
 
 ## Installation
 

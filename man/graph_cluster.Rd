@@ -26,7 +26,7 @@ graph_cluster(
 }
 \arguments{
 \item{graph}{A numeric matrix/data frame, a KNN object returned by \code{nn()}, or an embedding object with a matrix \code{layout}.}
-\item{method}{One of \code{"random_walking"}, \code{"louvain"}, or \code{"leiden"}. \code{"random_walking"} uses a native random-walk label-propagation pass inspired by walktrap/random-walk clustering.}
+\item{method}{One of \code{"random_walking"}, \code{"louvain"}, or \code{"leiden"}. \code{"random_walking"} uses a native random-walk label-propagation pass inspired by walktrap/random-walk clustering. \code{"louvain"} uses modularity local moving. \code{"leiden"} adds a refinement pass intended to split disconnected communities after local moving. See References.}
 \item{backend}{Community-detection backend. \code{"auto"} uses CUDA when libcugraph is available and CPU otherwise. \code{"cpu"} uses native faissR C++/OpenMP code. \code{"cuda"} uses native RAPIDS libcugraph for Louvain and Leiden when libcugraph was detected at build time; random-walking is CPU-only.}
 \item{k}{Number of neighbours when \code{graph} is not already a KNN object.}
 \item{graph_backend}{Backend passed to \code{nn_without_self()} for neighbour search.}
@@ -46,6 +46,14 @@ graph_cluster(
 }
 \value{
 A \code{faissR_graph_cluster} list with membership, modularity, method, backend, graph edge list, parameters, and source acknowledgements.
+}
+\details{
+Method descriptions:
+\itemize{
+  \item \code{"random_walking"}: native CPU random-walk label-propagation/community method inspired by walktrap-style random-walk clustering and local parallel random-walk literature. CUDA random-walking is not enabled yet.
+  \item \code{"louvain"}: native CPU Louvain modularity local-moving implementation, with optional RAPIDS libcugraph CUDA execution when faissR is built with cuGraph.
+  \item \code{"leiden"}: native CPU Leiden-style local moving plus refinement, with optional RAPIDS libcugraph CUDA execution when available.
+}
 }
 \references{
 Blondel VD, Guillaume JL, Lambiotte R, Lefebvre E. Fast unfolding of communities in large networks. Journal of Statistical Mechanics: Theory and Experiment. 2008;2008(10):P10008.

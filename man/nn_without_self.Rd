@@ -24,7 +24,8 @@ observations in rows.}
 \item{backend}{Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
 uses CUDA when available and CPU otherwise.}
 
-\item{method}{Algorithm selector passed through the same resolver as [nn()].}
+\item{method}{Algorithm selector passed through the same resolver as [nn()].
+See [nn()] for method descriptions and references.}
 
 \item{metric}{Distance metric: `"euclidean"`, `"cosine"`, or
 `"correlation"`.}

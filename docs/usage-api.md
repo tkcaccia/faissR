@@ -50,6 +50,24 @@ Returns a `faissR_nn` list with `indices` and `distances` matrices. Indices are
 1-based R row numbers. The resolved backend is stored in
 `attr(result, "backend")`.
 
+### Nearest-Neighbour Methods
+
+| `method` | Description |
+| --- | --- |
+| `"auto"` | Shape-aware selector for the chosen backend. CPU auto uses exact search for small work, grid search for large 2D/3D self-search, FAISS IVF for million-row self-search where HNSW graph construction is too memory-heavy, and FAISS HNSW for large high-dimensional CPU searches when FAISS is available [1-2,5]. CUDA auto uses CUDA grid for large 2D/3D self-search, exact FAISS GPU Flat or cuVS brute force for small/medium searches, and FAISS GPU CAGRA for very large self-search when available [1-3,13-15]. |
+| `"exact"` | Exact nearest-neighbour search. On CPU this uses faissR's native exact route; on CUDA it uses FAISS GPU Flat when available, otherwise cuVS brute force [1-3,16]. |
+| `"flat"` | FAISS Flat index route for exhaustive L2 search. It is exact but can avoid some generic R wrapper overhead and uses FAISS CPU/GPU implementations when available [1-2,16]. |
+| `"bruteforce"` | Brute-force exhaustive search. On CUDA this prefers the RAPIDS cuVS brute-force backend; on CPU it maps to the exact CPU route [3]. |
+| `"grid"` | Native spatial grid search for 2D/3D Euclidean self-KNN. It is intended for low-dimensional spatial or simulated data and errors clearly outside supported dimensions. |
+| `"vptree"` | Native exact vantage-point-tree search for Euclidean CPU queries. It is mainly useful for low-dimensional CPU data where tree pruning helps. |
+| `"sparse"` | Native exact sparse `dgCMatrix` CPU search. It keeps sparse input sparse instead of densifying. |
+| `"HNSW"` | FAISS CPU HNSW graph-search index. HNSW is a high-recall approximate nearest-neighbour graph method and is the default CPU approximate route for many large high-dimensional datasets [5,16]. |
+| `"IVF"` | FAISS inverted-file index. IVF partitions vectors into coarse lists and probes selected lists; it trades exactness for speed/memory and is useful for very large CPU/GPU searches [1-2,16]. |
+| `"IVFPQ"` | FAISS IVF with product quantization. IVFPQ compresses vectors and is best treated as a memory-pressure method rather than an accuracy-first default [1-2,6,16]. |
+| `"NSG"` | FAISS CPU NSG graph-search index when the linked FAISS build exposes it. It is kept as an optional graph-search baseline [16]. |
+| `"NNDescent"` | NN-descent style approximate graph construction. CPU uses FAISS NNDescent when available; CUDA maps to cuVS NN-descent [3-4,16]. |
+| `"CAGRA"` | CUDA-only graph-search method. faissR prefers FAISS GPU CAGRA when FAISS is built with NVIDIA cuVS integration and otherwise uses direct cuVS CAGRA when available [3,13-16]. |
+
 ## `nn_without_self()`
 
 ```r
@@ -147,6 +165,14 @@ graph_cluster(graph, method = "leiden", backend = "auto",
 
 Returns a `faissR_graph_cluster` object with `membership`, `modularity`,
 parameters, backend metadata, and source acknowledgements.
+
+### Graph Clustering Methods
+
+| `method` | Description |
+| --- | --- |
+| `"random_walking"` | Native CPU random-walk label-propagation/community method inspired by walktrap-style random-walk clustering and local parallel random-walk literature. CUDA random-walking is not enabled yet [10,19]. |
+| `"louvain"` | Native CPU Louvain modularity local-moving implementation, with optional RAPIDS libcugraph CUDA execution when faissR is built with cuGraph [9,12]. |
+| `"leiden"` | Native CPU Leiden-style local moving plus refinement to split disconnected communities, with optional RAPIDS libcugraph CUDA execution when available. The CPU implementation acknowledges Leiden and shared-memory/dynamic Leiden work [11-12,17-18]. |
 
 ## `fast_kmeans()`
 

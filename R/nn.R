@@ -3540,6 +3540,62 @@ grid_self_knn <- function(data,
 #' Invalid combinations stop clearly before computation; for example,
 #' `backend = "cpu", method = "CAGRA"` errors because CAGRA is CUDA-only.
 #'
+#' @details
+#' Method descriptions:
+#' \itemize{
+#'   \item `"auto"`: shape-aware selector for the selected backend. CPU auto
+#'   uses exact, grid, FAISS IVF, or FAISS HNSW depending on data shape and
+#'   size. CUDA auto uses CUDA grid, exact FAISS GPU Flat/cuVS brute force, or
+#'   FAISS GPU CAGRA when appropriate [1-3,5,13-15].
+#'   \item `"exact"`: exact nearest-neighbour search. CPU uses faissR's native
+#'   exact route; CUDA uses FAISS GPU Flat or cuVS brute force when available
+#'   [1-3,16].
+#'   \item `"flat"`: FAISS Flat exhaustive L2 index, exact on supported FAISS
+#'   CPU/GPU builds [1-2,16].
+#'   \item `"bruteforce"`: exhaustive brute-force search. CUDA prefers RAPIDS
+#'   cuVS brute force; CPU maps to exact CPU search [3].
+#'   \item `"grid"`: native exact 2D/3D Euclidean spatial grid search.
+#'   \item `"vptree"`: native exact CPU vantage-point-tree search.
+#'   \item `"sparse"`: native exact sparse `dgCMatrix` CPU search.
+#'   \item `"HNSW"`: FAISS CPU HNSW approximate graph-search index [5,16].
+#'   \item `"IVF"`: FAISS inverted-file index, trading exhaustive search for
+#'   coarse-list probing [1-2,16].
+#'   \item `"IVFPQ"`: FAISS inverted-file index with product quantization,
+#'   mainly for compressed-memory approximate search [1-2,6,16].
+#'   \item `"NSG"`: FAISS CPU NSG graph-search index when exposed by the linked
+#'   FAISS build [16].
+#'   \item `"NNDescent"`: NN-descent approximate graph construction via FAISS
+#'   on CPU or cuVS on CUDA [3-4,16].
+#'   \item `"CAGRA"`: CUDA-only graph-search method via FAISS GPU CAGRA/cuVS
+#'   integration or direct RAPIDS cuVS CAGRA [3,13-16].
+#' }
+#'
+#' References are numbered as in `docs/references.md` in the GitHub
+#' repository.
+#'
+#' @references
+#' Johnson J, Douze M, Jegou H. Billion-scale similarity search with GPUs. IEEE
+#' Transactions on Big Data. 2021;7:535-547.
+#'
+#' Douze M, Guzhva A, Deng C, Johnson J, Szilvasy G, Mazaré PE, et al. The
+#' FAISS library. arXiv 2024. See also the FAISS C++ API documentation.
+#'
+#' RAPIDS Development Team. RAPIDS cuVS: GPU-accelerated vector search and
+#' clustering. https://github.com/rapidsai/cuvs.
+#'
+#' Dong W, Moses C, Li K. Efficient k-nearest neighbor graph construction for
+#' generic similarity measures. WWW 2011:577-586.
+#'
+#' Malkov YA, Yashunin DA. Efficient and robust approximate nearest neighbor
+#' search using hierarchical navigable small world graphs. IEEE TPAMI.
+#' 2020;42:824-836.
+#'
+#' Jégou H, Douze M, Schmid C. Product quantization for nearest neighbor
+#' search. IEEE TPAMI. 2011;33:117-128.
+#'
+#' NVIDIA, Meta, and FAISS documentation for FAISS GPU indexes backed by NVIDIA
+#' cuVS, including IVF and CAGRA integration.
+#'
 #' @param data Numeric matrix/data frame or sparse `Matrix` object of reference
 #'   observations in rows. Sparse inputs use the native exact `dgCMatrix`
 #'   backend for `backend = "auto"` or `"cpu"`.
@@ -3618,6 +3674,7 @@ nn <- function(data,
 #' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
 #'   uses CUDA when available and CPU otherwise.
 #' @param method Algorithm selector passed through the same resolver as [nn()].
+#'   See [nn()] for method descriptions and references.
 #' @param metric Distance metric: `"euclidean"`, `"cosine"`, or
 #'   `"correlation"`.
 #' @param tuning Tuning policy passed to [nn()]. `"auto"` uses the tuned default
