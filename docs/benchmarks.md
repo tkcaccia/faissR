@@ -117,6 +117,9 @@ unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.
 
 Use `--cycles=10` to repeat speed and recall measurements. The raw result table
 contains one row per dataset/backend/method/metric/k/cycle combination.
+`--recall_threshold` must be a numeric value between 0 and 1; invalid values
+stop before the benchmark starts instead of silently changing recommendation
+rules.
 `nn_metric_cycle_summary.csv` aggregates successful rows across cycles by
 dataset/backend/method/metric/k and reports success counts, median/min/max
 elapsed time, recall stability, and the dominant implementation backend.
@@ -208,8 +211,9 @@ safer table for comparing neighbourhood sizes and Louvain/Leiden target counts.
 graph/clustering/backend/method row within `ari_tolerance` of the best median
 ARI for each dataset/k/target-cluster-count combination; when ARI is
 available and median total times tie, higher median ARI and then higher median
-modularity break the tie. When ARI is unavailable it selects the fastest median
-total-time row. The
+modularity break the tie. `--ari_tolerance` must be a non-negative number and
+is validated before datasets are loaded. When ARI is unavailable it selects the
+fastest median total-time row. The
 `recommendation_basis` column records whether the row was selected as
 `"fastest_within_ari_tolerance"` or `"speed_only_no_ari"`.
 `graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where
@@ -400,6 +404,8 @@ same best-row ranking per dataset/centers combination, which is the safer table
 for comparing different requested cluster counts.
 `kmeans_recommendations_from_cycles.csv` selects the fastest row within
 `ari_tolerance` of the best median ARI for each dataset/centers combination;
+`--ari_tolerance` must be a non-negative number and is validated before
+datasets are loaded.
 when ARI is available and median times tie, higher median ARI and then lower
 median total within-cluster sum of squares break the tie. When ARI is
 unavailable it selects the fastest median-time row. The

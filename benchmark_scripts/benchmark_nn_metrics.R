@@ -120,6 +120,15 @@ as_int_arg <- function(x, default) {
   if (length(value) != 1L || is.na(value) || value < 1L) as.integer(default) else value
 }
 
+required_probability_arg <- function(x, arg) {
+  value <- suppressWarnings(as.numeric(x))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) ||
+      value < 0 || value > 1) {
+    stop("`", arg, "` must be a numeric value between 0 and 1.", call. = FALSE)
+  }
+  value
+}
+
 configure_threads <- function(n_threads) {
   value <- as.character(as.integer(n_threads))
   Sys.setenv(
@@ -897,11 +906,7 @@ cycles <- as_int_arg(args$cycles, 1L)
 quality_n <- as_int_arg(args$quality_n, 512L)
 quality_max_ops <- suppressWarnings(as.numeric(args$quality_max_ops %||% "5e9"))
 if (length(quality_max_ops) != 1L || is.na(quality_max_ops) || !is.finite(quality_max_ops)) quality_max_ops <- 5e9
-recall_threshold <- suppressWarnings(as.numeric(args$recall_threshold %||% "0.98"))
-if (length(recall_threshold) != 1L || is.na(recall_threshold) || !is.finite(recall_threshold) ||
-    recall_threshold < 0 || recall_threshold > 1) {
-  recall_threshold <- 0.98
-}
+recall_threshold <- required_probability_arg(args$recall_threshold %||% "0.98", "recall_threshold")
 
 datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "SimulatedUniform2D", "SimulatedUniform3D"), collapse = ","))
 backends <- validate_backend_values(split_arg(args$backends, paste(default_nn_backend_values(), collapse = ",")))

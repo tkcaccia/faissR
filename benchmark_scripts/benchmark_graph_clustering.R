@@ -30,6 +30,14 @@ as_int_vec_arg <- function(x, default) {
   if (!length(value)) suppressWarnings(as.integer(default)) else value
 }
 
+required_nonnegative_numeric_arg <- function(x, arg) {
+  value <- suppressWarnings(as.numeric(x))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 0) {
+    stop("`", arg, "` must be a non-negative numeric value.", call. = FALSE)
+  }
+  value
+}
+
 default_graph_k_values <- function() {
   c(15L, 50L, 100L)
 }
@@ -698,10 +706,7 @@ configure_threads(n_threads)
 seed <- as_int_arg(args$seed, 1L)
 timeout <- as_int_arg(args$timeout, 600L)
 cycles <- as_int_arg(args$cycles, 1L)
-ari_tolerance <- suppressWarnings(as.numeric(args$ari_tolerance %||% "0.01"))
-if (length(ari_tolerance) != 1L || is.na(ari_tolerance) || !is.finite(ari_tolerance) || ari_tolerance < 0) {
-  ari_tolerance <- 0.01
-}
+ari_tolerance <- required_nonnegative_numeric_arg(args$ari_tolerance %||% "0.01", "ari_tolerance")
 k_values <- as_int_vec_arg(
   split_arg(args$k_values, paste(default_graph_k_values(), collapse = ",")),
   default_graph_k_values()

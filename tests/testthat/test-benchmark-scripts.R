@@ -423,6 +423,17 @@ test_that("NN metric benchmark defaults cover requested metrics and k grid", {
     env$as_int_vec_arg(c("unknown"), env$default_nn_k_values()),
     env$default_nn_k_values()
   )
+  expect_equal(env$required_probability_arg("0.98", "recall_threshold"), 0.98)
+  expect_equal(env$required_probability_arg(0, "recall_threshold"), 0)
+  expect_equal(env$required_probability_arg(1, "recall_threshold"), 1)
+  expect_error(
+    env$required_probability_arg("high", "recall_threshold"),
+    "between 0 and 1"
+  )
+  expect_error(
+    env$required_probability_arg(1.1, "recall_threshold"),
+    "between 0 and 1"
+  )
 })
 
 test_that("NN metric auto comparison preserves recommendation basis", {
@@ -811,6 +822,16 @@ test_that("k-means benchmark centers argument is explicit", {
   expect_equal(env$required_positive_int_arg("3", "centers"), 3L)
   expect_error(env$required_positive_int_arg("auto", "centers"), "positive integer")
   expect_error(env$required_positive_int_arg(0L, "centers"), "positive integer")
+  expect_equal(env$required_nonnegative_numeric_arg("0.01", "ari_tolerance"), 0.01)
+  expect_equal(env$required_nonnegative_numeric_arg(0, "ari_tolerance"), 0)
+  expect_error(
+    env$required_nonnegative_numeric_arg("auto", "ari_tolerance"),
+    "non-negative numeric"
+  )
+  expect_error(
+    env$required_nonnegative_numeric_arg(-0.1, "ari_tolerance"),
+    "non-negative numeric"
+  )
 })
 
 test_that("k-means benchmark recommendations are grouped by dataset and centers", {
@@ -1105,6 +1126,16 @@ test_that("graph benchmark target cluster mode is explicit", {
   expect_null(env$label_target_clusters(rep(letters[1:3], each = 2L), "none"))
   expect_equal(env$label_target_clusters(rep(letters[1:3], each = 2L), "labels"), 3L)
   expect_error(env$normalize_target_clusters_mode("labelled"), "target_clusters")
+  expect_equal(env$required_nonnegative_numeric_arg("0.01", "ari_tolerance"), 0.01)
+  expect_equal(env$required_nonnegative_numeric_arg(0, "ari_tolerance"), 0)
+  expect_error(
+    env$required_nonnegative_numeric_arg("auto", "ari_tolerance"),
+    "non-negative numeric"
+  )
+  expect_error(
+    env$required_nonnegative_numeric_arg(-0.1, "ari_tolerance"),
+    "non-negative numeric"
+  )
 })
 
 test_that("graph benchmark recommendations are grouped by target cluster count", {

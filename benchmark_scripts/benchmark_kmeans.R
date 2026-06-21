@@ -31,6 +31,14 @@ required_positive_int_arg <- function(x, arg) {
   value
 }
 
+required_nonnegative_numeric_arg <- function(x, arg) {
+  value <- suppressWarnings(as.numeric(x))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 0) {
+    stop("`", arg, "` must be a non-negative numeric value.", call. = FALSE)
+  }
+  value
+}
+
 default_kmeans_method_values <- function() {
   c("fast_kmeans", "stats")
 }
@@ -616,10 +624,7 @@ seed <- as_int_arg(args$seed, 1L)
 timeout <- as_int_arg(args$timeout, 600L)
 fallback_centers <- required_positive_int_arg(args$centers %||% 10L, "centers")
 cycles <- as_int_arg(args$cycles, 1L)
-ari_tolerance <- suppressWarnings(as.numeric(args$ari_tolerance %||% "0.01"))
-if (length(ari_tolerance) != 1L || is.na(ari_tolerance) || !is.finite(ari_tolerance) || ari_tolerance < 0) {
-  ari_tolerance <- 0.01
-}
+ari_tolerance <- required_nonnegative_numeric_arg(args$ari_tolerance %||% "0.01", "ari_tolerance")
 max_iter <- args$max_iter %||% "auto"
 n_init <- args$n_init %||% "auto"
 tol <- args$tol %||% "auto"
