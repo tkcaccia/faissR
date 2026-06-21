@@ -84,6 +84,14 @@ optional thread-control helper packages before FAISS/cuVS.
 The same explicit-runtime convention is used by the NN metrics and k-means
 benchmark scripts.
 
+The legacy Benchmark #1 summary file `benchmark1_best_by_dataset.csv` is
+quality-aware: within each dataset/metric/k group it ranks successful KNN rows
+by recall@k, neighbour-rank correlation, mean relative distance error, elapsed
+time, and peak memory. The companion
+`benchmark1_ranked_speed_quality_memory.csv` preserves the same ordering for
+all successful rows. This means the "best" row is not simply the fastest row
+when a slower method has better measured nearest-neighbour quality.
+
 ## NN Metric Cycles
 
 `benchmark_scripts/benchmark_nn_metrics.R` focuses on faissR's public `nn()`

@@ -142,6 +142,27 @@ read_result_csvs <- function(files) {
   do.call(rbind, rows)
 }
 
+benchmark1_rank_value <- function(data, column, default, higher_is_better = FALSE) {
+  value <- if (column %in% names(data)) data[[column]] else rep(default, nrow(data))
+  value <- suppressWarnings(as.numeric(value))
+  value[!is.finite(value)] <- default
+  if (higher_is_better) -value else value
+}
+
+rank_benchmark1_success <- function(success) {
+  if (!nrow(success)) return(success)
+  success[order(
+    success$dataset,
+    success$metric,
+    success$k,
+    benchmark1_rank_value(success, "recall_at_k", -Inf, higher_is_better = TRUE),
+    benchmark1_rank_value(success, "rank_correlation", -Inf, higher_is_better = TRUE),
+    benchmark1_rank_value(success, "mean_relative_distance_error", Inf),
+    benchmark1_rank_value(success, "time_sec", Inf),
+    benchmark1_rank_value(success, "peak_rss_gb", Inf)
+  ), , drop = FALSE]
+}
+
 read_peak_rss_gb <- function() {
   status <- "/proc/self/status"
   if (!file.exists(status)) return(NA_real_)
@@ -1076,18 +1097,10 @@ results <- results[order(results$dataset, results$backend, results$implementatio
 utils::write.csv(results, file.path(out_dir, "benchmark1_nn_speed_results.csv"), row.names = FALSE)
 
 success <- results[results$status == "success" & results$kind == "knn_search", , drop = FALSE]
-best <- success[order(success$dataset, success$metric, success$k, success$time_sec), ]
-best <- best[!duplicated(paste(best$dataset, best$metric, best$k, sep = "\r")), ]
+ranked_quality <- rank_benchmark1_success(success)
+best <- ranked_quality[!duplicated(paste(ranked_quality$dataset, ranked_quality$metric, ranked_quality$k, sep = "\r")), ]
 utils::write.csv(best, file.path(out_dir, "benchmark1_best_by_dataset.csv"), row.names = FALSE)
 if (nrow(success)) {
-  ranked_quality <- success[order(
-    success$dataset,
-    success$k,
-    success$metric,
-    -success$recall_at_k,
-    success$time_sec,
-    success$peak_rss_gb
-  ), , drop = FALSE]
   utils::write.csv(ranked_quality, file.path(out_dir, "benchmark1_ranked_speed_quality_memory.csv"), row.names = FALSE)
 }
 
@@ -1121,6 +1134,7 @@ materials <- c(
   paste0("All methods were tested over k = ", paste(k_values, collapse = ", "), " and metrics = ", paste(metric_values, collapse = ", "), ". CPU methods were run with n_threads/cores = ", n_threads, " when the package exposed a thread argument. Each dataset-method-parameter combination was executed in a separate R process with GNU `timeout` set to ", timeout_sec, " seconds."),
     "Workers were launched with the configured FAISS/cuVS/CUDA library paths before system library paths when those variables were supplied.",
   paste0("Nearest-neighbour quality was evaluated against an exact subset reference where feasible. The reference subset used at most ", quality_eval_max_n, " rows and was automatically reduced when the estimated operation count exceeded ", format(quality_eval_max_ops, scientific = TRUE), ". Reported quality metrics are recall@k, median recall@k, minimum recall@k, mean relative distance error, and Spearman rank correlation of neighbour ranks."),
+  "`benchmark1_best_by_dataset.csv` and `benchmark1_ranked_speed_quality_memory.csv` rank successful KNN-search rows by recall@k, neighbour-rank correlation, mean relative distance error, elapsed time, and peak memory. This keeps fast but low-recall rows from being reported as the best method.",
   "The faissR CUDA/cuVS NN-descent output was saved for every dataset where the method completed successfully.",
   "",
   "faissR methods tested: exact CPU, RcppHNSW wrapper, FAISS Flat, FAISS CPU IVF/IVF-Flat, FAISS CPU IVFPQ, FAISS GPU Flat, FAISS GPU IVF-Flat with NVIDIA cuVS integration, FAISS GPU IVF-PQ with NVIDIA cuVS integration, FAISS HNSW, FAISS NSG, native CPU NNDescent, CPU grid on simulated 2D/3D only, native CUDA exact, native CUDA IVF, CUDA grid on simulated 2D/3D only, direct RAPIDS cuVS IVF-Flat, direct RAPIDS cuVS IVF-PQ, direct cuVS brute force, direct cuVS CAGRA, and direct cuVS NN-descent.",

@@ -399,6 +399,37 @@ test_that("legacy Benchmark #1 exposes normalized faissR NNDescent metrics", {
   }
 })
 
+test_that("legacy Benchmark #1 best ranking is quality-aware before speed", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
+    "if (worker)"
+  )
+
+  success <- data.frame(
+    dataset = c("A", "A", "A", "B", "B"),
+    metric = c("l2", "l2", "l2", "cosine", "cosine"),
+    k = c(15L, 15L, 15L, 50L, 50L),
+    method = c(
+      "fast_low_recall",
+      "slow_high_recall",
+      "same_recall_better_rank",
+      "fast_missing_quality",
+      "slow_missing_quality"
+    ),
+    time_sec = c(1, 5, 4, 1, 2),
+    peak_rss_gb = c(2, 1, 1, 1, 1),
+    recall_at_k = c(0.80, 0.95, 0.95, NA, NA),
+    rank_correlation = c(0.80, 0.90, 0.92, NA, NA),
+    mean_relative_distance_error = c(0.20, 0.10, 0.08, NA, NA),
+    stringsAsFactors = FALSE
+  )
+
+  ranked <- env$rank_benchmark1_success(success)
+  best <- ranked[!duplicated(paste(ranked$dataset, ranked$metric, ranked$k, sep = "\r")), ]
+
+  expect_equal(best$method, c("same_recall_better_rank", "fast_missing_quality"))
+})
+
 test_that("k-means benchmark defaults cover fast_kmeans stats and public backends", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_kmeans.R"),
