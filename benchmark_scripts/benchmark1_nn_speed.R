@@ -290,6 +290,7 @@ method_is_exact <- function(method, metric) {
     "faissR_faiss_flat_l2",
     "faissR_faiss_gpu_flat_l2",
     "faissR_cuda_exact",
+    "faissR_cuda_cuvs_bruteforce",
     "Rnanoflann_standard",
     "RANN_kd",
     "RANN_bd",

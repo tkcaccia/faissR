@@ -533,6 +533,8 @@ test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
   expect_true(isTRUE(env$method_metric_applicable("faissR_faiss_gpu_flat_l2", "inner_product")$ok))
   expect_true(isTRUE(env$method_is_exact("faissR_faiss_flat_l2", "inner_product")))
   expect_true(isTRUE(env$method_is_exact("faissR_faiss_gpu_flat_l2", "inner_product")))
+  expect_true(isTRUE(env$method_is_exact("faissR_cuda_cuvs_bruteforce", "l2")))
+  expect_false(isTRUE(env$method_is_exact("faissR_cuda_cuvs_bruteforce", "inner_product")))
 })
 
 test_that("legacy Benchmark #1 defaults to all four public metrics", {
