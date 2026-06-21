@@ -30,6 +30,26 @@ as_int_vec_arg <- function(x, default) {
   if (!length(value)) suppressWarnings(as.integer(default)) else value
 }
 
+required_positive_int_values <- function(x, arg) {
+  raw <- trimws(as.character(x))
+  raw <- raw[nzchar(raw)]
+  value <- suppressWarnings(as.integer(raw))
+  invalid <- raw[is.na(value) | value < 1L]
+  if (length(invalid)) {
+    stop(
+      "`", arg, "` must contain only positive integers. Invalid value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  value <- unique(value)
+  if (!length(value)) {
+    stop("`", arg, "` must contain at least one positive integer.", call. = FALSE)
+  }
+  value
+}
+
 required_nonnegative_numeric_arg <- function(x, arg) {
   value <- suppressWarnings(as.numeric(x))
   if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 0) {
@@ -707,9 +727,9 @@ seed <- as_int_arg(args$seed, 1L)
 timeout <- as_int_arg(args$timeout, 600L)
 cycles <- as_int_arg(args$cycles, 1L)
 ari_tolerance <- required_nonnegative_numeric_arg(args$ari_tolerance %||% "0.01", "ari_tolerance")
-k_values <- as_int_vec_arg(
+k_values <- required_positive_int_values(
   split_arg(args$k_values, paste(default_graph_k_values(), collapse = ",")),
-  default_graph_k_values()
+  "k_values"
 )
 datasets <- split_arg(args$datasets, paste(c(
   dataset_index(data_root)$dataset,

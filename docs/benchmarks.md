@@ -104,6 +104,8 @@ default. Metric aliases accepted by the API, such as `"l2"`, `"cor"`,
 `"pearson"`, and `"ip"`, are canonicalized before preflight and reporting.
 Unknown metric names now stop the script instead of silently falling back to
 the default metric set, so command-line typos cannot contaminate timing tables.
+`--k_values` must contain one or more positive integers; malformed entries stop
+the script before datasets are loaded.
 The public `method = "sparse"` route is included in the default method list,
 but dense benchmark datasets record it as an expected skip because that route
 is intended for sparse `Matrix` inputs.
@@ -271,6 +273,8 @@ Rscript benchmark_scripts/benchmark_graph_clustering.R \
   --threads=2
 ```
 
+`--k_values` must contain one or more positive integers; malformed entries stop
+the graph benchmark before datasets are loaded.
 `--target_clusters` is normalized to either `labels` or `none`, and invalid
 values stop before the benchmark starts. Method, graph-backend, and
 cluster-backend selectors are also validated against the public benchmark

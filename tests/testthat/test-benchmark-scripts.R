@@ -423,6 +423,22 @@ test_that("NN metric benchmark defaults cover requested metrics and k grid", {
     env$as_int_vec_arg(c("unknown"), env$default_nn_k_values()),
     env$default_nn_k_values()
   )
+  expect_equal(
+    env$required_positive_int_values(c("5", "10", "10"), "k_values"),
+    c(5L, 10L)
+  )
+  expect_error(
+    env$required_positive_int_values(c("5", "zero"), "k_values"),
+    "Invalid value\\(s\\): zero"
+  )
+  expect_error(
+    env$required_positive_int_values(c("0"), "k_values"),
+    "Invalid value\\(s\\): 0"
+  )
+  expect_error(
+    env$required_positive_int_values(character(), "k_values"),
+    "at least one positive integer"
+  )
   expect_equal(env$required_probability_arg("0.98", "recall_threshold"), 0.98)
   expect_equal(env$required_probability_arg(0, "recall_threshold"), 0)
   expect_equal(env$required_probability_arg(1, "recall_threshold"), 1)
@@ -1074,6 +1090,22 @@ test_that("graph benchmark defaults cover requested methods backends and k grid"
   expect_equal(
     env$as_int_vec_arg(c("unknown"), env$default_graph_k_values()),
     env$default_graph_k_values()
+  )
+  expect_equal(
+    env$required_positive_int_values(c("15", "50", "50"), "k_values"),
+    c(15L, 50L)
+  )
+  expect_error(
+    env$required_positive_int_values(c("15", "many"), "k_values"),
+    "Invalid value\\(s\\): many"
+  )
+  expect_error(
+    env$required_positive_int_values(c("-1"), "k_values"),
+    "Invalid value\\(s\\): -1"
+  )
+  expect_error(
+    env$required_positive_int_values(character(), "k_values"),
+    "at least one positive integer"
   )
 })
 

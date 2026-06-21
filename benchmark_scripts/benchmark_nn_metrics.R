@@ -115,6 +115,26 @@ as_int_vec_arg <- function(x, default) {
   if (!length(value)) suppressWarnings(as.integer(default)) else unique(value)
 }
 
+required_positive_int_values <- function(x, arg) {
+  raw <- trimws(as.character(x))
+  raw <- raw[nzchar(raw)]
+  value <- suppressWarnings(as.integer(raw))
+  invalid <- raw[is.na(value) | value < 1L]
+  if (length(invalid)) {
+    stop(
+      "`", arg, "` must contain only positive integers. Invalid value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  value <- unique(value)
+  if (!length(value)) {
+    stop("`", arg, "` must contain at least one positive integer.", call. = FALSE)
+  }
+  value
+}
+
 as_int_arg <- function(x, default) {
   value <- suppressWarnings(as.integer(x %||% default))
   if (length(value) != 1L || is.na(value) || value < 1L) as.integer(default) else value
@@ -912,7 +932,10 @@ datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "
 backends <- validate_backend_values(split_arg(args$backends, paste(default_nn_backend_values(), collapse = ",")))
 methods <- canonical_method_values(split_arg(args$methods, paste(default_nn_method_values(), collapse = ",")))
 metrics <- validate_metric_values(split_arg(args$metrics, paste(default_nn_metric_values(), collapse = ",")))
-k_values <- as_int_vec_arg(split_arg(args$k_values, paste(default_nn_k_values(), collapse = ",")), default_nn_k_values())
+k_values <- required_positive_int_values(
+  split_arg(args$k_values, paste(default_nn_k_values(), collapse = ",")),
+  "k_values"
+)
 
 suppressPackageStartupMessages(library(faissR))
 capabilities <- faissR::nn_capabilities()
