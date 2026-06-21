@@ -1387,6 +1387,19 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
     return(if (identical(device, "cuda")) "cuda_auto" else "cpu_auto")
   }
   if (identical(device, "cpu")) {
+    if (identical(method, "grid") && !identical(metric, "euclidean")) {
+      stop("CPU `method = \"grid\"` supports only `metric = \"euclidean\"`.", call. = FALSE)
+    }
+    if (identical(method, "vptree") && identical(metric, "inner_product")) {
+      stop("CPU `method = \"vptree\"` does not support `metric = \"inner_product\"`.", call. = FALSE)
+    }
+    if (method %in% c("ivf", "ivfpq", "nsg", "nndescent") && !identical(metric, "euclidean")) {
+      stop(
+        "CPU `method = \"", public_nn_method_label(method),
+        "\"` is currently validated only for `metric = \"euclidean\"`.",
+        call. = FALSE
+      )
+    }
     switch(
       method,
       exact = "cpu",
@@ -1438,6 +1451,25 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
       stop("Unsupported CUDA nearest-neighbour method.", call. = FALSE)
     )
   }
+}
+
+public_nn_method_label <- function(method) {
+  labels <- c(
+    auto = "auto",
+    exact = "exact",
+    flat = "flat",
+    bruteforce = "bruteforce",
+    grid = "grid",
+    vptree = "vptree",
+    sparse = "sparse",
+    hnsw = "HNSW",
+    ivf = "IVF",
+    ivfpq = "IVFPQ",
+    nsg = "NSG",
+    nndescent = "NNDescent",
+    cagra = "CAGRA"
+  )
+  labels[[method]] %||% method
 }
 
 is_sparse_matrix_input <- function(x) {

@@ -102,6 +102,34 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(all(!caps$supported[caps$method == "vptree" & caps$metric == "inner_product"]))
 })
 
+test_that("nn_capabilities agrees with public backend resolver", {
+  caps <- nn_capabilities()
+  for (i in seq_len(nrow(caps))) {
+    row <- caps[i, , drop = FALSE]
+    resolved <- tryCatch(
+      faissR:::resolve_public_nn_backend(row$backend, row$method, row$metric),
+      error = identity
+    )
+    if (isTRUE(row$supported)) {
+      expect_false(
+        inherits(resolved, "error"),
+        info = sprintf(
+          "%s/%s/%s should resolve because nn_capabilities() marks it supported",
+          row$backend, row$method, row$metric
+        )
+      )
+    } else {
+      expect_true(
+        inherits(resolved, "error"),
+        info = sprintf(
+          "%s/%s/%s should error because nn_capabilities() marks it unsupported",
+          row$backend, row$method, row$metric
+        )
+      )
+    }
+  }
+})
+
 test_that("nn accepts sparse Matrix inputs on the native sparse CPU path", {
   skip_if_not_installed("Matrix")
   x <- matrix(c(
