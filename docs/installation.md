@@ -149,3 +149,7 @@ R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
 R CMD check --no-manual --no-build-vignettes faissR_0.1.0.tar.gz
 ```
+
+A CPU-only check should still finish with `Status: OK`; CUDA/cuVS/cuGraph tests
+are skipped unless those optional backends were compiled and are available at
+runtime.
