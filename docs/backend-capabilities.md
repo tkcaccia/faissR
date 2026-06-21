@@ -48,7 +48,7 @@ list with method-specific parameters.
 | `"grid"` | Native exact 2D/3D Euclidean grid. | Native CUDA 2D/3D Euclidean grid. | Low-dimensional spatial or simulated data. |
 | `"vptree"` | Native exact CPU vantage-point tree for Euclidean, cosine, and correlation; zero-normalized non-Euclidean rows use exact CPU fallback. | Unsupported. | Low-dimensional CPU searches. |
 | `"sparse"` | Native exact sparse `dgCMatrix` CPU route. | Unsupported. | Sparse matrices without densifying. |
-| `"HNSW"` | FAISS CPU HNSW. | Unsupported. | High-recall approximate CPU graph search [5,16]. |
+| `"HNSW"` | FAISS CPU HNSW for all four public metrics when FAISS is available; RcppHNSW/hnswlib fallback otherwise. | Unsupported. | High-recall approximate CPU graph search [5,16]. |
 | `"IVF"` | FAISS CPU IVF-Flat. | FAISS GPU IVF-Flat. | Large approximate search with coarse-list probing [1-2,16]. |
 | `"IVFPQ"` | FAISS CPU IVF-PQ. | FAISS GPU IVF-PQ. | Compressed-memory approximate search [6,16]. |
 | `"NSG"` | FAISS CPU NSG when exposed by FAISS. | Unsupported. | Optional CPU graph-search baseline [16]. |
