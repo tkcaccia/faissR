@@ -108,11 +108,8 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(all(caps$supported[
     caps$method == "nsg" & caps$backend == "cpu" & caps$metric == "euclidean"
   ]))
-  expect_true(all(caps$supported[
-    caps$method == "nsg" & caps$backend == "cpu" & caps$metric %in% c("cosine", "correlation")
-  ]))
   expect_true(all(!caps$supported[
-    caps$method == "nsg" & caps$backend == "cpu" & caps$metric == "inner_product"
+    caps$method == "nsg" & caps$backend == "cpu" & caps$metric != "euclidean"
   ]))
   expect_true(all(!caps$supported[caps$method == "nsg" & caps$backend == "cuda"]))
   expect_true(all(!caps$supported[
@@ -957,9 +954,9 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "ivfpq", "cosine"),
     "faiss_gpu_ivfpq"
   )
-  expect_equal(
+  expect_error(
     faissR:::resolve_public_nn_backend("cpu", "nsg", "correlation"),
-    "faiss_nsg"
+    "euclidean"
   )
   expect_error(
     faissR:::resolve_public_nn_backend("cpu", "nndescent", "inner_product"),
@@ -1383,16 +1380,16 @@ test_that("FAISS graph backends report actual and requested parameters", {
     expect_equal(nnd_approx$backend, "cpu")
 
     for (metric in c("cosine", "correlation")) {
-      nsg_metric <- internal_nn_without_self(
-        x,
-        k = 5L,
-        backend = "faiss_nsg",
-        metric = metric,
-        n_threads = 2L
+      expect_error(
+        internal_nn_without_self(
+          x,
+          k = 5L,
+          backend = "faiss_nsg",
+          metric = metric,
+          n_threads = 2L
+        ),
+        "euclidean"
       )
-      expect_equal(dim(nsg_metric$indices), c(nrow(x), 5L))
-      expect_equal(attr(nsg_metric, "metric"), metric)
-      expect_match(attr(nsg_metric, "approximation")$transform, "normalize")
       expect_error(
         internal_nn_without_self(
           x,
@@ -1406,7 +1403,7 @@ test_that("FAISS graph backends report actual and requested parameters", {
     }
     expect_error(
       internal_nn_without_self(x, k = 5L, backend = "faiss_nsg", metric = "inner_product", n_threads = 2L),
-      "inner_product"
+      "euclidean"
     )
     expect_error(
       internal_nn_without_self(x, k = 5L, backend = "faiss_nndescent", metric = "inner_product", n_threads = 2L),

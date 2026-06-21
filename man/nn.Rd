@@ -120,8 +120,9 @@ Method descriptions:
   mainly for compressed-memory approximate search. It supports L2, raw IP,
   and normalized-IP cosine/correlation routes on CPU and FAISS GPU [1-2,6,16].
   \item `"nsg"`: FAISS CPU NSG graph-search index when exposed by the linked
-  FAISS build. It supports Euclidean/L2 plus cosine/correlation through
-  normalized Euclidean graph search; raw inner product is not exposed [16].
+  FAISS build. It is exposed for Euclidean/L2 only because linked FAISS
+  graph builders can abort during normalized cosine/correlation or raw
+  inner-product construction [16].
   \item `"nndescent"`: NN-descent approximate graph construction via faissR's
   native CPU route or cuVS on CUDA. The public CPU route uses faissR's native
   NNDescent by default; FAISS NNDescent is disabled unless explicitly enabled

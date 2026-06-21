@@ -305,7 +305,7 @@ aggregates successful rows across cycles by dataset/method/backend/centers and
 reports success counts, median/min/max elapsed time, ARI stability, withinss
 stability, iteration counts, and resolved backend metadata.
 `kmeans_recommendations_from_cycles.csv` selects the fastest row within
-`ari_tolerance` of the best median ARI for each dataset; when ARI is
+`ari_tolerance` of the best median ARI for each dataset/centers combination; when ARI is
 unavailable it selects the fastest median-time row.
 `kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()`
 rows with those recommendations and reports median speed ratio, median ARI gap,

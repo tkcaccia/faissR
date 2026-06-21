@@ -769,14 +769,11 @@ nn_compute <- function(data,
     metric_inputs <- NULL
     search_data <- data
     search_points <- points
-    if (metric %in% c("cosine", "correlation")) {
-      metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric)
-      search_data <- metric_inputs$data
-      search_points <- metric_inputs$points
-    } else if (identical(metric, "inner_product")) {
+    if (metric %in% c("cosine", "correlation", "inner_product")) {
       stop(
-        "`backend = \"faiss_nsg\"` does not support `metric = \"inner_product\"` ",
-        "in this FAISS build.",
+        "`backend = \"faiss_nsg\"` currently supports only `metric = \"euclidean\"`. ",
+        "FAISS NSG graph construction can abort the R process for normalized ",
+        "cosine/correlation or raw inner-product routes in this linked FAISS build.",
         call. = FALSE
       )
     }
@@ -1526,11 +1523,11 @@ nn_capability_row <- function(method, backend, metric) {
       "FAISS IVFPQ supports Euclidean/L2 and raw inner product; cosine/correlation use row transforms followed by IVFPQ inner-product search."
     }
   } else if (identical(method, "nsg")) {
-    supported <- identical(backend, "cpu") && metric %in% c("euclidean", "cosine", "correlation")
+    supported <- identical(backend, "cpu") && identical(metric, "euclidean")
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) "FAISS CPU NSG" else NA_character_
     notes <- if (identical(backend, "cpu")) {
-      "Validated for Euclidean/L2 search; cosine/correlation use normalized Euclidean search. Raw inner-product NSG construction is disabled because this FAISS build can abort during graph construction."
+      "Validated for Euclidean/L2 search only. Cosine, correlation, and raw inner-product NSG construction are disabled because this linked FAISS build can abort during graph construction."
     } else {
       "NSG is CPU-only in the public API."
     }
@@ -1651,9 +1648,9 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
     if (identical(method, "vptree") && identical(metric, "inner_product")) {
       stop("CPU `method = \"vptree\"` does not support `metric = \"inner_product\"`.", call. = FALSE)
     }
-    if (identical(method, "nsg") && identical(metric, "inner_product")) {
+    if (identical(method, "nsg") && !identical(metric, "euclidean")) {
       stop(
-        "CPU `method = \"nsg\"` does not support `metric = \"inner_product\"`.",
+        "CPU `method = \"nsg\"` currently supports only `metric = \"euclidean\"`.",
         call. = FALSE
       )
     }
@@ -3099,6 +3096,7 @@ faiss_self_knn <- function(data,
                            backend = "faiss_ivf",
                            exact = FALSE,
                            seed = 4L,
+                           metric = "euclidean",
                            n_threads = NULL) {
   n <- nrow(data)
   k <- as.integer(k)
@@ -3165,6 +3163,14 @@ faiss_self_knn <- function(data,
   }
   if (identical(backend, "faiss_nsg") ||
       identical(backend, "cpu_nndescent_faiss_nsg")) {
+    if (metric %in% c("cosine", "correlation", "inner_product")) {
+      stop(
+        "`backend = \"faiss_nsg\"` currently supports only `metric = \"euclidean\"`. ",
+        "FAISS NSG graph construction can abort the R process for normalized ",
+        "cosine/correlation or raw inner-product routes in this linked FAISS build.",
+        call. = FALSE
+      )
+    }
     params <- faiss_nsg_params(k)
     out <- nn_faiss_nsg_cpp(
       data,
@@ -4654,8 +4660,9 @@ grid_self_knn <- function(data,
 #'   mainly for compressed-memory approximate search. It supports L2, raw IP,
 #'   and normalized-IP cosine/correlation routes on CPU and FAISS GPU [1-2,6,16].
 #'   \item `"nsg"`: FAISS CPU NSG graph-search index when exposed by the linked
-#'   FAISS build. It supports Euclidean/L2 plus cosine/correlation through
-#'   normalized Euclidean graph search; raw inner product is not exposed [16].
+#'   FAISS build. It is exposed for Euclidean/L2 only because linked FAISS
+#'   graph builders can abort during normalized cosine/correlation or raw
+#'   inner-product construction [16].
 #'   \item `"nndescent"`: NN-descent approximate graph construction via
 #'   faissR's native CPU route or cuVS on CUDA. It is kept Euclidean/L2-only;
 #'   FAISS NNDescent is experimental opt-in because linked FAISS builds can

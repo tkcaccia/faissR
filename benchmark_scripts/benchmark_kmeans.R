@@ -315,7 +315,7 @@ summarize_kmeans_cycles <- function(ok) {
 }
 
 recommend_kmeans_methods <- function(cycle_summary, ari_tolerance) {
-  parts <- split(cycle_summary, cycle_summary$dataset)
+  parts <- split(cycle_summary, paste(cycle_summary$dataset, cycle_summary$centers, sep = "__"))
   recommendations <- lapply(parts, function(x) {
     has_ari <- is.finite(x$median_ari)
     candidates <- if (any(has_ari)) {
@@ -329,7 +329,7 @@ recommend_kmeans_methods <- function(cycle_summary, ari_tolerance) {
   })
   out <- do.call(rbind, recommendations)
   row.names(out) <- NULL
-  out[order(out$dataset), , drop = FALSE]
+  out[order(out$dataset, out$centers), , drop = FALSE]
 }
 
 compare_fast_kmeans_to_recommendations <- function(cycle_summary, recommendations) {
@@ -672,7 +672,7 @@ materials <- c(
   "The result table records cycle, elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, total within-cluster sum of squares, iterations, selected k-means parameters, tuning policy, and ARI against dataset labels when labels are available.",
   "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. The `cycle` column supports repeated benchmark cycles such as `--cycles=10` for speed/ARI tuning.",
   "`kmeans_cycle_summary.csv` aggregates successful rows across cycles by dataset/method/backend/centers and reports success counts, median/min/max elapsed time, ARI stability, withinss stability, iteration counts, and resolved backend metadata.",
-  "`kmeans_recommendations_from_cycles.csv` selects the fastest row within `ari_tolerance` of the best median ARI for each dataset; when ARI is unavailable it selects the fastest median-time row.",
+  "`kmeans_recommendations_from_cycles.csv` selects the fastest row within `ari_tolerance` of the best median ARI for each dataset/centers combination; when ARI is unavailable it selects the fastest median-time row.",
   "`kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()` rows with those cycle-summary recommendations and reports median speed ratio, median ARI gap, withinss ratio, and backend/implementation agreement.",
   "Explicit CUDA requests whose required CUDA, FAISS GPU, or cuVS k-means runtime is unavailable are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`; `resolved_backend` remains `cuda` so the skipped public device request is auditable. `backend = \"auto\"` resolves to CPU instead of becoming an expected skip when no k-means-capable CUDA route is available. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
 )

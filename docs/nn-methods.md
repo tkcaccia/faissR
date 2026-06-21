@@ -74,7 +74,7 @@ rather than silently falling back to Euclidean search.
 | `"hnsw"` | euclidean, cosine, correlation, inner_product | unsupported | FAISS HNSW is used for all metrics when available; cosine/correlation use normalized inner-product search. |
 | `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
 | `"ivfpq"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVFPQ supports L2/IP; cosine/correlation use normalized IVFPQ IP. |
-| `"nsg"` | euclidean, cosine, correlation | unsupported | CPU FAISS NSG uses normalized Euclidean graph search for cosine/correlation; raw inner product is not exposed. |
+| `"nsg"` | euclidean | unsupported | CPU FAISS NSG is Euclidean/L2-only in faissR because this linked FAISS graph builder can abort for non-L2 construction. |
 | `"nndescent"` | euclidean | euclidean | Native CPU/cuVS NN-descent is kept Euclidean-only; FAISS NNDescent is experimental opt-in because linked FAISS builds can abort during graph construction. |
 | `"cagra"` | unsupported | euclidean, cosine, correlation | CUDA-only FAISS/cuVS graph search; cosine/correlation use normalized Euclidean graph search. |
 
@@ -258,11 +258,9 @@ navigating graph with a sparse, search-friendly structure [16,21].
 - It is CPU-only in faissR.
 - Availability depends on the linked FAISS build.
 - It is kept as an optional graph-search baseline.
-- It supports Euclidean/L2 directly. Cosine and correlation use row
-  normalization, or row centering plus normalization, followed by Euclidean NSG
-  search; returned distances are converted back to `1 - similarity`.
-- Raw inner-product NSG is not exposed because some linked FAISS graph builders
-  can abort during non-L2 construction.
+- It supports Euclidean/L2 directly.
+- Cosine, correlation, and raw inner-product NSG are not exposed because some
+  linked FAISS graph builders can abort during non-L2 construction.
 
 When using NSG, check whether the backend returns the requested number of
 neighbours and measure recall on a representative subset.
