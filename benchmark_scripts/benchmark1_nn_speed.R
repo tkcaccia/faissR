@@ -134,6 +134,11 @@ method_metric_applicable <- function(method, metric) {
     "faissR_rcpphnsw",
     "faissR_faiss_flat_ip",
     "faissR_faiss_gpu_flat_ip",
+    "faissR_faiss_ivf",
+    "faissR_faiss_ivfpq",
+    "faissR_faiss_gpu_ivf_flat",
+    "faissR_faiss_gpu_ivfpq",
+    "faissR_faiss_hnsw",
     "RcppHNSW_hnsw"
   )
   if (grepl("_ip$", method) && !identical(metric, "inner_product")) {
@@ -149,6 +154,11 @@ method_metric_applicable <- function(method, metric) {
     "faissR_rcpphnsw",
     "faissR_faiss_flat_l2",
     "faissR_faiss_gpu_flat_l2",
+    "faissR_faiss_ivf",
+    "faissR_faiss_ivfpq",
+    "faissR_faiss_gpu_ivf_flat",
+    "faissR_faiss_gpu_ivfpq",
+    "faissR_faiss_hnsw",
     "RcppHNSW_hnsw",
     "BiocNeighbors_hnsw",
     "BiocNeighbors_annoy",
@@ -162,7 +172,12 @@ method_metric_applicable <- function(method, metric) {
       "faissR_cpu_exact",
       "faissR_rcpphnsw",
       "faissR_faiss_flat_l2",
-      "faissR_faiss_gpu_flat_l2"
+      "faissR_faiss_gpu_flat_l2",
+      "faissR_faiss_ivf",
+      "faissR_faiss_ivfpq",
+      "faissR_faiss_gpu_ivf_flat",
+      "faissR_faiss_gpu_ivfpq",
+      "faissR_faiss_hnsw"
     )
   }
   if (method %in% non_euclidean_methods) return(list(ok = TRUE, reason = ""))
