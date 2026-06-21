@@ -1703,6 +1703,7 @@ select_cpu_auto_backend <- function(self_query,
     if (!isTRUE(self_query) || work_size <= exact_work || n < 5000L || k < 10L || p < 2L) {
       return("cpu")
     }
+    if (isTRUE(faiss_available())) return("faiss_hnsw")
     if (isTRUE(requireNamespace("RcppHNSW", quietly = TRUE))) return("hnsw")
     if (!is.na(faiss_flat_backend) && isTRUE(faiss_available()) && work_size >= faiss_flat_work) {
       return(faiss_flat_backend)

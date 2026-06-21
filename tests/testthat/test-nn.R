@@ -1000,10 +1000,11 @@ test_that("CPU auto selector is shape-aware", {
     work_size = 20000 * 20000 * 100,
     metric = "cosine"
   )
-  expect_true(large_non_euclidean %in% c("hnsw", "faiss_flat_cosine", "cpu"))
-  if (requireNamespace("RcppHNSW", quietly = TRUE)) expect_equal(large_non_euclidean, "hnsw")
-  if (!requireNamespace("RcppHNSW", quietly = TRUE) && faiss_available()) {
-    expect_equal(large_non_euclidean, "faiss_flat_cosine")
+  expect_true(large_non_euclidean %in% c("faiss_hnsw", "hnsw", "cpu"))
+  if (faiss_available()) {
+    expect_equal(large_non_euclidean, "faiss_hnsw")
+  } else if (requireNamespace("RcppHNSW", quietly = TRUE)) {
+    expect_equal(large_non_euclidean, "hnsw")
   }
 })
 

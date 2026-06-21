@@ -96,10 +96,11 @@ expected skips, not algorithmic failures.
   selected method and metric have a validated CUDA route, CPU otherwise.
 - CPU auto uses exact CPU for small work, native grid for large 2D/3D
   Euclidean self-search, FAISS IVF for some million-row low-dimensional cases,
-  FAISS HNSW for large high-dimensional Euclidean self-search when FAISS
-  exposes it, FAISS Flat exact search for larger cosine, correlation, or
-  inner-product query/exact workloads, and RcppHNSW/hnswlib for large
-  non-Euclidean self-search when available [1-2,5,16].
+  FAISS HNSW for large high-dimensional self-search, including non-Euclidean
+  HNSW when FAISS exposes it, FAISS Flat exact search for larger cosine,
+  correlation, or inner-product query/exact workloads, and RcppHNSW/hnswlib as
+  the large non-Euclidean self-search fallback when FAISS is unavailable
+  [1-2,5,16].
 - CUDA auto uses CUDA grid for large 2D/3D Euclidean self-search, exact FAISS
   GPU Flat or cuVS brute force for small/medium searches, and FAISS GPU CAGRA
   for very large self-search when available [1-3,13-16].
