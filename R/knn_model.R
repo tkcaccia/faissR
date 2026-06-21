@@ -156,12 +156,16 @@ knn_model_fit <- function(Xtrain,
 predict.faissR_knn_model <- function(object,
                                       newdata,
                                       k = NULL,
-                                      backend = c("auto", "cpu", "cuda"),
+                                      backend = NULL,
                                       tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                                       vote = c("majority", "weighted"),
                                       type = c("response", "prob"),
                                       ...) {
-  backend <- match.arg(backend)
+  backend <- if (is.null(backend)) {
+    object$backend %||% "auto"
+  } else {
+    as.character(backend)[1L]
+  }
   tuning <- as.character(tuning)[1L]
   vote <- match.arg(vote)
   type <- match.arg(type)

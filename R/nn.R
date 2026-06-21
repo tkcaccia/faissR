@@ -392,11 +392,11 @@ nn_compute <- function(data,
       )
     }
     params <- faiss_ivf_params(nrow(data), k)
-    tuning <- NULL
+    tuning_metadata <- NULL
     if (isTRUE(faiss_gpu_ivf_should_tune(data, k, self_query, tuning = tuning))) {
       tuned <- faiss_gpu_ivf_tune_params(data, k, params, tuning = tuning)
       params <- tuned$params
-      tuning <- tuned$tuning
+      tuning_metadata <- tuned$tuning
     }
     out <- nn_faiss_gpu_ivf_flat_cpp(
       data,
@@ -418,7 +418,7 @@ nn_compute <- function(data,
       requested_nprobe = as.integer(params$requested_nprobe),
       ivf_parameters_adjusted = !identical(as.integer(params$requested_nlist), as.integer(out$nlist)) ||
         !identical(as.integer(params$requested_nprobe), as.integer(out$nprobe)),
-      tuning = tuning
+      tuning = tuning_metadata
     )
     return(result)
   }
@@ -638,18 +638,18 @@ nn_compute <- function(data,
   if (backend %in% c("cuda_cuvs_cagra", "cuda_cagra", "gpu_cagra")) {
     require_cuvs_backend("cuVS CAGRA")
     params <- cuvs_cagra_params(nrow(data), k)
-    tuning <- NULL
+    tuning_metadata <- NULL
     if (isTRUE(cuvs_cagra_should_tune(data, k, self_query, tuning = tuning))) {
       tuned <- cuvs_cagra_tune_params(data, k, params, tuning = tuning)
       params <- tuned$params
-      tuning <- tuned$tuning
-      if (is.list(tuning) && !identical(tuning$status, "target_met")) {
-        best_recall <- if (is.data.frame(tuning$results) && "recall" %in% names(tuning$results)) {
-          suppressWarnings(max(tuning$results$recall, na.rm = TRUE))
+      tuning_metadata <- tuned$tuning
+      if (is.list(tuning_metadata) && !identical(tuning_metadata$status, "target_met")) {
+        best_recall <- if (is.data.frame(tuning_metadata$results) && "recall" %in% names(tuning_metadata$results)) {
+          suppressWarnings(max(tuning_metadata$results$recall, na.rm = TRUE))
         } else {
           NA_real_
         }
-        min_recall <- getOption("fastEmbedR.cuvs_cagra_tune_min_recall", tuning$target_recall)
+        min_recall <- getOption("fastEmbedR.cuvs_cagra_tune_min_recall", tuning_metadata$target_recall)
         min_recall <- suppressWarnings(as.numeric(min_recall))
         if (length(min_recall) != 1L || is.na(min_recall) || !is.finite(min_recall)) {
           min_recall <- 0.985
@@ -705,7 +705,7 @@ nn_compute <- function(data,
         !identical(as.integer(requested_search_width), as.integer(out$search_width)) ||
         !identical(as.integer(requested_itopk_size), as.integer(out$itopk_size)),
       search_batch_size = as.integer(out$search_batch_size),
-      tuning = tuning
+      tuning = tuning_metadata
     )
     return(result)
   }
@@ -996,12 +996,21 @@ normalize_nn_method <- function(method) {
   method <- tolower(gsub("[[:space:]_-]+", "", method))
   aliases <- c(
     exact = "exact",
+    cpuexact = "exact",
     flat = "flat",
     flatl2 = "flat",
+    faissflat = "flat",
+    faissflatl2 = "flat",
+    faissgpuflat = "flat",
+    faissgpuflatl2 = "flat",
     bruteforce = "bruteforce",
     brute = "bruteforce",
+    cudacuvsbruteforce = "bruteforce",
     grid = "grid",
+    cpugrid = "grid",
+    cudagrid = "grid",
     vptree = "vptree",
+    cpuvptree = "vptree",
     sparse = "sparse",
     cpusparse = "sparse",
     hnsw = "hnsw",
@@ -1010,17 +1019,25 @@ normalize_nn_method <- function(method) {
     faissivf = "ivf",
     ivfflat = "ivf",
     faissivfflat = "ivf",
+    faissgpuivf = "ivf",
+    faissgpuivfflat = "ivf",
+    cudacuvsivfflat = "ivf",
     ivfpq = "ivfpq",
     faissivfpq = "ivfpq",
+    faissgpuivfpq = "ivfpq",
+    cudacuvsivfpq = "ivfpq",
     pq = "ivfpq",
     nsg = "nsg",
     faissnsg = "nsg",
     nndescent = "nndescent",
     nn_descent = "nndescent",
     faissnndescent = "nndescent",
+    cudacuvsnndescent = "nndescent",
     cagra = "cagra",
     cuvscagra = "cagra",
     faisscagra = "cagra",
+    faissgpucagra = "cagra",
+    cudacuvscagra = "cagra",
     auto = "auto"
   )
   if (!method %in% names(aliases)) {

@@ -538,6 +538,18 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cpu", "faiss_nndescent", "euclidean"),
     "faiss_nndescent"
   )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "faiss_gpu_ivf_flat", "euclidean"),
+    "faiss_gpu_ivf_flat"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "cuda_cuvs_nndescent", "euclidean"),
+    "cuda_cuvs_nndescent"
+  )
+  expect_true(
+    faissR:::resolve_public_nn_backend("cuda", "faiss_gpu_cagra", "euclidean") %in%
+      c("faiss_gpu_cagra", "cuda_cuvs_cagra")
+  )
   expect_true(
     faissR:::resolve_public_nn_backend("cuda", "CAGRA", "euclidean") %in%
       c("faiss_gpu_cagra", "cuda_cuvs_cagra")

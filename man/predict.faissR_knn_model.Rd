@@ -8,7 +8,7 @@
   object,
   newdata,
   k = NULL,
-  backend = c("auto", "cpu", "cuda"),
+  backend = NULL,
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   vote = c("majority", "weighted"),
   type = c("response", "prob"),
