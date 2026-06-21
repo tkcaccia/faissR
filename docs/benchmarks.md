@@ -83,7 +83,9 @@ method matrix. It benchmarks `backend = "auto"`, `"cpu"`, and `"cuda"` across
 the public methods, the four public metrics (`"euclidean"`, `"cosine"`,
 `"correlation"`, and `"inner_product"`), and `k = 5, 10, 15, 50, 100` by
 default. Unsupported method/backend/metric combinations are preflighted with
-`nn_capabilities()` and written as expected skips.
+`nn_capabilities()` and the public backend resolver, then written as expected
+skips. Runtime expected skips also record when a resolved route requires
+unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.
 
 Use `--cycles=10` to repeat speed and recall measurements. The raw result table
 contains one row per dataset/backend/method/metric/k/cycle combination.
@@ -234,11 +236,11 @@ metric matrix. It runs public `nn()` combinations over:
 - k values: `5`, `10`, `15`, `50`, and `100` by default.
 
 Unsupported combinations are preflighted with `faissR::nn_capabilities()` and
-saved as `status = "expected_skip"` rows with `expected_skip = TRUE`; the
-capability table used for the run is saved as `nn_metric_capabilities.csv`.
-For `backend = "auto"`, the preflight checks CPU support and CUDA/cuVS runtime
-availability before deciding whether the combination should run or be recorded
-as an expected skip.
+the public backend resolver, then saved as `status = "expected_skip"` rows with
+`expected_skip = TRUE`; the design-level capability table used for the run is
+saved as `nn_metric_capabilities.csv`. For `backend = "auto"`, the preflight
+checks the resolved CPU/CUDA route and records expected skips when that route
+requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.
 Unexpected runtime errors remain ordinary failed rows. Recall is computed
 against exact CPU references when feasible. Small datasets use a full exact
 self-KNN reference; larger datasets use a deterministic sample of query rows
