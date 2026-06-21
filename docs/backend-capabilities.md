@@ -76,7 +76,7 @@ a CPU FAISS route in faissR.
 | FAISS GPU CAGRA/cuVS integration | no | yes, if FAISS GPU/cuVS integration is built | Uses FAISS GPU indexes backed by NVIDIA cuVS where available; cosine/correlation use normalized Euclidean search [13-15]. |
 | RAPIDS cuVS brute force | no | yes, if cuVS is built | Exact direct cuVS route [3]. |
 | RAPIDS cuVS CAGRA | no | yes, if cuVS is built | Direct CUDA graph-search route, guarded by pilot tuning; cosine/correlation use normalized Euclidean search [3]. |
-| RAPIDS cuVS IVF/PQ | no | yes, if cuVS is built | Direct cuVS approximate indexes [3,6]. |
+| RAPIDS cuVS IVF/PQ | no | yes, if cuVS is built | Direct cuVS approximate Euclidean/L2 benchmark routes; use public FAISS GPU `method = "ivf"`/`"ivfpq"` for metric-aware IVF/IP/cosine/correlation search [3,6]. |
 | RAPIDS cuVS NN-descent | no | yes, if cuVS is built | CUDA NN-descent route for Euclidean/L2 plus normalized cosine/correlation [3-4]. |
 
 ## Graph, Clustering, And Model Functions

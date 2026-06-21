@@ -96,6 +96,17 @@ nn_compute <- function(data,
   if (!identical(metric, "euclidean")) {
     if (identical(backend, "auto")) {
       backend <- "cpu"
+    } else if (backend %in% c("cuvs_ivf", "cuda_cuvs_ivf",
+                              "cuvs_ivf_flat", "cuda_cuvs_ivf_flat",
+                              "cuvs_ivfpq", "cuda_cuvs_ivfpq",
+                              "cuvs_ivf_pq", "cuda_cuvs_ivf_pq")) {
+      stop(
+        "Direct cuVS IVF backends currently support only ",
+        "`metric = \"euclidean\"`. Use public `backend = \"cuda\", ",
+        "method = \"ivf\"` or `\"ivfpq\"` for FAISS GPU metric-aware IVF ",
+        "routes.",
+        call. = FALSE
+      )
     } else if (identical(metric, "inner_product") &&
                backend %in% c("faiss_flat_l2", "faiss_flat", "cpu_faiss_flat")) {
       backend <- "faiss_flat_ip"
