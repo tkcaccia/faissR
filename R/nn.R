@@ -1866,7 +1866,7 @@ resolve_auto_knn_gpu_backend <- function(backend,
   if (!isTRUE(self_query)) return(NA_character_)
   if (k > 256L) return(NA_character_)
   if (work_size < 5e8) return(NA_character_)
-  if (!isTRUE(cuda_available()) && !isTRUE(cuvs_available()) && !isTRUE(faiss_available())) {
+  if (!isTRUE(cuda_available()) && !isTRUE(cuvs_available())) {
     return(NA_character_)
   }
   select_cuda_auto_backend(
@@ -4762,9 +4762,9 @@ grid_self_knn <- function(data,
 #'   is `data`.
 #' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
 #'   uses a validated CUDA route only when the requested method/metric
-#'   combination is supported, and otherwise resolves to CPU. Explicit
-#'   `"cuda"` fails clearly when CUDA support or the selected CUDA combination
-#'   is unavailable.
+#'   combination is supported and CUDA/cuVS runtime support is available, and
+#'   otherwise resolves to CPU. Explicit `"cuda"` fails clearly when CUDA
+#'   support or the selected CUDA combination is unavailable.
 #' @param method Algorithm selector. `"auto"` chooses a shape-aware default for
 #'   the selected backend. Other values include `"exact"`, `"flat"`,
 #'   `"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"hnsw"`, `"ivf"`,

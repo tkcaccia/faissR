@@ -96,7 +96,8 @@ expected skips, not algorithmic failures.
 `backend` and the data shape:
 
 - `backend = "auto"` first resolves the device family: CUDA/cuVS only when the
-  selected method and metric have a validated CUDA route, CPU otherwise.
+  selected method and metric have a validated CUDA route and a CUDA/cuVS
+  runtime is available, CPU otherwise.
 - CPU auto uses exact CPU for small work, native grid for large 2D/3D
   Euclidean self-search, FAISS IVF for some million-row low-dimensional cases,
   FAISS HNSW for large high-dimensional self-search, including non-Euclidean
