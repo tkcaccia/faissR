@@ -991,6 +991,37 @@ test_that("explicit FAISS GPU NN backends require FAISS GPU availability", {
   }
 })
 
+test_that("CUDA resolver uses FAISS GPU availability for routes with alternatives", {
+  expected_exact <- if (faiss_gpu_available()) {
+    "faiss_gpu_flat_l2"
+  } else if (cuvs_available()) {
+    "cuda_cuvs_bruteforce"
+  } else {
+    "cuda"
+  }
+  expected_bruteforce <- if (cuvs_available()) {
+    "cuda_cuvs_bruteforce"
+  } else if (faiss_gpu_available()) {
+    "faiss_gpu_flat_l2"
+  } else {
+    "cuda"
+  }
+  expected_cagra <- if (faiss_gpu_available()) "faiss_gpu_cagra" else "cuda_cuvs_cagra"
+
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "exact", "euclidean"),
+    expected_exact
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "bruteforce", "euclidean"),
+    expected_bruteforce
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "cagra", "euclidean"),
+    expected_cagra
+  )
+})
+
 
 test_that("public backend and method resolver maps device plus method", {
   expect_equal(
@@ -1416,7 +1447,7 @@ test_that("CUDA auto selector is shape-aware", {
     work_size = 500000 * 500000 * 512
   )
   expect_true(large %in% c("faiss_gpu_cagra", "cuda_cuvs_nndescent", "cuda"))
-  if (faiss_available()) expect_equal(large, "faiss_gpu_cagra")
+  if (faiss_gpu_available()) expect_equal(large, "faiss_gpu_cagra")
 })
 
 test_that("RcppHNSW implementation backend is available when installed", {

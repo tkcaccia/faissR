@@ -1726,8 +1726,8 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
     }
     switch(
       method,
-      exact = if (isTRUE(faiss_available())) "faiss_gpu_flat_l2" else if (isTRUE(cuvs_available())) "cuda_cuvs_bruteforce" else "cuda",
-      bruteforce = if (isTRUE(cuvs_available())) "cuda_cuvs_bruteforce" else if (isTRUE(faiss_available())) "faiss_gpu_flat_l2" else "cuda",
+      exact = if (isTRUE(faiss_gpu_available())) "faiss_gpu_flat_l2" else if (isTRUE(cuvs_available())) "cuda_cuvs_bruteforce" else "cuda",
+      bruteforce = if (isTRUE(cuvs_available())) "cuda_cuvs_bruteforce" else if (isTRUE(faiss_gpu_available())) "faiss_gpu_flat_l2" else "cuda",
       flat = "faiss_gpu_flat_l2",
       grid = "cuda_grid",
       ivf = "faiss_gpu_ivf_flat",
@@ -1740,7 +1740,7 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
           call. = FALSE
         )
       },
-      cagra = if (isTRUE(faiss_available())) "faiss_gpu_cagra" else "cuda_cuvs_cagra",
+      cagra = if (isTRUE(faiss_gpu_available())) "faiss_gpu_cagra" else "cuda_cuvs_cagra",
       hnsw = stop("`method = \"hnsw\"` is only available with `backend = \"cpu\"`.", call. = FALSE),
       nsg = stop("`method = \"nsg\"` is only available with `backend = \"cpu\"`.", call. = FALSE),
       sparse = stop("`method = \"sparse\"` is only available with `backend = \"cpu\"`.", call. = FALSE),
@@ -1920,7 +1920,7 @@ select_cuda_auto_backend <- function(self_query,
     return("cuda_grid")
   }
   if (!isTRUE(self_query)) {
-    if (isTRUE(faiss_available())) return("faiss_gpu_flat_l2")
+    if (isTRUE(faiss_gpu_available())) return("faiss_gpu_flat_l2")
     if (isTRUE(cuvs_available())) return("cuda_cuvs_bruteforce")
     return("cuda")
   }
@@ -1931,11 +1931,11 @@ select_cuda_auto_backend <- function(self_query,
     exact_work <- 5e12
   }
   if (n <= exact_n || work_size <= exact_work || k <= 8L) {
-    if (isTRUE(faiss_available())) return("faiss_gpu_flat_l2")
+    if (isTRUE(faiss_gpu_available())) return("faiss_gpu_flat_l2")
     if (isTRUE(cuvs_available())) return("cuda_cuvs_bruteforce")
     return("cuda")
   }
-  if (isTRUE(faiss_available())) {
+  if (isTRUE(faiss_gpu_available())) {
     return("faiss_gpu_cagra")
   }
   if (isTRUE(cuvs_available())) {
