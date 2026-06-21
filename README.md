@@ -11,6 +11,9 @@
 [Backends](docs/backend-capabilities.md) |
 [References](docs/references.md)
 
+Numbered citations in this README refer to the bibliography in
+[References](docs/references.md).
+
 `faissR` provides native nearest-neighbour search, graph construction, graph
 clustering, kNN models, and k-means for R workflows that need mandatory
 [FAISS](https://faiss.ai/index.html) support and optional NVIDIA CUDA/RAPIDS
