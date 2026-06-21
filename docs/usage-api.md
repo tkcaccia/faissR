@@ -201,7 +201,9 @@ fast_kmeans(data, centers, backend = "auto",
 | `tuning` | `"auto"` uses deterministic rules based on `nrow(data)`, `ncol(data)`, and `centers`; `"fixed"`, `"off"`, and `"none"` keep the historical defaults unless explicit parameter values are supplied. |
 
 Returns cluster labels, centers, within-cluster sums of squares, cluster sizes,
-iteration count, backend, and parameters, including the k-means tuning rule used.
+iteration count, backend, and parameters, including the k-means tuning rule used
+and whether `max_iter`, `n_init`, and `tol` were auto-selected or supplied
+explicitly.
 
 ## `knn()`
 

@@ -29,7 +29,9 @@
 #'   `"fixed"`, `"off"`, and `"none"` use the historical fixed defaults unless
 #'   `max_iter`, `n_init`, or `tol` are explicitly supplied.
 #' @return A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
-#'   `size`, `iter`, `backend`, and `parameters`.
+#'   `size`, `iter`, `backend`, and `parameters`. `parameters$tuning`
+#'   records the deterministic k-means policy and whether `max_iter`,
+#'   `n_init`, and `tol` were auto-selected or supplied explicitly.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' fit <- fast_kmeans(x, centers = 3, backend = "cpu", n_threads = 2)
@@ -67,6 +69,11 @@ fast_kmeans <- function(data,
     p = ncol(x),
     centers = centers,
     tuning = tuning
+  )
+  auto_params$resolved_from <- list(
+    max_iter = kmeans_value_source(max_iter),
+    n_init = kmeans_value_source(n_init),
+    tol = kmeans_value_source(tol)
   )
   max_iter <- normalize_kmeans_positive_int(max_iter, auto_params$max_iter)
   n_init <- normalize_kmeans_positive_int(n_init, auto_params$n_init)
@@ -361,4 +368,11 @@ normalize_positive_int <- function(x, fallback) {
     x <- fallback
   }
   as.integer(x)
+}
+
+kmeans_value_source <- function(x) {
+  if (is.character(x) && length(x) == 1L && identical(tolower(x), "auto")) {
+    return("auto")
+  }
+  "explicit"
 }

@@ -33,6 +33,9 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(auto$parameters$tuning$policy, "auto")
   expect_equal(auto$parameters$tuning$max_iter, 100L)
   expect_equal(auto$parameters$tuning$n_init, 5L)
+  expect_equal(auto$parameters$tuning$resolved_from$max_iter, "auto")
+  expect_equal(auto$parameters$tuning$resolved_from$n_init, "auto")
+  expect_equal(auto$parameters$tuning$resolved_from$tol, "auto")
   expect_equal(auto$parameters$max_iter, 100L)
   expect_equal(auto$parameters$n_init, 5L)
 
@@ -54,6 +57,9 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(explicit$parameters$max_iter, 7L)
   expect_equal(explicit$parameters$n_init, 2L)
   expect_equal(explicit$parameters$tol, 1e-5)
+  expect_equal(explicit$parameters$tuning$resolved_from$max_iter, "explicit")
+  expect_equal(explicit$parameters$tuning$resolved_from$n_init, "explicit")
+  expect_equal(explicit$parameters$tuning$resolved_from$tol, "explicit")
 })
 
 test_that("fast_kmeans explicit FAISS request fails clearly when unavailable", {

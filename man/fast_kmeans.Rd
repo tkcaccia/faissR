@@ -55,7 +55,8 @@ supported.}
 \value{
 A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
   `size`, `iter`, `backend`, and `parameters`, including the k-means tuning
-  rule used.
+  rule used. `parameters$tuning$resolved_from` records whether `max_iter`,
+  `n_init`, and `tol` were auto-selected or supplied explicitly.
 }
 \description{
 Run k-means using the fastest available backend. CPU acceleration uses
