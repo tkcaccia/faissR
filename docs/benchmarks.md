@@ -122,7 +122,10 @@ datasets use a full exact self-KNN reference; larger datasets use a
 deterministic sample of query rows when
 `quality_n * nrow(data) * ncol(data)` fits `--quality_max_ops`. The
 `recall_reference` and `recall_query_n` columns record whether recall used a
-full or sampled exact reference.
+full or sampled exact reference. The script also writes
+`nn_metric_fastest_at_recall_threshold.csv`, which records the fastest
+successful method per dataset/backend/metric/k whose recall is at least
+`--recall_threshold` when recall is available.
 
 Example CPU run:
 
@@ -133,6 +136,7 @@ Rscript benchmark_scripts/benchmark_nn_metrics.R \
   --backends=cpu \
   --metrics=euclidean,cosine,correlation,inner_product \
   --k_values=5,10,15,50,100 \
+  --recall_threshold=0.98 \
   --threads=12
 ```
 
@@ -145,5 +149,6 @@ Rscript benchmark_scripts/benchmark_nn_metrics.R \
   --backends=cuda \
   --metrics=euclidean,inner_product \
   --k_values=5,10,15,50,100 \
+  --recall_threshold=0.98 \
   --threads=2
 ```

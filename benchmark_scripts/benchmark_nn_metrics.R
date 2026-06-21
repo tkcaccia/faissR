@@ -319,6 +319,11 @@ timeout <- as_int_arg(args$timeout, 600L)
 quality_n <- as_int_arg(args$quality_n, 512L)
 quality_max_ops <- suppressWarnings(as.numeric(args$quality_max_ops %||% "5e9"))
 if (length(quality_max_ops) != 1L || is.na(quality_max_ops) || !is.finite(quality_max_ops)) quality_max_ops <- 5e9
+recall_threshold <- suppressWarnings(as.numeric(args$recall_threshold %||% "0.98"))
+if (length(recall_threshold) != 1L || is.na(recall_threshold) || !is.finite(recall_threshold) ||
+    recall_threshold < 0 || recall_threshold > 1) {
+  recall_threshold <- 0.98
+}
 
 datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "SimulatedUniform2D", "SimulatedUniform3D"), collapse = ","))
 backends <- split_arg(args$backends, "cpu,cuda")
@@ -330,12 +335,13 @@ suppressPackageStartupMessages(library(faissR))
 
 config <- data.frame(
   key = c("data_root", "out_dir", "datasets", "backends", "methods", "metrics",
-          "k_values", "threads", "timeout", "quality_n", "quality_max_ops", "seed"),
+          "k_values", "threads", "timeout", "quality_n", "quality_max_ops",
+          "recall_threshold", "seed"),
   value = c(
     data_root, out_dir, paste(datasets, collapse = ","), paste(backends, collapse = ","),
     paste(methods, collapse = ","), paste(metrics, collapse = ","),
     paste(k_values, collapse = ","), n_threads, timeout, quality_n,
-    format(quality_max_ops, scientific = TRUE), seed
+    format(quality_max_ops, scientific = TRUE), recall_threshold, seed
   ),
   stringsAsFactors = FALSE
 )
@@ -414,6 +420,21 @@ if (nrow(ok)) {
   best <- do.call(rbind, lapply(split(ok, paste(ok$dataset, ok$backend, ok$metric, ok$k, sep = "__")), function(x) x[1L, , drop = FALSE]))
   best$quality_score <- NULL
   utils::write.csv(best, file.path(out_dir, "nn_metric_best_by_dataset_backend_metric_k.csv"), row.names = FALSE)
+
+  tunable <- ok[!is.na(ok$recall_at_k) & ok$recall_at_k >= recall_threshold, , drop = FALSE]
+  if (nrow(tunable)) {
+    tunable <- tunable[order(tunable$dataset, tunable$backend, tunable$metric, tunable$k, tunable$elapsed_sec), , drop = FALSE]
+    fastest <- do.call(rbind, lapply(
+      split(tunable, paste(tunable$dataset, tunable$backend, tunable$metric, tunable$k, sep = "__")),
+      function(x) x[1L, , drop = FALSE]
+    ))
+    fastest$quality_score <- NULL
+    utils::write.csv(
+      fastest,
+      file.path(out_dir, "nn_metric_fastest_at_recall_threshold.csv"),
+      row.names = FALSE
+    )
+  }
 }
 
 materials <- c(
@@ -429,9 +450,11 @@ materials <- c(
   sprintf("- k values: `%s`", paste(k_values, collapse = "`, `")),
   sprintf("- CPU thread cap: `%s`", n_threads),
   sprintf("- Timeout per combination: `%s` seconds", timeout),
+  sprintf("- Fastest-method recall threshold: `%s`", recall_threshold),
   "",
   "Unsupported method/backend/metric combinations are recorded as failed rows with the package error message.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used.",
+  "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k whose recall is at least `recall_threshold`.",
   "The script does not add benchmark-only helpers to the package API."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_nn_metrics.md"))
