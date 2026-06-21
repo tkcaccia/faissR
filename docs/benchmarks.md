@@ -90,6 +90,12 @@ contains one row per dataset/backend/method/metric/k/cycle combination.
 `nn_metric_cycle_summary.csv` aggregates successful rows across cycles by
 dataset/backend/method/metric/k and reports success counts, median/min/max
 elapsed time, recall stability, and the dominant implementation backend.
+`nn_metric_recommendations_from_cycles.csv` selects the fastest method by
+median elapsed time among rows whose median recall is at least the configured
+`recall_threshold`, grouped by dataset/backend/metric/k.
+`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate
+`method = "auto"` rows with those recommendations and reports median speed
+ratio, median recall gap, and backend/implementation agreement.
 `nn_metric_best_by_dataset_backend_metric_k_cycle.csv` keeps the best row within
 each cycle, while `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the
 overall best row across cycles for backward-compatible summaries.
