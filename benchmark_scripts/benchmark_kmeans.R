@@ -380,8 +380,22 @@ compare_fast_kmeans_to_recommendations <- function(cycle_summary, recommendation
     ifelse(comparison$fast_median_elapsed_sec == 0, 1, Inf)
   )
   comparison$fast_median_ari_gap <- comparison$recommended_median_ari - comparison$fast_median_ari
-  comparison$fast_withinss_ratio <- comparison$fast_median_tot_withinss / comparison$recommended_median_tot_withinss
+  comparison$fast_withinss_ratio <- safe_positive_ratio(
+    comparison$fast_median_tot_withinss,
+    comparison$recommended_median_tot_withinss
+  )
   comparison[order(comparison$dataset, comparison$centers, comparison$fast_backend), , drop = FALSE]
+}
+
+safe_positive_ratio <- function(numerator, denominator) {
+  numerator <- suppressWarnings(as.numeric(numerator))
+  denominator <- suppressWarnings(as.numeric(denominator))
+  out <- rep(NA_real_, max(length(numerator), length(denominator)))
+  numerator <- rep(numerator, length.out = length(out))
+  denominator <- rep(denominator, length.out = length(out))
+  ok <- is.finite(numerator) & is.finite(denominator) & denominator > 0
+  out[ok] <- numerator[ok] / denominator[ok]
+  out
 }
 
 kmeans_rank_value <- function(data, column, default, higher_is_better = FALSE) {
@@ -714,7 +728,7 @@ materials <- c(
   "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. The `cycle` column supports repeated benchmark cycles such as `--cycles=10` for speed/ARI tuning.",
   "`kmeans_cycle_summary.csv` aggregates successful rows across cycles by dataset/method/backend/centers and reports success counts, median/min/max elapsed time, ARI stability, withinss stability, iteration counts, and resolved backend metadata.",
   "`kmeans_recommendations_from_cycles.csv` selects the fastest row within `ari_tolerance` of the best median ARI for each dataset/centers combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median times are broken by higher median ARI and then lower median total within-cluster sum of squares. When ARI is unavailable it selects the fastest median-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
-  "`kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median ARI gap, withinss ratio, and backend/implementation agreement.",
+  "`kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median ARI gap, withinss ratio, and backend/implementation agreement. The withinss ratio is `NA` when the recommended within-cluster sum of squares is unavailable or non-positive.",
   "Explicit CUDA requests whose required CUDA, FAISS GPU, or cuVS k-means runtime is unavailable are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`; `resolved_backend` remains `cuda` so the skipped public device request is auditable. `backend = \"auto\"` resolves to CPU instead of becoming an expected skip when no k-means-capable CUDA route is available. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_kmeans.md"))
