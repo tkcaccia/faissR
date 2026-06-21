@@ -412,6 +412,32 @@ List faiss_gpu_flat_ip_knn_impl(NumericMatrix data,
 #endif
 }
 
+List faiss_gpu_flat_normalized_ip_distance_knn_impl(NumericMatrix data,
+                                                    NumericMatrix points,
+                                                    int k,
+                                                    bool exclude_self) {
+#ifdef FASTEMBEDR_HAS_FAISS_GPU
+  const int n_features = data.ncol();
+  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::GpuIndexFlatConfig config;
+  config.device = 0;
+  faiss::gpu::GpuIndexFlatIP index(&resources, n_features, config);
+  return search_faiss_index(
+    index, data, points, k, exclude_self, 1,
+    "GpuIndexFlatIP", true, DistanceOutput::OneMinusInnerProduct
+  );
+#else
+  (void)data;
+  (void)points;
+  (void)k;
+  (void)exclude_self;
+  Rcpp::stop(
+    "FAISS GPU Flat IP backend is not available in this build. "
+    "Install FAISS GPU/cuVS headers and rebuild faissR with FAISS_HOME set."
+  );
+#endif
+}
+
 List faiss_ivf_knn_impl(NumericMatrix data,
                         NumericMatrix points,
                         int k,

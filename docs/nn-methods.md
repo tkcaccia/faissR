@@ -100,12 +100,12 @@ too slow or too memory-heavy for full all-pairs self-KNN on very large datasets.
 - `backend = "cuda"` maps to FAISS GPU Flat.
 
 Flat search is exact for L2/Euclidean search and is useful when you want FAISS
-semantics specifically. On CPU, `metric = "inner_product"` uses FAISS
-`IndexFlatIP`; `metric = "cosine"` uses row L2 normalization followed by
-`IndexFlatIP`; and `metric = "correlation"` uses row centering plus L2
-normalization followed by `IndexFlatIP`. The cosine and correlation routes
-return `1 - similarity` distances, not shifted inner-product scores. Flat can
-be faster than a generic R exact implementation because index construction, data
+semantics specifically. On CPU and FAISS GPU Flat, `metric = "inner_product"`
+uses `IndexFlatIP`; `metric = "cosine"` uses row L2 normalization followed by
+Flat IP; and `metric = "correlation"` uses row centering plus L2 normalization
+followed by Flat IP. The cosine and correlation routes return
+`1 - similarity` distances, not shifted inner-product scores. Flat can be
+faster than a generic R exact implementation because index construction, data
 layout, and search are handled by FAISS.
 
 ## `"bruteforce"`

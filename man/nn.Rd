@@ -42,9 +42,9 @@ backend/method combinations fail clearly; for example,
 \item{metric}{Distance metric. The intentionally small public set is
 `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
 `"euclidean"` is the validated high-performance default. `"cosine"` and
-`"correlation"` are implemented for exact CPU KNN, CPU FAISS Flat, and
-RcppHNSW. CPU FAISS Flat uses row L2 normalization for cosine and row centering
-plus L2 normalization for correlation before `IndexFlatIP`; distances are
+`"correlation"` are implemented for exact CPU KNN, FAISS CPU/GPU Flat, and
+RcppHNSW. FAISS Flat uses row L2 normalization for cosine and row centering
+plus L2 normalization for correlation before Flat IP search; distances are
 returned as `1 - similarity`. CPU `method = "auto"` can select
 RcppHNSW/hnswlib for large non-Euclidean self-search. CPU `method = "HNSW"`
 uses FAISS HNSW for Euclidean search when available and RcppHNSW/hnswlib for
@@ -86,9 +86,9 @@ Method descriptions:
   \item `"exact"`: exact nearest-neighbour search. CPU uses faissR's native
   exact route; CUDA uses FAISS GPU Flat or cuVS brute force when available
   [1-3,16].
-  \item `"flat"`: FAISS Flat exhaustive index. CPU supports L2, IP, and
-  normalized-IP cosine/correlation routes; CUDA supports FAISS GPU Flat L2
-  and IP when available [1-2,16].
+  \item `"flat"`: FAISS Flat exhaustive index. CPU and FAISS GPU support
+  L2, IP, and normalized-IP cosine/correlation routes when available
+  [1-2,16].
   \item `"bruteforce"`: exhaustive brute-force search. CUDA prefers RAPIDS
   cuVS brute force; CPU maps to exact CPU search [3].
   \item `"grid"`: native exact 2D/3D Euclidean spatial grid search.

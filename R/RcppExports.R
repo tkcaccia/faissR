@@ -225,6 +225,10 @@ nn_faiss_gpu_flat_ip_cpp <- function(data, points, k, exclude_self) {
     .Call(`_faissR_nn_faiss_gpu_flat_ip_cpp`, data, points, k, exclude_self)
 }
 
+nn_faiss_gpu_flat_normalized_ip_distance_cpp <- function(data, points, k, exclude_self) {
+    .Call(`_faissR_nn_faiss_gpu_flat_normalized_ip_distance_cpp`, data, points, k, exclude_self)
+}
+
 nn_faiss_ivfpq_cpp <- function(data, points, k, nlist, nprobe, pq_m, pq_nbits, exclude_self, n_threads) {
     .Call(`_faissR_nn_faiss_ivfpq_cpp`, data, points, k, nlist, nprobe, pq_m, pq_nbits, exclude_self, n_threads)
 }

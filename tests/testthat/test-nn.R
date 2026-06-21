@@ -653,9 +653,29 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "flat", "inner_product"),
     "faiss_gpu_flat_ip"
   )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "flat", "cosine"),
+    "faiss_gpu_flat_cosine"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "flat", "correlation"),
+    "faiss_gpu_flat_correlation"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "exact", "cosine"),
+    "faiss_gpu_flat_cosine"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "bruteforce", "correlation"),
+    "faiss_gpu_flat_correlation"
+  )
   expect_error(
     faissR:::resolve_public_nn_backend("cuda", "CAGRA", "inner_product"),
     "inner_product"
+  )
+  expect_error(
+    faissR:::resolve_public_nn_backend("cuda", "CAGRA", "cosine"),
+    "approximate methods"
   )
   expect_error(
     faissR:::resolve_public_nn_backend("cpu", "faiss_hnsw", "euclidean"),

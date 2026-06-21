@@ -98,14 +98,14 @@ Supported CUDA routes include:
 - native CUDA 2D/3D grid search for low-dimensional Euclidean self-KNN.
 
 The validated high-performance metric is Euclidean/L2. Cosine and correlation
-are exposed for exact CPU, FAISS CPU Flat, and RcppHNSW-compatible paths. CPU
+are exposed for exact CPU, FAISS CPU/GPU Flat, and RcppHNSW-compatible paths.
 FAISS Flat implements cosine by row L2 normalizing the inputs before
 `IndexFlatIP`, and correlation by row centering plus L2 normalization before
 `IndexFlatIP`; both routes return `1 - similarity` distances. Inner-product
 search is exposed for exact native CPU scoring, FAISS Flat IP routes, and the
 RcppHNSW/hnswlib IP path. CPU `method = "HNSW"` uses FAISS HNSW for Euclidean
 search when available and RcppHNSW/hnswlib for cosine, correlation, and
-inner-product search. Accelerator and approximate backends reject unsupported
+inner-product search. Approximate accelerator backends reject unsupported
 metric/backend combinations instead of returning neighbours computed under a
 different metric label.
 
@@ -175,7 +175,7 @@ public method names map to different concrete functions depending on `backend`.
 | --- | --- | --- | --- |
 | `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, or FAISS GPU CAGRA selector. | Default for general use. |
 | `exact` | Native exact CPU route. | FAISS GPU Flat when available, otherwise cuVS brute force. | Accuracy-first baseline. |
-| `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized CPU Flat IP. | FAISS GPU Flat L2/IP index. | Exact FAISS route [1-2,16]. |
+| `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized Flat IP. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP. | Exact FAISS route [1-2,16]. |
 | `bruteforce` | Native exact CPU route. | Direct cuVS brute force when available. | Useful for comparing direct cuVS against FAISS GPU Flat [3]. |
 | `grid` | Native 2D/3D exact spatial grid. | CUDA 2D/3D grid. | Errors outside two or three columns. |
 | `vptree` | Native exact CPU VP-tree. | Unsupported. | Low-dimensional CPU helper. |
