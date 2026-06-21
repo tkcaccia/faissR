@@ -15,7 +15,9 @@
 #' @param method Nearest-neighbour algorithm selector passed to
 #'   \code{\link{nn}()}. See \code{\link{nn}()} for method descriptions and
 #'   references.
-#' @param metric Distance metric passed to \code{\link{nn}()}.
+#' @param metric Distance metric passed to \code{\link{nn}()}. Aliases such as
+#'   `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as
+#'   canonical metric labels.
 #' @param tuning Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
 #'   tuned default for the resolved method.
 #' @param task `"auto"`, `"classification"`, or `"regression"`. `"auto"` treats
@@ -88,7 +90,7 @@ knn_model_fit <- function(Xtrain,
   backend <- normalize_public_backend_arg(backend)
   method <- as.character(method)[1L]
   tuning <- as.character(tuning)[1L]
-  metric <- match.arg(metric)
+  metric <- normalize_nn_metric(metric)
   task <- match.arg(task)
   x <- as.matrix(Xtrain)
   storage.mode(x) <- "double"

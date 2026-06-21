@@ -26,7 +26,7 @@ knn_graph(
 \item{k}{Number of non-self neighbours used in the graph.}
 \item{backend}{Device backend passed to \code{nn_without_self()} when \code{knn} is not supplied: \code{"auto"}, \code{"cpu"}, or \code{"cuda"}.}
 \item{nn_method}{Nearest-neighbour method passed to \code{nn_without_self()} when \code{knn} is not supplied. The default \code{"auto"} uses the shape-aware selector for the chosen backend.}
-\item{metric}{Distance metric passed to \code{nn_without_self()} when \code{knn} is not supplied.}
+\item{metric}{Distance metric passed to \code{nn_without_self()} when \code{knn} is not supplied. Aliases such as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as canonical metric labels.}
 \item{tuning}{Tuning policy passed to \code{nn_without_self()} when \code{knn} is not supplied.}
 \item{weight}{Graph weighting. \code{"auto"} uses SNN/Jaccard weights for input space and distance weights for embedding space. \code{"snn"} builds shared-nearest-neighbour Jaccard weights. \code{"adaptive"} uses a local radius kernel. \code{"distance"} uses \code{1 / (1 + distance)}. \code{"binary"} gives every edge weight 1.}
 \item{mutual}{If \code{TRUE}, keep only reciprocal nearest-neighbour edges.}

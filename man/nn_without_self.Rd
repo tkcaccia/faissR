@@ -30,7 +30,8 @@ validated CUDA combinations and CPU otherwise.}
 references.}
 
 \item{metric}{Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`,
-or `"inner_product"`. See \code{\link{nn}()} for metric/backend support
+or `"inner_product"`; aliases such as `"l2"`, `"cor"`/`"pearson"`, and
+`"ip"` are accepted. See \code{\link{nn}()} for metric/backend support
 details, including metric-aware CPU HNSW routing.}
 
 \item{tuning}{Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the

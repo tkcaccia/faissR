@@ -44,7 +44,9 @@ for example,
 `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only.}
 
 \item{metric}{Distance metric. The intentionally small public set is
-`"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
+`"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`;
+aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and
+stored as canonical metric labels.
 `"euclidean"` is the validated high-performance default. `"cosine"` and
 `"correlation"` are implemented for exact CPU KNN, FAISS CPU/GPU Flat,
 FAISS CPU/GPU IVF-Flat, FAISS CPU/GPU IVFPQ, FAISS CPU HNSW,

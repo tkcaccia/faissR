@@ -79,6 +79,26 @@ test_that("native exact KNN only accepts the documented metrics", {
   )
 })
 
+test_that("public NN APIs canonicalize common metric aliases", {
+  x <- matrix(c(
+    1, 0,
+    0, 1,
+    1, 1,
+    2, 0
+  ), ncol = 2, byrow = TRUE)
+
+  l2 <- nn(x, k = 2L, backend = "cpu", metric = "l2")
+  cor <- nn(x, k = 2L, backend = "cpu", metric = "pearson")
+  ip <- nn(x, k = 2L, backend = "cpu", metric = "ip")
+  without_self <- nn_without_self(x, k = 1L, backend = "cpu", metric = "cor")
+
+  expect_equal(attr(l2, "metric"), "euclidean")
+  expect_equal(attr(cor, "metric"), "correlation")
+  expect_equal(attr(ip, "metric"), "inner_product")
+  expect_equal(attr(without_self, "metric"), "correlation")
+  expect_error(nn(x, k = 2L, backend = "cpu", metric = "manhattan"), "metric")
+})
+
 test_that("nn_capabilities documents the public method metric matrix", {
   caps <- nn_capabilities()
   methods <- c(

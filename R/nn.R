@@ -2060,8 +2060,37 @@ normalize_nn_threads <- function(n_threads) {
 }
 
 normalize_nn_metric <- function(metric) {
-  metric <- tolower(as.character(metric))
-  match.arg(metric, c("euclidean", "cosine", "correlation", "inner_product"))
+  metric <- as.character(metric)
+  aliases <- c(
+    euclidean = "euclidean",
+    l2 = "euclidean",
+    cosine = "cosine",
+    cos = "cosine",
+    correlation = "correlation",
+    cor = "correlation",
+    pearson = "correlation",
+    inner_product = "inner_product",
+    innerproduct = "inner_product",
+    ip = "inner_product",
+    dot = "inner_product",
+    dot_product = "inner_product",
+    dotproduct = "inner_product"
+  )
+  if (length(metric) < 1L) {
+    metric <- "euclidean"
+  } else if (length(metric) > 1L) {
+    metric <- metric[[1L]]
+  }
+  key <- tolower(trimws(metric[[1L]]))
+  key <- gsub("[[:space:]-]+", "_", key)
+  if (!key %in% names(aliases)) {
+    stop(
+      "`metric` must be one of \"euclidean\", \"cosine\", ",
+      "\"correlation\", or \"inner_product\".",
+      call. = FALSE
+    )
+  }
+  unname(aliases[[key]])
 }
 
 should_use_grid2d_self_knn <- function(self_query,
@@ -4721,7 +4750,9 @@ grid_self_knn <- function(data,
 #'   for example,
 #'   `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only.
 #' @param metric Distance metric. The intentionally small public set is
-#'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
+#'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`;
+#'   aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and
+#'   stored as canonical metric labels.
 #'   `"euclidean"` is the validated high-performance default. `"cosine"` and
 #'   `"correlation"` are implemented for exact CPU KNN, FAISS CPU/GPU Flat,
 #'   FAISS CPU/GPU IVF-Flat, FAISS CPU/GPU IVFPQ, FAISS CPU HNSW,
@@ -4768,7 +4799,7 @@ nn <- function(data,
   backend <- normalize_public_backend_arg(backend)
   method <- as.character(method)[1L]
   tuning <- as.character(tuning)[1L]
-  metric <- match.arg(metric)
+  metric <- normalize_nn_metric(metric)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
   nn_compute(
     data,
@@ -4800,7 +4831,8 @@ nn <- function(data,
 #'   \code{\link{nn}()}. See \code{\link{nn}()} for method descriptions and
 #'   references.
 #' @param metric Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`,
-#'   or `"inner_product"`. See \code{\link{nn}()} for metric/backend support
+#'   or `"inner_product"`; aliases such as `"l2"`, `"cor"`/`"pearson"`, and
+#'   `"ip"` are accepted. See \code{\link{nn}()} for metric/backend support
 #'   details, including metric-aware CPU HNSW routing.
 #' @param tuning Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
 #'   tuned default for the resolved method.
@@ -4818,7 +4850,7 @@ nn_without_self <- function(data,
   backend <- normalize_public_backend_arg(backend)
   method <- as.character(method)[1L]
   tuning <- as.character(tuning)[1L]
-  metric <- match.arg(metric)
+  metric <- normalize_nn_metric(metric)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
   nn_compute(
     data,

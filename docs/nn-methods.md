@@ -61,6 +61,9 @@ is not the same as inner product: correlation is centered cosine similarity,
 whereas inner product is the raw dot product. The package only reports a metric
 as supported for a method when that route computes neighbours under that metric
 rather than silently falling back to Euclidean search.
+Common aliases are accepted at the API boundary and canonicalized in result
+attributes: `"l2"` maps to `"euclidean"`, `"cor"`/`"pearson"` map to
+`"correlation"`, and `"ip"` maps to `"inner_product"`.
 
 | Method | CPU metrics | CUDA metrics | Notes |
 | --- | --- | --- | --- |

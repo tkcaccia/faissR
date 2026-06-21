@@ -30,9 +30,10 @@ knn(
 resolution, using CUDA only for validated CUDA combinations and CPU otherwise.}
 \item{method}{Nearest-neighbour algorithm selector passed to \code{nn()}. \code{"auto"} chooses the most appropriate method for the selected backend. See \code{?nn} for descriptions and references for \code{"exact"}, \code{"flat"}, \code{"bruteforce"}, \code{"grid"}, \code{"vptree"}, \code{"sparse"}, \code{"hnsw"}, \code{"ivf"}, \code{"ivfpq"}, \code{"nsg"}, \code{"nndescent"}, and \code{"cagra"}.}
 \item{metric}{Distance metric passed to \code{nn()}: \code{"euclidean"},
-\code{"cosine"}, \code{"correlation"}, or \code{"inner_product"}. See
-\code{nn()} for metric/backend support details, including metric-aware CPU
-HNSW routing.}
+\code{"cosine"}, \code{"correlation"}, or \code{"inner_product"}. Aliases such
+as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as
+canonical metric labels. See \code{nn()} for metric/backend support details,
+including metric-aware CPU HNSW routing.}
 \item{tuning}{Tuning policy passed to \code{nn()}. \code{"auto"} uses the tuned default for the resolved method.}
 \item{task}{\code{"auto"}, \code{"classification"}, or \code{"regression"}. \code{"auto"} treats numeric responses as regression and other response types as classification.}
 \item{k}{Default number of neighbours used by \code{predict()} and by immediate predictions when \code{Xtest} is supplied.}

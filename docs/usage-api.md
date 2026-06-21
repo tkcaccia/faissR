@@ -44,7 +44,7 @@ nn(data, points = data, k = NULL, backend = "auto",
 | `k` | Number of neighbours to return. If `NULL`, faissR chooses an automatic neighbourhood size. |
 | `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses a validated CUDA route only when the requested method/metric combination is supported, and otherwise resolves to CPU. Explicit `"cuda"` fails clearly when CUDA support or the selected CUDA combination is unavailable. |
 | `method` | Algorithm selector: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"nsg"`, `"nndescent"`, or `"cagra"` [1-6,13-16]. For example, `method = "grid", backend = "cpu"` maps to the CPU grid implementation, while `method = "grid", backend = "cuda"` maps to the CUDA grid implementation. Distance choices belong in `metric`, not `method`. Invalid backend/method combinations, such as `method = "cagra", backend = "cpu"`, stop with a clear error. |
-| `metric` | Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Euclidean/L2 is the validated high-performance route for approximate FAISS/CUDA/cuVS. Cosine and correlation use validated exact paths, FAISS CPU/GPU Flat, IVF-Flat, IVFPQ, and CPU HNSW through normalized inner-product search; CAGRA uses normalized Euclidean graph search. Inner product is supported by native exact CPU scoring, FAISS Flat IP, FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, and RcppHNSW/hnswlib fallback paths when FAISS is unavailable. NSG and NNDescent remain Euclidean-only because linked FAISS graph builders can abort during non-Euclidean construction. |
+| `metric` | Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as canonical metric labels. Euclidean/L2 is the validated high-performance route for approximate FAISS/CUDA/cuVS. Cosine and correlation use validated exact paths, FAISS CPU/GPU Flat, IVF-Flat, IVFPQ, and CPU HNSW through normalized inner-product search; CAGRA uses normalized Euclidean graph search. Inner product is supported by native exact CPU scoring, FAISS Flat IP, FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, and RcppHNSW/hnswlib fallback paths when FAISS is unavailable. NSG and NNDescent remain Euclidean-only because linked FAISS graph builders can abort during non-Euclidean construction. |
 | `tuning` | Tuning policy for approximate GPU methods: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. `"auto"` uses the appropriate tuned default for the resolved method. |
 | `n_threads` | Number of CPU worker threads for CPU/FAISS CPU backends. GPU backends ignore this argument. |
 
@@ -88,7 +88,7 @@ nn_without_self(data, k, backend = "auto",
 | `k` | Number of non-self neighbours to return per row. |
 | `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. This wrapper uses the same backend/method/metric resolver as `nn()`, always performs self-search, and removes the diagonal self match. |
 | `method` | Same algorithm selector as `nn()`. |
-| `metric` | `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. |
+| `metric` | `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`; aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. |
 | `tuning` | Same tuning policy as `nn()`. |
 | `n_threads` | CPU worker threads for CPU/FAISS CPU backends. |
 
@@ -110,7 +110,7 @@ candidate_knn(data, candidates, points = data, k,
 | `points` | Optional query matrix. Defaults to `data` for self-query candidate scoring. |
 | `k` | Number of best neighbours to keep from each candidate row. Must be no larger than `ncol(candidates)`. |
 | `backend` | `"auto"`/`"cpu"` for exact CPU scoring inside candidates, or `"cuda"` for the native CUDA row-candidate kernel. |
-| `metric` | `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"` for CPU. CUDA candidate scoring currently supports Euclidean only. |
+| `metric` | `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"` for CPU. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. CUDA candidate scoring currently supports Euclidean only. |
 | `n_threads` | CPU worker threads. |
 | `exclude_self` | If `TRUE`, remove each row from its own candidate list. This requires `points = data`. |
 
@@ -133,7 +133,7 @@ knn_graph(data, knn = NULL, k = 50L, backend = "auto",
 | `k` | Number of neighbours used in the graph. If `knn` has fewer columns, faissR uses the available columns. |
 | `backend` | Device backend passed to `nn_without_self()` when neighbours must be computed from `data`: `"auto"`, `"cpu"`, or `"cuda"`. |
 | `nn_method` | Nearest-neighbour method passed to `nn_without_self()` when neighbours must be computed from `data`. |
-| `metric` | Distance metric passed to `nn_without_self()` when neighbours must be computed from `data`. |
+| `metric` | Distance metric passed to `nn_without_self()` when neighbours must be computed from `data`; aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. |
 | `tuning` | Tuning policy passed to `nn_without_self()` when neighbours must be computed from `data`. |
 | `weight` | Edge weighting: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. `"auto"` uses shared-nearest-neighbour weights for input space and distance weights for embedding space. |
 | `mutual` | If `TRUE`, keep only reciprocal nearest-neighbour edges. |
@@ -166,7 +166,7 @@ graph_cluster(graph, method = "random_walking", backend = "auto",
 | `k` | Number of neighbours when `graph` is raw data or an embedding rather than a graph/KNN object. |
 | `graph_backend` | Backend passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
 | `graph_method` | Nearest-neighbour method passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
-| `metric` | Distance metric passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
+| `metric` | Distance metric passed to `nn_without_self()` when faissR needs to build the KNN graph internally; aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. |
 | `tuning` | Tuning policy passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
 | `weight` | Graph edge weighting passed to `knn_graph()`: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. |
 | `mutual` | If `TRUE`, build a mutual-nearest-neighbour graph. |
@@ -243,7 +243,7 @@ prob  <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 | `Xtest` | Optional query matrix. If supplied, `knn()` fits and predicts immediately; otherwise it returns a reusable model. |
 | `backend` | Device backend passed to `nn()`: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` follows `nn()` backend/method/metric resolution, using CUDA only for validated CUDA combinations and CPU otherwise. |
 | `method` | Nearest-neighbour algorithm selector passed to `nn()`. `"auto"` chooses the most appropriate method for the selected backend. |
-| `metric` | Distance metric passed to `nn()`: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. |
+| `metric` | Distance metric passed to `nn()`: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as canonical metric labels. |
 | `tuning` | Tuning policy passed to `nn()`. `"auto"` uses the tuned default for the resolved method. |
 | `task` | `"auto"`, `"classification"`, or `"regression"`. `"auto"` treats numeric `Ytrain` as regression and non-numeric `Ytrain` as classification. |
 | `k` | Default number of neighbours used for prediction. |

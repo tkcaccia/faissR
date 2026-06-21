@@ -32,7 +32,8 @@ entries are ignored.}
 self-query Euclidean candidates with `exclude_self = TRUE`.}
 
 \item{metric}{`"euclidean"`, `"cosine"`, `"correlation"`, or
-`"inner_product"`. GPU candidate kernels currently support Euclidean only.}
+`"inner_product"`. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are
+accepted. GPU candidate kernels currently support Euclidean only.}
 
 \item{n_threads}{CPU threads for the CPU backend.}
 

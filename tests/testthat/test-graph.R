@@ -61,7 +61,7 @@ test_that("knn_graph passes method metric and tuning to internal KNN", {
     k = 6L,
     backend = "cpu",
     nn_method = "exact",
-    metric = "cosine",
+    metric = "cor",
     tuning = "off",
     n_threads = 2L
   )
@@ -69,7 +69,7 @@ test_that("knn_graph passes method metric and tuning to internal KNN", {
 
   expect_s3_class(g, "faissR_graph")
   expect_equal(meta$nn_method, "exact")
-  expect_equal(meta$metric, "cosine")
+  expect_equal(meta$metric, "correlation")
   expect_equal(meta$tuning, "off")
   expect_equal(meta$nn_backend, "cpu")
   expect_equal(meta$requested_backend, "cpu")

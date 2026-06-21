@@ -85,6 +85,20 @@ test_that("candidate_knn supports CPU cosine candidates", {
   expect_equal(out$distances[1, ], c(0, 1 - 1 / sqrt(2)), tolerance = 1e-12)
 })
 
+test_that("candidate_knn canonicalizes metric aliases", {
+  x <- matrix(c(
+    1, 0,
+    0, 1,
+    1, 1
+  ), ncol = 2, byrow = TRUE)
+  candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
+
+  out <- candidate_knn(x, candidates, k = 2L, backend = "cpu", metric = "ip")
+
+  expect_s3_class(out, "faissR_nn")
+  expect_equal(attr(out, "metric"), "inner_product")
+})
+
 test_that("candidate_knn supports CPU correlation candidates", {
   x <- matrix(c(
     1, 2, 3,

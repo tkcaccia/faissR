@@ -16,7 +16,8 @@
 #'   \code{\link{nn_without_self}()} when `knn` is not supplied. The default
 #'   `"auto"` uses the shape-aware selector for the chosen backend.
 #' @param metric Distance metric passed to \code{\link{nn_without_self}()} when
-#'   `knn` is not supplied.
+#'   `knn` is not supplied. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and
+#'   `"ip"` are accepted and stored as canonical metric labels.
 #' @param tuning Tuning policy passed to \code{\link{nn_without_self}()} when
 #'   `knn` is not supplied.
 #' @param weight Graph weighting. `"auto"` uses SNN/Jaccard weights for input
@@ -56,7 +57,7 @@ knn_graph <- function(data,
                       n_threads = NULL) {
   backend <- as.character(backend)[1L]
   nn_method <- public_nn_method_label(normalize_nn_method(nn_method))
-  metric <- match.arg(metric)
+  metric <- normalize_nn_metric(metric)
   tuning <- normalize_nn_tuning(tuning)
   weight <- match.arg(weight)
   k <- as.integer(k)
@@ -205,7 +206,9 @@ resolve_graph_cluster_backend <- function(backend) {
 #' @param graph_method Nearest-neighbour method passed to
 #'   \code{\link{nn_without_self}()} when `graph` is a matrix or embedding.
 #' @param metric Distance metric passed to \code{\link{nn_without_self}()} when
-#'   `graph` is a matrix or embedding.
+#'   `graph` is a matrix or embedding. Aliases such as `"l2"`,
+#'   `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as canonical
+#'   metric labels.
 #' @param tuning Tuning policy passed to \code{\link{nn_without_self}()} when
 #'   `graph` is a matrix or embedding.
 #' @param weight KNN graph weighting. See \code{\link{knn_graph}()}.
@@ -278,7 +281,7 @@ graph_cluster <- function(graph,
   requested_backend <- match.arg(backend)
   backend <- resolve_graph_cluster_backend(requested_backend)
   graph_method <- public_nn_method_label(normalize_nn_method(graph_method))
-  metric <- match.arg(metric)
+  metric <- normalize_nn_metric(metric)
   tuning <- normalize_nn_tuning(tuning)
   if (identical(method, "random_walking") && identical(backend, "cuda")) {
     if (identical(requested_backend, "auto")) {
