@@ -243,7 +243,11 @@ Returns cluster labels, centers, within-cluster sums of squares, cluster sizes,
 iteration count, `converged`, `hit_max_iter`, backend, and parameters,
 including the k-means tuning rule used plus shape metadata, and whether
 `max_iter`, `n_init`, and `tol` were
-auto-selected or supplied explicitly. `parameters$tuning$effective` records the
+auto-selected or supplied explicitly. `parameters$tuning$rule` is a stable
+grouping label such as `small_low_work_multistart`,
+`medium_single_start`, or `large_fast_convergence`; `rule_detail` preserves
+the exact shape/work values used for that decision.
+`parameters$tuning$effective` records the
 final values used after explicit overrides and `"auto"` defaults have been
 resolved; `parameters$tuning$effective_max_iter`,
 `parameters$tuning$effective_n_init`, and `parameters$tuning$effective_tol`

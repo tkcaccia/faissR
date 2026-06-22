@@ -67,8 +67,11 @@ A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
   implementation that actually ran, while `parameters$requested_backend` and
   `parameters$resolved_backend` record the public backend request and device
   policy result. `parameters$tuning` records the deterministic k-means policy,
-  shape metadata, and whether `max_iter`, `n_init`, and `tol` were
-  auto-selected or supplied explicitly. `parameters$tuning$effective` records
+  stable `rule` label, shape metadata, and whether `max_iter`, `n_init`, and
+  `tol` were auto-selected or supplied explicitly.
+  `parameters$tuning$rule_detail` records the exact
+  `n`/`p`/`centers`/work values used to choose the rule.
+  `parameters$tuning$effective` records
   the final values used after explicit overrides and `"auto"` defaults have
   been resolved; `parameters$tuning$effective_max_iter`,
   `parameters$tuning$effective_n_init`, and

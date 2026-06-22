@@ -1528,7 +1528,8 @@ test_that("k-means benchmark records static selection metadata", {
     n_init = 5L,
     tol = 1e-4,
     tuning_policy = "auto",
-    tuning_rule = "shape",
+    tuning_rule = "small_low_work_multistart",
+    tuning_rule_detail = "n=100;p=4;centers=3;n_per_center=33.33;work=1.2e+03",
     tuning_work = 1200,
     tuning_n_per_center = 33.3,
     selection_policy = "static_shape_center_backend_selector",
@@ -1550,6 +1551,8 @@ test_that("k-means benchmark records static selection metadata", {
   expect_false(row$hit_max_iter)
 
   summary <- env$summarize_kmeans_cycles(row)
+  expect_equal(summary$tuning_rule, "small_low_work_multistart")
+  expect_equal(summary$tuning_rule_detail, "n=100;p=4;centers=3;n_per_center=33.33;work=1.2e+03")
   expect_equal(summary$selection_policy, "static_shape_center_backend_selector")
   expect_false(summary$selection_slow_tuning)
   expect_equal(summary$selection_predicted_backend, "cpu")
@@ -1710,6 +1713,7 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
     median_tol = c(1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4),
     tuning_policy = c("auto", "auto", "auto", "auto", "stats", "stats"),
     tuning_rule = c("medium", "medium", "medium", "medium", "stats_kmeans", "stats_kmeans"),
+    tuning_rule_detail = c("fast3", "fast3", "fast5", "fast5", "stats3", "stats5"),
     median_tuning_work = c(300, 300, 500, 500, NA, NA),
     median_tuning_n_per_center = c(10, 10, 10, 10, NA, NA),
     tuning_high_dim = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
@@ -1743,6 +1747,8 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
   expect_equal(out$recommended_n_threads, c(2L, 2L, 2L, 2L))
   expect_equal(out$fast_tuning_rule, rep("medium", 4))
   expect_equal(out$recommended_tuning_rule, rep("stats_kmeans", 4))
+  expect_equal(out$fast_tuning_rule_detail, c("fast3", "fast3", "fast5", "fast5"))
+  expect_equal(out$recommended_tuning_rule_detail, c("stats3", "stats3", "stats5", "stats5"))
   expect_equal(out$fast_selection_policy, rep("static_shape_center_backend_selector", 4))
   expect_equal(out$recommended_selection_policy, rep("stats", 4))
   expect_equal(out$fast_selection_predicted_backend, c("cpu", "cuda", "cpu", "cuda"))

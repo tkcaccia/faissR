@@ -790,6 +790,19 @@ test_that("benchmark documentation describes k-means runtime reason codes", {
   expect_true(grepl("missing_gpu_kmeans_backend", prose, fixed = TRUE))
 })
 
+test_that("benchmark documentation describes k-means tuning rule details", {
+  docs_file <- test_path("../../docs/benchmarks.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  expect_true(grepl("tuning_rule", prose, fixed = TRUE))
+  expect_true(grepl("tuning_rule_detail", prose, fixed = TRUE))
+  expect_true(grepl("small_low_work_multistart", prose, fixed = TRUE))
+  expect_true(grepl("large_fast_convergence", prose, fixed = TRUE))
+})
+
 test_that("NN capability docs describe runtime reason codes", {
   docs_files <- c(
     test_path("../../docs", c("backend-capabilities.md", "nn-methods.md", "benchmarks.md")),

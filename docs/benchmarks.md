@@ -560,6 +560,10 @@ Benchmark rows also record `selection_*` columns from
 reason, runtime capability flags, work/input-size estimates, and
 `selection_slow_tuning = FALSE`. Benchmark summaries can therefore explain auto
 CPU/CUDA selection without running extra pilot jobs.
+For k-means parameter tuning, `tuning_rule` is a categorical no-pilot label
+such as `small_low_work_multistart`, `medium_single_start`, or
+`large_fast_convergence`, while `tuning_rule_detail` stores the exact
+`n`/`p`/`centers`/work trace for auditing.
 
 Example CPU run:
 

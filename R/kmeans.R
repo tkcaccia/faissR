@@ -42,8 +42,11 @@
 #'   implementation that actually ran, while `parameters$requested_backend` and
 #'   `parameters$resolved_backend` record the public backend request and device
 #'   policy result. `parameters$tuning` records the deterministic k-means policy,
-#'   shape metadata, and whether `max_iter`, `n_init`, and `tol` were
-#'   auto-selected or supplied explicitly. `parameters$tuning$effective` records
+#'   stable `rule` label, shape metadata, and whether `max_iter`, `n_init`, and
+#'   `tol` were auto-selected or supplied explicitly.
+#'   `parameters$tuning$rule_detail` records the exact
+#'   `n`/`p`/`centers`/work values used to choose the rule.
+#'   `parameters$tuning$effective` records
 #'   the final values used after explicit overrides and `"auto"` defaults have
 #'   been resolved; `parameters$tuning$effective_max_iter`,
 #'   `parameters$tuning$effective_n_init`, and
@@ -629,6 +632,34 @@ normalize_kmeans_init <- function(init) {
   init
 }
 
+kmeans_rule_detail <- function(n, p, centers, n_per_center, work) {
+  paste(
+    paste0("n=", n),
+    paste0("p=", p),
+    paste0("centers=", centers),
+    paste0("n_per_center=", formatC(n_per_center, digits = 4, format = "fg")),
+    paste0("work=", format(work, scientific = TRUE)),
+    sep = ";"
+  )
+}
+
+kmeans_auto_rule_label <- function(centers,
+                                   large_n,
+                                   high_dim,
+                                   many_centers,
+                                   small_many_centers,
+                                   work,
+                                   n,
+                                   n_per_center) {
+  if (centers == 1L) return("single_cluster_exact_mean")
+  if (isTRUE(large_n) || work >= 5e9) return("large_fast_convergence")
+  if (isTRUE(small_many_centers)) return("small_many_centers_multistart")
+  if (n <= 50000L && centers <= 20L && work <= 2e8) return("small_low_work_multistart")
+  if (n <= 100000L && centers <= 50L && work <= 5e8) return("medium_multistart")
+  if (isTRUE(high_dim) || isTRUE(many_centers) || work >= 5e8) return("medium_single_start")
+  "small_single_start"
+}
+
 kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
   tuning <- normalize_kmeans_tuning(tuning)
   work <- as.double(n) * as.double(p) * as.double(centers)
@@ -637,6 +668,7 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
   many_centers <- centers >= 100L
   n_per_center <- as.double(n) / as.double(centers)
   small_many_centers <- many_centers && n <= 50000L && work <= 2e8 && n_per_center >= 20
+  rule_detail <- kmeans_rule_detail(n, p, centers, n_per_center, work)
   if (!identical(tuning, "auto")) {
     return(list(
       policy = tuning,
@@ -649,7 +681,8 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
       large_n = isTRUE(large_n),
       many_centers = isTRUE(many_centers),
       small_many_centers = isTRUE(small_many_centers),
-      rule = "fixed_defaults"
+      rule = "fixed_defaults",
+      rule_detail = rule_detail
     ))
   }
   if (centers == 1L) {
@@ -664,7 +697,8 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
       large_n = isTRUE(large_n),
       many_centers = FALSE,
       small_many_centers = FALSE,
-      rule = "single_cluster_exact_mean"
+      rule = "single_cluster_exact_mean",
+      rule_detail = rule_detail
     ))
   }
   max_iter <- if (large_n || work >= 5e9) {
@@ -688,6 +722,16 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
   } else {
     1e-4
   }
+  rule <- kmeans_auto_rule_label(
+    centers = centers,
+    large_n = large_n,
+    high_dim = high_dim,
+    many_centers = many_centers,
+    small_many_centers = small_many_centers,
+    work = work,
+    n = n,
+    n_per_center = n_per_center
+  )
   list(
     policy = "auto",
     max_iter = as.integer(max_iter),
@@ -699,15 +743,8 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
     large_n = isTRUE(large_n),
     many_centers = isTRUE(many_centers),
     small_many_centers = isTRUE(small_many_centers),
-    rule = paste(
-      "shape",
-      paste0("n=", n),
-      paste0("p=", p),
-      paste0("centers=", centers),
-      paste0("n_per_center=", formatC(n_per_center, digits = 4, format = "fg")),
-      paste0("work=", format(work, scientific = TRUE)),
-      sep = ";"
-    )
+    rule = rule,
+    rule_detail = rule_detail
   )
 }
 

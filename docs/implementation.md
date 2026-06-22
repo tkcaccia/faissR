@@ -388,13 +388,17 @@ predictable while allowing small problems to use more restarts and large
 high-dimensional problems to use cheaper convergence settings. The selected
 policy is recorded in `result$parameters$tuning`; its shape metadata includes
 estimated work, `n_per_center`, and flags such as `many_centers` and
-`small_many_centers`. Small many-cluster problems can keep 100 Lloyd iterations
-and use three restarts when `n / centers` remains large enough, while genuinely
-large or high-dimensional problems keep cheaper settings. For benchmark-like
-shapes, MNIST70k with 10 centres uses 75 iterations and one restart,
-million-row low-dimensional data uses 50 iterations, one restart, and
-`tol = 1e-3`, while a small 50,000 x 10 / 100-cluster job keeps 100 iterations
-and three restarts. These are fixed rules, not pilot benchmark loops. The
+`small_many_centers`. The stable `rule` label groups comparable tuning tiers,
+while `rule_detail` preserves the exact `n`, `p`, `centers`, `n_per_center`,
+and work estimate that produced the rule. Small many-cluster problems can keep
+100 Lloyd iterations and use three restarts when `n / centers` remains large
+enough, while genuinely large or high-dimensional problems keep cheaper
+settings. For benchmark-like shapes, MNIST70k with 10 centres uses the
+`medium_single_start` rule with 75 iterations and one restart, million-row
+low-dimensional data uses `large_fast_convergence` with 50 iterations, one
+restart, and `tol = 1e-3`, while a small 50,000 x 10 / 100-cluster job uses
+`small_many_centers_multistart` with 100 iterations and three restarts. These
+are fixed rules, not pilot benchmark loops. The
 `resolved_from` field records whether `max_iter`, `n_init`, and `tol` were
 selected by auto/default rules or supplied explicitly.
 `result$parameters$tuning$effective` records the final values used after
