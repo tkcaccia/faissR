@@ -350,6 +350,10 @@ test_that("knn_graph stores an optional cluster-count target for graph_cluster",
   expect_s3_class(cl$resolution_search, "data.frame")
   expect_true(all(c("candidate", "target_gap", "selected") %in% names(cl$resolution_search)))
   expect_equal(sum(cl$resolution_search$selected), 1L)
+  expect_equal(
+    cl$resolution_search$target_gap[cl$resolution_search$selected],
+    min(cl$resolution_search$target_gap, na.rm = TRUE)
+  )
   expect_equal(cl$target_gap, abs(cl$n_communities - 3L))
   expect_equal(cl$parameters$target_gap, cl$target_gap)
   expect_equal(
@@ -698,6 +702,10 @@ test_that("graph_cluster can target a requested number of communities", {
   expect_equal(cl$parameters$n_edges, cl$graph$n_edges)
   expect_lte(abs(cl$n_communities - 3L), 1L)
   expect_equal(sum(cl$resolution_search$selected), 1L)
+  expect_equal(
+    cl$resolution_search$target_gap[cl$resolution_search$selected],
+    min(cl$resolution_search$target_gap, na.rm = TRUE)
+  )
   expect_equal(
     cl$resolution_search$candidate[cl$resolution_search$selected],
     cl$resolution_selection$selected_candidate
