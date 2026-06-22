@@ -54,8 +54,10 @@ the same CPU FAISS Flat float32 route described in \code{\link{nn}()}.}
 A `faissR_nn` object with `indices`, `distances`, and stable
   metadata fields `index_base`, `distance_type`, `metric`, and
   `backend_used`. Float32 routes also record `input_layout` and
-  `input_owns_data`. Auto requests also include `attr(result,
-  "auto_selection")`, a static shape/k/metric decision record that does
+  `input_owns_data`. Normalized Euclidean graph routes for cosine/correlation
+  record `metric_transform` and `attr(result, "distance_transform")`. Auto
+  requests also include `attr(result, "auto_selection")`, a static
+  shape/k/metric decision record that does
   records the predicted internal backend, public method class, device class,
   and does not run pilot tuning.
 }

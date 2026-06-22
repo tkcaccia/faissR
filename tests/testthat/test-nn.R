@@ -1487,6 +1487,13 @@ test_that("grid self KNN supports normalized cosine and correlation metrics", {
     expect_equal(attr(grid, "backend"), "cpu_grid3d", info = metric)
     expect_true(isTRUE(attr(grid, "exact")), info = metric)
     expect_equal(attr(grid, "metric"), metric)
+    expect_match(grid$metric_transform, "normalize_then_euclidean", info = metric)
+    expect_equal(attr(grid, "metric_transform"), grid$metric_transform, info = metric)
+    expect_equal(
+      attr(grid, "distance_transform"),
+      "normalized_euclidean_squared_over_2_to_1_minus_similarity",
+      info = metric
+    )
     expect_match(attr(grid, "spatial_index")$metric_transform, "normalize_then_euclidean", info = metric)
     expect_equal(grid$indices, exact$indices, info = metric)
     expect_equal(grid$distances, exact$distances, tolerance = 1e-8, info = metric)

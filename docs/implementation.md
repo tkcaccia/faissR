@@ -117,6 +117,14 @@ apply the normalized-distance repair without relabelling the backend.
 Direct cuVS IVF/PQ, CAGRA, and NN-Descent use normalized Euclidean search for
 cosine/correlation and keep raw inner product disabled because the direct cuVS
 routes used by faissR are L2-based.
+Graph-style routes that implement cosine/correlation through normalized
+Euclidean search convert returned neighbour distances back to `1 - similarity`
+with the stable formula
+`normalized_euclidean_squared_over_2_to_1_minus_similarity`. Those results
+record `metric_transform` and `attr(result, "distance_transform")`, and
+approximate routes also copy the fields into `attr(result, "approximation")`,
+so benchmark summaries can distinguish the search space from the reported
+distance semantics.
 Inner-product search is exposed for exact native CPU
 scoring, FAISS Flat IP routes, FAISS IVF-Flat/IVFPQ IP, FAISS HNSW
 IP, and the RcppHNSW/hnswlib IP

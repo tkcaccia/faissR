@@ -56,7 +56,10 @@ Returns a `faissR_nn` list with `indices` and `distances` plus stable metadata
 fields: `index_base`, `distance_type`, `metric`, and `backend_used`. Float32
 routes also expose `input_layout` and `input_owns_data` to document the adapter
 path used before FAISS consumed the `float*` data. Indices are 1-based R row
-numbers. The public request is stored in
+numbers. Normalized Euclidean graph routes used for cosine/correlation also
+record `metric_transform` and `attr(result, "distance_transform")`, which makes
+the distance conversion explicit in benchmark tables. The public request is
+stored in
 `attr(result, "requested_backend")`, `attr(result, "requested_method")`, and
 `attr(result, "tuning")`; the implementation-facing route is stored in
 `attr(result, "backend")` and, when it differs from the public label,

@@ -3183,6 +3183,15 @@ finalize_normalized_euclidean_metric_result <- function(result, inputs) {
     data_zero = inputs$data_zero,
     points_zero = inputs$points_zero
   )
+  result$metric_transform <- inputs$transform
+  attr(result, "metric_transform") <- inputs$transform
+  attr(result, "distance_transform") <- "normalized_euclidean_squared_over_2_to_1_minus_similarity"
+  approximation <- attr(result, "approximation")
+  if (!is.null(approximation)) {
+    approximation$metric_transform <- inputs$transform
+    approximation$distance_transform <- "normalized_euclidean_squared_over_2_to_1_minus_similarity"
+    attr(result, "approximation") <- approximation
+  }
   sort_knn_rows_by_distance_index(result)
 }
 
@@ -6102,7 +6111,9 @@ grid_self_knn <- function(data,
 #'   metadata fields `index_base`, `distance_type`, `metric`, and
 #'   `backend_used`. Float32 routes also record `input_layout` and
 #'   `input_owns_data` so downstream packages can distinguish direct float32
-#'   payload use from one-time row-major conversion. Indices are 1-based. The
+#'   payload use from one-time row-major conversion. Normalized Euclidean graph
+#'   routes for cosine/correlation record `metric_transform` and
+#'   `attr(result, "distance_transform")`. Indices are 1-based. The
 #'   requested backend/method, tuning policy, resolved
 #'   backend, metric, exact/approximate flag, and self-query flag are stored in
 #'   attributes including `attr(result, "requested_backend")`,
@@ -6201,8 +6212,10 @@ nn <- function(data,
 #' @return A `faissR_nn` object with `indices`, `distances`, and stable
 #'   metadata fields `index_base`, `distance_type`, `metric`, and
 #'   `backend_used`. Float32 routes also record `input_layout` and
-#'   `input_owns_data`. Auto requests also include `attr(result,
-#'   "auto_selection")`, a static shape/k/metric decision record that does
+#'   `input_owns_data`. Normalized Euclidean graph routes for cosine/correlation
+#'   record `metric_transform` and `attr(result, "distance_transform")`. Auto
+#'   requests also include `attr(result, "auto_selection")`, a static
+#'   shape/k/metric decision record that does
 #'   records the predicted internal backend, public method class, device class,
 #'   and does not run pilot tuning.
 #' @export
