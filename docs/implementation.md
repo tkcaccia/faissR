@@ -209,6 +209,9 @@ Explicit methods map to the selected backend. For example,
 whereas `method = "grid", backend = "cuda"` resolves to the CUDA grid
 implementation. Invalid combinations fail before computation; for example,
 `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only.
+For CUDA CAGRA, `options(faissR.cagra_implementation = "auto")` keeps the
+default FAISS GPU CAGRA first, direct cuVS fallback rule; `"faiss_gpu"` or
+`"cuvs"` forces one provider for benchmark isolation.
 
 Direct cuVS CAGRA uses deterministic no-pilot defaults for `tuning = "auto"`.
 If the user explicitly requests `tuning = "cache"` or `tuning = "pilot"`, faissR
@@ -246,7 +249,7 @@ public method names map to different concrete functions depending on `backend`.
 | `vamana` | Native DiskANN/Vamana-style robust-pruned candidate graph with CPU refinement. | Native DiskANN/Vamana-style robust-pruned candidate graph with CUDA row-candidate refinement. | Distinct pruned directed graph route implemented in faissR; cuVS Vamana currently provides build/serialization rather than KNN search [3,24]. |
 | `nsg` | FAISS CPU NSG for Euclidean/L2; native CPU NSG-style self-KNN candidate graph for cosine, correlation, and inner product. | Native CUDA NSG-style self-KNN candidate graph for all public metrics. | Optional graph-search baseline; CPU non-L2 routes avoid unsafe linked-FAISS graph construction by using faissR-owned candidate pruning/refinement. Native CPU/CUDA NSG use backend-specific auto defaults and options (`faissR.cpu_nsg_*`, `faissR.cuda_nsg_*`) [16,21,29]. |
 | `nndescent` | Native CPU NNDescent for Euclidean/L2, cosine, correlation, and raw inner product. | Direct cuVS NN-descent for Euclidean/L2, cosine, and correlation; faissR native CUDA candidate refinement for raw inner product. | Approximate KNN graph construction; cosine/correlation use normalized Euclidean search, CPU and native CUDA raw inner product use shifted dot-product distances, and FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
-| `cagra` | Unsupported. | FAISS GPU CAGRA preferred, direct cuVS CAGRA fallback. Cosine/correlation use normalized Euclidean graph search. | CUDA-only graph-search method; raw inner product is not exposed [3,13-16]. |
+| `cagra` | Unsupported. | FAISS GPU CAGRA preferred, direct cuVS CAGRA fallback; `faissR.cagra_implementation` can force `"faiss_gpu"` or `"cuvs"`. Cosine/correlation use normalized Euclidean graph search. | CUDA-only graph-search method; raw inner product is not exposed [3,13-16]. |
 
 Unsupported method/backend pairs stop before computation. This makes benchmark
 failures interpretable: a row marked unavailable or unsupported means the

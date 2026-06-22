@@ -1773,6 +1773,56 @@ test_that("CUDA resolver uses FAISS GPU availability for routes with alternative
   )
 })
 
+test_that("CUDA CAGRA implementation can be selected by option", {
+  old <- getOption("faissR.cagra_implementation")
+  on.exit(options(faissR.cagra_implementation = old), add = TRUE)
+
+  options(faissR.cagra_implementation = "faiss_gpu")
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "cagra", "euclidean"),
+    "faiss_gpu_cagra"
+  )
+  expect_false(faissR:::public_nn_cuda_route_available(
+    "cagra",
+    "euclidean",
+    faiss_gpu_available_value = FALSE,
+    cuvs_available_value = TRUE
+  ))
+  expect_true(faissR:::public_nn_cuda_route_available(
+    "cagra",
+    "euclidean",
+    faiss_gpu_available_value = TRUE,
+    cuvs_available_value = FALSE
+  ))
+
+  options(faissR.cagra_implementation = "cuvs")
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "cagra", "euclidean"),
+    "cuda_cuvs_cagra"
+  )
+  expect_true(faissR:::public_nn_cuda_route_available(
+    "cagra",
+    "euclidean",
+    faiss_gpu_available_value = FALSE,
+    cuvs_available_value = TRUE
+  ))
+  expect_false(faissR:::public_nn_cuda_route_available(
+    "cagra",
+    "euclidean",
+    faiss_gpu_available_value = TRUE,
+    cuvs_available_value = FALSE
+  ))
+
+  options(faissR.cagra_implementation = "unknown")
+  expect_equal(
+    faissR:::resolve_cuda_cagra_backend(
+      faiss_gpu_available_value = TRUE,
+      cuvs_available_value = TRUE
+    ),
+    "faiss_gpu_cagra"
+  )
+})
+
 
 test_that("public backend and method resolver maps device plus method", {
   expect_equal(

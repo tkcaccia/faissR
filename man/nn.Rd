@@ -217,9 +217,12 @@ Method descriptions:
   opt-in because linked FAISS builds can abort during graph construction
   [3-4,16].
   \item `"cagra"`: CUDA-only graph-search method via FAISS GPU CAGRA/cuVS
-  integration or direct RAPIDS cuVS CAGRA. It supports Euclidean/L2 plus
-  cosine/correlation through normalized Euclidean graph search; raw inner
-  product is not exposed [3,13-16].
+  integration or direct RAPIDS cuVS CAGRA. By default faissR chooses FAISS GPU
+  CAGRA when that route is available and otherwise direct cuVS CAGRA; set
+  `options(faissR.cagra_implementation = "faiss_gpu")` or `"cuvs"` to force one
+  provider for benchmarking. It supports Euclidean/L2 plus cosine/correlation
+  through normalized Euclidean graph search; raw inner product is not exposed
+  [3,13-16].
 }
 
 References are numbered as in `docs/references.md` in the GitHub

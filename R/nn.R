@@ -1819,6 +1819,45 @@ faissr_option <- function(name, default = NULL) {
   default
 }
 
+cagra_implementation_preference <- function(default = "auto") {
+  value <- faissr_option("cagra_implementation", default)
+  value <- tolower(gsub("[[:space:]_-]+", "", as.character(value)[1L]))
+  aliases <- c(
+    auto = "auto",
+    default = "auto",
+    faiss = "faiss_gpu",
+    faissgpu = "faiss_gpu",
+    gpu = "faiss_gpu",
+    faisscuvs = "faiss_gpu",
+    faissgpucagra = "faiss_gpu",
+    cuvs = "cuvs",
+    rapids = "cuvs",
+    directcuvs = "cuvs",
+    cudacuvs = "cuvs",
+    cudacuvscagra = "cuvs"
+  )
+  if (!value %in% names(aliases)) {
+    return(default)
+  }
+  unname(aliases[[value]])
+}
+
+resolve_cuda_cagra_backend <- function(faiss_gpu_available_value = faiss_gpu_available(),
+                                       cuvs_available_value = cuvs_available()) {
+  preference <- cagra_implementation_preference()
+  if (identical(preference, "faiss_gpu")) {
+    return("faiss_gpu_cagra")
+  }
+  if (identical(preference, "cuvs")) {
+    return("cuda_cuvs_cagra")
+  }
+  if (isTRUE(faiss_gpu_available_value)) {
+    "faiss_gpu_cagra"
+  } else {
+    "cuda_cuvs_cagra"
+  }
+}
+
 #' Nearest-neighbour method capabilities
 #'
 #' `nn_capabilities()` returns the public method/backend/metric support table
@@ -2165,7 +2204,11 @@ nn_capability_row <- function(method, backend, metric) {
     supported <- identical(backend, "cuda") && metric %in% c("euclidean", "cosine", "correlation")
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cuda")) "FAISS GPU CAGRA or cuVS CAGRA" else NA_character_
-    notes <- if (identical(backend, "cuda")) "CUDA-only approximate graph search, validated for Euclidean/L2; cosine/correlation use normalized Euclidean search." else "CAGRA is CUDA-only."
+    notes <- if (identical(backend, "cuda")) {
+      "CUDA-only approximate graph search; faissR.cagra_implementation selects FAISS GPU CAGRA, direct cuVS CAGRA, or the default FAISS-then-cuVS rule."
+    } else {
+      "CAGRA is CUDA-only."
+    }
   }
 
   if (!isTRUE(supported)) {
@@ -2330,7 +2373,7 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
       } else {
         "cuda_native_nndescent"
       },
-      cagra = if (isTRUE(faiss_gpu_available())) "faiss_gpu_cagra" else "cuda_cuvs_cagra",
+      cagra = resolve_cuda_cagra_backend(),
       stop("Unsupported CUDA nearest-neighbour method.", call. = FALSE)
     )
   }
@@ -2801,7 +2844,17 @@ public_nn_cuda_route_available <- function(method,
     ivf = isTRUE(faiss_gpu_available_value),
     ivfpq = isTRUE(faiss_gpu_available_value),
     nndescent = isTRUE(cuvs_available_value),
-    cagra = isTRUE(faiss_gpu_available_value) || isTRUE(cuvs_available_value),
+    cagra = {
+      selected <- resolve_cuda_cagra_backend(
+        faiss_gpu_available_value = faiss_gpu_available_value,
+        cuvs_available_value = cuvs_available_value
+      )
+      if (identical(selected, "faiss_gpu_cagra")) {
+        isTRUE(faiss_gpu_available_value)
+      } else {
+        isTRUE(cuvs_available_value)
+      }
+    },
     FALSE
   )
 }
@@ -6433,7 +6486,10 @@ grid_self_knn <- function(data,
 #'   opt-in because linked FAISS builds can abort during graph construction
 #'   [3-4,16].
 #'   \item `"cagra"`: CUDA-only graph-search method via FAISS GPU CAGRA/cuVS
-#'   integration or direct RAPIDS cuVS CAGRA. It supports Euclidean/L2 plus
+#'   integration or direct RAPIDS cuVS CAGRA. By default faissR chooses FAISS
+#'   GPU CAGRA when that route is available and otherwise direct cuVS CAGRA;
+#'   set `options(faissR.cagra_implementation = "faiss_gpu")` or `"cuvs"` to
+#'   force one provider for benchmarking. It supports Euclidean/L2 plus
 #'   cosine/correlation through normalized Euclidean graph search; raw inner
 #'   product is not exposed [3,13-16].
 #' }

@@ -57,7 +57,7 @@ with method-specific parameters.
 | `"vamana"` | Native DiskANN/Vamana-style robust-pruned candidate graph with CPU candidate refinement. | Native DiskANN/Vamana-style robust-pruned candidate graph with CUDA row-candidate refinement. | Distinct pruned directed graph route inspired by DiskANN/Vamana; cuVS Vamana is acknowledged for GPU build/serialization, but faissR performs KNN candidate refinement because cuVS Vamana search is not exposed yet [3,24]. |
 | `"nsg"` | FAISS CPU NSG for Euclidean/L2; native CPU NSG-style candidate graph for cosine, correlation, and inner product self-KNN. | Native CUDA NSG-style candidate graph for Euclidean, cosine, correlation, and inner product self-KNN. | Optional graph-search baseline. CPU non-L2 requests avoid unsafe linked-FAISS graph construction and use faissR-owned NSG-style candidate refinement; cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances [16,21,29]. |
 | `"nndescent"` | Native CPU NNDescent for Euclidean/L2, cosine, correlation, and raw inner product. | Direct RAPIDS cuVS NN-descent for Euclidean/L2, cosine, and correlation; faissR native CUDA candidate refinement for raw inner product. | Approximate KNN graph construction; cosine/correlation use normalized Euclidean search, CPU and native CUDA raw inner product use shifted dot-product distances, and FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
-| `"cagra"` | Unsupported. | FAISS GPU CAGRA preferred; direct RAPIDS cuVS CAGRA when available. Cosine/correlation use normalized Euclidean graph search. | CUDA graph-search method; raw inner-product search is not exposed [3,13-16]. |
+| `"cagra"` | Unsupported. | FAISS GPU CAGRA preferred; direct RAPIDS cuVS CAGRA when available. `options(faissR.cagra_implementation = "faiss_gpu")` or `"cuvs"` forces one provider; `"auto"` keeps the default FAISS-then-cuVS rule. Cosine/correlation use normalized Euclidean graph search. | CUDA graph-search method; raw inner-product search is not exposed [3,13-16]. |
 
 Unsupported combinations fail before computation. For example,
 `nn(x, backend = "cpu", method = "cagra")` errors because CAGRA is CUDA-only,
@@ -117,7 +117,10 @@ non-public implementation route labels, device/runtime hints, and notes. The
 `nn_capabilities()` for the full method/backend/metric matrix. The
 `resolved_route` column is diagnostic metadata; values such as `faiss_hnsw` or
 `cuda_cuvs_cagra` are implementation labels, not accepted public `method`
-values. The boolean helpers return a single
+values. For public CAGRA calls, keep `method = "cagra"` and select the CUDA
+provider with `options(faissR.cagra_implementation = "auto")`,
+`"faiss_gpu"`, or `"cuvs"` when a benchmark must force FAISS GPU CAGRA or
+direct cuVS CAGRA. The boolean helpers return a single
 `TRUE`/`FALSE` value. They are useful for diagnostics and examples, but
 explicit backend calls still validate availability at execution time.
 `nn_capabilities()` returns a data frame with one row per public

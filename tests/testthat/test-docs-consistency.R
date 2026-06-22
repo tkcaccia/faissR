@@ -558,6 +558,30 @@ test_that("GitHub and reference docs describe direct cuVS brute-force metric sco
   }
 })
 
+test_that("GitHub and reference docs describe CAGRA provider selection", {
+  docs_files <- c(
+    test_path("../../docs", c(
+      "backend-capabilities.md",
+      "implementation.md",
+      "nn-methods.md",
+      "usage-api.md",
+      "autotuning.md"
+    )),
+    test_path("../../man/nn.Rd")
+  )
+  missing <- !file.exists(docs_files)
+  if (any(missing)) {
+    skip("GitHub or reference documentation files are not available in this installed-package test context.")
+  }
+
+  for (docs_file in docs_files) {
+    prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+    expect_true(grepl("faissR.cagra_implementation", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("faiss_gpu", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("cuvs", prose, ignore.case = TRUE), info = basename(docs_file))
+  }
+})
+
 test_that("GitHub and reference docs describe grid cosine/correlation support", {
   docs_files <- c(
     test_path("../../docs", c(
