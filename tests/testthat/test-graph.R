@@ -318,6 +318,26 @@ test_that("knn_graph stores an optional cluster-count target for graph_cluster",
   expect_equal(cl$parameters$resolution_selection$selected_candidate, which(cl$resolution_search$selected))
   expect_lte(abs(cl$n_communities - 3L), 1L)
 
+  override <- graph_cluster(
+    g,
+    method = "louvain",
+    backend = "cpu",
+    n_threads = 2L,
+    seed = 1L,
+    n_clusters = 2L
+  )
+  expect_equal(override$target_n_clusters, 2L)
+  expect_equal(override$parameters$n_clusters, 2L)
+
+  precomputed <- nn_without_self(x, k = 8L, backend = "cpu", n_threads = 2L)
+  g_knn <- knn_graph(precomputed, k = 8L, n_clusters = 3L)
+  expect_s3_class(g_knn, "faissR_graph")
+  expect_equal(class(g_knn), c("faissR_graph", "list"))
+  expect_equal(attr(g_knn, "faissR_graph")$target_n_clusters, 3L)
+  leiden <- graph_cluster(g_knn, method = "leiden", backend = "cpu", n_threads = 2L, seed = 1L)
+  expect_equal(leiden$target_n_clusters, 3L)
+  expect_equal(leiden$parameters$n_clusters, 3L)
+
   walk <- graph_cluster(g, method = "random_walking", backend = "cpu", n_threads = 2L)
   expect_s3_class(walk, "faissR_graph_cluster")
   expect_null(walk$target_n_clusters)
