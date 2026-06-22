@@ -63,18 +63,23 @@ benchmark_env <- function() {
   env
 }
 
-data_root <- args$data_root %||% Sys.getenv("FAISSR_BENCHMARK_DATA", file.path(getwd(), "Data"))
-out_dir <- args$out_dir %||% Sys.getenv(
-  "FAISSR_BENCHMARK_OUT",
-  file.path(getwd(), paste0("faissR_BENCHMARK1_", format(Sys.time(), "%Y%m%d_%H%M%S")))
-)
-k <- as.integer(args$k %||% "50")
-n_threads <- as.integer(args$threads %||% "4")
-metric <- tolower(args$metric %||% "l2")
-if (metric %in% c("euclidean", "l2")) metric <- "l2"
-if (metric %in% c("ip", "innerproduct", "inner_product")) metric <- "inner_product"
-if (metric %in% c("cor", "pearson")) metric <- "correlation"
-if (!metric %in% c("l2", "cosine", "correlation", "inner_product")) metric <- "l2"
+benchmark1_metric_value <- function(metric = NULL, arg_name = "metric") {
+  raw <- metric %||% "l2"
+  if (length(raw) != 1L || is.na(raw) || !nzchar(raw)) {
+    stop("`", arg_name, "` must contain exactly one metric.", call. = FALSE)
+  }
+  value <- tolower(trimws(raw))
+  if (value %in% c("euclidean", "l2")) return("l2")
+  if (value %in% c("ip", "innerproduct", "inner_product")) return("inner_product")
+  if (value %in% c("cor", "pearson")) return("correlation")
+  if (value %in% c("cosine", "correlation")) return(value)
+  stop(
+    "`", arg_name, "` must be one of: l2, cosine, correlation, inner_product. ",
+    "Invalid value(s): ", value, ".",
+    call. = FALSE
+  )
+}
+
 benchmark1_metric_values <- function(metrics = NULL,
                                      env_metrics = Sys.getenv("FAISSR_BENCHMARK1_METRICS", unset = NA_character_)) {
   raw <- metrics %||% env_metrics
@@ -86,26 +91,21 @@ benchmark1_metric_values <- function(metrics = NULL,
   }
   values <- trimws(strsplit(raw, ",", fixed = TRUE)[[1L]])
   values <- unique(tolower(values[nzchar(values)]))
-  values[values %in% c("euclidean")] <- "l2"
-  values[values %in% c("ip", "innerproduct")] <- "inner_product"
-  values[values %in% c("cor", "pearson")] <- "correlation"
-  valid <- c("l2", "cosine", "correlation", "inner_product")
-  invalid <- values[!values %in% valid]
-  if (length(invalid)) {
-    stop(
-      "`metrics` must contain only Benchmark #1 metrics: ",
-      paste(valid, collapse = ", "),
-      ". Invalid value(s): ",
-      paste(invalid, collapse = ", "),
-      ".",
-      call. = FALSE
-    )
-  }
+  values <- vapply(values, benchmark1_metric_value, character(1L), arg_name = "metrics")
   if (!length(values)) {
     stop("`metrics` must contain at least one metric.", call. = FALSE)
   }
-  values
+  unique(unname(values))
 }
+
+data_root <- args$data_root %||% Sys.getenv("FAISSR_BENCHMARK_DATA", file.path(getwd(), "Data"))
+out_dir <- args$out_dir %||% Sys.getenv(
+  "FAISSR_BENCHMARK_OUT",
+  file.path(getwd(), paste0("faissR_BENCHMARK1_", format(Sys.time(), "%Y%m%d_%H%M%S")))
+)
+k <- as.integer(args$k %||% "50")
+n_threads <- as.integer(args$threads %||% "4")
+metric <- benchmark1_metric_value(args$metric %||% "l2")
 
 benchmark1_k_values <- function(k_values = NULL,
                                 env_k_values = Sys.getenv("FAISSR_BENCHMARK1_K_VALUES", unset = NA_character_)) {
