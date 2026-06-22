@@ -50,6 +50,28 @@ usage_argument_rows <- function(lines, section) {
   sub("^\\| `([^`]+)` \\|.*$", "\\1", rows)
 }
 
+extract_reference_numbers <- function(text) {
+  hits <- unlist(regmatches(text, gregexpr("\\[[0-9][0-9, -]*\\]", text)))
+  if (!length(hits)) return(integer())
+  hits <- gsub("\\[|\\]|[[:space:]]", "", hits)
+  refs <- integer()
+  for (hit in hits) {
+    pieces <- strsplit(hit, ",", fixed = TRUE)[[1L]]
+    for (piece in pieces) {
+      if (grepl("-", piece, fixed = TRUE)) {
+        bounds <- suppressWarnings(as.integer(strsplit(piece, "-", fixed = TRUE)[[1L]]))
+        if (length(bounds) == 2L && all(is.finite(bounds)) && bounds[[1L]] <= bounds[[2L]]) {
+          refs <- c(refs, seq.int(bounds[[1L]], bounds[[2L]]))
+        }
+      } else {
+        value <- suppressWarnings(as.integer(piece))
+        if (is.finite(value)) refs <- c(refs, value)
+      }
+    }
+  }
+  sort(unique(refs))
+}
+
 test_that("NN methods documentation metric table agrees with nn_capabilities", {
   docs_file <- test_path("../../docs/nn-methods.md")
   if (!file.exists(docs_file)) {
@@ -398,6 +420,31 @@ test_that("usage API includes all exported public workflow sections", {
       info = section
     )
   }
+})
+
+test_that("GitHub references are cited outside the reference list", {
+  refs_file <- test_path("../../docs/references.md")
+  docs_dir <- test_path("../../docs")
+  if (!file.exists(refs_file) || !dir.exists(docs_dir)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  refs <- readLines(refs_file, warn = FALSE)
+  listed <- suppressWarnings(as.integer(sub("^([0-9]+)\\..*$", "\\1", grep("^[0-9]+\\.", refs, value = TRUE))))
+  listed <- listed[is.finite(listed)]
+  expect_gt(length(listed), 0L)
+
+  docs_files <- c(test_path("../../README.md"), list.files(docs_dir, pattern = "\\.md$", full.names = TRUE))
+  docs_files <- docs_files[file.exists(docs_files)]
+  docs_files <- docs_files[
+    normalizePath(docs_files, mustWork = FALSE) != normalizePath(refs_file, mustWork = FALSE)
+  ]
+  text <- paste(
+    vapply(docs_files, function(path) paste(readLines(path, warn = FALSE), collapse = "\n"), character(1L)),
+    collapse = "\n"
+  )
+  cited <- extract_reference_numbers(text)
+  expect_equal(setdiff(listed, cited), integer())
 })
 
 test_that("usage API argument tables document live function formals", {
