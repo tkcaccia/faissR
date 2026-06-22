@@ -116,12 +116,22 @@ If CUDA/cuVS/cuGraph is not available, install the CPU package with FAISS only.
 | `FAISSR_USE_CUDA` | Enable CUDA/FAISS GPU build paths where available. |
 | `FAISSR_USE_CUVS` | Enable RAPIDS cuVS build paths where available. |
 | `FAISSR_USE_CUGRAPH` | Enable RAPIDS libcugraph graph-clustering paths where available. |
+| `FAISSR_CUDA_ARCH` | Optional space-separated CUDA architectures passed to `nvcc`, for example `80 89`. |
+| `FAISSR_CUDA_FLAGS` | Optional extra flags appended to the CUDA compilation command. |
 | `CUDA_HOME` | CUDA toolkit prefix. |
 | `CUVS_HOME` | RAPIDS cuVS installation prefix. |
 | `CUGRAPH_HOME` | RAPIDS libcugraph installation prefix. |
 | `NVCC` | Optional explicit CUDA compiler path. |
 | `PKG_CONFIG_PATH` | Helps locate FAISS/cuVS/cuGraph `.pc` files. |
 | `LD_LIBRARY_PATH` / `DYLD_LIBRARY_PATH` | Runtime library search path on Linux/macOS. |
+
+CPU exact-search diagnostics can be controlled with:
+
+| Variable | Purpose |
+| --- | --- |
+| `FAISSR_USE_FORTRAN_NN` | Set to `1` to force the Fortran exact Euclidean CPU kernel, or `0` to force the C++ path. |
+| `FAISSR_NN_ROW_MAJOR` | Set to `1` to force row-major temporary copies for exact CPU distance loops, or `0` to use R's column-major layout directly. |
+| `FAISSR_NN_ROW_MAJOR_MAX_MB` | Maximum row-major temporary size in MiB when `FAISSR_NN_ROW_MAJOR` is not forced. |
 
 ## Validation
 
