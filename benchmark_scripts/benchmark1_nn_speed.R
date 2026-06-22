@@ -1153,6 +1153,10 @@ invalid_worker_method_row <- function(dataset, method, k, metric, n_threads) {
     implementation_backend = NA_character_,
     auto_predicted_method = NA_character_,
     auto_predicted_device = NA_character_,
+    auto_explicit_backend = NA,
+    auto_explicit_method = NA,
+    auto_backend_decision = NA_character_,
+    auto_method_decision = NA_character_,
     route_parameters = NA_character_,
     tuning_status = NA_character_,
     kind = NA_character_,
@@ -1212,6 +1216,10 @@ if (worker) {
     implementation_backend = NA_character_,
     auto_predicted_method = NA_character_,
     auto_predicted_device = NA_character_,
+    auto_explicit_backend = NA,
+    auto_explicit_method = NA,
+    auto_backend_decision = NA_character_,
+    auto_method_decision = NA_character_,
     route_parameters = NA_character_,
     tuning_status = NA_character_,
     kind = mm$kind %||% NA_character_,
@@ -1292,6 +1300,10 @@ if (worker) {
     if (is.null(auto_selection)) auto_selection <- list()
     row$auto_predicted_method <- auto_selection$predicted_method %||% NA_character_
     row$auto_predicted_device <- auto_selection$predicted_device %||% NA_character_
+    row$auto_explicit_backend <- auto_selection$explicit_backend %||% NA
+    row$auto_explicit_method <- auto_selection$explicit_method %||% NA
+    row$auto_backend_decision <- auto_selection$backend_decision %||% NA_character_
+    row$auto_method_decision <- auto_selection$method_decision %||% NA_character_
     row$route_parameters <- benchmark1_route_parameters(obj)
     row$tuning_status <- benchmark1_tuning_status(obj)
     sx <- standardize_knn(obj)
@@ -1472,6 +1484,10 @@ for (di in seq_len(nrow(datasets))) {
             implementation_backend = NA_character_,
             auto_predicted_method = NA_character_,
             auto_predicted_device = NA_character_,
+            auto_explicit_backend = NA,
+            auto_explicit_method = NA,
+            auto_backend_decision = NA_character_,
+            auto_method_decision = NA_character_,
             route_parameters = NA_character_,
             tuning_status = NA_character_,
             kind = methods$kind[[mi]],
@@ -1555,7 +1571,7 @@ materials <- c(
   "Native CPU NNDescent is benchmarked for Euclidean, cosine, correlation, and raw inner-product metrics. Direct CUDA/cuVS NN-descent is benchmarked for Euclidean, cosine, and correlation; raw inner-product CUDA/cuVS NN-descent is recorded as unsupported.",
   "The Flat rows use the public `method = \"flat\"` route. When `metric = \"inner_product\"` is explicitly requested, faissR dispatches the same public Flat rows to the appropriate FAISS inner-product index internally instead of listing duplicate Flat-IP methods.",
   "For faissR rows, `execution_backend` records the internal backend label used by `nn_compute()`, while `public_backend` and `public_method` record the equivalent public `nn(..., backend = , method = )` route. This separates legacy benchmark labels from the public API.",
-  "Successful faissR rows also record `result_backend`, `result_requested_backend`, `result_requested_method`, `result_tuning`, `resolved_backend`, `implementation_backend`, `auto_predicted_method`, `auto_predicted_device`, compact `route_parameters`, and `tuning_status`. These fields make deterministic no-pilot tuning choices, explicit backend/method requests, and concrete FAISS/cuVS/native routes explicit in the Benchmark #1 result table.",
+  "Successful faissR rows also record `result_backend`, `result_requested_backend`, `result_requested_method`, `result_tuning`, `resolved_backend`, `implementation_backend`, `auto_predicted_method`, `auto_predicted_device`, `auto_explicit_backend`, `auto_explicit_method`, `auto_backend_decision`, `auto_method_decision`, compact `route_parameters`, and `tuning_status`. These fields make deterministic no-pilot tuning choices, explicit backend/method requests, and concrete FAISS/cuVS/native routes explicit in the Benchmark #1 result table.",
   "The benchmark result table includes `backend_detail` to distinguish FAISS GPU indexes that use NVIDIA cuVS internally from direct RAPIDS cuVS API calls.",
   "`benchmark1_runtime_capabilities.csv` records the faissR Benchmark #1 method/metric preflight table, including legacy Benchmark #1 method labels, equivalent public `nn()` routes where available, execution backends, metric support, `public_runtime_reason`, `runtime_available`, `runtime_reason`, and current runtime availability notes.",
   "External R package methods tested: Rnanoflann, RANN kd-tree and bd-tree, rnndescent RPF/RNND/NND/brute-force, RcppHNSW, RcppAnnoy, BiocNeighbors VP-tree/HNSW/Annoy, uwot::similarity_graph with nn_method = fnn, annoy, hnsw, and nndescent, and cuda.ml KNN if an installed cuda.ml package exposes a recognised KNN routine. External RcppHNSW rows use Euclidean, cosine, or inner-product (`distance = \"ip\"`) modes when those metrics are requested; correlation is recorded as unavailable for the external RcppHNSW row because Benchmark #1 does not row-center data before calling that package.",

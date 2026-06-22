@@ -634,6 +634,10 @@ test_that("NN metric auto comparison preserves recommendation basis", {
     result_tuning = c("auto", "auto"),
     auto_predicted_method = c("hnsw", NA_character_),
     auto_predicted_device = c("cpu", NA_character_),
+    auto_explicit_backend = c(FALSE, NA),
+    auto_explicit_method = c(FALSE, NA),
+    auto_backend_decision = c("auto_cpu_fallback", NA_character_),
+    auto_method_decision = c("auto_cpu_fallback", NA_character_),
     resolved_backend = c("faiss_hnsw", "faiss_hnsw"),
     implementation_backend = c("faiss_hnsw", "faiss_hnsw"),
     preflight_route = c("faiss_hnsw", "faiss_hnsw"),
@@ -663,6 +667,10 @@ test_that("NN metric auto comparison preserves recommendation basis", {
   expect_equal(out$auto_result_tuning, "auto")
   expect_equal(out$auto_auto_predicted_method, "hnsw")
   expect_equal(out$auto_auto_predicted_device, "cpu")
+  expect_false(out$auto_auto_explicit_backend)
+  expect_false(out$auto_auto_explicit_method)
+  expect_equal(out$auto_auto_backend_decision, "auto_cpu_fallback")
+  expect_equal(out$auto_auto_method_decision, "auto_cpu_fallback")
   expect_equal(out$auto_preflight_route, "faiss_hnsw")
   expect_equal(out$recommended_preflight_route, "faiss_hnsw")
   expect_equal(out$auto_route_parameters, "approximation.m=16;approximation.ef_search=150")

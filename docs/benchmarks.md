@@ -160,10 +160,11 @@ dominant implementation backend. New runs also preserve the public request
 stored on `nn()` results (`result_requested_backend`,
 `result_requested_method`, and `result_tuning`), compact `route_parameters`
 metadata from FAISS/cuVS/native result attributes, explicit
-`auto_predicted_method` and `auto_predicted_device` fields from no-pilot auto
-selection, and `tuning_status` when a backend reports tuning. For cosine and
-correlation routes that search in normalized Euclidean space, compact
-`route_parameters` also records the `metric_transform` and
+`auto_predicted_method`, `auto_predicted_device`, `auto_explicit_backend`,
+`auto_explicit_method`, `auto_backend_decision`, and `auto_method_decision`
+fields from no-pilot auto selection, and `tuning_status` when a backend reports
+tuning. For cosine and correlation routes that search in normalized Euclidean
+space, compact `route_parameters` also records the `metric_transform` and
 `distance_transform` used to convert the public metric into the searched
 distance.
 For deterministic no-pilot routes such as FAISS CPU HNSW, the compact
