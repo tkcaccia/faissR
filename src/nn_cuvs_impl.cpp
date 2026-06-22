@@ -895,6 +895,9 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
   index_params.get()->graph_degree = static_cast<std::size_t>(graph_degree);
   index_params.get()->intermediate_graph_degree =
     static_cast<std::size_t>(intermediate_graph_degree);
+  index_params.get()->build_algo = NN_DESCENT;
+  index_params.get()->nn_descent_niter =
+    static_cast<std::size_t>(env_int("FAISSR_CUVS_CAGRA_NN_DESCENT_NITER", 20, 1));
 
   CagraIndex index;
   cuvs_check(
@@ -995,6 +998,8 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
   out["intermediate_graph_degree"] = intermediate_graph_degree;
   out["search_width"] = search_width;
   out["itopk_size"] = itopk_size;
+  out["build_algo"] = "NN_DESCENT";
+  out["nn_descent_niter"] = static_cast<int>(index_params.get()->nn_descent_niter);
   out["requested_graph_degree"] = requested_graph_degree;
   out["requested_intermediate_graph_degree"] = requested_intermediate_graph_degree;
   out["requested_search_width"] = requested_search_width;
