@@ -841,7 +841,12 @@ nn_compute <- function(data,
         n_threads = n_threads
       ))
     }
-    params <- faiss_hnsw_params(k)
+    params <- faiss_hnsw_params(
+      k,
+      n = nrow(data),
+      p = ncol(data),
+      metric = metric
+    )
     out <- nn_faiss_hnsw_cpp(
       data,
       points,
@@ -866,7 +871,13 @@ nn_compute <- function(data,
       requested_m = as.integer(out$requested_m),
       requested_ef_construction = as.integer(out$requested_ef_construction),
       requested_ef_search = as.integer(out$requested_ef_search),
-      hnsw_parameters_adjusted = isTRUE(out$hnsw_parameters_adjusted)
+      hnsw_parameters_adjusted = isTRUE(out$hnsw_parameters_adjusted),
+      tuning_policy = params$policy,
+      tuning_rule = params$rule,
+      tuning_high_dim = isTRUE(params$high_dim),
+      tuning_large_n = isTRUE(params$large_n),
+      tuning_small_k = isTRUE(params$small_k),
+      tuning_non_euclidean = isTRUE(params$non_euclidean)
     )
     return(result)
   }
@@ -3319,7 +3330,12 @@ faiss_hnsw_normalized_metric_result <- function(data,
                                                 metric,
                                                 n_threads = NULL) {
   metric <- normalize_nn_metric(metric)
-  params <- faiss_hnsw_params(k)
+  params <- faiss_hnsw_params(
+    k,
+    n = nrow(data),
+    p = ncol(data),
+    metric = metric
+  )
   data_metric <- if (identical(metric, "correlation")) {
     row_center_l2_normalize(data)
   } else {
@@ -3370,7 +3386,13 @@ faiss_hnsw_normalized_metric_result <- function(data,
     requested_m = as.integer(out$requested_m),
     requested_ef_construction = as.integer(out$requested_ef_construction),
     requested_ef_search = as.integer(out$requested_ef_search),
-    hnsw_parameters_adjusted = isTRUE(out$hnsw_parameters_adjusted)
+    hnsw_parameters_adjusted = isTRUE(out$hnsw_parameters_adjusted),
+    tuning_policy = params$policy,
+    tuning_rule = params$rule,
+    tuning_high_dim = isTRUE(params$high_dim),
+    tuning_large_n = isTRUE(params$large_n),
+    tuning_small_k = isTRUE(params$small_k),
+    tuning_non_euclidean = isTRUE(params$non_euclidean)
   )
   result
 }
@@ -4003,7 +4025,12 @@ faiss_self_knn <- function(data,
   }
   if (identical(backend, "faiss_hnsw") ||
       identical(backend, "cpu_nndescent_faiss_hnsw")) {
-    params <- faiss_hnsw_params(k)
+    params <- faiss_hnsw_params(
+      k,
+      n = nrow(data),
+      p = ncol(data),
+      metric = metric
+    )
     out <- nn_faiss_hnsw_cpp(
       data,
       data,
@@ -4029,6 +4056,12 @@ faiss_self_knn <- function(data,
       requested_ef_construction = as.integer(out$requested_ef_construction),
       requested_ef_search = as.integer(out$requested_ef_search),
       hnsw_parameters_adjusted = isTRUE(out$hnsw_parameters_adjusted),
+      tuning_policy = params$policy,
+      tuning_rule = params$rule,
+      tuning_high_dim = isTRUE(params$high_dim),
+      tuning_large_n = isTRUE(params$large_n),
+      tuning_small_k = isTRUE(params$small_k),
+      tuning_non_euclidean = isTRUE(params$non_euclidean),
       seed = as.integer(seed)
     )
     return(out)
@@ -4874,22 +4907,89 @@ faiss_pq_params <- function(p) {
   list(m = as.integer(m), nbits = as.integer(nbits))
 }
 
-faiss_hnsw_params <- function(k) {
+faiss_hnsw_auto_policy <- function(n = NULL, p = NULL, k, metric = "euclidean") {
+  n <- suppressWarnings(as.integer(n %||% NA_integer_))
+  p <- suppressWarnings(as.integer(p %||% NA_integer_))
   k <- as.integer(k)
-  m <- faiss_option_int("hnsw_m", 32L, min_value = 2L, max_value = 256L)
+  metric <- normalize_nn_metric(metric)
+  high_dim <- length(p) == 1L && !is.na(p) && p >= 256L
+  large_n <- length(n) == 1L && !is.na(n) && n >= 50000L
+  very_large_high_dim <- isTRUE(large_n) && isTRUE(high_dim)
+  small_k <- length(k) == 1L && !is.na(k) && k <= 10L
+  large_k <- length(k) == 1L && !is.na(k) && k >= 100L
+  non_euclidean <- !identical(metric, "euclidean")
+
+  if ((isTRUE(very_large_high_dim) && isTRUE(large_k)) ||
+      (isTRUE(non_euclidean) && (isTRUE(large_k) || isTRUE(high_dim)))) {
+    rule <- "high_recall_shape_metric"
+    m <- 48L
+    ef_construction <- 240L
+    ef_search <- max(220L, 3L * k)
+  } else if (isTRUE(small_k) &&
+             !isTRUE(high_dim) &&
+             !isTRUE(non_euclidean)) {
+    rule <- "small_k_speed"
+    m <- 24L
+    ef_construction <- 120L
+    ef_search <- max(80L, 4L * k)
+  } else {
+    rule <- "balanced_shape_metric"
+    m <- 32L
+    ef_construction <- 200L
+    ef_search <- max(150L, 3L * k)
+  }
+
+  list(
+    m = as.integer(m),
+    ef_construction = as.integer(ef_construction),
+    ef_search = as.integer(ef_search),
+    rule = rule,
+    high_dim = isTRUE(high_dim),
+    large_n = isTRUE(large_n),
+    small_k = isTRUE(small_k),
+    non_euclidean = isTRUE(non_euclidean)
+  )
+}
+
+faiss_hnsw_manual_params <- function() {
+  any(vapply(
+    c("hnsw_m", "hnsw_ef_construction", "hnsw_ef_search"),
+    function(name) !is.null(faissr_option(paste0("faiss_", name), NULL)),
+    logical(1)
+  ))
+}
+
+faiss_hnsw_params <- function(k, n = NULL, p = NULL, metric = "euclidean") {
+  k <- as.integer(k)
+  auto <- faiss_hnsw_auto_policy(n = n, p = p, k = k, metric = metric)
+  manual <- faiss_hnsw_manual_params()
+  m <- faiss_option_int("hnsw_m", auto$m, min_value = 2L, max_value = 256L)
   ef_construction <- faiss_option_int(
     "hnsw_ef_construction",
-    max(200L, 5L * m),
+    auto$ef_construction,
     min_value = m,
     max_value = 4096L
   )
   ef_search <- faiss_option_int(
     "hnsw_ef_search",
-    max(150L, 3L * k),
+    auto$ef_search,
     min_value = k,
     max_value = 4096L
   )
-  list(m = as.integer(m), ef_construction = as.integer(ef_construction), ef_search = as.integer(ef_search))
+  list(
+    m = as.integer(m),
+    ef_construction = as.integer(ef_construction),
+    ef_search = as.integer(ef_search),
+    rule = auto$rule,
+    policy = if (isTRUE(manual)) "manual_options" else "auto_shape_metric",
+    high_dim = auto$high_dim,
+    large_n = auto$large_n,
+    small_k = auto$small_k,
+    non_euclidean = auto$non_euclidean,
+    requested_m = as.integer(auto$m),
+    requested_ef_construction = as.integer(auto$ef_construction),
+    requested_ef_search = as.integer(auto$ef_search)
+  )
 }
 
 faiss_nsg_params <- function(k) {
@@ -5559,6 +5659,9 @@ grid_self_knn <- function(data,
 #'   `"hnsw"` for inner-product search.
 #'   \item `"sparse"`: native exact sparse `dgCMatrix` CPU search.
 #'   \item `"hnsw"`: FAISS CPU HNSW approximate graph-search index [5,16].
+#'   Default FAISS HNSW parameters are selected by a deterministic
+#'   shape/k/metric rule without pilot tuning; result approximation metadata
+#'   records the selected `tuning_rule` and the shape flags used.
 #'   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
 #'   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
 #'   cosine/correlation routes on CPU and FAISS GPU [1-2,16].
@@ -5667,7 +5770,9 @@ grid_self_knn <- function(data,
 #'   tuned default for the resolved method, `"cache"` reuses/stores pilot
 #'   results, `"pilot"` tunes for this call without persisting, `"fixed"` uses
 #'   fixed defaults with tuning metadata, and `"off"`/`"none"` disables tuning.
-#'   Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.
+#'   FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
+#'   `k`, and `metric`; explicit `faissR.faiss_hnsw_*` options override those
+#'   defaults. Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.
 #' @param output Distance storage type for the returned object. `"double"`
 #'   returns the default R numeric distance matrix. `"float"` returns
 #'   `distances` as a `float::fl()`/`float32` object and records

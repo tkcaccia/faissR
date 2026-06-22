@@ -2179,6 +2179,63 @@ test_that("CPU auto selector is k and metric aware on benchmark k grid", {
   }
 })
 
+test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuning", {
+  old_options <- options(
+    faissR.faiss_hnsw_m = NULL,
+    faissR.faiss_hnsw_ef_construction = NULL,
+    faissR.faiss_hnsw_ef_search = NULL
+  )
+  on.exit(options(old_options), add = TRUE)
+
+  speed <- faissR:::faiss_hnsw_params(
+    k = 5L,
+    n = 20000L,
+    p = 32L,
+    metric = "euclidean"
+  )
+  expect_equal(speed$policy, "auto_shape_metric")
+  expect_equal(speed$rule, "small_k_speed")
+  expect_equal(speed$m, 24L)
+  expect_equal(speed$ef_construction, 120L)
+  expect_equal(speed$ef_search, 80L)
+
+  balanced <- faissR:::faiss_hnsw_params(
+    k = 50L,
+    n = 70000L,
+    p = 784L,
+    metric = "euclidean"
+  )
+  expect_equal(balanced$rule, "balanced_shape_metric")
+  expect_equal(balanced$m, 32L)
+  expect_equal(balanced$ef_construction, 200L)
+  expect_equal(balanced$ef_search, 150L)
+  expect_true(isTRUE(balanced$high_dim))
+  expect_true(isTRUE(balanced$large_n))
+
+  high_recall <- faissR:::faiss_hnsw_params(
+    k = 100L,
+    n = 70000L,
+    p = 784L,
+    metric = "correlation"
+  )
+  expect_equal(high_recall$rule, "high_recall_shape_metric")
+  expect_equal(high_recall$m, 48L)
+  expect_equal(high_recall$ef_construction, 240L)
+  expect_equal(high_recall$ef_search, 300L)
+  expect_true(isTRUE(high_recall$non_euclidean))
+
+  options(faissR.faiss_hnsw_m = 40L)
+  manual <- faissR:::faiss_hnsw_params(
+    k = 50L,
+    n = 70000L,
+    p = 784L,
+    metric = "euclidean"
+  )
+  expect_equal(manual$policy, "manual_options")
+  expect_equal(manual$m, 40L)
+  expect_equal(manual$rule, "balanced_shape_metric")
+})
+
 test_that("CPU auto selector can fall back to native NNDescent for large self-KNN", {
   expect_true(faissR:::should_use_native_nndescent_auto_fallback(
     self_query = TRUE,
@@ -2647,6 +2704,11 @@ test_that("FAISS HNSW reports actual and requested parameters", {
     expect_equal(approx$ef_search, 10L)
     expect_equal(approx$requested_ef_search, 10L)
     expect_true(approx$hnsw_parameters_adjusted)
+    expect_equal(approx$tuning_policy, "manual_options")
+    expect_equal(approx$tuning_rule, "small_k_speed")
+    expect_false(isTRUE(approx$tuning_high_dim))
+    expect_false(isTRUE(approx$tuning_large_n))
+    expect_false(isTRUE(approx$tuning_non_euclidean))
   } else {
     expect_error(internal_nn(x, k = 10L, backend = "faiss_hnsw"), "FAISS")
   }

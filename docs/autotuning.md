@@ -57,9 +57,9 @@ implementation routes recorded in benchmark output, not separate public
 | `exact` / `flat` | `faiss_flat_exact`, `faiss_flat_l2` | CPU exact baseline | Use for exact CPU reference on small/medium data [1-2,16]; avoid as default for large high-dimensional self-search because MNIST/FashionMNIST timed out. |
 | `exact` / `flat` | `faiss_gpu_flat_l2` | CUDA exact/high-recall | Preferred high-recall GPU default when FAISS GPU is available and data fits. |
 | `bruteforce` | `cuda_cuvs_bruteforce` | CUDA exact/high-recall | Preferred exact cuVS path; consistently recall 1 in this benchmark and often fastest. |
-| `hnsw` | `faiss_hnsw` speed tier | CPU speed tier | M = 24, efConstruction = 120, efSearch = 80; good speed, but recall can be below 0.999 on image/flow data [5]. |
-| `hnsw` | `faiss_hnsw` balanced tier | CPU default tier | M = 32, efConstruction = 200, efSearch = 150; best general CPU balance and used as the default FAISS HNSW setting. |
-| `hnsw` | `faiss_hnsw` high-recall tier | CPU high-recall tier | M = 48, efConstruction = 240, efSearch = 220; use when recall target is about 0.999 or higher. |
+| `hnsw` | `faiss_hnsw` speed tier | CPU speed tier | M = 24, efConstruction = 120, efSearch = max(80, 4k); used only for lower-dimensional Euclidean `k <= 10` jobs where the benchmark grid showed exact CPU was too conservative but high-recall HNSW was unnecessary [5]. |
+| `hnsw` | `faiss_hnsw` balanced tier | CPU default tier | M = 32, efConstruction = 200, efSearch = max(150, 3k); default deterministic shape/metric rule for general CPU HNSW. |
+| `hnsw` | `faiss_hnsw` high-recall tier | CPU high-recall tier | M = 48, efConstruction = 240, efSearch = max(220, 3k); used for large-k high-dimensional searches and high-dimensional non-Euclidean searches where normalized IP/correlation routes need extra graph-search breadth. |
 | `hnsw` | `hnsw`/hnswlib fallback | CPU fallback | Good fallback when FAISS is unavailable, but FAISS HNSW is preferred when FAISS is built. |
 | `ivf` | `faiss_ivf` speed tier | CPU IVF speed tier | nprobe = 4; too low-recall on many datasets, not a default accuracy path. |
 | `ivf` | `faiss_ivf` balanced tier | CPU IVF middle tier | Default `nprobe` now uses at least 16 probes; useful when HNSW is not desired. |
@@ -130,6 +130,8 @@ Policy summary:
   On the benchmark `k` grid, large high-dimensional CPU self-search keeps
   `k = 5` on an exact route and switches to HNSW from `k = 10` upward when a
   graph-search backend is available; non-Euclidean `k = 5` can use exact FAISS
+  Flat, and explicit CPU HNSW uses deterministic `n`, `p`, `k`, and `metric`
+  tiers without running a pilot benchmark.
   Flat metric routes when FAISS is available.
 - `backend = "cuda", method = "auto"`: CUDA grid for large 2D/3D
   Euclidean/cosine/correlation self-KNN; FAISS GPU Flat for small and medium

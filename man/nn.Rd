@@ -84,7 +84,9 @@ computed under a different metric.}
 tuned default for the resolved method, `"cache"` reuses/stores pilot
 results, `"pilot"` tunes for this call without persisting, `"fixed"` uses
 fixed defaults with tuning metadata, and `"off"`/`"none"` disables tuning.
-Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.}
+FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
+`k`, and `metric`; explicit `faissR.faiss_hnsw_*` options override those
+defaults. Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.}
 
 \item{output}{Distance storage type for the returned object. `"double"`
 returns the default R numeric distance matrix. `"float"` returns
@@ -164,6 +166,9 @@ Method descriptions:
   `"hnsw"` for inner-product search.
   \item `"sparse"`: native exact sparse `dgCMatrix` CPU search.
   \item `"hnsw"`: FAISS CPU HNSW approximate graph-search index [5,16].
+  Default FAISS HNSW parameters are selected by a deterministic
+  shape/k/metric rule without pilot tuning; result approximation metadata
+  records the selected `tuning_rule` and the shape flags used.
   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
   cosine/correlation routes on CPU and FAISS GPU [1-2,16].

@@ -156,6 +156,9 @@ recommended method-specific policy. FAISS GPU IVF can tune `nlist` and
 `nprobe`; cuVS CAGRA can tune graph/search parameters and stop if pilot recall
 does not meet the target. Approximate results record relevant parameters in
 `attr(result, "approximation")`.
+FAISS CPU HNSW uses a deterministic no-pilot policy based on `n`, `p`, `k`, and
+`metric`; the approximation metadata records `tuning_rule` plus the shape flags
+used by that policy.
 
 Exact routes mark `attr(result, "exact") = TRUE`. Approximate routes mark
 `exact = FALSE`, and benchmark code should report recall or explicitly mark

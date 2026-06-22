@@ -141,7 +141,9 @@ All KNN routes return a `faissR_nn` object with:
 - `attr(result, "exact")`: whether the route is exact by construction;
 - `attr(result, "approximation")`: method-specific parameters for approximate
   routes, such as `nlist`, `nprobe`, HNSW `M`, CAGRA graph degree, or tuning
-  metadata.
+  metadata. FAISS HNSW records the deterministic `tuning_rule` selected from
+  `n`, `p`, `k`, and `metric`, plus shape flags such as high-dimensional,
+  large-`n`, small-`k`, and non-Euclidean routing.
 - `attr(result, "auto_selection")`: for requests involving
   `backend = "auto"` or `method = "auto"`, the static shape/k/metric decision
   record. It stores `policy = "static_shape_k_metric_selector"`, the predicted
@@ -201,6 +203,10 @@ or cuVS brute force rather than silently returning a poor graph-search result.
 IVF probe defaults are conservative enough to avoid misleading speed-only
 results. IVFPQ is treated as an explicit memory-pressure backend because product
 quantization can reduce recall substantially [6].
+FAISS HNSW uses no pilot tuning in the user call. Its default parameters are a
+static shape/k/metric policy: a speed tier for lower-dimensional Euclidean
+`k <= 10`, a balanced tier for general CPU HNSW, and a high-recall tier for
+large-`k` high-dimensional or non-Euclidean searches.
 
 ### Method Families
 
