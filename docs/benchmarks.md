@@ -280,12 +280,18 @@ normalized Euclidean space, this field also records the
 `metric_transform` and `distance_transform` used before clustering. This lets graph ARI/speed
 comparisons distinguish, for example, two HNSW-built graphs that used different
 `tuning_rule` or `ef_search` settings.
+For CUDA-capable `graph_method = "cagra"` and `graph_method = "auto"` rows,
+`--cagra_implementations=faiss_gpu,cuvs` splits graph construction into
+separate FAISS GPU CAGRA and direct RAPIDS cuVS CAGRA provider requests. The
+raw and summary CSVs record this request as `graph_cagra_implementation`, so
+auto graph-clustering audits can separate provider choice from public method
+choice.
 The config includes `available_datasets`, the validated real plus simulated
 dataset names accepted by the `--datasets` selector, so subset runs remain
 auditable.
 `graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by
-dataset/k/graph-backend/graph-method/metric/cluster-backend/clustering-method/
-weight/target-cluster-count and reports success counts, median/min/max graph,
+dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/
+clustering-method/weight/target-cluster-count and reports success counts, median/min/max graph,
 clustering, and total time, ARI stability, modularity stability, graph size,
 community counts, CPU thread count, preflight routes, compact graph-route
 parameter metadata, and resolved backend metadata.
@@ -310,12 +316,13 @@ the R object.
 `graph_cluster_best_by_dataset.csv` keeps a compact best successful row per
 dataset after ranking by ARI, modularity, and total time for backward-compatible
 summaries. `graph_cluster_best_by_dataset_k_target.csv` keeps the same
-best-row ranking per dataset/k/graph-method/metric/target-cluster-count
-combination, which is the safer table for comparing neighbourhood sizes, KNN
-graph routes, metrics, and Louvain/Leiden target counts.
+best-row ranking per dataset/k/graph-method/metric/CAGRA-provider/
+target-cluster-count combination, which is the safer table for comparing
+neighbourhood sizes, KNN graph routes, CAGRA providers, metrics, and
+Louvain/Leiden target counts.
 `graph_cluster_recommendations_from_cycles.csv` selects the fastest successful
 graph/clustering method row within `ari_tolerance` of the best median ARI for
-each dataset/k/graph-backend/graph-method/metric/cluster-backend/
+each dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/
 target-cluster-count combination;
 when ARI is available and median total times tie, higher median ARI and then
 higher median modularity break the tie. `--ari_tolerance` must be a
@@ -335,8 +342,8 @@ are `NA` when the required timing, ARI, or modularity values are unavailable or
 invalid.
 `graph_cluster_global_recommendations_from_cycles.csv` pools requested
 graph/clustering backends before selecting the fastest row within the ARI
-tolerance for each dataset/k/graph-method/metric/target-cluster-count
-combination. `graph_cluster_auto_vs_global_recommendation.csv` compares auto
+tolerance for each dataset/k/graph-method/metric/CAGRA-provider/
+target-cluster-count combination. `graph_cluster_auto_vs_global_recommendation.csv` compares auto
 rows with those pooled recommendations, including requested-backend agreement,
 resolved-backend agreement, method agreement, speed ratio, ARI gap, and
 modularity gap. These global tables are the main audit for whether graph and
@@ -358,6 +365,7 @@ when CUDA/cuGraph support is not available.
 Graph construction can also vary the nearest-neighbour route and metric with
 `--graph_methods` and `--metrics`. The default uses
 `--graph_methods=auto`,
+`--cagra_implementations=auto`,
 `--metrics=euclidean,cosine,correlation,inner_product`, and
 `--k_values=5,10,15,50,100` so benchmark rows cover the public metric surface
 and the full requested graph-density grid. Expanded HPC runs can also use

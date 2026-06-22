@@ -1062,8 +1062,64 @@ test_that("graph benchmark raw rows record expected-skip reason labels", {
   )
 
   expect_true("expected_skip_reason" %in% names(row))
+  expect_true("graph_cagra_implementation" %in% names(row))
   expect_true(isTRUE(row$expected_skip))
   expect_equal(row$expected_skip_reason, "missing_cugraph")
+})
+
+test_that("graph benchmark cycle summaries keep CAGRA providers separate", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  ok <- data.frame(
+    dataset = c("A", "A"),
+    n = c(100L, 100L),
+    p = c(4L, 4L),
+    cycle = c(1L, 1L),
+    k = c(15L, 15L),
+    graph_backend = c("cuda", "cuda"),
+    graph_method = c("cagra", "cagra"),
+    metric = c("euclidean", "euclidean"),
+    graph_cagra_implementation = c("faiss_gpu", "cuvs"),
+    graph_resolved_backend = c("faiss_gpu_cagra", "cuda_cuvs_cagra"),
+    graph_preflight_route = c("faiss_gpu_cagra", "cuda_cuvs_cagra"),
+    graph_route_parameters = c("nn_cuvs.accelerator=faiss_gpu_cagra", "nn_cuvs.accelerator=cuda_cuvs_cagra"),
+    cluster_backend = c("cpu", "cpu"),
+    cluster_resolved_backend = c("cpu", "cpu"),
+    cluster_preflight_route = c("cpu", "cpu"),
+    method = c("leiden", "leiden"),
+    weight = c("snn", "snn"),
+    n_clusters_requested = c(3L, 3L),
+    n_clusters_source = c("labels", "labels"),
+    n_threads = c(2L, 2L),
+    status = c("success", "success"),
+    error = c(NA_character_, NA_character_),
+    load_sec = c(0.1, 0.1),
+    graph_sec = c(1, 2),
+    cluster_sec = c(0.5, 0.5),
+    total_sec = c(1.5, 2.5),
+    peak_rss_gb = c(1, 1),
+    graph_n_vertices = c(100L, 100L),
+    n_edges = c(500L, 500L),
+    n_communities = c(3L, 3L),
+    modularity = c(0.4, 0.4),
+    ari = c(0.9, 0.9),
+    selected_resolution = c(1, 1),
+    target_gap = c(0L, 0L),
+    resolution_selection = c("closest_n_communities_then_highest_modularity", "closest_n_communities_then_highest_modularity"),
+    resolution_selected_candidate = c(4L, 4L),
+    resolution_candidates = c(7L, 7L),
+    resolution_min_target_gap = c(0L, 0L),
+    resolution_selected_is_min_gap = c(TRUE, TRUE),
+    graph_cached = c(TRUE, TRUE),
+    expected_skip = c(FALSE, FALSE)
+  )
+
+  out <- env$summarize_graph_cycles(ok)
+  expect_equal(nrow(out), 2L)
+  expect_equal(sort(out$graph_cagra_implementation), c("cuvs", "faiss_gpu"))
+  expect_equal(sort(out$graph_resolved_backend), c("cuda_cuvs_cagra", "faiss_gpu_cagra"))
 })
 
 test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
@@ -2252,6 +2308,28 @@ test_that("graph benchmark defaults cover requested methods backends and k grid"
     c(5L, 10L, 15L, 50L, 100L)
   )
   expect_equal(env$default_graph_cycles(), 10L)
+  expect_equal(
+    env$validate_cagra_implementation_values(c("auto", "faiss", "direct-cuvs")),
+    c("auto", "faiss_gpu", "cuvs")
+  )
+  expect_equal(
+    env$cagra_implementation_values_for("cuda", "cagra", c("faiss_gpu", "cuvs")),
+    c("faiss_gpu", "cuvs")
+  )
+  expect_equal(
+    env$cagra_implementation_values_for("cuda", "auto", c("faiss_gpu", "cuvs")),
+    c("faiss_gpu", "cuvs")
+  )
+  expect_equal(
+    env$cagra_implementation_values_for("auto", "auto", c("faiss_gpu", "cuvs")),
+    c("faiss_gpu", "cuvs")
+  )
+  expect_true(is.na(env$cagra_implementation_values_for("cpu", "auto", c("faiss_gpu", "cuvs"))))
+  expect_true(is.na(env$cagra_implementation_values_for("cpu", "cagra", c("faiss_gpu", "cuvs"))))
+  expect_error(
+    env$validate_cagra_implementation_values("metal"),
+    "cagra_implementations"
+  )
   expect_equal(
     env$as_int_vec_arg(c("unknown"), env$default_graph_k_values()),
     env$default_graph_k_values()
