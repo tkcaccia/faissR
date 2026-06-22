@@ -548,9 +548,9 @@ When `stats` is part of the run,
 each successful `fast_kmeans()` row against `stats::kmeans` for the same
 dataset, cycle, and number of centers, reporting speedup, ARI delta, and
 withinss ratio. Speedups, ARI deltas, and withinss ratios are `NA` when the
-required timing or quality values are missing or invalid. Use `--cycles=10` to
-repeat speed/ARI measurements without hand-launching the same benchmark
-multiple times. `kmeans_cycle_summary.csv`
+required timing or quality values are missing or invalid. The k-means benchmark
+defaults to 10 repeated cycles for speed/ARI stability; `--cycles` can override
+this for smoke tests or longer stability runs. `kmeans_cycle_summary.csv`
 aggregates successful rows across cycles by dataset/method/backend/centers and
 reports success counts, median/min/max elapsed time, ARI stability, withinss
 stability, iteration counts, whether any cycle hit `max_iter`, whether all
@@ -564,7 +564,8 @@ for comparing different requested cluster counts.
 `kmeans_recommendations_from_cycles.csv` selects the fastest row within
 `ari_tolerance` of the best median ARI for each dataset/centers combination;
 `--ari_tolerance` must be a non-negative number and is validated before
-datasets are loaded.
+datasets are loaded. `--cycles` must be positive when supplied and otherwise
+defaults to 10.
 When ARI is available and median times tie, higher median ARI and then lower
 median total within-cluster sum of squares break the tie. When ARI is
 unavailable it selects the fastest median-time row. The

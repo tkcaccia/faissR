@@ -43,6 +43,10 @@ default_kmeans_backend_values <- function() {
   c("auto", "cpu", "cuda")
 }
 
+default_kmeans_cycles <- function() {
+  10L
+}
+
 valid_kmeans_tuning_values <- function() {
   c("auto", "fixed", "off", "none")
 }
@@ -1124,7 +1128,7 @@ configure_threads(n_threads)
 seed <- required_positive_int_arg(args$seed %||% 1L, "seed")
 timeout <- required_positive_int_arg(args$timeout %||% 600L, "timeout")
 fallback_centers <- required_positive_int_arg(args$centers %||% 10L, "centers")
-cycles <- required_positive_int_arg(args$cycles %||% 1L, "cycles")
+cycles <- required_positive_int_arg(args$cycles %||% default_kmeans_cycles(), "cycles")
 ari_tolerance <- required_nonnegative_numeric_arg(args$ari_tolerance %||% "0.01", "ari_tolerance")
 max_iter <- args$max_iter %||% "auto"
 n_init <- args$n_init %||% "auto"
@@ -1357,7 +1361,7 @@ materials <- c(
   "`kmeans_runtime_capabilities.csv` records the runtime availability table used for k-means preflight, including CUDA, FAISS GPU, and cuVS availability, `runtime_reason`, human-readable `runtime_notes`, and whether explicit CUDA k-means requests can run in the current build. The `runtime_reason` field distinguishes available routes from `missing_cuda_runtime` and `missing_gpu_kmeans_backend` preflight skips.",
   "The result table records cycle, elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, total within-cluster sum of squares, iterations, selected k-means parameters, deterministic tuning policy/rule/shape metadata, static `selection_*` no-pilot backend decision metadata, and ARI against dataset labels when labels are available. `tuning_rule` is a stable grouping label such as `small_low_work_multistart`, while `tuning_rule_detail` preserves the exact shape/work values that produced the rule.",
   "`kmeans_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, elapsed time, and total within-cluster sum of squares for a compact backwards-compatible summary. `kmeans_best_by_dataset_centers.csv` keeps the best successful row per dataset/centers combination so different requested cluster counts remain auditable.",
-  "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. Speedups, ARI deltas, and withinss ratios are `NA` when the required timing or quality values are missing or invalid. The `cycle` column supports repeated benchmark cycles such as `--cycles=10` for speed/ARI tuning.",
+  "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. Speedups, ARI deltas, and withinss ratios are `NA` when the required timing or quality values are missing or invalid. The k-means benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs.",
   "`kmeans_cycle_summary.csv` aggregates successful rows across cycles by dataset/method/backend/centers and reports success counts, median/min/max elapsed time, ARI stability, withinss stability, iteration counts, whether any cycle hit `max_iter`, whether all cycles converged before the iteration cap, selected parameter medians, deterministic tuning rule/shape metadata, static selection metadata, and resolved backend metadata.",
   "`kmeans_recommendations_from_cycles.csv` selects the fastest row within `ari_tolerance` of the best median ARI for each dataset/centers combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median times are broken by higher median ARI and then lower median total within-cluster sum of squares. When ARI is unavailable it selects the fastest median-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
   "`kmeans_backend_recommendations_from_cycles.csv` applies the same rule within each dataset/centers/backend group, so CPU, CUDA, auto, and stats rows can be tuned or reported separately without changing the overall recommendation file.",

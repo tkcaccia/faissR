@@ -1392,6 +1392,7 @@ test_that("k-means benchmark defaults cover fast_kmeans stats and public backend
     env$default_kmeans_backend_values(),
     c("auto", "cpu", "cuda")
   )
+  expect_equal(env$default_kmeans_cycles(), 10L)
   expect_equal(
     env$valid_kmeans_tuning_values(),
     c("auto", "fixed", "off", "none")
