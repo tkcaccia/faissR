@@ -224,25 +224,16 @@ nn_compute <- function(data,
     )
     if (!is.na(auto_gpu)) {
       backend <- auto_gpu
-    } else if (identical(backend, "auto") &&
-               should_use_grid2d_self_knn(
-                 self_query = self_query,
-                 n = nrow(data),
-                 p = ncol(data),
-                 k = k,
-                 exclude_self = isTRUE(exclude_self),
-                 metric = metric
-               )) {
-      backend <- "cpu_grid"
-    } else if (identical(backend, "auto") &&
-               should_use_auto_cpu_approx_self_knn(
-                 self_query = self_query,
-                 n = nrow(data),
-                 p = ncol(data),
-                 k = k,
-                 work_size = work_size
-               )) {
-      backend <- select_cpu_approx_backend(nrow(data), ncol(data), k)
+    } else if (identical(backend, "auto")) {
+      backend <- select_cpu_auto_backend(
+        self_query = self_query,
+        n = nrow(data),
+        p = ncol(data),
+        n_points = nrow(points),
+        k = k,
+        work_size = work_size,
+        metric = metric
+      )
     } else if (identical(backend, "cpu_approx")) {
       if (!isTRUE(self_query)) {
         stop("`backend = \"cpu_approx\"` is only available for self-KNN searches.", call. = FALSE)

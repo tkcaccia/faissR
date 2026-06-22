@@ -185,6 +185,29 @@ test_that("public NN results preserve requested and resolved routing metadata", 
   expect_equal(attr(without_self, "tuning"), "off")
 })
 
+test_that("top-level auto reuses the metric-aware CPU auto selector after GPU decline", {
+  skip_if_not(faiss_available())
+  old <- options(
+    faissR.cpu_auto_exact_work = 1,
+    faissR.cpu_auto_faiss_flat_work = 1,
+    faissR.cuda_auto_exact_work = 1e99
+  )
+  on.exit(options(old), add = TRUE)
+
+  set.seed(1043)
+  x <- matrix(rnorm(80), ncol = 4)
+  q <- x[1:3, , drop = FALSE]
+
+  cpu_auto <- nn(x, q, k = 3L, backend = "cpu", method = "auto", metric = "cosine")
+  top_auto <- nn(x, q, k = 3L, backend = "auto", method = "auto", metric = "cosine")
+
+  expect_equal(attr(cpu_auto, "backend"), "faiss_flat_cosine")
+  expect_equal(attr(top_auto, "backend"), attr(cpu_auto, "backend"))
+  expect_equal(attr(top_auto, "metric"), "cosine")
+  expect_equal(attr(top_auto, "requested_backend"), "auto")
+  expect_equal(attr(top_auto, "requested_method"), "auto")
+})
+
 test_that("public NN APIs require scalar backend method metric and tuning choices", {
   x <- matrix(rnorm(40), ncol = 4)
   y <- factor(rep(c("a", "b"), each = 5L))
