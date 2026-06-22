@@ -124,8 +124,11 @@ expected skips, not algorithmic failures.
   `backend = "auto"` keeps those non-Euclidean metrics on CPU.
 
 `auto` is intended as a balanced default, not a guarantee of the fastest method
-for every dataset. For benchmarking, report the resolved backend stored in the
-result attributes.
+for every dataset. For benchmarking, report the requested backend/method/tuning
+stored in `attr(result, "requested_backend")`,
+`attr(result, "requested_method")`, and `attr(result, "tuning")` together with
+the resolved backend in `attr(result, "resolved_backend")` and approximation
+parameters.
 
 ## `"hnsw"` Metrics
 
@@ -329,7 +332,8 @@ high-dimensional data.
 Approximate methods should be reported with:
 
 - requested `backend` and `method`;
-- resolved backend attributes;
+- `attr(result, "requested_backend")`, `attr(result, "requested_method")`,
+  `attr(result, "tuning")`, and `attr(result, "resolved_backend")`;
 - index/search parameters stored in `attr(result, "approximation")`;
 - `k`, metric, and whether self-neighbours were excluded;
 - recall@k or an explicit note that quality was not evaluated.

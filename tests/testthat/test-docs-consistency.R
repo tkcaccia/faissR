@@ -334,6 +334,30 @@ test_that("README describes public NN metrics and correlation semantics", {
   expect_true(grepl("explicit CUDA routes remain on CUDA", prose, fixed = TRUE))
 })
 
+test_that("GitHub NN docs describe requested and resolved result metadata", {
+  docs_files <- c(
+    test_path("../../docs", c("backend-capabilities.md", "implementation.md", "nn-methods.md", "usage-api.md")),
+    test_path("../../man/nn.Rd")
+  )
+  missing <- !file.exists(docs_files)
+  if (any(missing)) {
+    skip("GitHub or reference documentation files are not available in this installed-package test context.")
+  }
+
+  required_terms <- c(
+    "requested_backend",
+    "requested_method",
+    "tuning",
+    "resolved_backend"
+  )
+  for (docs_file in docs_files) {
+    prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+    for (term in required_terms) {
+      expect_true(grepl(term, prose, fixed = TRUE), info = paste(basename(docs_file), term))
+    }
+  }
+})
+
 test_that("GitHub and reference docs describe normalized zero-row metric semantics", {
   docs_files <- c(
     test_path("../../README.md"),

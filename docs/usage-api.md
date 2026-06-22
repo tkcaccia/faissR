@@ -51,8 +51,11 @@ nn(data, points = data, k = NULL, backend = "auto",
 Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.
 
 Returns a `faissR_nn` list with `indices` and `distances` matrices. Indices are
-1-based R row numbers. The resolved backend is stored in
-`attr(result, "backend")`.
+1-based R row numbers. The public request is stored in
+`attr(result, "requested_backend")`, `attr(result, "requested_method")`, and
+`attr(result, "tuning")`; the implementation-facing route is stored in
+`attr(result, "backend")` and, when it differs from the public label,
+`attr(result, "resolved_backend")`.
 
 ### Nearest-Neighbour Methods
 

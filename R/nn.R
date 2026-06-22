@@ -5125,9 +5125,11 @@ grid_self_knn <- function(data,
 #' @param n_threads Number of CPU worker threads for CPU backends. GPU backends
 #'   ignore this argument.
 #' @return A list with integer matrix `indices` and numeric matrix `distances`.
-#'   Indices are 1-based. The requested backend/method, resolved backend,
-#'   tuning policy, metric, exact/approximate flag, and self-query flag are
-#'   stored as attributes.
+#'   Indices are 1-based. The requested backend/method, tuning policy, resolved
+#'   backend, metric, exact/approximate flag, and self-query flag are stored in
+#'   attributes including `attr(result, "requested_backend")`,
+#'   `attr(result, "requested_method")`, `attr(result, "tuning")`, and
+#'   `attr(result, "resolved_backend")`.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu")
