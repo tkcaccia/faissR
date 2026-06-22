@@ -133,9 +133,11 @@ the script before datasets are loaded.
 The public `method = "grid"` route is also recorded as an expected skip for
 datasets that are not two- or three-dimensional, because that method is a
 native low-dimensional spatial search route.
-The public `method = "nsg"` route is recorded as an expected skip for datasets
-with 100 or fewer rows, because linked FAISS NSG builds require more than 100
-training rows before graph construction can start.
+The public `method = "nsg"` Euclidean route is recorded as an expected skip for
+datasets with 100 or fewer rows, because that route uses linked FAISS NSG and
+FAISS requires more than 100 training rows before graph construction can start.
+Non-Euclidean CPU NSG benchmark rows use faissR's native NSG-style route and do
+not receive this FAISS-specific small-data skip.
 Unsupported method/backend/metric combinations are preflighted with
 `nn_capabilities()` and the public backend resolver, then written as expected
 skips. Runtime expected skips also record when a resolved route requires
@@ -411,7 +413,8 @@ public NN metrics and the same aliases as `nn()`, such as `l2`, `pearson`,
 reporting. Unsupported graph method/backend/metric combinations are
 recorded as expected skips using `nn_capabilities(runtime = TRUE)` plus
 data-shape checks such as the 2D/3D requirement for `method = "grid"` and the
-more-than-100-row FAISS NSG construction requirement for `method = "nsg"`.
+more-than-100-row FAISS NSG construction requirement for Euclidean
+`method = "nsg"` rows.
 The runtime capability table is written to
 `graph_cluster_nn_capabilities.csv`, so unavailable FAISS GPU, CUDA, and cuVS
 graph-construction routes can be audited before any graph is built. When

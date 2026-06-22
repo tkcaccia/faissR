@@ -279,6 +279,7 @@ method_metric_applicable <- function(method, metric) {
     "faissR_faiss_hnsw",
     "faissR_cpu_vamana",
     "faissR_cuda_vamana",
+    "faissR_cpu_nsg",
     "faissR_cuda_nsg",
     "faissR_cpu_nndescent",
     "RcppHNSW_hnsw"
@@ -303,6 +304,7 @@ method_metric_applicable <- function(method, metric) {
     "faissR_faiss_hnsw",
     "faissR_cpu_vamana",
     "faissR_cuda_vamana",
+    "faissR_cpu_nsg",
     "faissR_cuda_nsg",
     "faissR_cpu_nndescent",
     "faissR_cuda_cuvs_nndescent",
@@ -327,6 +329,7 @@ method_metric_applicable <- function(method, metric) {
       "faissR_faiss_hnsw",
       "faissR_cpu_vamana",
       "faissR_cuda_vamana",
+      "faissR_cpu_nsg",
       "faissR_cuda_nsg",
       "faissR_cpu_nndescent",
       "faissR_cuda_cuvs_nndescent"
@@ -657,6 +660,7 @@ faissr_benchmark_route <- function(method) {
     cpu_vamana = list(execution_backend = "cpu_vamana", public_backend = "cpu", public_method = "vamana"),
     cuda_vamana = list(execution_backend = "cuda_vamana", public_backend = "cuda", public_method = "vamana"),
     faiss_nsg = list(execution_backend = "faiss_nsg", public_backend = "cpu", public_method = "nsg"),
+    cpu_nsg = list(execution_backend = "cpu_nsg", public_backend = "cpu", public_method = "nsg"),
     cuda_nsg = list(execution_backend = "cuda_nsg", public_backend = "cuda", public_method = "nsg"),
     cpu_nndescent = list(execution_backend = "cpu_nndescent", public_backend = "cpu", public_method = "nndescent"),
     cpu_grid = list(execution_backend = "cpu_grid", public_backend = "cpu", public_method = "grid"),
@@ -931,6 +935,7 @@ method_table <- function() {
       "faissR_cpu_vamana",
       "faissR_cuda_vamana",
       "faissR_faiss_nsg",
+      "faissR_cpu_nsg",
       "faissR_cuda_nsg",
       "faissR_cpu_nndescent",
       "faissR_cpu_grid",
@@ -961,7 +966,7 @@ method_table <- function() {
       "Rtsne_neighbors"
     ),
     implementation = c(
-      rep("faissR", 23),
+      rep("faissR", 24),
       "Rnanoflann", "RANN", "RANN",
       "rnndescent", "rnndescent", "rnndescent", "rnndescent",
       "RcppHNSW", "RcppAnnoy",
@@ -971,14 +976,14 @@ method_table <- function() {
       "umap", "Rtsne"
     ),
     backend = c(
-      "CPU", "CPU", "CPU", "CUDA", "CPU", "CPU", "CUDA", "CUDA", "CUDA", "CPU", "CPU", "CUDA", "CPU", "CUDA", "CPU",
-      "CPU", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA",
+      "CPU", "CPU", "CPU", "CUDA", "CPU", "CPU", "CUDA", "CUDA", "CUDA", "CPU", "CPU", "CUDA", "CPU", "CPU", "CUDA",
+      "CPU", "CPU", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA",
       rep("CPU", 15),
       "CUDA",
       "CPU", "CPU"
     ),
     kind = c(
-      rep("knn_search", 39),
+      rep("knn_search", 40),
       "knn_consumer",
       "not_applicable"
     ),
@@ -990,6 +995,7 @@ method_table <- function() {
   methods$backend_detail[methods$method == "faissR_faiss_gpu_cagra"] <- "FAISS GPU + cuVS integrated CAGRA"
   methods$backend_detail[methods$method == "faissR_cpu_vamana"] <- "Native Vamana candidate graph"
   methods$backend_detail[methods$method == "faissR_cuda_vamana"] <- "Native Vamana candidate graph + CUDA refinement"
+  methods$backend_detail[methods$method == "faissR_cpu_nsg"] <- "Native CPU NSG candidate graph"
   methods$backend_detail[methods$method == "faissR_cuda_nsg"] <- "Native CUDA NSG candidate graph"
   methods$backend_detail[methods$method %in% c(
     "faissR_cuda_cuvs_ivf_flat",
@@ -1032,6 +1038,8 @@ benchmark_method_aliases <- function(methods) {
     cuda_vamana = "faissR_cuda_vamana",
     faissR_cuda_vamana = "faissR_cuda_vamana",
     nsg = "faissR_faiss_nsg",
+    cpu_nsg = "faissR_cpu_nsg",
+    faissR_cpu_nsg = "faissR_cpu_nsg",
     cuda_nsg = "faissR_cuda_nsg",
     faissR_cuda_nsg = "faissR_cuda_nsg",
     nndescent = "faissR_cpu_nndescent",

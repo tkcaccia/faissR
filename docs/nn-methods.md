@@ -55,7 +55,7 @@ The `runtime_reason` labels are machine-readable, for example `available`,
 | `"ivf"` | approximate | FAISS IVF-Flat | FAISS GPU IVF-Flat | FAISS IVF [1-2,16] |
 | `"ivfpq"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
 | `"vamana"` | approximate | native Vamana candidate graph | native Vamana candidate graph with CUDA refinement | DiskANN/Vamana [3,24] |
-| `"nsg"` | approximate | FAISS NSG for Euclidean/L2 when exposed | native CUDA NSG-style candidate graph for all public metrics | NSG/FAISS [16,21,29] |
+| `"nsg"` | approximate | FAISS NSG for Euclidean/L2; native CPU NSG-style candidate graph for non-L2 metrics | native CUDA NSG-style candidate graph for all public metrics | NSG/FAISS [16,21,29] |
 | `"nndescent"` | approximate | native CPU NNDescent | cuVS NN-descent | NN-descent/cuVS [3-4,16] |
 | `"cagra"` | approximate | unsupported | FAISS GPU CAGRA or cuVS CAGRA | FAISS/cuVS CAGRA [3,13-16] |
 
@@ -92,7 +92,7 @@ CUDA and keep CUDA backend metadata.
 | `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
 | `"ivfpq"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVFPQ supports L2/IP; cosine/correlation use normalized IVFPQ IP. |
 | `"vamana"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native robust-pruned candidate graph inspired by DiskANN/Vamana; CPU/CUDA refine exact top-k within candidate rows. Cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
-| `"nsg"` | euclidean | euclidean, cosine, correlation, inner_product | CPU FAISS NSG is Euclidean/L2-only in faissR because this linked FAISS graph builder can abort for non-L2 construction. CUDA NSG is self-KNN only; cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
+| `"nsg"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CPU Euclidean/L2 uses FAISS NSG when exposed; CPU non-L2 metrics use faissR's native NSG-style candidate graph. CUDA NSG is self-KNN only; cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
 | `"nndescent"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation | Native CPU NN-descent supports raw inner-product search; CPU/CUDA cosine and correlation use normalized Euclidean graph search. CUDA cuVS NN-descent does not expose raw inner product. FAISS NNDescent is experimental opt-in because linked FAISS builds can abort during graph construction. |
 | `"cagra"` | unsupported | euclidean, cosine, correlation | CUDA-only FAISS/cuVS graph search; cosine/correlation use normalized Euclidean graph search. |
 
@@ -297,17 +297,19 @@ the DiskANN/Vamana inspiration and cuVS build path in documentation.
 `method = "nsg"` requests a Navigating Spreading-out Graph style approximate
 nearest-neighbour graph [21].
 
-- CPU `method = "nsg"` uses FAISS NSG if the linked FAISS build exposes it and
-  remains Euclidean/L2-only because linked FAISS graph builders can abort
-  during non-L2 construction [16].
+- CPU `method = "nsg"` uses FAISS NSG for Euclidean/L2 if the linked FAISS
+  build exposes it. For cosine, correlation, and inner product, faissR uses a
+  native NSG-style self-KNN candidate graph so non-L2 requests do not enter the
+  unsafe linked-FAISS NSG graph builder [16,21,29].
 - CUDA `method = "nsg"` uses faissR's native CUDA NSG-style self-KNN route. It
   builds a sparse candidate graph, prunes candidates with an NSG/MRNG-style
   rule, and refines rows with the native CUDA row-candidate KNN kernel.
-- CUDA NSG supports Euclidean, cosine, correlation, and inner product for
-  self-KNN. Cosine/correlation use normalized Euclidean search; inner product
-  uses the package-wide shifted dot-product distance convention.
-- Query-vs-reference CUDA NSG graph traversal is not exposed yet; explicit CUDA
-  NSG currently requires self-KNN.
+- CPU and CUDA native NSG routes support Euclidean, cosine, correlation, and
+  inner product for self-KNN. Cosine/correlation use normalized Euclidean
+  search; inner product uses the package-wide shifted dot-product distance
+  convention.
+- Query-vs-reference native NSG graph traversal is not exposed yet; explicit
+  native CPU/CUDA NSG currently requires self-KNN.
 
 When using NSG, check whether the backend returns the requested number of
 neighbours and measure recall on a representative subset.

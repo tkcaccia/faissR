@@ -49,7 +49,7 @@ backend_info <- function() {
     ),
     supported_metrics = c(
       "euclidean, cosine, correlation, inner_product; method-specific exclusions in nn_capabilities()",
-      "euclidean, cosine, correlation, inner_product for Flat/IVF/IVFPQ/HNSW; NSG is Euclidean-only",
+      "euclidean, cosine, correlation, inner_product for Flat/IVF/IVFPQ/HNSW and public NSG; explicit FAISS NSG is Euclidean-only",
       "euclidean, cosine, correlation, inner_product for IVF/IVFPQ; CAGRA excludes inner_product",
       "euclidean for direct brute force; euclidean plus normalized cosine/correlation for direct IVF/PQ, CAGRA, and NN-descent; inner_product excluded",
       "euclidean, cosine, correlation, inner_product where the selected CUDA method supports the metric",

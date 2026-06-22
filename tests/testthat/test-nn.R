@@ -674,12 +674,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(all(!caps$supported[
     caps$method == "grid" & caps$metric == "inner_product"
   ]))
-  expect_true(all(caps$supported[
-    caps$method == "nsg" & caps$backend == "cpu" & caps$metric == "euclidean"
-  ]))
-  expect_true(all(!caps$supported[
-    caps$method == "nsg" & caps$backend == "cpu" & caps$metric != "euclidean"
-  ]))
+  expect_true(all(caps$supported[caps$method == "nsg" & caps$backend == "cpu"]))
   expect_true(all(caps$supported[caps$method == "nsg" & caps$backend == "cuda"]))
   expect_true(all(caps$supported[
     caps$method == "nndescent" & caps$metric %in% c("euclidean", "cosine", "correlation")
@@ -1955,9 +1950,17 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "vamana", "inner_product"),
     "cuda_vamana"
   )
-  expect_error(
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "nsg", "euclidean"),
+    "faiss_nsg"
+  )
+  expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "nsg", "correlation"),
-    "euclidean"
+    "cpu_nsg"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "nsg", "inner_product"),
+    "cpu_nsg"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "nsg", "euclidean"),
@@ -2114,6 +2117,31 @@ test_that("native Vamana returns metric-aware CPU self-KNN results", {
     expect_equal(approx$backend, "cpu_vamana", info = metric)
     expect_equal(approx$strategy, "native_vamana_candidate_graph", info = metric)
     expect_true(all(is.finite(out$distances)), info = metric)
+  }
+})
+
+test_that("native CPU NSG returns metric-aware self-KNN results", {
+  set.seed(240125)
+  x <- matrix(rnorm(90L * 5L), nrow = 90L)
+
+  for (metric in c("euclidean", "cosine", "correlation", "inner_product")) {
+    out <- internal_nn_without_self(
+      x,
+      k = 6L,
+      backend = "cpu_nsg",
+      metric = metric,
+      n_threads = 2L
+    )
+    approx <- attr(out, "approximation")
+    expect_equal(dim(out$indices), c(nrow(x), 6L), info = metric)
+    expect_equal(dim(out$distances), c(nrow(x), 6L), info = metric)
+    expect_equal(attr(out, "backend"), "cpu_nsg", info = metric)
+    expect_equal(attr(out, "metric"), metric, info = metric)
+    expect_equal(approx$backend, "cpu_nsg", info = metric)
+    expect_equal(approx$strategy, "native_cpu_nsg_candidate_graph", info = metric)
+    expect_equal(approx$accelerator, "cpu", info = metric)
+    expect_true(all(is.finite(out$distances)), info = metric)
+    expect_true(all(out$indices >= 1L & out$indices <= nrow(x)), info = metric)
   }
 })
 

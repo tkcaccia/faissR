@@ -1093,8 +1093,9 @@ is_expected_skip <- function(caps, backend, method, metric) {
   NULL
 }
 
-nn_data_expected_skip <- function(x, method) {
+nn_data_expected_skip <- function(x, method, metric = "euclidean") {
   method <- canonical_method_key(method)[[1L]]
+  metric <- canonical_metric_key(metric)[[1L]]
   if (identical(method, "grid")) {
     p <- ncol(x)
     if (length(p) != 1L || is.na(p) || !p %in% c(2L, 3L)) {
@@ -1114,7 +1115,7 @@ nn_data_expected_skip <- function(x, method) {
     }
     return(NULL)
   }
-  if (identical(method, "nsg")) {
+  if (identical(method, "nsg") && identical(metric, "euclidean")) {
     n <- nrow(x)
     if (length(n) != 1L || is.na(n) || n <= 100L) {
       return(list(
@@ -1321,7 +1322,7 @@ for (dataset_name in datasets) {
           for (method in methods) {
             row_id <- row_id + 1L
             expected <- is_expected_skip(capabilities, backend, method, metric)
-            if (is.null(expected)) expected <- nn_data_expected_skip(x, method)
+            if (is.null(expected)) expected <- nn_data_expected_skip(x, method, metric)
             if (!is.null(expected)) {
               row <- result_row(
                 dataset = dataset_name,

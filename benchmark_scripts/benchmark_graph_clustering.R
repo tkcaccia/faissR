@@ -1018,7 +1018,7 @@ graph_build_expected_skip <- function(graph_backend, graph_method = "auto", metr
       ))
     }
   }
-  if (identical(graph_method, "nsg") && !is.null(x)) {
+  if (identical(graph_method, "nsg") && identical(metric, "euclidean") && !is.null(x)) {
     n <- nrow(x)
     if (length(n) != 1L || is.na(n) || n <= 100L) {
       return(list(

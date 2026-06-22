@@ -233,7 +233,7 @@ nn_compute <- function(data,
     } else if (!backend %in% c("auto", "cpu", "cpu_auto", "hnsw", "rcpphnsw", "cpu_hnsw",
                                "faiss_hnsw", "faiss_ivf", "faiss_ivf_flat",
                                "faiss_ivfpq", "faiss_nsg", "faiss_nndescent",
-                               "cpu_vamana", "cuda_vamana", "cuda_nsg",
+                               "cpu_nsg", "cpu_vamana", "cuda_vamana", "cuda_nsg",
                                "cpu_nndescent",
                                "cpu_faiss_index_ivf", "faiss_gpu_ivf",
                                "faiss_gpu_ivf_flat", "cuda_faiss_ivf_flat",
@@ -969,41 +969,43 @@ nn_compute <- function(data,
     return(result)
   }
 
-  if (identical(backend, "cuda_nsg")) {
+  if (backend %in% c("cpu_nsg", "cuda_nsg")) {
     if (!isTRUE(self_query)) {
-      stop("CUDA NSG is currently implemented for self-KNN searches only.", call. = FALSE)
+      stop("Native NSG is currently implemented for self-KNN searches only.", call. = FALSE)
     }
-    if (!isTRUE(cuda_available())) {
+    use_cuda <- identical(backend, "cuda_nsg")
+    if (isTRUE(use_cuda) && !isTRUE(cuda_available())) {
       stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
     }
     metric_inputs <- NULL
     search_data <- data
-    cuda_metric <- "euclidean"
+    refine_metric <- "euclidean"
     if (metric %in% c("cosine", "correlation")) {
       metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric)
       search_data <- metric_inputs$data
     } else if (identical(metric, "inner_product")) {
-      cuda_metric <- "inner_product"
+      refine_metric <- "inner_product"
     }
     params <- cuda_nsg_params(nrow(search_data), ncol(search_data), k, metric = metric)
-    out <- cuda_nsg_self_knn(
+    out <- native_nsg_self_knn(
       search_data,
       k = k,
       r = params$r,
       graph_k = params$graph_k,
-      metric = cuda_metric,
+      metric = refine_metric,
+      use_cuda = use_cuda,
       n_threads = n_threads
     )
-    result <- finish_nn_result(out, "cuda_nsg", k, self_query, exact = FALSE, metric = metric)
+    result <- finish_nn_result(out, backend, k, self_query, exact = FALSE, metric = metric)
     if (!is.null(metric_inputs)) {
       result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
     }
     approx <- attr(out, "approximation", exact = TRUE)
     attr(result, "approximation") <- c(
       list(
-        strategy = "native_cuda_nsg_candidate_graph",
-        backend = "cuda_nsg",
-        accelerator = "cuda",
+        strategy = if (isTRUE(use_cuda)) "native_cuda_nsg_candidate_graph" else "native_cpu_nsg_candidate_graph",
+        backend = backend,
+        accelerator = if (isTRUE(use_cuda)) "cuda" else "cpu",
         metric = metric,
         transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
         r = as.integer(params$r),
@@ -2060,11 +2062,15 @@ nn_capability_row <- function(method, backend, metric) {
       "FAISS IVFPQ supports Euclidean/L2 and raw inner product; cosine/correlation use row transforms followed by IVFPQ inner-product search."
     }
   } else if (identical(method, "nsg")) {
-    supported <- if (identical(backend, "cpu")) identical(metric, "euclidean") else all_metrics
-    exact <- if (supported) FALSE else NA
-    implementation <- if (identical(backend, "cpu")) "FAISS CPU NSG" else "native CUDA NSG candidate graph"
+    supported <- all_metrics
+    exact <- FALSE
+    implementation <- if (identical(backend, "cpu")) {
+      if (identical(metric, "euclidean")) "FAISS CPU NSG" else "native CPU NSG candidate graph"
+    } else {
+      "native CUDA NSG candidate graph"
+    }
     notes <- if (identical(backend, "cpu")) {
-      "Validated for Euclidean/L2 search only. Cosine, correlation, and raw inner-product NSG construction are disabled because this linked FAISS build can abort during graph construction."
+      "CPU Euclidean/L2 uses FAISS NSG when available; CPU cosine, correlation, and raw inner product use faissR's native NSG-style candidate graph to avoid unsafe non-L2 FAISS graph construction."
     } else if (supported) {
       "CUDA NSG builds an NSG-style candidate graph and refines candidates with the native CUDA row-candidate kernel; cosine/correlation use normalized Euclidean search and raw inner product uses shifted dot-product distances."
     } else {
@@ -2206,12 +2212,6 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
     if (identical(method, "grid") && identical(metric, "inner_product")) {
       stop("CPU `method = \"grid\"` does not support `metric = \"inner_product\"`.", call. = FALSE)
     }
-    if (identical(method, "nsg") && !identical(metric, "euclidean")) {
-      stop(
-        "CPU `method = \"nsg\"` currently supports only `metric = \"euclidean\"`.",
-        call. = FALSE
-      )
-    }
     switch(
       method,
       exact = "cpu",
@@ -2228,7 +2228,7 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
       ivf = "faiss_ivf",
       ivfpq = "faiss_ivfpq",
       vamana = "cpu_vamana",
-      nsg = "faiss_nsg",
+      nsg = if (identical(metric, "euclidean")) "faiss_nsg" else "cpu_nsg",
       nndescent = "cpu_nndescent",
       cagra = stop("`method = \"cagra\"` is only available with `backend = \"cuda\"`.", call. = FALSE),
       stop("Unsupported CPU nearest-neighbour method.", call. = FALSE)
@@ -2324,7 +2324,7 @@ nn_resolved_backend_public_method <- function(backend) {
                      "cuda_cuvs_ivfpq", "cuvs_ivf_pq",
                      "cuda_cuvs_ivf_pq")) return("ivfpq")
   if (backend %in% c("cpu_vamana", "cuda_vamana")) return("vamana")
-  if (backend %in% c("faiss_nsg", "cuda_nsg")) return("nsg")
+  if (backend %in% c("faiss_nsg", "cpu_nsg", "cuda_nsg")) return("nsg")
   if (backend %in% c("cpu_nndescent", "faiss_nndescent",
                      "cuda_cuvs_nndescent", "cuvs_nndescent",
                      "cuda_nndescent", "cuda_approx",
@@ -2643,7 +2643,7 @@ public_nn_cpu_route_supported <- function(method, metric) {
     ivf = all_metrics,
     ivfpq = all_metrics,
     vamana = all_metrics,
-    nsg = identical(metric, "euclidean"),
+    nsg = all_metrics,
     nndescent = all_metrics,
     cagra = FALSE,
     FALSE
@@ -4292,27 +4292,32 @@ vamana_self_knn <- function(data,
   out
 }
 
-cuda_nsg_self_knn <- function(data,
-                              k,
-                              r,
-                              graph_k,
-                              metric = "euclidean",
-                              n_threads = NULL) {
+native_nsg_self_knn <- function(data,
+                                k,
+                                r,
+                                graph_k,
+                                metric = "euclidean",
+                                use_cuda = FALSE,
+                                n_threads = NULL) {
   metric <- normalize_nn_metric(metric)
   if (!metric %in% c("euclidean", "inner_product")) {
-    stop("CUDA NSG candidate refinement supports Euclidean or inner-product scoring.", call. = FALSE)
+    stop("Native NSG candidate refinement supports Euclidean or inner-product scoring.", call. = FALSE)
   }
   if (nrow(data) < 2L) {
-    stop("CUDA NSG requires at least two rows.", call. = FALSE)
+    stop("Native NSG requires at least two rows.", call. = FALSE)
   }
   graph_k <- as.integer(min(max(k, graph_k), nrow(data) - 1L, 255L))
   r <- as.integer(min(max(k, r), graph_k))
-  if (identical(metric, "inner_product")) {
+  if (isTRUE(use_cuda) && identical(metric, "euclidean")) {
+    raw <- nn_cuda_cpp(data, data, as.integer(graph_k + 1L), FALSE)
+    seed <- drop_self_knn_result(raw, graph_k)
+    seed_backend <- "native_cuda_exact_seed"
+  } else {
     seed <- nn_cpp(
       data,
       data,
       as.integer(graph_k),
-      "inner_product",
+      metric,
       FALSE,
       FALSE,
       0,
@@ -4320,21 +4325,37 @@ cuda_nsg_self_knn <- function(data,
       as.integer(normalize_nn_threads(n_threads)),
       TRUE
     )
-    seed_backend <- "native_cpu_inner_product_seed"
-  } else {
-    raw <- nn_cuda_cpp(data, data, as.integer(graph_k + 1L), FALSE)
-    seed <- drop_self_knn_result(raw, graph_k)
-    seed_backend <- "native_cuda_exact_seed"
+    seed_backend <- if (identical(metric, "inner_product")) {
+      "native_cpu_inner_product_seed"
+    } else if (isTRUE(use_cuda)) {
+      "native_cpu_exact_seed"
+    } else {
+      "native_cpu_exact_seed"
+    }
   }
   graph <- nsg_prune_candidate_graph(data, seed$indices, r = r, metric = metric)
-  refined <- row_candidate_knn_cuda_cpp(
-    data,
-    graph,
-    as.integer(k),
-    metric
-  )
-  out <- list(indices = refined$indices, distances = refined$distances)
-  attr(out, "cuda_kernel") <- "row_candidate_knn"
+  if (isTRUE(use_cuda)) {
+    refined <- row_candidate_knn_cuda_cpp(
+      data,
+      graph,
+      as.integer(k),
+      metric
+    )
+    out <- list(indices = refined$indices, distances = refined$distances)
+    attr(out, "cuda_kernel") <- "row_candidate_knn"
+  } else {
+    out <- candidate_knn_cpp(
+      data,
+      data,
+      graph,
+      as.integer(k),
+      metric,
+      FALSE,
+      TRUE,
+      TRUE,
+      as.integer(normalize_nn_threads(n_threads))
+    )
+  }
   attr(out, "approximation") <- list(
     seed_backend = seed_backend,
     candidate_columns = as.integer(ncol(graph)),
@@ -6258,9 +6279,11 @@ grid_self_knn <- function(data,
 #'   search for this index.
 #'   \item `"nsg"`: Navigating Spreading-out Graph style approximate search
 #'   [16,21,29]. CPU uses FAISS NSG for Euclidean/L2 when exposed by the linked
-#'   FAISS build. CUDA uses faissR's native NSG-style self-KNN candidate graph
-#'   for all public metrics; cosine/correlation use normalized Euclidean search
-#'   and raw inner product uses shifted dot-product distances.
+#'   FAISS build and faissR's native NSG-style self-KNN candidate graph for
+#'   cosine, correlation, and inner product. CUDA uses faissR's native NSG-style
+#'   self-KNN candidate graph for all public metrics; cosine/correlation use
+#'   normalized Euclidean search and raw inner product uses shifted dot-product
+#'   distances.
 #'   \item `"nndescent"`: NN-descent approximate graph construction via
 #'   faissR's native CPU route or cuVS on CUDA. The native CPU route supports
 #'   Euclidean/L2 and raw inner-product self-KNN; cosine/correlation use

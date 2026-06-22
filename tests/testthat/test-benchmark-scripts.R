@@ -185,7 +185,7 @@ test_that("benchmark dataset defaults use the requested real and simulated datas
   }
 })
 
-test_that("NN metric benchmark preflights CPU-only NSG metric limits as expected skips", {
+test_that("NN metric benchmark preflights NSG metric and runtime skips", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
     "args <- parse_args()"
@@ -194,10 +194,7 @@ test_that("NN metric benchmark preflights CPU-only NSG metric limits as expected
 
   for (metric in c("cosine", "correlation", "inner_product")) {
     skip <- env$is_expected_skip(caps, "cpu", "nsg", metric)
-    expect_type(skip, "list")
-    expect_true(isTRUE(skip$skip))
-    expect_true(nzchar(skip$reason))
-    expect_match(skip$notes, "euclidean|unsupported|rejected", ignore.case = TRUE)
+    expect_null(skip)
 
     cuda_skip <- env$is_expected_skip(caps, "cuda", "nsg", metric)
     if (!is.null(cuda_skip)) {
@@ -499,7 +496,7 @@ test_that("NN metric benchmark canonicalizes metric aliases before preflight", {
   expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "l2")$supported))
   expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "pearson")$supported))
   expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "ip")$supported))
-  expect_false(isTRUE(env$capability_status(caps, "cpu", "nsg", "ip")$supported))
+  expect_true(isTRUE(env$capability_status(caps, "cpu", "nsg", "ip")$supported))
 })
 
 test_that("NN metric benchmark validates public backend labels", {
@@ -2334,6 +2331,7 @@ test_that("graph benchmark preflights graph method and metric skips", {
   expect_match(nsg_skip$notes, "more than 100 training rows")
   expect_match(nsg_skip$notes, "80 rows")
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(120 * 4), ncol = 4)))
+  expect_null(env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "cosine", x = matrix(rnorm(80 * 4), ncol = 4)))
 })
 
 test_that("graph benchmark preflights resolved route runtime dependencies", {
