@@ -465,6 +465,7 @@ summarize_nn_cycles <- function(ok) {
       result_backend = dominant_value(x$result_backend),
       resolved_backend = dominant_value(x$resolved_backend),
       implementation_backend = dominant_value(x$implementation_backend),
+      preflight_route = dominant_value(x$preflight_route),
       recall_reference = dominant_value(x$recall_reference),
       stringsAsFactors = FALSE
     )
@@ -516,8 +517,9 @@ compare_auto_to_recommendations <- function(cycle_summary, recommendations) {
   keys <- c("dataset", "backend", "metric", "k")
   auto_keep <- c(
     keys, "method", "result_backend", "resolved_backend", "implementation_backend",
-    "success_cycles", "median_elapsed_sec", "median_recall_at_k", "min_recall_at_k",
-    "median_min_recall_at_k", "recall_reference", "median_recall_query_n"
+    "preflight_route", "n_threads", "success_cycles", "median_elapsed_sec",
+    "median_recall_at_k", "min_recall_at_k", "median_min_recall_at_k",
+    "recall_reference", "median_recall_query_n"
   )
   rec_keep <- c(auto_keep, "recommendation_basis")
   auto <- auto[, auto_keep, drop = FALSE]
@@ -1179,9 +1181,9 @@ materials <- c(
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",
   "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches. Speed ratios and recall gaps are reported as `NA` when the required timing or recall values are missing or invalid.",
-  "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/metric/k and reports success counts, median/min/max elapsed time, recall stability, and the dominant implementation backend.",
+  "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/metric/k and reports success counts, median/min/max elapsed time, recall stability, CPU thread count, preflight route, and the dominant implementation backend.",
   "`nn_metric_recommendations_from_cycles.csv` selects one method per dataset/backend/metric/k. When recall is available, it selects the fastest method whose median recall is at least `recall_threshold`; tied median times are broken by higher median recall, minimum recall, and median minimum recall. If no method reaches the threshold it selects the best-recall row and marks it as below threshold, breaking tied median recall by minimum recall, median minimum recall, and then speed. When recall is unavailable for the group, it selects the fastest successful row and marks the recommendation as speed-only.",
-  "`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate `method = \"auto\"` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median recall gap, and backend/implementation agreement. Speed ratios and recall gaps are `NA` when the required timing or recall values are unavailable or invalid.",
+  "`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate `method = \"auto\"` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median recall gap, CPU thread count, preflight route, and backend/implementation agreement. Speed ratios and recall gaps are `NA` when the required timing or recall values are unavailable or invalid.",
   "`nn_metric_best_by_dataset_backend_metric_k_cycle.csv` stores the best row within each cycle using the same recall-threshold rule as the cycle recommendations: fastest above threshold, best recall below threshold, and fastest when recall is unavailable; `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the overall best row across cycles with the same rule for backward-compatible summaries.",
   "The script does not add benchmark-only helpers to the package API."
 )

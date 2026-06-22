@@ -270,6 +270,39 @@ test_that("NN metric benchmark recommendation ties prefer stronger recall stabil
   )
 })
 
+test_that("NN metric cycle summaries preserve route and thread metadata", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  ok <- data.frame(
+    dataset = c("A", "A"),
+    backend = c("cpu", "cpu"),
+    method = c("auto", "auto"),
+    metric = c("euclidean", "euclidean"),
+    k = c(50L, 50L),
+    n = c(100L, 100L),
+    p = c(10L, 10L),
+    n_threads = c(2L, 2L),
+    cycle = c(1L, 2L),
+    elapsed_sec = c(1, 2),
+    recall_at_k = c(0.99, 0.98),
+    min_recall_at_k = c(0.97, 0.96),
+    recall_query_n = c(100L, 100L),
+    exact = c(FALSE, FALSE),
+    result_backend = c("faiss_hnsw", "faiss_hnsw"),
+    resolved_backend = c("faiss_hnsw", "faiss_hnsw"),
+    implementation_backend = c("faiss_hnsw", "faiss_hnsw"),
+    preflight_route = c("faiss_hnsw", "faiss_hnsw"),
+    recall_reference = c("sample", "sample")
+  )
+
+  out <- env$summarize_nn_cycles(ok)
+  expect_equal(out$n_threads, 2L)
+  expect_equal(out$preflight_route, "faiss_hnsw")
+  expect_equal(out$success_cycles, 2L)
+})
+
 test_that("NN metric best-row ranking prefers recall stability before speed", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
@@ -518,6 +551,8 @@ test_that("NN metric auto comparison preserves recommendation basis", {
     result_backend = c("faiss_hnsw", "faiss_hnsw"),
     resolved_backend = c("faiss_hnsw", "faiss_hnsw"),
     implementation_backend = c("faiss_hnsw", "faiss_hnsw"),
+    preflight_route = c("faiss_hnsw", "faiss_hnsw"),
+    n_threads = c(2L, 2L),
     success_cycles = c(2L, 2L),
     median_elapsed_sec = c(5, 4),
     median_recall_at_k = c(0.99, 0.99),
@@ -534,6 +569,10 @@ test_that("NN metric auto comparison preserves recommendation basis", {
   expect_equal(anyDuplicated(names(out)), 0L)
   expect_equal(out$recommended_recommendation_basis, "fastest_at_recall_threshold")
   expect_true("recommended_recommendation_basis" %in% names(out))
+  expect_equal(out$auto_preflight_route, "faiss_hnsw")
+  expect_equal(out$recommended_preflight_route, "faiss_hnsw")
+  expect_equal(out$auto_n_threads, 2L)
+  expect_equal(out$recommended_n_threads, 2L)
 })
 
 test_that("NN metric auto comparison guards speed ratios and recall gaps", {
@@ -550,6 +589,8 @@ test_that("NN metric auto comparison guards speed ratios and recall gaps", {
     result_backend = c("faiss_hnsw", "faiss_hnsw", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine"),
     resolved_backend = c("faiss_hnsw", "faiss_hnsw", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine"),
     implementation_backend = c("faiss_hnsw", "faiss_hnsw", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine"),
+    preflight_route = c("faiss_hnsw", "faiss_hnsw", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine"),
+    n_threads = c(2L, 2L, 2L, 2L),
     success_cycles = c(1L, 1L, 1L, 1L),
     median_elapsed_sec = c(1, 0, 1, 2),
     median_recall_at_k = c(0.99, 0.99, NA, 0.98),

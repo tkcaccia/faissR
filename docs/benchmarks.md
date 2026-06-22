@@ -134,7 +134,8 @@ rules. `--threads`, `--timeout`, `--cycles`, `--quality_n`, and
 `--quality_max_ops` are also validated before datasets are loaded.
 `nn_metric_cycle_summary.csv` aggregates successful rows across cycles by
 dataset/backend/method/metric/k and reports success counts, median/min/max
-elapsed time, recall stability, and the dominant implementation backend.
+elapsed time, recall stability, CPU thread count, preflight route, and the
+dominant implementation backend.
 `nn_metric_recommendations_from_cycles.csv` emits one row per
 dataset/backend/metric/k. When recall is available, it selects the fastest
 method whose median recall is at least the configured `recall_threshold`; if no
@@ -147,9 +148,10 @@ unavailable for the group, it selects the fastest successful row and marks
 `recommendation_basis = "speed_only_no_recall"`.
 `nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate
 `method = "auto"` rows with those recommendations and reports median speed
-ratio, median recall gap, backend/implementation agreement, and the
-recommendation basis used for the recommended row. Speed ratios and recall gaps
-are `NA` when the required timing or recall values are unavailable or invalid.
+ratio, median recall gap, CPU thread count, preflight route,
+backend/implementation agreement, and the recommendation basis used for the
+recommended row. Speed ratios and recall gaps are `NA` when the required timing
+or recall values are unavailable or invalid.
 `nn_metric_best_by_dataset_backend_metric_k_cycle.csv` keeps the best row within
 each cycle using the same recall-threshold rule: fastest above threshold,
 best recall below threshold, and fastest when recall is unavailable.
@@ -368,7 +370,9 @@ speed for below-threshold groups. The
 `recommendation_basis` column records which rule was used.
 `nn_metric_auto_vs_cycle_recommendation.csv` carries this value as
 `recommended_recommendation_basis` so auto comparisons can be interpreted as
-recall-qualified, below-threshold, or speed-only comparisons.
+recall-qualified, below-threshold, or speed-only comparisons. Cycle summaries
+and auto comparisons also preserve `n_threads` and `preflight_route`, so CPU
+threading and public route decisions remain auditable after aggregation.
 
 Example CPU run:
 
