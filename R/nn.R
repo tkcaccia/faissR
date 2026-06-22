@@ -3655,7 +3655,8 @@ finalize_normalized_euclidean_metric_result <- function(result, inputs) {
 finalize_mips_l2_metric_result <- function(result, inputs) {
   if (ncol(result$indices) > 0L) {
     q_norm2 <- rep(as.numeric(inputs$points_norm2), length.out = nrow(result$distances))
-    scores <- (as.numeric(inputs$radius2) + q_norm2 - result$distances) / 2
+    l2_squared <- result$distances * result$distances
+    scores <- (as.numeric(inputs$radius2) + q_norm2 - l2_squared) / 2
     row_best <- apply(scores, 1L, function(x) {
       finite <- x[is.finite(x)]
       if (!length(finite)) NA_real_ else max(finite)
