@@ -47,12 +47,17 @@ libcugraph was detected at build time; random-walking is CPU-only.}
 \item{prune}{Drop graph edges with weight less than or equal to this value when a graph must be built from data or a KNN object.}
 \item{n_threads}{CPU threads. Used by KNN construction and native CPU clustering.}
 \item{n_runs}{Number of independent native clustering runs. The result with the largest modularity is returned. Values greater than one can use several CPU cores.}
-\item{resolution}{Modularity resolution for Louvain/Leiden-style scoring.}
+\item{resolution}{Modularity resolution for Louvain/Leiden-style scoring.
+Use a positive number for direct resolution control. When \code{n_clusters}
+is supplied, \code{resolution = NULL} lets faissR seed the bounded
+deterministic grid from the no-pilot graph-shape heuristic instead of a user
+resolution.}
 \item{n_clusters}{Optional target number of communities for Louvain/Leiden.
 If supplied, faissR evaluates a bounded deterministic resolution grid on the
 already-built graph and keeps the result whose community count is closest to
-the target. The grid is centered from the requested \code{resolution} and,
-when graph size is known, a no-pilot shape heuristic based on
+the target. The grid is centered from the requested \code{resolution}, or
+from an automatic seed when \code{resolution = NULL}, and when graph size is
+known uses a no-pilot shape heuristic based on
 \code{n_clusters / sqrt(n_vertices)}. The search width is shape-aware: small
 graphs use a wider deterministic grid, while large graphs use fewer candidates
 to reduce repeated Louvain/Leiden passes. This is a convenience target, not a
@@ -112,7 +117,9 @@ community count is used, \code{target_n_clusters},
 \code{selected_resolution}, \code{target_gap}, \code{resolution_selection},
 and \code{resolution_search} record the requested target, selected resolution,
 final community-count gap, deterministic selection rule, and full resolution
-search table.
+search table. \code{parameters$resolution_source} is \code{"default"},
+\code{"user"}, or \code{"target_auto"} depending on how the resolution-grid
+seed was chosen.
 }
 \references{
 Blondel VD, Guillaume JL, Lambiotte R, Lefebvre E. Fast unfolding of communities in large networks. Journal of Statistical Mechanics: Theory and Experiment. 2008;2008(10):P10008.

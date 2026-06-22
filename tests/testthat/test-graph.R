@@ -362,6 +362,7 @@ test_that("graph_cluster owns target cluster count", {
   expect_s3_class(cl, "faissR_graph_cluster")
   expect_equal(cl$target_n_clusters, 3L)
   expect_equal(cl$parameters$n_clusters, 3L)
+  expect_equal(cl$parameters$resolution_source, "default")
   expect_equal(cl$parameters$requested_backend, "cpu")
   expect_equal(cl$parameters$resolved_backend, "cpu")
   expect_equal(cl$parameters$graph_backend, attr(g, "faissR_graph")$nn_backend)
@@ -398,6 +399,20 @@ test_that("graph_cluster owns target cluster count", {
   expect_equal(override$target_n_clusters, 2L)
   expect_equal(override$parameters$n_clusters, 2L)
 
+  auto_resolution <- graph_cluster(
+    g,
+    method = "louvain",
+    backend = "cpu",
+    n_threads = 2L,
+    seed = 1L,
+    resolution = NULL,
+    n_clusters = 3L
+  )
+  expect_equal(auto_resolution$target_n_clusters, 3L)
+  expect_equal(auto_resolution$parameters$resolution, 1)
+  expect_equal(auto_resolution$parameters$resolution_source, "target_auto")
+  expect_s3_class(auto_resolution$resolution_search, "data.frame")
+
   precomputed <- nn_without_self(x, k = 8L, backend = "cpu", n_threads = 2L)
   g_knn <- knn_graph(precomputed, k = 8L)
   expect_s3_class(g_knn, "faissR_graph")
@@ -425,6 +440,30 @@ test_that("graph cluster-count targets are strict positive whole numbers", {
     knn_graph(x, k = 4L, backend = "cpu", n_clusters = 2L),
     "unused argument"
   )
+  expect_error(
+    graph_cluster(
+      x,
+      method = "louvain",
+      backend = "cpu",
+      graph_backend = "cpu",
+      k = 4L,
+      resolution = NULL
+    ),
+    "resolution"
+  )
+  null_resolution <- graph_cluster(
+    x,
+    method = "louvain",
+    backend = "cpu",
+    graph_backend = "cpu",
+    k = 4L,
+    resolution = NULL,
+    n_clusters = 2L,
+    n_threads = 2L
+  )
+  expect_equal(null_resolution$parameters$resolution_source, "target_auto")
+  expect_equal(null_resolution$parameters$n_clusters, 2L)
+
   expect_error(
     graph_cluster(
       x,

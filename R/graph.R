@@ -253,12 +253,16 @@ resolve_graph_cluster_backend <- function(backend) {
 #' @param n_threads CPU threads for KNN construction and native CPU clustering.
 #' @param n_runs Number of independent native runs. The best modularity is kept.
 #' @param resolution Modularity resolution for Louvain/Leiden-style scoring.
+#'   Use a positive number for direct resolution control. When `n_clusters` is
+#'   supplied, `resolution = NULL` lets faissR seed the bounded deterministic
+#'   grid from the no-pilot graph-shape heuristic instead of a user resolution.
 #' @param n_clusters Optional target number of communities for Louvain/Leiden.
 #'   If supplied, faissR evaluates a bounded deterministic resolution grid on
 #'   the already-built graph and keeps the result whose community count is
 #'   closest to `n_clusters`. The grid is centered from the requested
-#'   `resolution` and, when graph size is known, a no-pilot shape heuristic
-#'   based on `n_clusters / sqrt(n_vertices)`. The search width is also
+#'   `resolution`, or from an automatic seed when `resolution = NULL`, and
+#'   when graph size is known uses a no-pilot shape heuristic based on
+#'   `n_clusters / sqrt(n_vertices)`. The search width is also
 #'   shape-aware: small graphs use a wider grid, while large graphs use fewer
 #'   deterministic candidates to avoid repeated full Louvain/Leiden passes.
 #'   This is a convenience target, not a hard guarantee. If `n_clusters` is
@@ -290,7 +294,9 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   `target_n_clusters`, `selected_resolution`, `target_gap`,
 #'   `resolution_selection`, and `resolution_search` record the requested
 #'   target, selected resolution, final community-count gap, deterministic
-#'   selection rule, and full resolution search table.
+#'   selection rule, and full resolution search table. `parameters$resolution_source`
+#'   is `"default"`, `"user"`, or `"target_auto"` depending on how the
+#'   resolution-grid seed was chosen.
 #' @references
 #' Blondel VD, Guillaume JL, Lambiotte R, Lefebvre E. Fast unfolding of
 #' communities in large networks. Journal of Statistical Mechanics: Theory and
@@ -336,6 +342,7 @@ graph_cluster <- function(graph,
                           steps = 4L,
                           seed = NULL,
                           ...) {
+  resolution_was_missing <- missing(resolution)
   if (missing(method) && !is.null(n_clusters)) {
     method <- "louvain"
   }
@@ -363,11 +370,14 @@ graph_cluster <- function(graph,
   n_runs <- normalize_graph_positive_int(n_runs, "n_runs")
   n_iterations <- normalize_graph_positive_int(n_iterations, "n_iterations")
   steps <- normalize_graph_positive_int(steps, "steps")
-  resolution <- suppressWarnings(as.numeric(resolution))
-  if (length(resolution) != 1L || is.na(resolution) || !is.finite(resolution) || resolution <= 0) {
-    stop("`resolution` must be a positive number.", call. = FALSE)
-  }
   n_clusters <- normalize_graph_target_clusters(n_clusters, method)
+  resolution_info <- normalize_graph_resolution(
+    resolution,
+    has_target = !is.null(n_clusters),
+    was_missing = resolution_was_missing
+  )
+  resolution <- resolution_info$value
+  resolution_source <- resolution_info$source
   prune <- suppressWarnings(as.numeric(prune))
   if (length(prune) != 1L || is.na(prune) || !is.finite(prune) || prune < 0) {
     stop("`prune` must be a non-negative number.", call. = FALSE)
@@ -413,6 +423,7 @@ graph_cluster <- function(graph,
       meta,
       list(
         resolution = resolution,
+        resolution_source = resolution_source,
         n_clusters = graph_n_clusters,
         selected_resolution = ans$selected_resolution %||% resolution,
         target_gap = ans$target_gap %||% NA_integer_,
@@ -523,6 +534,7 @@ graph_cluster <- function(graph,
     mutual = mutual,
     prune = prune,
     resolution = resolution,
+    resolution_source = resolution_source,
     n_clusters = n_clusters,
     selected_resolution = ans$selected_resolution %||% resolution,
     target_gap = ans$target_gap %||% NA_integer_,
@@ -626,6 +638,23 @@ validate_graph_target_cluster_count <- function(n_clusters, n_vertices) {
     stop("`n_clusters` cannot be larger than the number of graph vertices.", call. = FALSE)
   }
   n_clusters
+}
+
+normalize_graph_resolution <- function(resolution, has_target = FALSE, was_missing = FALSE) {
+  if (is.null(resolution)) {
+    if (isTRUE(has_target)) {
+      return(list(value = 1, source = "target_auto"))
+    }
+    stop("`resolution` must be a positive number, or NULL when `n_clusters` is supplied.", call. = FALSE)
+  }
+  value <- suppressWarnings(as.numeric(resolution))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) || value <= 0) {
+    stop("`resolution` must be a positive number.", call. = FALSE)
+  }
+  list(
+    value = value,
+    source = if (isTRUE(was_missing)) "default" else "user"
+  )
 }
 
 graph_resolution_center <- function(resolution, n_clusters, n_vertices = NULL) {
