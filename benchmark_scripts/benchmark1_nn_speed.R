@@ -113,8 +113,11 @@ benchmark1_k_values <- function(k_values = NULL,
   }
   values <- trimws(strsplit(raw, ",", fixed = TRUE)[[1L]])
   values <- values[nzchar(values)]
-  parsed <- suppressWarnings(as.integer(values))
-  invalid <- values[is.na(parsed) | parsed < 1L]
+  parsed <- suppressWarnings(as.numeric(values))
+  invalid <- values[
+    is.na(parsed) | !is.finite(parsed) | parsed < 1L |
+      abs(parsed - round(parsed)) > sqrt(.Machine$double.eps)
+  ]
   if (length(invalid)) {
     stop(
       "`k_values` must contain only positive integers. Invalid value(s): ",
@@ -123,7 +126,7 @@ benchmark1_k_values <- function(k_values = NULL,
       call. = FALSE
     )
   }
-  parsed <- unique(parsed)
+  parsed <- unique(as.integer(round(parsed)))
   if (!length(parsed)) {
     stop("`k_values` must contain at least one positive integer.", call. = FALSE)
   }
@@ -133,11 +136,12 @@ benchmark1_k_values <- function(k_values = NULL,
 benchmark1_positive_int_arg <- function(value, arg, default = NULL) {
   raw <- value
   if (is.null(raw) || length(raw) != 1L || is.na(raw)) raw <- default
-  parsed <- suppressWarnings(as.integer(raw))
-  if (length(parsed) != 1L || is.na(parsed) || !is.finite(parsed) || parsed < 1L) {
+  parsed <- suppressWarnings(as.numeric(raw))
+  if (length(parsed) != 1L || is.na(parsed) || !is.finite(parsed) || parsed < 1L ||
+      abs(parsed - round(parsed)) > sqrt(.Machine$double.eps)) {
     stop("`", arg, "` must be a positive integer.", call. = FALSE)
   }
-  parsed
+  as.integer(round(parsed))
 }
 
 benchmark1_positive_numeric_arg <- function(value, arg, default = NULL) {

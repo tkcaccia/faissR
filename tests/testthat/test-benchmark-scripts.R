@@ -734,6 +734,10 @@ test_that("legacy Benchmark #1 validates k-value grids", {
     "Invalid value\\(s\\): 0"
   )
   expect_error(
+    env$benchmark1_k_values("15.5", env_k_values = NA_character_),
+    "Invalid value\\(s\\): 15.5"
+  )
+  expect_error(
     env$benchmark1_k_values("", env_k_values = ""),
     "at least one positive integer"
   )
@@ -755,6 +759,10 @@ test_that("legacy Benchmark #1 validates scalar numeric controls", {
   )
   expect_error(
     env$benchmark1_positive_int_arg("bad", "k", "15"),
+    "positive integer"
+  )
+  expect_error(
+    env$benchmark1_positive_int_arg("15.5", "k", "15"),
     "positive integer"
   )
   expect_error(
