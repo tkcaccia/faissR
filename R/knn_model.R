@@ -18,7 +18,9 @@
 #'   references.
 #' @param metric Distance metric passed to \code{\link{nn}()}. Aliases such as
 #'   `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as
-#'   canonical metric labels.
+#'   canonical metric labels. Correlation is centered cosine similarity, not
+#'   raw inner product; see \code{\link{nn}()} for the metric transforms and
+#'   backend support matrix.
 #' @param tuning Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
 #'   tuned default for the resolved method.
 #' @param task `"auto"`, `"classification"`, or `"regression"`. `"auto"` treats

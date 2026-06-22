@@ -21,7 +21,8 @@
 #'   resolve to the same public method label.
 #' @param metric Distance metric passed to \code{\link{nn_without_self}()} when
 #'   `knn` is not supplied. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and
-#'   `"ip"` are accepted and stored as canonical metric labels.
+#'   `"ip"` are accepted and stored as canonical metric labels. Correlation is
+#'   centered cosine similarity, not raw inner product.
 #' @param tuning Tuning policy passed to \code{\link{nn_without_self}()} when
 #'   `knn` is not supplied.
 #' @param weight Graph weighting. `"auto"` uses SNN/Jaccard weights for input
@@ -232,7 +233,8 @@ resolve_graph_cluster_backend <- function(backend) {
 #' @param metric Distance metric passed to \code{\link{nn_without_self}()} when
 #'   `graph` is a matrix or embedding. Aliases such as `"l2"`,
 #'   `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as canonical
-#'   metric labels.
+#'   metric labels. Correlation is centered cosine similarity, not raw inner
+#'   product.
 #' @param tuning Tuning policy passed to \code{\link{nn_without_self}()} when
 #'   `graph` is a matrix or embedding.
 #' @param weight KNN graph weighting. See \code{\link{knn_graph}()}.

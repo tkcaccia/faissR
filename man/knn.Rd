@@ -33,8 +33,9 @@ runtime support is available, and CPU otherwise.}
 \item{metric}{Distance metric passed to \code{nn()}: \code{"euclidean"},
 \code{"cosine"}, \code{"correlation"}, or \code{"inner_product"}. Aliases such
 as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as
-canonical metric labels. See \code{nn()} for metric/backend support details,
-including metric-aware CPU HNSW routing.}
+canonical metric labels. Correlation is centered cosine similarity, not raw
+inner product. See \code{nn()} for metric/backend support details, including
+metric-aware CPU HNSW routing.}
 \item{tuning}{Tuning policy passed to \code{nn()}. \code{"auto"} uses the tuned default for the resolved method.}
 \item{task}{\code{"auto"}, \code{"classification"}, or \code{"regression"}. \code{"auto"} treats numeric responses as regression and other response types as classification.}
 \item{k}{Default number of neighbours used by \code{predict()} and by immediate predictions when \code{Xtest} is supplied.}

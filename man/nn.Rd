@@ -47,9 +47,12 @@ backend/method combinations fail clearly; for example,
 `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`;
 aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and
 stored as canonical metric labels.
+`"inner_product"` is the raw dot product, `"cosine"` is the dot product
+after row L2 normalization, and `"correlation"` is centered cosine
+similarity after subtracting each row mean and L2-normalizing each row.
 `"euclidean"` is the validated high-performance default. `"cosine"` and
-`"correlation"` are implemented for exact CPU KNN, native 2D/3D grid search,
-FAISS CPU/GPU Flat,
+`"correlation"` are implemented for exact CPU KNN, native 2D/3D grid
+search, FAISS CPU/GPU Flat,
 FAISS CPU/GPU IVF-Flat, FAISS CPU/GPU IVFPQ, FAISS CPU HNSW,
 and RcppHNSW. FAISS approximate IP-capable routes use row L2 normalization
 for cosine and row centering plus L2 normalization for correlation before
@@ -106,8 +109,8 @@ Method descriptions:
   self-KNN, exact FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for
   Euclidean searches when appropriate, and FAISS GPU Flat IP routes for
   cosine, correlation, and inner-product searches only when FAISS GPU Flat is
-  available [1-3,5,13-15]. On cuVS-only runtimes,
-  `backend = "auto"` keeps non-grid non-Euclidean searches on CPU.
+  available [1-3,5,13-15]. On cuVS-only runtimes, `backend = "auto"` keeps
+  non-grid non-Euclidean searches on CPU.
   \item `"exact"`: exact nearest-neighbour search. CPU uses faissR's native
   exact route; CUDA uses FAISS GPU Flat when the linked FAISS build reports
   GPU support. Euclidean CUDA exact search can otherwise use direct cuVS
@@ -116,8 +119,8 @@ Method descriptions:
   \item `"flat"`: FAISS Flat exhaustive index. CPU and FAISS GPU support
   L2, IP, and normalized-IP cosine/correlation routes when available
   [1-2,16].
-  \item `"bruteforce"`: exhaustive brute-force search. CPU maps to exact CPU
-  search. On CUDA, Euclidean prefers RAPIDS cuVS brute force; cosine,
+  \item `"bruteforce"`: exhaustive brute-force search. CPU maps to exact
+  CPU search. On CUDA, Euclidean prefers RAPIDS cuVS brute force; cosine,
   correlation, and inner product use FAISS GPU Flat when available because
   direct cuVS brute force is Euclidean/L2-only in faissR [1-3,16].
   \item `"grid"`: native exact 2D/3D spatial grid search for Euclidean,

@@ -28,7 +28,7 @@ knn_graph(
 \item{backend}{Device backend passed to \code{nn_without_self()} when \code{knn} is not supplied: \code{"auto"}, \code{"cpu"}, or \code{"cuda"}.}
 \item{nn_method}{Nearest-neighbour method passed to \code{nn_without_self()} when \code{knn} is not supplied. The default \code{"auto"} uses the shape-aware selector for the chosen backend.}
 \item{method}{Alias for \code{nn_method}, matching the public method argument used by \code{nn()} and \code{knn()}. If both \code{method} and \code{nn_method} are supplied they must resolve to the same public nearest-neighbour method label.}
-\item{metric}{Distance metric passed to \code{nn_without_self()} when \code{knn} is not supplied. Aliases such as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as canonical metric labels.}
+\item{metric}{Distance metric passed to \code{nn_without_self()} when \code{knn} is not supplied. Aliases such as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as canonical metric labels. Correlation is centered cosine similarity, not raw inner product.}
 \item{tuning}{Tuning policy passed to \code{nn_without_self()} when \code{knn} is not supplied.}
 \item{weight}{Graph weighting. \code{"auto"} uses SNN/Jaccard weights for input space and distance weights for embedding space. \code{"snn"} builds shared-nearest-neighbour Jaccard weights. \code{"adaptive"} uses a local radius kernel. \code{"distance"} uses \code{1 / (1 + distance)}. \code{"binary"} gives every edge weight 1.}
 \item{mutual}{If \code{TRUE}, keep only reciprocal nearest-neighbour edges.}

@@ -5050,6 +5050,9 @@ grid_self_knn <- function(data,
 #'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`;
 #'   aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and
 #'   stored as canonical metric labels.
+#'   `"inner_product"` is the raw dot product, `"cosine"` is the dot product
+#'   after row L2 normalization, and `"correlation"` is centered cosine
+#'   similarity after subtracting each row mean and L2-normalizing each row.
 #'   `"euclidean"` is the validated high-performance default. `"cosine"` and
 #'   `"correlation"` are implemented for exact CPU KNN, native 2D/3D grid
 #'   search, FAISS CPU/GPU Flat,
@@ -5139,8 +5142,9 @@ nn <- function(data,
 #'   references.
 #' @param metric Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`,
 #'   or `"inner_product"`; aliases such as `"l2"`, `"cor"`/`"pearson"`, and
-#'   `"ip"` are accepted. See \code{\link{nn}()} for metric/backend support
-#'   details, including metric-aware CPU HNSW routing.
+#'   `"ip"` are accepted. Correlation is centered cosine similarity, not raw
+#'   inner product; see \code{\link{nn}()} for metric/backend support details,
+#'   including metric-aware CPU HNSW routing.
 #' @param tuning Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
 #'   tuned default for the resolved method.
 #' @param n_threads Number of CPU worker threads used by CPU backends.

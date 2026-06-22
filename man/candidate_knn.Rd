@@ -33,9 +33,10 @@ require self-query candidates with `exclude_self = TRUE`.}
 
 \item{metric}{`"euclidean"`, `"cosine"`, `"correlation"`, or
 `"inner_product"`. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and
-`"ip"` are accepted. CUDA candidate scoring supports Euclidean directly
-and cosine/correlation through normalized Euclidean scoring; raw
-inner-product CUDA candidate scoring is not exposed.}
+`"ip"` are accepted. Correlation is centered cosine similarity, not raw
+inner product. CUDA candidate scoring supports Euclidean directly and
+cosine/correlation through normalized Euclidean scoring; raw inner-product
+CUDA candidate scoring is not exposed.}
 
 \item{n_threads}{CPU threads for the CPU backend.}
 
