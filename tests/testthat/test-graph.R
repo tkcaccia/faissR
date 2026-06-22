@@ -92,6 +92,14 @@ test_that("graph builders require canonical weight labels", {
     "`backend` must be a single value"
   )
   expect_error(
+    knn_graph(x, k = 5L, backend = "cpu", mutual = c(TRUE, FALSE)),
+    "`mutual` must be a single TRUE or FALSE"
+  )
+  expect_error(
+    knn_graph(x, k = 5L, backend = "cpu", mutual = "TRUE"),
+    "`mutual` must be a single TRUE or FALSE"
+  )
+  expect_error(
     graph_cluster(x, method = "louvain", backend = "cpu", graph_backend = "cpu", k = 5L, weight = "d"),
     "weight"
   )

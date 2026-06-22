@@ -85,7 +85,7 @@ knn_graph <- function(data,
   if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L) {
     stop("`k` must be a positive integer.", call. = FALSE)
   }
-  mutual <- isTRUE(mutual)
+  mutual <- normalize_scalar_logical_arg(mutual, "mutual", default = FALSE)
   prune <- suppressWarnings(as.numeric(prune))
   if (length(prune) != 1L || is.na(prune) || !is.finite(prune) || prune < 0) {
     stop("`prune` must be a non-negative number.", call. = FALSE)
@@ -440,7 +440,7 @@ graph_cluster <- function(graph,
     knn_input$distances[, cols, drop = FALSE],
     weight_type = weight,
     prune = prune,
-    mutual = isTRUE(mutual)
+    mutual = mutual
   )
   n_clusters <- validate_graph_target_cluster_count(n_clusters, graph_edges$n_vertices)
   ans <- graph_cluster_edges_target(
@@ -464,7 +464,7 @@ graph_cluster <- function(graph,
     graph_space = graph_space,
     input_method = input_method,
     weight = weight,
-    mutual = isTRUE(mutual),
+    mutual = mutual,
     prune = prune,
     resolution = resolution,
     n_clusters = n_clusters,
