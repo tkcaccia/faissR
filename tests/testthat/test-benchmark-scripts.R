@@ -1627,11 +1627,11 @@ test_that("graph benchmark validates dataset selectors", {
     test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
     "args <- parse_args()"
   )
-  valid <- c("COIL20", "USPS", "SimulatedUniform2D", "SimulatedUniform3D")
+  valid <- c("COIL20", "USPS", "SimulatedUniform2D", "SimulatedUniform3D", "SimulatedTiny3Clusters")
 
   expect_equal(
-    env$validate_dataset_values(c("COIL20", "USPS", "COIL20"), valid),
-    c("COIL20", "USPS")
+    env$validate_dataset_values(c("COIL20", "USPS", "SimulatedTiny3Clusters", "COIL20"), valid),
+    c("COIL20", "USPS", "SimulatedTiny3Clusters")
   )
   expect_error(
     env$validate_dataset_values(c("COIL20", "bad_dataset"), valid),

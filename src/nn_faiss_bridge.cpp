@@ -192,10 +192,19 @@ extern "C" SEXP faissR_nn_float32_call(SEXP x,
     n_threads_value,
     metric_value
   );
+  const std::string backend_used =
+    metric_value == "inner_product" ? "faiss_flat_ip" :
+    (metric_value == "cosine" ? "faiss_flat_cosine" :
+    (metric_value == "correlation" ? "faiss_flat_correlation" : "faiss_flat_l2"));
   out["index_base"] = 1;
   out["distance_type"] = "double";
   out["metric"] = metric_value;
-  out["backend_used"] = metric_value == "inner_product" ? "faiss_flat_ip" : "faiss";
+  out["backend_used"] = backend_used;
+  out.attr("index_base") = 1;
+  out.attr("distance_type") = "double";
+  out.attr("metric") = metric_value;
+  out.attr("backend_used") = backend_used;
+  out.attr("resolved_backend") = backend_used;
   return out;
   END_RCPP
 }

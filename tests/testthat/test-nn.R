@@ -216,6 +216,49 @@ test_that("float32 C-callable entry point is registered", {
   expect_true(faissR_test_float32_callable_registered())
 })
 
+test_that("float32 C-callable returns stable KNN metadata", {
+  skip_if_not_installed("Rcpp")
+  skip_if_not_installed("float")
+  skip_if_not(faiss_available(), "FAISS is required for float32 input")
+  Rcpp::cppFunction(
+    code = '
+      Rcpp::List faissR_test_float32_callable_run(SEXP x) {
+      typedef SEXP (*faissR_nn_float32_fun)(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
+      faissR_nn_float32_fun fn = (faissR_nn_float32_fun)
+        R_GetCCallable("faissR", "faissR_nn_float32_call");
+      if (fn == NULL) Rcpp::stop("faissR_nn_float32_call is not registered");
+      SEXP out = fn(
+        x,
+        Rcpp::wrap(2),
+        Rcpp::wrap(std::string("cpu")),
+        Rcpp::wrap(std::string("euclidean")),
+        Rcpp::wrap(false),
+        Rcpp::wrap(2)
+      );
+      return Rcpp::as<Rcpp::List>(out);
+    }',
+    includes = "#include <R_ext/Rdynload.h>"
+  )
+
+  x <- float::fl(matrix(c(
+    0, 0,
+    1, 0,
+    0, 2,
+    3, 3
+  ), ncol = 2, byrow = TRUE))
+  out <- faissR_test_float32_callable_run(x)
+
+  expect_equal(dim(out$indices), c(4L, 2L))
+  expect_equal(out$index_base, 1L)
+  expect_equal(out$distance_type, "double")
+  expect_equal(out$metric, "euclidean")
+  expect_equal(out$backend_used, "faiss_flat_l2")
+  expect_equal(attr(out, "distance_type"), "double")
+  expect_equal(attr(out, "metric"), "euclidean")
+  expect_equal(attr(out, "backend_used"), "faiss_flat_l2")
+  expect_equal(attr(out, "resolved_backend"), "faiss_flat_l2")
+})
+
 test_that("native exact KNN only accepts the documented metrics", {
   x <- matrix(c(
     0, 0,
