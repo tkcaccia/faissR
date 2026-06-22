@@ -768,6 +768,8 @@ canonical_method_values <- function(methods) {
       "`methods` must use canonical lowercase public method labels. ",
       "Invalid value(s): ",
       paste(invalid, collapse = ", "),
+      ". Valid value(s): ",
+      paste(default_nn_method_values(), collapse = ", "),
       ".",
       call. = FALSE
     )

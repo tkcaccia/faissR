@@ -466,6 +466,10 @@ test_that("NN metric benchmark requires canonical public method labels", {
     "canonical lowercase"
   )
   expect_error(
+    env$canonical_method_values(c("HNSW", "faiss_hnsw")),
+    "Valid value\\(s\\): auto, exact, flat, bruteforce, grid, vptree, sparse, hnsw, ivf, ivfpq, nsg, nndescent, cagra"
+  )
+  expect_error(
     env$canonical_method_values(character()),
     "at least one method"
   )
