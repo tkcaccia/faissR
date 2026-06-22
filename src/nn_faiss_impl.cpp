@@ -213,6 +213,45 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
   return view;
 }
 
+std::vector<char> normalize_float32_view(MatrixViewF32& view,
+                                         const std::string& metric) {
+  std::vector<char> zero(static_cast<std::size_t>(view.nrow), 0);
+  if (metric != "cosine" && metric != "correlation") {
+    return zero;
+  }
+
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+  for (int r = 0; r < view.nrow; ++r) {
+    float* row = view.buffer.data() + static_cast<std::size_t>(r) * view.ncol;
+    double mean = 0.0;
+    if (metric == "correlation") {
+      for (int c = 0; c < view.ncol; ++c) {
+        mean += static_cast<double>(row[c]);
+      }
+      mean /= static_cast<double>(view.ncol);
+    }
+    double norm2 = 0.0;
+    for (int c = 0; c < view.ncol; ++c) {
+      const double centered = static_cast<double>(row[c]) - mean;
+      row[c] = static_cast<float>(centered);
+      norm2 += centered * centered;
+    }
+    if (norm2 <= 0.0 || !std::isfinite(norm2)) {
+      zero[static_cast<std::size_t>(r)] = 1;
+      std::fill(row, row + view.ncol, 0.0f);
+      continue;
+    }
+    const float inv_norm = static_cast<float>(1.0 / std::sqrt(norm2));
+    for (int c = 0; c < view.ncol; ++c) {
+      row[c] *= inv_norm;
+    }
+  }
+  view.data = view.buffer.data();
+  return zero;
+}
+
 bool same_float32_object(SEXP data, SEXP points) {
   return data == points;
 }
@@ -393,6 +432,91 @@ List search_faiss_index(faiss::Index& index,
   );
 }
 
+void sort_knn_result_rows(IntegerMatrix& indices, NumericMatrix& dists) {
+  const int n_points = indices.nrow();
+  const int k = indices.ncol();
+  std::vector<int> order(static_cast<std::size_t>(k));
+  for (int i = 0; i < n_points; ++i) {
+    for (int j = 0; j < k; ++j) order[static_cast<std::size_t>(j)] = j;
+    std::sort(order.begin(), order.end(), [&](const int a, const int b) {
+      const double da = dists(i, a);
+      const double db = dists(i, b);
+      const bool a_na = indices(i, a) == NA_INTEGER || !std::isfinite(da);
+      const bool b_na = indices(i, b) == NA_INTEGER || !std::isfinite(db);
+      if (a_na != b_na) return !a_na;
+      if (da != db) return da < db;
+      return indices(i, a) < indices(i, b);
+    });
+    std::vector<int> idx(static_cast<std::size_t>(k));
+    std::vector<double> dst(static_cast<std::size_t>(k));
+    for (int j = 0; j < k; ++j) {
+      const int source = order[static_cast<std::size_t>(j)];
+      idx[static_cast<std::size_t>(j)] = indices(i, source);
+      dst[static_cast<std::size_t>(j)] = dists(i, source);
+    }
+    for (int j = 0; j < k; ++j) {
+      indices(i, j) = idx[static_cast<std::size_t>(j)];
+      dists(i, j) = dst[static_cast<std::size_t>(j)];
+    }
+  }
+}
+
+void restore_zero_normalized_float32_rows(List& out,
+                                          const std::vector<char>& data_zero,
+                                          const std::vector<char>& points_zero,
+                                          const bool self_query,
+                                          const bool exclude_self) {
+  if (data_zero.empty() || points_zero.empty()) return;
+  bool any_data_zero = false;
+  bool any_points_zero = false;
+  for (char value : data_zero) any_data_zero = any_data_zero || value != 0;
+  for (char value : points_zero) any_points_zero = any_points_zero || value != 0;
+  if (!any_data_zero || !any_points_zero) return;
+
+  IntegerMatrix indices = out["indices"];
+  NumericMatrix dists = out["distances"];
+  const int n_data = static_cast<int>(data_zero.size());
+  const int n_points = indices.nrow();
+  const int k = indices.ncol();
+  std::vector<int> zero_candidates;
+  std::vector<int> nonzero_candidates;
+  zero_candidates.reserve(static_cast<std::size_t>(n_data));
+  nonzero_candidates.reserve(static_cast<std::size_t>(n_data));
+  for (int i = 0; i < n_data; ++i) {
+    if (data_zero[static_cast<std::size_t>(i)] != 0) {
+      zero_candidates.push_back(i + 1);
+    } else {
+      nonzero_candidates.push_back(i + 1);
+    }
+  }
+
+  for (int i = 0; i < n_points; ++i) {
+    if (points_zero[static_cast<std::size_t>(i)] == 0) continue;
+    int written = 0;
+    int zero_written = 0;
+    for (int candidate : zero_candidates) {
+      if (self_query && exclude_self && candidate == i + 1) continue;
+      if (written >= k) break;
+      indices(i, written) = candidate;
+      dists(i, written) = 0.0;
+      ++written;
+      ++zero_written;
+    }
+    for (int candidate : nonzero_candidates) {
+      if (written >= k) break;
+      indices(i, written) = candidate;
+      dists(i, written) = 1.0;
+      ++written;
+    }
+    for (int j = written; j < k; ++j) {
+      indices(i, j) = NA_INTEGER;
+      dists(i, j) = R_PosInf;
+    }
+    (void)zero_written;
+  }
+  sort_knn_result_rows(indices, dists);
+}
+
 List search_faiss_flat_float32(SEXP data,
                                SEXP points,
                                int k,
@@ -418,24 +542,33 @@ List search_faiss_flat_float32(SEXP data,
     Rcpp::stop("self-neighbor exclusion requires points to be data");
   }
 
+  std::vector<char> data_zero = normalize_float32_view(xb, metric);
+  std::vector<char> points_zero = same_storage ?
+    data_zero :
+    normalize_float32_view(xq, metric);
+
   const int n_points = same_storage ? xb.nrow : xq.nrow;
   const int search_k = exclude_self ? std::min(xb.nrow, k + 1) : k;
   const float* query_ptr = same_storage ? xb.data : xq.data;
+  const bool normalized_metric = metric == "cosine" || metric == "correlation";
   const DistanceOutput output = metric == "inner_product" ?
     DistanceOutput::InnerProduct :
-    DistanceOutput::L2Squared;
+    (normalized_metric ? DistanceOutput::OneMinusInnerProduct : DistanceOutput::L2Squared);
 
   OmpThreadScope threads(n_threads);
   std::unique_ptr<faiss::Index> index;
   std::string index_type;
-  if (metric == "inner_product") {
+  if (metric == "inner_product" || normalized_metric) {
     index.reset(new faiss::IndexFlatIP(xb.ncol));
     index_type = "IndexFlatIP";
   } else if (metric == "euclidean") {
     index.reset(new faiss::IndexFlatL2(xb.ncol));
     index_type = "IndexFlatL2";
   } else {
-    Rcpp::stop("FAISS float32 Flat input supports metric = 'euclidean' or 'inner_product'");
+    Rcpp::stop(
+      "FAISS float32 Flat input supports metric = 'euclidean', "
+      "'cosine', 'correlation', or 'inner_product'"
+    );
   }
 
   std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
@@ -460,6 +593,18 @@ List search_faiss_flat_float32(SEXP data,
     output,
     n_threads
   );
+  if (normalized_metric) {
+    restore_zero_normalized_float32_rows(
+      out, data_zero, points_zero, self_query, exclude_self
+    );
+    IntegerMatrix indices = out["indices"];
+    NumericMatrix dists = out["distances"];
+    sort_knn_result_rows(indices, dists);
+    out["metric"] = metric;
+    out["metric_transform"] = metric == "correlation" ?
+      "row_center_l2_normalize_then_IndexFlatIP" :
+      "row_l2_normalize_then_IndexFlatIP";
+  }
   out["input_type"] = "float32";
   out["input_layout"] = "float32_column_major_payload_to_row_major";
   return out;

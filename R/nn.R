@@ -73,7 +73,8 @@ nn_compute <- function(data,
     n_threads <- normalize_nn_threads(n_threads)
     metric <- normalize_nn_metric(metric)
     if (!backend %in% c("faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat",
-                        "faiss_flat_l2", "faiss_flat_ip")) {
+                        "faiss_flat_l2", "faiss_flat_ip",
+                        "faiss_flat_cosine", "faiss_flat_correlation")) {
       stop(
         "float32 input currently supports the FAISS Flat routes only. ",
         "Use `method = \"flat\"` with `backend = \"cpu\"`, or pass an ",
@@ -81,12 +82,10 @@ nn_compute <- function(data,
         call. = FALSE
       )
     }
-    if (!metric %in% c("euclidean", "inner_product")) {
+    if (!metric %in% c("euclidean", "cosine", "correlation", "inner_product")) {
       stop(
-        "float32 FAISS Flat input currently supports `metric = \"euclidean\"` ",
-        "or `metric = \"inner_product\"`. Cosine and correlation float32 ",
-        "routes require normalized float32 transforms and are not enabled in ",
-        "this build slice.",
+        "float32 FAISS Flat input currently supports `metric = \"euclidean\"`, ",
+        "`\"cosine\"`, `\"correlation\"`, or `\"inner_product\"`.",
         call. = FALSE
       )
     }
@@ -106,7 +105,12 @@ nn_compute <- function(data,
     )
     return(finish_nn_result(
       out,
-      if (identical(metric, "inner_product")) "faiss_flat_ip" else "faiss",
+      switch(metric,
+        inner_product = "faiss_flat_ip",
+        cosine = "faiss_flat_cosine",
+        correlation = "faiss_flat_correlation",
+        "faiss"
+      ),
       k,
       self_query,
       exact = TRUE,

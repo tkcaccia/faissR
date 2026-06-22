@@ -165,6 +165,45 @@ test_that("float32 input routes through FAISS Flat when float is installed", {
   expect_equal(attr(out, "resolved_backend"), "faiss")
 })
 
+test_that("float32 FAISS Flat input supports normalized metrics", {
+  skip_if_not_installed("float")
+  skip_if_not(faiss_available(), "FAISS is required for float32 input")
+
+  x <- matrix(c(
+    0.20,  1.10, -0.40,
+    1.30, -0.20,  0.70,
+   -0.80,  0.40,  1.50,
+    2.10,  1.70, -1.20,
+   -1.40,  2.20,  0.30,
+    0.60, -1.30, -0.90
+  ), ncol = 3, byrow = TRUE)
+  xf <- float::fl(x)
+
+  for (metric in c("cosine", "correlation")) {
+    out <- nn_without_self(
+      xf,
+      k = 2L,
+      backend = "cpu",
+      method = "flat",
+      metric = metric,
+      n_threads = 2L
+    )
+    exact <- nn_without_self(
+      x,
+      k = 2L,
+      backend = "cpu",
+      method = "exact",
+      metric = metric,
+      n_threads = 2L
+    )
+
+    expect_equal(out$indices, exact$indices, info = metric)
+    expect_equal(out$distances, exact$distances, tolerance = 1e-5, info = metric)
+    expect_equal(out$input_type, "float32", info = metric)
+    expect_equal(attr(out, "resolved_backend"), paste0("faiss_flat_", metric), info = metric)
+  }
+})
+
 test_that("native exact KNN only accepts the documented metrics", {
   x <- matrix(c(
     0, 0,
