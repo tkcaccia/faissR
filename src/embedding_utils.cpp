@@ -457,56 +457,6 @@ double mean_neighbor_rank_error_cpp(IntegerMatrix high_indices,
 }
 
 // [[Rcpp::export]]
-NumericVector knn_recall_cpp(IntegerMatrix approx_indices,
-                             IntegerMatrix exact_indices,
-                             int k) {
-  const int n = approx_indices.nrow();
-  if (exact_indices.nrow() != n) {
-    Rcpp::stop("Approximate and exact KNN must have the same number of rows");
-  }
-  k = std::min(k, std::min(approx_indices.ncol(), exact_indices.ncol()));
-  if (k < 1) Rcpp::stop("k must be positive");
-
-  std::vector<double> recalls(static_cast<std::size_t>(n), 0.0);
-  for (int row = 0; row < n; ++row) {
-    int shared = 0;
-    for (int a = 0; a < k; ++a) {
-      const int candidate = approx_indices(row, a);
-      for (int e = 0; e < k; ++e) {
-        if (candidate == exact_indices(row, e)) {
-          ++shared;
-          break;
-        }
-      }
-    }
-    recalls[static_cast<std::size_t>(row)] =
-      static_cast<double>(shared) / static_cast<double>(k);
-  }
-
-  double sum = 0.0;
-  double min_value = std::numeric_limits<double>::infinity();
-  for (const double value : recalls) {
-    sum += value;
-    min_value = std::min(min_value, value);
-  }
-  std::vector<double> sorted = recalls;
-  const std::size_t mid = sorted.size() / 2u;
-  std::nth_element(sorted.begin(), sorted.begin() + mid, sorted.end());
-  double median = sorted[mid];
-  if (sorted.size() % 2u == 0u) {
-    std::nth_element(sorted.begin(), sorted.begin() + mid - 1u, sorted.begin() + mid);
-    median = 0.5 * (median + sorted[mid - 1u]);
-  }
-
-  NumericVector out = NumericVector::create(
-    Rcpp::Named("recall_at_k") = sum / static_cast<double>(n),
-    Rcpp::Named("median_recall_at_k") = median,
-    Rcpp::Named("min_recall_at_k") = min_value
-  );
-  return out;
-}
-
-// [[Rcpp::export]]
 IntegerVector majority_vote_knn_labels_cpp(IntegerMatrix embed_indices,
                                            IntegerVector labels,
                                            int k,

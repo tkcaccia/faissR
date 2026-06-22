@@ -60,19 +60,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// knn_recall_cpp
-NumericVector knn_recall_cpp(IntegerMatrix approx_indices, IntegerMatrix exact_indices, int k);
-RcppExport SEXP _faissR_knn_recall_cpp(SEXP approx_indicesSEXP, SEXP exact_indicesSEXP, SEXP kSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< IntegerMatrix >::type approx_indices(approx_indicesSEXP);
-    Rcpp::traits::input_parameter< IntegerMatrix >::type exact_indices(exact_indicesSEXP);
-    Rcpp::traits::input_parameter< int >::type k(kSEXP);
-    rcpp_result_gen = Rcpp::wrap(knn_recall_cpp(approx_indices, exact_indices, k));
-    return rcpp_result_gen;
-END_RCPP
-}
 // majority_vote_knn_labels_cpp
 IntegerVector majority_vote_knn_labels_cpp(IntegerMatrix embed_indices, IntegerVector labels, int k, int n_label_levels);
 RcppExport SEXP _faissR_majority_vote_knn_labels_cpp(SEXP embed_indicesSEXP, SEXP labelsSEXP, SEXP kSEXP, SEXP n_label_levelsSEXP) {
@@ -1069,7 +1056,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_strip_self_neighbors_cpp", (DL_FUNC) &_faissR_strip_self_neighbors_cpp, 2},
     {"_faissR_validate_projection_knn_cpp", (DL_FUNC) &_faissR_validate_projection_knn_cpp, 4},
     {"_faissR_mean_neighbor_rank_error_cpp", (DL_FUNC) &_faissR_mean_neighbor_rank_error_cpp, 3},
-    {"_faissR_knn_recall_cpp", (DL_FUNC) &_faissR_knn_recall_cpp, 3},
     {"_faissR_majority_vote_knn_labels_cpp", (DL_FUNC) &_faissR_majority_vote_knn_labels_cpp, 4},
     {"_faissR_batch_entropy_cpp", (DL_FUNC) &_faissR_batch_entropy_cpp, 4},
     {"_faissR_sampled_pair_distances_cpp", (DL_FUNC) &_faissR_sampled_pair_distances_cpp, 4},

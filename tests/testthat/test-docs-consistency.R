@@ -230,6 +230,18 @@ test_that("native routines use registered symbols without public helper leakage"
 
   namespace_text <- paste(readLines(namespace_file, warn = FALSE), collapse = "\n")
   rcpp_exports_text <- paste(readLines(rcpp_exports_file, warn = FALSE), collapse = "\n")
+  r_exports_file <- file.path(root, "R", "RcppExports.R")
+  embedding_utils_file <- file.path(root, "src", "embedding_utils.cpp")
+  r_exports_text <- if (file.exists(r_exports_file)) {
+    paste(readLines(r_exports_file, warn = FALSE), collapse = "\n")
+  } else {
+    ""
+  }
+  embedding_utils_text <- if (file.exists(embedding_utils_file)) {
+    paste(readLines(embedding_utils_file, warn = FALSE), collapse = "\n")
+  } else {
+    ""
+  }
   docs_text <- paste(
     vapply(docs_files, function(path) paste(readLines(path, warn = FALSE), collapse = "\n"), character(1L)),
     collapse = "\n"
@@ -239,6 +251,10 @@ test_that("native routines use registered symbols without public helper leakage"
   expect_true(grepl("R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);", rcpp_exports_text, fixed = TRUE))
   expect_true(grepl("R_useDynamicSymbols(dll, FALSE);", rcpp_exports_text, fixed = TRUE))
   expect_false(grepl("knn_recall_cpp", docs_text, fixed = TRUE))
+  expect_false(grepl("knn_recall_cpp", r_exports_text, fixed = TRUE))
+  expect_false(grepl("knn_recall_cpp", rcpp_exports_text, fixed = TRUE))
+  expect_false(grepl("_faissR_knn_recall_cpp", rcpp_exports_text, fixed = TRUE))
+  expect_false(grepl("knn_recall_cpp", embedding_utils_text, fixed = TRUE))
 })
 
 test_that("repository text excludes private benchmark machine details", {

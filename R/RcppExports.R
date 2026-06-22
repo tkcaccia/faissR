@@ -17,10 +17,6 @@ mean_neighbor_rank_error_cpp <- function(high_indices, embed_indices, k) {
     .Call(`_faissR_mean_neighbor_rank_error_cpp`, high_indices, embed_indices, k)
 }
 
-knn_recall_cpp <- function(approx_indices, exact_indices, k) {
-    .Call(`_faissR_knn_recall_cpp`, approx_indices, exact_indices, k)
-}
-
 majority_vote_knn_labels_cpp <- function(embed_indices, labels, k, n_label_levels) {
     .Call(`_faissR_majority_vote_knn_labels_cpp`, embed_indices, labels, k, n_label_levels)
 }
