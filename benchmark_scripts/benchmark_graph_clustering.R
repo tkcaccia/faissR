@@ -751,6 +751,7 @@ recommend_graph_cluster_methods <- function(cycle_summary, ari_tolerance) {
     candidates <- candidates[order(
       candidates$median_total_sec,
       -ifelse(is.finite(candidates$median_ari), candidates$median_ari, -Inf),
+      -ifelse(is.finite(candidates$min_ari), candidates$min_ari, -Inf),
       -ifelse(is.finite(candidates$median_modularity), candidates$median_modularity, -Inf)
     ), , drop = FALSE]
     candidates[1L, , drop = FALSE]
@@ -788,6 +789,7 @@ recommend_graph_cluster_global_methods <- function(cycle_summary, ari_tolerance)
     candidates <- candidates[order(
       candidates$median_total_sec,
       -ifelse(is.finite(candidates$median_ari), candidates$median_ari, -Inf),
+      -ifelse(is.finite(candidates$min_ari), candidates$min_ari, -Inf),
       -ifelse(is.finite(candidates$median_modularity), candidates$median_modularity, -Inf),
       candidates$graph_backend,
       candidates$cluster_backend,
@@ -1823,7 +1825,7 @@ materials <- c(
   "Each KNN graph is built once per dataset/cycle/k/graph-backend/graph-method/metric/weight combination and reused across clustering methods and clustering backends within that cycle. The graph benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs. `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
   "`graph_cluster_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, modularity, and total time for a compact backwards-compatible summary. `graph_cluster_best_by_dataset_k_target.csv` keeps the best successful row per dataset/k/graph-method/metric/CAGRA-provider/target-cluster-count combination so different neighbourhood sizes, KNN graph routes, CAGRA providers, metrics, and Louvain/Leiden target counts remain auditable.",
   "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, graph size, community counts, selected resolution, target gap, target-resolution mode, resolution-selection rule, candidate-center, selected-candidate and candidate-count diagnostics, CPU thread count, method/metric/provider-aware preflight routes, compact graph-route parameter metadata, and resolved backend metadata.",
-  "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering method row within `ari_tolerance` of the best median ARI for each dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/target-cluster-count combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median total times are broken by higher median ARI and then higher median modularity. When ARI is unavailable it selects the fastest median total-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
+  "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering method row within `ari_tolerance` of the best median ARI for each dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/target-cluster-count combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median total times are broken by higher median ARI, higher minimum ARI across cycles, and then higher median modularity. When ARI is unavailable it selects the fastest median total-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
   "`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where graph or clustering backend was `auto` with recommendations from the same requested graph-backend/graph-method/metric/cluster-backend group and reports the recommendation basis, median speed ratio, median ARI gap, modularity gap, method agreement, and resolved-backend agreement. Speed ratios and quality gaps are `NA` when the required timing, ARI, or modularity values are unavailable or invalid.",
   "`graph_cluster_global_recommendations_from_cycles.csv` selects the fastest successful row within the ARI tolerance after pooling requested graph and clustering backends for each dataset/k/graph-method/metric/CAGRA-provider/target-cluster-count combination. This table audits the best observed CPU/CUDA route instead of only the best route inside each requested-backend group.",
   "`graph_cluster_auto_vs_global_recommendation.csv` compares aggregate auto rows with those global recommendations and records requested-backend agreement, resolved-backend agreement, method agreement, speed ratio, ARI gap, and modularity gap. This table is intended for refining graph and clustering auto selectors across CPU/CUDA choices.",

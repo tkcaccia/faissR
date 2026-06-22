@@ -336,8 +336,9 @@ Louvain/Leiden target counts.
 graph/clustering method row within `ari_tolerance` of the best median ARI for
 each dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/
 target-cluster-count combination;
-when ARI is available and median total times tie, higher median ARI and then
-higher median modularity break the tie. `--ari_tolerance` must be a
+when ARI is available and median total times tie, higher median ARI, higher
+minimum ARI across cycles, and then higher median modularity break the tie.
+`--ari_tolerance` must be a
 non-negative number and is validated before datasets are loaded. `--threads`
 and `--timeout` must be positive integers; `--cycles` must be positive when
 supplied and otherwise defaults to 10. These arguments are validated before

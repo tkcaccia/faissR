@@ -2748,36 +2748,40 @@ test_that("graph benchmark recommendations stay separated by graph method and me
   expect_equal(global$method, rep("leiden", 4L))
 })
 
-test_that("graph benchmark recommendation ties prefer higher ARI then modularity", {
+test_that("graph benchmark recommendation ties prefer stable ARI then modularity", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
     "args <- parse_args()"
   )
   cycle_summary <- data.frame(
-    dataset = c("A", "A", "B", "B"),
-    k = c(15L, 15L, 15L, 15L),
-    graph_backend = c("cpu", "cpu", "cpu", "cpu"),
-    graph_resolved_backend = c("cpu", "cpu", "cpu", "cpu"),
-    cluster_backend = c("cpu", "cpu", "cpu", "cpu"),
-    cluster_resolved_backend = c("cpu", "cpu", "cpu", "cpu"),
-    method = c("lower_ari", "higher_ari", "lower_modularity", "higher_modularity"),
-    weight = c("snn", "snn", "snn", "snn"),
-    success_cycles = c(1L, 1L, 1L, 1L),
-    median_graph_sec = c(0.5, 0.5, 0.5, 0.5),
-    median_cluster_sec = c(0.5, 0.5, 0.5, 0.5),
-    median_total_sec = c(1, 1, 1, 1),
-    median_ari = c(0.89, 0.90, 0.90, 0.90),
-    min_ari = c(0.89, 0.90, 0.90, 0.90),
-    median_modularity = c(0.5, 0.4, 0.3, 0.4),
-    median_n_communities = c(3, 3, 3, 3),
-    median_selected_resolution = c(1, 1, 1, 1),
-    n_clusters_requested = c(3L, 3L, 3L, 3L),
-    n_clusters_source = c("labels", "labels", "labels", "labels"),
-    graph_cached = c(TRUE, TRUE, TRUE, TRUE)
+    dataset = c("A", "A", "B", "B", "C", "C"),
+    k = rep(15L, 6L),
+    graph_backend = rep("cpu", 6L),
+    graph_resolved_backend = rep("cpu", 6L),
+    cluster_backend = rep("cpu", 6L),
+    cluster_resolved_backend = rep("cpu", 6L),
+    method = c(
+      "lower_ari", "higher_ari",
+      "lower_min_ari", "higher_min_ari",
+      "lower_modularity", "higher_modularity"
+    ),
+    weight = rep("snn", 6L),
+    success_cycles = rep(2L, 6L),
+    median_graph_sec = rep(0.5, 6L),
+    median_cluster_sec = rep(0.5, 6L),
+    median_total_sec = rep(1, 6L),
+    median_ari = c(0.89, 0.90, 0.90, 0.90, 0.90, 0.90),
+    min_ari = c(0.89, 0.89, 0.80, 0.85, 0.85, 0.85),
+    median_modularity = c(0.5, 0.4, 0.5, 0.4, 0.3, 0.4),
+    median_n_communities = rep(3, 6L),
+    median_selected_resolution = rep(1, 6L),
+    n_clusters_requested = rep(3L, 6L),
+    n_clusters_source = rep("labels", 6L),
+    graph_cached = rep(TRUE, 6L)
   )
 
   out <- env$recommend_graph_cluster_methods(cycle_summary, ari_tolerance = 0.02)
-  expect_equal(out$method, c("higher_ari", "higher_modularity"))
+  expect_equal(out$method, c("higher_ari", "higher_min_ari", "higher_modularity"))
 })
 
 test_that("graph benchmark best-row ranking uses modularity before speed", {
