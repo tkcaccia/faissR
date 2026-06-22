@@ -628,9 +628,7 @@ faissr_benchmark_route <- function(method) {
     cpu_exact = list(execution_backend = "cpu", public_backend = "cpu", public_method = "exact"),
     rcpphnsw = list(execution_backend = "hnsw", public_backend = "cpu", public_method = "hnsw"),
     faiss_flat_l2 = list(execution_backend = "faiss_flat_l2", public_backend = "cpu", public_method = "flat"),
-    faiss_flat_ip = list(execution_backend = "faiss_flat_ip", public_backend = "cpu", public_method = "flat"),
     faiss_gpu_flat_l2 = list(execution_backend = "faiss_gpu_flat_l2", public_backend = "cuda", public_method = "flat"),
-    faiss_gpu_flat_ip = list(execution_backend = "faiss_gpu_flat_ip", public_backend = "cuda", public_method = "flat"),
     faiss_ivf = list(execution_backend = "faiss_ivf", public_backend = "cpu", public_method = "ivf"),
     faiss_ivfpq = list(execution_backend = "faiss_ivfpq", public_backend = "cpu", public_method = "ivfpq"),
     faiss_gpu_ivf_flat = list(execution_backend = "faiss_gpu_ivf_flat", public_backend = "cuda", public_method = "ivf"),
@@ -921,6 +919,42 @@ benchmark1_method_values <- function(methods, valid_methods = method_table()$met
   values
 }
 
+invalid_worker_method_row <- function(dataset, method, k, metric, n_threads) {
+  data.frame(
+    dataset = dataset %||% NA_character_,
+    method = method %||% NA_character_,
+    implementation = NA_character_,
+    backend = NA_character_,
+    backend_detail = NA_character_,
+    execution_backend = NA_character_,
+    public_backend = NA_character_,
+    public_method = NA_character_,
+    kind = NA_character_,
+    n = NA_integer_,
+    p = NA_integer_,
+    k = k,
+    metric = metric,
+    n_threads = n_threads,
+    status = "failed",
+    time_sec = NA_real_,
+    load_sec = NA_real_,
+    peak_rss_gb = NA_real_,
+    recall_at_k = NA_real_,
+    median_recall_at_k = NA_real_,
+    min_recall_at_k = NA_real_,
+    mean_relative_distance_error = NA_real_,
+    rank_correlation = NA_real_,
+    quality_eval_n = NA_integer_,
+    quality_exact_sec = NA_real_,
+    quality_status = "failed",
+    quality_error = "invalid Benchmark #1 method",
+    output_rows = NA_integer_,
+    output_cols = NA_integer_,
+    error = paste0("invalid Benchmark #1 method: ", method %||% NA_character_),
+    stringsAsFactors = FALSE
+  )
+}
+
 if (worker) {
   dataset <- args$dataset
   data_path <- args$data_path
@@ -928,7 +962,12 @@ if (worker) {
   result_path <- args$result_path
   dir.create(dirname(result_path), recursive = TRUE, showWarnings = FALSE)
   meta <- method_table()
-  mm <- meta[match(method, meta$method), , drop = FALSE]
+  method_match <- match(method, meta$method)
+  if (is.na(method_match)) {
+    write_csv_one(result_path, invalid_worker_method_row(dataset, method, k, metric, n_threads))
+    quit(status = 0L)
+  }
+  mm <- meta[method_match, , drop = FALSE]
   started_total <- proc.time()[["elapsed"]]
   row <- data.frame(
     dataset = dataset,

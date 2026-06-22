@@ -754,6 +754,27 @@ test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
   expect_true(isTRUE(env$method_is_exact("faissR_faiss_gpu_flat_l2", "inner_product")))
   expect_true(isTRUE(env$method_is_exact("faissR_cuda_cuvs_bruteforce", "l2")))
   expect_false(isTRUE(env$method_is_exact("faissR_cuda_cuvs_bruteforce", "inner_product")))
+
+  removed_cpu_route <- env$faissr_benchmark_route("faissR_faiss_flat_ip")
+  removed_gpu_route <- env$faissr_benchmark_route("faissR_faiss_gpu_flat_ip")
+  expect_equal(removed_cpu_route$execution_backend, "faiss_flat_ip")
+  expect_true(is.na(removed_cpu_route$public_backend))
+  expect_true(is.na(removed_cpu_route$public_method))
+  expect_equal(removed_gpu_route$execution_backend, "faiss_gpu_flat_ip")
+  expect_true(is.na(removed_gpu_route$public_backend))
+  expect_true(is.na(removed_gpu_route$public_method))
+
+  invalid_row <- env$invalid_worker_method_row(
+    dataset = "COIL20",
+    method = "faissR_faiss_flat_ip",
+    k = 50L,
+    metric = "inner_product",
+    n_threads = 12L
+  )
+  expect_equal(invalid_row$status, "failed")
+  expect_equal(invalid_row$quality_status, "failed")
+  expect_match(invalid_row$error, "invalid Benchmark #1 method")
+  expect_true(is.na(invalid_row$public_method))
 })
 
 test_that("legacy Benchmark #1 uses canonical direct cuVS IVF row", {
