@@ -310,9 +310,9 @@ policy. Supported edge weights include:
 The graph object stores `k`, weighting, pruning, mutual-edge filtering, optional
 target community count, and KNN backend/method/metric/tuning metadata. It also
 keeps compact-relevant KNN result attributes such as FAISS/cuVS approximation
-parameters, spatial-index metadata, and auto-selection metadata so graph
-benchmarks can report which tuned KNN route produced a graph. It does not
-require `igraph`.
+parameters, spatial-index metadata, auto-selection metadata, and normalized
+metric transform metadata so graph benchmarks can report which tuned KNN route
+and distance semantics produced a graph. It does not require `igraph`.
 Inner-product graph construction inherits the `nn()` metric contract:
 neighbours are ranked by larger raw dot product, while edge weighting receives
 shifted smaller-is-better distances.

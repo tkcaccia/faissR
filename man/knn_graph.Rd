@@ -48,7 +48,8 @@ attribute stores graph-construction metadata: graph size, weighting,
 nearest-neighbour method, metric, tuning policy, optional
 \code{target_n_clusters}, requested/resolved KNN backends, and compact-relevant
 KNN result metadata such as \code{nn_approximation}, \code{nn_faiss},
-\code{nn_cuvs}, \code{nn_spatial_index}, and \code{nn_auto_selection}. For
+\code{nn_cuvs}, \code{nn_spatial_index}, \code{nn_auto_selection},
+\code{nn_metric_transform}, and \code{nn_distance_transform}. For
 precomputed KNN input, \code{nn_backend} prefers the KNN object's resolved
 backend when available, so benchmark metadata records concrete FAISS/cuVS
 routes rather than only the public requested backend.

@@ -2586,7 +2586,9 @@ test_that("graph benchmark extracts compact graph KNN route parameters", {
       predicted_method = "hnsw",
       predicted_device = "cpu",
       slow_tuning = FALSE
-    )
+    ),
+    nn_metric_transform = "row_l2_normalize_then_euclidean_graph_search",
+    nn_distance_transform = "normalized_euclidean_squared_over_2_to_1_minus_similarity"
   )
 
   params <- env$graph_route_parameters(graph)
@@ -2599,6 +2601,8 @@ test_that("graph benchmark extracts compact graph KNN route parameters", {
   expect_match(params, "nn_auto_selection.predicted_method=hnsw", fixed = TRUE)
   expect_match(params, "nn_auto_selection.predicted_device=cpu", fixed = TRUE)
   expect_match(params, "nn_auto_selection.slow_tuning=FALSE", fixed = TRUE)
+  expect_match(params, "nn_metric.metric_transform=row_l2_normalize_then_euclidean_graph_search", fixed = TRUE)
+  expect_match(params, "nn_metric.distance_transform=normalized_euclidean_squared_over_2_to_1_minus_similarity", fixed = TRUE)
 })
 
 test_that("graph benchmark summarizes graph_cluster resolution search diagnostics", {

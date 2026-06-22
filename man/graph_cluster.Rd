@@ -94,7 +94,10 @@ record the public backend request and the device policy after resolving
 and \code{parameters$graph_resolved_backend} record the concrete KNN
 implementation, public graph backend request, and resolved KNN backend.
 \code{parameters$n_vertices} and \code{parameters$n_edges}
-record the clustered graph size for benchmark summaries. When a target
+record the clustered graph size for benchmark summaries.
+\code{parameters$nn_metric_transform} and
+\code{parameters$nn_distance_transform} preserve normalized metric conversion
+metadata from the KNN route that built the graph. When a target
 community count is used, \code{target_n_clusters},
 \code{selected_resolution}, \code{target_gap}, \code{resolution_selection},
 and \code{resolution_search} record the requested target, selected resolution,

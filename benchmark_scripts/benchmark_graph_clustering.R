@@ -443,7 +443,11 @@ graph_route_parameters <- function(graph) {
     nn_cuvs = meta$nn_cuvs %||% list(),
     nn_spatial_index = meta$nn_spatial_index %||% list(),
     nn_sparse = meta$nn_sparse %||% list(),
-    nn_auto_selection = meta$nn_auto_selection %||% list()
+    nn_auto_selection = meta$nn_auto_selection %||% list(),
+    nn_metric = list(
+      metric_transform = meta$nn_metric_transform %||% NA_character_,
+      distance_transform = meta$nn_distance_transform %||% NA_character_
+    )
   )
   keys <- c(
     "strategy", "library", "accelerator", "metric", "transform", "role",
@@ -461,6 +465,7 @@ graph_route_parameters <- function(graph) {
     "requested_intermediate_graph_degree", "requested_search_width",
     "requested_itopk_size", "bins_per_dim", "n_cells",
     "index_type", "search_batch_size", "n_threads",
+    "metric_transform", "distance_transform",
     "policy", "predicted_backend", "predicted_method", "predicted_device",
     "reason", "n", "p", "k", "work_size", "slow_tuning"
   )

@@ -160,8 +160,8 @@ required. When faissR builds neighbours internally, the `faissR_graph` metadata
 includes graph size, weighting, nearest-neighbour method, metric, tuning
 policy, optional `target_n_clusters`, and the requested/resolved public KNN
 backends. It also preserves compact-relevant KNN route metadata such as
-approximation parameters, auto-selection metadata, and FAISS/cuVS/grid
-attributes for benchmark auditing.
+approximation parameters, auto-selection metadata, normalized metric transform
+metadata, and FAISS/cuVS/grid attributes for benchmark auditing.
 
 ## `graph_cluster()`
 
@@ -208,7 +208,10 @@ When `graph_cluster()` builds the graph internally,
 `parameters$graph_resolved_backend` separate the concrete KNN implementation
 from the public graph backend request and resolved KNN route.
 `parameters$n_vertices` and `parameters$n_edges` record the clustered graph
-size for benchmark summaries. When a target community count is used,
+size for benchmark summaries. `parameters$nn_metric_transform` and
+`parameters$nn_distance_transform` preserve normalized cosine/correlation graph
+construction metadata from the KNN route.
+When a target community count is used,
 `target_n_clusters`, `selected_resolution`, `target_gap`,
 `resolution_selection`, and `resolution_search` record the requested target,
 selected resolution, final community-count gap, deterministic selection rule,

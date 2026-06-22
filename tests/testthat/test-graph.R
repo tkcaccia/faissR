@@ -173,6 +173,33 @@ test_that("knn_graph passes method metric and tuning to internal KNN", {
   expect_equal(meta$resolved_backend, "cpu")
 })
 
+test_that("knn_graph preserves normalized metric transform metadata", {
+  set.seed(50412)
+  x <- matrix(rnorm(180L), ncol = 3L)
+
+  g <- knn_graph(
+    x,
+    k = 6L,
+    backend = "cpu",
+    method = "grid",
+    metric = "cosine",
+    weight = "distance",
+    n_threads = 2L
+  )
+  meta <- attr(g, "faissR_graph")
+
+  expect_s3_class(g, "faissR_graph")
+  expect_match(meta$nn_metric_transform, "normalize_then_euclidean")
+  expect_equal(
+    meta$nn_distance_transform,
+    "normalized_euclidean_squared_over_2_to_1_minus_similarity"
+  )
+
+  cl <- graph_cluster(g, method = "louvain", backend = "cpu", n_threads = 2L)
+  expect_equal(cl$parameters$nn_metric_transform, meta$nn_metric_transform)
+  expect_equal(cl$parameters$nn_distance_transform, meta$nn_distance_transform)
+})
+
 test_that("knn_graph stores KNN route metadata for benchmark auditing", {
   knn <- list(
     indices = matrix(c(
