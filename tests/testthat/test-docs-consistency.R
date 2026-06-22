@@ -522,3 +522,18 @@ test_that("autotuning method settings table keeps public and implementation labe
   expect_length(separator_cells, 4L)
   expect_true(any(grepl("not separate public", lines, fixed = TRUE)))
 })
+
+test_that("autotuning docs describe CUDA auto non-Euclidean routing", {
+  docs_file <- test_path("../../docs/autotuning.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  expect_true(grepl("FAISS[[:space:]]+GPU[[:space:]]+Flat[[:space:]]+IP[[:space:]]+routes", prose))
+  expect_true(grepl("cosine", prose, fixed = TRUE))
+  expect_true(grepl("correlation", prose, fixed = TRUE))
+  expect_true(grepl("inner-product", prose, fixed = TRUE))
+  expect_true(grepl("cuVS-only runtimes", prose, fixed = TRUE))
+  expect_true(grepl("non-grid non-Euclidean searches on CPU", prose, fixed = TRUE))
+})

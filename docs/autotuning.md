@@ -127,7 +127,11 @@ Policy summary:
   Flat metric routes when FAISS is available.
 - `backend = "cuda", method = "auto"`: CUDA grid for large 2D/3D self-KNN;
   FAISS GPU Flat for small and medium datasets where exact GPU search is fast;
-  FAISS GPU CAGRA for very large self-KNN.
+  FAISS GPU CAGRA for very large Euclidean self-KNN when available; and FAISS
+  GPU Flat IP routes for cosine, correlation, and inner-product searches when
+  FAISS GPU Flat is available. On cuVS-only runtimes, `backend = "auto"` keeps
+  non-grid non-Euclidean searches on CPU instead of selecting an unavailable
+  GPU index.
 
 Observed examples from the run:
 
