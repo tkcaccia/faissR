@@ -1255,6 +1255,10 @@ test_that("graph benchmark defaults cover requested methods backends and k grid"
     "Invalid value\\(s\\): -1"
   )
   expect_error(
+    env$required_positive_int_values(c("15.5"), "k_values"),
+    "Invalid value\\(s\\): 15.5"
+  )
+  expect_error(
     env$required_positive_int_values(character(), "k_values"),
     "at least one positive integer"
   )
@@ -1313,6 +1317,10 @@ test_that("graph benchmark target cluster mode is explicit", {
   expect_equal(env$required_positive_int_arg("600", "timeout"), 600L)
   expect_equal(env$required_positive_int_arg("10", "cycles"), 10L)
   expect_error(env$required_positive_int_arg("many", "cycles"), "positive integer")
+  expect_error(env$required_positive_int_arg("1.5", "cycles"), "positive integer")
+  expect_equal(env$required_positive_int_arg("42", "seed"), 42L)
+  expect_error(env$required_positive_int_arg("many", "seed"), "positive integer")
+  expect_error(env$required_positive_int_arg(0, "seed"), "positive integer")
   expect_equal(env$required_nonnegative_numeric_arg("0.01", "ari_tolerance"), 0.01)
   expect_equal(env$required_nonnegative_numeric_arg(0, "ari_tolerance"), 0)
   expect_error(
