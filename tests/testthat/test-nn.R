@@ -167,6 +167,22 @@ test_that("nn_capabilities documents the public method metric matrix", {
     caps$method == "nndescent" & caps$metric == "inner_product"
   ]))
   expect_true(all(!caps$supported[caps$method == "vptree" & caps$metric == "inner_product"]))
+
+  cuda_bruteforce_l2 <- caps[
+    caps$backend == "cuda" & caps$method == "bruteforce" & caps$metric == "euclidean",
+    ,
+    drop = FALSE
+  ]
+  cuda_bruteforce_cor <- caps[
+    caps$backend == "cuda" & caps$method == "bruteforce" & caps$metric == "correlation",
+    ,
+    drop = FALSE
+  ]
+  expect_match(cuda_bruteforce_l2$implementation, "cuVS brute force")
+  expect_match(cuda_bruteforce_l2$notes, "direct cuVS brute force")
+  expect_equal(cuda_bruteforce_cor$implementation, "FAISS GPU Flat")
+  expect_match(cuda_bruteforce_cor$notes, "FAISS GPU Flat")
+  expect_match(cuda_bruteforce_cor$notes, "Euclidean/L2-only")
 })
 
 test_that("nn_capabilities agrees with public backend resolver", {

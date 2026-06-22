@@ -1587,8 +1587,13 @@ nn_capability_row <- function(method, backend, metric) {
       implementation <- "native CPU exact"
       notes <- "CPU exact scorer supports all public metrics."
     } else {
-      implementation <- "FAISS GPU Flat or cuVS brute force"
-      notes <- "Cosine/correlation and inner-product route through FAISS GPU Flat; Euclidean brute force can use cuVS when available."
+      if (euclidean) {
+        implementation <- "FAISS GPU Flat or cuVS brute force"
+        notes <- "Euclidean CUDA exact/brute-force search can use FAISS GPU Flat when available, otherwise direct cuVS brute force when cuVS is available."
+      } else {
+        implementation <- "FAISS GPU Flat"
+        notes <- "CUDA cosine, correlation, and inner-product exact/brute-force search require FAISS GPU Flat metric-aware routes; direct cuVS brute force is Euclidean/L2-only in faissR."
+      }
     }
   } else if (identical(method, "flat")) {
     supported <- all_metrics
