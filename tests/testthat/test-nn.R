@@ -613,9 +613,10 @@ test_that("nn_capabilities can report current runtime availability", {
   )
   expect_equal(nrow(runtime_caps), nrow(caps))
   expect_true(all(c(
-    "resolved_backend", "runtime_available", "runtime_notes"
+    "resolved_backend", "runtime_available", "runtime_reason", "runtime_notes"
   ) %in% names(runtime_caps)))
   expect_type(runtime_caps$runtime_available, "logical")
+  expect_true(all(!is.na(runtime_caps$runtime_reason)))
   expect_true(all(!is.na(runtime_caps$runtime_notes)))
 
   cpu_exact <- runtime_caps[
@@ -627,6 +628,7 @@ test_that("nn_capabilities can report current runtime availability", {
   ]
   expect_equal(cpu_exact$resolved_backend, "cpu")
   expect_true(cpu_exact$runtime_available)
+  expect_equal(cpu_exact$runtime_reason, "available")
 
   cpu_flat <- runtime_caps[
     runtime_caps$backend == "cpu" &
@@ -637,6 +639,7 @@ test_that("nn_capabilities can report current runtime availability", {
   ]
   expect_equal(cpu_flat$resolved_backend, "faiss_flat_l2")
   expect_equal(cpu_flat$runtime_available, faiss_available())
+  expect_equal(cpu_flat$runtime_reason, if (faiss_available()) "available" else "missing_faiss")
 
   cuda_flat <- runtime_caps[
     runtime_caps$backend == "cuda" &
@@ -647,6 +650,7 @@ test_that("nn_capabilities can report current runtime availability", {
   ]
   expect_equal(cuda_flat$resolved_backend, "faiss_gpu_flat_l2")
   expect_equal(cuda_flat$runtime_available, faiss_gpu_available())
+  expect_equal(cuda_flat$runtime_reason, if (faiss_gpu_available()) "available" else "missing_faiss_gpu")
 
   unsupported <- runtime_caps[
     runtime_caps$backend == "cpu" &
@@ -657,6 +661,7 @@ test_that("nn_capabilities can report current runtime availability", {
   ]
   expect_false(unsupported$supported)
   expect_false(unsupported$runtime_available)
+  expect_equal(unsupported$runtime_reason, "unsupported_combination")
   expect_true(is.na(unsupported$resolved_backend))
 })
 

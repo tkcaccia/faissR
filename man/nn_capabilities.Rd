@@ -7,8 +7,12 @@ nn_capabilities(runtime = FALSE)
 \arguments{
 \item{runtime}{Logical; when \code{FALSE} (the default), report support by
 design without checking the current compiled/runtime libraries. When
-\code{TRUE}, add \code{resolved_backend}, \code{runtime_available}, and
-\code{runtime_notes} columns for the current installation.}
+\code{TRUE}, add \code{resolved_backend}, \code{runtime_available},
+\code{runtime_reason}, and \code{runtime_notes} columns for the current
+installation. \code{runtime_reason} uses stable labels such as
+\code{"available"}, \code{"unsupported_combination"}, \code{"missing_faiss"},
+\code{"missing_faiss_gpu"}, \code{"missing_cuda"}, and \code{"missing_cuvs"}
+for benchmark preflight tables.}
 }
 \value{
 A data frame with one row per public \code{method}, \code{backend}

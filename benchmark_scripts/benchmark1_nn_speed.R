@@ -667,15 +667,16 @@ faissr_benchmark_route <- function(method) {
 benchmark1_execution_backend_status <- function(execution_backend) {
   backend <- as.character(execution_backend)[1L]
   if (is.na(backend) || !nzchar(backend)) {
-    return(list(runtime_available = NA, runtime_notes = NA_character_))
+    return(list(runtime_available = NA, runtime_reason = NA_character_, runtime_notes = NA_character_))
   }
   if (backend %in% c("cpu", "cpu_nndescent", "cpu_grid")) {
-    return(list(runtime_available = TRUE, runtime_notes = "Native CPU faissR route is available."))
+    return(list(runtime_available = TRUE, runtime_reason = "available", runtime_notes = "Native CPU faissR route is available."))
   }
   if (identical(backend, "hnsw")) {
     ok <- available_pkg("RcppHNSW")
     return(list(
       runtime_available = ok,
+      runtime_reason = if (ok) "available" else "missing_rcpphnsw",
       runtime_notes = if (ok) "RcppHNSW fallback route is available." else "RcppHNSW is not installed."
     ))
   }
@@ -683,6 +684,7 @@ benchmark1_execution_backend_status <- function(execution_backend) {
     ok <- isTRUE(faissR::faiss_gpu_available())
     return(list(
       runtime_available = ok,
+      runtime_reason = if (ok) "available" else "missing_faiss_gpu",
       runtime_notes = if (ok) "FAISS GPU route is available." else "FAISS GPU support is not available in this build."
     ))
   }
@@ -690,6 +692,7 @@ benchmark1_execution_backend_status <- function(execution_backend) {
     ok <- isTRUE(faissR::cuvs_available())
     return(list(
       runtime_available = ok,
+      runtime_reason = if (ok) "available" else "missing_cuvs",
       runtime_notes = if (ok) "Direct cuVS route is available." else "RAPIDS cuVS support is not available in this build."
     ))
   }
@@ -697,6 +700,7 @@ benchmark1_execution_backend_status <- function(execution_backend) {
     ok <- isTRUE(faissR::cuda_available())
     return(list(
       runtime_available = ok,
+      runtime_reason = if (ok) "available" else "missing_cuda",
       runtime_notes = if (ok) "Native CUDA route is available." else "Native CUDA support is not available in this build."
     ))
   }
@@ -704,10 +708,11 @@ benchmark1_execution_backend_status <- function(execution_backend) {
     ok <- isTRUE(faissR::faiss_available())
     return(list(
       runtime_available = ok,
+      runtime_reason = if (ok) "available" else "missing_faiss",
       runtime_notes = if (ok) "FAISS CPU route is available." else "FAISS CPU support is not available in this build."
     ))
   }
-  list(runtime_available = TRUE, runtime_notes = "No faissR runtime dependency detected.")
+  list(runtime_available = TRUE, runtime_reason = "available", runtime_notes = "No faissR runtime dependency detected.")
 }
 
 benchmark1_runtime_capabilities <- function(methods, metrics = c("l2", "cosine", "correlation", "inner_product")) {
@@ -737,7 +742,7 @@ benchmark1_runtime_capabilities <- function(methods, metrics = c("l2", "cosine",
       runtime <- if (startsWith(method, "faissR_")) {
         benchmark1_execution_backend_status(methods$execution_backend[[i]])
       } else {
-        list(runtime_available = NA, runtime_notes = NA_character_)
+        list(runtime_available = NA, runtime_reason = NA_character_, runtime_notes = NA_character_)
       }
       rows[[r]] <- data.frame(
         method = method,
@@ -753,7 +758,9 @@ benchmark1_runtime_capabilities <- function(methods, metrics = c("l2", "cosine",
         metric_notes = if (isTRUE(applicable$ok)) "" else applicable$reason,
         public_supported = if (!is.null(public_cap)) isTRUE(public_cap$supported[[1L]]) else NA,
         public_resolved_backend = if (!is.null(public_cap) && "resolved_backend" %in% names(public_cap)) public_cap$resolved_backend[[1L]] else NA_character_,
+        public_runtime_reason = if (!is.null(public_cap) && "runtime_reason" %in% names(public_cap)) public_cap$runtime_reason[[1L]] else NA_character_,
         runtime_available = runtime$runtime_available,
+        runtime_reason = runtime$runtime_reason,
         runtime_notes = runtime$runtime_notes,
         stringsAsFactors = FALSE
       )
@@ -1416,7 +1423,7 @@ materials <- c(
   "The Flat rows use the public `method = \"flat\"` route. When `metric = \"inner_product\"` is explicitly requested, faissR dispatches the same public Flat rows to the appropriate FAISS inner-product index internally instead of listing duplicate Flat-IP methods.",
   "For faissR rows, `execution_backend` records the internal backend label used by `nn_compute()`, while `public_backend` and `public_method` record the equivalent public `nn(..., backend = , method = )` route. This separates legacy benchmark labels from the public API.",
   "The benchmark result table includes `backend_detail` to distinguish FAISS GPU indexes that use NVIDIA cuVS internally from direct RAPIDS cuVS API calls.",
-  "`benchmark1_runtime_capabilities.csv` records the faissR Benchmark #1 method/metric preflight table, including legacy Benchmark #1 method labels, equivalent public `nn()` routes where available, execution backends, metric support, and current runtime availability.",
+  "`benchmark1_runtime_capabilities.csv` records the faissR Benchmark #1 method/metric preflight table, including legacy Benchmark #1 method labels, equivalent public `nn()` routes where available, execution backends, metric support, `public_runtime_reason`, `runtime_available`, `runtime_reason`, and current runtime availability notes.",
   "External R package methods tested: Rnanoflann, RANN kd-tree and bd-tree, rnndescent RPF/RNND/NND/brute-force, RcppHNSW, RcppAnnoy, BiocNeighbors VP-tree/HNSW/Annoy, uwot::similarity_graph with nn_method = fnn, annoy, hnsw, and nndescent, and cuda.ml KNN if an installed cuda.ml package exposes a recognised KNN routine. External RcppHNSW rows use Euclidean, cosine, or inner-product (`distance = \"ip\"`) modes when those metrics are requested; correlation is recorded as unavailable for the external RcppHNSW row because Benchmark #1 does not row-center data before calling that package.",
   "umap::umap.knn was included as a precomputed-neighbour consumer test, not as a standalone KNN search algorithm. Rtsne::Rtsne_neighbors was marked not applicable because it consumes precomputed neighbours and optimizes t-SNE rather than exporting a standalone KNN search.",
   "",

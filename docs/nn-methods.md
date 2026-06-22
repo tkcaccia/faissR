@@ -37,8 +37,11 @@ as a data frame for benchmark preflight checks, including rows for
 `backend = "auto"`, `"cpu"`, and `"cuda"`. Use
 `nn_capabilities(runtime = TRUE)` when a benchmark script also needs the
 current build/runtime status; it appends `resolved_backend`,
-`runtime_available`, and `runtime_notes` columns so FAISS GPU, CUDA, and cuVS
-rows can be skipped or labelled before computation starts.
+`runtime_available`, `runtime_reason`, and `runtime_notes` columns so FAISS
+GPU, CUDA, and cuVS rows can be skipped or labelled before computation starts.
+The `runtime_reason` labels are machine-readable, for example `available`,
+`unsupported_combination`, `missing_faiss`, `missing_faiss_gpu`,
+`missing_cuda`, and `missing_cuvs`.
 
 ## Method Summary
 

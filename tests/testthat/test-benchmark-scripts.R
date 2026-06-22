@@ -245,6 +245,7 @@ test_that("NN metric benchmark consumes runtime capability columns when present"
   expect_true(isTRUE(cpu_flat$supported))
   expect_equal(cpu_flat$resolved_backend, "faiss_flat_l2")
   expect_equal(cpu_flat$runtime_available, faiss_available())
+  expect_equal(cpu_flat$runtime_reason, if (faiss_available()) "available" else "missing_faiss")
   expect_true(nzchar(cpu_flat$runtime_notes))
 
   cuda_flat <- env$is_expected_skip(caps, "cuda", "flat", "euclidean")
@@ -885,7 +886,7 @@ test_that("legacy Benchmark #1 records faissR runtime capability preflight", {
   expect_true(all(c(
     "method", "metric", "execution_backend", "public_backend",
     "public_method", "public_metric", "metric_supported",
-    "runtime_available", "runtime_notes"
+    "public_runtime_reason", "runtime_available", "runtime_reason", "runtime_notes"
   ) %in% names(caps)))
   expect_true("faissR_faiss_gpu_flat_l2" %in% caps$method)
 
@@ -899,6 +900,7 @@ test_that("legacy Benchmark #1 records faissR runtime capability preflight", {
   expect_equal(cpu_flat$public_method, "flat")
   expect_equal(cpu_flat$public_metric, "euclidean")
   expect_equal(cpu_flat$runtime_available, faiss_available())
+  expect_equal(cpu_flat$runtime_reason, if (faiss_available()) "available" else "missing_faiss")
 
   cpu_nnd_ip <- caps[
     caps$method == "faissR_cpu_nndescent" & caps$metric == "inner_product",
@@ -2013,7 +2015,7 @@ test_that("graph benchmark preflights runtime-unavailable graph routes", {
   caps <- env$graph_nn_capabilities()
 
   expect_true(all(c(
-    "resolved_backend", "runtime_available", "runtime_notes"
+    "resolved_backend", "runtime_available", "runtime_reason", "runtime_notes"
   ) %in% names(caps)))
 
   cuda_skip <- env$graph_build_expected_skip(

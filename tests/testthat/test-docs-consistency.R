@@ -753,6 +753,26 @@ test_that("benchmark documentation describes k-means runtime reason codes", {
   expect_true(grepl("missing_gpu_kmeans_backend", prose, fixed = TRUE))
 })
 
+test_that("NN capability docs describe runtime reason codes", {
+  docs_files <- c(
+    test_path("../../docs", c("backend-capabilities.md", "nn-methods.md", "benchmarks.md")),
+    test_path("../../man/nn_capabilities.Rd")
+  )
+  docs_files <- docs_files[file.exists(docs_files)]
+  if (!length(docs_files)) {
+    skip("GitHub or reference documentation files are not available in this installed-package test context.")
+  }
+
+  prose <- paste(unlist(lapply(docs_files, readLines, warn = FALSE)), collapse = " ")
+  expect_true(grepl("runtime_reason", prose, fixed = TRUE))
+  expect_true(grepl("runtime_notes", prose, fixed = TRUE))
+  expect_true(grepl("missing_faiss", prose, fixed = TRUE))
+  expect_true(grepl("missing_faiss_gpu", prose, fixed = TRUE))
+  expect_true(grepl("missing_cuda", prose, fixed = TRUE))
+  expect_true(grepl("missing_cuvs", prose, fixed = TRUE))
+  expect_true(grepl("unsupported_combination", prose, fixed = TRUE))
+})
+
 test_that("benchmark documentation distinguishes requested and actual graph cluster counts", {
   docs_file <- test_path("../../docs/benchmarks.md")
   if (!file.exists(docs_file)) {

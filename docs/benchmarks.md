@@ -79,7 +79,8 @@ cuVS internally from direct RAPIDS cuVS API calls.
 The file `benchmark1_runtime_capabilities.csv` records the faissR Benchmark #1
 method/metric preflight table, including legacy Benchmark #1 method labels,
 equivalent public `nn()` routes where available, execution backends, metric
-support, and current runtime availability. Runtime-unavailable faissR rows are
+support, `public_runtime_reason`, `runtime_available`, `runtime_reason`, and
+current runtime availability notes. Runtime-unavailable faissR rows are
 recorded as skipped before loading dataset matrices.
 
 If a non-standard runtime library directory is needed, set `FAISSR_ENV_DIR`
@@ -236,6 +237,9 @@ dataset/k/graph-backend/cluster-backend/method/weight and reports success
 counts, median/min/max graph, clustering, and total time, ARI stability,
 modularity stability, graph size, community counts, CPU thread count, preflight
 routes, and resolved backend metadata.
+`graph_cluster_nn_capabilities.csv` stores the graph-construction
+`nn_capabilities(runtime = TRUE)` table, including `runtime_reason` and
+`runtime_notes` for runtime-unavailable KNN routes.
 When `n_clusters` is used, graph-clustering result metadata also records
 `target_gap`, `resolution_selection`, and a `resolution_search` table whose
 selected row is marked with `selected = TRUE`, so target-count resolution
@@ -389,7 +393,9 @@ the public backend resolver, then saved as `status = "expected_skip"` rows with
 `nn_metric_benchmark_config.csv`, the raw row-level result table is saved as
 `nn_metric_benchmark_results.csv`, and the runtime-aware capability table used
 for the run is saved as `nn_metric_capabilities.csv`, including public
-`backend = "auto"`, `"cpu"`, and `"cuda"` rows. For `backend = "auto"`, the
+`backend = "auto"`, `"cpu"`, and `"cuda"` rows plus `resolved_backend`,
+`runtime_available`, `runtime_reason`, and `runtime_notes`. For
+`backend = "auto"`, the
 preflight first checks the explicit auto capability row, then checks the
 resolved CPU/CUDA route and records expected skips when that route requires
 unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.

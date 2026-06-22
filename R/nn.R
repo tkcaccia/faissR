@@ -1627,8 +1627,11 @@ faissr_option <- function(name, default = NULL) {
 #'
 #' @param runtime Logical; when `FALSE` (the default), report support by design
 #'   without checking the current compiled/runtime libraries. When `TRUE`, add
-#'   `resolved_backend`, `runtime_available`, and `runtime_notes` columns for
-#'   the current installation.
+#'   `resolved_backend`, `runtime_available`, `runtime_reason`, and
+#'   `runtime_notes` columns for the current installation. `runtime_reason`
+#'   uses stable labels such as `"available"`, `"unsupported_combination"`,
+#'   `"missing_faiss"`, `"missing_faiss_gpu"`, `"missing_cuda"`, and
+#'   `"missing_cuvs"` for benchmark preflight tables.
 #' @return A data frame with one row per public `method`, `backend` (`"auto"`,
 #'   `"cpu"`, or `"cuda"`), and `metric` combination. Columns include
 #'   `supported`, `exact`, `implementation`, and `notes`. If `runtime = TRUE`,
@@ -1669,6 +1672,7 @@ nn_capability_runtime_row <- function(row) {
     return(data.frame(
       resolved_backend = NA_character_,
       runtime_available = FALSE,
+      runtime_reason = "unsupported_combination",
       runtime_notes = "Unsupported method/backend/metric combination.",
       stringsAsFactors = FALSE
     ))
@@ -1681,6 +1685,7 @@ nn_capability_runtime_row <- function(row) {
     return(data.frame(
       resolved_backend = NA_character_,
       runtime_available = FALSE,
+      runtime_reason = "resolver_error",
       runtime_notes = conditionMessage(resolved),
       stringsAsFactors = FALSE
     ))
@@ -1693,6 +1698,7 @@ nn_capability_runtime_row <- function(row) {
   data.frame(
     resolved_backend = resolved,
     runtime_available = isTRUE(availability$available),
+    runtime_reason = availability$reason %||% if (isTRUE(availability$available)) "available" else "unavailable_runtime",
     runtime_notes = availability$notes,
     stringsAsFactors = FALSE
   )
@@ -1709,6 +1715,7 @@ nn_cuda_auto_runtime_available <- function(metric,
       isTRUE(faiss_gpu_available_value)
     return(list(
       available = ok,
+      reason = if (ok) "available" else "missing_cuda_route",
       notes = if (ok) {
         "CUDA auto Euclidean route is available through native CUDA, FAISS GPU, or cuVS."
       } else {
@@ -1719,6 +1726,7 @@ nn_cuda_auto_runtime_available <- function(metric,
   ok <- isTRUE(faiss_gpu_available_value)
   list(
     available = ok,
+    reason = if (ok) "available" else "missing_faiss_gpu",
     notes = if (ok) {
       "CUDA auto non-Euclidean route is available through FAISS GPU Flat metric-aware search."
     } else if (isTRUE(cuda_available_value) && metric %in% c("cosine", "correlation")) {
@@ -1736,19 +1744,20 @@ nn_cuda_auto_runtime_available <- function(metric,
 nn_resolved_backend_available <- function(backend) {
   backend <- as.character(backend)[1L]
   if (is.na(backend) || !nzchar(backend)) {
-    return(list(available = FALSE, notes = "No resolved backend."))
+    return(list(available = FALSE, reason = "missing_resolved_backend", notes = "No resolved backend."))
   }
   if (backend %in% c(
     "auto", "cpu", "cpu_auto", "cpu_grid", "cpu_vptree", "cpu_sparse",
     "cpu_nndescent", "cpu_approx", "grid", "grid2d", "grid3d",
     "cpu_grid2d", "cpu_grid3d", "vptree", "sparse", "sparse_cpu"
   )) {
-    return(list(available = TRUE, notes = "Native CPU route is available."))
+    return(list(available = TRUE, reason = "available", notes = "Native CPU route is available."))
   }
   if (identical(backend, "hnsw")) {
     ok <- requireNamespace("RcppHNSW", quietly = TRUE)
     return(list(
       available = ok,
+      reason = if (ok) "available" else "missing_rcpphnsw",
       notes = if (ok) "RcppHNSW fallback is available." else "RcppHNSW fallback is not installed."
     ))
   }
@@ -1756,6 +1765,7 @@ nn_resolved_backend_available <- function(backend) {
     ok <- isTRUE(faiss_gpu_available())
     return(list(
       available = ok,
+      reason = if (ok) "available" else "missing_faiss_gpu",
       notes = if (ok) "FAISS GPU route is available." else "FAISS GPU support is not available in this build."
     ))
   }
@@ -1763,6 +1773,7 @@ nn_resolved_backend_available <- function(backend) {
     ok <- isTRUE(cuvs_available())
     return(list(
       available = ok,
+      reason = if (ok) "available" else "missing_cuvs",
       notes = if (ok) "cuVS route is available." else "cuVS support is not available in this build."
     ))
   }
@@ -1770,6 +1781,7 @@ nn_resolved_backend_available <- function(backend) {
     ok <- isTRUE(cuda_available())
     return(list(
       available = ok,
+      reason = if (ok) "available" else "missing_cuda",
       notes = if (ok) "Native CUDA route is available." else "Native CUDA support is not available in this build."
     ))
   }
@@ -1777,10 +1789,11 @@ nn_resolved_backend_available <- function(backend) {
     ok <- isTRUE(faiss_available())
     return(list(
       available = ok,
+      reason = if (ok) "available" else "missing_faiss",
       notes = if (ok) "FAISS CPU route is available." else "FAISS CPU support is not available in this build."
     ))
   }
-  list(available = TRUE, notes = "No additional runtime dependency detected.")
+  list(available = TRUE, reason = "available", notes = "No additional runtime dependency detected.")
 }
 
 nn_capability_row <- function(method, backend, metric) {
