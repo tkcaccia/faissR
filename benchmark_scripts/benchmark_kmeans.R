@@ -305,6 +305,24 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
       rule_detail = rule_detail
     ))
   }
+  if (centers == n) {
+    return(list(
+      policy = "auto",
+      max_iter = 1L,
+      n_init = 1L,
+      tol = 0,
+      work = as.numeric(work),
+      n_per_center = as.numeric(n_per_center),
+      high_dim = isTRUE(high_dim),
+      large_n = isTRUE(large_n),
+      many_centers = TRUE,
+      small_many_centers = FALSE,
+      few_points_many_centers = TRUE,
+      backend_policy = backend_policy,
+      rule = "singleton_exact_identity",
+      rule_detail = rule_detail
+    ))
+  }
   max_iter <- if (large_n || work >= 5e9) {
     50L
   } else if (high_dim || (many_centers && !small_many_centers && !few_points_many_centers) || work >= 5e8) {
@@ -362,6 +380,7 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
   nbytes_threshold <- kmeans_option_number("kmeans_cuda_nbytes_threshold", 256 * 1024^2, min_value = 1)
   large_n_threshold <- kmeans_option_integer("kmeans_cuda_large_n_threshold", 50000L, min_value = 1L)
   large_p_threshold <- kmeans_option_integer("kmeans_cuda_large_p_threshold", 128L, min_value = 1L)
+  min_n_per_center <- kmeans_option_number("kmeans_cuda_min_n_per_center", 20, min_value = 1)
   helper <- tryCatch(
     getFromNamespace("kmeans_auto_backend_policy", "faissR"),
     error = function(e) NULL
@@ -379,7 +398,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
       large_n_threshold = large_n_threshold,
-      large_p_threshold = large_p_threshold
+      large_p_threshold = large_p_threshold,
+      min_n_per_center = min_n_per_center
     ))
   }
   n <- suppressWarnings(as.double(n))
@@ -397,7 +417,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
       large_n_threshold = large_n_threshold,
-      large_p_threshold = large_p_threshold
+      large_p_threshold = large_p_threshold,
+      min_n_per_center = min_n_per_center
     ))
   }
   work <- n * p * centers
@@ -413,7 +434,36 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
       large_n_threshold = large_n_threshold,
-      large_p_threshold = large_p_threshold
+      large_p_threshold = large_p_threshold,
+      min_n_per_center = min_n_per_center
+    ))
+  }
+  if (centers == n) {
+    return(list(
+      prefer_cuda = FALSE,
+      reason = "singleton_exact_identity",
+      work = as.numeric(work),
+      nbytes = as.numeric(nbytes),
+      n_per_center = as.numeric(n_per_center),
+      work_threshold = work_threshold,
+      nbytes_threshold = nbytes_threshold,
+      large_n_threshold = large_n_threshold,
+      large_p_threshold = large_p_threshold,
+      min_n_per_center = min_n_per_center
+    ))
+  }
+  if (n_per_center < min_n_per_center && nbytes < nbytes_threshold) {
+    return(list(
+      prefer_cuda = FALSE,
+      reason = "few_points_per_center_cpu_preferred",
+      work = as.numeric(work),
+      nbytes = as.numeric(nbytes),
+      n_per_center = as.numeric(n_per_center),
+      work_threshold = work_threshold,
+      nbytes_threshold = nbytes_threshold,
+      large_n_threshold = large_n_threshold,
+      large_p_threshold = large_p_threshold,
+      min_n_per_center = min_n_per_center
     ))
   }
   prefer <- work >= work_threshold ||
@@ -437,7 +487,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
     work_threshold = work_threshold,
     nbytes_threshold = nbytes_threshold,
     large_n_threshold = large_n_threshold,
-    large_p_threshold = large_p_threshold
+    large_p_threshold = large_p_threshold,
+    min_n_per_center = min_n_per_center
   )
 }
 

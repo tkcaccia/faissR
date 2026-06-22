@@ -36,7 +36,9 @@
 #'   `centers = 1` uses the exact column-mean solution for `backend = "auto"`
 #'   and `"cpu"` with `max_iter = 1`, `n_init = 1`, and `tol = 0`, records
 #'   `single_cluster_exact_mean`, and stays on CPU because no iterative
-#'   k-means backend can improve that solution.
+#'   k-means backend can improve that solution. `centers = nrow(data)` uses the
+#'   exact singleton assignment for `backend = "auto"` and `"cpu"` and records
+#'   `singleton_exact_identity`.
 #'   `"fixed"`, `"off"`, and `"none"` use the historical fixed defaults unless
 #'   `max_iter`, `n_init`, or `tol` are explicitly supplied.
 #' @return A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
@@ -61,7 +63,8 @@
 #'   `options(faissR.kmeans_cuda_work_threshold = ...)`,
 #'   `options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
 #'   `options(faissR.kmeans_cuda_large_n_threshold = ...)`, or
-#'   `options(faissR.kmeans_cuda_large_p_threshold = ...)`.
+#'   `options(faissR.kmeans_cuda_large_p_threshold = ...)`, or
+#'   `options(faissR.kmeans_cuda_min_n_per_center = ...)`.
 #'   `parameters$tuning$selection` stores the static no-pilot backend and
 #'   effective-parameter decision used for benchmark auditing, including
 #'   `explicit_backend` and `backend_decision` fields that distinguish an
@@ -150,8 +153,16 @@ fast_kmeans <- function(data,
     tuning = tuning
   )
 
-  if (centers == 1L && backend %in% c("auto", "cpu")) {
+  if (centers == 1L && identical(backend, "cpu")) {
     return(finish_trivial_one_cluster_kmeans(
+      x = x,
+      tuning_metadata = auto_params,
+      requested_backend = requested_backend,
+      resolved_backend = "cpu"
+    ))
+  }
+  if (centers == nrow(x) && identical(backend, "cpu")) {
+    return(finish_trivial_singleton_kmeans(
       x = x,
       tuning_metadata = auto_params,
       requested_backend = requested_backend,
@@ -308,6 +319,7 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
   nbytes_threshold <- kmeans_option_number("kmeans_cuda_nbytes_threshold", 256 * 1024^2, min_value = 1)
   large_n_threshold <- kmeans_option_integer("kmeans_cuda_large_n_threshold", 50000L, min_value = 1L)
   large_p_threshold <- kmeans_option_integer("kmeans_cuda_large_p_threshold", 128L, min_value = 1L)
+  min_n_per_center <- kmeans_option_number("kmeans_cuda_min_n_per_center", 20, min_value = 1)
   if (is.null(n) || is.null(p) || is.null(centers)) {
     return(list(
       prefer_cuda = TRUE,
@@ -318,7 +330,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
       large_n_threshold = large_n_threshold,
-      large_p_threshold = large_p_threshold
+      large_p_threshold = large_p_threshold,
+      min_n_per_center = min_n_per_center
     ))
   }
   n <- suppressWarnings(as.double(n))
@@ -336,7 +349,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
       large_n_threshold = large_n_threshold,
-      large_p_threshold = large_p_threshold
+      large_p_threshold = large_p_threshold,
+      min_n_per_center = min_n_per_center
     ))
   }
   work <- n * p * centers
@@ -352,7 +366,36 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
       large_n_threshold = large_n_threshold,
-      large_p_threshold = large_p_threshold
+      large_p_threshold = large_p_threshold,
+      min_n_per_center = min_n_per_center
+    ))
+  }
+  if (centers == n) {
+    return(list(
+      prefer_cuda = FALSE,
+      reason = "singleton_exact_identity",
+      work = as.numeric(work),
+      nbytes = as.numeric(nbytes),
+      n_per_center = as.numeric(n_per_center),
+      work_threshold = work_threshold,
+      nbytes_threshold = nbytes_threshold,
+      large_n_threshold = large_n_threshold,
+      large_p_threshold = large_p_threshold,
+      min_n_per_center = min_n_per_center
+    ))
+  }
+  if (n_per_center < min_n_per_center && nbytes < nbytes_threshold) {
+    return(list(
+      prefer_cuda = FALSE,
+      reason = "few_points_per_center_cpu_preferred",
+      work = as.numeric(work),
+      nbytes = as.numeric(nbytes),
+      n_per_center = as.numeric(n_per_center),
+      work_threshold = work_threshold,
+      nbytes_threshold = nbytes_threshold,
+      large_n_threshold = large_n_threshold,
+      large_p_threshold = large_p_threshold,
+      min_n_per_center = min_n_per_center
     ))
   }
   prefer <- work >= work_threshold ||
@@ -376,7 +419,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
     work_threshold = work_threshold,
     nbytes_threshold = nbytes_threshold,
     large_n_threshold = large_n_threshold,
-    large_p_threshold = large_p_threshold
+    large_p_threshold = large_p_threshold,
+    min_n_per_center = min_n_per_center
   )
 }
 
@@ -568,6 +612,50 @@ finish_trivial_one_cluster_kmeans <- function(x,
   out
 }
 
+finish_trivial_singleton_kmeans <- function(x,
+                                            tuning_metadata = NULL,
+                                            requested_backend = "auto",
+                                            resolved_backend = "cpu") {
+  max_iter <- tuning_metadata$effective$max_iter %||%
+    tuning_metadata$effective_max_iter %||%
+    NA_integer_
+  n_init <- tuning_metadata$effective$n_init %||%
+    tuning_metadata$effective_n_init %||%
+    NA_integer_
+  tol <- tuning_metadata$effective$tol %||%
+    tuning_metadata$effective_tol %||%
+    NA_real_
+  out <- list(
+    cluster = seq_len(nrow(x)),
+    centers = unname(as.matrix(x)),
+    withinss = rep.int(0, nrow(x)),
+    tot.withinss = 0,
+    size = rep.int(1L, nrow(x)),
+    iter = 0L,
+    hit_max_iter = FALSE,
+    backend = "trivial",
+    backend_library = "faissR",
+    parameters = list(
+      centers = as.integer(nrow(x)),
+      max_iter = as.integer(max_iter),
+      n_init = as.integer(n_init),
+      tol = as.numeric(tol),
+      seed = NA_integer_,
+      n_threads = 1L,
+      init = "exact_singletons",
+      requested_backend = requested_backend,
+      resolved_backend = resolved_backend,
+      tuning = tuning_metadata,
+      exact_trivial_solution = TRUE
+    )
+  )
+  out$converged <- TRUE
+  out$parameters$hit_max_iter <- out$hit_max_iter
+  out$parameters$converged <- out$converged
+  class(out) <- c("faissR_kmeans", "kmeans")
+  out
+}
+
 kmeans_hit_max_iter <- function(iter, max_iter) {
   iter <- suppressWarnings(as.integer(iter))
   max_iter <- suppressWarnings(as.integer(max_iter))
@@ -672,6 +760,7 @@ kmeans_auto_rule_label <- function(centers,
                                    n,
                                    n_per_center) {
   if (centers == 1L) return("single_cluster_exact_mean")
+  if (centers == n) return("singleton_exact_identity")
   if (isTRUE(large_n) || work >= 5e9) return("large_fast_convergence")
   if (isTRUE(small_many_centers)) return("small_many_centers_multistart")
   if (isTRUE(few_points_many_centers)) return("few_points_many_centers_multistart")
@@ -722,6 +811,23 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
       small_many_centers = FALSE,
       few_points_many_centers = FALSE,
       rule = "single_cluster_exact_mean",
+      rule_detail = rule_detail
+    ))
+  }
+  if (centers == n) {
+    return(list(
+      policy = "auto",
+      max_iter = 1L,
+      n_init = 1L,
+      tol = 0,
+      work = as.numeric(work),
+      n_per_center = as.numeric(n_per_center),
+      high_dim = isTRUE(high_dim),
+      large_n = isTRUE(large_n),
+      many_centers = TRUE,
+      small_many_centers = FALSE,
+      few_points_many_centers = TRUE,
+      rule = "singleton_exact_identity",
       rule_detail = rule_detail
     ))
   }

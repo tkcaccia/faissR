@@ -1746,6 +1746,7 @@ test_that("k-means benchmark mirrors fast_kmeans auto CUDA shape gate", {
   expect_equal(small_policy$nbytes_threshold, 256 * 1024^2)
   expect_equal(small_policy$large_n_threshold, 50000)
   expect_equal(small_policy$large_p_threshold, 128)
+  expect_equal(small_policy$min_n_per_center, 20)
 
   work_policy <- env$kmeans_auto_backend_policy(n = 70000L, p = 784L, centers = 10L)
   expect_true(work_policy$prefer_cuda)
@@ -1756,6 +1757,16 @@ test_that("k-means benchmark mirrors fast_kmeans auto CUDA shape gate", {
   expect_false(one_cluster$prefer_cuda)
   expect_equal(one_cluster$reason, "single_cluster_exact_mean")
   expect_equal(one_cluster$n_per_center, 1000000)
+
+  singleton <- env$kmeans_auto_backend_policy(n = 120L, p = 4L, centers = 120L)
+  expect_false(singleton$prefer_cuda)
+  expect_equal(singleton$reason, "singleton_exact_identity")
+  expect_equal(singleton$n_per_center, 1)
+
+  few_points <- env$kmeans_auto_backend_policy(n = 5000L, p = 512L, centers = 1000L)
+  expect_false(few_points$prefer_cuda)
+  expect_equal(few_points$reason, "few_points_per_center_cpu_preferred")
+  expect_equal(few_points$n_per_center, 5)
 })
 
 test_that("k-means benchmark fallback auto params mirror package metadata", {
@@ -1767,6 +1778,7 @@ test_that("k-means benchmark fallback auto params mirror package metadata", {
 
   shapes <- list(
     list(n = 70000L, p = 784L, centers = 1L, tuning = "auto"),
+    list(n = 120L, p = 4L, centers = 120L, tuning = "auto"),
     list(n = 70000L, p = 784L, centers = 10L, tuning = " Auto "),
     list(n = 50000L, p = 10L, centers = 100L, tuning = "auto"),
     list(n = 1000L, p = 10L, centers = 100L, tuning = "auto"),

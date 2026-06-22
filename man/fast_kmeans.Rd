@@ -60,6 +60,8 @@ high-dimensional jobs use cheaper iteration and tolerance defaults.
 and `"cpu"` with `max_iter = 1`, `n_init = 1`, and `tol = 0`, records
 `single_cluster_exact_mean`, and stays on CPU because no iterative
 k-means backend can improve that solution.
+`centers = nrow(data)` uses the exact singleton assignment for `backend = "auto"`
+and `"cpu"` and records `singleton_exact_identity`.
 `"fixed"`, `"off"`, and `"none"` use the historical fixed defaults unless
 `max_iter`, `n_init`, or `tol` are explicitly supplied.}
 }
@@ -86,7 +88,8 @@ A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
   `options(faissR.kmeans_cuda_work_threshold = ...)`,
   `options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
   `options(faissR.kmeans_cuda_large_n_threshold = ...)`, or
-  `options(faissR.kmeans_cuda_large_p_threshold = ...)`.
+  `options(faissR.kmeans_cuda_large_p_threshold = ...)`, or
+  `options(faissR.kmeans_cuda_min_n_per_center = ...)`.
   `parameters$tuning$selection` stores the static no-pilot backend and
   effective-parameter decision used for benchmark auditing, including
   `explicit_backend` and `backend_decision` fields that distinguish an

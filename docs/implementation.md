@@ -437,7 +437,10 @@ restart, and `tol = 1e-3`, while a small 50,000 x 10 / 100-cluster job uses
 are fixed rules, not pilot benchmark loops. When `centers = 1`,
 `fast_kmeans()` uses the exact CPU column mean for `backend = "auto"` and
 `"cpu"` and records `single_cluster_exact_mean`, because iterative k-means
-cannot improve that solution on any backend. The
+cannot improve that solution on any backend. When `centers = nrow(data)`,
+`fast_kmeans()` uses the exact singleton assignment for `backend = "auto"` and
+`"cpu"` and records `singleton_exact_identity`, because every observation is
+already its own optimal cluster. The
 `resolved_from` field records whether `max_iter`, `n_init`, and `tol` were
 selected by auto/default rules or supplied explicitly.
 `result$parameters$tuning$effective` records the final values used after
@@ -456,15 +459,18 @@ accelerated route and errors if unavailable. This makes k-means behavior
 consistent with `nn()`, `knn_graph()`, and `graph_cluster()`.
 The gate is deterministic and recorded in
 `result$parameters$tuning$backend_policy`, with a `reason` such as
-`"small_cpu_preferred"`, `"work_at_least_1e8"`,
-`"input_at_least_256MiB"`, or `"large_high_dimensional_input"` so benchmark
-summaries can audit why `backend = "auto"` selected CPU or CUDA without running
-extra tuning jobs. Benchmark-derived threshold refinements can be applied
-without changing package code by setting
+`"small_cpu_preferred"`, `"few_points_per_center_cpu_preferred"`,
+`"work_at_least_1e8"`, `"input_at_least_256MiB"`,
+`"large_high_dimensional_input"`, `"single_cluster_exact_mean"`, or
+`"singleton_exact_identity"` so benchmark summaries can audit why
+`backend = "auto"` selected CPU or CUDA without running extra tuning jobs.
+Benchmark-derived threshold refinements can be applied without changing package
+code by setting
 `options(faissR.kmeans_cuda_work_threshold = ...)`,
 `options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
 `options(faissR.kmeans_cuda_large_n_threshold = ...)`, or
-`options(faissR.kmeans_cuda_large_p_threshold = ...)`; invalid option values
+`options(faissR.kmeans_cuda_large_p_threshold = ...)`, or
+`options(faissR.kmeans_cuda_min_n_per_center = ...)`; invalid option values
 fall back to the documented defaults. `result$parameters$tuning$selection` is the compact
 no-pilot audit record: it stores the requested and predicted backends,
 runtime capability flags, shape/work estimates, effective `max_iter`, `n_init`,

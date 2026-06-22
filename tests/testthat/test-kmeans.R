@@ -207,6 +207,38 @@ test_that("fast_kmeans uses an exact trivial solution for one cluster on CPU and
   expect_equal(cpu_fit$tot.withinss, expected_within)
 })
 
+test_that("fast_kmeans uses an exact trivial solution for singleton clusters on CPU and auto", {
+  set.seed(2022)
+  x <- matrix(rnorm(30), ncol = 3)
+
+  fit <- fast_kmeans(x, centers = nrow(x), backend = "auto", seed = 99, n_threads = 2)
+  expect_s3_class(fit, "faissR_kmeans")
+  expect_equal(fit$backend, "trivial")
+  expect_equal(fit$parameters$requested_backend, "auto")
+  expect_equal(fit$parameters$resolved_backend, "cpu")
+  expect_true(isTRUE(fit$parameters$exact_trivial_solution))
+  expect_equal(fit$cluster, seq_len(nrow(x)))
+  expect_equal(fit$centers, x)
+  expect_equal(fit$withinss, rep.int(0, nrow(x)))
+  expect_equal(fit$tot.withinss, 0)
+  expect_equal(fit$size, rep.int(1L, nrow(x)))
+  expect_equal(fit$iter, 0L)
+  expect_false(fit$hit_max_iter)
+  expect_true(fit$converged)
+  expect_equal(fit$parameters$max_iter, 1L)
+  expect_equal(fit$parameters$n_init, 1L)
+  expect_equal(fit$parameters$tol, 0)
+  expect_equal(fit$parameters$tuning$rule, "singleton_exact_identity")
+  expect_equal(fit$parameters$tuning$backend_policy$reason, "singleton_exact_identity")
+  expect_false(fit$parameters$tuning$backend_policy$prefer_cuda)
+  expect_equal(fit$parameters$tuning$selection$predicted_backend, "cpu")
+
+  cpu_fit <- fast_kmeans(x, centers = nrow(x), backend = "cpu", seed = 99, n_threads = 2)
+  expect_equal(cpu_fit$backend, "trivial")
+  expect_equal(cpu_fit$centers, x)
+  expect_equal(cpu_fit$tot.withinss, 0)
+})
+
 test_that("kmeans auto parameter helper canonicalizes tuning labels", {
   auto <- faissR:::kmeans_auto_params(
     n = 100L,
@@ -421,13 +453,15 @@ test_that("fast_kmeans auto backend is shape-aware", {
   expect_equal(small_policy$nbytes_threshold, 256 * 1024^2)
   expect_equal(small_policy$large_n_threshold, 50000)
   expect_equal(small_policy$large_p_threshold, 128)
+  expect_equal(small_policy$min_n_per_center, 20)
 
   withr::with_options(
     list(
       faissR.kmeans_cuda_work_threshold = 1000,
       faissR.kmeans_cuda_nbytes_threshold = 1e9,
       faissR.kmeans_cuda_large_n_threshold = 1e9,
-      faissR.kmeans_cuda_large_p_threshold = 1e9
+      faissR.kmeans_cuda_large_p_threshold = 1e9,
+      faissR.kmeans_cuda_min_n_per_center = 5
     ),
     {
       tuned_policy <- faissR:::kmeans_auto_backend_policy(n = 120L, p = 4L, centers = 3L)
@@ -445,7 +479,8 @@ test_that("fast_kmeans auto backend is shape-aware", {
       faissR.kmeans_cuda_work_threshold = -1,
       faissR.kmeans_cuda_nbytes_threshold = "bad",
       faissR.kmeans_cuda_large_n_threshold = 0,
-      faissR.kmeans_cuda_large_p_threshold = NA
+      faissR.kmeans_cuda_large_p_threshold = NA,
+      faissR.kmeans_cuda_min_n_per_center = 0
     ),
     {
       fallback_policy <- faissR:::kmeans_auto_backend_policy(n = 120L, p = 4L, centers = 3L)
@@ -453,6 +488,7 @@ test_that("fast_kmeans auto backend is shape-aware", {
       expect_equal(fallback_policy$nbytes_threshold, 256 * 1024^2)
       expect_equal(fallback_policy$large_n_threshold, 50000)
       expect_equal(fallback_policy$large_p_threshold, 128)
+      expect_equal(fallback_policy$min_n_per_center, 20)
     }
   )
 
@@ -493,6 +529,17 @@ test_that("fast_kmeans auto backend is shape-aware", {
   high_dim_policy <- faissR:::kmeans_auto_backend_policy(n = 60000L, p = 128L, centers = 2L)
   expect_true(high_dim_policy$prefer_cuda)
   expect_equal(high_dim_policy$reason, "large_high_dimensional_input")
+
+  few_points_policy <- faissR:::kmeans_auto_backend_policy(n = 5000L, p = 512L, centers = 1000L)
+  expect_false(few_points_policy$prefer_cuda)
+  expect_equal(few_points_policy$reason, "few_points_per_center_cpu_preferred")
+  expect_equal(few_points_policy$n_per_center, 5)
+  expect_equal(few_points_policy$min_n_per_center, 20)
+
+  singleton_policy <- faissR:::kmeans_auto_backend_policy(n = 120L, p = 4L, centers = 120L)
+  expect_false(singleton_policy$prefer_cuda)
+  expect_equal(singleton_policy$reason, "singleton_exact_identity")
+  expect_equal(singleton_policy$n_per_center, 1)
 
   unknown_policy <- faissR:::kmeans_auto_backend_policy(n = NULL, p = NULL, centers = NULL)
   expect_true(unknown_policy$prefer_cuda)

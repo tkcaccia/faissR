@@ -618,18 +618,23 @@ are recorded as `status = "expected_skip"` with `expected_skip = TRUE`, while
 auditable. The skip decision is derived from `kmeans_runtime_capabilities.csv`.
 `backend = "auto"` resolves to CPU instead of becoming an expected
 skip when no k-means-capable CUDA route is available, and it can also resolve
-to CPU for small k-means jobs where the deterministic shape gate estimates that
-GPU launch/copy overhead would dominate. `centers = 1` is also resolved to the
-exact CPU column-mean solution, even for very large matrices, because no
-iterative CPU or CUDA k-means backend can improve that objective. Unexpected
-runtime errors remain failed rows and are not replaced with CPU timings.
+to CPU for small k-means jobs or many-cluster jobs with too few observations
+per center where the deterministic shape gate estimates that GPU launch/copy
+overhead would dominate. `centers = 1` is resolved to the exact CPU column-mean
+solution, and `centers = nrow(data)` is resolved to the exact singleton
+assignment, because no iterative CPU or CUDA k-means backend can improve either
+objective. Unexpected runtime errors remain failed rows and are not replaced
+with CPU timings.
 The package records the same decision in
 `parameters$tuning$backend_policy`, including a reason string such as
-`small_cpu_preferred`, `work_at_least_1e8`, `input_at_least_256MiB`, or
-`large_high_dimensional_input`, plus `single_cluster_exact_mean` for the exact
-one-cluster path, the estimated work and input bytes, and the
+`small_cpu_preferred`, `few_points_per_center_cpu_preferred`,
+`work_at_least_1e8`, `input_at_least_256MiB`, or
+`large_high_dimensional_input`, plus `single_cluster_exact_mean` and
+`singleton_exact_identity` for exact paths, the estimated work and input bytes,
+and the
 deterministic threshold values (`work_threshold`, `nbytes_threshold`,
-`large_n_threshold`, and `large_p_threshold`) used for the CPU/CUDA decision.
+`large_n_threshold`, `large_p_threshold`, and `min_n_per_center`) used for the
+CPU/CUDA decision.
 Benchmark rows also record `selection_*` columns from
 `parameters$tuning$selection`, including the predicted backend, backend-policy
 reason, explicit-backend flag, backend decision label, runtime capability
