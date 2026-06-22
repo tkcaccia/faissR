@@ -99,6 +99,15 @@ test_that("public NN APIs canonicalize common metric aliases", {
   expect_error(nn(x, k = 2L, backend = "cpu", metric = "manhattan"), "metric")
 })
 
+test_that("public NN APIs validate tuning at the exported boundary", {
+  x <- matrix(rnorm(40), ncol = 4)
+
+  expect_no_error(nn(x, k = 2L, backend = "cpu", method = "exact", tuning = "none"))
+  expect_no_error(nn_without_self(x, k = 2L, backend = "cpu", method = "exact", tuning = "none"))
+  expect_error(nn(x, k = 2L, backend = "cpu", tuning = "aggressive"), "tuning")
+  expect_error(nn_without_self(x, k = 2L, backend = "cpu", tuning = "aggressive"), "tuning")
+})
+
 test_that("nn_capabilities documents the public method metric matrix", {
   caps <- nn_capabilities()
   methods <- c(

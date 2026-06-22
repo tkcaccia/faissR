@@ -4968,7 +4968,7 @@ nn <- function(data,
                n_threads = NULL) {
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
-  tuning <- as.character(tuning)[1L]
+  tuning <- normalize_nn_tuning(tuning)
   metric <- normalize_nn_metric(metric)
   validate_public_nn_method_shape(data, method)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
@@ -5021,7 +5021,7 @@ nn_without_self <- function(data,
                             n_threads = NULL) {
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
-  tuning <- as.character(tuning)[1L]
+  tuning <- normalize_nn_tuning(tuning)
   metric <- normalize_nn_metric(metric)
   validate_public_nn_method_shape(data, method)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
