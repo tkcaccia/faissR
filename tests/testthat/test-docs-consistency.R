@@ -723,14 +723,14 @@ test_that("usage API graph_cluster signature shows the live default method", {
 })
 
 test_that("graph cluster target documentation states integer and graph-size constraints", {
-  docs_files <- c(
-    test_path("../../docs", c(
-      "usage-api.md",
-      "implementation.md",
-      "benchmarks.md"
-    )),
-    test_path("../../man", c("knn_graph.Rd", "graph_cluster.Rd"))
-  )
+	  docs_files <- c(
+	    test_path("../../docs", c(
+	      "usage-api.md",
+	      "implementation.md",
+	      "benchmarks.md"
+	    )),
+	    test_path("../../man/graph_cluster.Rd")
+	  )
   missing <- !file.exists(docs_files)
   if (any(missing)) {
     skip("Graph documentation files are not available in this installed-package test context.")
@@ -745,19 +745,18 @@ test_that("graph cluster target documentation states integer and graph-size cons
 })
 
 test_that("knn_graph reference documents benchmark graph metadata", {
-  rd <- rd_file_text("knn_graph")
-  required_metadata <- c(
-    "target_n_clusters",
-    "nearest-neighbour method",
-    "metric",
-    "tuning policy",
-    "requested/resolved KNN backends"
-  )
+	  rd <- rd_file_text("knn_graph")
+	  required_metadata <- c(
+	    "nearest-neighbour method",
+	    "metric",
+	    "tuning policy"
+	  )
 
   for (field in required_metadata) {
-    expect_true(grepl(field, rd, fixed = TRUE), info = field)
-  }
-})
+	    expect_true(grepl(field, rd, fixed = TRUE), info = field)
+	  }
+	  expect_true(grepl("requested/resolved KNN", rd, fixed = TRUE), info = "requested/resolved KNN backends")
+	})
 
 test_that("graph_cluster docs describe clustered graph size metadata", {
   docs_files <- c(

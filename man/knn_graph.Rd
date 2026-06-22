@@ -17,7 +17,6 @@ knn_graph(
   weight = c("auto", "snn", "adaptive", "distance", "binary"),
   mutual = FALSE,
   prune = 0,
-  n_clusters = NULL,
   n_threads = NULL
 )
 }
@@ -33,21 +32,13 @@ knn_graph(
 \item{weight}{Graph weighting. \code{"auto"} uses SNN/Jaccard weights for input space and distance weights for embedding space. \code{"snn"} builds shared-nearest-neighbour Jaccard weights. \code{"adaptive"} uses a local radius kernel. \code{"distance"} uses \code{1 / (1 + distance)}. \code{"binary"} gives every edge weight 1.}
 \item{mutual}{If \code{TRUE}, keep only reciprocal nearest-neighbour edges.}
 \item{prune}{Drop edges with weight less than or equal to this value.}
-\item{n_clusters}{Optional target number of communities to store with the
-graph. When this graph is later passed to \code{graph_cluster()} with
-\code{method = "louvain"} or \code{"leiden"} and no explicit \code{n_clusters},
-the stored target is used instead of relying only on \code{resolution}. Stored
-targets are ignored by \code{method = "random_walking"}; explicitly passing
-\code{n_clusters} to random-walking still errors. The target must be a
-positive integer and cannot exceed the number of graph vertices.}
 \item{n_threads}{CPU threads passed to \code{nn()} when KNN is computed here.}
 }
 \value{
 A native \code{faissR_graph} edge-list object. The \code{faissR_graph}
 attribute stores graph-construction metadata: graph size, weighting,
-nearest-neighbour method, metric, tuning policy, optional
-\code{target_n_clusters}, requested/resolved KNN backends, and compact-relevant
-KNN result metadata such as \code{nn_approximation}, \code{nn_faiss},
+nearest-neighbour method, metric, tuning policy, requested/resolved KNN
+backends, and compact-relevant KNN result metadata such as \code{nn_approximation}, \code{nn_faiss},
 \code{nn_cuvs}, \code{nn_spatial_index}, \code{nn_auto_selection},
 \code{nn_metric_transform}, and \code{nn_distance_transform}. For
 precomputed KNN input, \code{nn_backend} prefers the KNN object's resolved
@@ -59,7 +50,7 @@ routes rather than only the public requested backend.
 }
 \examples{
 x <- scale(as.matrix(iris[, 1:4]))
-g <- knn_graph(x, k = 15, backend = "cpu", n_clusters = 3)
-cl <- graph_cluster(g, method = "louvain", backend = "cpu")
+g <- knn_graph(x, k = 15, backend = "cpu")
+cl <- graph_cluster(g, method = "louvain", backend = "cpu", n_clusters = 3)
 table(cl$membership)
 }

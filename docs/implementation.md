@@ -349,18 +349,17 @@ unavailable until a dedicated CUDA implementation is added; with
 available.
 
 `graph_cluster(n_clusters = m)` provides a target-community-count convenience
-for Louvain and Leiden. The same target can also be stored on the graph with
-`knn_graph(n_clusters = m)` and will be used by Louvain/Leiden
-`graph_cluster()` calls unless the caller supplies a different target. Stored
-targets are ignored by `method = "random_walking"`; explicitly passing
-`n_clusters` to random-walking remains an error. The graph is built once, then
-faissR evaluates a bounded deterministic grid of resolution values centered
-from the supplied `resolution` and, when graph size is known, a no-pilot
-shape heuristic based on `n_clusters / sqrt(n_vertices)`. It keeps the result
-whose number of communities is closest to `m`, breaking ties by modularity. The
-selected resolution, candidate center, and search table are returned in the
-result metadata as `selected_resolution`, `resolution_selection`, and
-`resolution_search`, with the requested target stored as `target_n_clusters`.
+for Louvain and Leiden. The target belongs to `graph_cluster()`, not
+`knn_graph()`, so a precomputed graph can be reused with different target
+counts or with an explicit `resolution`. Passing `n_clusters` to
+random-walking remains an error. The graph is built once, then faissR evaluates
+a bounded deterministic grid of resolution values centered from the supplied
+`resolution` and, when graph size is known, a no-pilot shape heuristic based on
+`n_clusters / sqrt(n_vertices)`. It keeps the result whose number of communities
+is closest to `m`, breaking ties by modularity. The selected resolution,
+candidate center, and search table are returned in the result metadata as
+`selected_resolution`, `resolution_selection`, and `resolution_search`, with the
+requested target stored as `target_n_clusters`.
 The selected row is marked in `resolution_search$selected`; `target_gap`
 records the final absolute difference from the requested community count, and
 `resolution_selection` records the deterministic rule
@@ -614,6 +613,7 @@ practical.
 faissR is released under the MIT license. The implementation is inspired by and
 links against external work including FAISS, FAISS GPU/cuVS integration, RAPIDS
 cuVS, RAPIDS libcugraph, HNSW, NN-Descent, IVF, product quantization, k-means,
-Louvain, Leiden, and random-walk clustering [1-19]. See
+Louvain, Leiden, random-walk clustering, NSG, DiskANN/Vamana, and related ANN
+designs such as VP trees, GGNN, SONG, BANG, and PilotANN [1-29]. See
 [References](references.md) for papers, software projects, and acknowledgements.
 External libraries remain separate system dependencies with their own licenses.

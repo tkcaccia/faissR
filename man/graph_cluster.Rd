@@ -66,15 +66,13 @@ of graph vertices.}
 \code{graph_cluster()} runs native faissR community detection on a KNN graph. The graph can be supplied as a precomputed \code{nn()} result or built from a matrix/data frame using any faissR nearest-neighbour backend, including FAISS and cuVS KNN backends. The CPU clustering backend is implemented in C++ and uses OpenMP when available; it does not depend on igraph. CUDA graph clustering uses native RAPIDS libcugraph for Louvain and Leiden when faissR was built against libcugraph. Random-walking currently remains CPU-only. CUDA graph clustering never calls Python and never silently falls back to CPU.
 }
 \details{
-\code{n_clusters} can be supplied directly to \code{graph_cluster()} or stored
-on a graph with \code{knn_graph(n_clusters = ...)}. When a target count is
-available for Louvain or Leiden, faissR builds or reuses the graph once,
+\code{n_clusters} is supplied directly to \code{graph_cluster()}. When a target
+count is available for Louvain or Leiden, faissR builds or reuses the graph once,
 evaluates a bounded deterministic resolution grid centered by the requested
 \code{resolution} and graph shape, and records the selected resolution, center,
-and search table in the returned object. Stored graph targets are ignored by
-\code{method = "random_walking"}; explicitly passing \code{n_clusters} to
-random-walking still errors. The target must be a positive integer and cannot
-exceed the number of graph vertices.
+and search table in the returned object. Passing \code{n_clusters} to
+\code{method = "random_walking"} still errors. The target must be a positive
+integer and cannot exceed the number of graph vertices.
 
 Method descriptions:
 \itemize{

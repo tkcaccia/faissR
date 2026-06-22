@@ -92,7 +92,7 @@ km$parameters$tuning
 ## Reuse KNN For Clustering
 
 ```r
-g2 <- knn_graph(nn_res, k = 10, n_clusters = 3)
-cl2 <- graph_cluster(g2, method = "leiden", backend = "cpu", n_threads = 4)
+g2 <- knn_graph(nn_res, k = 10)
+cl2 <- graph_cluster(g2, method = "leiden", backend = "cpu", n_clusters = 3, n_threads = 4)
 table(labels, cl2$membership)
 ```

@@ -135,7 +135,7 @@ knn_graph(data, knn = NULL, k = 50L, backend = "auto",
           method = NULL, nn_method = "auto",
           metric = "euclidean", tuning = "auto",
           weight = "auto", mutual = FALSE, prune = 0,
-          n_clusters = NULL, n_threads = NULL)
+          n_threads = NULL)
 ```
 
 | Argument | Description |
@@ -151,14 +151,12 @@ knn_graph(data, knn = NULL, k = 50L, backend = "auto",
 | `weight` | Edge weighting: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. `"auto"` uses shared-nearest-neighbour weights for input space and distance weights for embedding space. |
 | `mutual` | If `TRUE`, keep only reciprocal nearest-neighbour edges. |
 | `prune` | Drop edges with weight less than or equal to this non-negative threshold. |
-| `n_clusters` | Optional target number of communities to store with the graph. `graph_cluster()` uses this target for Louvain/Leiden when no explicit `n_clusters` is supplied. Stored targets are ignored by random-walking; explicitly passing `n_clusters` to random-walking still errors. The target must be a positive integer and cannot exceed the graph vertex count. |
 | `n_threads` | CPU worker threads for neighbour search when KNN is computed inside the function. |
 
 Returns a native `faissR_graph` edge-list object. No `igraph` dependency is
 required. When faissR builds neighbours internally, the `faissR_graph` metadata
 includes graph size, weighting, nearest-neighbour method, metric, tuning
-policy, optional `target_n_clusters`, and the requested/resolved public KNN
-backends. It also preserves compact-relevant KNN route metadata such as
+policy, and the requested/resolved public KNN backends. It also preserves compact-relevant KNN route metadata such as
 approximation parameters, auto-selection metadata, normalized metric transform
 metadata, and FAISS/cuVS/grid attributes for benchmark auditing.
 

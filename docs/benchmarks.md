@@ -420,12 +420,10 @@ The runtime capability table is written to
 graph-construction routes can be audited before any graph is built. When
 `--target_clusters=labels` is
 used, Louvain and Leiden use `n_clusters = length(unique(dataset$labels))`. If
-the selected method set contains only Louvain and Leiden, the benchmark stores
-that target on the graph with `knn_graph(n_clusters = ...)` and lets
-`graph_cluster()` reuse it. Mixed method sets that include random-walking pass
-the target only to Louvain/Leiden rows because the public API intentionally
-reserves `n_clusters` for Louvain and Leiden. `n_clusters_requested` records
-this requested target count, while `n_communities` records the actual
+the selected method set contains random-walking, the benchmark still reserves
+`n_clusters` for Louvain and Leiden because random-walking intentionally has no
+cluster-count target. `n_clusters_requested` records this requested target
+count passed directly to `graph_cluster()`, while `n_communities` records the actual
 community count returned by clustering. The target is a convenience target, not
 a hard guarantee. It is validated as a positive integer no larger than the
 graph vertex count, so malformed label-derived targets fail clearly before

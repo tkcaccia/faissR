@@ -35,19 +35,12 @@
 #'   `"distance"` uses `1 / (1 + distance)`. `"binary"` gives every edge weight 1.
 #' @param mutual If `TRUE`, keep only reciprocal nearest-neighbour edges.
 #' @param prune Drop edges with weight less than or equal to this value.
-#' @param n_clusters Optional target number of communities to store with the
-#'   graph. When this graph is later passed to \code{\link{graph_cluster}()} with
-#'   `method = "louvain"` or `"leiden"` and no explicit `n_clusters`, the
-#'   stored target is used instead of relying only on `resolution`. Stored
-#'   targets are ignored by `method = "random_walking"`; explicitly passing
-#'   `n_clusters` to random-walking still errors. The target must be a positive
-#'   integer and cannot exceed the number of graph vertices.
 #' @param n_threads CPU threads passed to `nn()` when KNN is computed here.
 #' @return A native `faissR_graph` edge-list object. The `faissR_graph`
 #'   attribute stores graph-construction metadata: graph size, weighting,
-#'   nearest-neighbour method, metric, tuning policy, optional
-#'   `target_n_clusters`, requested/resolved KNN backends, and compact-relevant
-#'   KNN result metadata such as `nn_approximation`, `nn_faiss`, `nn_cuvs`,
+#'   nearest-neighbour method, metric, tuning policy, requested/resolved KNN
+#'   backends, and compact-relevant KNN result metadata such as `nn_approximation`,
+#'   `nn_faiss`, `nn_cuvs`,
 #'   `nn_spatial_index`, `nn_auto_selection`, `nn_metric_transform`, and
 #'   `nn_distance_transform`. For precomputed KNN input,
 #'   `nn_backend` prefers the KNN object's resolved backend when available, so
@@ -55,8 +48,8 @@
 #'   public requested backend.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
-#' g <- knn_graph(x, k = 15, backend = "cpu", n_clusters = 3)
-#' cl <- graph_cluster(g, method = "louvain", backend = "cpu")
+#' g <- knn_graph(x, k = 15, backend = "cpu")
+#' cl <- graph_cluster(g, method = "louvain", backend = "cpu", n_clusters = 3)
 #' table(cl$membership)
 #' @export
 knn_graph <- function(data,
@@ -70,7 +63,6 @@ knn_graph <- function(data,
                       weight = c("auto", "snn", "adaptive", "distance", "binary"),
                       mutual = FALSE,
                       prune = 0,
-                      n_clusters = NULL,
                       n_threads = NULL) {
   if (!is.null(method)) {
     method <- public_nn_method_label(normalize_nn_method(method))
@@ -93,8 +85,6 @@ knn_graph <- function(data,
   if (length(prune) != 1L || is.na(prune) || !is.finite(prune) || prune < 0) {
     stop("`prune` must be a non-negative number.", call. = FALSE)
   }
-  n_clusters <- normalize_graph_target_clusters(n_clusters, method = NULL)
-
   input_backend <- NA_character_
   requested_graph_backend <- normalize_public_backend_arg(backend)
   resolved_graph_backend <- NA_character_
@@ -160,7 +150,6 @@ knn_graph <- function(data,
     prune,
     mutual
   )
-  n_clusters <- validate_graph_target_cluster_count(n_clusters, edges$n_vertices)
   metadata <- list(
     k = as.integer(k),
     space = graph_space,
@@ -184,7 +173,6 @@ knn_graph <- function(data,
     nn_metric_transform = attr(knn, "metric_transform") %||% knn$metric_transform %||% NULL,
     nn_distance_transform = attr(knn, "distance_transform") %||% NULL,
     input_method = input_method,
-    target_n_clusters = n_clusters,
     n_vertices = edges$n_vertices,
     n_edges = edges$n_edges
   )
@@ -293,7 +281,8 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   metadata from the KNN route that built the graph. `parameters$nn_approximation`,
 #'   `parameters$nn_faiss`, `parameters$nn_cuvs`, `parameters$nn_spatial_index`,
 #'   `parameters$nn_auto_selection` preserve compact
-#'   KNN route metadata when the graph is built internally. When a target community count is used,
+#'   KNN route metadata when the graph is built internally. When `n_clusters`
+#'   is supplied,
 #'   `target_n_clusters`, `selected_resolution`, `target_gap`,
 #'   `resolution_selection`, and `resolution_search` record the requested
 #'   target, selected resolution, final community-count gap, deterministic
@@ -399,12 +388,7 @@ graph_cluster <- function(graph,
         meta$graph_requested_backend %||%
         NA_character_
     }
-    graph_n_clusters <- n_clusters
-    if (is.null(graph_n_clusters) && !identical(method, "random_walking") &&
-        !is.null(meta$target_n_clusters)) {
-      graph_n_clusters <- meta$target_n_clusters
-    }
-    graph_n_clusters <- normalize_graph_target_clusters(graph_n_clusters, method)
+    graph_n_clusters <- normalize_graph_target_clusters(n_clusters, method)
     graph_n_clusters <- validate_graph_target_cluster_count(graph_n_clusters, graph$n_vertices)
     ans <- graph_cluster_edges_target(
       graph,

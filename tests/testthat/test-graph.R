@@ -346,7 +346,7 @@ test_that("graph construction rejects implementation backend labels", {
   )
 })
 
-test_that("knn_graph stores an optional cluster-count target for graph_cluster", {
+test_that("graph_cluster owns target cluster count", {
   set.seed(509)
   x <- rbind(
     matrix(rnorm(80, -3, 0.15), ncol = 4),
@@ -354,11 +354,11 @@ test_that("knn_graph stores an optional cluster-count target for graph_cluster",
     matrix(rnorm(80, 3, 0.15), ncol = 4)
   )
 
-  g <- knn_graph(x, k = 8L, backend = "cpu", n_clusters = 3L)
+  g <- knn_graph(x, k = 8L, backend = "cpu")
   expect_s3_class(g, "faissR_graph")
-  expect_equal(attr(g, "faissR_graph")$target_n_clusters, 3L)
+  expect_null(attr(g, "faissR_graph")$target_n_clusters)
 
-  cl <- graph_cluster(g, method = "louvain", backend = "cpu", n_threads = 2L, seed = 1L)
+  cl <- graph_cluster(g, method = "louvain", backend = "cpu", n_clusters = 3L, n_threads = 2L, seed = 1L)
   expect_s3_class(cl, "faissR_graph_cluster")
   expect_equal(cl$target_n_clusters, 3L)
   expect_equal(cl$parameters$n_clusters, 3L)
@@ -399,11 +399,11 @@ test_that("knn_graph stores an optional cluster-count target for graph_cluster",
   expect_equal(override$parameters$n_clusters, 2L)
 
   precomputed <- nn_without_self(x, k = 8L, backend = "cpu", n_threads = 2L)
-  g_knn <- knn_graph(precomputed, k = 8L, n_clusters = 3L)
+  g_knn <- knn_graph(precomputed, k = 8L)
   expect_s3_class(g_knn, "faissR_graph")
   expect_equal(class(g_knn), c("faissR_graph", "list"))
-  expect_equal(attr(g_knn, "faissR_graph")$target_n_clusters, 3L)
-  leiden <- graph_cluster(g_knn, method = "leiden", backend = "cpu", n_threads = 2L, seed = 1L)
+  expect_null(attr(g_knn, "faissR_graph")$target_n_clusters)
+  leiden <- graph_cluster(g_knn, method = "leiden", backend = "cpu", n_clusters = 3L, n_threads = 2L, seed = 1L)
   expect_equal(leiden$target_n_clusters, 3L)
   expect_equal(leiden$parameters$n_clusters, 3L)
 
@@ -422,8 +422,8 @@ test_that("graph cluster-count targets are strict positive whole numbers", {
   x <- matrix(rnorm(40), ncol = 4)
 
   expect_error(
-    knn_graph(x, k = 4L, backend = "cpu", n_clusters = 2.5),
-    "positive integer"
+    knn_graph(x, k = 4L, backend = "cpu", n_clusters = 2L),
+    "unused argument"
   )
   expect_error(
     graph_cluster(
@@ -437,10 +437,6 @@ test_that("graph cluster-count targets are strict positive whole numbers", {
     "positive integer"
   )
   expect_error(
-    knn_graph(x, k = 4L, backend = "cpu", n_clusters = nrow(x) + 1L),
-    "larger than the number of graph vertices"
-  )
-  expect_error(
     graph_cluster(
       x,
       method = "leiden",
@@ -451,6 +447,24 @@ test_that("graph cluster-count targets are strict positive whole numbers", {
     ),
     "larger than the number of graph vertices"
   )
+})
+
+test_that("graph_cluster resolution changes Louvain partitions on separable graphs", {
+  set.seed(5093)
+  x <- rbind(
+    matrix(rnorm(80, -4, 0.15), ncol = 4),
+    matrix(rnorm(80, -1, 0.15), ncol = 4),
+    matrix(rnorm(80, 1, 0.15), ncol = 4),
+    matrix(rnorm(80, 4, 0.15), ncol = 4)
+  )
+  g <- knn_graph(x, k = 8L, backend = "cpu")
+
+  low <- graph_cluster(g, method = "louvain", backend = "cpu", resolution = 0.05, n_threads = 2L, seed = 1L)
+  high <- graph_cluster(g, method = "louvain", backend = "cpu", resolution = 16, n_threads = 2L, seed = 1L)
+
+  expect_lt(low$n_communities, high$n_communities)
+  expect_equal(low$parameters$resolution, 0.05)
+  expect_equal(high$parameters$resolution, 16)
 })
 
 test_that("target cluster resolution candidates are bounded and deterministic", {

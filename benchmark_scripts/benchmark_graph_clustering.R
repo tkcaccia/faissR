@@ -1065,7 +1065,7 @@ label_target_clusters <- function(labels, target_mode) {
 }
 
 build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
-                             n_clusters, n_threads, timeout, cycle = 1L,
+                             n_threads, timeout, cycle = 1L,
                              graph_method = "auto", metric = "euclidean") {
   n <- nrow(data_obj$data)
   p <- ncol(data_obj$data)
@@ -1080,7 +1080,6 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
         method = graph_method,
         metric = metric,
         weight = weight,
-        n_clusters = n_clusters,
         n_threads = n_threads
       )
     }, timeout)
@@ -1120,7 +1119,7 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
         graph_method = graph_method,
         metric = metric,
         weight = weight,
-        n_clusters = n_clusters,
+        n_clusters = NULL,
         n_threads = n_threads,
         status = "failed",
         error = conditionMessage(e),
@@ -1142,22 +1141,15 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
   n <- nrow(data_obj$data)
   p <- ncol(data_obj$data)
   labels <- data_obj$labels
-  graph_meta <- attr(graph_obj, "faissR_graph") %||% list()
   graph_preflight_route <- graph_build_preflight_route(graph_backend)
   cluster_preflight_route <- graph_cluster_preflight_route(cluster_backend)
-  graph_target <- graph_meta$target_n_clusters %||% NULL
   n_clusters <- NULL
   n_clusters_source <- NA_character_
   if (!identical(method, "random_walking")) {
-    if (is.null(graph_target)) {
-      n_clusters <- label_target_clusters(labels, target_mode)
-      if (!is.null(n_clusters)) n_clusters_source <- target_mode
-    } else {
-      n_clusters <- NULL
-      n_clusters_source <- "stored_graph_target"
-    }
+    n_clusters <- label_target_clusters(labels, target_mode)
+    if (!is.null(n_clusters)) n_clusters_source <- target_mode
   }
-  n_clusters_requested <- graph_target %||% n_clusters
+  n_clusters_requested <- n_clusters
 
   started <- proc.time()[["elapsed"]]
   tryCatch({
@@ -1381,10 +1373,6 @@ for (dataset_name in datasets) {
         for (metric in metrics) {
           for (cycle in seq_len(cycles)) {
             cycle_seed <- seed + (cycle - 1L) * 1000003L
-            graph_target_clusters <- NULL
-            if (!"random_walking" %in% methods) {
-              graph_target_clusters <- label_target_clusters(loaded$labels, target_mode)
-            }
             graph_preflight_route <- graph_build_preflight_route(graph_backend)
             graph_skip_reason <- graph_build_expected_skip(
               graph_backend = graph_backend,
@@ -1422,7 +1410,6 @@ for (dataset_name in datasets) {
                 k = k,
                 graph_backend = graph_backend,
                 weight = weight,
-                n_clusters = graph_target_clusters,
                 n_threads = n_threads,
                 timeout = timeout,
                 cycle = cycle,
@@ -1438,12 +1425,10 @@ for (dataset_name in datasets) {
                 row_target_clusters <- if (identical(method, "random_walking")) {
                   NULL
                 } else {
-                  graph_target_clusters %||% label_target_clusters(loaded$labels, target_mode)
+                  label_target_clusters(loaded$labels, target_mode)
                 }
                 row_target_source <- if (identical(method, "random_walking") || is.null(row_target_clusters)) {
                   NA_character_
-                } else if (!is.null(graph_target_clusters)) {
-                  "stored_graph_target"
                 } else {
                   target_mode
                 }
@@ -1652,8 +1637,8 @@ materials <- c(
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
   "`graph_cluster_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `graph_cluster_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, graph timings, clustering timings, memory, graph vertex/edge counts, ARI, modularity, graph NN method/metric, compact `graph_route_parameters` from the KNN route that built the graph, and backend metadata. Auto KNN graph routes include no-pilot `predicted_backend`, `predicted_method`, `predicted_device`, explicit backend/method flags, and backend/method decision metadata when available; these are also written as first-class `graph_auto_*` columns for direct filtering and comparison.",
   "`graph_cluster_nn_capabilities.csv` stores the `faissR::nn_capabilities(runtime = TRUE)` table used to preflight graph KNN construction, including `runtime_reason` and `runtime_notes`. Runtime-unavailable graph routes are recorded as expected skips before a graph is built.",
-  "`target_clusters` is normalized to either `\"labels\"` or `\"none\"`; invalid values stop before the benchmark starts. When `target_clusters = \"labels\"`, Louvain and Leiden use `n_clusters = length(unique(labels))`. If a benchmark block contains only Louvain/Leiden, this target is stored on the graph with `knn_graph(n_clusters = ...)` and reused by `graph_cluster()`; mixed blocks that include random-walking pass the target only to Louvain/Leiden rows because random-walking intentionally has no cluster-count target.",
-  "`n_clusters_requested` records the requested target community count for Louvain/Leiden rows. This is a convenience target, not a hard guarantee; the actual community count is stored separately as `n_communities`. `n_clusters_source` records whether that target came from dataset labels, a stored `knn_graph(n_clusters = ...)` target, or no target. When a target is used, faissR evaluates a bounded deterministic resolution grid around the supplied resolution; `target_gap`, `resolution_selection`, `resolution_selected_candidate`, `resolution_candidates`, `resolution_min_target_gap`, `resolution_selected_is_min_gap`, and the selected resolution summarize the deterministic resolution-search decision.",
+  "`target_clusters` is normalized to either `\"labels\"` or `\"none\"`; invalid values stop before the benchmark starts. When `target_clusters = \"labels\"`, Louvain and Leiden call `graph_cluster(n_clusters = length(unique(labels)))`. Random-walking rows receive no `n_clusters` value because random-walking intentionally has no cluster-count target.",
+  "`n_clusters_requested` records the requested target community count for Louvain/Leiden rows. This is a convenience target, not a hard guarantee; the actual community count is stored separately as `n_communities`. `n_clusters_source` records whether that target came from dataset labels or no target. When a target is used, faissR evaluates a bounded deterministic resolution grid around the supplied resolution; `target_gap`, `resolution_selection`, `resolution_selected_candidate`, `resolution_candidates`, `resolution_min_target_gap`, `resolution_selected_is_min_gap`, and the selected resolution summarize the deterministic resolution-search decision.",
   "Each KNN graph is built once per dataset/cycle/k/graph-backend/graph-method/metric/weight combination and reused across clustering methods and clustering backends within that cycle. The graph benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs. `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
   "`graph_cluster_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, modularity, and total time for a compact backwards-compatible summary. `graph_cluster_best_by_dataset_k_target.csv` keeps the best successful row per dataset/k/graph-method/metric/target-cluster-count combination so different neighbourhood sizes, KNN graph routes, metrics, and Louvain/Leiden target counts remain auditable.",
   "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/graph-method/metric/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, graph size, community counts, selected resolution, target gap, resolution-selection rule, selected-candidate and candidate-count diagnostics, CPU thread count, preflight routes, compact graph-route parameter metadata, and resolved backend metadata.",

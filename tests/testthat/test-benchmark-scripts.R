@@ -2611,7 +2611,7 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
     method = c("louvain", "louvain"),
     weight = c("snn", "snn"),
     n_clusters_requested = c(3L, 5L),
-    n_clusters_source = c("stored_graph_target", "labels"),
+	    n_clusters_source = c("labels", "labels"),
     n_threads = c(2L, 2L),
     status = c("success", "success"),
     error = c(NA_character_, NA_character_),
@@ -2643,7 +2643,7 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
   expect_equal(nrow(out), 2L)
   expect_type(out$n_clusters_requested, "integer")
   expect_equal(sort(as.integer(out$n_clusters_requested)), c(3L, 5L))
-  expect_equal(sort(out$n_clusters_source), c("labels", "stored_graph_target"))
+	  expect_equal(sort(out$n_clusters_source), c("labels", "labels"))
   expect_equal(out$median_graph_n_vertices, c(100, 100))
   expect_equal(out$graph_preflight_route, c("cpu", "cpu"))
   expect_equal(
