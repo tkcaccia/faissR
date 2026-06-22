@@ -2082,6 +2082,17 @@ test_that("CUDA NN-descent requests use RAPIDS cuVS", {
   expect_gt(recall$recall_at_k, 0.65)
 })
 
+test_that("cuVS brute force reports Euclidean metric metadata", {
+  skip_if_not(cuvs_available())
+
+  x <- matrix(rnorm(80L), nrow = 20L)
+  out <- internal_nn(x, k = 4L, backend = "cuda_cuvs_bruteforce", metric = "euclidean")
+
+  expect_equal(attr(out, "metric"), "euclidean")
+  expect_equal(attr(out, "cuvs")$metric, "euclidean")
+  expect_equal(attr(out, "cuvs")$resolved_backend, "cuda_cuvs_bruteforce")
+})
+
 test_that("cuVS CAGRA reports actual and requested graph parameters", {
   skip_if_not(cuvs_available())
 

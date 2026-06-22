@@ -1083,7 +1083,8 @@ nn_compute <- function(data,
       index_type = as.character(out$index_type),
       library = "cuvs",
       backend = "cuda",
-      resolved_backend = resolved_backend
+      resolved_backend = resolved_backend,
+      metric = metric
     )
     return(result)
   }
