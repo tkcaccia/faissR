@@ -1006,12 +1006,20 @@ all_graph_cluster_expected_skips <- function(cluster_backends, methods) {
   length(checks) > 0L && all(checks)
 }
 
-.graph_nn_capabilities_cache <- NULL
+.graph_nn_capabilities_cache <- new.env(parent = emptyenv())
 
-graph_nn_capabilities <- function() {
-  if (!is.null(.graph_nn_capabilities_cache)) return(.graph_nn_capabilities_cache)
-  .graph_nn_capabilities_cache <<- faissR::nn_capabilities(runtime = TRUE)
-  .graph_nn_capabilities_cache
+graph_nn_capabilities <- function(graph_cagra_implementation = NA_character_) {
+  key <- if (is.na(graph_cagra_implementation)) "__default__" else as.character(graph_cagra_implementation)[1L]
+  cached <- .graph_nn_capabilities_cache[[key]]
+  if (!is.null(cached)) return(cached)
+  old_options <- NULL
+  if (!is.na(graph_cagra_implementation)) {
+    old_options <- options(faissR.cagra_implementation = graph_cagra_implementation)
+    on.exit(options(old_options), add = TRUE)
+  }
+  caps <- faissR::nn_capabilities(runtime = TRUE)
+  .graph_nn_capabilities_cache[[key]] <- caps
+  caps
 }
 
 graph_route_runtime_skip <- function(route,
@@ -1065,7 +1073,7 @@ graph_build_expected_skip <- function(graph_backend, graph_method = "auto", metr
     on.exit(options(old_options), add = TRUE)
   }
   cap <- tryCatch({
-    caps <- graph_nn_capabilities()
+    caps <- graph_nn_capabilities(graph_cagra_implementation)
     caps[caps$backend == graph_backend & caps$method == graph_method & caps$metric == metric, , drop = FALSE]
   }, error = function(e) data.frame())
   if (nrow(cap) && !isTRUE(cap$supported[[1L]])) {
@@ -1167,11 +1175,6 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
     metric = metric,
     graph_cagra_implementation = graph_cagra_implementation
   )
-  old_options <- NULL
-  if (!is.na(graph_cagra_implementation)) {
-    old_options <- options(faissR.cagra_implementation = graph_cagra_implementation)
-    on.exit(options(old_options), add = TRUE)
-  }
   tryCatch({
     graph <- with_elapsed_limit({
       faissR::knn_graph(
@@ -1180,6 +1183,7 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
         backend = graph_backend,
         method = graph_method,
         metric = metric,
+        cagra_implementation = if (is.na(graph_cagra_implementation)) NULL else graph_cagra_implementation,
         weight = weight,
         n_threads = n_threads
       )

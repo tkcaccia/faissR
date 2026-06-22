@@ -1227,9 +1227,6 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
     faissR.faiss_gpu_ivf_tune_seed = as.integer(seed + 11L),
     faissR.cuvs_cagra_tune_seed = as.integer(seed + 23L)
   )
-  if (!is.na(cagra_implementation)) {
-    old_options <- c(old_options, options(faissR.cagra_implementation = cagra_implementation))
-  }
   on.exit(options(old_options), add = TRUE)
   set.seed(as.integer(seed))
   preflight_route <- tryCatch(
@@ -1244,6 +1241,7 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
         backend = backend,
         method = method,
         metric = metric,
+        cagra_implementation = if (is.na(cagra_implementation)) NULL else cagra_implementation,
         n_threads = n_threads
       )
     }, timeout)

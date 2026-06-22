@@ -288,7 +288,8 @@ For CUDA-capable `graph_method = "cagra"` and `graph_method = "auto"` rows,
 separate FAISS GPU CAGRA and direct RAPIDS cuVS CAGRA provider requests. The
 raw and summary CSVs record this request as `graph_cagra_implementation`, so
 auto graph-clustering audits can separate provider choice from public method
-choice.
+choice. The benchmark calls pass this provider through faissR's per-call
+`cagra_implementation` argument, avoiding shared option state between rows.
 The config includes `available_datasets`, the validated real plus simulated
 dataset names accepted by the `--datasets` selector, so subset runs remain
 auditable.
@@ -510,7 +511,8 @@ public `method = "cagra"` rows and CUDA-capable `method = "auto"` rows that may
 select CAGRA; it is `NA` for rows where CAGRA cannot be selected. This keeps the
 public method namespace small while still allowing benchmark tables to compare
 FAISS GPU CAGRA against direct cuVS CAGRA, including for shape-aware auto
-selection.
+selection. Row execution uses the per-call `cagra_implementation` argument so
+provider selection remains isolated across cycles, datasets, metrics, and `k`.
 The aggregate file `nn_metric_recommendations_from_cycles.csv` emits one row
 per dataset/backend/metric/k: it chooses the fastest median row above the recall
 threshold when possible, the best-recall row when all measured methods are below
