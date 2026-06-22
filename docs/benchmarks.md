@@ -522,7 +522,8 @@ resolved CPU/CUDA route and records expected skips when that route requires
 unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.
 The config includes `available_datasets`, the validated real plus simulated
 dataset names accepted by the `--datasets` selector, which makes partial or
-subset reruns traceable to the full benchmark universe.Unexpected runtime errors remain ordinary failed rows. Recall is computed
+subset reruns traceable to the full benchmark universe. Unexpected runtime
+errors remain ordinary failed rows. Recall is computed
 against exact CPU references when feasible. Small datasets use a full exact
 self-KNN reference; larger datasets use a deterministic sample of query rows
 when `quality_n * nrow(data) * ncol(data)` fits `--quality_max_ops`. The
@@ -551,6 +552,13 @@ public method namespace small while still allowing benchmark tables to compare
 FAISS GPU CAGRA against direct cuVS CAGRA, including for shape-aware auto
 selection. Row execution uses the per-call `cagra_implementation` argument so
 provider selection remains isolated across cycles, datasets, metrics, and `k`.
+For stress runs that compare FAISS GPU CAGRA and direct RAPIDS cuVS CAGRA in
+one benchmark matrix, `--isolate_cuda_cagra=true` runs CUDA CAGRA provider rows
+inside child R processes. The parent process still builds the exact reference
+and computes recall, while the raw table records `isolated_process` and
+`child_status`. The elapsed method time is measured inside the child around
+`faissR::nn()`, so process launch and result serialization are auditable but
+not counted as NN search time.
 The aggregate file `nn_metric_recommendations_from_cycles.csv` emits one row
 per dataset/backend/metric/k: it chooses the fastest median row above the recall
 threshold when possible, the best-recall row when all measured methods are below
