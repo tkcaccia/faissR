@@ -352,6 +352,46 @@ finish_fast_kmeans <- function(out,
   out
 }
 
+#' @export
+print.faissR_kmeans <- function(x, ...) {
+  params <- x$parameters %||% list()
+  tuning <- params$tuning %||% list()
+  effective <- tuning$effective %||% list()
+  cat("faissR k-means\n")
+  cat("  backend: ", x$backend %||% NA_character_, "\n", sep = "")
+  if (!is.null(params$requested_backend)) {
+    cat("  requested backend: ", params$requested_backend, "\n", sep = "")
+  }
+  if (!is.null(params$resolved_backend)) {
+    cat("  resolved backend: ", params$resolved_backend, "\n", sep = "")
+  }
+  cat("  clusters: ", length(x$size), "\n", sep = "")
+  cat("  observations: ", length(x$cluster), "\n", sep = "")
+  cat("  iterations: ", x$iter %||% NA_integer_, "\n", sep = "")
+  if (!is.null(x$tot.withinss)) {
+    cat("  total withinss: ", format(x$tot.withinss, digits = 4), "\n", sep = "")
+  }
+  if (!is.null(tuning$policy)) {
+    cat("  tuning: ", tuning$policy, "\n", sep = "")
+  }
+  max_iter <- effective$max_iter %||% params$max_iter
+  n_init <- effective$n_init %||% params$n_init
+  tol <- effective$tol %||% params$tol
+  if (!is.null(max_iter) || !is.null(n_init) || !is.null(tol)) {
+    cat(
+      "  effective: max_iter=",
+      max_iter %||% NA_integer_,
+      ", n_init=",
+      n_init %||% NA_integer_,
+      ", tol=",
+      format(tol %||% NA_real_, digits = 4),
+      "\n",
+      sep = ""
+    )
+  }
+  invisible(x)
+}
+
 normalize_kmeans_tuning <- function(tuning) {
   tuning <- normalize_scalar_choice_arg(
     tuning,

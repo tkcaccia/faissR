@@ -25,6 +25,12 @@ test_that("fast_kmeans works on the CPU path", {
   expect_true(fit$backend %in% c("cpu", "faiss"))
   expect_equal(fit$parameters$requested_backend, "cpu")
   expect_equal(fit$parameters$resolved_backend, "cpu")
+  printed <- capture.output(print(fit))
+  expect_true(any(grepl("faissR k-means", printed, fixed = TRUE)))
+  expect_true(any(grepl("backend:", printed, fixed = TRUE)))
+  expect_true(any(grepl("requested backend: cpu", printed, fixed = TRUE)))
+  expect_true(any(grepl("resolved backend: cpu", printed, fixed = TRUE)))
+  expect_true(any(grepl("effective: max_iter=20", printed, fixed = TRUE)))
 })
 
 test_that("fast_kmeans records deterministic auto tuning policy", {
