@@ -82,7 +82,7 @@ test_that("public high-level APIs expose auto/cpu/cuda backend and auto tuning",
   }
 
   predict_formals <- formals(getS3method("predict", "faissR_knn_model"))
-  expect_null(predict_formals$backend)
+  expect_equal(eval(predict_formals$backend), backend_choices)
   expect_equal(eval(predict_formals$tuning), nn_tuning_choices)
   expect_equal(eval(formals(graph_cluster)$graph_backend), "auto")
   expect_equal(eval(formals(knn_graph)$nn_method), eval(formals(nn)$method))

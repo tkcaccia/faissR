@@ -8,7 +8,7 @@
   object,
   newdata,
   k = NULL,
-  backend = NULL,
+  backend = c("auto", "cpu", "cuda"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   vote = c("majority", "weighted"),
   type = c("response", "prob"),
@@ -23,8 +23,8 @@
 \item{k}{Number of neighbours.}
 
 \item{backend}{Device backend used for this prediction call: `"auto"`,
-`"cpu"`, or `"cuda"`. `NULL` reuses the backend stored in the fitted
-model. The fitted model's method and metric are always reused.}
+`"cpu"`, or `"cuda"`. The fitted model's method and metric are always
+reused.}
 
 \item{tuning}{Tuning policy used for this prediction call. `"auto"` uses the
 tuned default for the resolved method.}

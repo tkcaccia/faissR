@@ -152,8 +152,8 @@ knn_model_fit <- function(Xtrain,
 #' @param newdata Numeric query matrix with observations in rows.
 #' @param k Number of neighbours.
 #' @param backend Device backend used for this prediction call: `"auto"`,
-#'   `"cpu"`, or `"cuda"`. `NULL` reuses the backend stored in the fitted
-#'   model. The fitted model's method and metric are always reused.
+#'   `"cpu"`, or `"cuda"`. The fitted model's method and metric are always
+#'   reused.
 #' @param tuning Tuning policy used for this prediction call. `"auto"` uses the
 #'   tuned default for the resolved method.
 #' @param vote `"majority"` or `"weighted"` for classification; `"majority"`
@@ -167,16 +167,12 @@ knn_model_fit <- function(Xtrain,
 predict.faissR_knn_model <- function(object,
                                       newdata,
                                       k = NULL,
-                                      backend = NULL,
+                                      backend = c("auto", "cpu", "cuda"),
                                       tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                                       vote = c("majority", "weighted"),
                                       type = c("response", "prob"),
                                       ...) {
-  backend <- if (is.null(backend)) {
-    object$backend %||% "auto"
-  } else {
-    normalize_public_backend_arg(backend)
-  }
+  backend <- normalize_public_backend_arg(backend)
   tuning <- normalize_nn_tuning(tuning)
   vote <- normalize_knn_vote(vote)
   type <- normalize_knn_type(type)

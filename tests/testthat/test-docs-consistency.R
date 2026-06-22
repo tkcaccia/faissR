@@ -283,7 +283,7 @@ test_that("reference manual keeps probability prediction inside predict", {
   expect_true(grepl('type = c\\("response", "prob"\\)', knn_rd))
   expect_true(grepl('type = c\\("response", "prob"\\)', predict_rd))
   expect_true(grepl("backend, method, metric, tuning", knn_rd, fixed = TRUE))
-  expect_true(grepl("The fitted model's method and metric are always reused", predict_rd, fixed = TRUE))
+  expect_true(grepl("The fitted model's method and metric are always[[:space:]]+reused", predict_rd))
   expect_false(grepl("predict_proba", manual_text, fixed = TRUE))
 })
 
