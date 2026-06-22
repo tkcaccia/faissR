@@ -1931,6 +1931,45 @@ test_that("graph benchmark preflights graph method and metric skips", {
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(120 * 4), ncol = 4)))
 })
 
+test_that("graph benchmark preflights resolved route runtime dependencies", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+
+  faiss_gpu_skip <- env$graph_route_runtime_skip(
+    "faiss_gpu_flat_l2",
+    cuda_available_value = FALSE,
+    faiss_gpu_available_value = TRUE,
+    cuvs_available_value = TRUE
+  )
+  expect_match(faiss_gpu_skip, "FAISS GPU")
+  expect_match(faiss_gpu_skip, "CUDA device")
+
+  expect_null(env$graph_route_runtime_skip(
+    "faiss_gpu_flat_l2",
+    cuda_available_value = TRUE,
+    faiss_gpu_available_value = TRUE,
+    cuvs_available_value = FALSE
+  ))
+
+  cuvs_skip <- env$graph_route_runtime_skip(
+    "cuda_cuvs_nndescent",
+    cuda_available_value = TRUE,
+    faiss_gpu_available_value = FALSE,
+    cuvs_available_value = FALSE
+  )
+  expect_match(cuvs_skip, "cuVS")
+
+  cuda_skip <- env$graph_route_runtime_skip(
+    "cuda_grid",
+    cuda_available_value = FALSE,
+    faiss_gpu_available_value = TRUE,
+    cuvs_available_value = TRUE
+  )
+  expect_match(cuda_skip, "CUDA")
+})
+
 test_that("graph benchmark preflights runtime-unavailable graph routes", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
@@ -1949,7 +1988,7 @@ test_that("graph benchmark preflights runtime-unavailable graph routes", {
     metric = "euclidean",
     x = dense
   )
-  if (isTRUE(faiss_gpu_available())) {
+  if (isTRUE(faiss_gpu_available()) && isTRUE(cuda_available())) {
     expect_null(cuda_skip)
   } else {
     expect_match(cuda_skip, "faiss_gpu_flat_l2|FAISS GPU|unavailable", ignore.case = TRUE)

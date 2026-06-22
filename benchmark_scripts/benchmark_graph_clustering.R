@@ -710,6 +710,37 @@ graph_nn_capabilities <- function() {
   .graph_nn_capabilities_cache
 }
 
+graph_route_runtime_skip <- function(route,
+                                     cuda_available_value = faissR::cuda_available(),
+                                     faiss_gpu_available_value = faissR::faiss_gpu_available(),
+                                     cuvs_available_value = faissR::cuvs_available()) {
+  route <- as.character(route)[1L]
+  if (is.na(route) || !nzchar(route)) return(NULL)
+  if (startsWith(route, "faiss_gpu")) {
+    if (!isTRUE(faiss_gpu_available_value) || !isTRUE(cuda_available_value)) {
+      return(paste0(
+        "Graph construction resolved route `", route,
+        "` requires FAISS GPU support and a CUDA device, but that runtime is unavailable."
+      ))
+    }
+  } else if (startsWith(route, "cuda_cuvs")) {
+    if (!isTRUE(cuvs_available_value)) {
+      return(paste0(
+        "Graph construction resolved route `", route,
+        "` requires RAPIDS cuVS, but cuVS is unavailable in the current runtime."
+      ))
+    }
+  } else if (route %in% c("cuda", "cuda_grid")) {
+    if (!isTRUE(cuda_available_value)) {
+      return(paste0(
+        "Graph construction resolved route `", route,
+        "` requires a CUDA device, but CUDA is unavailable in the current runtime."
+      ))
+    }
+  }
+  NULL
+}
+
 graph_build_expected_skip <- function(graph_backend, graph_method = "auto", metric = "euclidean", x = NULL) {
   graph_backend <- tolower(as.character(graph_backend)[1L])
   graph_method <- as.character(graph_method)[1L]
@@ -733,6 +764,10 @@ graph_build_expected_skip <- function(graph_backend, graph_method = "auto", metr
       "but it is unavailable in the current runtime:",
       notes %||% "runtime dependency is unavailable."
     ))
+  }
+  if (nrow(cap) && "resolved_backend" %in% names(cap)) {
+    route_skip <- graph_route_runtime_skip(cap$resolved_backend[[1L]])
+    if (!is.null(route_skip)) return(route_skip)
   }
   if (identical(graph_method, "grid") && !is.null(x)) {
     p <- ncol(x)
