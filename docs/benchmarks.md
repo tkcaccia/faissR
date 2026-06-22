@@ -157,6 +157,9 @@ each cycle using the same recall-threshold rule: fastest above threshold,
 best recall below threshold, and fastest when recall is unavailable.
 `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the overall best row
 across cycles with the same rule for backward-compatible summaries.
+`MATERIALS_AND_METHODS_nn_metrics.md` records the corresponding paper-ready
+methods text, including the metric grid, k grid, recall rules, expected-skip
+policy, and output-file definitions.
 
 Example CPU-focused metric run:
 
@@ -243,6 +246,9 @@ recommendation basis, median speed ratio, median ARI gap, modularity gap,
 method agreement, and resolved-backend agreement. Speed ratios and quality gaps
 are `NA` when the required timing, ARI, or modularity values are unavailable or
 invalid.
+`MATERIALS_AND_METHODS_graph_clustering.md` records the corresponding
+paper-ready methods text, including graph reuse, ARI/modularity reporting,
+target-cluster handling, expected-skip policy, and output-file definitions.
 The result table stores both requested and resolved public backend metadata:
 `graph_backend`/`cluster_backend` are the user requests, while
 `graph_preflight_route`/`cluster_preflight_route` show the resolver decision
@@ -457,6 +463,9 @@ withinss ratio, requested/resolved backend metadata, CPU thread count,
 backend/implementation agreement, and the recommendation basis used for the
 recommended row. Speed ratios, ARI gaps, and withinss ratios are `NA` when the
 required timing or quality values are missing or invalid.
+`MATERIALS_AND_METHODS_kmeans.md` records the corresponding paper-ready
+methods text, including centers selection, ARI/withinss reporting, tuning
+policy, expected-skip policy, and output-file definitions.
 Explicit CUDA/library combinations that are known unavailable before execution
 are recorded as `status = "expected_skip"` with `expected_skip = TRUE`, while
 `resolved_backend` remains `"cuda"` so the skipped public device request is

@@ -34,7 +34,8 @@ test_that("benchmark materials document key row-level and summary outputs", {
       "nn_metric_best_by_dataset_backend_metric_k.csv",
       "nn_metric_best_by_dataset_backend_metric_k_cycle.csv",
       "nn_metric_fastest_at_recall_threshold.csv",
-      "nn_metric_auto_vs_fastest.csv"
+      "nn_metric_auto_vs_fastest.csv",
+      "MATERIALS_AND_METHODS_nn_metrics.md"
     ),
     graph = c(
       "graph_cluster_benchmark_config.csv",
@@ -43,7 +44,8 @@ test_that("benchmark materials document key row-level and summary outputs", {
       "graph_cluster_best_by_dataset_k_target.csv",
       "graph_cluster_cycle_summary.csv",
       "graph_cluster_recommendations_from_cycles.csv",
-      "graph_cluster_auto_vs_cycle_recommendation.csv"
+      "graph_cluster_auto_vs_cycle_recommendation.csv",
+      "MATERIALS_AND_METHODS_graph_clustering.md"
     ),
     kmeans = c(
       "kmeans_benchmark_config.csv",
@@ -54,7 +56,8 @@ test_that("benchmark materials document key row-level and summary outputs", {
       "kmeans_recommendations_from_cycles.csv",
       "kmeans_backend_recommendations_from_cycles.csv",
       "kmeans_fast_vs_cycle_recommendation.csv",
-      "kmeans_fast_vs_stats.csv"
+      "kmeans_fast_vs_stats.csv",
+      "MATERIALS_AND_METHODS_kmeans.md"
     )
   )
   scripts <- c(
