@@ -18,17 +18,13 @@ split_arg <- function(x, default) {
   trimws(strsplit(x %||% default, ",", fixed = TRUE)[[1L]])
 }
 
-as_int_arg <- function(x, default) {
-  value <- suppressWarnings(as.integer(x %||% default))
-  if (length(value) != 1L || is.na(value) || value < 1L) as.integer(default) else value
-}
-
 required_positive_int_arg <- function(x, arg) {
-  value <- suppressWarnings(as.integer(x))
-  if (length(value) != 1L || is.na(value) || value < 1L) {
+  value <- suppressWarnings(as.numeric(x))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 1L ||
+      abs(value - round(value)) > sqrt(.Machine$double.eps)) {
     stop("`", arg, "` must be a positive integer.", call. = FALSE)
   }
-  value
+  as.integer(round(value))
 }
 
 required_nonnegative_numeric_arg <- function(x, arg) {
@@ -235,14 +231,21 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
 
 resolve_kmeans_int <- function(x, fallback) {
   if (is.character(x) && length(x) == 1L && identical(tolower(x), "auto")) return(as.integer(fallback))
-  out <- suppressWarnings(as.integer(x))
-  if (length(out) != 1L || is.na(out) || out < 1L) as.integer(fallback) else out
+  out <- suppressWarnings(as.numeric(x))
+  if (length(out) != 1L || is.na(out) || !is.finite(out) || out < 1L ||
+      abs(out - round(out)) > sqrt(.Machine$double.eps)) {
+    stop("k-means integer tuning values must be positive integers or `auto`.", call. = FALSE)
+  }
+  as.integer(round(out))
 }
 
 resolve_kmeans_tol <- function(x, fallback) {
   if (is.character(x) && length(x) == 1L && identical(tolower(x), "auto")) return(as.numeric(fallback))
   out <- suppressWarnings(as.numeric(x))
-  if (length(out) != 1L || is.na(out) || !is.finite(out) || out < 0) as.numeric(fallback) else out
+  if (length(out) != 1L || is.na(out) || !is.finite(out) || out < 0) {
+    stop("k-means tolerance must be a non-negative numeric value or `auto`.", call. = FALSE)
+  }
+  as.numeric(out)
 }
 
 infer_kmeans_resolved_backend <- function(backend, backend_used, method) {
@@ -620,7 +623,7 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 n_threads <- required_positive_int_arg(args$threads %||% 4L, "threads")
 configure_threads(n_threads)
-seed <- as_int_arg(args$seed, 1L)
+seed <- required_positive_int_arg(args$seed %||% 1L, "seed")
 timeout <- required_positive_int_arg(args$timeout %||% 600L, "timeout")
 fallback_centers <- required_positive_int_arg(args$centers %||% 10L, "centers")
 cycles <- required_positive_int_arg(args$cycles %||% 1L, "cycles")
