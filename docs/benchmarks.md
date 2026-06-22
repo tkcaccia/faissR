@@ -76,6 +76,11 @@ rather than duplicate Flat-IP rows. Implementation-specific faissR rows,
 such as FAISS GPU IVF and direct cuVS rows, are timed through faissR's internal
 benchmark route so the table can distinguish FAISS GPU indexes that use NVIDIA
 cuVS internally from direct RAPIDS cuVS API calls.
+The file `benchmark1_runtime_capabilities.csv` records the faissR Benchmark #1
+method/metric preflight table, including legacy Benchmark #1 method labels,
+equivalent public `nn()` routes where available, execution backends, metric
+support, and current runtime availability. Runtime-unavailable faissR rows are
+recorded as skipped before loading dataset matrices.
 
 If a non-standard runtime library directory is needed, set `FAISSR_ENV_DIR`
 explicitly before launch. The script no longer treats an unrelated active

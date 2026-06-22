@@ -654,6 +654,114 @@ faissr_benchmark_route <- function(method) {
   route
 }
 
+benchmark1_execution_backend_status <- function(execution_backend) {
+  backend <- as.character(execution_backend)[1L]
+  if (is.na(backend) || !nzchar(backend)) {
+    return(list(runtime_available = NA, runtime_notes = NA_character_))
+  }
+  if (backend %in% c("cpu", "cpu_nndescent", "cpu_grid")) {
+    return(list(runtime_available = TRUE, runtime_notes = "Native CPU faissR route is available."))
+  }
+  if (identical(backend, "hnsw")) {
+    ok <- available_pkg("RcppHNSW")
+    return(list(
+      runtime_available = ok,
+      runtime_notes = if (ok) "RcppHNSW fallback route is available." else "RcppHNSW is not installed."
+    ))
+  }
+  if (startsWith(backend, "faiss_gpu")) {
+    ok <- isTRUE(faissR::faiss_gpu_available())
+    return(list(
+      runtime_available = ok,
+      runtime_notes = if (ok) "FAISS GPU route is available." else "FAISS GPU support is not available in this build."
+    ))
+  }
+  if (startsWith(backend, "cuda_cuvs")) {
+    ok <- isTRUE(faissR::cuvs_available())
+    return(list(
+      runtime_available = ok,
+      runtime_notes = if (ok) "Direct cuVS route is available." else "RAPIDS cuVS support is not available in this build."
+    ))
+  }
+  if (startsWith(backend, "cuda")) {
+    ok <- isTRUE(faissR::cuda_available())
+    return(list(
+      runtime_available = ok,
+      runtime_notes = if (ok) "Native CUDA route is available." else "Native CUDA support is not available in this build."
+    ))
+  }
+  if (startsWith(backend, "faiss")) {
+    ok <- isTRUE(faissR::faiss_available())
+    return(list(
+      runtime_available = ok,
+      runtime_notes = if (ok) "FAISS CPU route is available." else "FAISS CPU support is not available in this build."
+    ))
+  }
+  list(runtime_available = TRUE, runtime_notes = "No faissR runtime dependency detected.")
+}
+
+benchmark1_runtime_capabilities <- function(methods, metrics = c("l2", "cosine", "correlation", "inner_product")) {
+  metrics <- benchmark1_metric_values(paste(metrics, collapse = ","))
+  rows <- vector("list", nrow(methods) * length(metrics))
+  r <- 0L
+  nn_caps <- tryCatch(faissR::nn_capabilities(runtime = TRUE), error = function(e) NULL)
+  for (i in seq_len(nrow(methods))) {
+    method <- methods$method[[i]]
+    for (metric in metrics) {
+      r <- r + 1L
+      applicable <- method_metric_applicable(method, metric)
+      public_metric <- metric_arg_for_label(metric)
+      public_cap <- NULL
+      if (!is.null(nn_caps) &&
+          !is.na(methods$public_backend[[i]]) &&
+          !is.na(methods$public_method[[i]])) {
+        public_cap <- nn_caps[
+          nn_caps$backend == methods$public_backend[[i]] &
+            nn_caps$method == methods$public_method[[i]] &
+            nn_caps$metric == public_metric,
+          ,
+          drop = FALSE
+        ]
+        if (nrow(public_cap)) public_cap <- public_cap[1L, , drop = FALSE] else public_cap <- NULL
+      }
+      runtime <- if (startsWith(method, "faissR_")) {
+        benchmark1_execution_backend_status(methods$execution_backend[[i]])
+      } else {
+        list(runtime_available = NA, runtime_notes = NA_character_)
+      }
+      rows[[r]] <- data.frame(
+        method = method,
+        metric = metric,
+        implementation = methods$implementation[[i]],
+        backend = methods$backend[[i]],
+        backend_detail = methods$backend_detail[[i]],
+        execution_backend = methods$execution_backend[[i]],
+        public_backend = methods$public_backend[[i]],
+        public_method = methods$public_method[[i]],
+        public_metric = public_metric,
+        metric_supported = isTRUE(applicable$ok),
+        metric_notes = if (isTRUE(applicable$ok)) "" else applicable$reason,
+        public_supported = if (!is.null(public_cap)) isTRUE(public_cap$supported[[1L]]) else NA,
+        public_resolved_backend = if (!is.null(public_cap) && "resolved_backend" %in% names(public_cap)) public_cap$resolved_backend[[1L]] else NA_character_,
+        runtime_available = runtime$runtime_available,
+        runtime_notes = runtime$runtime_notes,
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  do.call(rbind, rows)
+}
+
+benchmark1_runtime_skip <- function(method, metric) {
+  if (!startsWith(method, "faissR_")) return(NULL)
+  applicable <- method_metric_applicable(method, metric)
+  if (!isTRUE(applicable$ok)) return(NULL)
+  route <- faissr_benchmark_route(method)
+  status <- benchmark1_execution_backend_status(route$execution_backend)
+  if (isTRUE(status$runtime_available) || is.na(status$runtime_available)) return(NULL)
+  status$runtime_notes %||% paste("Resolved Benchmark #1 route", route$execution_backend, "is unavailable in the current runtime.")
+}
+
 run_method <- function(method, x, k, n_threads, dataset, out_dir, metric) {
   configure_cpu_threads(n_threads)
   if (startsWith(method, "faissR_")) {
@@ -1018,6 +1126,15 @@ if (worker) {
       write_csv_one(result_path, row)
       quit(status = 0L)
     }
+    runtime_skip <- benchmark1_runtime_skip(method, metric)
+    if (!is.null(runtime_skip)) {
+      row$status <- "skipped"
+      row$error <- runtime_skip
+      row$quality_status <- "skipped"
+      row$quality_error <- runtime_skip
+      write_csv_one(result_path, row)
+      quit(status = 0L)
+    }
     applicable <- method_dataset_applicable(method, dataset)
     if (!isTRUE(applicable$ok)) {
       row$status <- "skipped"
@@ -1152,6 +1269,11 @@ utils::write.csv(
   file.path(out_dir, "benchmark1_parameter_grid.csv"),
   row.names = FALSE
 )
+utils::write.csv(
+  benchmark1_runtime_capabilities(methods, metric_values),
+  file.path(out_dir, "benchmark1_runtime_capabilities.csv"),
+  row.names = FALSE
+)
 
 cmdline <- commandArgs(FALSE)
 file_arg <- grep("^--file=", cmdline, value = TRUE)
@@ -1283,6 +1405,7 @@ materials <- c(
   "The Flat rows use the public `method = \"flat\"` route. When `metric = \"inner_product\"` is explicitly requested, faissR dispatches the same public Flat rows to the appropriate FAISS inner-product index internally instead of listing duplicate Flat-IP methods.",
   "For faissR rows, `execution_backend` records the internal backend label used by `nn_compute()`, while `public_backend` and `public_method` record the equivalent public `nn(..., backend = , method = )` route. This separates legacy benchmark labels from the public API.",
   "The benchmark result table includes `backend_detail` to distinguish FAISS GPU indexes that use NVIDIA cuVS internally from direct RAPIDS cuVS API calls.",
+  "`benchmark1_runtime_capabilities.csv` records the faissR Benchmark #1 method/metric preflight table, including legacy Benchmark #1 method labels, equivalent public `nn()` routes where available, execution backends, metric support, and current runtime availability.",
   "External R package methods tested: Rnanoflann, RANN kd-tree and bd-tree, rnndescent RPF/RNND/NND/brute-force, RcppHNSW, RcppAnnoy, BiocNeighbors VP-tree/HNSW/Annoy, uwot::similarity_graph with nn_method = fnn, annoy, hnsw, and nndescent, and cuda.ml KNN if an installed cuda.ml package exposes a recognised KNN routine.",
   "umap::umap.knn was included as a precomputed-neighbour consumer test, not as a standalone KNN search algorithm. Rtsne::Rtsne_neighbors was marked not applicable because it consumes precomputed neighbours and optimizes t-SNE rather than exporting a standalone KNN search.",
   "",

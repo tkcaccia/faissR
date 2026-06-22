@@ -868,6 +868,41 @@ test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
   expect_true(is.na(invalid_row$public_method))
 })
 
+test_that("legacy Benchmark #1 records faissR runtime capability preflight", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
+    "if (worker)"
+  )
+  methods <- env$method_table()
+  caps <- env$benchmark1_runtime_capabilities(methods, c("l2", "inner_product"))
+
+  expect_s3_class(caps, "data.frame")
+  expect_true(all(c(
+    "method", "metric", "execution_backend", "public_backend",
+    "public_method", "public_metric", "metric_supported",
+    "runtime_available", "runtime_notes"
+  ) %in% names(caps)))
+  expect_true("faissR_faiss_gpu_flat_l2" %in% caps$method)
+
+  cpu_flat <- caps[
+    caps$method == "faissR_faiss_flat_l2" & caps$metric == "l2",
+    ,
+    drop = FALSE
+  ]
+  expect_equal(cpu_flat$execution_backend, "faiss_flat_l2")
+  expect_equal(cpu_flat$public_backend, "cpu")
+  expect_equal(cpu_flat$public_method, "flat")
+  expect_equal(cpu_flat$public_metric, "euclidean")
+  expect_equal(cpu_flat$runtime_available, faiss_available())
+
+  gpu_skip <- env$benchmark1_runtime_skip("faissR_faiss_gpu_flat_l2", "l2")
+  if (isTRUE(faiss_gpu_available())) {
+    expect_null(gpu_skip)
+  } else {
+    expect_match(gpu_skip, "FAISS GPU|not available|unavailable", ignore.case = TRUE)
+  }
+})
+
 test_that("legacy Benchmark #1 uses canonical direct cuVS IVF row", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
