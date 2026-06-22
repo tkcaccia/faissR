@@ -372,7 +372,6 @@ method_metric_applicable <- function(method, metric) {
 
 method_dataset_applicable <- function(method, dataset) {
   validation_pending <- c(
-    "faissR_cuda_cuvs_cagra",
     "cuda_ml_knn",
     "RANN_bd",
     "rnndescent_rpf",
