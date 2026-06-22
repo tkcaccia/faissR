@@ -246,10 +246,12 @@ model_Ytrain <- function(object) {
 }
 
 normalize_knn_model_k <- function(k, n_train) {
-  k <- suppressWarnings(as.integer(k))
-  if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L) {
+  k <- suppressWarnings(as.numeric(k))
+  if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L ||
+      abs(k - round(k)) > sqrt(.Machine$double.eps)) {
     stop("`k` must be a positive integer.", call. = FALSE)
   }
+  k <- as.integer(round(k))
   if (k > n_train) {
     stop("`k` cannot be larger than the number of training rows.", call. = FALSE)
   }

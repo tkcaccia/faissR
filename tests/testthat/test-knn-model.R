@@ -98,10 +98,12 @@ test_that("knn and predict require canonical task vote and type labels", {
   expect_error(knn(x, y, x[1:2, , drop = FALSE], backend = "cpu", vote = "w", k = 3L), "vote")
   expect_error(knn(x, y, x[1:2, , drop = FALSE], backend = "cpu", type = "p", k = 3L), "type")
   expect_error(knn(x, y, backend = "cpu", k = c(2L, 3L)), "`k` must be a positive integer")
+  expect_error(knn(x, y, backend = "cpu", k = 2.5), "`k` must be a positive integer")
   expect_error(knn(x, y, backend = "cpu", k = 3L, n_threads = c(1L, 2L)), "`n_threads` must be NULL or a single positive integer")
 
   model <- knn(x, y, backend = "cpu", k = 3L)
   expect_error(predict(model, x[1:2, , drop = FALSE], k = c(2L, 3L)), "`k` must be a positive integer")
+  expect_error(predict(model, x[1:2, , drop = FALSE], k = 2.5), "`k` must be a positive integer")
   expect_error(predict(model, x[1:2, , drop = FALSE], vote = "w"), "vote")
   expect_error(predict(model, x[1:2, , drop = FALSE], type = "p"), "type")
 })
