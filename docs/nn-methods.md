@@ -56,7 +56,7 @@ The `runtime_reason` labels are machine-readable, for example `available`,
 | `"ivfpq"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
 | `"vamana"` | approximate | native Vamana candidate graph | native Vamana candidate graph with CUDA refinement | DiskANN/Vamana [3,24] |
 | `"nsg"` | approximate | FAISS NSG for Euclidean/L2; native CPU NSG-style candidate graph for non-L2 metrics | native CUDA NSG-style candidate graph for all public metrics | NSG/FAISS [16,21,29] |
-| `"nndescent"` | approximate | native CPU NNDescent | cuVS NN-descent | NN-descent/cuVS [3-4,16] |
+| `"nndescent"` | approximate | native CPU NNDescent | cuVS NN-descent for Euclidean/cosine/correlation; native CUDA candidate refinement for raw inner product | NN-descent/cuVS [3-4,16] |
 | `"cagra"` | approximate | unsupported | FAISS GPU CAGRA or cuVS CAGRA | FAISS/cuVS CAGRA [3,13-16] |
 
 ## Metric Support Matrix

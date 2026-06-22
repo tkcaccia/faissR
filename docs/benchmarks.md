@@ -76,6 +76,10 @@ rather than duplicate Flat-IP rows. Implementation-specific faissR rows,
 such as FAISS GPU IVF and direct cuVS rows, are timed through faissR's internal
 benchmark route so the table can distinguish FAISS GPU indexes that use NVIDIA
 cuVS internally from direct RAPIDS cuVS API calls.
+CUDA NN-descent has two Benchmark #1 rows: `faissR_cuda_cuvs_nndescent` covers
+the direct cuVS Euclidean/normalized-metric route, while
+`faissR_cuda_native_nndescent` covers raw inner-product candidate refinement
+through faissR's native CUDA kernel.
 The file `benchmark1_runtime_capabilities.csv` records the faissR Benchmark #1
 method/metric preflight table, including legacy Benchmark #1 method labels,
 equivalent public `nn()` routes where available, execution backends, metric

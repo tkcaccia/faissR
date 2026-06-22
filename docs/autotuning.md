@@ -73,6 +73,7 @@ implementation routes recorded in benchmark output, not separate public
 | `nsg` | `faiss_nsg` speed/balanced tiers | CPU graph candidate | Can be accurate but failed on some datasets with fewer than k neighbours; use safer params or retry. |
 | `nndescent` | `cpu_nndescent` speed/balanced tiers | CPU graph speed tier | Native faissR NN-descent route; useful as an explicit Euclidean, normalized cosine/correlation, or raw inner-product graph-search candidate, but recall was usually lower than HNSW. |
 | `nndescent` | `cuda_cuvs_nndescent` | CUDA graph speed tier | Fast and useful at around 0.99 recall on some datasets; failed on COIL20. |
+| `nndescent` | `cuda_native_nndescent` | CUDA raw inner-product tier | Native CUDA candidate-refinement route used by public `backend = "cuda", method = "nndescent", metric = "inner_product"` because direct cuVS NN-descent does not expose raw IP. |
 | `cagra` | `faiss_gpu_cagra` | CUDA graph high-recall tier | Reliable high-recall CAGRA path through FAISS/cuVS integration [13-15]. |
 | `cagra` | `cuda_cuvs_cagra` | Direct cuVS CAGRA | `tuning = "auto"` uses deterministic defaults; explicit `tuning = "cache"` or `"pilot"` adds a recall guard. Direct cuVS CAGRA had anomalously poor MNIST recall; do not trust without measured recall or pilot success. |
 | `grid` | `cpu_grid` | Exact 2D/3D spatial path | Best for simulated 2D/3D Euclidean/cosine/correlation data; unavailable by design outside 2D/3D. |

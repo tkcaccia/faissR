@@ -1161,6 +1161,19 @@ test_that("legacy Benchmark #1 records faissR runtime capability preflight", {
   expect_equal(cpu_nnd_ip$public_resolved_backend, "cpu_nndescent")
   expect_true(isTRUE(cpu_nnd_ip$runtime_available))
 
+  cuda_native_nnd_ip <- caps[
+    caps$method == "faissR_cuda_native_nndescent" & caps$metric == "inner_product",
+    ,
+    drop = FALSE
+  ]
+  expect_equal(cuda_native_nnd_ip$execution_backend, "cuda_native_nndescent")
+  expect_equal(cuda_native_nnd_ip$public_backend, "cuda")
+  expect_equal(cuda_native_nnd_ip$public_method, "nndescent")
+  expect_equal(cuda_native_nnd_ip$public_metric, "inner_product")
+  expect_true(isTRUE(cuda_native_nnd_ip$metric_supported))
+  expect_true(isTRUE(cuda_native_nnd_ip$public_supported))
+  expect_equal(cuda_native_nnd_ip$public_resolved_backend, "cuda_native_nndescent")
+
   gpu_skip <- env$benchmark1_runtime_skip("faissR_faiss_gpu_flat_l2", "l2")
   if (isTRUE(faiss_gpu_available())) {
     expect_null(gpu_skip)
@@ -1310,6 +1323,9 @@ test_that("legacy Benchmark #1 exposes faissR NNDescent metric support", {
     expect_true(isTRUE(env$method_metric_applicable(method, "correlation")$ok))
   }
   expect_true(isTRUE(env$method_metric_applicable("faissR_cpu_nndescent", "inner_product")$ok))
+  expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_native_nndescent", "inner_product")$ok))
+  expect_false(isTRUE(env$method_metric_applicable("faissR_cuda_native_nndescent", "l2")$ok))
+  expect_false(isTRUE(env$method_metric_applicable("faissR_cuda_native_nndescent", "cosine")$ok))
   expect_false(isTRUE(env$method_metric_applicable("faissR_cuda_cuvs_nndescent", "inner_product")$ok))
   for (metric in c("l2", "cosine", "correlation", "inner_product")) {
     expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_nsg", metric)$ok), info = metric)
@@ -1335,6 +1351,12 @@ test_that("legacy Benchmark #1 exposes faissR NNDescent metric support", {
   expect_equal(cuda_nsg$public_backend, "cuda")
   expect_equal(cuda_nsg$public_method, "nsg")
   expect_equal(cuda_nsg$backend_detail, "Native CUDA NSG candidate graph")
+  cuda_native_nnd <- methods[methods$method == "faissR_cuda_native_nndescent", , drop = FALSE]
+  expect_equal(nrow(cuda_native_nnd), 1L)
+  expect_equal(cuda_native_nnd$execution_backend, "cuda_native_nndescent")
+  expect_equal(cuda_native_nnd$public_backend, "cuda")
+  expect_equal(cuda_native_nnd$public_method, "nndescent")
+  expect_equal(cuda_native_nnd$backend_detail, "Native CUDA NN-descent candidate refinement")
 })
 
 test_that("legacy Benchmark #1 best ranking is quality-aware before speed", {
