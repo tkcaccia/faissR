@@ -12,6 +12,7 @@ nn_without_self(
     "vamana", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+  cagra_implementation = NULL,
   output = c("double", "float"),
   distances = NULL,
   n_threads = NULL
@@ -42,6 +43,9 @@ including metric-aware CPU HNSW routing.}
 deterministic no-pilot default for the resolved method. FAISS IVF/IVFPQ
 routes use metric-aware defaults; optional FAISS GPU IVF pilot/cache tuning
 is Euclidean-only.}
+
+\item{cagra_implementation}{CUDA CAGRA provider for this call. See
+\code{\link{nn}()}.}
 
 \item{output}{Distance storage type: `"double"` for the default R numeric
 matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the

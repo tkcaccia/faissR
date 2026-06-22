@@ -1873,6 +1873,34 @@ test_that("CUDA CAGRA implementation can be selected by option", {
   ))
 })
 
+test_that("CUDA CAGRA implementation can be selected per call", {
+  old <- getOption("faissR.cagra_implementation")
+  on.exit(options(faissR.cagra_implementation = old), add = TRUE)
+
+  options(faissR.cagra_implementation = "cuvs")
+  local({
+    faissR:::set_call_cagra_implementation("faiss_gpu")
+    expect_equal(getOption("faissR.cagra_implementation"), "faiss_gpu")
+    expect_equal(
+      faissR:::resolve_public_nn_backend("cuda", "cagra", "euclidean"),
+      "faiss_gpu_cagra"
+    )
+  })
+  expect_equal(getOption("faissR.cagra_implementation"), "cuvs")
+
+  expect_equal(faissR:::normalize_cagra_implementation_arg("direct-cuvs"), "cuvs")
+  expect_equal(faissR:::normalize_cagra_implementation_arg("faiss"), "faiss_gpu")
+  expect_error(
+    nn_without_self(
+      matrix(rnorm(20), ncol = 4),
+      k = 2L,
+      backend = "cpu",
+      cagra_implementation = "metal"
+    ),
+    "cagra_implementation"
+  )
+})
+
 
 test_that("public backend and method resolver maps device plus method", {
   expect_equal(

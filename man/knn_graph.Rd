@@ -14,6 +14,7 @@ knn_graph(
   method = NULL,
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+  cagra_implementation = NULL,
   weight = c("auto", "snn", "adaptive", "distance", "binary"),
   mutual = FALSE,
   prune = 0,
@@ -29,6 +30,7 @@ knn_graph(
 \item{method}{Alias for \code{nn_method}, matching the public method argument used by \code{nn()} and \code{knn()}. If both \code{method} and \code{nn_method} are supplied they must resolve to the same public nearest-neighbour method label.}
 \item{metric}{Distance metric passed to \code{nn_without_self()} when \code{knn} is not supplied. Aliases such as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as canonical metric labels. Correlation is centered cosine similarity, not raw inner product. Inner-product graph construction ranks neighbours by larger raw dot product while reusing faissR's shifted smaller-is-better distance convention from \code{nn()}.}
 \item{tuning}{Tuning policy passed to \code{nn_without_self()} when \code{knn} is not supplied.}
+\item{cagra_implementation}{CUDA CAGRA provider passed to \code{nn_without_self()} when KNN is computed here. \code{NULL} uses the global option; \code{"auto"} prefers FAISS GPU CAGRA then direct cuVS CAGRA, while \code{"faiss_gpu"} or \code{"cuvs"} force one provider.}
 \item{weight}{Graph weighting. \code{"auto"} uses SNN/Jaccard weights for input space and distance weights for embedding space. \code{"snn"} builds shared-nearest-neighbour Jaccard weights. \code{"adaptive"} uses a local radius kernel. \code{"distance"} uses \code{1 / (1 + distance)}. \code{"binary"} gives every edge weight 1.}
 \item{mutual}{If \code{TRUE}, keep only reciprocal nearest-neighbour edges.}
 \item{prune}{Drop edges with weight less than or equal to this value.}

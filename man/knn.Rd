@@ -13,6 +13,7 @@ knn(
     "vamana", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+  cagra_implementation = NULL,
   task = c("auto", "classification", "regression"),
   k = 15L,
   n_threads = NULL,
@@ -37,6 +38,7 @@ canonical metric labels. Correlation is centered cosine similarity, not raw
 inner product. See \code{nn()} for metric/backend support details, including
 metric-aware CPU HNSW routing.}
 \item{tuning}{Tuning policy passed to \code{nn()}. \code{"auto"} uses the deterministic default for the resolved method; \code{"cache"} and \code{"pilot"} opt into pilot tuning where implemented. FAISS GPU IVF pilot/cache tuning is Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware defaults.}
+\item{cagra_implementation}{CUDA CAGRA provider passed to \code{nn()} for \code{method = "cagra"} or CUDA-auto routes that select CAGRA. \code{NULL} uses the global \code{faissR.cagra_implementation} option; \code{"auto"} prefers FAISS GPU CAGRA then direct cuVS CAGRA, while \code{"faiss_gpu"} or \code{"cuvs"} force one provider.}
 \item{task}{\code{"auto"}, \code{"classification"}, or \code{"regression"}. \code{"auto"} treats numeric responses as regression and other response types as classification.}
 \item{k}{Default number of neighbours used by \code{predict()} and by immediate predictions when \code{Xtest} is supplied.}
 \item{n_threads}{CPU threads passed to \code{nn()} for CPU backends.}

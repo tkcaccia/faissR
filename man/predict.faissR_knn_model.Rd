@@ -10,6 +10,7 @@
   k = NULL,
   backend = c("auto", "cpu", "cuda"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+  cagra_implementation = NULL,
   vote = c("majority", "weighted"),
   type = c("response", "prob"),
   ...
@@ -29,6 +30,9 @@ reused.}
 \item{tuning}{Tuning policy used for this prediction call. `"auto"` uses the
 deterministic default for the resolved method; pilot/cache tuning is
 opt-in.}
+
+\item{cagra_implementation}{CUDA CAGRA provider for this prediction call.
+\code{NULL} reuses the fitted model's setting, then the global option.}
 
 \item{vote}{`"majority"` or `"weighted"` for classification; `"majority"`
 means an unweighted neighbour mean for regression.}

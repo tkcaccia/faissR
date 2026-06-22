@@ -28,6 +28,10 @@
 #'   \code{\link{nn}()}.
 #' @param tuning Tuning policy passed to \code{\link{nn_without_self}()} when
 #'   `knn` is not supplied.
+#' @param cagra_implementation CUDA CAGRA provider passed to
+#'   \code{\link{nn_without_self}()} when KNN is computed here. `NULL` uses the
+#'   global option; `"auto"` prefers FAISS GPU CAGRA then direct cuVS CAGRA,
+#'   while `"faiss_gpu"` or `"cuvs"` force one provider.
 #' @param weight Graph weighting. `"auto"` uses SNN/Jaccard weights for input
 #'   space and distance weights for embedding space. `"snn"` builds full
 #'   shared-nearest-neighbour Jaccard weights between all rows sharing at least
@@ -60,6 +64,7 @@ knn_graph <- function(data,
                       method = NULL,
                       metric = c("euclidean", "cosine", "correlation", "inner_product"),
                       tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+                      cagra_implementation = NULL,
                       weight = c("auto", "snn", "adaptive", "distance", "binary"),
                       mutual = FALSE,
                       prune = 0,
@@ -78,6 +83,7 @@ knn_graph <- function(data,
   }
   metric <- normalize_nn_metric(metric)
   tuning <- normalize_nn_tuning(tuning)
+  cagra_implementation <- normalize_cagra_implementation_arg(cagra_implementation)
   weight <- normalize_graph_weight(weight)
   k <- normalize_graph_positive_int(k, "k")
   mutual <- normalize_scalar_logical_arg(mutual, "mutual", default = FALSE)
@@ -112,6 +118,7 @@ knn_graph <- function(data,
         method = nn_method,
         metric = metric,
         tuning = tuning,
+        cagra_implementation = cagra_implementation,
         n_threads = n_threads
       )
       resolved_graph_backend <- attr(knn, "resolved_backend") %||% attr(knn, "backend") %||% graph_backend
@@ -125,6 +132,7 @@ knn_graph <- function(data,
         method = nn_method,
         metric = metric,
         tuning = tuning,
+        cagra_implementation = cagra_implementation,
         n_threads = n_threads
       )
       resolved_graph_backend <- attr(knn, "resolved_backend") %||% attr(knn, "backend") %||% graph_backend
@@ -165,6 +173,7 @@ knn_graph <- function(data,
     nn_requested_backend = attr(knn, "requested_backend") %||% requested_graph_backend,
     nn_requested_method = attr(knn, "requested_method") %||% nn_method,
     nn_tuning = attr(knn, "tuning") %||% tuning,
+    nn_cagra_implementation = cagra_implementation %||% NA_character_,
     nn_approximation = attr(knn, "approximation") %||% NULL,
     nn_faiss = attr(knn, "faiss") %||% NULL,
     nn_cuvs = attr(knn, "cuvs") %||% NULL,
@@ -245,6 +254,11 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   convention from \code{\link{nn}()}.
 #' @param tuning Tuning policy passed to \code{\link{nn_without_self}()} when
 #'   `graph` is a matrix or embedding.
+#' @param cagra_implementation CUDA CAGRA provider passed to
+#'   \code{\link{nn_without_self}()} when graph KNN is computed here. `NULL`
+#'   uses the global option; `"auto"`, `"faiss_gpu"`, or `"cuvs"` select the
+#'   CAGRA provider for CUDA `graph_method = "cagra"` and CUDA-auto CAGRA
+#'   routes.
 #' @param weight KNN graph weighting. See \code{\link{knn_graph}()}.
 #' @param mutual If `TRUE`, keep only reciprocal nearest-neighbour edges when a
 #'   graph must be built from data or a KNN object.
@@ -330,6 +344,7 @@ graph_cluster <- function(graph,
                           graph_method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"),
                           metric = c("euclidean", "cosine", "correlation", "inner_product"),
                           tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+                          cagra_implementation = NULL,
                           weight = c("auto", "snn", "adaptive", "distance", "binary"),
                           mutual = FALSE,
                           prune = 0,
@@ -352,6 +367,7 @@ graph_cluster <- function(graph,
   graph_method <- public_nn_method_label(normalize_nn_method(graph_method))
   metric <- normalize_nn_metric(metric)
   tuning <- normalize_nn_tuning(tuning)
+  cagra_implementation <- normalize_cagra_implementation_arg(cagra_implementation)
   if (identical(method, "random_walking") && identical(backend, "cuda")) {
     if (identical(requested_backend, "auto")) {
       backend <- "cpu"
@@ -461,6 +477,7 @@ graph_cluster <- function(graph,
       method = graph_method,
       metric = metric,
       tuning = tuning,
+      cagra_implementation = cagra_implementation,
       n_threads = n_threads
     )
     input_backend <- attr(knn, "resolved_backend") %||% attr(knn, "backend") %||% resolved
@@ -474,6 +491,7 @@ graph_cluster <- function(graph,
       method = graph_method,
       metric = metric,
       tuning = tuning,
+      cagra_implementation = cagra_implementation,
       n_threads = n_threads
     )
     input_backend <- attr(knn, "resolved_backend") %||% attr(knn, "backend") %||% resolved
@@ -521,6 +539,7 @@ graph_cluster <- function(graph,
     nn_requested_backend = attr(knn, "requested_backend") %||% graph_requested_backend,
     nn_requested_method = attr(knn, "requested_method") %||% graph_method,
     nn_tuning = attr(knn, "tuning") %||% tuning,
+    nn_cagra_implementation = cagra_implementation %||% NA_character_,
     nn_approximation = attr(knn, "approximation") %||% NULL,
     nn_faiss = attr(knn, "faiss") %||% NULL,
     nn_cuvs = attr(knn, "cuvs") %||% NULL,

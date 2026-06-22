@@ -1834,9 +1834,12 @@ faissr_option <- function(name, default = NULL) {
   default
 }
 
-cagra_implementation_preference <- function(default = "auto") {
-  value <- faissr_option("cagra_implementation", default)
+normalize_cagra_implementation_value <- function(value, default = "auto", arg = NULL, strict = FALSE) {
+  if (is.null(value)) value <- default
   value <- tolower(gsub("[[:space:]_-]+", "", as.character(value)[1L]))
+  if (length(value) != 1L || is.na(value) || !nzchar(value)) {
+    value <- ""
+  }
   aliases <- c(
     auto = "auto",
     default = "auto",
@@ -1852,9 +1855,47 @@ cagra_implementation_preference <- function(default = "auto") {
     cudacuvscagra = "cuvs"
   )
   if (!value %in% names(aliases)) {
+    if (isTRUE(strict)) {
+      arg <- arg %||% "cagra_implementation"
+      stop(
+        "`", arg, "` must be one of \"auto\", \"faiss_gpu\", or \"cuvs\".",
+        call. = FALSE
+      )
+    }
     return(default)
   }
   unname(aliases[[value]])
+}
+
+cagra_implementation_preference <- function(default = "auto") {
+  normalize_cagra_implementation_value(
+    faissr_option("cagra_implementation", default),
+    default = default
+  )
+}
+
+normalize_cagra_implementation_arg <- function(value) {
+  if (is.null(value)) return(NULL)
+  normalize_cagra_implementation_value(
+    value,
+    default = "auto",
+    arg = "cagra_implementation",
+    strict = TRUE
+  )
+}
+
+set_call_cagra_implementation <- function(value) {
+  value <- normalize_cagra_implementation_arg(value)
+  if (is.null(value)) return(invisible(FALSE))
+  old <- getOption("faissR.cagra_implementation")
+  options(faissR.cagra_implementation = value)
+  parent <- parent.frame()
+  do.call(
+    on.exit,
+    list(substitute(options(faissR.cagra_implementation = OLD), list(OLD = old)), add = TRUE),
+    envir = parent
+  )
+  invisible(TRUE)
 }
 
 resolve_cuda_cagra_backend <- function(faiss_gpu_available_value = faiss_gpu_available(),
@@ -6816,6 +6857,12 @@ grid_self_knn <- function(data,
 #'   IVF, while non-Euclidean IVF routes use deterministic metric-aware
 #'   defaults. Advanced tuning and cache knobs use
 #'   `options(faissR.<name> = ...)`.
+#' @param cagra_implementation CUDA CAGRA provider for this call. `NULL` uses
+#'   the global `options(faissR.cagra_implementation = ...)` value. `"auto"`
+#'   prefers FAISS GPU CAGRA when available and otherwise direct RAPIDS cuVS
+#'   CAGRA; `"faiss_gpu"` and `"cuvs"` force one provider for benchmarking.
+#'   This argument affects only public `backend = "cuda", method = "cagra"`
+#'   requests and CUDA-auto routes that select CAGRA.
 #' @param output Distance storage type for the returned object. `"double"`
 #'   returns the default R numeric distance matrix. `"float"` returns
 #'   `distances` as a `float::fl()`/`float32` object and records
@@ -6865,9 +6912,11 @@ nn <- function(data,
                method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"),
                metric = c("euclidean", "cosine", "correlation", "inner_product"),
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+               cagra_implementation = NULL,
                output = c("double", "float"),
                distances = NULL,
                n_threads = NULL) {
+  set_call_cagra_implementation(cagra_implementation)
   points_missing <- missing(points)
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
@@ -6933,6 +6982,8 @@ nn <- function(data,
 #'   deterministic no-pilot default for the resolved method. FAISS IVF/IVFPQ
 #'   routes use metric-aware defaults; optional FAISS GPU IVF pilot/cache tuning
 #'   is Euclidean-only.
+#' @param cagra_implementation CUDA CAGRA provider for this call. See
+#'   \code{\link{nn}()}.
 #' @param output Distance storage type: `"double"` for the default R numeric
 #'   matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
 #'   optional `float` package is installed. `float::fl()` input matrices use
@@ -6955,9 +7006,11 @@ nn_without_self <- function(data,
                             method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"),
                             metric = c("euclidean", "cosine", "correlation", "inner_product"),
                             tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+                            cagra_implementation = NULL,
                             output = c("double", "float"),
                             distances = NULL,
                             n_threads = NULL) {
+  set_call_cagra_implementation(cagra_implementation)
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
   tuning <- normalize_nn_tuning(tuning)

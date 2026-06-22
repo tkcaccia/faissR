@@ -13,6 +13,7 @@ nn(
     "vamana", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+  cagra_implementation = NULL,
   output = c("double", "float"),
   distances = NULL,
   n_threads = NULL
@@ -99,6 +100,13 @@ FAISS GPU IVF `"cache"`/`"pilot"` tuning currently runs only for Euclidean
 IVF, while non-Euclidean IVF routes use deterministic metric-aware
 defaults. Advanced tuning and cache knobs use
 `options(faissR.<name> = ...)`.}
+
+\item{cagra_implementation}{CUDA CAGRA provider for this call. `NULL` uses
+the global `options(faissR.cagra_implementation = ...)` value. `"auto"`
+prefers FAISS GPU CAGRA when available and otherwise direct RAPIDS cuVS
+CAGRA; `"faiss_gpu"` and `"cuvs"` force one provider for benchmarking.
+This argument affects only public `backend = "cuda", method = "cagra"`
+requests and CUDA-auto routes that select CAGRA.}
 
 \item{output}{Distance storage type for the returned object. `"double"`
 returns the default R numeric distance matrix. `"float"` returns

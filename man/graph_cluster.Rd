@@ -15,6 +15,7 @@ graph_cluster(
     "ivfpq", "vamana", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+  cagra_implementation = NULL,
   weight = c("auto", "snn", "adaptive", "distance", "binary"),
   mutual = FALSE,
   prune = 0,
@@ -42,6 +43,7 @@ libcugraph was detected at build time; random-walking is CPU-only.}
 \item{graph_method}{Nearest-neighbour method passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding.}
 \item{metric}{Distance metric passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding. Aliases such as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as canonical metric labels. Correlation is centered cosine similarity, not raw inner product. Inner-product graph construction ranks neighbours by larger raw dot product while reusing faissR's shifted smaller-is-better distance convention from \code{nn()}.}
 \item{tuning}{Tuning policy passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding.}
+\item{cagra_implementation}{CUDA CAGRA provider passed to \code{nn_without_self()} when graph KNN is computed here. \code{NULL} uses the global option; \code{"auto"}, \code{"faiss_gpu"}, or \code{"cuvs"} select the CAGRA provider for CUDA \code{graph_method = "cagra"} and CUDA-auto CAGRA routes.}
 \item{weight}{KNN graph weighting used when a graph must be built.}
 \item{mutual}{If \code{TRUE}, keep only reciprocal nearest-neighbour edges when a graph must be built from data or a KNN object.}
 \item{prune}{Drop graph edges with weight less than or equal to this value when a graph must be built from data or a KNN object.}

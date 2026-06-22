@@ -44,6 +44,34 @@ test_that("precomputed KNN graph metadata prefers resolved backend", {
   expect_equal(cl$parameters$graph_resolved_backend, "faiss_gpu_cagra")
 })
 
+test_that("graph KNN builders record requested CAGRA implementation", {
+  set.seed(502)
+  x <- matrix(rnorm(60), ncol = 4)
+
+  g <- knn_graph(
+    x,
+    k = 4L,
+    backend = "cpu",
+    method = "exact",
+    cagra_implementation = "cuvs",
+    n_threads = 2L
+  )
+  expect_equal(attr(g, "faissR_graph")$nn_cagra_implementation, "cuvs")
+
+  cl <- graph_cluster(
+    x,
+    method = "louvain",
+    backend = "cpu",
+    graph_backend = "cpu",
+    graph_method = "exact",
+    cagra_implementation = "faiss_gpu",
+    k = 4L,
+    n_threads = 2L,
+    seed = 1L
+  )
+  expect_equal(cl$parameters$nn_cagra_implementation, "faiss_gpu")
+})
+
 test_that("precomputed KNN graph metadata fills missing requested backend", {
   knn <- list(
     indices = matrix(c(
