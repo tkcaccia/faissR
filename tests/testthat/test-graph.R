@@ -77,6 +77,18 @@ test_that("knn_graph supports adaptive weights and mutual edges natively", {
   expect_true(all(g_mutual$weight > 0))
 })
 
+test_that("graph builders require canonical weight labels", {
+  x <- matrix(rnorm(80), ncol = 4)
+
+  expect_equal(faissR:::normalize_graph_weight(NULL), "auto")
+  expect_equal(faissR:::normalize_graph_weight("adaptive"), "adaptive")
+  expect_error(knn_graph(x, k = 5L, backend = "cpu", weight = "a"), "weight")
+  expect_error(
+    graph_cluster(x, method = "louvain", backend = "cpu", graph_backend = "cpu", k = 5L, weight = "d"),
+    "weight"
+  )
+})
+
 test_that("knn_graph passes method metric and tuning to internal KNN", {
   set.seed(5041)
   x <- matrix(rnorm(120), ncol = 4)
@@ -319,6 +331,24 @@ test_that("graph_cluster requires canonical clustering method labels", {
   )
   expect_equal(faissR:::normalize_graph_cluster_method(NULL), "random_walking")
   expect_equal(faissR:::normalize_graph_cluster_method("leiden"), "leiden")
+})
+
+test_that("graph_cluster requires canonical objective-function labels", {
+  x <- matrix(rnorm(80), ncol = 4)
+
+  expect_equal(faissR:::normalize_graph_objective_function(NULL), "modularity")
+  expect_equal(faissR:::normalize_graph_objective_function("CPM"), "CPM")
+  expect_error(
+    graph_cluster(
+      x,
+      method = "leiden",
+      backend = "cpu",
+      graph_backend = "cpu",
+      k = 5L,
+      objective_function = "C"
+    ),
+    "objective_function"
+  )
 })
 
 test_that("graph_cluster passes method metric and tuning to internal KNN", {

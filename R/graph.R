@@ -81,7 +81,7 @@ knn_graph <- function(data,
   }
   metric <- normalize_nn_metric(metric)
   tuning <- normalize_nn_tuning(tuning)
-  weight <- match.arg(weight)
+  weight <- normalize_graph_weight(weight)
   k <- as.integer(k)
   if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L) {
     stop("`k` must be a positive integer.", call. = FALSE)
@@ -321,8 +321,8 @@ graph_cluster <- function(graph,
       )
     }
   }
-  weight <- match.arg(weight)
-  objective_function <- match.arg(objective_function)
+  weight <- normalize_graph_weight(weight)
+  objective_function <- normalize_graph_objective_function(objective_function)
   n_threads <- normalize_nn_threads(n_threads)
   k <- normalize_positive_int(k, 50L)
   n_runs <- normalize_positive_int(n_runs, 1L)
@@ -489,6 +489,30 @@ normalize_graph_cluster_method <- function(method) {
     )
   }
   method
+}
+
+normalize_graph_weight <- function(weight) {
+  weight <- as.character(weight)[1L]
+  if (is.na(weight) || !nzchar(weight)) weight <- "auto"
+  weight <- trimws(weight)
+  weights <- c("auto", "snn", "adaptive", "distance", "binary")
+  if (!weight %in% weights) {
+    stop(
+      "`weight` must be one of \"auto\", \"snn\", \"adaptive\", \"distance\", or \"binary\".",
+      call. = FALSE
+    )
+  }
+  weight
+}
+
+normalize_graph_objective_function <- function(objective_function) {
+  objective_function <- as.character(objective_function)[1L]
+  if (is.na(objective_function) || !nzchar(objective_function)) objective_function <- "modularity"
+  objective_function <- trimws(objective_function)
+  if (!objective_function %in% c("modularity", "CPM")) {
+    stop("`objective_function` must be one of \"modularity\" or \"CPM\".", call. = FALSE)
+  }
+  objective_function
 }
 
 normalize_graph_target_clusters <- function(n_clusters, method) {
