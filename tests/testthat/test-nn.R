@@ -1460,6 +1460,11 @@ test_that("public backend and method resolver maps device plus method", {
     "cuda_cuvs_nndescent"
   )
   expect_error(
+    faissR:::resolve_public_nn_backend("cuda", "hnsw", "correlation"),
+    'CUDA `method = "hnsw"` does not support `metric = "correlation"`',
+    fixed = TRUE
+  )
+  expect_error(
     faissR:::resolve_public_nn_backend("cuda", "cagra", "inner_product"),
     "inner_product"
   )

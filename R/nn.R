@@ -1790,12 +1790,11 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
       device <- "cpu"
     } else {
       stop(
-        "CUDA nearest-neighbour approximate methods currently support only ",
-        "`metric = \"euclidean\"` or `metric = \"inner_product\"`. ",
-        "Use `method = \"flat\"`, `method = \"grid\"`, `method = \"ivf\"`, ",
-        "`method = \"ivfpq\"`, `method = \"exact\"`, or ",
-        "`method = \"bruteforce\"` for validated CUDA cosine/correlation ",
-        "search.",
+        "CUDA `method = \"", method, "\"` does not support ",
+        "`metric = \"", metric, "\"`. Use `method = \"exact\"`, ",
+        "`\"bruteforce\"`, `\"flat\"`, `\"grid\"`, `\"ivf\"`, ",
+        "`\"ivfpq\"`, `\"nndescent\"`, or `\"cagra\"` for validated ",
+        "CUDA cosine/correlation search.",
         call. = FALSE
       )
     }
