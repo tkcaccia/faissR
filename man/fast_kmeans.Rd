@@ -83,7 +83,10 @@ A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
   deterministic shape rule used by `backend = "auto"` to decide whether CUDA
   has enough estimated work or input size to offset transfer overhead.
   `parameters$tuning$selection` stores the static no-pilot backend and
-  effective-parameter decision used for benchmark auditing. `hit_max_iter`
+  effective-parameter decision used for benchmark auditing, including
+  `explicit_backend` and `backend_decision` fields that distinguish an
+  explicit `"cpu"`/`"cuda"` request from an automatic shape-policy choice.
+  `hit_max_iter`
   records whether the run reached the effective iteration cap, and
   `converged` is the corresponding conservative convergence flag used by
   benchmark summaries.

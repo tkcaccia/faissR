@@ -452,7 +452,10 @@ summaries can audit why `backend = "auto"` selected CPU or CUDA without running
 extra tuning jobs. `result$parameters$tuning$selection` is the compact
 no-pilot audit record: it stores the requested and predicted backends,
 runtime capability flags, shape/work estimates, effective `max_iter`, `n_init`,
-and `tol`, and `slow_tuning = FALSE`.
+and `tol`, `explicit_backend`, `backend_decision`, and `slow_tuning = FALSE`.
+The `backend_decision` field is the shape-policy reason for auto requests and
+`explicit_cpu`/`explicit_cuda` for explicit device requests, so benchmark
+summaries do not confuse a forced backend with an automatic choice.
 The returned object also records `hit_max_iter` and `converged`, derived from
 the effective iteration cap and the backend-reported iteration count. These
 flags are conservative convergence diagnostics for benchmark tuning: they do

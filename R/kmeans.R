@@ -57,7 +57,10 @@
 #'   deterministic shape rule used by `backend = "auto"` to decide whether CUDA
 #'   has enough estimated work or input size to offset transfer overhead.
 #'   `parameters$tuning$selection` stores the static no-pilot backend and
-#'   effective-parameter decision used for benchmark auditing. `hit_max_iter`
+#'   effective-parameter decision used for benchmark auditing, including
+#'   `explicit_backend` and `backend_decision` fields that distinguish an
+#'   explicit `"cpu"`/`"cuda"` request from an automatic shape-policy choice.
+#'   `hit_max_iter`
 #'   records whether the run reached the effective iteration cap, and
 #'   `converged` is the corresponding conservative convergence flag used by
 #'   benchmark summaries.
@@ -262,6 +265,12 @@ kmeans_selection_metadata <- function(requested_backend,
                                       cuvs_available_value = cuvs_available()) {
   effective <- effective %||% list()
   backend_policy <- backend_policy %||% kmeans_auto_backend_policy(n, p, centers)
+  explicit_backend <- !identical(requested_backend, "auto")
+  backend_decision <- if (isTRUE(explicit_backend)) {
+    paste0("explicit_", requested_backend)
+  } else {
+    backend_policy$reason %||% NA_character_
+  }
   list(
     policy = "static_shape_center_backend_selector",
     slow_tuning = FALSE,
@@ -275,6 +284,8 @@ kmeans_selection_metadata <- function(requested_backend,
     nbytes = as.numeric(backend_policy$nbytes %||% (as.double(n) * as.double(p) * 8)),
     n_per_center = as.numeric(backend_policy$n_per_center %||% (as.double(n) / as.double(centers))),
     backend_policy_reason = backend_policy$reason %||% NA_character_,
+    explicit_backend = isTRUE(explicit_backend),
+    backend_decision = backend_decision,
     backend_policy_prefer_cuda = isTRUE(backend_policy$prefer_cuda),
     cuda_available = isTRUE(cuda_available_value),
     faiss_gpu_available = isTRUE(faiss_gpu_available_value),

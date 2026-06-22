@@ -618,9 +618,10 @@ deterministic threshold values (`work_threshold`, `nbytes_threshold`,
 `large_n_threshold`, and `large_p_threshold`) used for the CPU/CUDA decision.
 Benchmark rows also record `selection_*` columns from
 `parameters$tuning$selection`, including the predicted backend, backend-policy
-reason, runtime capability flags, work/input-size estimates, and
-`selection_slow_tuning = FALSE`. Benchmark summaries can therefore explain auto
-CPU/CUDA selection without running extra pilot jobs.
+reason, explicit-backend flag, backend decision label, runtime capability
+flags, work/input-size estimates, and `selection_slow_tuning = FALSE`.
+Benchmark summaries can therefore separate explicit CPU/CUDA requests from
+automatic CPU/CUDA selection without running extra pilot jobs.
 For k-means parameter tuning, `tuning_rule` is a categorical no-pilot label
 such as `small_low_work_multistart`, `medium_single_start`, or
 `large_fast_convergence`, while `tuning_rule_detail` stores the exact

@@ -84,6 +84,8 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(auto$parameters$tuning$selection$effective_n_init, auto$parameters$n_init)
   expect_equal(auto$parameters$tuning$selection$effective_tol, auto$parameters$tol)
   expect_equal(auto$parameters$tuning$selection$backend_policy_reason, "small_cpu_preferred")
+  expect_true(auto$parameters$tuning$selection$explicit_backend)
+  expect_equal(auto$parameters$tuning$selection$backend_decision, "explicit_cpu")
   expect_false(auto$parameters$tuning$selection$backend_policy_prefer_cuda)
 
   auto_backend <- fast_kmeans(x, centers = 3, backend = "auto", seed = 12, n_threads = 2)
@@ -92,6 +94,11 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_true(auto_backend$backend %in% c("cpu", "faiss", "cuda_faiss", "cuda_cuvs"))
   expect_equal(auto_backend$parameters$tuning$selection$requested_backend, "auto")
   expect_equal(auto_backend$parameters$tuning$selection$predicted_backend, auto_backend$parameters$resolved_backend)
+  expect_false(auto_backend$parameters$tuning$selection$explicit_backend)
+  expect_equal(
+    auto_backend$parameters$tuning$selection$backend_decision,
+    auto_backend$parameters$tuning$selection$backend_policy_reason
+  )
 
   small_many <- faissR:::kmeans_auto_params(
     n = 5000L,
@@ -431,6 +438,8 @@ test_that("fast_kmeans auto backend is shape-aware", {
   expect_equal(cuda_selection$policy, "static_shape_center_backend_selector")
   expect_equal(cuda_selection$predicted_backend, "cuda")
   expect_equal(cuda_selection$backend_policy_reason, "work_at_least_1e8")
+  expect_false(cuda_selection$explicit_backend)
+  expect_equal(cuda_selection$backend_decision, "work_at_least_1e8")
   expect_true(cuda_selection$backend_policy_prefer_cuda)
   expect_true(cuda_selection$cuda_available)
   expect_true(cuda_selection$faiss_gpu_available)

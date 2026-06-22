@@ -265,6 +265,9 @@ expose the same values as flat fields for benchmark summaries.
 `parameters$tuning$backend_policy` records the deterministic `backend = "auto"`
 shape decision, including `prefer_cuda`, `reason`, estimated work, input bytes,
 and `n_per_center`.
+`parameters$tuning$selection` records the compact no-pilot device decision;
+`selection$explicit_backend` and `selection$backend_decision` distinguish
+explicit `"cpu"`/`"cuda"` calls from automatic shape-policy choices.
 `hit_max_iter` records whether the run reached the effective iteration cap; this
 helps benchmark cycles identify fast settings that may be under-iterating.
 `parameters$requested_backend` records the public backend argument,

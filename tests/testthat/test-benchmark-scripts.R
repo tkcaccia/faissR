@@ -1668,6 +1668,8 @@ test_that("k-means benchmark records static selection metadata", {
     selection_slow_tuning = FALSE,
     selection_predicted_backend = "cpu",
     selection_reason = "small_cpu_preferred",
+    selection_explicit_backend = TRUE,
+    selection_backend_decision = "explicit_cpu",
     selection_work = 1200,
     selection_nbytes = 3200,
     selection_n_per_center = 33.3,
@@ -1679,6 +1681,8 @@ test_that("k-means benchmark records static selection metadata", {
   expect_false(row$selection_slow_tuning)
   expect_equal(row$selection_predicted_backend, "cpu")
   expect_equal(row$selection_reason, "small_cpu_preferred")
+  expect_true(row$selection_explicit_backend)
+  expect_equal(row$selection_backend_decision, "explicit_cpu")
   expect_true(row$converged)
   expect_false(row$hit_max_iter)
 
@@ -1690,6 +1694,8 @@ test_that("k-means benchmark records static selection metadata", {
   expect_false(summary$selection_slow_tuning)
   expect_equal(summary$selection_predicted_backend, "cpu")
   expect_equal(summary$selection_reason, "small_cpu_preferred")
+  expect_true(summary$selection_explicit_backend)
+  expect_equal(summary$selection_backend_decision, "explicit_cpu")
   expect_equal(summary$median_selection_work, 1200)
   expect_equal(summary$median_selection_nbytes, 3200)
   expect_equal(summary$median_selection_n_per_center, 33.3)
@@ -1861,6 +1867,8 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
     selection_slow_tuning = c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE),
     selection_predicted_backend = c("cuda", "cpu", "cuda", "cpu", "stats", "stats"),
     selection_reason = c("work_at_least_1e8", "small_cpu_preferred", "work_at_least_1e8", "small_cpu_preferred", "stats_kmeans", "stats_kmeans"),
+    selection_explicit_backend = c(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE),
+    selection_backend_decision = c("explicit_cuda", "explicit_cpu", "explicit_cuda", "explicit_cpu", "stats_kmeans", "stats_kmeans"),
     median_selection_work = c(300, 300, 500, 500, NA, NA),
     median_selection_nbytes = c(2400, 2400, 4000, 4000, NA, NA),
     median_selection_n_per_center = c(10, 10, 10, 10, NA, NA),
@@ -1888,6 +1896,8 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
   expect_equal(out$fast_selection_policy, rep("static_shape_center_backend_selector", 4))
   expect_equal(out$recommended_selection_policy, rep("stats", 4))
   expect_equal(out$fast_selection_predicted_backend, c("cpu", "cuda", "cpu", "cuda"))
+  expect_equal(out$fast_selection_backend_decision, c("explicit_cpu", "explicit_cuda", "explicit_cpu", "explicit_cuda"))
+  expect_true(all(out$fast_selection_explicit_backend))
   expect_equal(unique(out$recommended_recommendation_basis), "fastest_within_ari_tolerance")
 })
 
@@ -1930,6 +1940,8 @@ test_that("k-means auto comparison audits global recommendation", {
     selection_slow_tuning = c(FALSE, FALSE, FALSE),
     selection_predicted_backend = c("cpu", NA_character_, "stats"),
     selection_reason = c("small_cpu_preferred", "explicit_cuda", "stats_kmeans"),
+    selection_explicit_backend = c(FALSE, TRUE, TRUE),
+    selection_backend_decision = c("small_cpu_preferred", "explicit_cuda", "stats_kmeans"),
     median_selection_work = c(300, 300, NA),
     median_selection_nbytes = c(2400, 2400, NA),
     median_selection_n_per_center = c(10, 10, NA),
@@ -1950,6 +1962,8 @@ test_that("k-means auto comparison audits global recommendation", {
   expect_equal(out$auto_median_speed_ratio, 2)
   expect_equal(out$auto_median_ari_gap, 0)
   expect_equal(out$auto_selection_predicted_backend, "cpu")
+  expect_false(out$auto_selection_explicit_backend)
+  expect_equal(out$recommended_selection_backend_decision, "explicit_cuda")
   expect_equal(out$recommended_selection_reason, "explicit_cuda")
 })
 
