@@ -688,6 +688,27 @@ test_that("autotuning method settings table keeps public and implementation labe
   expect_true(any(grepl("not separate public", lines, fixed = TRUE)))
 })
 
+test_that("GitHub docs keep implementation labels out of public method/backend API", {
+  docs_files <- test_path("../../docs", c(
+    "backend-capabilities.md",
+    "implementation.md",
+    "usage-api.md",
+    "nn-methods.md"
+  ))
+  missing <- !file.exists(docs_files)
+  if (any(missing)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  prose <- paste(
+    vapply(docs_files, function(path) paste(readLines(path, warn = FALSE), collapse = "\n"), character(1L)),
+    collapse = "\n"
+  )
+  expect_true(grepl("not public `method` values", prose, fixed = TRUE))
+  expect_false(grepl("legacy explicit `backend` calls", prose, fixed = TRUE))
+  expect_false(grepl("legacy backend labels", prose, fixed = TRUE))
+})
+
 test_that("autotuning docs describe CUDA auto non-Euclidean routing", {
   docs_file <- test_path("../../docs/autotuning.md")
   if (!file.exists(docs_file)) {
