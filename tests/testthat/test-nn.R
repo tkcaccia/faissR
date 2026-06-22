@@ -655,6 +655,26 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_match(cuda_auto_cor$notes, "cuVS-only")
 })
 
+test_that("nn_capabilities agrees with public CPU/CUDA resolver support", {
+  caps <- nn_capabilities()
+  checked <- subset(caps, backend %in% c("cpu", "cuda") & method != "auto")
+
+  for (i in seq_len(nrow(checked))) {
+    row <- checked[i, , drop = FALSE]
+    label <- paste(row$backend, row$method, row$metric)
+    expr <- quote(faissR:::resolve_public_nn_backend(
+      row$backend[[1L]],
+      row$method[[1L]],
+      row$metric[[1L]]
+    ))
+    if (isTRUE(row$supported[[1L]])) {
+      expect_error(eval(expr), NA, info = label)
+    } else {
+      expect_error(eval(expr), info = label)
+    }
+  }
+})
+
 test_that("nn_capabilities can report current runtime availability", {
   caps <- nn_capabilities()
   runtime_caps <- nn_capabilities(runtime = TRUE)
@@ -1835,7 +1855,7 @@ test_that("public backend and method resolver maps device plus method", {
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "hnsw", "euclidean"),
-    "faiss_hnsw"
+    if (faiss_available()) "faiss_hnsw" else "hnsw"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "hnsw", "cosine"),
@@ -1851,7 +1871,7 @@ test_that("public backend and method resolver maps device plus method", {
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "hnsw", "euclidean"),
-    "faiss_hnsw"
+    if (faiss_available()) "faiss_hnsw" else "hnsw"
   )
   expect_error(
     faissR:::resolve_public_nn_backend("cpu", "HNSW", "euclidean"),
