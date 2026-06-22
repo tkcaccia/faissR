@@ -543,9 +543,15 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(all(caps$supported[
     caps$method == "nndescent" & caps$metric %in% c("euclidean", "cosine", "correlation")
   ]))
-  expect_true(all(!caps$supported[
-    caps$method == "nndescent" & caps$metric == "inner_product"
-  ]))
+  expect_true(caps$supported[
+    caps$method == "nndescent" & caps$backend == "cpu" & caps$metric == "inner_product"
+  ])
+  expect_true(caps$supported[
+    caps$method == "nndescent" & caps$backend == "auto" & caps$metric == "inner_product"
+  ])
+  expect_true(!caps$supported[
+    caps$method == "nndescent" & caps$backend == "cuda" & caps$metric == "inner_product"
+  ])
   expect_true(all(!caps$supported[caps$method == "vptree" & caps$metric == "inner_product"]))
 
   cuda_bruteforce_l2 <- caps[
@@ -1762,9 +1768,9 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cpu", "nsg", "correlation"),
     "euclidean"
   )
-  expect_error(
+  expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "nndescent", "inner_product"),
-    "nndescent"
+    "cpu_nndescent"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "nndescent", "correlation"),
@@ -2446,10 +2452,20 @@ test_that("FAISS graph backends report actual and requested parameters", {
       expect_equal(dim(nnd_metric$indices), c(nrow(x), 5L))
       expect_match(nnd_metric_approx$transform, "normalize")
     }
-    expect_error(
-      internal_nn_without_self(x, k = 5L, backend = "cpu_nndescent", metric = "inner_product", n_threads = 2L),
-      "inner_product"
+    nnd_ip <- internal_nn_without_self(
+      x,
+      k = 5L,
+      backend = "cpu_nndescent",
+      metric = "inner_product",
+      n_threads = 2L
     )
+    nnd_ip_approx <- attr(nnd_ip, "approximation")
+    expect_equal(attr(nnd_ip, "backend"), "cpu_nndescent")
+    expect_equal(attr(nnd_ip, "metric"), "inner_product")
+    expect_equal(dim(nnd_ip$indices), c(nrow(x), 5L))
+    expect_equal(nnd_ip_approx$metric, "inner_product")
+    expect_equal(unname(nnd_ip$distances[, 1L]), rep(0, nrow(x)))
+    expect_true(all(is.finite(nnd_ip$distances)))
     expect_error(
       internal_nn_without_self(x, k = 5L, backend = "faiss_nsg", metric = "inner_product", n_threads = 2L),
       "euclidean"

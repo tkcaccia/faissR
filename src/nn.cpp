@@ -569,11 +569,22 @@ bool insert_sorted_top_float(const float* data,
                              const int candidate,
                              const int n_features,
                              const int capacity,
-                             std::vector<NeighborF>& top) {
+                             std::vector<NeighborF>& top,
+                             const DistanceKind kind = DistanceKind::Euclidean) {
   if (candidate == query || candidate < 0) return false;
   if (sorted_top_contains(top, candidate)) return false;
+  float distance = 0.0f;
+  if (kind == DistanceKind::InnerProduct) {
+    const float* x = data + static_cast<std::size_t>(query) * n_features;
+    const float* y = data + static_cast<std::size_t>(candidate) * n_features;
+    float dot = 0.0f;
+    for (int c = 0; c < n_features; ++c) dot += x[c] * y[c];
+    distance = -dot;
+  } else {
+    distance = squared_euclidean_row_major_float(data, query, candidate, n_features);
+  }
   const NeighborF item{
-    squared_euclidean_row_major_float(data, query, candidate, n_features),
+    distance,
     candidate
   };
   if (static_cast<int>(top.size()) == capacity &&
@@ -2399,11 +2410,17 @@ List nndescent_self_knn_cpp(NumericMatrix data,
                             int n_random_projections,
                             int seed,
                             bool parallel,
-                            int cores) {
+                            int cores,
+                            std::string metric) {
   const int n = data.nrow();
   const int n_features = data.ncol();
   if (n < 2) Rcpp::stop("data must have at least two rows");
   if (k < 1 || k >= n) Rcpp::stop("k must be in [1, nrow(data) - 1]");
+  const DistanceKind distance_kind = distance_kind_from_method(metric);
+  if (distance_kind != DistanceKind::Euclidean &&
+      distance_kind != DistanceKind::InnerProduct) {
+    Rcpp::stop("native CPU NN-descent supports euclidean or inner_product metrics");
+  }
   pool_size = std::max(k, std::min(pool_size, n - 1));
   n_iters = std::max(0, n_iters);
   max_candidates = std::max(pool_size, std::min(max_candidates, n - 1));
@@ -2449,7 +2466,9 @@ List nndescent_self_knn_cpp(NumericMatrix data,
       for (int other_pos = lo; other_pos <= hi; ++other_pos) {
         if (other_pos == pos) continue;
         const int candidate = scores[static_cast<std::size_t>(other_pos)].second;
-        insert_sorted_top_float(x, query, candidate, n_features, pool_size, top);
+        insert_sorted_top_float(
+          x, query, candidate, n_features, pool_size, top, distance_kind
+        );
       }
     }
   }
@@ -2460,11 +2479,15 @@ List nndescent_self_knn_cpp(NumericMatrix data,
     std::vector<NeighborF>& top = init_top[static_cast<std::size_t>(i)];
     int attempts = 0;
     while (static_cast<int>(top.size()) < pool_size && attempts < pool_size * 32) {
-      insert_sorted_top_float(x, i, uniform(row_rng), n_features, pool_size, top);
+      insert_sorted_top_float(
+        x, i, uniform(row_rng), n_features, pool_size, top, distance_kind
+      );
       ++attempts;
     }
     for (int candidate = 0; static_cast<int>(top.size()) < pool_size && candidate < n; ++candidate) {
-      insert_sorted_top_float(x, i, candidate, n_features, pool_size, top);
+      insert_sorted_top_float(
+        x, i, candidate, n_features, pool_size, top, distance_kind
+      );
     }
     write_sorted_top_to_graph(top, graph_indices, graph_distances, i, pool_size);
   }
@@ -2502,7 +2525,9 @@ List nndescent_self_knn_cpp(NumericMatrix data,
         if (seen[static_cast<std::size_t>(candidate)] == stamp) return;
         seen[static_cast<std::size_t>(candidate)] = stamp;
         ++candidate_count;
-        insert_sorted_top_float(x, query, candidate, n_features, pool_size, top);
+        insert_sorted_top_float(
+          x, query, candidate, n_features, pool_size, top, distance_kind
+        );
       };
 
       for (int q = row_start; q < row_end; ++q) {
@@ -2570,8 +2595,14 @@ List nndescent_self_knn_cpp(NumericMatrix data,
     for (int j = 0; j < k; ++j) {
       const int idx = graph_indices[base + j];
       indices_ptr[static_cast<std::size_t>(j) * n + i] = idx + 1;
-      distances_ptr[static_cast<std::size_t>(j) * n + i] =
-        std::sqrt(std::max(static_cast<double>(graph_distances[base + j]), 0.0));
+      double distance = static_cast<double>(graph_distances[base + j]);
+      if (distance_kind == DistanceKind::InnerProduct) {
+        const double row_best = static_cast<double>(graph_distances[base]);
+        distance = std::max(distance - row_best, 0.0);
+      } else {
+        distance = std::sqrt(std::max(distance, 0.0));
+      }
+      distances_ptr[static_cast<std::size_t>(j) * n + i] = distance;
     }
   }
 

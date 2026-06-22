@@ -93,7 +93,7 @@ CUDA and keep CUDA backend metadata.
 | `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
 | `"ivfpq"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVFPQ supports L2/IP; cosine/correlation use normalized IVFPQ IP. |
 | `"nsg"` | euclidean | unsupported | CPU FAISS NSG is Euclidean/L2-only in faissR because this linked FAISS graph builder can abort for non-L2 construction. |
-| `"nndescent"` | euclidean, cosine, correlation | euclidean, cosine, correlation | Native CPU/cuVS NN-descent supports cosine/correlation by normalized Euclidean graph search; raw inner product is not exposed. FAISS NNDescent is experimental opt-in because linked FAISS builds can abort during graph construction. |
+| `"nndescent"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation | Native CPU NN-descent supports raw inner-product search; CPU/CUDA cosine and correlation use normalized Euclidean graph search. CUDA cuVS NN-descent does not expose raw inner product. FAISS NNDescent is experimental opt-in because linked FAISS builds can abort during graph construction. |
 | `"cagra"` | unsupported | euclidean, cosine, correlation | CUDA-only FAISS/cuVS graph search; cosine/correlation use normalized Euclidean graph search. |
 
 Programmatic form:
@@ -302,10 +302,12 @@ construction [4].
 
 - On CPU, faissR uses its native CPU NNDescent implementation by default.
 - On CUDA, faissR maps to direct RAPIDS cuVS NN-descent when available [3].
-- Public NNDescent routes support Euclidean/L2 directly and cosine/correlation
-  by row normalization followed by Euclidean graph search. Raw inner-product
-  NNDescent is not exposed because dot-product search is not equivalent to this
-  metric-preserving transform.
+- Native CPU NNDescent supports Euclidean/L2 directly and raw inner-product
+  self-KNN by ranking larger dot products through faissR's shifted
+  smaller-is-better distance convention.
+- CPU and CUDA NNDescent support cosine/correlation by row normalization
+  followed by Euclidean graph search.
+- CUDA cuVS NN-descent does not expose raw inner-product search.
 - FAISS NNDescent is disabled by default because linked FAISS builds could
   abort the R process during graph construction. The explicit FAISS backend is
   available only behind `options(faissR.enable_faiss_nndescent = TRUE)` for

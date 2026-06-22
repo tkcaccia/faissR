@@ -1227,9 +1227,6 @@ nn_compute <- function(data,
   }
 
   if (identical(backend, "cpu_nndescent")) {
-    if (identical(metric, "inner_product")) {
-      stop("CPU NN-descent does not support `metric = \"inner_product\"`.", call. = FALSE)
-    }
     if (!isTRUE(self_query)) {
       stop("`method = \"nndescent\"` is only available for self-KNN searches on CPU.", call. = FALSE)
     }
@@ -1254,7 +1251,8 @@ nn_compute <- function(data,
         search_data,
         k = nonself_k,
         seed = fast_knn_approx_seed(),
-        n_threads = n_threads
+        n_threads = n_threads,
+        metric = if (is.null(metric_inputs)) metric else "euclidean"
       )
       if (!isTRUE(exclude_self)) {
         out$indices <- cbind(seq_len(nrow(data)), out$indices)
@@ -1861,13 +1859,19 @@ nn_capability_row <- function(method, backend, metric) {
       "NSG is CPU-only in the public API."
     }
   } else if (identical(method, "nndescent")) {
-    supported <- non_ip_metric
+    supported <- if (identical(backend, "cpu")) {
+      all_metrics
+    } else {
+      non_ip_metric
+    }
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) "native CPU NNDescent" else "cuVS CUDA NN-descent"
-    notes <- if (supported) {
+    notes <- if (identical(backend, "cpu")) {
+      "Native CPU NNDescent supports Euclidean/L2 and raw inner-product self-KNN; cosine/correlation use normalized Euclidean graph search."
+    } else if (supported) {
       "Validated for Euclidean/L2 self-KNN search; cosine/correlation use normalized Euclidean graph search."
     } else {
-      "NNDescent does not expose raw inner-product search."
+      "CUDA NNDescent does not expose raw inner-product search."
     }
   } else if (identical(method, "cagra")) {
     supported <- identical(backend, "cuda") && metric %in% c("euclidean", "cosine", "correlation")
@@ -1987,12 +1991,6 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
     if (identical(method, "nsg") && !identical(metric, "euclidean")) {
       stop(
         "CPU `method = \"nsg\"` currently supports only `metric = \"euclidean\"`.",
-        call. = FALSE
-      )
-    }
-    if (identical(method, "nndescent") && identical(metric, "inner_product")) {
-      stop(
-        "CPU `method = \"nndescent\"` does not support `metric = \"inner_product\"`.",
         call. = FALSE
       )
     }
@@ -3778,20 +3776,32 @@ faiss_self_knn <- function(data,
     )
   }
   n_threads <- normalize_nn_threads(n_threads)
+  metric <- normalize_nn_metric(metric)
   if (isTRUE(exact) || identical(backend, "faiss_flat") ||
       identical(backend, "cpu_nndescent_faiss_flat")) {
-    out <- nn_faiss_flat_cpp(
-      data,
-      data,
-      as.integer(k),
-      TRUE,
-      as.integer(n_threads)
-    )
+    out <- if (identical(metric, "inner_product")) {
+      nn_faiss_flat_ip_cpp(
+        data,
+        data,
+        as.integer(k),
+        TRUE,
+        as.integer(n_threads)
+      )
+    } else {
+      nn_faiss_flat_cpp(
+        data,
+        data,
+        as.integer(k),
+        TRUE,
+        as.integer(n_threads)
+      )
+    }
     attr(out, "approximation") <- list(
-      strategy = "faiss_IndexFlatL2_self",
+      strategy = if (identical(metric, "inner_product")) "faiss_IndexFlatIP_self" else "faiss_IndexFlatL2_self",
       backend = "faiss",
       library = "faiss",
       exact = TRUE,
+      metric = metric,
       seed = as.integer(seed)
     )
     return(out)
@@ -3806,8 +3816,8 @@ faiss_self_knn <- function(data,
       as.integer(params$m),
       as.integer(params$ef_construction),
       as.integer(params$ef_search),
-      "euclidean",
-      "euclidean",
+      faiss_metric_search_arg(metric),
+      faiss_metric_distance_output_arg(metric),
       TRUE,
       as.integer(n_threads)
     )
@@ -3816,6 +3826,7 @@ faiss_self_knn <- function(data,
       backend = backend,
       library = "faiss",
       exact = FALSE,
+      metric = metric,
       m = as.integer(out$m),
       ef_construction = as.integer(out$ef_construction),
       ef_search = as.integer(out$ef_search),
@@ -3845,8 +3856,8 @@ faiss_self_knn <- function(data,
       as.integer(params$r),
       as.integer(params$search_l),
       as.integer(params$build_type),
-      "euclidean",
-      "euclidean",
+      faiss_metric_search_arg(metric),
+      faiss_metric_distance_output_arg(metric),
       TRUE,
       as.integer(n_threads)
     )
@@ -3929,6 +3940,7 @@ faiss_self_knn <- function(data,
     backend = backend,
     library = "faiss",
     exact = FALSE,
+    metric = metric,
     nlist = as.integer(out$nlist),
     nprobe = as.integer(out$nprobe),
     seed = as.integer(seed)
@@ -4066,9 +4078,18 @@ nndescent_iterations <- function(n, k) {
 nndescent_self_knn <- function(data,
                                k,
                                seed = 4L,
-                               n_threads = NULL) {
+                               n_threads = NULL,
+                               metric = "euclidean") {
   n <- nrow(data)
   k <- as.integer(k)
+  metric <- normalize_nn_metric(metric)
+  if (!metric %in% c("euclidean", "inner_product")) {
+    stop(
+      "Native CPU NN-descent expects raw euclidean or inner_product input. ",
+      "Cosine and correlation are normalized before this helper is called.",
+      call. = FALSE
+    )
+  }
   if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L || k >= n) {
     stop("`k` must be in [1, nrow(data) - 1].", call. = FALSE)
   }
@@ -4086,7 +4107,8 @@ nndescent_self_knn <- function(data,
       backend = paste0("cpu_nndescent_faiss_", faiss_index),
       exact = identical(faiss_index, "flat"),
       seed = seed,
-      n_threads = n_threads
+      n_threads = n_threads,
+      metric = metric
     ))
   }
   pool_size <- nndescent_pool_size(n, k)
@@ -4102,7 +4124,8 @@ nndescent_self_knn <- function(data,
     as.integer(n_random_projections),
     as.integer(seed),
     TRUE,
-    as.integer(max(1L, min(8L, n_threads)))
+    as.integer(max(1L, min(8L, n_threads))),
+    metric
   )
   params <- list(
     strategy = "native_cpu_nndescent",
@@ -4111,7 +4134,8 @@ nndescent_self_knn <- function(data,
     n_iters = n_iters,
     max_candidates = max_candidates,
     n_random_projections = n_random_projections,
-    reverse_candidates = "rank_ordered"
+    reverse_candidates = "rank_ordered",
+    metric = metric
   )
   attr(out, "nndescent") <- params
   attr(out, "approximation") <- params
@@ -5347,9 +5371,11 @@ grid_self_knn <- function(data,
 #'   graph builders can abort during normalized cosine/correlation or raw
 #'   inner-product construction [16].
 #'   \item `"nndescent"`: NN-descent approximate graph construction via
-#'   faissR's native CPU route or cuVS on CUDA. It supports Euclidean/L2 plus
-#'   cosine/correlation through normalized Euclidean graph search; raw inner
-#'   product is not exposed. FAISS NNDescent is experimental opt-in because
+#'   faissR's native CPU route or cuVS on CUDA. The native CPU route supports
+#'   Euclidean/L2 and raw inner-product self-KNN; cosine/correlation use
+#'   normalized Euclidean graph search. The CUDA cuVS route supports
+#'   Euclidean/L2 plus normalized cosine/correlation, but does not expose raw
+#'   inner-product search. FAISS NNDescent is experimental opt-in because
 #'   linked FAISS builds can abort during graph construction [3-4,16].
 #'   \item `"cagra"`: CUDA-only graph-search method via FAISS GPU CAGRA/cuVS
 #'   integration or direct RAPIDS cuVS CAGRA. It supports Euclidean/L2 plus
@@ -5433,9 +5459,9 @@ grid_self_knn <- function(data,
 #'   unavailable. CPU `method = "hnsw"` uses FAISS HNSW for all metrics when
 #'   available and RcppHNSW/hnswlib when FAISS is unavailable.
 #'   `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
-#'   FAISS IVF-Flat/IVFPQ IP, and FAISS HNSW IP where available.
-#'   `method = "nndescent"` supports cosine/correlation through normalized
-#'   Euclidean graph search and does not expose raw inner-product search.
+#'   FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, and native CPU NN-descent raw
+#'   dot-product search where available. CUDA NN-descent and CAGRA do not
+#'   expose raw inner-product search.
 #'   Unsupported backend combinations fail clearly instead of returning neighbours
 #'   computed under a different metric.
 #' @param tuning Tuning policy for approximate GPU methods. `"auto"` uses the

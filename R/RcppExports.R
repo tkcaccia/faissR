@@ -105,8 +105,8 @@ landmark_projection_knn_approx_cpp <- function(landmarks, queries, k, n_projecti
     .Call(`_faissR_landmark_projection_knn_approx_cpp`, landmarks, queries, k, n_projections, window, seed, parallel, cores)
 }
 
-nndescent_self_knn_cpp <- function(data, k, pool_size, n_iters, max_candidates, n_random_projections, seed, parallel, cores) {
-    .Call(`_faissR_nndescent_self_knn_cpp`, data, k, pool_size, n_iters, max_candidates, n_random_projections, seed, parallel, cores)
+nndescent_self_knn_cpp <- function(data, k, pool_size, n_iters, max_candidates, n_random_projections, seed, parallel, cores, metric) {
+    .Call(`_faissR_nndescent_self_knn_cpp`, data, k, pool_size, n_iters, max_candidates, n_random_projections, seed, parallel, cores, metric)
 }
 
 ivf_self_knn_cpp <- function(data, k, nlist, nprobe, seed, parallel, cores) {

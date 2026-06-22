@@ -1906,8 +1906,9 @@ test_that("graph benchmark preflights graph method and metric skips", {
   sparse_skip <- env$graph_build_expected_skip("cpu", graph_method = "sparse", metric = "euclidean", x = dense)
   expect_match(sparse_skip, "sparse Matrix")
 
-  nnd_ip <- env$graph_build_expected_skip("cpu", graph_method = "nndescent", metric = "inner_product", x = dense)
-  expect_match(nnd_ip, "inner-product|inner_product")
+  expect_null(env$graph_build_expected_skip("cpu", graph_method = "nndescent", metric = "inner_product", x = dense))
+  nnd_cuda_ip <- env$graph_build_expected_skip("cuda", graph_method = "nndescent", metric = "inner_product", x = dense)
+  expect_match(nnd_cuda_ip, "inner-product|inner_product")
 
   nsg_skip <- env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(80 * 4), ncol = 4))
   expect_match(nsg_skip, "more than 100 training rows")

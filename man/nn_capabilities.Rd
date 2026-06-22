@@ -36,9 +36,11 @@ The capability table reports metric support only when the selected route
 computes neighbours under that metric. FAISS Flat, IVF-Flat, IVFPQ, and HNSW
 support cosine and correlation by using normalized inner-product searches.
 CAGRA and NNDescent support cosine and correlation by using normalized
-Euclidean graph search. FAISS NSG remains Euclidean-only because linked FAISS
-graph builders can abort during non-Euclidean graph construction. Raw
-inner-product search is not exposed for NSG, NNDescent, or CAGRA.
+Euclidean graph search. Native CPU NNDescent also supports raw inner-product
+self-KNN through faissR's shifted dot-product distance convention. FAISS NSG
+remains Euclidean-only because linked FAISS graph builders can abort during
+non-Euclidean graph construction. Raw inner-product search is not exposed for
+NSG, CUDA NNDescent, or CAGRA.
 
 Use \code{runtime = TRUE} for benchmark preflight checks that must distinguish
 a valid method/metric combination from a route that is unavailable in the

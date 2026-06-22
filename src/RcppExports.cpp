@@ -406,8 +406,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // nndescent_self_knn_cpp
-List nndescent_self_knn_cpp(NumericMatrix data, int k, int pool_size, int n_iters, int max_candidates, int n_random_projections, int seed, bool parallel, int cores);
-RcppExport SEXP _faissR_nndescent_self_knn_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP pool_sizeSEXP, SEXP n_itersSEXP, SEXP max_candidatesSEXP, SEXP n_random_projectionsSEXP, SEXP seedSEXP, SEXP parallelSEXP, SEXP coresSEXP) {
+List nndescent_self_knn_cpp(NumericMatrix data, int k, int pool_size, int n_iters, int max_candidates, int n_random_projections, int seed, bool parallel, int cores, std::string metric);
+RcppExport SEXP _faissR_nndescent_self_knn_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP pool_sizeSEXP, SEXP n_itersSEXP, SEXP max_candidatesSEXP, SEXP n_random_projectionsSEXP, SEXP seedSEXP, SEXP parallelSEXP, SEXP coresSEXP, SEXP metricSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -420,7 +420,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
     Rcpp::traits::input_parameter< bool >::type parallel(parallelSEXP);
     Rcpp::traits::input_parameter< int >::type cores(coresSEXP);
-    rcpp_result_gen = Rcpp::wrap(nndescent_self_knn_cpp(data, k, pool_size, n_iters, max_candidates, n_random_projections, seed, parallel, cores));
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    rcpp_result_gen = Rcpp::wrap(nndescent_self_knn_cpp(data, k, pool_size, n_iters, max_candidates, n_random_projections, seed, parallel, cores, metric));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1088,7 +1089,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_landmark_candidate_knn_cpp", (DL_FUNC) &_faissR_landmark_candidate_knn_cpp, 7},
     {"_faissR_landmark_candidate_knn_subset_cpp", (DL_FUNC) &_faissR_landmark_candidate_knn_subset_cpp, 8},
     {"_faissR_landmark_projection_knn_approx_cpp", (DL_FUNC) &_faissR_landmark_projection_knn_approx_cpp, 8},
-    {"_faissR_nndescent_self_knn_cpp", (DL_FUNC) &_faissR_nndescent_self_knn_cpp, 9},
+    {"_faissR_nndescent_self_knn_cpp", (DL_FUNC) &_faissR_nndescent_self_knn_cpp, 10},
     {"_faissR_ivf_self_knn_cpp", (DL_FUNC) &_faissR_ivf_self_knn_cpp, 7},
     {"_faissR_annoy_self_knn_cpp", (DL_FUNC) &_faissR_annoy_self_knn_cpp, 8},
     {"_faissR_vptree_self_knn_cpp", (DL_FUNC) &_faissR_vptree_self_knn_cpp, 4},
