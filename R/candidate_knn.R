@@ -19,9 +19,11 @@
 #' @param metric `"euclidean"`, `"cosine"`, `"correlation"`, or
 #'   `"inner_product"`. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and
 #'   `"ip"` are accepted. Correlation is centered cosine similarity, not raw
-#'   inner product. CUDA candidate scoring supports Euclidean directly and
-#'   cosine/correlation through normalized Euclidean scoring; raw inner-product
-#'   CUDA candidate scoring is not exposed.
+#'   inner product. CPU inner-product scoring ranks by larger raw dot product,
+#'   while returned `distances` are shifted within each query so the best
+#'   returned dot product has distance `0`. CUDA candidate scoring supports
+#'   Euclidean directly and cosine/correlation through normalized Euclidean
+#'   scoring; raw inner-product CUDA candidate scoring is not exposed.
 #' @param n_threads CPU threads for the CPU backend.
 #' @param exclude_self If `TRUE`, remove each query row from its own candidate
 #'   set. This is valid only for self-query candidate KNN.

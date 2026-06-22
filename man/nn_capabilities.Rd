@@ -20,6 +20,10 @@ benchmarks.
 faissR exposes four public nearest-neighbour metrics: \code{"euclidean"},
 \code{"cosine"}, \code{"correlation"}, and \code{"inner_product"}. Correlation
 is centered cosine similarity, whereas inner product is the raw dot product.
+For \code{metric = "inner_product"}, neighbours are ranked by larger raw dot
+product, but returned \code{distances} keep faissR's smaller-is-better
+convention by shifting each query row so the best returned dot product has
+distance \code{0}.
 
 The capability table reports metric support only when the selected route
 computes neighbours under that metric. FAISS Flat, IVF-Flat, IVFPQ, and HNSW

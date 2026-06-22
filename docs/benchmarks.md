@@ -332,7 +332,8 @@ metric matrix. It runs public `nn()` combinations over:
   method labels, not resolved backend labels such as `faiss_hnsw`;
 - metrics: `"euclidean"`, `"cosine"`, `"correlation"`, and
   `"inner_product"` after alias canonicalization; correlation is centered
-  cosine similarity, while inner product is the raw dot product;
+  cosine similarity, while inner product ranks by larger raw dot product and
+  reports shifted smaller-is-better distances;
 - k values: `5`, `10`, `15`, `50`, and `100` by default.
 
 Unsupported combinations are preflighted with `faissR::nn_capabilities()` and

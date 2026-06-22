@@ -63,7 +63,11 @@ the tuned defaults identified for the resolved method.
 The public nearest-neighbour metrics are `"euclidean"`, `"cosine"`,
 `"correlation"`, and `"inner_product"`. Correlation is centered cosine
 similarity, whereas inner product is the raw dot product; distance choices
-belong in `metric`, not in separate method names. For normalized cosine and
+belong in `metric`, not in separate method names. For inner-product searches,
+neighbours are ranked by larger raw dot product, but returned `distances` keep
+faissR's smaller-is-better convention: the best returned dot product in each
+query row has distance `0`, and lower dot products have larger shifted
+distances. For normalized cosine and
 correlation routes, all-zero cosine rows and constant correlation rows are
 handled explicitly: two zero-normalized rows have distance `0`, while a
 zero-normalized row versus a nonzero row has distance `1`. CPU FAISS Flat uses

@@ -316,6 +316,8 @@ test_that("README describes public NN metrics and correlation semantics", {
   expect_true(grepl('"euclidean".*"cosine".*"correlation".*"inner_product"', prose))
   expect_true(grepl("Correlation is centered cosine similarity", prose, fixed = TRUE))
   expect_true(grepl("inner product is the raw dot product", prose, fixed = TRUE))
+  expect_true(grepl("best returned dot product", prose, fixed = TRUE))
+  expect_true(grepl("smaller-is-better", prose, fixed = TRUE))
   expect_true(grepl("distance choices belong in `metric`", prose, fixed = TRUE))
   expect_true(grepl("zero-normalized rows have distance `0`", prose, fixed = TRUE))
   expect_true(grepl("explicit CUDA routes remain on CUDA", prose, fixed = TRUE))

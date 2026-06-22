@@ -117,6 +117,10 @@ method/backend/metric combination, including `backend = "auto"`, `"cpu"`, and
 `"cuda"`, and marks unsupported combinations before a benchmark tries to run
 them.
 
+For `metric = "inner_product"`, faissR ranks neighbours by larger raw dot
+product but reports shifted smaller-is-better distances, with the best returned
+dot product in each query row at distance `0`.
+
 The capability table is design-level. Runtime auto-selection can still choose
 CPU when the public CUDA design route needs a missing optional component. For
 example, CUDA cosine and correlation auto routes can use CUDA grid for large

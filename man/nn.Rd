@@ -50,6 +50,10 @@ stored as canonical metric labels.
 `"inner_product"` is the raw dot product, `"cosine"` is the dot product
 after row L2 normalization, and `"correlation"` is centered cosine
 similarity after subtracting each row mean and L2-normalizing each row.
+For `metric = "inner_product"`, neighbours are ranked by larger raw dot
+product, but returned `distances` keep faissR's smaller-is-better
+convention: within each query row the best returned dot product has
+distance `0`, and lower dot products have larger shifted distances.
 `"euclidean"` is the validated high-performance default. `"cosine"` and
 `"correlation"` are implemented for exact CPU KNN, native 2D/3D grid
 search, FAISS CPU/GPU Flat,

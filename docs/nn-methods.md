@@ -62,6 +62,10 @@ is not the same as inner product: correlation is centered cosine similarity,
 whereas inner product is the raw dot product. The package only reports a metric
 as supported for a method when that route computes neighbours under that metric
 rather than silently falling back to Euclidean search.
+For `metric = "inner_product"`, neighbours are ranked by larger raw dot
+product, but returned `distances` keep the package-wide smaller-is-better
+contract: the best returned dot product in each query row has distance `0`, and
+lower dot products have larger shifted distances.
 Common aliases are accepted at the API boundary and canonicalized in result
 attributes: `"l2"` maps to `"euclidean"`, `"cor"`/`"pearson"` map to
 `"correlation"`, and `"ip"` maps to `"inner_product"`.
@@ -157,7 +161,8 @@ semantics specifically. On CPU and FAISS GPU Flat, `metric = "inner_product"`
 uses `IndexFlatIP`; `metric = "cosine"` uses row L2 normalization followed by
 Flat IP; and `metric = "correlation"` uses row centering plus L2 normalization
 followed by Flat IP. The cosine and correlation routes return
-`1 - similarity` distances, not shifted inner-product scores. Flat can be
+`1 - similarity` distances; raw inner-product routes return per-query shifted
+dot-product distances. Flat can be
 faster than a generic R exact implementation because index construction, data
 layout, and search are handled by FAISS.
 
