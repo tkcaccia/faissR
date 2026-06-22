@@ -505,6 +505,10 @@ test_that("public NN results preserve requested and resolved routing metadata", 
   expect_false(auto_meta$slow_tuning)
   expect_equal(auto_meta$requested_backend, "auto")
   expect_equal(auto_meta$requested_method, "exact")
+  expect_false(auto_meta$explicit_backend)
+  expect_true(auto_meta$explicit_method)
+  expect_equal(auto_meta$backend_decision, "explicit_route")
+  expect_equal(auto_meta$method_decision, "explicit_exact")
   expect_equal(auto_meta$predicted_backend, attr(out, "backend"))
   expect_equal(auto_meta$predicted_method, "exact")
   expect_equal(auto_meta$predicted_device, "cpu")
@@ -537,6 +541,10 @@ test_that("top-level auto reuses the metric-aware CPU auto selector after GPU de
   expect_equal(attr(top_auto, "requested_method"), "auto")
   auto_meta <- attr(top_auto, "auto_selection")
   expect_equal(auto_meta$policy, "static_shape_k_metric_selector")
+  expect_false(auto_meta$explicit_backend)
+  expect_false(auto_meta$explicit_method)
+  expect_equal(auto_meta$backend_decision, "auto_cpu_fallback")
+  expect_equal(auto_meta$method_decision, "auto_cpu_fallback")
   expect_equal(auto_meta$predicted_backend, attr(top_auto, "backend"))
   expect_equal(auto_meta$predicted_method, "flat")
   expect_equal(auto_meta$predicted_device, "cpu")
@@ -552,6 +560,23 @@ test_that("explicit NN routes do not attach auto selection metadata", {
   out <- nn(x, k = 3L, backend = "cpu", method = "exact", tuning = "off")
 
   expect_null(attr(out, "auto_selection"))
+})
+
+test_that("NN auto-selection metadata distinguishes explicit backend and method requests", {
+  skip_if_not(faiss_available())
+  set.seed(1045)
+  x <- matrix(rnorm(80), ncol = 4)
+
+  cpu_auto_method <- nn(x, k = 3L, backend = "cpu", method = "auto", tuning = "off")
+  auto_meta <- attr(cpu_auto_method, "auto_selection")
+
+  expect_true(auto_meta$explicit_backend)
+  expect_false(auto_meta$explicit_method)
+  expect_equal(auto_meta$backend_decision, "explicit_cpu")
+  expect_equal(auto_meta$method_decision, "cpu_auto_shape_selector")
+  expect_equal(auto_meta$requested_backend, "cpu")
+  expect_equal(auto_meta$requested_method, "auto")
+  expect_equal(auto_meta$predicted_backend, attr(cpu_auto_method, "backend"))
 })
 
 test_that("resolved backend labels map to stable auto-selection method and device metadata", {

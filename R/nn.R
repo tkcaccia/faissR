@@ -2890,8 +2890,10 @@ nn_auto_selection_metadata <- function(data,
                                        metric = "euclidean",
                                        tuning = "auto",
                                        exclude_self = FALSE) {
-  if (!identical(requested_backend, "auto") &&
-      !identical(requested_method, "auto") &&
+  explicit_backend <- !identical(requested_backend, "auto")
+  explicit_method <- !identical(requested_method, "auto")
+  if (explicit_backend &&
+      explicit_method &&
       !resolved_backend %in% c("auto", "cpu_auto", "cuda_auto", "gpu_auto")) {
     return(NULL)
   }
@@ -2904,12 +2906,27 @@ nn_auto_selection_metadata <- function(data,
     exclude_self = exclude_self
   )
   route <- nn_auto_route_for_shape(shape, resolved_backend)
+  requested_method_label <- public_nn_method_label(requested_method)
+  backend_decision <- if (explicit_backend) {
+    paste0("explicit_", requested_backend)
+  } else {
+    route$reason
+  }
+  method_decision <- if (explicit_method) {
+    paste0("explicit_", requested_method_label)
+  } else {
+    route$reason
+  }
   list(
     policy = "static_shape_k_metric_selector",
     slow_tuning = FALSE,
     requested_backend = requested_backend,
-    requested_method = public_nn_method_label(requested_method),
+    requested_method = requested_method_label,
     resolved_public_backend = resolved_backend,
+    explicit_backend = explicit_backend,
+    explicit_method = explicit_method,
+    backend_decision = backend_decision,
+    method_decision = method_decision,
     predicted_backend = route$selected_backend,
     predicted_method = nn_resolved_backend_public_method(route$selected_backend),
     predicted_device = nn_resolved_backend_device(route$selected_backend),
@@ -6121,7 +6138,8 @@ grid_self_knn <- function(data,
 #'   `attr(result, "resolved_backend")`. Auto requests also include
 #'   `attr(result, "auto_selection")`, a static shape/k/metric decision record
 #'   that records the predicted internal backend, public method class, device
-#'   class, and does not run pilot tuning.
+#'   class, explicit backend/method flags, backend/method decision reasons, and
+#'   does not run pilot tuning.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu")
@@ -6215,9 +6233,9 @@ nn <- function(data,
 #'   `input_owns_data`. Normalized Euclidean graph routes for cosine/correlation
 #'   record `metric_transform` and `attr(result, "distance_transform")`. Auto
 #'   requests also include `attr(result, "auto_selection")`, a static
-#'   shape/k/metric decision record that does
-#'   records the predicted internal backend, public method class, device class,
-#'   and does not run pilot tuning.
+#'   shape/k/metric decision record that records the predicted internal backend,
+#'   public method class, device class, explicit backend/method flags,
+#'   backend/method decision reasons, and does not run pilot tuning.
 #' @export
 nn_without_self <- function(data,
                             k,

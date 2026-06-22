@@ -746,6 +746,10 @@ test_that("NN metric benchmark extracts compact backend route parameters", {
   attr(out, "spatial_index") <- list(strategy = "ignored_grid", bins_per_dim = 32L)
   attr(out, "auto_selection") <- list(
     policy = "static_shape_k_metric_selector",
+    explicit_backend = TRUE,
+    explicit_method = FALSE,
+    backend_decision = "explicit_cpu",
+    method_decision = "cpu_auto_shape_selector",
     predicted_backend = "faiss_hnsw",
     predicted_method = "hnsw",
     predicted_device = "cpu",
@@ -767,6 +771,10 @@ test_that("NN metric benchmark extracts compact backend route parameters", {
   expect_match(params, "approximation.pq_tuning_rule=pq_high_dim_shape", fixed = TRUE)
   expect_match(params, "approximation.pq_tuning_high_dim=TRUE", fixed = TRUE)
   expect_match(params, "spatial_index.bins_per_dim=32", fixed = TRUE)
+  expect_match(params, "auto_selection.explicit_backend=TRUE", fixed = TRUE)
+  expect_match(params, "auto_selection.explicit_method=FALSE", fixed = TRUE)
+  expect_match(params, "auto_selection.backend_decision=explicit_cpu", fixed = TRUE)
+  expect_match(params, "auto_selection.method_decision=cpu_auto_shape_selector", fixed = TRUE)
   expect_match(params, "auto_selection.predicted_method=hnsw", fixed = TRUE)
   expect_match(params, "auto_selection.predicted_device=cpu", fixed = TRUE)
   expect_match(params, "auto_selection.reason=cpu_auto_shape_selector", fixed = TRUE)
@@ -1052,6 +1060,10 @@ test_that("legacy Benchmark #1 extracts faissR result route and tuning metadata"
     pq_tuning_rule = "pq_high_dim_shape"
   )
   attr(out, "auto_selection") <- list(
+    explicit_backend = TRUE,
+    explicit_method = FALSE,
+    backend_decision = "explicit_cpu",
+    method_decision = "cpu_auto_shape_selector",
     predicted_method = "faiss_hnsw",
     predicted_device = "cpu",
     reason = "cpu_auto_shape_selector"
@@ -1062,6 +1074,8 @@ test_that("legacy Benchmark #1 extracts faissR result route and tuning metadata"
   expect_match(params, "approximation.strategy=faiss_IndexHNSWFlat", fixed = TRUE)
   expect_match(params, "approximation.tuning_rule=balanced_shape_metric", fixed = TRUE)
   expect_match(params, "approximation.pq_tuning_rule=pq_high_dim_shape", fixed = TRUE)
+  expect_match(params, "auto_selection.explicit_backend=TRUE", fixed = TRUE)
+  expect_match(params, "auto_selection.backend_decision=explicit_cpu", fixed = TRUE)
   expect_match(params, "auto_selection.predicted_method=faiss_hnsw", fixed = TRUE)
   expect_match(params, "auto_selection.predicted_device=cpu", fixed = TRUE)
   expect_equal(env$benchmark1_tuning_status(out), "balanced_shape_metric")

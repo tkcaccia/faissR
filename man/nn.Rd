@@ -133,7 +133,8 @@ A list with integer matrix `indices`, `distances`, and stable
   `attr(result, "resolved_backend")`. Auto requests also include
   `attr(result, "auto_selection")`, a static shape/k/metric decision record
   that records the predicted internal backend, public method class, device
-  class, and does not run pilot tuning.
+  class, explicit backend/method flags, backend/method decision reasons, and
+  does not run pilot tuning.
 }
 \description{
 `nn()` provides a package-native nearest-neighbor entry point compatible with

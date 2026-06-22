@@ -140,10 +140,11 @@ the resolved backend in `attr(result, "resolved_backend")` and approximation
 parameters. Auto requests also carry `attr(result, "auto_selection")`, a
 static no-pilot record of the shape/k/metric rule that predicted the concrete
 route. The record keeps the internal `predicted_backend` and also exposes
-`predicted_method` plus `predicted_device`, so benchmark tables can compare
-`method = "auto"` against the fastest observed public method/device class
-without parsing implementation labels or rerunning any tuning logic inside
-`nn()`.
+`predicted_method` plus `predicted_device`. It also records
+`explicit_backend`, `explicit_method`, `backend_decision`, and
+`method_decision`, so benchmark tables can distinguish a forced CPU/CUDA or
+forced method request from an automatic shape-policy choice without parsing
+implementation labels or rerunning any tuning logic inside `nn()`.
 
 FAISS CPU HNSW adds method-specific no-pilot tuning metadata in
 `attr(result, "approximation")`. The policy records `tuning_rule` plus

@@ -160,9 +160,10 @@ All KNN routes return a `faissR_nn` object with:
   `backend = "auto"` or `method = "auto"`, the static shape/k/metric decision
   record. It stores `policy = "static_shape_k_metric_selector"`, the predicted
   concrete backend, public method class, device class, the reason for the
-  selection, `n`, `p`, query count, `k`, metric, work-size estimate, and
-  `slow_tuning = FALSE`. This is a preflight record only; it does not run a
-  pilot benchmark or build an index.
+  selection, explicit backend/method flags, backend/method decision reasons,
+  `n`, `p`, query count, `k`, metric, work-size estimate, and `slow_tuning =
+  FALSE`. This is a preflight record only; it does not run a pilot benchmark or
+  build an index.
 
 This metadata is intentionally simple because the same result object feeds graph
 construction, clustering, benchmarking, and supervised prediction.

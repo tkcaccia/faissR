@@ -87,8 +87,9 @@ result-facing backend, requested public backend/method/tuning, resolved
 implementation backend, auto-selected method/device, compact
 `route_parameters`, and `tuning_status`. The compact route metadata includes
 deterministic no-pilot tuning flags for approximate FAISS/cuVS routes, including
-HNSW, IVF, PQ/IVFPQ, CAGRA, NSG, and NN-descent when those fields are attached
-to the `nn()` result.
+HNSW, IVF, PQ/IVFPQ, CAGRA, NSG, and NN-descent, plus explicit backend/method
+flags and backend/method decision reasons when those fields are attached to the
+`nn()` result.
 
 If a non-standard runtime library directory is needed, set `FAISSR_ENV_DIR`
 explicitly before launch. The script no longer treats an unrelated active

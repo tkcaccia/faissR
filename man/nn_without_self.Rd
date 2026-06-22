@@ -57,9 +57,9 @@ A `faissR_nn` object with `indices`, `distances`, and stable
   `input_owns_data`. Normalized Euclidean graph routes for cosine/correlation
   record `metric_transform` and `attr(result, "distance_transform")`. Auto
   requests also include `attr(result, "auto_selection")`, a static
-  shape/k/metric decision record that does
-  records the predicted internal backend, public method class, device class,
-  and does not run pilot tuning.
+  shape/k/metric decision record that records the predicted internal backend,
+  public method class, device class, explicit backend/method flags,
+  backend/method decision reasons, and does not run pilot tuning.
 }
 \description{
 `nn_without_self()` is a convenience wrapper around `nn()` for the common
