@@ -104,8 +104,10 @@ attempted for `faiss_hnsw`, `faiss_ivf`, `faiss_gpu_cagra`, and
 `cuda_cuvs_ivf_flat`. All four worker processes were killed with exit code 137.
 The common failure mode was host-memory pressure from loading a 10 GB double
 `data.table`, coercing it to a second contiguous double matrix, and then building
-backend-side float/index buffers. On this machine, full ImageNet should be run
-from a memory-efficient matrix/float32 representation or on a host with more RAM.
+backend-side float/index buffers. Full ImageNet-style benchmarks should
+therefore use a memory-efficient
+matrix/float32 representation or run on a host with enough RAM for the source
+data, converted matrix, and backend-side buffers.
 
 
 ## Shape-Aware `backend` Plus `method = "auto"`

@@ -208,7 +208,8 @@ test_that("repository text excludes private benchmark machine details", {
     "/mnt/sata_ssd",
     "fastEmbedR_BENCHMARK",
     "fastEmbedR/Data",
-    "micromamba/envs"
+    "micromamba/envs",
+    "On this machine, full ImageNet"
   )
   text <- vapply(
     files,
