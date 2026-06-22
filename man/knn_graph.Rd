@@ -44,10 +44,10 @@ positive integer and cannot exceed the number of graph vertices.}
 }
 \value{
 A native \code{faissR_graph} edge-list object. The \code{faissR_graph}
-attribute stores graph-construction metadata, including
-\code{requested_backend} and \code{resolved_backend} for the public KNN backend
-policy used when faissR computes neighbours internally. For precomputed KNN
-input, \code{nn_backend} prefers the KNN object's resolved backend when
+attribute stores graph-construction metadata: graph size, weighting,
+nearest-neighbour method, metric, tuning policy, optional
+\code{target_n_clusters}, and requested/resolved KNN backends. For precomputed
+KNN input, \code{nn_backend} prefers the KNN object's resolved backend when
 available, so benchmark metadata records concrete FAISS/cuVS routes rather
 than only the public requested backend.
 }

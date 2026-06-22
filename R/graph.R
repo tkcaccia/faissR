@@ -40,12 +40,12 @@
 #'   integer and cannot exceed the number of graph vertices.
 #' @param n_threads CPU threads passed to `nn()` when KNN is computed here.
 #' @return A native `faissR_graph` edge-list object. The `faissR_graph`
-#'   attribute stores graph-construction metadata, including `requested_backend`
-#'   and `resolved_backend` for the public KNN backend policy used when faissR
-#'   computes neighbours internally. For precomputed KNN input, `nn_backend`
-#'   prefers the KNN object's resolved backend when available, so benchmark
-#'   metadata records concrete FAISS/cuVS routes rather than only the public
-#'   requested backend.
+#'   attribute stores graph-construction metadata: graph size, weighting,
+#'   nearest-neighbour method, metric, tuning policy, optional
+#'   `target_n_clusters`, and requested/resolved KNN backends. For precomputed
+#'   KNN input, `nn_backend` prefers the KNN object's resolved backend when
+#'   available, so benchmark metadata records concrete FAISS/cuVS routes rather
+#'   than only the public requested backend.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' g <- knn_graph(x, k = 15, backend = "cpu", n_clusters = 3)

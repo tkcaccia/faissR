@@ -356,6 +356,21 @@ test_that("graph cluster target documentation states integer and graph-size cons
   }
 })
 
+test_that("knn_graph reference documents benchmark graph metadata", {
+  rd <- rd_file_text("knn_graph")
+  required_metadata <- c(
+    "target_n_clusters",
+    "nearest-neighbour method",
+    "metric",
+    "tuning policy",
+    "requested/resolved KNN backends"
+  )
+
+  for (field in required_metadata) {
+    expect_true(grepl(field, rd, fixed = TRUE), info = field)
+  }
+})
+
 test_that("benchmark docs describe deterministic ARI recommendation tie-breaks", {
   docs_file <- test_path("../../docs/benchmarks.md")
   if (!file.exists(docs_file)) {

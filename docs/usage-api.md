@@ -145,8 +145,9 @@ knn_graph(data, knn = NULL, k = 50L, backend = "auto",
 
 Returns a native `faissR_graph` edge-list object. No `igraph` dependency is
 required. When faissR builds neighbours internally, the `faissR_graph` metadata
-includes `requested_backend` and `resolved_backend` for the public KNN backend
-policy.
+includes graph size, weighting, nearest-neighbour method, metric, tuning
+policy, optional `target_n_clusters`, and the requested/resolved public KNN
+backends.
 
 ## `graph_cluster()`
 
