@@ -348,6 +348,13 @@ result_row <- function(dataset, n, p, method, backend, centers, cycle, n_threads
                        ari = NA_real_, max_iter = NA_integer_,
                        n_init = NA_integer_, tol = NA_real_,
                        tuning_policy = NA_character_,
+                       tuning_rule = NA_character_,
+                       tuning_work = NA_real_,
+                       tuning_n_per_center = NA_real_,
+                       tuning_high_dim = NA,
+                       tuning_large_n = NA,
+                       tuning_many_centers = NA,
+                       tuning_small_many_centers = NA,
                        expected_skip = FALSE) {
   data.frame(
     dataset = dataset,
@@ -372,6 +379,13 @@ result_row <- function(dataset, n, p, method, backend, centers, cycle, n_threads
     n_init = as.integer(n_init),
     tol = tol,
     tuning_policy = tuning_policy,
+    tuning_rule = tuning_rule,
+    tuning_work = tuning_work,
+    tuning_n_per_center = tuning_n_per_center,
+    tuning_high_dim = as.logical(tuning_high_dim),
+    tuning_large_n = as.logical(tuning_large_n),
+    tuning_many_centers = as.logical(tuning_many_centers),
+    tuning_small_many_centers = as.logical(tuning_small_many_centers),
     expected_skip = isTRUE(expected_skip),
     stringsAsFactors = FALSE
   )
@@ -431,10 +445,17 @@ summarize_kmeans_cycles <- function(ok) {
       median_max_iter = finite_median(x$max_iter),
       median_n_init = finite_median(x$n_init),
       median_tol = finite_median(x$tol),
+      median_tuning_work = finite_median(x$tuning_work),
+      median_tuning_n_per_center = finite_median(x$tuning_n_per_center),
       backend_used = dominant_value(x$backend_used),
       requested_backend = dominant_value(x$requested_backend),
       resolved_backend = dominant_value(x$resolved_backend),
       tuning_policy = dominant_value(x$tuning_policy),
+      tuning_rule = dominant_value(x$tuning_rule),
+      tuning_high_dim = any(x$tuning_high_dim %in% TRUE, na.rm = TRUE),
+      tuning_large_n = any(x$tuning_large_n %in% TRUE, na.rm = TRUE),
+      tuning_many_centers = any(x$tuning_many_centers %in% TRUE, na.rm = TRUE),
+      tuning_small_many_centers = any(x$tuning_small_many_centers %in% TRUE, na.rm = TRUE),
       stringsAsFactors = FALSE
     )
   })
@@ -498,8 +519,12 @@ compare_fast_kmeans_to_recommendations <- function(cycle_summary, recommendation
     keys, "method", "backend", "backend_used", "requested_backend",
     "resolved_backend", "n_threads", "success_cycles", "median_elapsed_sec",
     "median_ari", "min_ari", "median_tot_withinss", "median_iter",
-    "median_max_iter", "median_n_init", "median_tol", "tuning_policy"
+    "median_max_iter", "median_n_init", "median_tol", "tuning_policy",
+    "tuning_rule", "median_tuning_work", "median_tuning_n_per_center",
+    "tuning_high_dim", "tuning_large_n", "tuning_many_centers",
+    "tuning_small_many_centers"
   )
+  keep <- keep[keep %in% names(cycle_summary)]
   rec_keep <- c(keep, "recommendation_basis")
   fast <- fast[, keep, drop = FALSE]
   recommendations <- recommendations[, rec_keep, drop = FALSE]
@@ -660,6 +685,7 @@ run_one <- function(x, labels, dataset_name, method, backend, centers,
     }, timeout)
     elapsed <- proc.time()[["elapsed"]] - started
     params <- fit$parameters %||% list()
+    tuning_meta <- params$tuning %||% auto_params
     backend_used <- fit$backend %||% if (identical(method, "stats")) "stats" else NA_character_
     result_row(
       dataset = dataset_name,
@@ -682,7 +708,14 @@ run_one <- function(x, labels, dataset_name, method, backend, centers,
       max_iter = params$max_iter %||% resolved_max_iter,
       n_init = params$n_init %||% resolved_n_init,
       tol = params$tol %||% resolved_tol,
-      tuning_policy = params$tuning$policy %||% if (identical(method, "stats")) "stats" else NA_character_
+      tuning_policy = tuning_meta$policy %||% if (identical(method, "stats")) "stats" else NA_character_,
+      tuning_rule = tuning_meta$rule %||% if (identical(method, "stats")) "stats_kmeans" else NA_character_,
+      tuning_work = tuning_meta$work %||% NA_real_,
+      tuning_n_per_center = tuning_meta$n_per_center %||% NA_real_,
+      tuning_high_dim = tuning_meta$high_dim %||% NA,
+      tuning_large_n = tuning_meta$large_n %||% NA,
+      tuning_many_centers = tuning_meta$many_centers %||% NA,
+      tuning_small_many_centers = tuning_meta$small_many_centers %||% NA
     )
   }, error = function(e) {
     result_row(
@@ -806,6 +839,13 @@ for (dataset_name in datasets) {
             n_init = resolve_kmeans_int(n_init, auto_params$n_init),
             tol = resolve_kmeans_tol(tol, auto_params$tol),
             tuning_policy = auto_params$policy,
+            tuning_rule = auto_params$rule,
+            tuning_work = auto_params$work,
+            tuning_n_per_center = auto_params$n_per_center,
+            tuning_high_dim = auto_params$high_dim,
+            tuning_large_n = auto_params$large_n,
+            tuning_many_centers = auto_params$many_centers,
+            tuning_small_many_centers = auto_params$small_many_centers,
             requested_backend = backend,
             resolved_backend = backend,
             expected_skip = TRUE
@@ -922,13 +962,13 @@ materials <- c(
   sprintf("- Requested centers fallback: `%s`; `--centers` must be a positive integer and labels override this fallback when available", fallback_centers),
   "",
   "`kmeans_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `kmeans_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, selected parameters, ARI, within-cluster sums of squares, and backend metadata.",
-  "The result table records cycle, elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, total within-cluster sum of squares, iterations, selected k-means parameters, tuning policy, and ARI against dataset labels when labels are available.",
+  "The result table records cycle, elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, total within-cluster sum of squares, iterations, selected k-means parameters, deterministic tuning policy/rule/shape metadata, and ARI against dataset labels when labels are available.",
   "`kmeans_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, elapsed time, and total within-cluster sum of squares for a compact backwards-compatible summary. `kmeans_best_by_dataset_centers.csv` keeps the best successful row per dataset/centers combination so different requested cluster counts remain auditable.",
   "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. Speedups, ARI deltas, and withinss ratios are `NA` when the required timing or quality values are missing or invalid. The `cycle` column supports repeated benchmark cycles such as `--cycles=10` for speed/ARI tuning.",
-  "`kmeans_cycle_summary.csv` aggregates successful rows across cycles by dataset/method/backend/centers and reports success counts, median/min/max elapsed time, ARI stability, withinss stability, iteration counts, and resolved backend metadata.",
+  "`kmeans_cycle_summary.csv` aggregates successful rows across cycles by dataset/method/backend/centers and reports success counts, median/min/max elapsed time, ARI stability, withinss stability, iteration counts, selected parameter medians, deterministic tuning rule/shape metadata, and resolved backend metadata.",
   "`kmeans_recommendations_from_cycles.csv` selects the fastest row within `ari_tolerance` of the best median ARI for each dataset/centers combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median times are broken by higher median ARI and then lower median total within-cluster sum of squares. When ARI is unavailable it selects the fastest median-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
   "`kmeans_backend_recommendations_from_cycles.csv` applies the same rule within each dataset/centers/backend group, so CPU, CUDA, auto, and stats rows can be tuned or reported separately without changing the overall recommendation file.",
-  "`kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median ARI gap, withinss ratio, requested/resolved backend metadata, CPU thread count, and backend/implementation agreement. Speed ratios, ARI gaps, and withinss ratios are `NA` when the required timing or quality values are missing or invalid.",
+  "`kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median ARI gap, withinss ratio, selected tuning metadata, requested/resolved backend metadata, CPU thread count, and backend/implementation agreement. Speed ratios, ARI gaps, and withinss ratios are `NA` when the required timing or quality values are missing or invalid.",
   "Explicit CUDA requests whose required CUDA, FAISS GPU, or cuVS k-means runtime is unavailable are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`; `resolved_backend` remains `cuda` so the skipped public device request is auditable. `backend = \"auto\"` resolves to CPU instead of becoming an expected skip when no k-means-capable CUDA route is available, and also resolves to CPU for small k-means shapes where the deterministic shape gate estimates that GPU launch/copy overhead would dominate. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_kmeans.md"))

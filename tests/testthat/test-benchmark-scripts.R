@@ -1331,7 +1331,14 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
     median_max_iter = c(100, 100, 100, 100, 100, 100),
     median_n_init = c(3, 3, 3, 3, 1, 1),
     median_tol = c(1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4),
-    tuning_policy = c("auto", "auto", "auto", "auto", "stats", "stats")
+    tuning_policy = c("auto", "auto", "auto", "auto", "stats", "stats"),
+    tuning_rule = c("medium", "medium", "medium", "medium", "stats_kmeans", "stats_kmeans"),
+    median_tuning_work = c(300, 300, 500, 500, NA, NA),
+    median_tuning_n_per_center = c(10, 10, 10, 10, NA, NA),
+    tuning_high_dim = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
+    tuning_large_n = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
+    tuning_many_centers = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
+    tuning_small_many_centers = c(FALSE, FALSE, FALSE, FALSE, NA, NA)
   )
   recommendations <- cycle_summary[cycle_summary$method == "stats", , drop = FALSE]
   recommendations$recommendation_basis <- "fastest_within_ari_tolerance"
@@ -1344,6 +1351,8 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
   expect_equal(out$recommended_requested_backend, c("stats", "stats", "stats", "stats"))
   expect_equal(out$fast_n_threads, c(2L, 2L, 2L, 2L))
   expect_equal(out$recommended_n_threads, c(2L, 2L, 2L, 2L))
+  expect_equal(out$fast_tuning_rule, rep("medium", 4))
+  expect_equal(out$recommended_tuning_rule, rep("stats_kmeans", 4))
   expect_equal(unique(out$recommended_recommendation_basis), "fastest_within_ari_tolerance")
 })
 

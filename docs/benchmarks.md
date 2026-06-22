@@ -440,7 +440,8 @@ repeat speed/ARI measurements without hand-launching the same benchmark
 multiple times. `kmeans_cycle_summary.csv`
 aggregates successful rows across cycles by dataset/method/backend/centers and
 reports success counts, median/min/max elapsed time, ARI stability, withinss
-stability, iteration counts, and resolved backend metadata.
+stability, iteration counts, selected parameter medians, deterministic tuning
+rule/shape metadata, and resolved backend metadata.
 `kmeans_best_by_dataset.csv` keeps a compact best successful row per dataset
 after ranking by ARI, elapsed time, and total within-cluster sum of squares for
 backward-compatible summaries. `kmeans_best_by_dataset_centers.csv` keeps the
@@ -460,10 +461,10 @@ each dataset/centers/backend group, so CPU, CUDA, auto, and stats results can
 be tuned or reported separately without losing the overall recommendation.
 `kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()`
 rows with those recommendations and reports median speed ratio, median ARI gap,
-withinss ratio, requested/resolved backend metadata, CPU thread count,
-backend/implementation agreement, and the recommendation basis used for the
-recommended row. Speed ratios, ARI gaps, and withinss ratios are `NA` when the
-required timing or quality values are missing or invalid.
+withinss ratio, selected tuning metadata, requested/resolved backend metadata,
+CPU thread count, backend/implementation agreement, and the recommendation
+basis used for the recommended row. Speed ratios, ARI gaps, and withinss ratios
+are `NA` when the required timing or quality values are missing or invalid.
 `MATERIALS_AND_METHODS_kmeans.md` records the corresponding paper-ready
 methods text, including centers selection, ARI/withinss reporting, tuning
 policy, expected-skip policy, and output-file definitions.
