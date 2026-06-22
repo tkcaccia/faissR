@@ -1605,6 +1605,9 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
   expect_equal(sort(as.integer(out$n_clusters_requested)), c(3L, 5L))
   expect_equal(sort(out$n_clusters_source), c("labels", "stored_graph_target"))
   expect_equal(out$median_graph_n_vertices, c(100, 100))
+  expect_equal(out$graph_preflight_route, c("cpu", "cpu"))
+  expect_equal(out$cluster_preflight_route, c("cpu", "cpu"))
+  expect_equal(out$n_threads, c(2L, 2L))
 })
 
 test_that("graph benchmark recommendations preserve integer target counts", {
@@ -1651,10 +1654,13 @@ test_that("graph benchmark auto comparison has unique schema columns", {
     n_clusters_requested = c(3L, 3L),
     graph_backend = c("auto", "cpu"),
     graph_resolved_backend = c("cpu", "cpu"),
+    graph_preflight_route = c("cpu", "cpu"),
     cluster_backend = c("auto", "cpu"),
     cluster_resolved_backend = c("cpu", "cpu"),
+    cluster_preflight_route = c("cpu", "cpu"),
     method = c("louvain", "leiden"),
     weight = c("snn", "snn"),
+    n_threads = c(2L, 2L),
     success_cycles = c(2L, 2L),
     median_graph_sec = c(1, 1),
     median_cluster_sec = c(3, 2),
@@ -1679,6 +1685,10 @@ test_that("graph benchmark auto comparison has unique schema columns", {
   expect_equal(out$recommended_recommendation_basis, "fastest_within_ari_tolerance")
   expect_equal(out$auto_method, "louvain")
   expect_equal(out$recommended_method, "leiden")
+  expect_equal(out$auto_graph_preflight_route, "cpu")
+  expect_equal(out$recommended_cluster_preflight_route, "cpu")
+  expect_equal(out$auto_n_threads, 2L)
+  expect_equal(out$recommended_n_threads, 2L)
 })
 
 test_that("graph benchmark auto comparison guards speed and quality gaps", {
@@ -1692,10 +1702,13 @@ test_that("graph benchmark auto comparison guards speed and quality gaps", {
     n_clusters_requested = c(3L, 3L, 3L, 3L),
     graph_backend = c("auto", "cpu", "auto", "cpu"),
     graph_resolved_backend = c("cpu", "cpu", "cpu", "cpu"),
+    graph_preflight_route = c("cpu", "cpu", "cpu", "cpu"),
     cluster_backend = c("auto", "cpu", "auto", "cpu"),
     cluster_resolved_backend = c("cpu", "cpu", "cpu", "cpu"),
+    cluster_preflight_route = c("cpu", "cpu", "cpu", "cpu"),
     method = c("louvain", "leiden", "louvain", "leiden"),
     weight = c("snn", "snn", "snn", "snn"),
+    n_threads = c(2L, 2L, 2L, 2L),
     success_cycles = c(1L, 1L, 1L, 1L),
     median_graph_sec = c(1, 1, 1, 1),
     median_cluster_sec = c(1, 0, 1, 1),

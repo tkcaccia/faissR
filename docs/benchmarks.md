@@ -216,8 +216,8 @@ auditable.
 `graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by
 dataset/k/graph-backend/cluster-backend/method/weight and reports success
 counts, median/min/max graph, clustering, and total time, ARI stability,
-modularity stability, graph size, community counts, and resolved backend
-metadata.
+modularity stability, graph size, community counts, CPU thread count, preflight
+routes, and resolved backend metadata.
 `graph_cluster_best_by_dataset.csv` keeps a compact best successful row per
 dataset after ranking by ARI, modularity, and total time for backward-compatible
 summaries. `graph_cluster_best_by_dataset_k_target.csv` keeps the same
@@ -244,7 +244,9 @@ The result table stores both requested and resolved public backend metadata:
 `graph_preflight_route`/`cluster_preflight_route` show the resolver decision
 before runtime availability checks and
 `graph_resolved_backend`/`cluster_resolved_backend` show the public device
-policy recorded by successful result objects after `"auto"` resolution.
+policy recorded by successful result objects after `"auto"` resolution. The
+route columns and `n_threads` are also preserved in cycle summaries and
+auto/recommendation comparisons.
 By default, graph construction and graph clustering are each tested with
 `"auto"`, `"cpu"`, and `"cuda"` backends. `backend = "auto"` may resolve to CPU
 when CUDA/cuGraph support is not available.
