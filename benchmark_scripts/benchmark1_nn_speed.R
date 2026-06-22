@@ -29,9 +29,6 @@ find_benchmark_script <- function(path = "benchmark_scripts/benchmark1_nn_speed.
 script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
 script_file <- if (length(script_arg)) sub("^--file=", "", script_arg[[1L]]) else find_benchmark_script()
 script_dir <- dirname(normalizePath(script_file, mustWork = FALSE))
-source(file.path(script_dir, "source.R"))
-
-args <- parse_args(commandArgs(trailingOnly = TRUE))
 
 faiss_env_dir <- Sys.getenv("FAISSR_ENV_DIR", "")
 cuda_lib_dir <- Sys.getenv("FAISSR_CUDA_LIB_DIR", Sys.getenv("CUDA_HOME", ""))
@@ -56,11 +53,37 @@ if (nzchar(faiss_library_path)) env_updates$LD_LIBRARY_PATH <- faiss_library_pat
 if (nzchar(faiss_preload)) env_updates$LD_PRELOAD <- faiss_preload
 if (length(env_updates)) do.call(Sys.setenv, env_updates)
 
+preload_missing_from_process <- function(preload) {
+  if (!nzchar(preload)) return(FALSE)
+  if (identical(Sys.getenv("FAISSR_PRELOAD_REEXEC", unset = ""), "1")) return(FALSE)
+  requested <- strsplit(preload, ":", fixed = TRUE)[[1L]]
+  requested <- requested[nzchar(requested)]
+  current <- strsplit(Sys.getenv("LD_PRELOAD", unset = ""), ":", fixed = TRUE)[[1L]]
+  current <- current[nzchar(current)]
+  length(setdiff(requested, current)) > 0L
+}
+
+if (preload_missing_from_process(faiss_preload)) {
+  reexec_env <- c(
+    "FAISSR_PRELOAD_REEXEC=1",
+    if (nzchar(faiss_env_dir)) paste0("CONDA_PREFIX=", faiss_env_dir) else character(),
+    if (nzchar(faiss_library_path)) paste0("LD_LIBRARY_PATH=", faiss_library_path) else character(),
+    paste0("LD_PRELOAD=", faiss_preload)
+  )
+  status <- system2("Rscript", c(script_file, commandArgs(trailingOnly = TRUE)), env = reexec_env)
+  quit(save = "no", status = status)
+}
+
+source(file.path(script_dir, "source.R"))
+
+args <- parse_args(commandArgs(trailingOnly = TRUE))
+
 benchmark_env <- function() {
   env <- character()
   if (nzchar(faiss_env_dir)) env <- c(env, paste0("FAISSR_ENV_DIR=", faiss_env_dir))
   if (nzchar(faiss_library_path)) env <- c(env, paste0("LD_LIBRARY_PATH=", faiss_library_path))
   if (nzchar(faiss_preload)) env <- c(env, paste0("LD_PRELOAD=", faiss_preload))
+  if (nzchar(faiss_preload)) env <- c(env, "FAISSR_PRELOAD_REEXEC=1")
   env
 }
 
