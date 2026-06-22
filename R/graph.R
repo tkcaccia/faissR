@@ -304,7 +304,7 @@ graph_cluster <- function(graph,
                           steps = 4L,
                           seed = NULL,
                           ...) {
-  method <- match.arg(method)
+  method <- normalize_graph_cluster_method(method)
   requested_backend <- normalize_public_backend_arg(backend)
   backend <- resolve_graph_cluster_backend(requested_backend)
   graph_method <- public_nn_method_label(normalize_nn_method(graph_method))
@@ -475,6 +475,20 @@ graph_cluster <- function(graph,
   ans$sources <- graph_cluster_sources(method, backend)
   class(ans) <- "faissR_graph_cluster"
   ans
+}
+
+normalize_graph_cluster_method <- function(method) {
+  method <- as.character(method)[1L]
+  if (is.na(method) || !nzchar(method)) method <- "random_walking"
+  method <- trimws(method)
+  methods <- c("random_walking", "louvain", "leiden")
+  if (!method %in% methods) {
+    stop(
+      "`method` must be one of \"random_walking\", \"louvain\", or \"leiden\".",
+      call. = FALSE
+    )
+  }
+  method
 }
 
 normalize_graph_target_clusters <- function(n_clusters, method) {

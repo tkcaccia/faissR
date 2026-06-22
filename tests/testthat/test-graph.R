@@ -305,6 +305,22 @@ test_that("graph_cluster runs native CPU random-walk and Louvain clustering with
   expect_false("Pons and Latapy (2006) for random-walk walktrap clustering" %in% louvain$sources)
 })
 
+test_that("graph_cluster requires canonical clustering method labels", {
+  set.seed(50511)
+  x <- matrix(rnorm(80), ncol = 4)
+
+  expect_error(
+    graph_cluster(x, method = "l", backend = "cpu", graph_backend = "cpu", k = 5L),
+    "method"
+  )
+  expect_error(
+    graph_cluster(x, method = "walktrap", backend = "cpu", graph_backend = "cpu", k = 5L),
+    "method"
+  )
+  expect_equal(faissR:::normalize_graph_cluster_method(NULL), "random_walking")
+  expect_equal(faissR:::normalize_graph_cluster_method("leiden"), "leiden")
+})
+
 test_that("graph_cluster passes method metric and tuning to internal KNN", {
   set.seed(5052)
   x <- rbind(
