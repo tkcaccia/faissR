@@ -31,7 +31,9 @@
 #'   `nrow(data)`, `ncol(data)`, and `centers` without running pilot searches.
 #'   Small many-cluster jobs can use extra restarts when `n / centers` remains
 #'   large enough; large or high-dimensional jobs use cheaper iteration and
-#'   tolerance defaults.
+#'   tolerance defaults. `centers = 1` uses the exact column-mean solution for
+#'   `backend = "auto"` and `"cpu"` with `max_iter = 1`, `n_init = 1`, and
+#'   `tol = 0`, because no iterative k-means backend can improve that solution.
 #'   `"fixed"`, `"off"`, and `"none"` use the historical fixed defaults unless
 #'   `max_iter`, `n_init`, or `tol` are explicitly supplied.
 #' @return A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
@@ -133,6 +135,15 @@ fast_kmeans <- function(data,
     backend_policy = auto_params$backend_policy,
     tuning = tuning
   )
+
+  if (centers == 1L && backend %in% c("auto", "cpu")) {
+    return(finish_trivial_one_cluster_kmeans(
+      x = x,
+      tuning_metadata = auto_params,
+      requested_backend = requested_backend,
+      resolved_backend = "cpu"
+    ))
+  }
 
   if (identical(backend, "cuda")) {
     return(run_cuda_kmeans(
@@ -309,6 +320,19 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
   work <- n * p * centers
   nbytes <- n * p * 8
   n_per_center <- n / centers
+  if (centers == 1) {
+    return(list(
+      prefer_cuda = FALSE,
+      reason = "single_cluster_exact_mean",
+      work = as.numeric(work),
+      nbytes = as.numeric(nbytes),
+      n_per_center = as.numeric(n_per_center),
+      work_threshold = work_threshold,
+      nbytes_threshold = nbytes_threshold,
+      large_n_threshold = large_n_threshold,
+      large_p_threshold = large_p_threshold
+    ))
+  }
   prefer <- work >= work_threshold ||
     nbytes >= nbytes_threshold ||
     (n >= large_n_threshold && p >= large_p_threshold)
@@ -475,6 +499,53 @@ finish_fast_kmeans <- function(out,
   out
 }
 
+finish_trivial_one_cluster_kmeans <- function(x,
+                                              tuning_metadata = NULL,
+                                              requested_backend = "auto",
+                                              resolved_backend = "cpu") {
+  center <- matrix(colMeans(x), nrow = 1L)
+  row_offsets <- sweep(x, 2L, center[1L, ], "-")
+  within <- sum(row_offsets * row_offsets)
+  max_iter <- tuning_metadata$effective$max_iter %||%
+    tuning_metadata$effective_max_iter %||%
+    NA_integer_
+  n_init <- tuning_metadata$effective$n_init %||%
+    tuning_metadata$effective_n_init %||%
+    NA_integer_
+  tol <- tuning_metadata$effective$tol %||%
+    tuning_metadata$effective_tol %||%
+    NA_real_
+  out <- list(
+    cluster = rep.int(1L, nrow(x)),
+    centers = center,
+    withinss = as.numeric(within),
+    tot.withinss = as.numeric(within),
+    size = as.integer(nrow(x)),
+    iter = 0L,
+    hit_max_iter = FALSE,
+    backend = "trivial",
+    backend_library = "faissR",
+    parameters = list(
+      centers = 1L,
+      max_iter = as.integer(max_iter),
+      n_init = as.integer(n_init),
+      tol = as.numeric(tol),
+      seed = NA_integer_,
+      n_threads = 1L,
+      init = "exact_mean",
+      requested_backend = requested_backend,
+      resolved_backend = resolved_backend,
+      tuning = tuning_metadata,
+      exact_trivial_solution = TRUE
+    )
+  )
+  out$converged <- TRUE
+  out$parameters$hit_max_iter <- out$hit_max_iter
+  out$parameters$converged <- out$converged
+  class(out) <- c("faissR_kmeans", "kmeans")
+  out
+}
+
 kmeans_hit_max_iter <- function(iter, max_iter) {
   iter <- suppressWarnings(as.integer(iter))
   max_iter <- suppressWarnings(as.integer(max_iter))
@@ -579,6 +650,21 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
       many_centers = isTRUE(many_centers),
       small_many_centers = isTRUE(small_many_centers),
       rule = "fixed_defaults"
+    ))
+  }
+  if (centers == 1L) {
+    return(list(
+      policy = "auto",
+      max_iter = 1L,
+      n_init = 1L,
+      tol = 0,
+      work = as.numeric(work),
+      n_per_center = as.numeric(n_per_center),
+      high_dim = isTRUE(high_dim),
+      large_n = isTRUE(large_n),
+      many_centers = FALSE,
+      small_many_centers = FALSE,
+      rule = "single_cluster_exact_mean"
     ))
   }
   max_iter <- if (large_n || work >= 5e9) {

@@ -143,6 +143,40 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(explicit$parameters$tuning$effective$tol, 1e-5)
 })
 
+test_that("fast_kmeans uses an exact trivial solution for one cluster on CPU and auto", {
+  set.seed(2021)
+  x <- matrix(rnorm(120), ncol = 6)
+  expected_center <- matrix(colMeans(x), nrow = 1L)
+  expected_within <- sum(sweep(x, 2L, expected_center[1L, ], "-")^2)
+
+  fit <- fast_kmeans(x, centers = 1L, backend = "auto", seed = 99, n_threads = 2)
+  expect_s3_class(fit, "faissR_kmeans")
+  expect_equal(fit$backend, "trivial")
+  expect_equal(fit$parameters$requested_backend, "auto")
+  expect_equal(fit$parameters$resolved_backend, "cpu")
+  expect_true(isTRUE(fit$parameters$exact_trivial_solution))
+  expect_equal(fit$cluster, rep.int(1L, nrow(x)))
+  expect_equal(fit$centers, expected_center)
+  expect_equal(fit$withinss, expected_within)
+  expect_equal(fit$tot.withinss, expected_within)
+  expect_equal(fit$size, nrow(x))
+  expect_equal(fit$iter, 0L)
+  expect_false(fit$hit_max_iter)
+  expect_true(fit$converged)
+  expect_equal(fit$parameters$max_iter, 1L)
+  expect_equal(fit$parameters$n_init, 1L)
+  expect_equal(fit$parameters$tol, 0)
+  expect_equal(fit$parameters$tuning$rule, "single_cluster_exact_mean")
+  expect_equal(fit$parameters$tuning$backend_policy$reason, "single_cluster_exact_mean")
+  expect_false(fit$parameters$tuning$backend_policy$prefer_cuda)
+  expect_equal(fit$parameters$tuning$selection$predicted_backend, "cpu")
+
+  cpu_fit <- fast_kmeans(x, centers = 1L, backend = "cpu", seed = 99, n_threads = 2)
+  expect_equal(cpu_fit$backend, "trivial")
+  expect_equal(cpu_fit$centers, expected_center)
+  expect_equal(cpu_fit$tot.withinss, expected_within)
+})
+
 test_that("kmeans auto parameter helper canonicalizes tuning labels", {
   auto <- faissR:::kmeans_auto_params(
     n = 100L,
@@ -212,7 +246,7 @@ test_that("fast_kmeans auto tuning is shape and center-count aware for benchmark
   byte_policy <- faissR:::kmeans_auto_backend_policy(
     n = 300000L,
     p = 128L,
-    centers = 1L
+    centers = 2L
   )
   expect_true(byte_policy$prefer_cuda)
   expect_equal(byte_policy$reason, "input_at_least_256MiB")
@@ -222,7 +256,7 @@ test_that("fast_kmeans auto tuning is shape and center-count aware for benchmark
   high_dim_policy <- faissR:::kmeans_auto_backend_policy(
     n = 50000L,
     p = 128L,
-    centers = 1L
+    centers = 2L
   )
   expect_true(high_dim_policy$prefer_cuda)
   expect_equal(high_dim_policy$reason, "large_high_dimensional_input")
