@@ -510,8 +510,11 @@ failed rows and are not replaced with CPU timings.
 The package records the same decision in
 `parameters$tuning$backend_policy`, including a reason string such as
 `small_cpu_preferred`, `work_at_least_1e8`, `input_at_least_256MiB`, or
-`large_high_dimensional_input`, so benchmark summaries can explain auto CPU/CUDA
-selection without running extra pilot jobs.
+`large_high_dimensional_input`, the estimated work and input bytes, and the
+deterministic threshold values (`work_threshold`, `nbytes_threshold`,
+`large_n_threshold`, and `large_p_threshold`) used for the CPU/CUDA decision.
+Benchmark summaries can therefore explain auto CPU/CUDA selection without
+running extra pilot jobs.
 
 Example CPU run:
 

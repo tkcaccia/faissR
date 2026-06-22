@@ -1248,10 +1248,15 @@ test_that("k-means benchmark mirrors fast_kmeans auto CUDA shape gate", {
   small_policy <- env$kmeans_auto_backend_policy(n = 120L, p = 4L, centers = 3L)
   expect_false(small_policy$prefer_cuda)
   expect_equal(small_policy$reason, "small_cpu_preferred")
+  expect_equal(small_policy$work_threshold, 1e8)
+  expect_equal(small_policy$nbytes_threshold, 256 * 1024^2)
+  expect_equal(small_policy$large_n_threshold, 50000)
+  expect_equal(small_policy$large_p_threshold, 128)
 
   work_policy <- env$kmeans_auto_backend_policy(n = 70000L, p = 784L, centers = 10L)
   expect_true(work_policy$prefer_cuda)
   expect_equal(work_policy$reason, "work_at_least_1e8")
+  expect_true(work_policy$work >= work_policy$work_threshold)
 })
 
 test_that("k-means benchmark fallback auto params mirror package metadata", {

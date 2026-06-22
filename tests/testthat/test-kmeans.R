@@ -60,6 +60,10 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_true(is.finite(auto$parameters$tuning$backend_policy$work))
   expect_true(is.finite(auto$parameters$tuning$backend_policy$nbytes))
   expect_true(is.finite(auto$parameters$tuning$backend_policy$n_per_center))
+  expect_equal(auto$parameters$tuning$backend_policy$work_threshold, 1e8)
+  expect_equal(auto$parameters$tuning$backend_policy$nbytes_threshold, 256 * 1024^2)
+  expect_equal(auto$parameters$tuning$backend_policy$large_n_threshold, 50000)
+  expect_equal(auto$parameters$tuning$backend_policy$large_p_threshold, 128)
 
   auto_backend <- fast_kmeans(x, centers = 3, backend = "auto", seed = 12, n_threads = 2)
   expect_equal(auto_backend$parameters$requested_backend, "auto")
@@ -177,6 +181,26 @@ test_that("fast_kmeans auto tuning is shape and center-count aware for benchmark
   expect_true(isTRUE(flow10$large_n))
   expect_false(isTRUE(flow10$high_dim))
   expect_equal(flow10$n_per_center, 100000)
+
+  byte_policy <- faissR:::kmeans_auto_backend_policy(
+    n = 300000L,
+    p = 128L,
+    centers = 1L
+  )
+  expect_true(byte_policy$prefer_cuda)
+  expect_equal(byte_policy$reason, "input_at_least_256MiB")
+  expect_equal(byte_policy$nbytes_threshold, 256 * 1024^2)
+  expect_true(byte_policy$nbytes >= byte_policy$nbytes_threshold)
+
+  high_dim_policy <- faissR:::kmeans_auto_backend_policy(
+    n = 50000L,
+    p = 128L,
+    centers = 1L
+  )
+  expect_true(high_dim_policy$prefer_cuda)
+  expect_equal(high_dim_policy$reason, "large_high_dimensional_input")
+  expect_equal(high_dim_policy$large_n_threshold, 50000)
+  expect_equal(high_dim_policy$large_p_threshold, 128)
 
   small_many <- faissR:::kmeans_auto_params(
     n = 50000L,

@@ -314,6 +314,10 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
 }
 
 kmeans_auto_backend_policy <- function(n, p, centers) {
+  work_threshold <- 1e8
+  nbytes_threshold <- 256 * 1024^2
+  large_n_threshold <- 50000
+  large_p_threshold <- 128
   helper <- tryCatch(
     getFromNamespace("kmeans_auto_backend_policy", "faissR"),
     error = function(e) NULL
@@ -327,7 +331,11 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       reason = "unknown_shape",
       work = NA_real_,
       nbytes = NA_real_,
-      n_per_center = NA_real_
+      n_per_center = NA_real_,
+      work_threshold = work_threshold,
+      nbytes_threshold = nbytes_threshold,
+      large_n_threshold = large_n_threshold,
+      large_p_threshold = large_p_threshold
     ))
   }
   n <- suppressWarnings(as.double(n))
@@ -341,18 +349,24 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       reason = "invalid_shape_assume_cuda_capable",
       work = NA_real_,
       nbytes = NA_real_,
-      n_per_center = NA_real_
+      n_per_center = NA_real_,
+      work_threshold = work_threshold,
+      nbytes_threshold = nbytes_threshold,
+      large_n_threshold = large_n_threshold,
+      large_p_threshold = large_p_threshold
     ))
   }
   work <- n * p * centers
   nbytes <- n * p * 8
   n_per_center <- n / centers
-  prefer <- work >= 1e8 || nbytes >= 256 * 1024^2 || (n >= 50000 && p >= 128)
-  reason <- if (work >= 1e8) {
+  prefer <- work >= work_threshold ||
+    nbytes >= nbytes_threshold ||
+    (n >= large_n_threshold && p >= large_p_threshold)
+  reason <- if (work >= work_threshold) {
     "work_at_least_1e8"
-  } else if (nbytes >= 256 * 1024^2) {
+  } else if (nbytes >= nbytes_threshold) {
     "input_at_least_256MiB"
-  } else if (n >= 50000 && p >= 128) {
+  } else if (n >= large_n_threshold && p >= large_p_threshold) {
     "large_high_dimensional_input"
   } else {
     "small_cpu_preferred"
@@ -362,7 +376,11 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
     reason = reason,
     work = as.numeric(work),
     nbytes = as.numeric(nbytes),
-    n_per_center = as.numeric(n_per_center)
+    n_per_center = as.numeric(n_per_center),
+    work_threshold = work_threshold,
+    nbytes_threshold = nbytes_threshold,
+    large_n_threshold = large_n_threshold,
+    large_p_threshold = large_p_threshold
   )
 }
 
