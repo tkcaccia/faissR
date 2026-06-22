@@ -2434,6 +2434,158 @@ select_self_approx_backend <- function(prefer_cuda = FALSE) {
   "cpu"
 }
 
+nn_auto_shape <- function(data,
+                          points,
+                          points_missing,
+                          k,
+                          metric = "euclidean",
+                          exclude_self = FALSE) {
+  data_dim <- if (is_float32_matrix_input(data)) float32_matrix_dims(data, "data") else dim(data)
+  if (is.null(data_dim) || length(data_dim) != 2L) {
+    data_dim <- dim(as.matrix(data))
+  }
+  points_dim <- if (isTRUE(points_missing)) {
+    data_dim
+  } else if (is_float32_matrix_input(points)) {
+    float32_matrix_dims(points, "points")
+  } else {
+    dim(points)
+  }
+  if (is.null(points_dim) || length(points_dim) != 2L) {
+    points_dim <- dim(as.matrix(points))
+  }
+  n <- as.integer(data_dim[[1L]])
+  p <- as.integer(data_dim[[2L]])
+  n_points <- as.integer(points_dim[[1L]])
+  self_query <- isTRUE(points_missing) || identical(data, points)
+  if (is.null(k)) {
+    k <- if (n == 1L) {
+      1L
+    } else {
+      min(n, auto_k(n, include_self = isTRUE(self_query) && !isTRUE(exclude_self)))
+    }
+  }
+  k <- normalize_nn_positive_integer(k, "k", "`k` must be NULL or a positive integer.")
+  list(
+    n = n,
+    p = p,
+    n_points = n_points,
+    k = as.integer(k),
+    metric = normalize_nn_metric(metric),
+    self_query = isTRUE(self_query),
+    exclude_self = isTRUE(exclude_self),
+    work_size = as.double(n) * as.double(n_points) * as.double(p)
+  )
+}
+
+nn_auto_route_for_shape <- function(shape, resolved_backend) {
+  backend <- resolved_backend
+  selected <- backend
+  reason <- "explicit_route"
+  error <- NA_character_
+  if (identical(backend, "auto")) {
+    gpu <- resolve_auto_knn_gpu_backend(
+      backend = "auto",
+      self_query = shape$self_query,
+      n_points = shape$n_points,
+      n = shape$n,
+      p = shape$p,
+      k = shape$k,
+      work_size = shape$work_size,
+      metric = shape$metric
+    )
+    if (!is.na(gpu)) {
+      selected <- gpu
+      reason <- "auto_cuda_preselector"
+    } else {
+      selected <- select_cpu_auto_backend(
+        self_query = shape$self_query,
+        n = shape$n,
+        p = shape$p,
+        n_points = shape$n_points,
+        k = shape$k,
+        work_size = shape$work_size,
+        metric = shape$metric
+      )
+      reason <- "auto_cpu_fallback"
+    }
+  } else if (identical(backend, "cpu_auto")) {
+    selected <- select_cpu_auto_backend(
+      self_query = shape$self_query,
+      n = shape$n,
+      p = shape$p,
+      n_points = shape$n_points,
+      k = shape$k,
+      work_size = shape$work_size,
+      metric = shape$metric
+    )
+    reason <- "cpu_auto_shape_selector"
+  } else if (backend %in% c("cuda_auto", "gpu_auto")) {
+    selected <- tryCatch(
+      select_cuda_auto_backend(
+        self_query = shape$self_query,
+        n = shape$n,
+        p = shape$p,
+        n_points = shape$n_points,
+        k = shape$k,
+        work_size = shape$work_size,
+        metric = shape$metric
+      ),
+      error = function(e) {
+        error <<- conditionMessage(e)
+        backend
+      }
+    )
+    reason <- if (is.na(error)) "cuda_auto_shape_selector" else "cuda_auto_unavailable"
+  }
+  list(selected_backend = selected, reason = reason, error = error)
+}
+
+nn_auto_selection_metadata <- function(data,
+                                       points,
+                                       points_missing,
+                                       k,
+                                       requested_backend,
+                                       requested_method,
+                                       resolved_backend,
+                                       metric = "euclidean",
+                                       tuning = "auto",
+                                       exclude_self = FALSE) {
+  if (!identical(requested_backend, "auto") &&
+      !identical(requested_method, "auto") &&
+      !resolved_backend %in% c("auto", "cpu_auto", "cuda_auto", "gpu_auto")) {
+    return(NULL)
+  }
+  shape <- nn_auto_shape(
+    data = data,
+    points = points,
+    points_missing = points_missing,
+    k = k,
+    metric = metric,
+    exclude_self = exclude_self
+  )
+  route <- nn_auto_route_for_shape(shape, resolved_backend)
+  list(
+    policy = "static_shape_k_metric_selector",
+    slow_tuning = FALSE,
+    requested_backend = requested_backend,
+    requested_method = public_nn_method_label(requested_method),
+    resolved_public_backend = resolved_backend,
+    predicted_backend = route$selected_backend,
+    reason = route$reason,
+    error = route$error,
+    n = shape$n,
+    p = shape$p,
+    n_points = shape$n_points,
+    k = shape$k,
+    metric = shape$metric,
+    self_query = shape$self_query,
+    exclude_self = shape$exclude_self,
+    work_size = shape$work_size,
+    tuning = normalize_nn_tuning(tuning)
+  )
+}
+
 normalize_nn_threads <- function(n_threads) {
   if (is.null(n_threads)) {
     n_threads <- suppressWarnings(parallel::detectCores(logical = FALSE))
@@ -5303,7 +5455,9 @@ grid_self_knn <- function(data,
 #'   backend, metric, exact/approximate flag, and self-query flag are stored in
 #'   attributes including `attr(result, "requested_backend")`,
 #'   `attr(result, "requested_method")`, `attr(result, "tuning")`, and
-#'   `attr(result, "resolved_backend")`.
+#'   `attr(result, "resolved_backend")`. Auto requests also include
+#'   `attr(result, "auto_selection")`, a static shape/k/metric decision record
+#'   that does not run pilot tuning.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu")
@@ -5321,6 +5475,7 @@ nn <- function(data,
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                output = c("double", "float"),
                n_threads = NULL) {
+  points_missing <- missing(points)
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
   tuning <- normalize_nn_tuning(tuning)
@@ -5328,12 +5483,24 @@ nn <- function(data,
   output <- normalize_nn_output(output)
   validate_public_nn_method_shape(data, method)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
+  auto_selection <- nn_auto_selection_metadata(
+    data = data,
+    points = points,
+    points_missing = points_missing,
+    k = k,
+    requested_backend = backend,
+    requested_method = method,
+    resolved_backend = resolved_backend,
+    metric = metric,
+    tuning = tuning,
+    exclude_self = FALSE
+  )
   result <- nn_compute(
     data,
     points,
     k,
     resolved_backend,
-    missing(points),
+    points_missing,
     exclude_self = FALSE,
     n_threads = n_threads,
     metric = metric,
@@ -5342,6 +5509,7 @@ nn <- function(data,
   attr(result, "requested_backend") <- backend
   attr(result, "requested_method") <- public_nn_method_label(method)
   attr(result, "tuning") <- tuning
+  if (!is.null(auto_selection)) attr(result, "auto_selection") <- auto_selection
   finalize_nn_output(result, output)
 }
 
@@ -5373,7 +5541,9 @@ nn <- function(data,
 #'   matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
 #'   optional `float` package is installed.
 #' @param n_threads Number of CPU worker threads used by CPU backends.
-#' @return A `faissR_nn` object with `indices` and `distances` matrices.
+#' @return A `faissR_nn` object with `indices` and `distances` matrices. Auto
+#'   requests also include `attr(result, "auto_selection")`, a static
+#'   shape/k/metric decision record that does not run pilot tuning.
 #' @export
 nn_without_self <- function(data,
                             k,
@@ -5391,6 +5561,18 @@ nn_without_self <- function(data,
   output <- normalize_nn_output(output)
   validate_public_nn_method_shape(data, method)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
+  auto_selection <- nn_auto_selection_metadata(
+    data = data,
+    points = data,
+    points_missing = TRUE,
+    k = k,
+    requested_backend = backend,
+    requested_method = method,
+    resolved_backend = resolved_backend,
+    metric = metric,
+    tuning = tuning,
+    exclude_self = TRUE
+  )
   result <- nn_compute(
     data,
     data,
@@ -5405,6 +5587,7 @@ nn_without_self <- function(data,
   attr(result, "requested_backend") <- backend
   attr(result, "requested_method") <- public_nn_method_label(method)
   attr(result, "tuning") <- tuning
+  if (!is.null(auto_selection)) attr(result, "auto_selection") <- auto_selection
   finalize_nn_output(result, output)
 }
 

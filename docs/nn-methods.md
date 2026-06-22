@@ -132,7 +132,10 @@ for every dataset. For benchmarking, report the requested backend/method/tuning
 stored in `attr(result, "requested_backend")`,
 `attr(result, "requested_method")`, and `attr(result, "tuning")` together with
 the resolved backend in `attr(result, "resolved_backend")` and approximation
-parameters.
+parameters. Auto requests also carry `attr(result, "auto_selection")`, a
+static no-pilot record of the shape/k/metric rule that predicted the concrete
+route. This lets benchmark tables compare `method = "auto"` against the
+fastest observed method without rerunning any tuning logic inside `nn()`.
 
 ## `"hnsw"` Metrics
 

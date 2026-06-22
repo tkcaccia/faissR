@@ -102,7 +102,9 @@ A list with integer matrix `indices`, `distances`, and stable metadata fields
   backend, metric, exact/approximate flag, and self-query flag are stored in
   attributes including `attr(result, "requested_backend")`,
   `attr(result, "requested_method")`, `attr(result, "tuning")`, and
-  `attr(result, "resolved_backend")`.
+  `attr(result, "resolved_backend")`. Auto requests also include
+  `attr(result, "auto_selection")`, a static shape/k/metric decision record
+  that does not run pilot tuning.
 }
 \description{
 `nn()` provides a package-native nearest-neighbor entry point compatible with

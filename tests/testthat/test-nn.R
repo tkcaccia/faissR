@@ -397,6 +397,16 @@ test_that("public NN results preserve requested and resolved routing metadata", 
   expect_equal(attr(without_self, "resolved_backend"), attr(without_self, "backend"))
   expect_equal(attr(without_self, "metric"), "cosine")
   expect_equal(attr(without_self, "tuning"), "off")
+  auto_meta <- attr(out, "auto_selection")
+  expect_equal(auto_meta$policy, "static_shape_k_metric_selector")
+  expect_false(auto_meta$slow_tuning)
+  expect_equal(auto_meta$requested_backend, "auto")
+  expect_equal(auto_meta$requested_method, "exact")
+  expect_equal(auto_meta$predicted_backend, attr(out, "backend"))
+  expect_equal(auto_meta$metric, "euclidean")
+  expect_equal(auto_meta$k, 3L)
+  expect_equal(auto_meta$n, nrow(x))
+  expect_equal(auto_meta$p, ncol(x))
 })
 
 test_that("top-level auto reuses the metric-aware CPU auto selector after GPU decline", {
@@ -420,6 +430,21 @@ test_that("top-level auto reuses the metric-aware CPU auto selector after GPU de
   expect_equal(attr(top_auto, "metric"), "cosine")
   expect_equal(attr(top_auto, "requested_backend"), "auto")
   expect_equal(attr(top_auto, "requested_method"), "auto")
+  auto_meta <- attr(top_auto, "auto_selection")
+  expect_equal(auto_meta$policy, "static_shape_k_metric_selector")
+  expect_equal(auto_meta$predicted_backend, attr(top_auto, "backend"))
+  expect_equal(auto_meta$reason, "auto_cpu_fallback")
+  expect_equal(auto_meta$metric, "cosine")
+  expect_false(auto_meta$self_query)
+  expect_false(auto_meta$slow_tuning)
+})
+
+test_that("explicit NN routes do not attach auto selection metadata", {
+  set.seed(1044)
+  x <- matrix(rnorm(80), ncol = 4)
+  out <- nn(x, k = 3L, backend = "cpu", method = "exact", tuning = "off")
+
+  expect_null(attr(out, "auto_selection"))
 })
 
 test_that("public NN APIs require scalar backend method metric and tuning choices", {
