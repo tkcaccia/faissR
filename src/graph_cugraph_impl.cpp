@@ -60,6 +60,21 @@ struct DeviceArray {
   DeviceArray& operator=(const DeviceArray&) = delete;
 };
 
+struct GraphHandle {
+  cugraph_graph_t* graph = nullptr;
+  ~GraphHandle() {
+    free();
+  }
+  void free() {
+    if (graph) {
+      cugraph_graph_free(graph);
+      graph = nullptr;
+    }
+  }
+  GraphHandle(const GraphHandle&) = delete;
+  GraphHandle& operator=(const GraphHandle&) = delete;
+};
+
 std::vector<int32_t> copy_int32_result(const cugraph_resource_handle_t* handle,
                                        cugraph_type_erased_device_array_view_t* view) {
   const size_t n = cugraph_type_erased_device_array_view_size(view);
@@ -105,10 +120,10 @@ List run_cugraph_community(List edge_list,
     cugraph_graph_properties_t props;
     props.is_symmetric = static_cast<bool_t>(1);
     props.is_multigraph = static_cast<bool_t>(0);
-    cugraph_graph_t* graph = nullptr;
+    GraphHandle graph;
     cugraph_error_t* error = nullptr;
     check_cugraph(cugraph_graph_create_sg(handle, &props, d_vertices.view, d_src.view, d_dst.view, d_weight.view,
-                                          nullptr, nullptr, static_cast<bool_t>(0), static_cast<bool_t>(0), static_cast<bool_t>(1), static_cast<bool_t>(1), static_cast<bool_t>(0), static_cast<bool_t>(0), &graph, &error),
+                                          nullptr, nullptr, static_cast<bool_t>(0), static_cast<bool_t>(0), static_cast<bool_t>(1), static_cast<bool_t>(1), static_cast<bool_t>(0), static_cast<bool_t>(0), &graph.graph, &error),
                   error, "cuGraph graph create");
 
     std::vector<int32_t> best_membership;
@@ -117,17 +132,15 @@ List run_cugraph_community(List edge_list,
     for (int run = 0; run < n_runs; ++run) {
       cugraph_hierarchical_clustering_result_t* result = nullptr;
       if (method == "louvain") {
-        check_cugraph(cugraph_louvain(handle, graph, static_cast<size_t>(std::max(1, n_iterations)), 1e-7, resolution, static_cast<bool_t>(0), &result, &error),
+        check_cugraph(cugraph_louvain(handle, graph.graph, static_cast<size_t>(std::max(1, n_iterations)), 1e-7, resolution, static_cast<bool_t>(0), &result, &error),
                       error, "cuGraph Louvain");
       } else if (method == "leiden") {
         cugraph_rng_state_t* rng = nullptr;
         check_cugraph(cugraph_rng_state_create(handle, static_cast<uint64_t>(seed + run * 104729), &rng, &error), error, "cuGraph RNG create");
-        check_cugraph(cugraph_leiden(handle, rng, graph, static_cast<size_t>(std::max(1, n_iterations)), resolution, 0.01, static_cast<bool_t>(0), &result, &error),
+        check_cugraph(cugraph_leiden(handle, rng, graph.graph, static_cast<size_t>(std::max(1, n_iterations)), resolution, 0.01, static_cast<bool_t>(0), &result, &error),
                       error, "cuGraph Leiden");
         cugraph_rng_state_free(rng);
       } else {
-        cugraph_graph_free(graph);
-        cugraph_free_resource_handle(handle);
         Rcpp::stop("CUDA random_walking requires a dedicated cuGraph random-walk clustering adapter; use backend = 'cpu' for this method for now.");
       }
 
@@ -147,7 +160,7 @@ List run_cugraph_community(List edge_list,
       }
       cugraph_hierarchical_clustering_result_free(result);
     }
-    cugraph_graph_free(graph);
+    graph.free();
     cugraph_free_resource_handle(handle);
 
     std::vector<int32_t> unique = best_membership;
