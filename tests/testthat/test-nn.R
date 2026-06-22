@@ -1075,6 +1075,10 @@ test_that("non-euclidean metrics use only validated backend paths", {
     "inner_product"
   )
   expect_error(
+    internal_nn(x, k = 4L, backend = "cuda_cuvs_ivf_flat", metric = "inner_product"),
+    "Direct cuVS IVF.*inner-product"
+  )
+  expect_error(
     internal_nn(x, k = 4L, backend = "cuda_cuvs_ivfpq", metric = "inner_product"),
     "Direct cuVS IVF.*inner-product"
   )

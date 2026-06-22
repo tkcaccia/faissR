@@ -425,6 +425,17 @@ test_that("graph cluster-count targets are strict positive whole numbers", {
   )
 })
 
+test_that("target cluster resolution candidates are bounded and deterministic", {
+  candidates <- faissR:::graph_resolution_candidates(1, 3L)
+
+  expect_equal(candidates, sort(candidates))
+  expect_true(1 %in% candidates)
+  expect_equal(min(candidates), 1 / 16)
+  expect_equal(max(candidates), 16)
+  expect_equal(length(candidates), 17L)
+  expect_equal(faissR:::graph_resolution_candidates(0.5, NULL), 0.5)
+})
+
 test_that("graph runtime integer controls reject fractional values", {
   set.seed(5092)
   x <- matrix(rnorm(40), ncol = 4)

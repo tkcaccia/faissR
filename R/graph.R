@@ -265,8 +265,8 @@ resolve_graph_cluster_backend <- function(backend) {
 #' @param n_runs Number of independent native runs. The best modularity is kept.
 #' @param resolution Modularity resolution for Louvain/Leiden-style scoring.
 #' @param n_clusters Optional target number of communities for Louvain/Leiden.
-#'   If supplied, faissR evaluates a small deterministic resolution grid around
-#'   `resolution` on the already-built graph and keeps the result whose
+#'   If supplied, faissR evaluates a bounded deterministic resolution grid
+#'   around `resolution` on the already-built graph and keeps the result whose
 #'   community count is closest to `n_clusters`. This is a convenience target,
 #'   not a hard guarantee. The target must be a positive integer and cannot
 #'   exceed the number of graph vertices.
@@ -616,10 +616,10 @@ validate_graph_target_cluster_count <- function(n_clusters, n_vertices) {
 
 graph_resolution_candidates <- function(resolution, n_clusters) {
   if (is.null(n_clusters)) return(resolution)
-  exponents <- seq(-3, 3)
+  exponents <- seq(-4, 4, by = 0.5)
   candidates <- resolution * (2 ^ exponents)
   candidates <- candidates[is.finite(candidates) & candidates > 0]
-  unique(c(resolution, candidates))
+  sort(unique(c(resolution, candidates)))
 }
 
 graph_cluster_edges_target <- function(edge_list,

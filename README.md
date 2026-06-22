@@ -44,7 +44,7 @@ headers and libraries discovered by `configure`.
   Louvain/Leiden clustering.
 - `graph_cluster()` for native C++/OpenMP random-walk, Louvain, and
   Leiden-style clustering [9-11], including an optional `n_clusters` target
-  that searches a small deterministic resolution grid for Louvain/Leiden.
+  that searches a bounded deterministic resolution grid for Louvain/Leiden.
   CUDA Louvain and Leiden use RAPIDS libcugraph when faissR is built with
   libcugraph [12]; CUDA random-walking is not enabled yet.
 - `fast_kmeans()` for CPU, FAISS CPU/GPU, and optional cuVS k-means [7-8],
