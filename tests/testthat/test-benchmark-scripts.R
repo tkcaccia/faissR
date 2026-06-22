@@ -995,6 +995,27 @@ test_that("k-means benchmark validates method and backend selectors", {
   )
 })
 
+test_that("k-means benchmark validates dataset selectors", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+  valid <- c("COIL20", "USPS", "SimulatedTiny3Clusters")
+
+  expect_equal(
+    env$validate_dataset_values(c("COIL20", "USPS", "COIL20"), valid),
+    c("COIL20", "USPS")
+  )
+  expect_error(
+    env$validate_dataset_values(c("COIL20", "bad_dataset"), valid),
+    "Invalid value\\(s\\): bad_dataset"
+  )
+  expect_error(
+    env$validate_dataset_values(character(), valid),
+    "at least one dataset"
+  )
+})
+
 test_that("k-means benchmark centers argument is explicit", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_kmeans.R"),
@@ -1341,6 +1362,27 @@ test_that("graph benchmark validates method and backend selectors", {
   expect_error(
     env$validate_choice_values(character(), env$default_graph_backends(), "graph_backends"),
     "at least one value"
+  )
+})
+
+test_that("graph benchmark validates dataset selectors", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  valid <- c("COIL20", "USPS", "SimulatedUniform2D", "SimulatedUniform3D")
+
+  expect_equal(
+    env$validate_dataset_values(c("COIL20", "USPS", "COIL20"), valid),
+    c("COIL20", "USPS")
+  )
+  expect_error(
+    env$validate_dataset_values(c("COIL20", "bad_dataset"), valid),
+    "Invalid value\\(s\\): bad_dataset"
+  )
+  expect_error(
+    env$validate_dataset_values(character(), valid),
+    "at least one dataset"
   )
 })
 

@@ -97,6 +97,28 @@ validate_choice_values <- function(values, valid, arg_name) {
   values
 }
 
+validate_dataset_values <- function(datasets, valid_datasets, arg_name = "datasets") {
+  datasets <- unique(trimws(as.character(datasets)))
+  datasets <- datasets[nzchar(datasets)]
+  valid_datasets <- unique(trimws(as.character(valid_datasets)))
+  valid_datasets <- valid_datasets[nzchar(valid_datasets)]
+  invalid <- datasets[!datasets %in% valid_datasets]
+  if (length(invalid)) {
+    stop(
+      "`", arg_name, "` must contain only available benchmark datasets: ",
+      paste(valid_datasets, collapse = ", "),
+      ". Invalid value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  if (!length(datasets)) {
+    stop("`", arg_name, "` must contain at least one dataset.", call. = FALSE)
+  }
+  datasets
+}
+
 configure_threads <- function(n_threads) {
   vars <- c(
     "OMP_NUM_THREADS",
@@ -745,11 +767,15 @@ k_values <- required_positive_int_values(
   split_arg(args$k_values, paste(default_graph_k_values(), collapse = ",")),
   "k_values"
 )
-datasets <- split_arg(args$datasets, paste(c(
+available_datasets <- c(
   dataset_index(data_root)$dataset,
   "SimulatedUniform2D",
   "SimulatedUniform3D"
-), collapse = ","))
+)
+datasets <- validate_dataset_values(
+  split_arg(args$datasets, paste(available_datasets, collapse = ",")),
+  available_datasets
+)
 methods <- validate_choice_values(
   split_arg(args$methods, paste(default_graph_cluster_methods(), collapse = ",")),
   default_graph_cluster_methods(),

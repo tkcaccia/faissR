@@ -63,6 +63,28 @@ validate_choice_values <- function(values, valid, arg_name) {
   values
 }
 
+validate_dataset_values <- function(datasets, valid_datasets, arg_name = "datasets") {
+  datasets <- unique(trimws(as.character(datasets)))
+  datasets <- datasets[nzchar(datasets)]
+  valid_datasets <- unique(trimws(as.character(valid_datasets)))
+  valid_datasets <- valid_datasets[nzchar(valid_datasets)]
+  invalid <- datasets[!datasets %in% valid_datasets]
+  if (length(invalid)) {
+    stop(
+      "`", arg_name, "` must contain only available benchmark datasets: ",
+      paste(valid_datasets, collapse = ", "),
+      ". Invalid value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  if (!length(datasets)) {
+    stop("`", arg_name, "` must contain at least one dataset.", call. = FALSE)
+  }
+  datasets
+}
+
 configure_threads <- function(n_threads) {
   value <- as.character(as.integer(n_threads))
   Sys.setenv(
@@ -657,7 +679,11 @@ n_init <- args$n_init %||% "auto"
 tol <- args$tol %||% "auto"
 tuning <- args$tuning %||% "auto"
 
-datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "SimulatedTiny3Clusters"), collapse = ","))
+available_datasets <- c(dataset_index(data_root)$dataset, "SimulatedTiny3Clusters")
+datasets <- validate_dataset_values(
+  split_arg(args$datasets, paste(available_datasets, collapse = ",")),
+  available_datasets
+)
 methods <- validate_choice_values(
   split_arg(args$methods, paste(default_kmeans_method_values(), collapse = ",")),
   default_kmeans_method_values(),
