@@ -1171,6 +1171,36 @@ test_that("k-means benchmark recommendations are grouped by dataset and centers"
   )
 })
 
+test_that("k-means benchmark can recommend within backend groups", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = c("A", "A", "A", "A"),
+    centers = c(2L, 2L, 2L, 2L),
+    method = c("fast_kmeans", "fast_kmeans", "stats", "stats"),
+    backend = c("cpu", "cuda", "stats", "stats"),
+    metric = rep("euclidean", 4L),
+    median_ari = c(0.91, 0.90, 0.92, 0.89),
+    median_elapsed_sec = c(3, 1, 5, 4),
+    median_tot_withinss = c(10, 11, 9, 12)
+  )
+
+  overall <- env$recommend_kmeans_methods(cycle_summary, ari_tolerance = 0.02)
+  by_backend <- env$recommend_kmeans_methods(
+    cycle_summary,
+    ari_tolerance = 0.02,
+    group_cols = c("dataset", "centers", "backend")
+  )
+
+  expect_equal(nrow(overall), 1L)
+  expect_equal(overall$backend, "cuda")
+  expect_equal(nrow(by_backend), 3L)
+  expect_equal(by_backend$backend, c("cpu", "cuda", "stats"))
+  expect_equal(by_backend$method, c("fast_kmeans", "fast_kmeans", "stats"))
+})
+
 test_that("k-means benchmark recommendation ties prefer higher ARI then lower withinss", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_kmeans.R"),

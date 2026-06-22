@@ -442,8 +442,23 @@ summarize_kmeans_cycles <- function(ok) {
   out[order(out$dataset, -out$median_ari, out$median_elapsed_sec), , drop = FALSE]
 }
 
-recommend_kmeans_methods <- function(cycle_summary, ari_tolerance) {
-  parts <- split(cycle_summary, paste(cycle_summary$dataset, cycle_summary$centers, sep = "__"))
+recommend_kmeans_methods <- function(cycle_summary, ari_tolerance, group_cols = c("dataset", "centers")) {
+  missing_cols <- setdiff(group_cols, names(cycle_summary))
+  if (length(missing_cols)) {
+    stop("Missing k-means recommendation grouping columns: ", paste(missing_cols, collapse = ", "), call. = FALSE)
+  }
+  group_key <- do.call(
+    paste,
+    c(
+      lapply(cycle_summary[, group_cols, drop = FALSE], function(x) {
+        x <- as.character(x)
+        x[is.na(x)] <- "NA"
+        x
+      }),
+      sep = "__"
+    )
+  )
+  parts <- split(cycle_summary, group_key)
   recommendations <- lapply(parts, function(x) {
     has_ari <- is.finite(x$median_ari)
     candidates <- if (any(has_ari)) {
@@ -470,7 +485,8 @@ recommend_kmeans_methods <- function(cycle_summary, ari_tolerance) {
   })
   out <- do.call(rbind, recommendations)
   row.names(out) <- NULL
-  out[order(out$dataset, out$centers), , drop = FALSE]
+  order_cols <- group_cols[group_cols %in% names(out)]
+  out[do.call(order, out[, order_cols, drop = FALSE]), , drop = FALSE]
 }
 
 compare_fast_kmeans_to_recommendations <- function(cycle_summary, recommendations) {
@@ -856,6 +872,18 @@ if (nrow(ok)) {
       row.names = FALSE
     )
   }
+  backend_recommendations <- recommend_kmeans_methods(
+    cycle_summary,
+    ari_tolerance,
+    group_cols = c("dataset", "centers", "backend")
+  )
+  if (nrow(backend_recommendations)) {
+    utils::write.csv(
+      backend_recommendations,
+      file.path(out_dir, "kmeans_backend_recommendations_from_cycles.csv"),
+      row.names = FALSE
+    )
+  }
 
   aggregate_fast <- compare_fast_kmeans_to_recommendations(cycle_summary, recommendations)
   if (nrow(aggregate_fast)) {
@@ -899,6 +927,7 @@ materials <- c(
   "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. Speedups, ARI deltas, and withinss ratios are `NA` when the required timing or quality values are missing or invalid. The `cycle` column supports repeated benchmark cycles such as `--cycles=10` for speed/ARI tuning.",
   "`kmeans_cycle_summary.csv` aggregates successful rows across cycles by dataset/method/backend/centers and reports success counts, median/min/max elapsed time, ARI stability, withinss stability, iteration counts, and resolved backend metadata.",
   "`kmeans_recommendations_from_cycles.csv` selects the fastest row within `ari_tolerance` of the best median ARI for each dataset/centers combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median times are broken by higher median ARI and then lower median total within-cluster sum of squares. When ARI is unavailable it selects the fastest median-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
+  "`kmeans_backend_recommendations_from_cycles.csv` applies the same rule within each dataset/centers/backend group, so CPU, CUDA, auto, and stats rows can be tuned or reported separately without changing the overall recommendation file.",
   "`kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median ARI gap, withinss ratio, requested/resolved backend metadata, CPU thread count, and backend/implementation agreement. Speed ratios, ARI gaps, and withinss ratios are `NA` when the required timing or quality values are missing or invalid.",
   "Explicit CUDA requests whose required CUDA, FAISS GPU, or cuVS k-means runtime is unavailable are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`; `resolved_backend` remains `cuda` so the skipped public device request is auditable. `backend = \"auto\"` resolves to CPU instead of becoming an expected skip when no k-means-capable CUDA route is available, and also resolves to CPU for small k-means shapes where the deterministic shape gate estimates that GPU launch/copy overhead would dominate. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
 )

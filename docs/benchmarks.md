@@ -443,11 +443,14 @@ for comparing different requested cluster counts.
 `ari_tolerance` of the best median ARI for each dataset/centers combination;
 `--ari_tolerance` must be a non-negative number and is validated before
 datasets are loaded.
-when ARI is available and median times tie, higher median ARI and then lower
+When ARI is available and median times tie, higher median ARI and then lower
 median total within-cluster sum of squares break the tie. When ARI is
 unavailable it selects the fastest median-time row. The
 `recommendation_basis` column records whether the row was selected as
 `"fastest_within_ari_tolerance"` or `"speed_only_no_ari"`.
+`kmeans_backend_recommendations_from_cycles.csv` applies the same rule within
+each dataset/centers/backend group, so CPU, CUDA, auto, and stats results can
+be tuned or reported separately without losing the overall recommendation.
 `kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()`
 rows with those recommendations and reports median speed ratio, median ARI gap,
 withinss ratio, requested/resolved backend metadata, CPU thread count,
