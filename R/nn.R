@@ -64,10 +64,7 @@ nn_compute <- function(data,
       )
     }
   }
-  k <- as.integer(k)
-  if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L) {
-    stop("`k` must be NULL or a positive integer.", call. = FALSE)
-  }
+  k <- normalize_nn_positive_integer(k, "k", "`k` must be NULL or a positive integer.")
   max_k <- if (isTRUE(exclude_self)) nrow(data) - 1L else nrow(data)
   if (k > max_k) {
     stop("`k` cannot be larger than the available neighbor count.", call. = FALSE)
@@ -1927,10 +1924,7 @@ nn_sparse_compute <- function(data,
       )
     }
   }
-  k <- as.integer(k)
-  if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L) {
-    stop("`k` must be NULL or a positive integer.", call. = FALSE)
-  }
+  k <- normalize_nn_positive_integer(k, "k", "`k` must be NULL or a positive integer.")
   max_k <- if (isTRUE(exclude_self)) nrow(data) - 1L else nrow(data)
   if (k > max_k) {
     stop("`k` cannot be larger than the available neighbor count.", call. = FALSE)
@@ -2215,11 +2209,21 @@ normalize_nn_threads <- function(n_threads) {
     }
     return(as.integer(max(1L, min(64L, n_threads))))
   }
-  n_threads <- suppressWarnings(as.integer(n_threads))
-  if (length(n_threads) != 1L || is.na(n_threads) || !is.finite(n_threads) || n_threads < 1L) {
-    stop("`n_threads` must be NULL or a single positive integer.", call. = FALSE)
-  }
+  n_threads <- normalize_nn_positive_integer(
+    n_threads,
+    "n_threads",
+    "`n_threads` must be NULL or a single positive integer."
+  )
   as.integer(max(1L, min(64L, n_threads)))
+}
+
+normalize_nn_positive_integer <- function(x, arg, message) {
+  value <- suppressWarnings(as.numeric(x))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) ||
+      value < 1L || abs(value - round(value)) > sqrt(.Machine$double.eps)) {
+    stop(message, call. = FALSE)
+  }
+  as.integer(round(value))
 }
 
 normalize_nn_metric <- function(metric) {
@@ -5128,9 +5132,10 @@ nn_without_self <- function(data,
     stop("Approximate and exact KNN must have the same number of rows.", call. = FALSE)
   }
   k_is_auto <- is.null(k)
-  k <- if (k_is_auto) min(ncol(approx_idx), ncol(exact_idx)) else as.integer(k)
-  if (length(k) != 1L || is.na(k) || !is.finite(k) || (!k_is_auto && k < 1L)) {
-    stop("`k` must be a positive integer.", call. = FALSE)
+  k <- if (k_is_auto) {
+    min(ncol(approx_idx), ncol(exact_idx))
+  } else {
+    normalize_nn_positive_integer(k, "k", "`k` must be a positive integer.")
   }
   k <- min(k, ncol(approx_idx), ncol(exact_idx))
   if (k < 1L) {

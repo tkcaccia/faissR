@@ -105,7 +105,10 @@ test_that("public NN APIs require scalar backend method metric and tuning choice
   expect_no_error(nn(x, k = 2L))
   expect_no_error(nn_without_self(x, k = 2L))
   expect_error(nn(x, k = c(2L, 3L), backend = "cpu"), "`k` must be NULL or a positive integer")
+  expect_error(nn(x, k = 2.5, backend = "cpu"), "`k` must be NULL or a positive integer")
+  expect_error(nn_without_self(x, k = 1.5, backend = "cpu"), "`k` must be NULL or a positive integer")
   expect_error(nn(x, k = 2L, backend = "cpu", n_threads = c(1L, 2L)), "`n_threads` must be NULL or a single positive integer")
+  expect_error(nn(x, k = 2L, backend = "cpu", n_threads = 1.5), "`n_threads` must be NULL or a single positive integer")
   expect_error(nn_without_self(x, k = 2L, backend = "cpu", n_threads = 0L), "`n_threads` must be NULL or a single positive integer")
   expect_equal(faissR:::normalize_nn_threads(128L), 64L)
   expect_error(nn(x, k = 2L, backend = c("cpu", "cuda")), "`backend` must be a single value")
@@ -1922,6 +1925,10 @@ test_that("KNN recall summary ignores missing neighbour padding", {
       matrix(integer(), nrow = 2L, ncol = 0L)
     ),
     "at least one neighbour column"
+  )
+  expect_error(
+    faissR:::.knn_recall_summary(approx, exact, k = 1.5),
+    "`k` must be a positive integer"
   )
 })
 
