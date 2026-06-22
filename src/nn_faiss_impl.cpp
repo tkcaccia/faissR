@@ -117,12 +117,12 @@ struct MatrixViewF32 {
 
 Rcpp::IntegerVector matrix_dims_from_object(SEXP x, const char* name) {
   SEXP dim = Rf_getAttrib(x, R_DimSymbol);
-  if (Rf_isNull(dim)) {
+  if (Rf_isNull(dim) && Rf_isS4(x)) {
     SEXP data_slot = R_do_slot(x, Rf_install("Data"));
     dim = Rf_getAttrib(data_slot, R_DimSymbol);
   }
   if (Rf_isNull(dim) || Rf_length(dim) != 2) {
-    Rcpp::stop("%s must be a two-dimensional float32 matrix", name);
+    Rcpp::stop("%s must be a two-dimensional numeric or float32 matrix", name);
   }
   Rcpp::IntegerVector dims(dim);
   if (dims[0] < 1 || dims[1] < 1) {
@@ -159,33 +159,17 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
   view.nrow = dims[0];
   view.ncol = dims[1];
   const int expected_length = view.nrow * view.ncol;
-  SEXP slot = R_do_slot(x, Rf_install("Data"));
 
   view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
   view.owns_data = true;
   view.row_major = true;
 
   bool finite = true;
-  const float* col_major = float32_slot_ptr(slot, expected_length, name);
-  if (col_major != nullptr) {
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static) reduction(&& : finite)
-#endif
-    for (int r = 0; r < view.nrow; ++r) {
-      for (int c = 0; c < view.ncol; ++c) {
-        const float value = col_major[r + view.nrow * c];
-        if (!std::isfinite(value)) {
-          finite = false;
-          continue;
-        }
-        view.buffer[static_cast<std::size_t>(r) * view.ncol + c] = value;
-      }
-    }
-  } else if (TYPEOF(slot) == REALSXP) {
-    const double* col_major_double = REAL(slot);
-    if (Rf_length(slot) != expected_length) {
+  if (TYPEOF(x) == REALSXP) {
+    if (Rf_length(x) != expected_length) {
       Rcpp::stop("%s payload length does not match its dimensions", name);
     }
+    const double* col_major_double = REAL(x);
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static) reduction(&& : finite)
 #endif
@@ -200,9 +184,51 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
           static_cast<float>(value);
       }
     }
+  } else if (Rf_isS4(x)) {
+    SEXP slot = R_do_slot(x, Rf_install("Data"));
+    const float* col_major = float32_slot_ptr(slot, expected_length, name);
+    if (col_major != nullptr) {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) reduction(&& : finite)
+#endif
+      for (int r = 0; r < view.nrow; ++r) {
+        for (int c = 0; c < view.ncol; ++c) {
+          const float value = col_major[r + view.nrow * c];
+          if (!std::isfinite(value)) {
+            finite = false;
+            continue;
+          }
+          view.buffer[static_cast<std::size_t>(r) * view.ncol + c] = value;
+        }
+      }
+    } else if (TYPEOF(slot) == REALSXP) {
+      const double* col_major_double = REAL(slot);
+      if (Rf_length(slot) != expected_length) {
+        Rcpp::stop("%s payload length does not match its dimensions", name);
+      }
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) reduction(&& : finite)
+#endif
+      for (int r = 0; r < view.nrow; ++r) {
+        for (int c = 0; c < view.ncol; ++c) {
+          const double value = col_major_double[r + view.nrow * c];
+          if (!std::isfinite(value)) {
+            finite = false;
+            continue;
+          }
+          view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
+            static_cast<float>(value);
+        }
+      }
+    } else {
+      Rcpp::stop(
+        "%s must be a float::fl()/float32 object with an integer or raw @Data payload",
+        name
+      );
+    }
   } else {
     Rcpp::stop(
-      "%s must be a float::fl()/float32 object with an integer or raw @Data payload",
+      "%s must be an ordinary R double matrix or a float::fl()/float32 object",
       name
     );
   }

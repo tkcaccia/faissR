@@ -123,11 +123,17 @@ test_that("nn output distance storage can be requested explicitly", {
 
   out <- nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "double")
   expect_true(is.matrix(out$distances))
+  expect_equal(out$index_base, 1L)
+  expect_equal(out$distance_type, "double")
+  expect_equal(out$metric, "euclidean")
+  expect_equal(out$backend_used, attr(out, "resolved_backend"))
   expect_equal(attr(out, "distance_type"), "double")
 
   if (requireNamespace("float", quietly = TRUE)) {
     fout <- nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "float")
     expect_true(inherits(fout$distances, "float32"))
+    expect_equal(fout$distance_type, "float32")
+    expect_equal(fout$index_base, 1L)
     expect_equal(attr(fout, "distance_type"), "float32")
   } else {
     expect_error(
@@ -161,6 +167,10 @@ test_that("float32 input routes through FAISS Flat when float is installed", {
   expect_equal(out$indices, ref$indices)
   expect_equal(out$distances, ref$distances, tolerance = 1e-6)
   expect_equal(out$input_type, "float32")
+  expect_equal(out$index_base, 1L)
+  expect_equal(out$distance_type, "double")
+  expect_equal(out$metric, "euclidean")
+  expect_equal(out$backend_used, "faiss")
   expect_equal(attr(out, "distance_type"), "double")
   expect_equal(attr(out, "resolved_backend"), "faiss")
 })
@@ -257,6 +267,18 @@ test_that("float32 C-callable returns stable KNN metadata", {
   expect_equal(attr(out, "metric"), "euclidean")
   expect_equal(attr(out, "backend_used"), "faiss_flat_l2")
   expect_equal(attr(out, "resolved_backend"), "faiss_flat_l2")
+
+  xd <- matrix(c(
+    0, 0,
+    1, 0,
+    0, 2,
+    3, 3
+  ), ncol = 2, byrow = TRUE)
+  out_double <- faissR_test_float32_callable_run(xd)
+  expect_equal(out_double$indices, out$indices)
+  expect_equal(out_double$distances, out$distances, tolerance = 1e-6)
+  expect_equal(out_double$input_type, "float32")
+  expect_equal(out_double$input_layout, "float32_column_major_payload_to_row_major")
 })
 
 test_that("native exact KNN only accepts the documented metrics", {

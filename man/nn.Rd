@@ -88,6 +88,7 @@ Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.}
 \item{output}{Distance storage type for the returned object. `"double"`
 returns the default R numeric distance matrix. `"float"` returns
 `distances` as a `float::fl()`/`float32` object and records
+`distance_type = "float32"` plus
 `attr(result, "distance_type") = "float32"`; this requires the optional
 `float` package.}
 
@@ -95,7 +96,8 @@ returns the default R numeric distance matrix. `"float"` returns
 ignore this argument.}
 }
 \value{
-A list with integer matrix `indices` and numeric matrix `distances`.
+A list with integer matrix `indices`, `distances`, and stable metadata fields
+  `index_base`, `distance_type`, `metric`, and `backend_used`.
   Indices are 1-based. The requested backend/method, tuning policy, resolved
   backend, metric, exact/approximate flag, and self-query flag are stored in
   attributes including `attr(result, "requested_backend")`,

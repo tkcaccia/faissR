@@ -42,12 +42,14 @@ tuned default for the resolved method.}
 
 \item{output}{Distance storage type: `"double"` for the default R numeric
 matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
-optional `float` package is installed.}
+optional `float` package is installed. Results expose `distance_type` both as a
+list field and as `attr(result, "distance_type")`.}
 
 \item{n_threads}{Number of CPU worker threads used by CPU backends.}
 }
 \value{
-A `faissR_nn` object with `indices` and `distances` matrices.
+A `faissR_nn` object with `indices`, `distances`, and stable metadata fields
+`index_base`, `distance_type`, `metric`, and `backend_used`.
 }
 \description{
 `nn_without_self()` is a convenience wrapper around `nn()` for the common

@@ -471,8 +471,10 @@ are converted once to float32 internally.
 
 Distance output remains an ordinary R numeric matrix by default. Calling
 `nn(..., output = "float")` or `nn_without_self(..., output = "float")` stores
-`distances` as a `float::fl()`/`float32` object and records
-`attr(result, "distance_type") = "float32"`. The `float` package is in
+`distances` as a `float::fl()`/`float32` object and records both
+`distance_type = "float32"` and `attr(result, "distance_type") = "float32"`.
+KNN results also expose stable list fields for downstream packages:
+`index_base`, `metric`, and `backend_used`. The `float` package is in
 `Suggests`; faissR does not require it unless a user supplies a float32 object
 or requests float32 distance output.
 
@@ -480,7 +482,9 @@ faissR also registers a C-callable entry point named
 `faissR_nn_float32_call` during package initialization with
 `R_RegisterCCallable()`. Downstream packages can retrieve it with
 `R_GetCCallable("faissR", "faissR_nn_float32_call")` and call the CPU FAISS
-Flat float32 route without going through the R wrapper layer.
+Flat float32 route without going through the R wrapper layer. The callable
+accepts either a `float::fl()`/`float32` object or an ordinary R double matrix;
+both are adapted once into the row-major `float*` buffers consumed by FAISS.
 
 Sparse input is handled separately. If the input is a sparse `Matrix`, the
 native sparse CPU route can avoid densification. GPU and FAISS routes that do

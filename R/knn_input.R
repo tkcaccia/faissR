@@ -161,12 +161,17 @@ finish_nn_result <- function(out,
                              self_query,
                              exact = TRUE,
                              metric = "euclidean") {
+  out$index_base <- out$index_base %||% 1L
+  out$metric <- metric
+  out$backend_used <- out$backend_used %||% backend
   attr(out, "backend") <- backend
   attr(out, "resolved_backend") <- backend
   attr(out, "k") <- as.integer(k)
   attr(out, "self_query") <- isTRUE(self_query)
   attr(out, "exact") <- isTRUE(exact)
   attr(out, "metric") <- metric
+  attr(out, "index_base") <- as.integer(out$index_base)
+  attr(out, "backend_used") <- out$backend_used
   class(out) <- c("faissR_nn", "list")
   out
 }
@@ -216,11 +221,23 @@ as_float_distances <- function(x) {
 
 finalize_nn_output <- function(result, output = "double") {
   output <- normalize_nn_output(output)
+  public_metric <- attr(result, "metric") %||% result$metric %||% "euclidean"
   if (identical(output, "float")) {
     result$distances <- as_float_distances(result$distances)
+    result$distance_type <- "float32"
     attr(result, "distance_type") <- "float32"
   } else {
+    result$distance_type <- "double"
     attr(result, "distance_type") <- "double"
   }
+  result$index_base <- result$index_base %||% 1L
+  result$metric <- public_metric
+  result$backend_used <- result$backend_used %||%
+    attr(result, "resolved_backend") %||%
+    attr(result, "backend") %||%
+    NA_character_
+  attr(result, "index_base") <- as.integer(result$index_base)
+  attr(result, "metric") <- public_metric
+  attr(result, "backend_used") <- result$backend_used
   result
 }
