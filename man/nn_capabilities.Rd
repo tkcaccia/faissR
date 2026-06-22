@@ -2,13 +2,20 @@
 \alias{nn_capabilities}
 \title{Nearest-neighbour method capabilities}
 \usage{
-nn_capabilities()
+nn_capabilities(runtime = FALSE)
+}
+\arguments{
+\item{runtime}{Logical; when \code{FALSE} (the default), report support by
+design without checking the current compiled/runtime libraries. When
+\code{TRUE}, add \code{resolved_backend}, \code{runtime_available}, and
+\code{runtime_notes} columns for the current installation.}
 }
 \value{
 A data frame with one row per public \code{method}, \code{backend}
 (\code{"auto"}, \code{"cpu"}, or \code{"cuda"}), and \code{metric}
 combination. Columns include \code{supported}, \code{exact},
-\code{implementation}, and \code{notes}.
+\code{implementation}, and \code{notes}. If \code{runtime = TRUE}, runtime
+availability columns are appended.
 }
 \description{
 \code{nn_capabilities()} returns the public method/backend/metric support table
@@ -32,8 +39,13 @@ CAGRA and NNDescent support cosine and correlation by using normalized
 Euclidean graph search. FAISS NSG remains Euclidean-only because linked FAISS
 graph builders can abort during non-Euclidean graph construction. Raw
 inner-product search is not exposed for NSG, NNDescent, or CAGRA.
+
+Use \code{runtime = TRUE} for benchmark preflight checks that must distinguish
+a valid method/metric combination from a route that is unavailable in the
+current build, such as FAISS GPU rows on a CPU-only installation.
 }
 \examples{
 caps <- nn_capabilities()
 subset(caps, method == "flat" & supported)
+runtime_caps <- nn_capabilities(runtime = TRUE)
 }

@@ -34,7 +34,11 @@ Use `backend_info()` to inspect which compiled CPU, FAISS, CUDA, cuVS, and
 cuGraph capabilities are available on a given machine.
 Use `nn_capabilities()` to return the same method/backend/metric support matrix
 as a data frame for benchmark preflight checks, including rows for
-`backend = "auto"`, `"cpu"`, and `"cuda"`.
+`backend = "auto"`, `"cpu"`, and `"cuda"`. Use
+`nn_capabilities(runtime = TRUE)` when a benchmark script also needs the
+current build/runtime status; it appends `resolved_backend`,
+`runtime_available`, and `runtime_notes` columns so FAISS GPU, CUDA, and cuVS
+rows can be skipped or labelled before computation starts.
 
 ## Method Summary
 

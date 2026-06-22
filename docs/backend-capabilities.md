@@ -123,6 +123,12 @@ method/backend/metric combination, including `backend = "auto"`, `"cpu"`, and
 `"cuda"`, and marks unsupported combinations before a benchmark tries to run
 them.
 
+For benchmark launchers, `nn_capabilities(runtime = TRUE)` adds the
+implementation route that the public API would request on the current machine
+and whether that route is available in the installed build. This separates
+method/metric validity from local runtime availability, for example a valid
+FAISS GPU Flat row on a CPU-only installation.
+
 For `metric = "inner_product"`, faissR ranks neighbours by larger raw dot
 product but reports shifted smaller-is-better distances, with the best returned
 dot product in each query row at distance `0`.

@@ -1616,15 +1616,20 @@ faissr_option <- function(name, default = NULL) {
 #' keeping returned `distances` in the usual smaller-is-better orientation via
 #' per-query shifted dot-product distances.
 #'
+#' @param runtime Logical; when `FALSE` (the default), report support by design
+#'   without checking the current compiled/runtime libraries. When `TRUE`, add
+#'   `resolved_backend`, `runtime_available`, and `runtime_notes` columns for
+#'   the current installation.
 #' @return A data frame with one row per public `method`, `backend` (`"auto"`,
 #'   `"cpu"`, or `"cuda"`), and `metric` combination. Columns include
-#'   `supported`, `exact`,
-#'   `implementation`, and `notes`.
+#'   `supported`, `exact`, `implementation`, and `notes`. If `runtime = TRUE`,
+#'   runtime availability columns are appended.
 #' @examples
 #' caps <- nn_capabilities()
 #' subset(caps, method == "flat" & supported)
 #' @export
-nn_capabilities <- function() {
+nn_capabilities <- function(runtime = FALSE) {
+  runtime <- normalize_scalar_logical_arg(runtime, "runtime", default = FALSE)
   methods <- nn_method_labels()
   backends <- c("auto", "cpu", "cuda")
   metrics <- nn_metric_labels()
@@ -1640,7 +1645,94 @@ nn_capabilities <- function() {
   }
   out <- do.call(rbind.data.frame, rows)
   row.names(out) <- NULL
+  if (isTRUE(runtime)) {
+    runtime_rows <- lapply(seq_len(nrow(out)), function(i) {
+      nn_capability_runtime_row(out[i, , drop = FALSE])
+    })
+    runtime_out <- do.call(rbind.data.frame, runtime_rows)
+    out <- cbind(out, runtime_out, stringsAsFactors = FALSE)
+  }
   out
+}
+
+nn_capability_runtime_row <- function(row) {
+  if (!isTRUE(row$supported[[1L]])) {
+    return(data.frame(
+      resolved_backend = NA_character_,
+      runtime_available = FALSE,
+      runtime_notes = "Unsupported method/backend/metric combination.",
+      stringsAsFactors = FALSE
+    ))
+  }
+  resolved <- tryCatch(
+    resolve_public_nn_backend(row$backend[[1L]], row$method[[1L]], row$metric[[1L]]),
+    error = identity
+  )
+  if (inherits(resolved, "error")) {
+    return(data.frame(
+      resolved_backend = NA_character_,
+      runtime_available = FALSE,
+      runtime_notes = conditionMessage(resolved),
+      stringsAsFactors = FALSE
+    ))
+  }
+  availability <- nn_resolved_backend_available(resolved)
+  data.frame(
+    resolved_backend = resolved,
+    runtime_available = isTRUE(availability$available),
+    runtime_notes = availability$notes,
+    stringsAsFactors = FALSE
+  )
+}
+
+nn_resolved_backend_available <- function(backend) {
+  backend <- as.character(backend)[1L]
+  if (is.na(backend) || !nzchar(backend)) {
+    return(list(available = FALSE, notes = "No resolved backend."))
+  }
+  if (backend %in% c(
+    "auto", "cpu", "cpu_auto", "cpu_grid", "cpu_vptree", "cpu_sparse",
+    "cpu_nndescent", "cpu_approx", "grid", "grid2d", "grid3d",
+    "cpu_grid2d", "cpu_grid3d", "vptree", "sparse", "sparse_cpu"
+  )) {
+    return(list(available = TRUE, notes = "Native CPU route is available."))
+  }
+  if (identical(backend, "hnsw")) {
+    ok <- requireNamespace("RcppHNSW", quietly = TRUE)
+    return(list(
+      available = ok,
+      notes = if (ok) "RcppHNSW fallback is available." else "RcppHNSW fallback is not installed."
+    ))
+  }
+  if (startsWith(backend, "faiss_gpu")) {
+    ok <- isTRUE(faiss_gpu_available())
+    return(list(
+      available = ok,
+      notes = if (ok) "FAISS GPU route is available." else "FAISS GPU support is not available in this build."
+    ))
+  }
+  if (startsWith(backend, "cuda_cuvs") || startsWith(backend, "cuvs")) {
+    ok <- isTRUE(cuvs_available())
+    return(list(
+      available = ok,
+      notes = if (ok) "cuVS route is available." else "cuVS support is not available in this build."
+    ))
+  }
+  if (startsWith(backend, "cuda")) {
+    ok <- isTRUE(cuda_available())
+    return(list(
+      available = ok,
+      notes = if (ok) "Native CUDA route is available." else "Native CUDA support is not available in this build."
+    ))
+  }
+  if (startsWith(backend, "faiss")) {
+    ok <- isTRUE(faiss_available())
+    return(list(
+      available = ok,
+      notes = if (ok) "FAISS CPU route is available." else "FAISS CPU support is not available in this build."
+    ))
+  }
+  list(available = TRUE, notes = "No additional runtime dependency detected.")
 }
 
 nn_capability_row <- function(method, backend, metric) {

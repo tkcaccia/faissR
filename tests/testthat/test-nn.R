@@ -489,6 +489,63 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_match(cuda_auto_cor$notes, "cuVS-only")
 })
 
+test_that("nn_capabilities can report current runtime availability", {
+  caps <- nn_capabilities()
+  runtime_caps <- nn_capabilities(runtime = TRUE)
+
+  expect_identical(
+    names(caps),
+    c("method", "backend", "metric", "supported", "exact", "implementation", "notes")
+  )
+  expect_equal(nrow(runtime_caps), nrow(caps))
+  expect_true(all(c(
+    "resolved_backend", "runtime_available", "runtime_notes"
+  ) %in% names(runtime_caps)))
+  expect_type(runtime_caps$runtime_available, "logical")
+  expect_true(all(!is.na(runtime_caps$runtime_notes)))
+
+  cpu_exact <- runtime_caps[
+    runtime_caps$backend == "cpu" &
+      runtime_caps$method == "exact" &
+      runtime_caps$metric == "euclidean",
+    ,
+    drop = FALSE
+  ]
+  expect_equal(cpu_exact$resolved_backend, "cpu")
+  expect_true(cpu_exact$runtime_available)
+
+  cpu_flat <- runtime_caps[
+    runtime_caps$backend == "cpu" &
+      runtime_caps$method == "flat" &
+      runtime_caps$metric == "euclidean",
+    ,
+    drop = FALSE
+  ]
+  expect_equal(cpu_flat$resolved_backend, "faiss_flat_l2")
+  expect_equal(cpu_flat$runtime_available, faiss_available())
+
+  cuda_flat <- runtime_caps[
+    runtime_caps$backend == "cuda" &
+      runtime_caps$method == "flat" &
+      runtime_caps$metric == "euclidean",
+    ,
+    drop = FALSE
+  ]
+  expect_equal(cuda_flat$resolved_backend, "faiss_gpu_flat_l2")
+  expect_equal(cuda_flat$runtime_available, faiss_gpu_available())
+
+  unsupported <- runtime_caps[
+    runtime_caps$backend == "cpu" &
+      runtime_caps$method == "cagra" &
+      runtime_caps$metric == "euclidean",
+    ,
+    drop = FALSE
+  ]
+  expect_false(unsupported$supported)
+  expect_false(unsupported$runtime_available)
+  expect_true(is.na(unsupported$resolved_backend))
+})
+
 test_that("nn_capabilities agrees with public backend resolver", {
   caps <- nn_capabilities()
   expect_equal(sort(unique(caps$backend)), c("auto", "cpu", "cuda"))
