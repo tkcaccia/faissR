@@ -290,6 +290,14 @@ recommendation basis, median speed ratio, median ARI gap, modularity gap,
 method agreement, and resolved-backend agreement. Speed ratios and quality gaps
 are `NA` when the required timing, ARI, or modularity values are unavailable or
 invalid.
+`graph_cluster_global_recommendations_from_cycles.csv` pools requested
+graph/clustering backends before selecting the fastest row within the ARI
+tolerance for each dataset/k/graph-method/metric/target-cluster-count
+combination. `graph_cluster_auto_vs_global_recommendation.csv` compares auto
+rows with those pooled recommendations, including requested-backend agreement,
+resolved-backend agreement, method agreement, speed ratio, ARI gap, and
+modularity gap. These global tables are the main audit for whether graph and
+clustering `backend = "auto"` selected the fastest observed CPU/CUDA route.
 `MATERIALS_AND_METHODS_graph_clustering.md` records the corresponding
 paper-ready methods text, including graph reuse, ARI/modularity reporting,
 target-cluster handling, expected-skip policy, and output-file definitions.

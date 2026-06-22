@@ -46,6 +46,8 @@ test_that("benchmark materials document key row-level and summary outputs", {
       "graph_cluster_cycle_summary.csv",
       "graph_cluster_recommendations_from_cycles.csv",
       "graph_cluster_auto_vs_cycle_recommendation.csv",
+      "graph_cluster_global_recommendations_from_cycles.csv",
+      "graph_cluster_auto_vs_global_recommendation.csv",
       "MATERIALS_AND_METHODS_graph_clustering.md"
     ),
     kmeans = c(
@@ -2541,6 +2543,59 @@ test_that("graph benchmark auto comparison has unique schema columns", {
   expect_equal(louvain_row$recommended_cluster_preflight_route, "cpu")
   expect_equal(louvain_row$auto_n_threads, 2L)
   expect_equal(louvain_row$recommended_n_threads, 2L)
+})
+
+test_that("graph benchmark global recommendations pool across requested backends", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = c("A", "A", "A", "A"),
+    k = c(15L, 15L, 15L, 15L),
+    graph_method = c("auto", "auto", "auto", "auto"),
+    metric = c("euclidean", "euclidean", "euclidean", "euclidean"),
+    n_clusters_requested = c(3L, 3L, 3L, 3L),
+    graph_backend = c("auto", "cpu", "cuda", "cuda"),
+    cluster_backend = c("auto", "cpu", "cuda", "cuda"),
+    graph_resolved_backend = c("cpu", "cpu", "cuda", "cuda"),
+    graph_preflight_route = c("cpu", "cpu", "cuda", "cuda"),
+    cluster_resolved_backend = c("cpu", "cpu", "cuda", "cuda"),
+    cluster_preflight_route = c("cpu", "cpu", "cuda", "cuda"),
+    method = c("louvain", "leiden", "louvain", "leiden"),
+    weight = c("snn", "snn", "snn", "snn"),
+    n_threads = c(2L, 2L, 2L, 2L),
+    success_cycles = c(2L, 2L, 2L, 2L),
+    median_graph_sec = c(1, 1, 1, 1),
+    median_cluster_sec = c(3, 4, 1, 2),
+    median_total_sec = c(4, 5, 2, 3),
+    median_ari = c(0.94, 0.95, 0.94, 0.90),
+    min_ari = c(0.93, 0.94, 0.93, 0.89),
+    median_modularity = c(0.40, 0.42, 0.41, 0.39),
+    median_n_communities = c(3, 3, 3, 3),
+    median_selected_resolution = c(1, 1, 1, 1),
+    n_clusters_source = c("labels", "labels", "labels", "labels"),
+    graph_cached = c(TRUE, TRUE, TRUE, TRUE)
+  )
+
+  rec <- env$recommend_graph_cluster_global_methods(cycle_summary, ari_tolerance = 0.02)
+  expect_equal(nrow(rec), 1L)
+  expect_equal(rec$graph_backend, "cuda")
+  expect_equal(rec$cluster_backend, "cuda")
+  expect_equal(rec$method, "louvain")
+  expect_equal(rec$recommendation_basis, "global_fastest_within_ari_tolerance")
+
+  comparison <- env$compare_auto_graph_to_global_recommendations(cycle_summary, rec)
+  expect_equal(anyDuplicated(names(comparison)), 0L)
+  expect_true("auto_graph_backend" %in% names(comparison))
+  expect_true("recommended_graph_backend" %in% names(comparison))
+  auto_louvain <- comparison[comparison$auto_method == "louvain", , drop = FALSE]
+  expect_equal(nrow(auto_louvain), 1L)
+  expect_equal(auto_louvain$recommended_graph_backend, "cuda")
+  expect_false(auto_louvain$auto_uses_recommended_requested_graph_backend)
+  expect_false(auto_louvain$auto_uses_recommended_graph_resolved_backend)
+  expect_equal(auto_louvain$auto_median_speed_ratio, 2)
+  expect_equal(auto_louvain$auto_median_ari_gap, 0)
 })
 
 test_that("graph benchmark auto comparison guards speed and quality gaps", {

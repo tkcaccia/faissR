@@ -631,6 +631,45 @@ recommend_graph_cluster_methods <- function(cycle_summary, ari_tolerance) {
   out[order(out$dataset, out$k, out$graph_backend, out$graph_method, out$metric, out$cluster_backend, out$n_clusters_requested), , drop = FALSE]
 }
 
+recommend_graph_cluster_global_methods <- function(cycle_summary, ari_tolerance) {
+  cycle_summary <- ensure_graph_selector_columns(cycle_summary)
+  cluster_key <- ifelse(is.na(cycle_summary$n_clusters_requested), "NA", as.character(cycle_summary$n_clusters_requested))
+  parts <- split(
+    cycle_summary,
+    paste(
+      cycle_summary$dataset, cycle_summary$k,
+      cycle_summary$graph_method, cycle_summary$metric,
+      cluster_key,
+      sep = "__"
+    )
+  )
+  recommendations <- lapply(parts, function(x) {
+    has_ari <- is.finite(x$median_ari)
+    candidates <- if (any(has_ari)) {
+      best_ari <- max(x$median_ari[has_ari])
+      out <- x[has_ari & x$median_ari >= best_ari - ari_tolerance, , drop = FALSE]
+      out$recommendation_basis <- "global_fastest_within_ari_tolerance"
+      out
+    } else {
+      out <- x
+      out$recommendation_basis <- "global_speed_only_no_ari"
+      out
+    }
+    candidates <- candidates[order(
+      candidates$median_total_sec,
+      -ifelse(is.finite(candidates$median_ari), candidates$median_ari, -Inf),
+      -ifelse(is.finite(candidates$median_modularity), candidates$median_modularity, -Inf),
+      candidates$graph_backend,
+      candidates$cluster_backend,
+      candidates$method
+    ), , drop = FALSE]
+    candidates[1L, , drop = FALSE]
+  })
+  out <- do.call(rbind, recommendations)
+  row.names(out) <- NULL
+  out[order(out$dataset, out$k, out$graph_method, out$metric, out$n_clusters_requested), , drop = FALSE]
+}
+
 compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations) {
   if (!nrow(recommendations)) return(recommendations)
   cycle_summary <- ensure_graph_selector_columns(cycle_summary)
@@ -677,6 +716,55 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
     comparison$auto_median_modularity
   )
   comparison[order(comparison$dataset, comparison$k, comparison$graph_backend, comparison$graph_method, comparison$metric, comparison$cluster_backend, comparison$n_clusters_requested, comparison$auto_method), , drop = FALSE]
+}
+
+compare_auto_graph_to_global_recommendations <- function(cycle_summary, recommendations) {
+  if (!nrow(recommendations)) return(recommendations)
+  cycle_summary <- ensure_graph_selector_columns(cycle_summary)
+  recommendations <- ensure_graph_selector_columns(recommendations)
+  auto <- cycle_summary[
+    cycle_summary$graph_backend == "auto" | cycle_summary$cluster_backend == "auto",
+    ,
+    drop = FALSE
+  ]
+  if (!nrow(auto)) return(data.frame())
+  keys <- c("dataset", "k", "graph_method", "metric", "n_clusters_requested")
+  keep <- c(
+    keys, "graph_backend", "cluster_backend", "graph_resolved_backend",
+    "cluster_resolved_backend", "graph_preflight_route",
+    "graph_route_parameters", "cluster_preflight_route", "method", "weight", "n_threads",
+    "success_cycles", "median_graph_sec", "median_cluster_sec", "median_total_sec",
+    "median_ari", "min_ari", "median_modularity", "median_n_communities",
+    "median_selected_resolution", "median_target_gap", "resolution_selection",
+    "median_resolution_selected_candidate", "median_resolution_candidates",
+    "median_resolution_min_target_gap", "resolution_selected_is_min_gap",
+    "n_clusters_source", "graph_cached"
+  )
+  rec_keep <- c(keep, "recommendation_basis")
+  auto <- auto[, keep, drop = FALSE]
+  recommendations <- recommendations[, rec_keep, drop = FALSE]
+  names(auto)[match(keep[-seq_along(keys)], names(auto))] <- paste0("auto_", keep[-seq_along(keys)])
+  names(recommendations)[match(rec_keep[-seq_along(keys)], names(recommendations))] <- paste0("recommended_", rec_keep[-seq_along(keys)])
+  comparison <- merge(auto, recommendations, by = keys, all = FALSE)
+  if (!nrow(comparison)) return(comparison)
+  comparison$auto_uses_recommended_requested_graph_backend <- comparison$auto_graph_backend == comparison$recommended_graph_backend
+  comparison$auto_uses_recommended_requested_cluster_backend <- comparison$auto_cluster_backend == comparison$recommended_cluster_backend
+  comparison$auto_uses_recommended_graph_resolved_backend <- comparison$auto_graph_resolved_backend == comparison$recommended_graph_resolved_backend
+  comparison$auto_uses_recommended_cluster_resolved_backend <- comparison$auto_cluster_resolved_backend == comparison$recommended_cluster_resolved_backend
+  comparison$auto_uses_recommended_method <- comparison$auto_method == comparison$recommended_method
+  comparison$auto_median_speed_ratio <- safe_positive_ratio(
+    comparison$auto_median_total_sec,
+    comparison$recommended_median_total_sec
+  )
+  comparison$auto_median_ari_gap <- safe_difference(
+    comparison$recommended_median_ari,
+    comparison$auto_median_ari
+  )
+  comparison$auto_modularity_gap <- safe_difference(
+    comparison$recommended_median_modularity,
+    comparison$auto_median_modularity
+  )
+  comparison[order(comparison$dataset, comparison$k, comparison$graph_method, comparison$metric, comparison$n_clusters_requested, comparison$auto_graph_backend, comparison$auto_cluster_backend, comparison$auto_method), , drop = FALSE]
 }
 
 safe_positive_ratio <- function(numerator, denominator) {
@@ -1424,11 +1512,29 @@ if (nrow(ok)) {
     )
   }
 
+  global_recommendations <- recommend_graph_cluster_global_methods(cycle_summary, ari_tolerance)
+  if (nrow(global_recommendations)) {
+    utils::write.csv(
+      global_recommendations,
+      file.path(out_dir, "graph_cluster_global_recommendations_from_cycles.csv"),
+      row.names = FALSE
+    )
+  }
+
   auto_comparison <- compare_auto_graph_to_recommendations(cycle_summary, recommendations)
   if (nrow(auto_comparison)) {
     utils::write.csv(
       auto_comparison,
       file.path(out_dir, "graph_cluster_auto_vs_cycle_recommendation.csv"),
+      row.names = FALSE
+    )
+  }
+
+  global_auto_comparison <- compare_auto_graph_to_global_recommendations(cycle_summary, global_recommendations)
+  if (nrow(global_auto_comparison)) {
+    utils::write.csv(
+      global_auto_comparison,
+      file.path(out_dir, "graph_cluster_auto_vs_global_recommendation.csv"),
       row.names = FALSE
     )
   }
@@ -1464,6 +1570,8 @@ materials <- c(
   "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/graph-method/metric/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, graph size, community counts, selected resolution, target gap, resolution-selection rule, selected-candidate and candidate-count diagnostics, CPU thread count, preflight routes, compact graph-route parameter metadata, and resolved backend metadata.",
   "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering method row within `ari_tolerance` of the best median ARI for each dataset/k/graph-backend/graph-method/metric/cluster-backend/target-cluster-count combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median total times are broken by higher median ARI and then higher median modularity. When ARI is unavailable it selects the fastest median total-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
   "`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where graph or clustering backend was `auto` with recommendations from the same requested graph-backend/graph-method/metric/cluster-backend group and reports the recommendation basis, median speed ratio, median ARI gap, modularity gap, method agreement, and resolved-backend agreement. Speed ratios and quality gaps are `NA` when the required timing, ARI, or modularity values are unavailable or invalid.",
+  "`graph_cluster_global_recommendations_from_cycles.csv` selects the fastest successful row within the ARI tolerance after pooling requested graph and clustering backends for each dataset/k/graph-method/metric/target-cluster-count combination. This table audits the best observed CPU/CUDA route instead of only the best route inside each requested-backend group.",
+  "`graph_cluster_auto_vs_global_recommendation.csv` compares aggregate auto rows with those global recommendations and records requested-backend agreement, resolved-backend agreement, method agreement, speed ratio, ARI gap, and modularity gap. This table is intended for refining graph and clustering auto selectors across CPU/CUDA choices.",
   "`graph_backend` and `cluster_backend` record the requested public backends. `graph_preflight_route` and `cluster_preflight_route` record the public resolver decision before runtime availability checks; `graph_resolved_backend` and `cluster_resolved_backend` record the resolved device policy from successful result objects. These route columns and `n_threads` are preserved in cycle summaries and auto/recommendation comparisons, so CPU/CUDA rows can be audited without opening the R objects.",
   "Unsupported graph-clustering combinations known from the public API, such as CUDA random_walking, are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. If every row in a graph-build block is an expected skip, graph construction is skipped and graph timing/edge columns remain `NA`.",
   "CUDA rows are recorded as expected skips when faissR was not built with the required CUDA/cuGraph support; unexpected CUDA runtime errors remain failed rows. The benchmark does not silently replace explicit CUDA clustering with CPU clustering."
