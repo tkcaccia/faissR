@@ -508,9 +508,10 @@ be tuned or reported separately without losing the overall recommendation.
 `kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()`
 rows with those recommendations and reports median speed ratio, median ARI gap,
 withinss ratio, selected tuning metadata, requested/resolved backend metadata,
-CPU thread count, backend/implementation agreement, and the recommendation
-basis used for the recommended row. Speed ratios, ARI gaps, and withinss ratios
-are `NA` when the required timing or quality values are missing or invalid.
+CPU thread count, static no-pilot selection metadata, backend/implementation
+agreement, and the recommendation basis used for the recommended row. Speed
+ratios, ARI gaps, and withinss ratios are `NA` when the required timing or
+quality values are missing or invalid.
 `MATERIALS_AND_METHODS_kmeans.md` records the corresponding paper-ready
 methods text, including centers selection, ARI/withinss reporting, tuning
 policy, expected-skip policy, and output-file definitions.
@@ -529,8 +530,11 @@ The package records the same decision in
 `large_high_dimensional_input`, the estimated work and input bytes, and the
 deterministic threshold values (`work_threshold`, `nbytes_threshold`,
 `large_n_threshold`, and `large_p_threshold`) used for the CPU/CUDA decision.
-Benchmark summaries can therefore explain auto CPU/CUDA selection without
-running extra pilot jobs.
+Benchmark rows also record `selection_*` columns from
+`parameters$tuning$selection`, including the predicted backend, backend-policy
+reason, runtime capability flags, work/input-size estimates, and
+`selection_slow_tuning = FALSE`. Benchmark summaries can therefore explain auto
+CPU/CUDA selection without running extra pilot jobs.
 
 Example CPU run:
 

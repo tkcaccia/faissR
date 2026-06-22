@@ -1370,6 +1370,61 @@ test_that("k-means benchmark fallback auto params mirror package metadata", {
   }
 })
 
+test_that("k-means benchmark records static selection metadata", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+  row <- env$result_row(
+    dataset = "A",
+    n = 100L,
+    p = 4L,
+    method = "fast_kmeans",
+    backend = "auto",
+    centers = 3L,
+    cycle = 1L,
+    n_threads = 2L,
+    status = "success",
+    elapsed_sec = 1,
+    backend_used = "faiss",
+    requested_backend = "auto",
+    resolved_backend = "cpu",
+    iter = 5L,
+    tot_withinss = 10,
+    ari = 0.9,
+    max_iter = 100L,
+    n_init = 5L,
+    tol = 1e-4,
+    tuning_policy = "auto",
+    tuning_rule = "shape",
+    tuning_work = 1200,
+    tuning_n_per_center = 33.3,
+    selection_policy = "static_shape_center_backend_selector",
+    selection_slow_tuning = FALSE,
+    selection_predicted_backend = "cpu",
+    selection_reason = "small_cpu_preferred",
+    selection_work = 1200,
+    selection_nbytes = 3200,
+    selection_n_per_center = 33.3,
+    selection_cuda_available = FALSE,
+    selection_faiss_gpu_available = FALSE,
+    selection_cuvs_available = FALSE
+  )
+  expect_equal(row$selection_policy, "static_shape_center_backend_selector")
+  expect_false(row$selection_slow_tuning)
+  expect_equal(row$selection_predicted_backend, "cpu")
+  expect_equal(row$selection_reason, "small_cpu_preferred")
+
+  summary <- env$summarize_kmeans_cycles(row)
+  expect_equal(summary$selection_policy, "static_shape_center_backend_selector")
+  expect_false(summary$selection_slow_tuning)
+  expect_equal(summary$selection_predicted_backend, "cpu")
+  expect_equal(summary$selection_reason, "small_cpu_preferred")
+  expect_equal(summary$median_selection_work, 1200)
+  expect_equal(summary$median_selection_nbytes, 3200)
+  expect_equal(summary$median_selection_n_per_center, 33.3)
+})
+
 test_that("k-means benchmark recommendations are grouped by dataset and centers", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_kmeans.R"),
@@ -1524,7 +1579,20 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
     tuning_high_dim = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
     tuning_large_n = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
     tuning_many_centers = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
-    tuning_small_many_centers = c(FALSE, FALSE, FALSE, FALSE, NA, NA)
+    tuning_small_many_centers = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
+    selection_policy = c(
+      rep("static_shape_center_backend_selector", 4),
+      rep("stats", 2)
+    ),
+    selection_slow_tuning = c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE),
+    selection_predicted_backend = c("cuda", "cpu", "cuda", "cpu", "stats", "stats"),
+    selection_reason = c("work_at_least_1e8", "small_cpu_preferred", "work_at_least_1e8", "small_cpu_preferred", "stats_kmeans", "stats_kmeans"),
+    median_selection_work = c(300, 300, 500, 500, NA, NA),
+    median_selection_nbytes = c(2400, 2400, 4000, 4000, NA, NA),
+    median_selection_n_per_center = c(10, 10, 10, 10, NA, NA),
+    selection_cuda_available = c(TRUE, TRUE, TRUE, TRUE, NA, NA),
+    selection_faiss_gpu_available = c(TRUE, TRUE, TRUE, TRUE, NA, NA),
+    selection_cuvs_available = c(FALSE, FALSE, FALSE, FALSE, NA, NA)
   )
   recommendations <- cycle_summary[cycle_summary$method == "stats", , drop = FALSE]
   recommendations$recommendation_basis <- "fastest_within_ari_tolerance"
@@ -1539,6 +1607,9 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
   expect_equal(out$recommended_n_threads, c(2L, 2L, 2L, 2L))
   expect_equal(out$fast_tuning_rule, rep("medium", 4))
   expect_equal(out$recommended_tuning_rule, rep("stats_kmeans", 4))
+  expect_equal(out$fast_selection_policy, rep("static_shape_center_backend_selector", 4))
+  expect_equal(out$recommended_selection_policy, rep("stats", 4))
+  expect_equal(out$fast_selection_predicted_backend, c("cpu", "cuda", "cpu", "cuda"))
   expect_equal(unique(out$recommended_recommendation_basis), "fastest_within_ari_tolerance")
 })
 
