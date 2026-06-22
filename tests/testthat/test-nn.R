@@ -3856,6 +3856,69 @@ test_that("cuVS CAGRA reports actual and requested graph parameters", {
   expect_equal(approx$cagra_provider_option, "auto")
 })
 
+test_that("cuVS HNSW reports metric-aware CUDA results for all public metrics", {
+  skip_if_not(cuvs_available())
+
+  set.seed(840)
+  x <- rbind(
+    matrix(rnorm(40L * 6L, -0.5, 0.7), ncol = 6L),
+    matrix(rnorm(40L * 6L, 0.5, 0.7), ncol = 6L)
+  )
+  k <- 6L
+
+  for (metric in c("euclidean", "cosine", "correlation", "inner_product")) {
+    exact <- internal_nn_without_self(
+      x,
+      k = k,
+      backend = "cpu",
+      metric = metric,
+      n_threads = 2L
+    )
+    out <- internal_nn_without_self(
+      x,
+      k = k,
+      backend = "cuda_cuvs_hnsw",
+      metric = metric,
+      n_threads = 2L
+    )
+    approx <- attr(out, "approximation")
+    recall <- faissR:::.knn_recall_summary(out, exact, k)
+
+    expect_equal(dim(out$indices), c(nrow(x), k), info = metric)
+    expect_equal(dim(out$distances), c(nrow(x), k), info = metric)
+    expect_equal(attr(out, "backend"), "cuda_cuvs_hnsw", info = metric)
+    expect_equal(attr(out, "metric"), metric, info = metric)
+    expect_equal(approx$strategy, "rapids_cuvs_hnsw_from_cagra", info = metric)
+    expect_equal(approx$library, "cuvs", info = metric)
+    expect_equal(approx$accelerator, "cuda", info = metric)
+    expect_equal(approx$metric, metric, info = metric)
+    expect_true(all(is.finite(out$distances)), info = metric)
+    expect_gte(recall$recall_at_k, 0.4, info = metric)
+
+    if (metric %in% c("cosine", "correlation")) {
+      expect_match(attr(out, "metric_transform"), "euclidean_graph_search", info = metric)
+      expect_equal(
+        attr(out, "distance_transform"),
+        "normalized_euclidean_squared_over_2_to_1_minus_similarity",
+        info = metric
+      )
+      expect_equal(approx$distance_transform, attr(out, "distance_transform"), info = metric)
+    } else if (identical(metric, "inner_product")) {
+      expect_equal(
+        attr(out, "metric_transform"),
+        "maximum_inner_product_to_l2_extra_dimension",
+        info = metric
+      )
+      expect_equal(
+        attr(out, "distance_transform"),
+        "mips_l2_to_shifted_inner_product_distance",
+        info = metric
+      )
+      expect_equal(approx$distance_transform, attr(out, "distance_transform"), info = metric)
+    }
+  }
+})
+
 test_that("CUDA backend reports unavailable runtime clearly", {
   skip_if(cuda_available())
 

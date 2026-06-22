@@ -891,12 +891,16 @@ test_that("backend docs describe explicit HNSW auto CUDA routing", {
 })
 
 test_that("NN methods page describes CUDA HNSW and raw inner-product support", {
-  docs_file <- test_path("../../docs/nn-methods.md")
-  if (!file.exists(docs_file)) {
+  docs_files <- c(
+    test_path("../../docs", c("nn-methods.md", "backend-capabilities.md", "implementation.md", "usage-api.md")),
+    test_path("../../man/nn.Rd")
+  )
+  docs_files <- docs_files[file.exists(docs_files)]
+  if (!length(docs_files)) {
     skip("NN methods documentation is not available in this installed-package test context.")
   }
 
-  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  prose <- paste(unlist(lapply(docs_files, readLines, warn = FALSE)), collapse = " ")
   expect_true(grepl("cuVS HNSW for Euclidean, normalized cosine/correlation, and transformed raw inner product", prose, fixed = TRUE))
   expect_true(grepl("maximum-inner-product-to-L2 extra-dimension transform", prose, fixed = TRUE))
   expect_true(grepl("CPU and CUDA HNSW support Euclidean, cosine, correlation, and inner product", prose, fixed = TRUE))
