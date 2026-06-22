@@ -403,7 +403,10 @@ The gate is deterministic and recorded in
 `"small_cpu_preferred"`, `"work_at_least_1e8"`,
 `"input_at_least_256MiB"`, or `"large_high_dimensional_input"` so benchmark
 summaries can audit why `backend = "auto"` selected CPU or CUDA without running
-extra tuning jobs.
+extra tuning jobs. `result$parameters$tuning$selection` is the compact
+no-pilot audit record: it stores the requested and predicted backends,
+runtime capability flags, shape/work estimates, effective `max_iter`, `n_init`,
+and `tol`, and `slow_tuning = FALSE`.
 `seed` controls CPU/statistics and FAISS k-means paths. The direct cuVS C API
 path currently does not expose an explicit seed in the stable params structure,
 so repeated direct-cuVS runs use backend-controlled initialization and benchmark

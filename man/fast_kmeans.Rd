@@ -73,6 +73,8 @@ A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
   benchmark summaries. `parameters$tuning$backend_policy` records the
   deterministic shape rule used by `backend = "auto"` to decide whether CUDA
   has enough estimated work or input size to offset transfer overhead.
+  `parameters$tuning$selection` stores the static no-pilot backend and
+  effective-parameter decision used for benchmark auditing.
 }
 \description{
 Run k-means using the fastest available backend. CPU acceleration uses

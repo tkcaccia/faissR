@@ -48,6 +48,8 @@
 #'   benchmark summaries. `parameters$tuning$backend_policy` records the
 #'   deterministic shape rule used by `backend = "auto"` to decide whether CUDA
 #'   has enough estimated work or input size to offset transfer overhead.
+#'   `parameters$tuning$selection` stores the static no-pilot backend and
+#'   effective-parameter decision used for benchmark auditing.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' fit <- fast_kmeans(x, centers = 3, backend = "cpu", n_threads = 2)
@@ -116,6 +118,16 @@ fast_kmeans <- function(data,
     n = nrow(x),
     p = ncol(x),
     centers = centers
+  )
+  auto_params$selection <- kmeans_selection_metadata(
+    requested_backend = requested_backend,
+    resolved_backend = backend,
+    n = nrow(x),
+    p = ncol(x),
+    centers = centers,
+    effective = auto_params$effective,
+    backend_policy = auto_params$backend_policy,
+    tuning = tuning
   )
 
   if (identical(backend, "cuda")) {
@@ -211,6 +223,43 @@ resolve_fast_kmeans_backend <- function(backend,
 
 kmeans_auto_prefers_cuda <- function(n, p, centers) {
   isTRUE(kmeans_auto_backend_policy(n, p, centers)$prefer_cuda)
+}
+
+kmeans_selection_metadata <- function(requested_backend,
+                                      resolved_backend,
+                                      n,
+                                      p,
+                                      centers,
+                                      effective,
+                                      backend_policy,
+                                      tuning = "auto",
+                                      cuda_available_value = cuda_available(),
+                                      faiss_gpu_available_value = faiss_gpu_available(),
+                                      cuvs_available_value = cuvs_available()) {
+  effective <- effective %||% list()
+  backend_policy <- backend_policy %||% kmeans_auto_backend_policy(n, p, centers)
+  list(
+    policy = "static_shape_center_backend_selector",
+    slow_tuning = FALSE,
+    requested_backend = requested_backend,
+    predicted_backend = resolved_backend,
+    resolved_backend = resolved_backend,
+    n = as.integer(n),
+    p = as.integer(p),
+    centers = as.integer(centers),
+    work = as.numeric(backend_policy$work %||% (as.double(n) * as.double(p) * as.double(centers))),
+    nbytes = as.numeric(backend_policy$nbytes %||% (as.double(n) * as.double(p) * 8)),
+    n_per_center = as.numeric(backend_policy$n_per_center %||% (as.double(n) / as.double(centers))),
+    backend_policy_reason = backend_policy$reason %||% NA_character_,
+    backend_policy_prefer_cuda = isTRUE(backend_policy$prefer_cuda),
+    cuda_available = isTRUE(cuda_available_value),
+    faiss_gpu_available = isTRUE(faiss_gpu_available_value),
+    cuvs_available = isTRUE(cuvs_available_value),
+    effective_max_iter = as.integer(effective$max_iter %||% NA_integer_),
+    effective_n_init = as.integer(effective$n_init %||% NA_integer_),
+    effective_tol = as.numeric(effective$tol %||% NA_real_),
+    tuning = normalize_kmeans_tuning(tuning)
+  )
 }
 
 kmeans_auto_backend_policy <- function(n, p, centers) {
