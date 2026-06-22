@@ -473,9 +473,10 @@ Distance output remains an ordinary R numeric matrix by default. Calling
 or requests float32 distance output.
 
 faissR also registers a C-callable entry point named
-`faissR_nn_float32_call` with `R_RegisterCCallable()`. Downstream packages can
-retrieve it with `R_GetCCallable("faissR", "faissR_nn_float32_call")` and call
-the CPU FAISS Flat float32 route without going through the R wrapper layer.
+`faissR_nn_float32_call` during package initialization with
+`R_RegisterCCallable()`. Downstream packages can retrieve it with
+`R_GetCCallable("faissR", "faissR_nn_float32_call")` and call the CPU FAISS
+Flat float32 route without going through the R wrapper layer.
 
 Sparse input is handled separately. If the input is a sparse `Matrix`, the
 native sparse CPU route can avoid densification. GPU and FAISS routes that do

@@ -204,6 +204,18 @@ test_that("float32 FAISS Flat input supports normalized metrics", {
   }
 })
 
+test_that("float32 C-callable entry point is registered", {
+  skip_if_not_installed("Rcpp")
+  Rcpp::cppFunction('
+    #include <R_ext/Rdynload.h>
+    bool faissR_test_float32_callable_registered() {
+      DL_FUNC ptr = R_GetCCallable("faissR", "faissR_nn_float32_call");
+      return ptr != NULL;
+    }
+  ')
+  expect_true(faissR_test_float32_callable_registered())
+})
+
 test_that("native exact KNN only accepts the documented metrics", {
   x <- matrix(c(
     0, 0,
