@@ -751,6 +751,19 @@ test_that("benchmark documentation describes NN expected-skip reason labels", {
   expect_true(grepl("without parsing the prose error message", prose, fixed = TRUE))
 })
 
+test_that("benchmark documentation describes deterministic NN tuning metadata", {
+  docs_file <- test_path("../../docs/benchmarks.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  expect_true(grepl("route_parameters", prose, fixed = TRUE))
+  expect_true(grepl("tuning_rule", prose, fixed = TRUE))
+  expect_true(grepl("FAISS CPU HNSW", prose, fixed = TRUE))
+  expect_true(grepl("deterministic no-pilot", prose, fixed = TRUE))
+})
+
 test_that("benchmark documentation describes graph expected-skip reason labels", {
   docs_file <- test_path("../../docs/benchmarks.md")
   if (!file.exists(docs_file)) {

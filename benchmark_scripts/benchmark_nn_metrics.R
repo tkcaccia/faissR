@@ -451,6 +451,8 @@ nn_route_parameters <- function(out) {
     "pq_dim", "pq_bits", "requested_pq_dim", "requested_pq_bits",
     "m", "ef_construction", "ef_search", "requested_m",
     "requested_ef_construction", "requested_ef_search",
+    "tuning_policy", "tuning_rule", "tuning_high_dim", "tuning_large_n",
+    "tuning_small_k", "tuning_non_euclidean",
     "r", "search_l", "build_type", "gk", "requested_r",
     "requested_search_l", "requested_build_type",
     "graph_degree", "intermediate_graph_degree", "max_iterations",
@@ -477,7 +479,12 @@ nn_route_parameters <- function(out) {
 nn_tuning_status <- function(out) {
   approx <- attr(out, "approximation") %||% list()
   tuning <- approx$tuning
-  if (is.null(tuning)) return(NA_character_)
+  if (is.null(tuning)) {
+    status <- approx$tuning_rule %||% approx$tuning_policy %||% NA_character_
+    status <- compact_route_metadata_value(status)
+    if (is.na(status)) return(NA_character_)
+    return(status)
+  }
   status <- tuning$status %||% tuning$policy %||% tuning$basis %||% NA_character_
   status <- compact_route_metadata_value(status)
   if (is.na(status)) return("present")
@@ -1329,7 +1336,7 @@ materials <- c(
   "`method = \"grid\"` is included in the default public method list but is recorded as an expected skip for datasets outside two or three columns, because it is a native low-dimensional spatial search route.",
   "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, and resolved backend fields.",
   "`nn_metric_capabilities.csv` stores the capability table used for that preflight, including `resolved_backend`, `runtime_available`, `runtime_reason`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
-  "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_requested_backend`, `result_requested_method`, and `result_tuning` record the public request stored on successful `nn()` results. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes, and `tuning_status` records backend tuning status when present.",
+  "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_requested_backend`, `result_requested_method`, and `result_tuning` record the public request stored on successful `nn()` results. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes, including deterministic FAISS HNSW `tuning_rule` and shape flags when present. `tuning_status` records backend tuning status, or the deterministic no-pilot tuning rule for routes such as FAISS CPU HNSW.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",
   "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches. Speed ratios and recall gaps are reported as `NA` when the required timing or recall values are missing or invalid.",

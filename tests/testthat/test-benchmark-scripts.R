@@ -673,6 +673,9 @@ test_that("NN metric benchmark extracts compact backend route parameters", {
     library = "faiss",
     m = 16L,
     ef_search = 150L,
+    tuning_policy = "auto_shape_metric",
+    tuning_rule = "balanced_shape_metric",
+    tuning_high_dim = TRUE,
     tuning = list(status = "target_met", results = data.frame(recall = 0.99))
   )
   attr(out, "spatial_index") <- list(strategy = "ignored_grid", bins_per_dim = 32L)
@@ -681,8 +684,14 @@ test_that("NN metric benchmark extracts compact backend route parameters", {
   expect_match(params, "approximation.strategy=faiss_IndexHNSWFlat", fixed = TRUE)
   expect_match(params, "approximation.m=16", fixed = TRUE)
   expect_match(params, "approximation.ef_search=150", fixed = TRUE)
+  expect_match(params, "approximation.tuning_policy=auto_shape_metric", fixed = TRUE)
+  expect_match(params, "approximation.tuning_rule=balanced_shape_metric", fixed = TRUE)
+  expect_match(params, "approximation.tuning_high_dim=TRUE", fixed = TRUE)
   expect_match(params, "spatial_index.bins_per_dim=32", fixed = TRUE)
   expect_equal(env$nn_tuning_status(out), "target_met")
+
+  attr(out, "approximation")$tuning <- NULL
+  expect_equal(env$nn_tuning_status(out), "balanced_shape_metric")
 })
 
 test_that("NN metric auto comparison guards speed ratios and recall gaps", {
