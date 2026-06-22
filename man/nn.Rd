@@ -14,6 +14,7 @@ nn(
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   output = c("double", "float"),
+  distances = NULL,
   n_threads = NULL
 )
 }
@@ -91,6 +92,10 @@ returns the default R numeric distance matrix. `"float"` returns
 `distance_type = "float32"` plus
 `attr(result, "distance_type") = "float32"`; this requires the optional
 `float` package.}
+
+\item{distances}{Optional alias for `output`, kept for callers that prefer
+`distances = "double"` or `distances = "float"` to describe the returned
+distance storage type.}
 
 \item{n_threads}{Number of CPU worker threads for CPU backends. GPU backends
 ignore this argument.}

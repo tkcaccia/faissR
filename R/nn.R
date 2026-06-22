@@ -5448,6 +5448,9 @@ grid_self_knn <- function(data,
 #'   `distances` as a `float::fl()`/`float32` object and records
 #'   `attr(result, "distance_type") = "float32"`; this requires the optional
 #'   `float` package.
+#' @param distances Optional alias for `output`, kept for callers that prefer
+#'   `distances = "double"` or `distances = "float"` to describe the returned
+#'   distance storage type.
 #' @param n_threads Number of CPU worker threads for CPU backends. GPU backends
 #'   ignore this argument.
 #' @return A list with integer matrix `indices` and numeric matrix `distances`.
@@ -5474,13 +5477,14 @@ nn <- function(data,
                metric = c("euclidean", "cosine", "correlation", "inner_product"),
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                output = c("double", "float"),
+               distances = NULL,
                n_threads = NULL) {
   points_missing <- missing(points)
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
   tuning <- normalize_nn_tuning(tuning)
   metric <- normalize_nn_metric(metric)
-  output <- normalize_nn_output(output)
+  output <- resolve_nn_output(output, distances)
   validate_public_nn_method_shape(data, method)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
   auto_selection <- nn_auto_selection_metadata(
@@ -5540,6 +5544,7 @@ nn <- function(data,
 #' @param output Distance storage type: `"double"` for the default R numeric
 #'   matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
 #'   optional `float` package is installed.
+#' @param distances Optional alias for `output`.
 #' @param n_threads Number of CPU worker threads used by CPU backends.
 #' @return A `faissR_nn` object with `indices` and `distances` matrices. Auto
 #'   requests also include `attr(result, "auto_selection")`, a static
@@ -5553,12 +5558,13 @@ nn_without_self <- function(data,
                             metric = c("euclidean", "cosine", "correlation", "inner_product"),
                             tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                             output = c("double", "float"),
+                            distances = NULL,
                             n_threads = NULL) {
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
   tuning <- normalize_nn_tuning(tuning)
   metric <- normalize_nn_metric(metric)
-  output <- normalize_nn_output(output)
+  output <- resolve_nn_output(output, distances)
   validate_public_nn_method_shape(data, method)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
   auto_selection <- nn_auto_selection_metadata(

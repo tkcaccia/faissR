@@ -34,7 +34,7 @@ expected to set. For the full R help page after installation, use
 ```r
 nn(data, points = data, k = NULL, backend = "auto",
    method = "auto", metric = "euclidean", tuning = "auto",
-   output = "double", n_threads = NULL)
+   output = "double", distances = NULL, n_threads = NULL)
 ```
 
 | Argument | Description |
@@ -47,6 +47,7 @@ nn(data, points = data, k = NULL, backend = "auto",
 | `metric` | Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as canonical metric labels. Inner product is the raw dot product; cosine is the dot product after row L2 normalization; correlation is centered cosine similarity after subtracting each row mean and L2-normalizing each row. For `metric = "inner_product"`, neighbours are ranked by larger raw dot product, but returned `distances` keep faissR's smaller-is-better convention: within each query row the best returned dot product has distance `0`, and lower dot products have larger shifted distances. Euclidean/L2 is the validated high-performance route for approximate FAISS/CUDA/cuVS. Cosine and correlation use validated exact paths, FAISS CPU/GPU Flat, IVF-Flat, IVFPQ, and CPU HNSW through normalized inner-product search; CAGRA and NNDescent use normalized Euclidean graph search. All-zero cosine rows and constant correlation rows are zero-normalized edge cases: faissR treats zero-vs-zero distance as `0` and zero-vs-nonzero distance as `1`; CPU FAISS Flat uses the exact CPU scorer for those rows to preserve deterministic small-`k` tie handling, while explicit CUDA routes remain on CUDA. Inner product is supported by native exact CPU scoring, FAISS Flat IP, FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, and RcppHNSW/hnswlib fallback paths when FAISS is unavailable. NSG remains Euclidean-only because linked FAISS graph builders can abort during non-Euclidean construction; NNDescent does not expose raw inner-product search. |
 | `tuning` | Tuning policy for approximate GPU methods: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. `"auto"` uses the appropriate tuned default for the resolved method. |
 | `output` | Distance storage type: `"double"` returns the default R numeric matrix; `"float"` returns `distances` as a `float::fl()`/`float32` matrix and records `distance_type = "float32"` plus `attr(result, "distance_type") = "float32"`. The `float` package is optional and used only when this output is requested or a float32 input object is supplied. |
+| `distances` | Optional alias for `output`; use `distances = "float"` when downstream code wants the returned distance matrix to remain float32. |
 | `n_threads` | Number of CPU worker threads for CPU/FAISS CPU backends. GPU backends ignore this argument. |
 
 Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.
@@ -82,7 +83,7 @@ fields: `index_base`, `distance_type`, `metric`, and `backend_used`. Indices are
 ```r
 nn_without_self(data, k, backend = "auto",
                 method = "auto", metric = "euclidean",
-                tuning = "auto", output = "double",
+                tuning = "auto", output = "double", distances = NULL,
                 n_threads = NULL)
 ```
 
@@ -95,6 +96,7 @@ nn_without_self(data, k, backend = "auto",
 | `metric` | `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`; aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. Correlation is centered cosine similarity, not raw inner product. |
 | `tuning` | Same tuning policy as `nn()`. |
 | `output` | Distance storage type: `"double"` for an R numeric distance matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the optional `float` package is installed. |
+| `distances` | Optional alias for `output`. |
 | `n_threads` | CPU worker threads for CPU/FAISS CPU backends. |
 
 Use this for graph construction and embedding workflows where each row should

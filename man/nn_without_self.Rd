@@ -13,6 +13,7 @@ nn_without_self(
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   output = c("double", "float"),
+  distances = NULL,
   n_threads = NULL
 )
 }
@@ -44,6 +45,8 @@ tuned default for the resolved method.}
 matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
 optional `float` package is installed. Results expose `distance_type` both as a
 list field and as `attr(result, "distance_type")`.}
+
+\item{distances}{Optional alias for `output`.}
 
 \item{n_threads}{Number of CPU worker threads used by CPU backends.}
 }

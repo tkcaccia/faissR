@@ -135,6 +135,17 @@ test_that("nn output distance storage can be requested explicitly", {
     expect_equal(fout$distance_type, "float32")
     expect_equal(fout$index_base, 1L)
     expect_equal(attr(fout, "distance_type"), "float32")
+
+    dout <- nn_without_self(
+      x,
+      k = 2L,
+      backend = "cpu",
+      method = "flat",
+      distances = "float"
+    )
+    expect_true(inherits(dout$distances, "float32"))
+    expect_equal(dout$distance_type, "float32")
+    expect_equal(attr(dout, "distance_type"), "float32")
   } else {
     expect_error(
       nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "float"),
@@ -145,6 +156,10 @@ test_that("nn output distance storage can be requested explicitly", {
   expect_error(
     nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "single"),
     "`output`"
+  )
+  expect_error(
+    nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "float", distances = "double"),
+    "`output` and `distances`"
   )
 })
 

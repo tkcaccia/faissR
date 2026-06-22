@@ -191,6 +191,31 @@ normalize_nn_output <- function(output) {
   output
 }
 
+resolve_nn_output <- function(output, distances = NULL) {
+  output <- normalize_nn_output(output)
+  if (is.null(distances)) {
+    return(output)
+  }
+  distances <- normalize_scalar_choice_arg(
+    distances,
+    arg = "distances",
+    default = "double",
+    formal_choices = c("double", "float")
+  )
+  if (is.na(distances) || !nzchar(distances)) distances <- "double"
+  distances <- tolower(trimws(distances))
+  if (!distances %in% c("double", "float")) {
+    stop("`distances` must be one of \"double\" or \"float\".", call. = FALSE)
+  }
+  if (!identical(output, "double") && !identical(output, distances)) {
+    stop(
+      "`output` and `distances` request different distance storage types.",
+      call. = FALSE
+    )
+  }
+  distances
+}
+
 is_float32_matrix_input <- function(x) {
   inherits(x, "float32")
 }
