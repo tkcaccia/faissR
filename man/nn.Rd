@@ -19,12 +19,17 @@ nn(
 )
 }
 \arguments{
-\item{data}{Numeric matrix/data frame or sparse `Matrix` object of reference
-observations in rows. Sparse inputs use the native exact `dgCMatrix`
-backend for `backend = "auto"` or `"cpu"`.}
+\item{data}{Numeric matrix/data frame, sparse `Matrix` object, or optional
+`float::fl()`/`float32` object of reference observations in rows. Sparse
+inputs use the native exact `dgCMatrix` backend for `backend = "auto"` or
+`"cpu"`. Float32 inputs use the CPU FAISS Flat float32 route for public
+`method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests and
+can be paired with ordinary R double query matrices.}
 
-\item{points}{Numeric matrix/data frame or sparse `Matrix` object of query
-observations in rows. Defaults to `data`.}
+\item{points}{Numeric matrix/data frame, sparse `Matrix` object, or optional
+`float::fl()`/`float32` query object with observations in rows. Defaults
+to `data`. A float32 query can be paired with an ordinary R double
+reference matrix on the CPU FAISS Flat float32 route.}
 
 \item{k}{Number of neighbors to return. `NULL` chooses the package's
 automatic neighborhood size and includes the self-neighbor when `points`
@@ -93,9 +98,10 @@ returns the default R numeric distance matrix. `"float"` returns
 `distances` as a `float::fl()`/`float32` object and records
 `distance_type = "float32"` plus
 `attr(result, "distance_type") = "float32"`; this requires the optional
-`float` package. When `data`/`points` are `float::fl()` matrices, the
-current float32 input route uses CPU FAISS Flat for public
-`method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests.}
+`float` package. When either `data` or `points` is a `float::fl()` matrix,
+the current float32 input route uses CPU FAISS Flat for public
+`method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests, with
+ordinary R double inputs converted once to float32 internally.}
 
 \item{distances}{Optional alias for `output`, kept for callers that prefer
 `distances = "double"` or `distances = "float"` to describe the returned

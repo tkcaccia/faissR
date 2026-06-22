@@ -210,6 +210,39 @@ test_that("float32 input routes through FAISS Flat when float is installed", {
   expect_equal(attr(fout, "distance_type"), "float32")
 })
 
+test_that("float32 FAISS Flat input accepts mixed double and float32 query matrices", {
+  skip_if_not_installed("float")
+  skip_if_not(faiss_available(), "FAISS is required for float32 input")
+
+  x <- matrix(c(
+    0.0, 0.0,
+    1.0, 0.0,
+    0.0, 1.0,
+    2.0, 2.0,
+    3.0, 3.0
+  ), ncol = 2, byrow = TRUE)
+  q <- matrix(c(
+    0.1, 0.0,
+    2.2, 2.0
+  ), ncol = 2, byrow = TRUE)
+  xf <- float::fl(x)
+  qf <- float::fl(q)
+
+  ref <- nn(x, q, k = 2L, backend = "cpu", method = "flat", n_threads = 2L)
+  float_data <- nn(xf, q, k = 2L, backend = "cpu", method = "flat", n_threads = 2L)
+  float_query <- nn(x, qf, k = 2L, backend = "cpu", method = "flat", n_threads = 2L)
+
+  expect_equal(float_data$indices, ref$indices)
+  expect_equal(float_data$distances, ref$distances, tolerance = 1e-6)
+  expect_equal(float_data$input_type, "float32")
+  expect_equal(float_data$backend_used, "faiss_flat_l2")
+
+  expect_equal(float_query$indices, ref$indices)
+  expect_equal(float_query$distances, ref$distances, tolerance = 1e-6)
+  expect_equal(float_query$input_type, "float32")
+  expect_equal(float_query$backend_used, "faiss_flat_l2")
+})
+
 test_that("float32 FAISS Flat input supports normalized metrics", {
   skip_if_not_installed("float")
   skip_if_not(faiss_available(), "FAISS is required for float32 input")

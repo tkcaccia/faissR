@@ -34,19 +34,25 @@ nn_compute <- function(data,
   data_float32 <- is_float32_matrix_input(data)
   points_float32 <- if (isTRUE(points_missing)) data_float32 else is_float32_matrix_input(points)
   if (isTRUE(data_float32) || isTRUE(points_float32)) {
-    if (!isTRUE(data_float32) || !isTRUE(points_float32)) {
-      stop(
-        "float32 nearest-neighbour input currently requires both `data` and ",
-        "`points` to be float::fl()/float32 objects. Convert both inputs to ",
-        "float32, or pass ordinary R numeric matrices.",
-        call. = FALSE
-      )
+    if (!isTRUE(data_float32)) {
+      data <- as.matrix(data)
+      storage.mode(data) <- "double"
     }
-    data_dim <- float32_matrix_dims(data, "data")
+    if (!isTRUE(points_missing) && !isTRUE(points_float32)) {
+      points <- as.matrix(points)
+      storage.mode(points) <- "double"
+    }
+    data_dim <- if (isTRUE(data_float32)) {
+      float32_matrix_dims(data, "data")
+    } else {
+      dim(data)
+    }
     points_dim <- if (isTRUE(points_missing)) {
       data_dim
-    } else {
+    } else if (isTRUE(points_float32)) {
       float32_matrix_dims(points, "points")
+    } else {
+      dim(points)
     }
     if (!identical(data_dim[[2L]], points_dim[[2L]])) {
       stop("`data` and `points` must have the same number of columns.", call. = FALSE)
@@ -5737,11 +5743,16 @@ grid_self_knn <- function(data,
 #' NVIDIA, Meta, and FAISS documentation for FAISS GPU indexes backed by NVIDIA
 #' cuVS, including IVF and CAGRA integration.
 #'
-#' @param data Numeric matrix/data frame or sparse `Matrix` object of reference
-#'   observations in rows. Sparse inputs use the native exact `dgCMatrix`
-#'   backend for `backend = "auto"` or `"cpu"`.
-#' @param points Numeric matrix/data frame or sparse `Matrix` object of query
-#'   observations in rows. Defaults to `data`.
+#' @param data Numeric matrix/data frame, sparse `Matrix` object, or optional
+#'   `float::fl()`/`float32` object of reference observations in rows. Sparse
+#'   inputs use the native exact `dgCMatrix` backend for `backend = "auto"` or
+#'   `"cpu"`. Float32 inputs use the CPU FAISS Flat float32 route for public
+#'   `method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests and
+#'   can be paired with ordinary R double query matrices.
+#' @param points Numeric matrix/data frame, sparse `Matrix` object, or optional
+#'   `float::fl()`/`float32` query object with observations in rows. Defaults
+#'   to `data`. A float32 query can be paired with an ordinary R double
+#'   reference matrix on the CPU FAISS Flat float32 route.
 #' @param k Number of neighbors to return. `NULL` chooses the package's
 #'   automatic neighborhood size and includes the self-neighbor when `points`
 #'   is `data`.
@@ -5804,9 +5815,10 @@ grid_self_knn <- function(data,
 #'   `distances` as a `float::fl()`/`float32` object and records
 #'   `distance_type = "float32"` plus
 #'   `attr(result, "distance_type") = "float32"`; this requires the optional
-#'   `float` package. When `data`/`points` are `float::fl()` matrices, the
-#'   current float32 input route uses CPU FAISS Flat for public
-#'   `method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests.
+#'   `float` package. When either `data` or `points` is a `float::fl()` matrix,
+#'   the current float32 input route uses CPU FAISS Flat for public
+#'   `method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests, with
+#'   ordinary R double inputs converted once to float32 internally.
 #' @param distances Optional alias for `output`, kept for callers that prefer
 #'   `distances = "double"` or `distances = "float"` to describe the returned
 #'   distance storage type.
