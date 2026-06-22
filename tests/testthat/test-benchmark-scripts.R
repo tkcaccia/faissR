@@ -1115,6 +1115,10 @@ test_that("k-means benchmark defaults cover fast_kmeans stats and public backend
     env$default_kmeans_backend_values(),
     c("auto", "cpu", "cuda")
   )
+  expect_equal(
+    env$valid_kmeans_tuning_values(),
+    c("auto", "fixed", "off", "none")
+  )
 })
 
 test_that("k-means benchmark validates method and backend selectors", {
@@ -1150,6 +1154,18 @@ test_that("k-means benchmark validates method and backend selectors", {
   expect_error(
     env$validate_choice_values(character(), env$default_kmeans_backend_values(), "backends"),
     "at least one value"
+  )
+  expect_equal(env$validate_kmeans_tuning_value(" auto "), "auto")
+  expect_equal(env$validate_kmeans_tuning_value("FIXED"), "fixed")
+  expect_equal(env$validate_kmeans_tuning_value("off"), "off")
+  expect_equal(env$validate_kmeans_tuning_value("none"), "none")
+  expect_error(
+    env$validate_kmeans_tuning_value("pilot"),
+    "Invalid value: pilot"
+  )
+  expect_error(
+    env$validate_kmeans_tuning_value(""),
+    "must be one of"
   )
 })
 

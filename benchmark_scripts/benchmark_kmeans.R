@@ -43,6 +43,10 @@ default_kmeans_backend_values <- function() {
   c("auto", "cpu", "cuda")
 }
 
+valid_kmeans_tuning_values <- function() {
+  c("auto", "fixed", "off", "none")
+}
+
 validate_choice_values <- function(values, valid, arg_name) {
   values <- unique(trimws(as.character(values)))
   values <- values[nzchar(values)]
@@ -61,6 +65,25 @@ validate_choice_values <- function(values, valid, arg_name) {
     stop("`", arg_name, "` must contain at least one value.", call. = FALSE)
   }
   values
+}
+
+validate_kmeans_tuning_value <- function(value, arg_name = "tuning") {
+  value <- trimws(as.character(value %||% "auto"))
+  if (length(value) != 1L || is.na(value) || !nzchar(value)) {
+    stop("`", arg_name, "` must be one of: ", paste(valid_kmeans_tuning_values(), collapse = ", "), ".", call. = FALSE)
+  }
+  value <- tolower(value)
+  if (!value %in% valid_kmeans_tuning_values()) {
+    stop(
+      "`", arg_name, "` must be one of: ",
+      paste(valid_kmeans_tuning_values(), collapse = ", "),
+      ". Invalid value: ",
+      value,
+      ".",
+      call. = FALSE
+    )
+  }
+  value
 }
 
 validate_dataset_values <- function(datasets, valid_datasets, arg_name = "datasets") {
@@ -761,7 +784,7 @@ ari_tolerance <- required_nonnegative_numeric_arg(args$ari_tolerance %||% "0.01"
 max_iter <- args$max_iter %||% "auto"
 n_init <- args$n_init %||% "auto"
 tol <- args$tol %||% "auto"
-tuning <- args$tuning %||% "auto"
+tuning <- validate_kmeans_tuning_value(args$tuning %||% "auto")
 
 available_datasets <- c(dataset_index(data_root)$dataset, "SimulatedTiny3Clusters")
 datasets <- validate_dataset_values(
