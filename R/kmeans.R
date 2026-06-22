@@ -34,8 +34,9 @@
 #'   also use a small multistart budget for stability; large or
 #'   high-dimensional jobs use cheaper iteration and tolerance defaults.
 #'   `centers = 1` uses the exact column-mean solution for `backend = "auto"`
-#'   and `"cpu"` with `max_iter = 1`, `n_init = 1`, and `tol = 0`, because no
-#'   iterative k-means backend can improve that solution.
+#'   and `"cpu"` with `max_iter = 1`, `n_init = 1`, and `tol = 0`, records
+#'   `single_cluster_exact_mean`, and stays on CPU because no iterative
+#'   k-means backend can improve that solution.
 #'   `"fixed"`, `"off"`, and `"none"` use the historical fixed defaults unless
 #'   `max_iter`, `n_init`, or `tol` are explicitly supplied.
 #' @return A list with `cluster`, `centers`, `withinss`, `tot.withinss`,

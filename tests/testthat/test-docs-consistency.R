@@ -387,6 +387,26 @@ test_that("fast_kmeans docs describe effective tuning metadata", {
   }
 })
 
+test_that("fast_kmeans source docs describe single-cluster exact rule", {
+  files <- c(
+    test_path("../../R/kmeans.R"),
+    test_path("../../man/fast_kmeans.Rd"),
+    test_path("../../docs/implementation.md"),
+    test_path("../../docs/usage-api.md")
+  )
+  missing <- !file.exists(files)
+  if (any(missing)) {
+    skip("Source, GitHub, or reference documentation files are not available in this installed-package test context.")
+  }
+
+  for (docs_file in files) {
+    prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+    expect_true(grepl("centers = 1", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("single_cluster_exact_mean", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("exact", prose, fixed = TRUE), info = basename(docs_file))
+  }
+})
+
 test_that("README describes public NN metrics and correlation semantics", {
   readme_file <- test_path("../../README.md")
   if (!file.exists(readme_file)) {
