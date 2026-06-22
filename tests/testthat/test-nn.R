@@ -743,6 +743,67 @@ test_that("nn_capabilities can report current runtime availability", {
   expect_true(is.na(unsupported$resolved_backend))
 })
 
+test_that("runtime-available CPU capability rows execute across public metrics", {
+  skip_if_not_installed("Matrix")
+
+  old_options <- options(
+    faissR.faiss_pq_m = 1L,
+    faissR.faiss_pq_nbits = 4L
+  )
+  on.exit(options(old_options), add = TRUE)
+
+  set.seed(20260622)
+  dense <- matrix(rnorm(180L * 8L), nrow = 180L)
+  low_dim <- matrix(rnorm(120L * 2L), nrow = 120L)
+  ivfpq_dense <- matrix(rnorm(700L * 4L), nrow = 700L)
+  sparse <- Matrix::Matrix(dense, sparse = TRUE)
+  smoke_methods <- c(
+    "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
+    "hnsw", "ivf", "ivfpq", "nndescent"
+  )
+  runtime_caps <- nn_capabilities(runtime = TRUE)
+  rows <- runtime_caps[
+    runtime_caps$backend == "cpu" &
+      runtime_caps$method %in% smoke_methods &
+      runtime_caps$supported &
+      runtime_caps$runtime_available,
+    ,
+    drop = FALSE
+  ]
+  expect_gt(nrow(rows), 0L)
+  expect_false("nsg" %in% rows$method)
+
+  for (i in seq_len(nrow(rows))) {
+    row <- rows[i, , drop = FALSE]
+    x <- switch(
+      row$method,
+      grid = low_dim,
+      sparse = sparse,
+      ivfpq = ivfpq_dense,
+      dense
+    )
+    label <- paste(row$method, row$metric, row$resolved_backend, sep = "/")
+    out <- nn_without_self(
+      x,
+      k = 5L,
+      backend = "cpu",
+      method = row$method,
+      metric = row$metric,
+      tuning = "fixed",
+      n_threads = 2L
+    )
+
+    expect_true(inherits(out, "faissR_nn"), info = label)
+    expect_equal(dim(out$indices), c(nrow(x), 5L), info = label)
+    expect_equal(dim(as.matrix(out$distances)), c(nrow(x), 5L), info = label)
+    expect_equal(attr(out, "metric"), row$metric, info = label)
+    expect_equal(attr(out, "requested_method"), row$method, info = label)
+    expect_equal(attr(out, "requested_backend"), "cpu", info = label)
+    expect_true(all(out$indices >= 1L & out$indices <= nrow(x)), info = label)
+    expect_true(all(is.finite(as.matrix(out$distances))), info = label)
+  }
+})
+
 test_that("cuda_auto runtime availability distinguishes cuVS and FAISS GPU metric routes", {
   euclidean_cuvs <- faissR:::nn_cuda_auto_runtime_available(
     "euclidean",
