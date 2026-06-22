@@ -66,7 +66,7 @@ required_nonnegative_numeric_arg <- function(x, arg) {
 }
 
 default_graph_k_values <- function() {
-  c(15L, 50L, 100L)
+  c(5L, 10L, 15L, 50L, 100L)
 }
 
 default_graph_cluster_methods <- function() {
@@ -85,7 +85,7 @@ valid_graph_nn_methods <- function() {
 }
 
 default_graph_metrics <- function() {
-  c("euclidean")
+  c("euclidean", "cosine", "correlation", "inner_product")
 }
 
 valid_graph_metrics <- function() {

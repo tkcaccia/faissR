@@ -1551,7 +1551,7 @@ test_that("graph benchmark defaults cover requested methods backends and k grid"
   )
   expect_equal(
     env$default_graph_k_values(),
-    c(15L, 50L, 100L)
+    c(5L, 10L, 15L, 50L, 100L)
   )
   expect_equal(
     env$as_int_vec_arg(c("unknown"), env$default_graph_k_values()),
@@ -1669,7 +1669,10 @@ test_that("graph benchmark target cluster mode is explicit", {
   )
   expect_equal(env$default_graph_nn_methods(), "auto")
   expect_true(all(c("auto", "hnsw", "ivf", "grid", "cagra") %in% env$valid_graph_nn_methods()))
-  expect_equal(env$default_graph_metrics(), "euclidean")
+  expect_equal(
+    env$default_graph_metrics(),
+    c("euclidean", "cosine", "correlation", "inner_product")
+  )
   expect_equal(
     env$validate_choice_values(c("euclidean", "cosine"), env$valid_graph_metrics(), "metrics"),
     c("euclidean", "cosine")

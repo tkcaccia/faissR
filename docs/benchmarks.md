@@ -265,12 +265,15 @@ By default, graph construction and graph clustering are each tested with
 `"auto"`, `"cpu"`, and `"cuda"` backends. `backend = "auto"` may resolve to CPU
 when CUDA/cuGraph support is not available.
 Graph construction can also vary the nearest-neighbour route and metric with
-`--graph_methods` and `--metrics`. The default remains
-`--graph_methods=auto --metrics=euclidean` to keep routine graph-clustering
-runs compact, but expanded HPC runs can use public NN methods such as
+`--graph_methods` and `--metrics`. The default uses
+`--graph_methods=auto`,
+`--metrics=euclidean,cosine,correlation,inner_product`, and
+`--k_values=5,10,15,50,100` so benchmark rows cover the public metric surface
+and the full requested graph-density grid. Expanded HPC runs can also use
+public NN methods such as
 `auto,hnsw,ivf,nndescent,grid` and metrics such as
-`euclidean,cosine,correlation` to evaluate how graph construction affects
-clustering ARI and speed.
+`euclidean,cosine,correlation,inner_product` to evaluate how graph construction
+affects clustering ARI and speed.
 Known unsupported graph-clustering combinations from the public API, such as
 CUDA random-walking or explicit CUDA clustering without libcugraph, are
 recorded as `status = "expected_skip"` with `expected_skip = TRUE`; if every
@@ -286,12 +289,12 @@ Rscript benchmark_scripts/benchmark_graph_clustering.R \
   --data_root=/path/to/Data \
   --out_dir=/path/to/faissR_GRAPH_CLUSTER_CPU \
   --datasets=COIL20,USPS,FashionMNIST,MNIST \
-  --k_values=15,50,100 \
+  --k_values=5,10,15,50,100 \
   --cycles=10 \
   --ari_tolerance=0.01 \
   --graph_backends=cpu \
   --graph_methods=auto,hnsw,ivf,nndescent \
-  --metrics=euclidean,cosine,correlation \
+  --metrics=euclidean,cosine,correlation,inner_product \
   --cluster_backends=cpu \
   --methods=random_walking,louvain,leiden \
   --threads=12
@@ -304,12 +307,12 @@ Rscript benchmark_scripts/benchmark_graph_clustering.R \
   --data_root=/path/to/Data \
   --out_dir=/path/to/faissR_GRAPH_CLUSTER_CUDA \
   --datasets=COIL20,USPS,FashionMNIST,MNIST \
-  --k_values=15,50,100 \
+  --k_values=5,10,15,50,100 \
   --cycles=10 \
   --ari_tolerance=0.01 \
   --graph_backends=cuda \
   --graph_methods=auto,cagra,nndescent,ivf \
-  --metrics=euclidean,cosine,correlation \
+  --metrics=euclidean,cosine,correlation,inner_product \
   --cluster_backends=cuda \
   --methods=louvain,leiden \
   --threads=2
