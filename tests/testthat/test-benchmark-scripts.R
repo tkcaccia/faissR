@@ -2614,6 +2614,10 @@ test_that("graph benchmark extracts compact graph KNN route parameters", {
     ),
     nn_auto_selection = list(
       policy = "static_shape_k_metric_selector",
+      explicit_backend = TRUE,
+      explicit_method = FALSE,
+      backend_decision = "explicit_cpu",
+      method_decision = "cpu_auto_shape_selector",
       predicted_backend = "faiss_hnsw",
       predicted_method = "hnsw",
       predicted_device = "cpu",
@@ -2630,6 +2634,10 @@ test_that("graph benchmark extracts compact graph KNN route parameters", {
   expect_match(params, "nn_approximation.tuning_rule=balanced_shape_metric", fixed = TRUE)
   expect_match(params, "nn_approximation.tuning_large_k=FALSE", fixed = TRUE)
   expect_match(params, "nn_auto_selection.policy=static_shape_k_metric_selector", fixed = TRUE)
+  expect_match(params, "nn_auto_selection.explicit_backend=TRUE", fixed = TRUE)
+  expect_match(params, "nn_auto_selection.explicit_method=FALSE", fixed = TRUE)
+  expect_match(params, "nn_auto_selection.backend_decision=explicit_cpu", fixed = TRUE)
+  expect_match(params, "nn_auto_selection.method_decision=cpu_auto_shape_selector", fixed = TRUE)
   expect_match(params, "nn_auto_selection.predicted_method=hnsw", fixed = TRUE)
   expect_match(params, "nn_auto_selection.predicted_device=cpu", fixed = TRUE)
   expect_match(params, "nn_auto_selection.slow_tuning=FALSE", fixed = TRUE)

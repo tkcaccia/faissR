@@ -466,7 +466,8 @@ graph_route_parameters <- function(graph) {
     "requested_itopk_size", "bins_per_dim", "n_cells",
     "index_type", "search_batch_size", "n_threads",
     "metric_transform", "distance_transform",
-    "policy", "predicted_backend", "predicted_method", "predicted_device",
+    "policy", "explicit_backend", "explicit_method", "backend_decision",
+    "method_decision", "predicted_backend", "predicted_method", "predicted_device",
     "reason", "n", "p", "k", "work_size", "slow_tuning"
   )
   pieces <- character()
@@ -1570,7 +1571,7 @@ materials <- c(
   sprintf("- Target clusters mode: `%s`", target_mode),
   "",
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
-  "`graph_cluster_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `graph_cluster_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, graph timings, clustering timings, memory, graph vertex/edge counts, ARI, modularity, graph NN method/metric, compact `graph_route_parameters` from the KNN route that built the graph, and backend metadata. Auto KNN graph routes include no-pilot `predicted_backend`, `predicted_method`, and `predicted_device` metadata when available.",
+  "`graph_cluster_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `graph_cluster_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, graph timings, clustering timings, memory, graph vertex/edge counts, ARI, modularity, graph NN method/metric, compact `graph_route_parameters` from the KNN route that built the graph, and backend metadata. Auto KNN graph routes include no-pilot `predicted_backend`, `predicted_method`, `predicted_device`, explicit backend/method flags, and backend/method decision metadata when available.",
   "`graph_cluster_nn_capabilities.csv` stores the `faissR::nn_capabilities(runtime = TRUE)` table used to preflight graph KNN construction, including `runtime_reason` and `runtime_notes`. Runtime-unavailable graph routes are recorded as expected skips before a graph is built.",
   "`target_clusters` is normalized to either `\"labels\"` or `\"none\"`; invalid values stop before the benchmark starts. When `target_clusters = \"labels\"`, Louvain and Leiden use `n_clusters = length(unique(labels))`. If a benchmark block contains only Louvain/Leiden, this target is stored on the graph with `knn_graph(n_clusters = ...)` and reused by `graph_cluster()`; mixed blocks that include random-walking pass the target only to Louvain/Leiden rows because random-walking intentionally has no cluster-count target.",
   "`n_clusters_requested` records the requested target community count for Louvain/Leiden rows. This is a convenience target, not a hard guarantee; the actual community count is stored separately as `n_communities`. `n_clusters_source` records whether that target came from dataset labels, a stored `knn_graph(n_clusters = ...)` target, or no target. When a target is used, faissR evaluates a bounded deterministic resolution grid around the supplied resolution; `target_gap`, `resolution_selection`, `resolution_selected_candidate`, `resolution_candidates`, `resolution_min_target_gap`, `resolution_selected_is_min_gap`, and the selected resolution summarize the deterministic resolution-search decision.",

@@ -263,9 +263,10 @@ Expected skips are marked with `expected_skip = TRUE` and a machine-readable
 without parsing the prose error message.
 The raw table and cycle summaries also preserve compact
 `graph_route_parameters` from the KNN route that built the graph, including
-FAISS/cuVS/grid parameter, auto-selection predicted method/device, and
-deterministic tuning metadata when present. For cosine/correlation graph routes
-that search in normalized Euclidean space, this field also records the
+FAISS/cuVS/grid parameter, auto-selection predicted method/device, explicit
+backend/method flags, backend/method decision reasons, and deterministic tuning
+metadata when present. For cosine/correlation graph routes that search in
+normalized Euclidean space, this field also records the
 `metric_transform` and `distance_transform` used before clustering. This lets graph ARI/speed
 comparisons distinguish, for example, two HNSW-built graphs that used different
 `tuning_rule` or `ef_search` settings.
