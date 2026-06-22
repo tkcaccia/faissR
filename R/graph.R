@@ -328,10 +328,10 @@ graph_cluster <- function(graph,
   weight <- normalize_graph_weight(weight)
   objective_function <- normalize_graph_objective_function(objective_function)
   n_threads <- normalize_nn_threads(n_threads)
-  k <- normalize_positive_int(k, 50L)
-  n_runs <- normalize_positive_int(n_runs, 1L)
-  n_iterations <- normalize_positive_int(n_iterations, 10L)
-  steps <- normalize_positive_int(steps, 4L)
+  k <- normalize_graph_positive_int(k, "k")
+  n_runs <- normalize_graph_positive_int(n_runs, "n_runs")
+  n_iterations <- normalize_graph_positive_int(n_iterations, "n_iterations")
+  steps <- normalize_graph_positive_int(steps, "steps")
   resolution <- suppressWarnings(as.numeric(resolution))
   if (length(resolution) != 1L || is.na(resolution) || !is.finite(resolution) || resolution <= 0) {
     stop("`resolution` must be a positive number.", call. = FALSE)
@@ -341,7 +341,7 @@ graph_cluster <- function(graph,
   if (length(prune) != 1L || is.na(prune) || !is.finite(prune) || prune < 0) {
     stop("`prune` must be a non-negative number.", call. = FALSE)
   }
-  seed <- if (is.null(seed)) 1L else normalize_positive_int(seed, 1L)
+  seed <- if (is.null(seed)) 1L else normalize_graph_positive_int(seed, "seed")
 
 
   graph_space <- "input"
@@ -545,6 +545,14 @@ normalize_graph_target_clusters <- function(n_clusters, method) {
     stop("`n_clusters` must be a positive integer.", call. = FALSE)
   }
   as.integer(round(value))
+}
+
+normalize_graph_positive_int <- function(x, arg) {
+  value <- suppressWarnings(as.integer(x))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 1L) {
+    stop("`", arg, "` must be a single positive integer.", call. = FALSE)
+  }
+  value
 }
 
 validate_graph_target_cluster_count <- function(n_clusters, n_vertices) {

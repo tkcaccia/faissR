@@ -375,6 +375,34 @@ test_that("graph_cluster requires canonical objective-function labels", {
   )
 })
 
+test_that("graph_cluster validates positive integer controls strictly", {
+  x <- matrix(rnorm(80), ncol = 4)
+
+  expect_equal(faissR:::normalize_graph_positive_int(5L, "k"), 5L)
+  expect_error(faissR:::normalize_graph_positive_int(c(5L, 6L), "k"), "single positive integer")
+  expect_error(faissR:::normalize_graph_positive_int("many", "n_runs"), "single positive integer")
+  expect_error(
+    graph_cluster(x, method = "louvain", backend = "cpu", graph_backend = "cpu", k = c(5L, 6L)),
+    "`k` must be a single positive integer"
+  )
+  expect_error(
+    graph_cluster(x, method = "louvain", backend = "cpu", graph_backend = "cpu", k = 5L, n_runs = "many"),
+    "`n_runs` must be a single positive integer"
+  )
+  expect_error(
+    graph_cluster(x, method = "louvain", backend = "cpu", graph_backend = "cpu", k = 5L, n_iterations = 0L),
+    "`n_iterations` must be a single positive integer"
+  )
+  expect_error(
+    graph_cluster(x, method = "random_walking", backend = "cpu", graph_backend = "cpu", k = 5L, steps = c(3L, 4L)),
+    "`steps` must be a single positive integer"
+  )
+  expect_error(
+    graph_cluster(x, method = "louvain", backend = "cpu", graph_backend = "cpu", k = 5L, seed = NA_integer_),
+    "`seed` must be a single positive integer"
+  )
+})
+
 test_that("graph_cluster passes method metric and tuning to internal KNN", {
   set.seed(5052)
   x <- rbind(
