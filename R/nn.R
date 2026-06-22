@@ -6100,8 +6100,10 @@ grid_self_knn <- function(data,
 #'   ignore this argument.
 #' @return A list with integer matrix `indices`, `distances`, and stable
 #'   metadata fields `index_base`, `distance_type`, `metric`, and
-#'   `backend_used`. Indices are 1-based. The requested backend/method,
-#'   tuning policy, resolved
+#'   `backend_used`. Float32 routes also record `input_layout` and
+#'   `input_owns_data` so downstream packages can distinguish direct float32
+#'   payload use from one-time row-major conversion. Indices are 1-based. The
+#'   requested backend/method, tuning policy, resolved
 #'   backend, metric, exact/approximate flag, and self-query flag are stored in
 #'   attributes including `attr(result, "requested_backend")`,
 #'   `attr(result, "requested_method")`, `attr(result, "tuning")`, and
@@ -6198,7 +6200,8 @@ nn <- function(data,
 #' @param n_threads Number of CPU worker threads used by CPU backends.
 #' @return A `faissR_nn` object with `indices`, `distances`, and stable
 #'   metadata fields `index_base`, `distance_type`, `metric`, and
-#'   `backend_used`. Auto requests also include `attr(result,
+#'   `backend_used`. Float32 routes also record `input_layout` and
+#'   `input_owns_data`. Auto requests also include `attr(result,
 #'   "auto_selection")`, a static shape/k/metric decision record that does
 #'   records the predicted internal backend, public method class, device class,
 #'   and does not run pilot tuning.

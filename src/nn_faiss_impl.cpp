@@ -113,6 +113,7 @@ struct MatrixViewF32 {
   int ncol = 0;
   bool row_major = true;
   bool owns_data = false;
+  std::string layout = "unknown";
   std::vector<float> buffer;
 };
 
@@ -154,6 +155,17 @@ const float* float32_slot_ptr(SEXP slot, const int expected_length, const char* 
   return nullptr;
 }
 
+bool finite_float32_payload(const float* ptr, const int length) {
+  bool finite = true;
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) reduction(&& : finite)
+#endif
+  for (int i = 0; i < length; ++i) {
+    if (!std::isfinite(ptr[i])) finite = false;
+  }
+  return finite;
+}
+
 MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
   Rcpp::IntegerVector dims = matrix_dims_from_object(x, name);
   MatrixViewF32 view;
@@ -161,12 +173,12 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
   view.ncol = dims[1];
   const int expected_length = view.nrow * view.ncol;
 
-  view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
-  view.owns_data = true;
-  view.row_major = true;
-
   bool finite = true;
   if (TYPEOF(x) == REALSXP) {
+    view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
+    view.owns_data = true;
+    view.row_major = true;
+    view.layout = "r_double_column_major_to_row_major_float32";
     if (Rf_length(x) != expected_length) {
       Rcpp::stop("%s payload length does not match its dimensions", name);
     }
@@ -189,20 +201,32 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
     SEXP slot = R_do_slot(x, Rf_install("Data"));
     const float* col_major = float32_slot_ptr(slot, expected_length, name);
     if (col_major != nullptr) {
+      finite = finite_float32_payload(col_major, expected_length);
+      if (view.nrow == 1 || view.ncol == 1) {
+        view.data = col_major;
+        view.owns_data = false;
+        view.row_major = true;
+        view.layout = "float32_payload_direct_row_compatible";
+      } else {
+        view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
+        view.owns_data = true;
+        view.row_major = true;
+        view.layout = "float32_column_major_payload_to_row_major";
 #ifdef _OPENMP
-#pragma omp parallel for schedule(static) reduction(&& : finite)
+#pragma omp parallel for schedule(static)
 #endif
-      for (int r = 0; r < view.nrow; ++r) {
-        for (int c = 0; c < view.ncol; ++c) {
-          const float value = col_major[r + view.nrow * c];
-          if (!std::isfinite(value)) {
-            finite = false;
-            continue;
+        for (int r = 0; r < view.nrow; ++r) {
+          for (int c = 0; c < view.ncol; ++c) {
+            view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
+              col_major[r + view.nrow * c];
           }
-          view.buffer[static_cast<std::size_t>(r) * view.ncol + c] = value;
         }
       }
     } else if (TYPEOF(slot) == REALSXP) {
+      view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
+      view.owns_data = true;
+      view.row_major = true;
+      view.layout = "s4_double_column_major_to_row_major_float32";
       const double* col_major_double = REAL(slot);
       if (Rf_length(slot) != expected_length) {
         Rcpp::stop("%s payload length does not match its dimensions", name);
@@ -236,7 +260,9 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
   if (!finite) {
     Rcpp::stop("FAISS float32 input requires finite values");
   }
-  view.data = view.buffer.data();
+  if (view.data == nullptr) {
+    view.data = view.buffer.data();
+  }
   return view;
 }
 
@@ -245,6 +271,23 @@ std::vector<char> normalize_float32_view(MatrixViewF32& view,
   std::vector<char> zero(static_cast<std::size_t>(view.nrow), 0);
   if (metric != "cosine" && metric != "correlation") {
     return zero;
+  }
+
+  if (!view.owns_data || view.buffer.empty()) {
+    const float* source = view.data;
+    view.buffer.assign(static_cast<std::size_t>(view.nrow) * view.ncol, 0.0f);
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (int r = 0; r < view.nrow; ++r) {
+      for (int c = 0; c < view.ncol; ++c) {
+        view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
+          source[static_cast<std::size_t>(r) * view.ncol + c];
+      }
+    }
+    view.data = view.buffer.data();
+    view.owns_data = true;
+    view.layout += "_normalized_copy";
   }
 
 #ifdef _OPENMP
@@ -743,7 +786,12 @@ List search_faiss_flat_float32(SEXP data,
       "row_l2_normalize_then_IndexFlatIP";
   }
   out["input_type"] = "float32";
-  out["input_layout"] = "float32_column_major_payload_to_row_major";
+  out["input_layout"] = same_storage ?
+    xb.layout :
+    ("data=" + xb.layout + ";points=" + xq.layout);
+  out["input_owns_data"] = same_storage ?
+    xb.owns_data :
+    (xb.owns_data || xq.owns_data);
   if (direct_float_distances) {
     out["distance_type"] = "float32";
     out.attr("distance_type") = "float32";

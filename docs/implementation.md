@@ -524,6 +524,14 @@ a CPU FAISS Flat-style request with `output = "float"`, it also enters this
 float-pointer route so FAISS does not produce an intermediate R double distance
 matrix.
 
+The float32 adapter records the route it used in the returned KNN object.
+`input_layout` distinguishes ordinary R double conversion, float32 payload
+transpose, mixed reference/query adapters, and the direct row-compatible
+float32 payload route used for one-row or one-column `float::fl()` matrices.
+`input_owns_data` records whether FAISS consumed an owned adapter buffer. For
+cosine and correlation, direct float32 payloads still make one owned copy before
+normalization because those transforms are applied in-place before FAISS search.
+
 Distance output remains an ordinary R numeric matrix by default. Calling
 `nn(..., output = "float")` or `nn_without_self(..., output = "float")` stores
 `distances` as a `float::fl()`/`float32` object and records both
@@ -535,9 +543,10 @@ distance matrix. The only fallback is the deterministic zero-row correction for
 cosine/correlation inputs with all-zero normalized rows, where faissR first
 repairs and sorts the double distance matrix before converting it to float32.
 KNN results also expose stable list fields for downstream packages:
-`index_base`, `metric`, and `backend_used`. The `float` package is in
-`Suggests`; faissR does not require it unless a user supplies a float32 object
-or requests float32 distance output.
+`index_base`, `metric`, `backend_used`, and, on the float32 route,
+`input_layout`/`input_owns_data`. The `float` package is in `Suggests`; faissR
+does not require it unless a user supplies a float32 object or requests float32
+distance output.
 
 faissR also registers a C-callable entry point named
 `faissR_nn_float32_call` during package initialization with

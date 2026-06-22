@@ -145,7 +145,8 @@ test_that("nn output distance storage can be requested explicitly", {
     )
     expect_true(inherits(dout$distances, "float32"))
     expect_equal(dout$input_type, "float32")
-    expect_equal(dout$input_layout, "float32_column_major_payload_to_row_major")
+    expect_equal(dout$input_layout, "r_double_column_major_to_row_major_float32")
+    expect_true(dout$input_owns_data)
     expect_equal(dout$backend_used, "faiss_flat_l2")
     expect_equal(dout$distance_type, "float32")
     expect_equal(attr(dout, "distance_type"), "float32")
@@ -199,6 +200,8 @@ test_that("float32 input routes through FAISS Flat when float is installed", {
   expect_equal(out$distance_type, "double")
   expect_equal(out$metric, "euclidean")
   expect_equal(out$backend_used, "faiss_flat_l2")
+  expect_equal(out$input_layout, "float32_column_major_payload_to_row_major")
+  expect_true(out$input_owns_data)
   expect_equal(attr(out, "distance_type"), "double")
   expect_equal(attr(out, "resolved_backend"), "faiss_flat_l2")
   expect_equal(auto$indices, ref$indices)
@@ -244,12 +247,33 @@ test_that("float32 FAISS Flat input accepts mixed double and float32 query matri
   expect_equal(float_data$indices, ref$indices)
   expect_equal(float_data$distances, ref$distances, tolerance = 1e-6)
   expect_equal(float_data$input_type, "float32")
+  expect_equal(
+    float_data$input_layout,
+    "data=float32_column_major_payload_to_row_major;points=r_double_column_major_to_row_major_float32"
+  )
   expect_equal(float_data$backend_used, "faiss_flat_l2")
 
   expect_equal(float_query$indices, ref$indices)
   expect_equal(float_query$distances, ref$distances, tolerance = 1e-6)
   expect_equal(float_query$input_type, "float32")
+  expect_equal(
+    float_query$input_layout,
+    "data=r_double_column_major_to_row_major_float32;points=float32_column_major_payload_to_row_major"
+  )
   expect_equal(float_query$backend_used, "faiss_flat_l2")
+})
+
+test_that("row-compatible float32 inputs can use the direct payload route", {
+  skip_if_not_installed("float")
+  skip_if_not(faiss_available(), "FAISS is required for float32 input")
+
+  x <- float::fl(matrix(c(0, 1, 3, 7, 8), ncol = 1))
+  out <- nn_without_self(x, k = 2L, backend = "cpu", method = "flat", n_threads = 2L)
+
+  expect_equal(out$input_type, "float32")
+  expect_equal(out$input_layout, "float32_payload_direct_row_compatible")
+  expect_false(out$input_owns_data)
+  expect_equal(out$backend_used, "faiss_flat_l2")
 })
 
 test_that("float32 FAISS Flat input supports normalized metrics", {
@@ -357,7 +381,7 @@ test_that("float32 C-callable returns stable KNN metadata", {
   expect_equal(out_double$indices, out$indices)
   expect_equal(out_double$distances, out$distances, tolerance = 1e-6)
   expect_equal(out_double$input_type, "float32")
-  expect_equal(out_double$input_layout, "float32_column_major_payload_to_row_major")
+  expect_equal(out_double$input_layout, "r_double_column_major_to_row_major_float32")
 })
 
 test_that("float32 C-callable can return float distances", {

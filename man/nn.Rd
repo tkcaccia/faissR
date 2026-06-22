@@ -121,8 +121,10 @@ ignore this argument.}
 \value{
 A list with integer matrix `indices`, `distances`, and stable
   metadata fields `index_base`, `distance_type`, `metric`, and
-  `backend_used`. Indices are 1-based. The requested backend/method,
-  tuning policy, resolved
+  `backend_used`. Float32 routes also record `input_layout` and
+  `input_owns_data` so downstream packages can distinguish direct float32
+  payload use from one-time row-major conversion. Indices are 1-based. The
+  requested backend/method, tuning policy, resolved
   backend, metric, exact/approximate flag, and self-query flag are stored in
   attributes including `attr(result, "requested_backend")`,
   `attr(result, "requested_method")`, `attr(result, "tuning")`, and
