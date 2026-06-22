@@ -554,6 +554,7 @@ test_that("NN metric benchmark defaults cover requested metrics and k grid", {
     env$default_nn_k_values(),
     c(5L, 10L, 15L, 50L, 100L)
   )
+  expect_equal(env$default_nn_cycles(), 10L)
   expect_equal(
     env$canonical_metric_values(c("unknown")),
     character()

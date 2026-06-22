@@ -84,6 +84,10 @@ default_nn_backend_values <- function() {
   c("auto", "cpu", "cuda")
 }
 
+default_nn_cycles <- function() {
+  10L
+}
+
 validate_backend_values <- function(backends, arg_name = "backends") {
   backends <- unique(trimws(as.character(backends)))
   backends <- backends[nzchar(backends)]
@@ -1224,7 +1228,7 @@ n_threads <- required_positive_int_arg(args$threads %||% 4L, "threads")
 configure_threads(n_threads)
 seed <- required_positive_int_arg(args$seed %||% 1L, "seed")
 timeout <- required_positive_int_arg(args$timeout %||% 600L, "timeout")
-cycles <- required_positive_int_arg(args$cycles %||% 1L, "cycles")
+cycles <- required_positive_int_arg(args$cycles %||% default_nn_cycles(), "cycles")
 quality_n <- required_positive_int_arg(args$quality_n %||% 512L, "quality_n")
 quality_max_ops <- required_positive_numeric_arg(args$quality_max_ops %||% "5e9", "quality_max_ops")
 recall_threshold <- required_probability_arg(args$recall_threshold %||% "0.98", "recall_threshold")
@@ -1457,7 +1461,7 @@ materials <- c(
   "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, and resolved backend fields.",
   "`nn_metric_capabilities.csv` stores the capability table used for that preflight, including `resolved_backend`, `runtime_available`, `runtime_reason`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
   "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_requested_backend`, `result_requested_method`, and `result_tuning` record the public request stored on successful `nn()` results. `auto_predicted_method` and `auto_predicted_device` record the public method/device class predicted by `attr(result, \"auto_selection\")` for auto requests, without parsing internal backend labels. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes and auto-selection metadata, including deterministic FAISS HNSW `tuning_rule`, shape flags, predicted method/device, and no-pilot auto-selection reason when present. `tuning_status` records backend tuning status, or the deterministic no-pilot tuning rule for routes such as FAISS CPU HNSW.",
-  "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k.",
+  "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k. The NN metric benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",
   "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches. Speed ratios and recall gaps are reported as `NA` when the required timing or recall values are missing or invalid.",
   "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/metric/k and reports success counts, median/min/max elapsed time, recall stability, CPU thread count, preflight route, compact route-parameter metadata, tuning status, and the dominant implementation backend.",

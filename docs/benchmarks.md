@@ -143,12 +143,15 @@ Unsupported method/backend/metric combinations are preflighted with
 skips. Runtime expected skips also record when a resolved route requires
 unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.
 
-Use `--cycles=10` to repeat speed and recall measurements. The raw result table
-contains one row per dataset/backend/method/metric/k/cycle combination.
+The NN metric benchmark defaults to 10 repeated cycles for speed/recall
+stability; `--cycles` can override this for smoke tests or longer stability
+runs. The raw result table contains one row per
+dataset/backend/method/metric/k/cycle combination.
 `--recall_threshold` must be a numeric value between 0 and 1; invalid values
 stop before the benchmark starts instead of silently changing recommendation
-rules. `--threads`, `--timeout`, `--cycles`, `--quality_n`, and
-`--quality_max_ops` are also validated before datasets are loaded.
+rules. `--threads`, `--timeout`, `--quality_n`, and `--quality_max_ops` are
+also validated before datasets are loaded. `--cycles` must be positive when
+supplied and otherwise defaults to 10.
 `nn_metric_cycle_summary.csv` aggregates successful rows across cycles by
 dataset/backend/method/metric/k and reports success counts, median/min/max
 elapsed time, recall stability, CPU thread count, preflight route, and the
