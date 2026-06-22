@@ -86,14 +86,9 @@ fast_kmeans <- function(data,
   max_iter <- normalize_kmeans_positive_int(max_iter, auto_params$max_iter)
   n_init <- normalize_kmeans_positive_int(n_init, auto_params$n_init)
   n_threads <- normalize_nn_threads(n_threads)
-  seed <- suppressWarnings(as.integer(seed))
-  if (length(seed) != 1L || is.na(seed) || !is.finite(seed)) seed <- 1L
+  seed <- normalize_kmeans_seed(seed)
   tol <- normalize_kmeans_tol(tol, auto_params$tol)
-  streaming_batch_size <- suppressWarnings(as.integer(streaming_batch_size))
-  if (length(streaming_batch_size) != 1L || is.na(streaming_batch_size) ||
-      !is.finite(streaming_batch_size) || streaming_batch_size < 0L) {
-    streaming_batch_size <- 0L
-  }
+  streaming_batch_size <- normalize_kmeans_streaming_batch_size(streaming_batch_size)
 
   backend <- resolve_fast_kmeans_backend(backend)
 
@@ -418,6 +413,23 @@ normalize_kmeans_positive_int <- function(x, fallback) {
     return(as.integer(fallback))
   }
   normalize_positive_int(x, fallback)
+}
+
+normalize_kmeans_seed <- function(seed) {
+  seed <- suppressWarnings(as.integer(seed))
+  if (length(seed) != 1L || is.na(seed) || !is.finite(seed)) {
+    stop("`seed` must be a single finite integer.", call. = FALSE)
+  }
+  seed
+}
+
+normalize_kmeans_streaming_batch_size <- function(streaming_batch_size) {
+  streaming_batch_size <- suppressWarnings(as.integer(streaming_batch_size))
+  if (length(streaming_batch_size) != 1L || is.na(streaming_batch_size) ||
+      !is.finite(streaming_batch_size) || streaming_batch_size < 0L) {
+    stop("`streaming_batch_size` must be a single non-negative integer.", call. = FALSE)
+  }
+  streaming_batch_size
 }
 
 normalize_kmeans_tol <- function(x, fallback) {

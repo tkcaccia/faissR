@@ -239,6 +239,32 @@ test_that("fast_kmeans requires canonical initialization labels", {
   )
 })
 
+test_that("fast_kmeans validates scalar seed and streaming batch size", {
+  x <- matrix(rnorm(40), ncol = 4)
+
+  expect_equal(faissR:::normalize_kmeans_seed(12L), 12L)
+  expect_equal(faissR:::normalize_kmeans_streaming_batch_size(0L), 0L)
+  expect_equal(faissR:::normalize_kmeans_streaming_batch_size(128L), 128L)
+  expect_error(faissR:::normalize_kmeans_seed(c(1L, 2L)), "single finite integer")
+  expect_error(faissR:::normalize_kmeans_seed(NA_integer_), "single finite integer")
+  expect_error(
+    faissR:::normalize_kmeans_streaming_batch_size(c(0L, 128L)),
+    "single non-negative integer"
+  )
+  expect_error(
+    faissR:::normalize_kmeans_streaming_batch_size(-1L),
+    "single non-negative integer"
+  )
+  expect_error(
+    fast_kmeans(x, centers = 2, backend = "cpu", seed = c(1L, 2L), n_threads = 2),
+    "seed"
+  )
+  expect_error(
+    fast_kmeans(x, centers = 2, backend = "cpu", streaming_batch_size = c(0L, 128L), n_threads = 2),
+    "streaming_batch_size"
+  )
+})
+
 test_that("fast_kmeans CUDA requests never silently use CPU", {
   x <- matrix(rnorm(80), ncol = 4)
   out <- tryCatch(
