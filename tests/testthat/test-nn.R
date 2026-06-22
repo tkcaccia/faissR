@@ -1005,6 +1005,26 @@ test_that("backend auto explicit methods require metric-capable CUDA routes befo
   expect_equal(
     faissR:::resolve_auto_public_nn_device(
       "hnsw",
+      "cosine",
+      cuda_available_value = FALSE,
+      cuvs_available_value = TRUE,
+      faiss_gpu_available_value = FALSE
+    ),
+    "cuda"
+  )
+  expect_equal(
+    faissR:::resolve_auto_public_nn_device(
+      "hnsw",
+      "correlation",
+      cuda_available_value = FALSE,
+      cuvs_available_value = TRUE,
+      faiss_gpu_available_value = FALSE
+    ),
+    "cuda"
+  )
+  expect_equal(
+    faissR:::resolve_auto_public_nn_device(
+      "hnsw",
       "inner_product",
       cuda_available_value = TRUE,
       cuvs_available_value = TRUE,
@@ -1819,6 +1839,24 @@ test_that("CUDA CAGRA implementation can be selected by option", {
   expect_false(faissR:::public_nn_cuda_route_available(
     "cagra",
     "euclidean",
+    faiss_gpu_available_value = TRUE,
+    cuvs_available_value = FALSE
+  ))
+  expect_true(faissR:::public_nn_cuda_route_available(
+    "hnsw",
+    "cosine",
+    faiss_gpu_available_value = FALSE,
+    cuvs_available_value = TRUE
+  ))
+  expect_true(faissR:::public_nn_cuda_route_available(
+    "hnsw",
+    "correlation",
+    faiss_gpu_available_value = FALSE,
+    cuvs_available_value = TRUE
+  ))
+  expect_false(faissR:::public_nn_cuda_route_available(
+    "hnsw",
+    "cosine",
     faiss_gpu_available_value = TRUE,
     cuvs_available_value = FALSE
   ))

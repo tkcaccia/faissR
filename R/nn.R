@@ -2979,6 +2979,7 @@ public_nn_cuda_route_available <- function(method,
       return(isTRUE(faiss_gpu_available_value))
     }
     if (identical(method, "grid")) return(isTRUE(cuda_available_value))
+    if (identical(method, "hnsw")) return(isTRUE(cuvs_available_value))
     if (identical(method, "nndescent")) return(isTRUE(cuvs_available_value))
     if (identical(method, "cagra")) {
       return(cuda_cagra_route_available(
@@ -2994,6 +2995,7 @@ public_nn_cuda_route_available <- function(method,
     bruteforce = isTRUE(faiss_gpu_available_value) || isTRUE(cuvs_available_value) || isTRUE(cuda_available_value),
     flat = isTRUE(faiss_gpu_available_value),
     grid = isTRUE(cuda_available_value),
+    hnsw = isTRUE(cuvs_available_value),
     ivf = isTRUE(faiss_gpu_available_value),
     ivfpq = isTRUE(faiss_gpu_available_value),
     nndescent = isTRUE(cuvs_available_value),

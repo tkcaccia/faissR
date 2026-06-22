@@ -35,6 +35,12 @@ explicit CUDA request with CPU work.
 | `"cpu"` | Use CPU/native/FAISS CPU routes. | Errors for CUDA-only methods such as `method = "cagra"`. |
 | `"cuda"` | Use CUDA/FAISS GPU/cuVS routes. | Errors if CUDA/cuVS support is unavailable or if the selected method is CPU-only. |
 
+For explicit public methods under `backend = "auto"`, the selector checks the
+method/metric CUDA route before choosing a device. For example,
+`method = "hnsw"` selects the cuVS HNSW route when RAPIDS cuVS HNSW is
+available for Euclidean, normalized cosine/correlation, or transformed raw
+inner-product search; otherwise it uses the CPU HNSW route.
+
 The public request is stored in `attr(result, "requested_backend")` and
 `attr(result, "requested_method")`; the normalized tuning policy is stored in
 `attr(result, "tuning")`. The backend that ran is stored in

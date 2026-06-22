@@ -878,6 +878,18 @@ test_that("backend auto documentation states the CUDA runtime requirement", {
   }
 })
 
+test_that("backend docs describe explicit HNSW auto CUDA routing", {
+  docs_file <- test_path("../../docs/backend-capabilities.md")
+  if (!file.exists(docs_file)) {
+    skip("Backend documentation is not available in this installed-package test context.")
+  }
+  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  expect_true(grepl('method = "hnsw"', prose, fixed = TRUE))
+  expect_true(grepl("selects the cuVS HNSW route", prose, fixed = TRUE))
+  expect_true(grepl("normalized cosine/correlation", prose, fixed = TRUE))
+  expect_true(grepl("transformed raw inner-product", prose, fixed = TRUE))
+})
+
 test_that("benchmark documentation describes canonical metric aliases once", {
   docs_file <- test_path("../../docs/benchmarks.md")
   if (!file.exists(docs_file)) {
