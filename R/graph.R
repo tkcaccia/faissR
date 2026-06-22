@@ -81,10 +81,7 @@ knn_graph <- function(data,
   metric <- normalize_nn_metric(metric)
   tuning <- normalize_nn_tuning(tuning)
   weight <- normalize_graph_weight(weight)
-  k <- as.integer(k)
-  if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L) {
-    stop("`k` must be a positive integer.", call. = FALSE)
-  }
+  k <- normalize_graph_positive_int(k, "k")
   mutual <- normalize_scalar_logical_arg(mutual, "mutual", default = FALSE)
   prune <- suppressWarnings(as.numeric(prune))
   if (length(prune) != 1L || is.na(prune) || !is.finite(prune) || prune < 0) {

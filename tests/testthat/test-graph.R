@@ -101,7 +101,11 @@ test_that("graph builders require canonical weight labels", {
   )
   expect_error(
     knn_graph(x, k = c(5L, 6L), backend = "cpu"),
-    "`k` must be a positive integer"
+    "`k` must be a single positive integer"
+  )
+  expect_error(
+    knn_graph(x, k = 5.5, backend = "cpu"),
+    "`k` must be a single positive integer"
   )
   expect_error(
     knn_graph(x, k = 5L, backend = "cpu", prune = c(0, 0.1)),
