@@ -272,10 +272,12 @@ same `faissR_nn` result shape as `nn()`.
 full all-pairs search when another algorithm has already proposed likely
 neighbours. CPU candidate ranking is exact for all public metrics. CUDA
 candidate ranking is used only when compiled and explicitly requested; it scores
-Euclidean candidates directly and cosine/correlation candidates after the same
-row-normalized Euclidean transform used by graph-search methods. Raw
-inner-product CUDA candidate scoring is not exposed. The output can feed graph
-construction, prediction, or diagnostic code.
+Euclidean candidates directly, cosine/correlation candidates after the same
+row-normalized Euclidean transform used by graph-search methods, and raw
+inner-product candidates through a dedicated CUDA kernel mode. CUDA and CPU
+inner-product candidate scoring both return shifted smaller-is-better
+distances where the best dot product in each query row has distance `0`. The
+output can feed graph construction, prediction, or diagnostic code.
 
 ## `knn_graph()`
 

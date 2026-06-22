@@ -836,6 +836,22 @@ test_that("NN capability docs describe runtime reason codes", {
   expect_true(grepl("unsupported_combination", prose, fixed = TRUE))
 })
 
+test_that("candidate KNN docs describe CUDA inner-product support", {
+  docs_files <- c(
+    test_path("../../docs", c("usage-api.md", "implementation.md", "backend-capabilities.md")),
+    test_path("../../man/candidate_knn.Rd")
+  )
+  docs_files <- docs_files[file.exists(docs_files)]
+  if (!length(docs_files)) {
+    skip("GitHub or reference documentation files are not available in this installed-package test context.")
+  }
+
+  prose <- paste(unlist(lapply(docs_files, readLines, warn = FALSE)), collapse = " ")
+  expect_true(grepl("CUDA candidate", prose, fixed = TRUE))
+  expect_true(grepl("inner-product", prose, fixed = TRUE))
+  expect_false(grepl("raw inner-product CUDA candidate scoring is not exposed", prose, fixed = TRUE))
+})
+
 test_that("benchmark documentation distinguishes requested and actual graph cluster counts", {
   docs_file <- test_path("../../docs/benchmarks.md")
   if (!file.exists(docs_file)) {

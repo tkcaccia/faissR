@@ -117,7 +117,7 @@ candidate_knn(data, candidates, points = data, k,
 | `points` | Optional query matrix. Defaults to `data` for self-query candidate scoring. |
 | `k` | Number of best neighbours to keep from each candidate row. Must be no larger than `ncol(candidates)`. |
 | `backend` | `"auto"`/`"cpu"` for exact CPU scoring inside candidates, or `"cuda"` for the native CUDA row-candidate kernel. |
-| `metric` | `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"` for CPU. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. Correlation is centered cosine similarity, not raw inner product. CPU inner-product candidate scoring ranks by larger raw dot product, while returned `distances` are shifted within each query so the best returned dot product has distance `0`. CUDA candidate scoring supports Euclidean directly and cosine/correlation through normalized Euclidean scoring; raw inner-product CUDA candidate scoring is not exposed. |
+| `metric` | `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. Correlation is centered cosine similarity, not raw inner product. Inner-product candidate scoring ranks by larger raw dot product, while returned `distances` are shifted within each query so the best returned dot product has distance `0`. CUDA candidate scoring supports Euclidean directly, cosine/correlation through normalized Euclidean scoring, and raw inner-product scoring through a dedicated CUDA kernel mode with the same shifted-distance convention. |
 | `n_threads` | CPU worker threads. |
 | `exclude_self` | If `TRUE`, remove each row from its own candidate list. This requires `points = data`. |
 
