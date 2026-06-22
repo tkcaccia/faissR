@@ -123,6 +123,30 @@ test_that("public NN method and metric labels are unique canonical labels", {
   expect_false("manhattan" %in% metrics)
 })
 
+test_that("NN capability table agrees with public backend resolver", {
+  caps <- nn_capabilities()
+  explicit <- caps[caps$backend %in% c("cpu", "cuda") & caps$method != "auto", , drop = FALSE]
+
+  for (i in seq_len(nrow(explicit))) {
+    row <- explicit[i, , drop = FALSE]
+    label <- paste(row$backend, row$method, row$metric, sep = "/")
+    if (isTRUE(row$supported)) {
+      resolved <- tryCatch(
+        faissR:::resolve_public_nn_backend(row$backend, row$method, row$metric),
+        error = identity
+      )
+      expect_false(inherits(resolved, "error"), info = label)
+      if (inherits(resolved, "error")) next
+      expect_true(is.character(resolved) && length(resolved) == 1L && nzchar(resolved), info = label)
+    } else {
+      expect_error(
+        faissR:::resolve_public_nn_backend(row$backend, row$method, row$metric),
+        info = label
+      )
+    }
+  }
+})
+
 test_that("public API excludes retired wrapper and platform-specific helper names", {
   namespace_exports <- getNamespaceExports("faissR")
   expected_exports <- c(
