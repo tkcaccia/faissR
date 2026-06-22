@@ -1029,6 +1029,18 @@ test_that("k-means benchmark centers argument is explicit", {
   expect_error(env$resolve_kmeans_tol("-0.1", 1e-4), "non-negative numeric")
 })
 
+test_that("k-means benchmark mirrors fast_kmeans auto CUDA shape gate", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+
+  expect_false(env$kmeans_auto_prefers_cuda(n = 120L, p = 4L, centers = 3L))
+  expect_true(env$kmeans_auto_prefers_cuda(n = 70000L, p = 784L, centers = 10L))
+  expect_true(env$kmeans_auto_prefers_cuda(n = 500000L, p = 32L, centers = 10L))
+  expect_true(env$kmeans_auto_prefers_cuda(n = NULL, p = NULL, centers = NULL))
+})
+
 test_that("k-means benchmark recommendations are grouped by dataset and centers", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_kmeans.R"),

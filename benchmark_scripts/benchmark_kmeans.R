@@ -229,6 +229,30 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
   list(max_iter = as.integer(max_iter), n_init = as.integer(n_init), tol = as.numeric(tol), policy = "auto")
 }
 
+kmeans_auto_prefers_cuda <- function(n, p, centers) {
+  helper <- tryCatch(
+    getFromNamespace("kmeans_auto_prefers_cuda", "faissR"),
+    error = function(e) NULL
+  )
+  if (is.function(helper)) {
+    return(isTRUE(helper(n = n, p = p, centers = centers)))
+  }
+  if (is.null(n) || is.null(p) || is.null(centers)) {
+    return(TRUE)
+  }
+  n <- suppressWarnings(as.double(n))
+  p <- suppressWarnings(as.double(p))
+  centers <- suppressWarnings(as.double(centers))
+  if (length(n) != 1L || length(p) != 1L || length(centers) != 1L ||
+      !is.finite(n) || !is.finite(p) || !is.finite(centers) ||
+      n <= 0 || p <= 0 || centers <= 0) {
+    return(TRUE)
+  }
+  work <- n * p * centers
+  nbytes <- n * p * 8
+  work >= 1e8 || nbytes >= 256 * 1024^2 || (n >= 50000 && p >= 128)
+}
+
 resolve_kmeans_int <- function(x, fallback) {
   if (is.character(x) && length(x) == 1L && identical(tolower(x), "auto")) return(as.integer(fallback))
   out <- suppressWarnings(as.numeric(x))
@@ -813,7 +837,7 @@ materials <- c(
   "`kmeans_cycle_summary.csv` aggregates successful rows across cycles by dataset/method/backend/centers and reports success counts, median/min/max elapsed time, ARI stability, withinss stability, iteration counts, and resolved backend metadata.",
   "`kmeans_recommendations_from_cycles.csv` selects the fastest row within `ari_tolerance` of the best median ARI for each dataset/centers combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median times are broken by higher median ARI and then lower median total within-cluster sum of squares. When ARI is unavailable it selects the fastest median-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
   "`kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median ARI gap, withinss ratio, and backend/implementation agreement. Speed ratios, ARI gaps, and withinss ratios are `NA` when the required timing or quality values are missing or invalid.",
-  "Explicit CUDA requests whose required CUDA, FAISS GPU, or cuVS k-means runtime is unavailable are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`; `resolved_backend` remains `cuda` so the skipped public device request is auditable. `backend = \"auto\"` resolves to CPU instead of becoming an expected skip when no k-means-capable CUDA route is available. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
+  "Explicit CUDA requests whose required CUDA, FAISS GPU, or cuVS k-means runtime is unavailable are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`; `resolved_backend` remains `cuda` so the skipped public device request is auditable. `backend = \"auto\"` resolves to CPU instead of becoming an expected skip when no k-means-capable CUDA route is available, and also resolves to CPU for small k-means shapes where the deterministic shape gate estimates that GPU launch/copy overhead would dominate. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_kmeans.md"))
 
