@@ -2186,10 +2186,15 @@ select_self_approx_backend <- function(prefer_cuda = FALSE) {
 normalize_nn_threads <- function(n_threads) {
   if (is.null(n_threads)) {
     n_threads <- suppressWarnings(parallel::detectCores(logical = FALSE))
+    n_threads <- suppressWarnings(as.integer(n_threads))
+    if (length(n_threads) != 1L || is.na(n_threads) || !is.finite(n_threads) || n_threads < 1L) {
+      n_threads <- 1L
+    }
+    return(as.integer(max(1L, min(64L, n_threads))))
   }
   n_threads <- suppressWarnings(as.integer(n_threads))
   if (length(n_threads) != 1L || is.na(n_threads) || !is.finite(n_threads) || n_threads < 1L) {
-    n_threads <- 1L
+    stop("`n_threads` must be NULL or a single positive integer.", call. = FALSE)
   }
   as.integer(max(1L, min(64L, n_threads)))
 }

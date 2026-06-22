@@ -104,6 +104,10 @@ test_that("public NN APIs require scalar backend method metric and tuning choice
 
   expect_no_error(nn(x, k = 2L))
   expect_no_error(nn_without_self(x, k = 2L))
+  expect_error(nn(x, k = c(2L, 3L), backend = "cpu"), "`k` must be NULL or a positive integer")
+  expect_error(nn(x, k = 2L, backend = "cpu", n_threads = c(1L, 2L)), "`n_threads` must be NULL or a single positive integer")
+  expect_error(nn_without_self(x, k = 2L, backend = "cpu", n_threads = 0L), "`n_threads` must be NULL or a single positive integer")
+  expect_equal(faissR:::normalize_nn_threads(128L), 64L)
   expect_error(nn(x, k = 2L, backend = c("cpu", "cuda")), "`backend` must be a single value")
   expect_error(nn(x, k = 2L, method = c("exact", "hnsw")), "`method` must be a single value")
   expect_error(nn(x, k = 2L, metric = c("cosine", "correlation")), "`metric` must be a single value")
