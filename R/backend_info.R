@@ -5,8 +5,10 @@
 #' CPU; this table is informational only.
 #'
 #' @return A data frame with one row per compiled/runtime backend family and
-#'   columns describing availability, public call hints, non-public
-#'   implementation route labels, device/runtime hints, and a short note.
+#'   columns describing availability, public call hints, public backend names,
+#'   supported public method/metric summaries, non-public implementation route
+#'   labels, device/runtime hints, and a short note. Use
+#'   \code{\link{nn_capabilities}()} for the full method/backend/metric matrix.
 #' @export
 backend_info <- function() {
   cuda_knn <- backend_flag(cuda_available)
@@ -28,6 +30,30 @@ backend_info <- function() {
       "backend = \"cuda\", method = \"bruteforce\"/\"nndescent\"/\"cagra\"",
       "backend = \"cuda\"",
       "graph_cluster(..., backend = \"cuda\")"
+    ),
+    public_backends = c(
+      "cpu",
+      "cpu, cuda",
+      "cuda",
+      "cuda",
+      "cuda",
+      "cuda"
+    ),
+    supported_methods = c(
+      "auto, exact, flat, bruteforce, grid, vptree, sparse, hnsw, ivf, ivfpq, nsg, nndescent",
+      "flat, ivf, ivfpq, hnsw, nsg; GPU flat/ivf/ivfpq/cagra when FAISS GPU is available",
+      "ivf, ivfpq, cagra",
+      "bruteforce, nndescent, cagra",
+      "grid plus CUDA-capable FAISS/cuVS methods",
+      "graph_cluster louvain, leiden"
+    ),
+    supported_metrics = c(
+      "euclidean, cosine, correlation, inner_product; method-specific exclusions in nn_capabilities()",
+      "euclidean, cosine, correlation, inner_product for Flat/IVF/IVFPQ/HNSW; NSG is Euclidean-only",
+      "euclidean, cosine, correlation, inner_product for IVF/IVFPQ; CAGRA excludes inner_product",
+      "euclidean for direct brute-force IVF/PQ; cosine/correlation for CAGRA/NN-descent via normalized Euclidean; inner_product excluded",
+      "euclidean, cosine, correlation, inner_product where the selected CUDA method supports the metric",
+      "not metric-based; uses graph edge weights"
     ),
     resolved_route = c(
       "implementation label: cpu",
