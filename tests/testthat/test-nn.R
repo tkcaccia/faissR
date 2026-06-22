@@ -144,6 +144,9 @@ test_that("nn output distance storage can be requested explicitly", {
       distances = "float"
     )
     expect_true(inherits(dout$distances, "float32"))
+    expect_equal(dout$input_type, "float32")
+    expect_equal(dout$input_layout, "float32_column_major_payload_to_row_major")
+    expect_equal(dout$backend_used, "faiss_flat_l2")
     expect_equal(dout$distance_type, "float32")
     expect_equal(attr(dout, "distance_type"), "float32")
   } else {

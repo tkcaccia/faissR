@@ -516,7 +516,10 @@ correlation are normalized in the float32 row-major buffer before FAISS
 routes. Float objects are read from their float32 payload and copied only once
 into FAISS's row-major `float*` layout, avoiding the previous
 float32-to-R-double-to-float32 path. Ordinary R double matrices still work and
-are converted once to float32 internally.
+are converted once to float32 internally. When an ordinary R double input uses
+a CPU FAISS Flat-style request with `output = "float"`, it also enters this
+float-pointer route so FAISS does not produce an intermediate R double distance
+matrix.
 
 Distance output remains an ordinary R numeric matrix by default. Calling
 `nn(..., output = "float")` or `nn_without_self(..., output = "float")` stores

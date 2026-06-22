@@ -369,6 +369,51 @@ nn_compute <- function(data,
     ))
   }
 
+  if (identical(output, "float") &&
+      backend %in% c("faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat",
+                     "faiss_flat_l2", "faiss_flat_ip",
+                     "faiss_flat_cosine", "faiss_flat_correlation")) {
+    if (!isTRUE(faiss_available())) {
+      stop(
+        "The real FAISS C++ backend is not available in this build. ",
+        "Reinstall faissR with `FAISS_HOME` pointing ",
+        "to a FAISS installation.",
+        call. = FALSE
+      )
+    }
+    backend_label <- switch(metric,
+      inner_product = "faiss_flat_ip",
+      cosine = "faiss_flat_cosine",
+      correlation = "faiss_flat_correlation",
+      "faiss_flat_l2"
+    )
+    out <- nn_faiss_flat_float32_cpp(
+      data,
+      points,
+      as.integer(k),
+      isTRUE(exclude_self),
+      as.integer(n_threads),
+      metric,
+      output
+    )
+    result <- finish_nn_result(
+      out,
+      backend_label,
+      k,
+      self_query,
+      exact = TRUE,
+      metric = metric
+    )
+    attr(result, "faiss") <- list(
+      index_type = as.character(out$index_type),
+      library = "faiss",
+      backend = "cpu",
+      metric = metric,
+      input_type = "float32"
+    )
+    return(result)
+  }
+
   if (backend %in% c("faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat", "faiss_flat_l2")) {
     if (!isTRUE(faiss_available())) {
       stop(
@@ -6039,10 +6084,12 @@ grid_self_knn <- function(data,
 #'   `float` package. When either `data` or `points` is a `float::fl()` matrix,
 #'   the current float32 input route uses CPU FAISS Flat for public
 #'   `method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests, with
-#'   ordinary R double inputs converted once to float32 internally. On that
-#'   route, float distance output is constructed directly from FAISS float
-#'   results instead of first materializing an R double distance matrix, except
-#'   for zero-row cosine/correlation correction.
+#'   ordinary R double inputs converted once to float32 internally. Ordinary R
+#'   double inputs with a CPU FAISS Flat-style request and `output = "float"`
+#'   also use this float-pointer FAISS route. On that route, float distance
+#'   output is constructed directly from FAISS float results instead of first
+#'   materializing an R double distance matrix, except for zero-row
+#'   cosine/correlation correction.
 #' @param distances Optional alias for `output`, kept for callers that prefer
 #'   `distances = "double"` or `distances = "float"` to describe the returned
 #'   distance storage type.

@@ -103,10 +103,12 @@ returns the default R numeric distance matrix. `"float"` returns
 `float` package. When either `data` or `points` is a `float::fl()` matrix,
 the current float32 input route uses CPU FAISS Flat for public
 `method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests, with
-ordinary R double inputs converted once to float32 internally. On that
-route, float distance output is constructed directly from FAISS float
-results instead of first materializing an R double distance matrix, except
-for zero-row cosine/correlation correction.}
+ordinary R double inputs converted once to float32 internally. Ordinary R
+double inputs with a CPU FAISS Flat-style request and `output = "float"`
+also use this float-pointer FAISS route. On that route, float distance
+output is constructed directly from FAISS float results instead of first
+materializing an R double distance matrix, except for zero-row
+cosine/correlation correction.}
 
 \item{distances}{Optional alias for `output`, kept for callers that prefer
 `distances = "double"` or `distances = "float"` to describe the returned
