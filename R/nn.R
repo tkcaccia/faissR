@@ -2001,11 +2001,7 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
   device <- normalize_public_compute_backend(backend)
   method <- method_label
   if (identical(requested_device, "auto") && !identical(method, "auto")) {
-    if (method %in% c("vptree", "sparse", "hnsw", "nsg")) {
-      device <- "cpu"
-    } else if (identical(method, "cagra")) {
-      device <- "cuda"
-    }
+    device <- resolve_auto_public_nn_device(method, metric)
   }
   if (identical(method, "auto")) {
     if (identical(requested_device, "auto")) {
@@ -2484,6 +2480,100 @@ cpu_auto_metric_faiss_flat_backend <- function(metric) {
     correlation = "faiss_flat_correlation",
     inner_product = "faiss_flat_ip",
     NA_character_
+  )
+}
+
+public_nn_cpu_route_supported <- function(method, metric) {
+  method <- normalize_nn_method(method)
+  metric <- normalize_nn_metric(metric)
+  all_metrics <- metric %in% nn_metric_labels()
+  non_ip_metric <- metric %in% c("euclidean", "cosine", "correlation")
+  switch(
+    method,
+    auto = TRUE,
+    exact = all_metrics,
+    bruteforce = all_metrics,
+    flat = all_metrics,
+    grid = non_ip_metric,
+    vptree = non_ip_metric,
+    sparse = all_metrics,
+    hnsw = all_metrics,
+    ivf = all_metrics,
+    ivfpq = all_metrics,
+    nsg = identical(metric, "euclidean"),
+    nndescent = all_metrics,
+    cagra = FALSE,
+    FALSE
+  )
+}
+
+public_nn_cuda_route_available <- function(method,
+                                           metric,
+                                           cuda_available_value = cuda_available(),
+                                           cuvs_available_value = cuvs_available(),
+                                           faiss_gpu_available_value = faiss_gpu_available()) {
+  method <- normalize_nn_method(method)
+  metric <- normalize_nn_metric(metric)
+  if (identical(method, "auto")) {
+    return(isTRUE(nn_cuda_auto_runtime_available(
+      metric,
+      cuda_available_value = cuda_available_value,
+      cuvs_available_value = cuvs_available_value,
+      faiss_gpu_available_value = faiss_gpu_available_value
+    )$available))
+  }
+  if (method %in% c("hnsw", "nsg", "sparse", "vptree")) return(FALSE)
+  if (identical(metric, "inner_product")) {
+    return(method %in% c("exact", "bruteforce", "flat", "ivf", "ivfpq") &&
+      isTRUE(faiss_gpu_available_value))
+  }
+  if (metric %in% c("cosine", "correlation")) {
+    if (method %in% c("exact", "bruteforce", "flat", "ivf", "ivfpq")) {
+      return(isTRUE(faiss_gpu_available_value))
+    }
+    if (identical(method, "grid")) return(isTRUE(cuda_available_value))
+    if (identical(method, "nndescent")) return(isTRUE(cuvs_available_value))
+    if (identical(method, "cagra")) {
+      return(isTRUE(faiss_gpu_available_value) || isTRUE(cuvs_available_value))
+    }
+    return(FALSE)
+  }
+  switch(
+    method,
+    exact = isTRUE(faiss_gpu_available_value) || isTRUE(cuvs_available_value) || isTRUE(cuda_available_value),
+    bruteforce = isTRUE(faiss_gpu_available_value) || isTRUE(cuvs_available_value) || isTRUE(cuda_available_value),
+    flat = isTRUE(faiss_gpu_available_value),
+    grid = isTRUE(cuda_available_value),
+    ivf = isTRUE(faiss_gpu_available_value),
+    ivfpq = isTRUE(faiss_gpu_available_value),
+    nndescent = isTRUE(cuvs_available_value),
+    cagra = isTRUE(faiss_gpu_available_value) || isTRUE(cuvs_available_value),
+    FALSE
+  )
+}
+
+resolve_auto_public_nn_device <- function(method,
+                                          metric,
+                                          cuda_available_value = cuda_available(),
+                                          cuvs_available_value = cuvs_available(),
+                                          faiss_gpu_available_value = faiss_gpu_available()) {
+  method <- normalize_nn_method(method)
+  metric <- normalize_nn_metric(metric)
+  if (identical(method, "cagra")) return("cuda")
+  if (public_nn_cuda_route_available(
+    method,
+    metric,
+    cuda_available_value = cuda_available_value,
+    cuvs_available_value = cuvs_available_value,
+    faiss_gpu_available_value = faiss_gpu_available_value
+  )) {
+    return("cuda")
+  }
+  if (public_nn_cpu_route_supported(method, metric)) return("cpu")
+  stop(
+    "`backend = \"auto\"`, method = \"", method, "\", metric = \"", metric,
+    "\" has no supported CPU route and no available CUDA route.",
+    call. = FALSE
   )
 }
 
@@ -5427,7 +5517,10 @@ grid_self_knn <- function(data,
 #'   Euclidean searches when appropriate, and FAISS GPU Flat IP routes for
 #'   cosine, correlation, and inner-product searches only when FAISS GPU Flat is
 #'   available [1-3,5,13-15]. On cuVS-only runtimes, `backend = "auto"` keeps
-#'   non-grid non-Euclidean searches on CPU.
+#'   non-grid non-Euclidean searches on CPU. When `backend = "auto"` is
+#'   combined with an explicit method, faissR first checks whether that exact
+#'   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU
+#'   route when that method/metric is supported on CPU.
 #'   \item `"exact"`: exact nearest-neighbour search. CPU uses faissR's native
 #'   exact route; CUDA uses FAISS GPU Flat when the linked FAISS build reports
 #'   GPU support. Euclidean CUDA exact search can otherwise use direct cuVS

@@ -179,7 +179,10 @@ Euclidean self-KNN when FAISS GPU/cuVS integration is available, and FAISS GPU
 Flat inner-product routes for cosine, correlation, and raw inner-product
 searches when FAISS GPU Flat is available [13-15]. If CUDA/cuVS is present but
 FAISS GPU Flat is not, `backend = "auto"` keeps non-grid non-Euclidean searches
-on CPU instead of selecting an unavailable GPU index.
+on CPU instead of selecting an unavailable GPU index. The same rule applies
+when `backend = "auto"` is combined with an explicit method such as `"flat"` or
+`"ivf"`: the selected method/metric must have a runtime-capable CUDA route, or
+auto uses the CPU route when that method/metric is supported on CPU.
 The public `tuning` argument controls method-specific pilot tuning. The default
 `tuning = "auto"` uses the recommended tuning policy for the resolved method;
 `"cache"`, `"pilot"`, and `"fixed"` can be selected explicitly, and

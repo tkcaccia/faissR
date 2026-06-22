@@ -135,7 +135,10 @@ Method descriptions:
   Euclidean searches when appropriate, and FAISS GPU Flat IP routes for
   cosine, correlation, and inner-product searches only when FAISS GPU Flat is
   available [1-3,5,13-15]. On cuVS-only runtimes, `backend = "auto"` keeps
-  non-grid non-Euclidean searches on CPU.
+  non-grid non-Euclidean searches on CPU. When `backend = "auto"` is
+  combined with an explicit method, faissR first checks whether that exact
+  method/metric has a runtime-capable CUDA route; otherwise it uses the CPU
+  route when that method/metric is supported on CPU.
   \item `"exact"`: exact nearest-neighbour search. CPU uses faissR's native
   exact route; CUDA uses FAISS GPU Flat when the linked FAISS build reports
   GPU support. Euclidean CUDA exact search can otherwise use direct cuVS

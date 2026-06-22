@@ -31,7 +31,7 @@ explicit CUDA request with CPU work.
 
 | Public backend | Meaning | Failure behavior |
 | --- | --- | --- |
-| `"auto"` | Prefer CUDA/cuVS for validated CUDA method/metric combinations when CUDA/cuVS runtime support is available; otherwise use CPU. | Falls back to CPU only because the user requested automatic device selection. |
+| `"auto"` | Prefer CUDA/cuVS for validated CUDA method/metric combinations when CUDA/cuVS runtime support is available; otherwise use CPU. With an explicit method, the chosen method/metric must have a runtime-capable CUDA route before auto selects CUDA. | Falls back to CPU only because the user requested automatic device selection. |
 | `"cpu"` | Use CPU/native/FAISS CPU routes. | Errors for CUDA-only methods such as `method = "cagra"`. |
 | `"cuda"` | Use CUDA/FAISS GPU/cuVS routes. | Errors if CUDA/cuVS support is unavailable or if the selected method is CPU-only. |
 
@@ -138,7 +138,9 @@ CPU when the public CUDA design route needs a missing optional component. For
 example, CUDA cosine and correlation auto routes can use CUDA grid for large
 2D/3D self-KNN, but non-grid CUDA cosine, correlation, and inner-product auto
 routes require FAISS GPU Flat; on a cuVS-only runtime, `backend = "auto"` keeps
-those metrics on CPU instead of selecting an unavailable FAISS GPU index.
+those metrics on CPU instead of selecting an unavailable FAISS GPU index. The
+same check is applied to explicit methods such as `"flat"`, `"ivf"`, and
+`"ivfpq"` under `backend = "auto"`.
 FAISS CPU and FAISS GPU availability are checked separately at execution time:
 explicit FAISS GPU Flat, IVF, IVFPQ, and CAGRA routes require a FAISS build
 that reports GPU support, not only a CPU FAISS installation.
