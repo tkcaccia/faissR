@@ -701,8 +701,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(caps$supported[
     caps$method == "nndescent" & caps$backend == "cuda" & caps$metric == "inner_product"
   ])
-  expect_false("sparse" %in% caps$method)
-  expect_false("vptree" %in% caps$method)
+  expect_false("removed_method" %in% caps$method)
 
   cuda_bruteforce_l2 <- caps[
     caps$backend == "cuda" & caps$method == "bruteforce" & caps$metric == "euclidean",
@@ -1889,16 +1888,16 @@ test_that("public backend and method resolver maps device plus method", {
     if (faiss_available()) "faiss_hnsw" else "hnsw"
   )
   expect_error(
-    faissR:::resolve_public_nn_backend("auto", "vptree", "cosine"),
+    faissR:::resolve_public_nn_backend("auto", "removed_method", "cosine"),
     "`method` must be one of"
   )
   expect_error(
-    faissR:::resolve_public_nn_backend("auto", "sparse", "inner_product"),
+    faissR:::resolve_public_nn_backend("auto", "removed_method", "inner_product"),
     "`method` must be one of"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("auto", "nsg", "euclidean"),
-    if (cuda_available()) "cuda_nsg" else "faiss_nsg"
+    if (cuda_available()) "cuda_nsg" else "cpu_nsg"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "grid", "euclidean"),
@@ -2055,7 +2054,7 @@ test_that("public backend and method resolver maps device plus method", {
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "nsg", "euclidean"),
-    "faiss_nsg"
+    "cpu_nsg"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "nsg", "correlation"),
@@ -2252,6 +2251,27 @@ test_that("native CPU NSG returns metric-aware self-KNN results", {
     expect_true(all(is.finite(out$distances)), info = metric)
     expect_true(all(out$indices >= 1L & out$indices <= nrow(x)), info = metric)
   }
+})
+
+test_that("public CPU NSG uses native route for euclidean instead of unsafe FAISS NSG", {
+  set.seed(240126)
+  x <- matrix(rnorm(120L * 8L), nrow = 120L)
+
+  out <- nn_without_self(
+    x,
+    k = 5L,
+    backend = "cpu",
+    method = "nsg",
+    metric = "euclidean",
+    n_threads = 2L
+  )
+
+  expect_equal(attr(out, "backend"), "cpu_nsg")
+  expect_equal(out$backend_used, "cpu_nsg")
+  expect_equal(dim(out$indices), c(nrow(x), 5L))
+  expect_equal(dim(out$distances), c(nrow(x), 5L))
+  expect_equal(attr(out, "approximation")$strategy, "native_cpu_nsg_candidate_graph")
+  expect_true(all(is.finite(out$distances)))
 })
 
 test_that("native NSG tuning is backend-specific", {

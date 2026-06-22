@@ -1178,25 +1178,6 @@ nn_data_expected_skip <- function(x, method, metric = "euclidean") {
     }
     return(NULL)
   }
-  if (identical(method, "nsg") && identical(metric, "euclidean")) {
-    n <- nrow(x)
-    if (length(n) != 1L || is.na(n) || n <= 100L) {
-      return(list(
-        skip = TRUE,
-        route = NA_character_,
-        reason = "insufficient_training_rows",
-        notes = sprintf(
-          paste(
-            "FAISS NSG requires more than 100 training rows in this FAISS build.",
-            "This dataset has %s rows, so NSG is recorded as an expected skip",
-            "instead of a method failure."
-          ),
-          if (length(n) == 1L && !is.na(n)) as.character(n) else "an unknown number of"
-        )
-      ))
-    }
-    return(NULL)
-  }
   NULL
 }
 

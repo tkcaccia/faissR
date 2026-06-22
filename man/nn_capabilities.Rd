@@ -45,8 +45,8 @@ NNDescent candidate-refinement route also support raw inner-product self-KNN
 through faissR's shifted dot-product distance convention. CUDA CAGRA/HNSW
 raw inner-product routes use a maximum-inner-product-to-L2 extra-dimension
 transform and convert returned L2 distances back to shifted inner-product
-distances. FAISS NSG remains Euclidean-only because linked FAISS graph
-builders can abort during non-Euclidean graph construction. Direct cuVS
+distances. Public CPU NSG uses faissR's native NSG-style route for all metrics
+because linked FAISS graph builders can abort during graph construction. Direct cuVS
 NNDescent does not expose raw inner-product search.
 Public CUDA \code{method = "cagra"} can resolve to FAISS GPU CAGRA or direct
 cuVS CAGRA; \code{options(faissR.cagra_implementation = "faiss_gpu")} or

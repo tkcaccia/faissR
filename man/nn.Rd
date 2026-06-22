@@ -209,12 +209,11 @@ Method descriptions:
   build/serialization, but current cuVS documentation does not expose KNN
   search for this index.
   \item `"nsg"`: Navigating Spreading-out Graph style approximate search
-  [16,21,29]. CPU uses FAISS NSG for Euclidean/L2 when exposed by the linked
-  FAISS build and faissR's native NSG-style self-KNN candidate graph for
-  cosine, correlation, and inner product. CUDA uses faissR's native NSG-style
-  self-KNN candidate graph for all public metrics; cosine/correlation use
-  normalized Euclidean search and raw inner product uses shifted dot-product
-  distances.
+  [16,21,29]. CPU uses faissR's native NSG-style self-KNN candidate graph for
+  all public metrics to avoid unsafe linked-FAISS graph construction. CUDA uses
+  faissR's native NSG-style self-KNN candidate graph for all public metrics;
+  cosine/correlation use normalized Euclidean search and raw inner product uses
+  shifted dot-product distances.
   \item `"nndescent"`: NN-descent approximate graph construction via
   faissR's native CPU route, direct cuVS on CUDA for Euclidean/L2 plus
   normalized cosine/correlation, or faissR's native CUDA candidate-refinement

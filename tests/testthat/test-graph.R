@@ -287,7 +287,7 @@ test_that("knn_graph rejects removed NN methods", {
     x,
     k = 6L,
     backend = "auto",
-    nn_method = "vptree",
+    nn_method = "removed_method",
     metric = "cosine",
     n_threads = 2L
   ), "`method` must be one of")
@@ -731,7 +731,7 @@ test_that("graph_cluster lets graph_backend auto resolve CPU-only NN methods", {
     method = "louvain",
     backend = "cpu",
     graph_backend = "auto",
-    graph_method = "vptree",
+    graph_method = "removed_method",
     metric = "cosine",
     k = 6L,
     n_threads = 2L

@@ -88,9 +88,7 @@ Supported CPU routes include:
   the linked FAISS build [1-6,16];
 - RcppHNSW as an optional CRAN-friendly fallback;
 - exact 2D/3D grid routes for low-dimensional Euclidean, cosine, and
-  correlation self-KNN;
-  VP-tree also supports cosine/correlation through normalized Euclidean search
-  when rows are nonzero/nonconstant.
+  correlation self-KNN.
 
 Supported CUDA routes include:
 
@@ -253,7 +251,7 @@ public method names map to different concrete functions depending on `backend`.
 | `ivf` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | Coarse-list approximate route [1-2,16]. |
 | `ivfpq` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | Compressed approximate route [6,16]. |
 | `vamana` | Native DiskANN/Vamana-style robust-pruned candidate graph with CPU refinement. | Native DiskANN/Vamana-style robust-pruned candidate graph with CUDA row-candidate refinement. | Distinct pruned directed graph route implemented in faissR; cuVS Vamana currently provides build/serialization rather than KNN search [3,24]. |
-| `nsg` | FAISS CPU NSG for Euclidean/L2; native CPU NSG-style self-KNN candidate graph for cosine, correlation, and inner product. | Native CUDA NSG-style self-KNN candidate graph for all public metrics. | Optional graph-search baseline; CPU non-L2 routes avoid unsafe linked-FAISS graph construction by using faissR-owned candidate pruning/refinement. Native CPU/CUDA NSG use backend-specific auto defaults and options (`faissR.cpu_nsg_*`, `faissR.cuda_nsg_*`) [16,21,29]. |
+| `nsg` | Native CPU NSG-style self-KNN candidate graph for Euclidean, cosine, correlation, and inner product. | Native CUDA NSG-style self-KNN candidate graph for all public metrics. | Optional graph-search baseline; public CPU NSG avoids unsafe linked-FAISS graph construction by using faissR-owned candidate pruning/refinement. Native CPU/CUDA NSG use backend-specific auto defaults and options (`faissR.cpu_nsg_*`, `faissR.cuda_nsg_*`) [16,21,29]. |
 | `nndescent` | Native CPU NNDescent for Euclidean/L2, cosine, correlation, and raw inner product. | Direct cuVS NN-descent for Euclidean/L2, cosine, and correlation; faissR native CUDA candidate refinement for raw inner product. | Approximate KNN graph construction; cosine/correlation use normalized Euclidean search, CPU and native CUDA raw inner product use shifted dot-product distances, and FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
 | `cagra` | Unsupported. | FAISS GPU CAGRA preferred, direct cuVS CAGRA fallback; `faissR.cagra_implementation` can force `"faiss_gpu"` or `"cuvs"`. Cosine/correlation use normalized Euclidean graph search; raw inner product uses a MIPS-to-L2 extra-dimension transform. | CUDA-only FAISS/cuVS graph-search method [3,13-16]. |
 
@@ -648,6 +646,6 @@ faissR is released under the MIT license. The implementation is inspired by and
 links against external work including FAISS, FAISS GPU/cuVS integration, RAPIDS
 cuVS, RAPIDS libcugraph, HNSW, NN-Descent, IVF, product quantization, k-means,
 Louvain, Leiden, random-walk clustering, NSG, DiskANN/Vamana, and related ANN
-designs such as VP trees, GGNN, SONG, BANG, and PilotANN [1-29]. See
+designs such as GGNN, SONG, BANG, and PilotANN [1-29]. See
 [References](references.md) for papers, software projects, and acknowledgements.
 External libraries remain separate system dependencies with their own licenses.

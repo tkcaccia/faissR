@@ -963,8 +963,7 @@ test_that("NN metric benchmark accounts for data-shaped method skips", {
   )
 
   default_methods <- env$default_nn_method_values()
-  expect_false("sparse" %in% default_methods)
-  expect_false("vptree" %in% default_methods)
+  expect_false("removed_method" %in% default_methods)
   expect_true("grid" %in% default_methods)
   expect_equal(
     env$validate_cagra_implementation_values(c("auto", "faiss", "direct-cuvs")),
@@ -998,12 +997,7 @@ test_that("NN metric benchmark accounts for data-shaped method skips", {
   expect_match(grid_skip$notes, "4 columns")
   expect_null(env$nn_data_expected_skip(matrix(rnorm(20), ncol = 2), "grid"))
   expect_null(env$nn_data_expected_skip(matrix(rnorm(30), ncol = 3), "grid"))
-  nsg_skip <- env$nn_data_expected_skip(matrix(rnorm(80 * 4), ncol = 4), "nsg")
-  expect_type(nsg_skip, "list")
-  expect_true(isTRUE(nsg_skip$skip))
-  expect_equal(nsg_skip$reason, "insufficient_training_rows")
-  expect_match(nsg_skip$notes, "more than 100 training rows")
-  expect_match(nsg_skip$notes, "80 rows")
+  expect_null(env$nn_data_expected_skip(matrix(rnorm(80 * 4), ncol = 4), "nsg"))
   expect_null(env$nn_data_expected_skip(matrix(rnorm(120 * 4), ncol = 4), "nsg"))
   expect_null(env$nn_data_expected_skip(matrix(rnorm(20), ncol = 4), "flat"))
 })
@@ -1135,6 +1129,10 @@ test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
   expect_equal(
     env$benchmark_method_aliases(c("flat")),
     "faissR_faiss_flat_l2"
+  )
+  expect_equal(
+    env$benchmark_method_aliases(c("nsg")),
+    "faissR_cpu_nsg"
   )
   expect_equal(
     env$benchmark1_method_values("flat", methods$method),
@@ -2526,10 +2524,7 @@ test_that("graph benchmark preflights graph method and metric skips", {
   expect_true(nzchar(nnd_cuda_ip$reason))
   expect_match(nnd_cuda_ip$notes, "cuda_native_nndescent|Native CUDA")
 
-  nsg_skip <- env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(80 * 4), ncol = 4))
-  expect_equal(nsg_skip$reason, "insufficient_training_rows")
-  expect_match(nsg_skip$notes, "more than 100 training rows")
-  expect_match(nsg_skip$notes, "80 rows")
+  expect_null(env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(80 * 4), ncol = 4)))
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(120 * 4), ncol = 4)))
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "cosine", x = matrix(rnorm(80 * 4), ncol = 4)))
 })

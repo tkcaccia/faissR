@@ -2192,12 +2192,12 @@ nn_capability_row <- function(method, backend, metric) {
     supported <- all_metrics
     exact <- FALSE
     implementation <- if (identical(backend, "cpu")) {
-      if (identical(metric, "euclidean")) "FAISS CPU NSG" else "native CPU NSG candidate graph"
+      "native CPU NSG candidate graph"
     } else {
       "native CUDA NSG candidate graph"
     }
     notes <- if (identical(backend, "cpu")) {
-      "CPU Euclidean/L2 uses FAISS NSG when available; CPU cosine, correlation, and raw inner product use faissR's native NSG-style candidate graph to avoid unsafe non-L2 FAISS graph construction."
+      "Public CPU NSG uses faissR's native NSG-style candidate graph for all metrics to avoid unsafe linked-FAISS graph construction."
     } else if (supported) {
       "CUDA NSG builds an NSG-style candidate graph and refines candidates with the native CUDA row-candidate kernel; cosine/correlation use normalized Euclidean search and raw inner product uses shifted dot-product distances."
     } else {
@@ -2374,7 +2374,7 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
       ivf = "faiss_ivf",
       ivfpq = "faiss_ivfpq",
       vamana = "cpu_vamana",
-      nsg = if (identical(metric, "euclidean")) "faiss_nsg" else "cpu_nsg",
+      nsg = "cpu_nsg",
       nndescent = "cpu_nndescent",
       cagra = stop("`method = \"cagra\"` is only available with `backend = \"cuda\"`.", call. = FALSE),
       stop("Unsupported CPU nearest-neighbour method.", call. = FALSE)
@@ -6653,12 +6653,11 @@ grid_self_knn <- function(data,
 #'   build/serialization, but current cuVS documentation does not expose KNN
 #'   search for this index.
 #'   \item `"nsg"`: Navigating Spreading-out Graph style approximate search
-#'   [16,21,29]. CPU uses FAISS NSG for Euclidean/L2 when exposed by the linked
-#'   FAISS build and faissR's native NSG-style self-KNN candidate graph for
-#'   cosine, correlation, and inner product. CUDA uses faissR's native NSG-style
-#'   self-KNN candidate graph for all public metrics; cosine/correlation use
-#'   normalized Euclidean search and raw inner product uses shifted dot-product
-#'   distances.
+#'   [16,21,29]. CPU uses faissR's native NSG-style self-KNN candidate graph for
+#'   all public metrics to avoid unsafe linked-FAISS graph construction. CUDA
+#'   uses faissR's native NSG-style self-KNN candidate graph for all public
+#'   metrics; cosine/correlation use normalized Euclidean search and raw inner
+#'   product uses shifted dot-product distances.
 #'   \item `"nndescent"`: NN-descent approximate graph construction via
 #'   faissR's native CPU route, direct cuVS on CUDA for Euclidean/L2 plus
 #'   normalized cosine/correlation, or faissR's native CUDA candidate-refinement

@@ -55,7 +55,7 @@ The `runtime_reason` labels are machine-readable, for example `available`,
 | `"ivf"` | approximate | FAISS IVF-Flat | FAISS GPU IVF-Flat | FAISS IVF [1-2,16] |
 | `"ivfpq"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
 | `"vamana"` | approximate | native Vamana candidate graph | native Vamana candidate graph with CUDA refinement | DiskANN/Vamana [3,24] |
-| `"nsg"` | approximate | FAISS NSG for Euclidean/L2; native CPU NSG-style candidate graph for non-L2 metrics | native CUDA NSG-style candidate graph for all public metrics | NSG/FAISS [16,21,29] |
+| `"nsg"` | approximate | native CPU NSG-style candidate graph for all public metrics | native CUDA NSG-style candidate graph for all public metrics | NSG/FAISS [16,21,29] |
 | `"nndescent"` | approximate | native CPU NNDescent | cuVS NN-descent for Euclidean/cosine/correlation; native CUDA candidate refinement for raw inner product | NN-descent/cuVS [3-4,16] |
 | `"cagra"` | approximate | unsupported | FAISS GPU CAGRA or cuVS CAGRA | FAISS/cuVS CAGRA [3,13-16] |
 
@@ -92,7 +92,7 @@ CUDA and keep CUDA backend metadata.
 | `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
 | `"ivfpq"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVFPQ supports L2/IP; cosine/correlation use normalized IVFPQ IP. |
 | `"vamana"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native robust-pruned candidate graph inspired by DiskANN/Vamana; CPU/CUDA refine exact top-k within candidate rows. Cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
-| `"nsg"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CPU Euclidean/L2 uses FAISS NSG when exposed; CPU non-L2 metrics use faissR's native NSG-style candidate graph. CUDA NSG is self-KNN only; cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
+| `"nsg"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Public CPU NSG uses faissR's native NSG-style candidate graph for all metrics. CUDA NSG is self-KNN only; cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
 | `"nndescent"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native CPU NN-descent supports raw inner-product search; CPU/CUDA cosine and correlation use normalized Euclidean graph search. CUDA raw inner product uses faissR's native CUDA candidate-refinement route because direct cuVS NN-descent does not expose raw inner product. FAISS NNDescent is experimental opt-in because linked FAISS builds can abort during graph construction. |
 | `"cagra"` | unsupported | euclidean, cosine, correlation, inner_product | CUDA-only FAISS/cuVS graph search; cosine/correlation use normalized Euclidean graph search and raw inner product uses a MIPS-to-L2 extra-dimension transform. |
 
@@ -300,10 +300,9 @@ the DiskANN/Vamana inspiration and cuVS build path in documentation.
 `method = "nsg"` requests a Navigating Spreading-out Graph style approximate
 nearest-neighbour graph [21].
 
-- CPU `method = "nsg"` uses FAISS NSG for Euclidean/L2 if the linked FAISS
-  build exposes it. For cosine, correlation, and inner product, faissR uses a
-  native NSG-style self-KNN candidate graph so non-L2 requests do not enter the
-  unsafe linked-FAISS NSG graph builder [16,21,29].
+- CPU `method = "nsg"` uses faissR's native NSG-style self-KNN candidate graph
+  for all public metrics so public calls do not enter the unsafe linked-FAISS
+  NSG graph builder [16,21,29].
 - CUDA `method = "nsg"` uses faissR's native CUDA NSG-style self-KNN route. It
   builds a sparse candidate graph, prunes candidates with an NSG/MRNG-style
   rule, and refines rows with the native CUDA row-candidate KNN kernel.

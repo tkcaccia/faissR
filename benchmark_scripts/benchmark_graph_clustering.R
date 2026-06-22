@@ -1103,15 +1103,6 @@ graph_build_expected_skip <- function(graph_backend, graph_method = "auto", metr
       ))
     }
   }
-  if (identical(graph_method, "nsg") && identical(metric, "euclidean") && !is.null(x)) {
-    n <- nrow(x)
-    if (length(n) != 1L || is.na(n) || n <= 100L) {
-      return(list(
-        reason = "insufficient_training_rows",
-        notes = sprintf("FAISS NSG requires more than 100 training rows in this FAISS build. This dataset has %s rows.", if (length(n) == 1L && !is.na(n)) as.character(n) else "an unknown number of")
-      ))
-    }
-  }
   if (identical(graph_backend, "cuda") &&
       !isTRUE(faissR::cuda_available()) &&
       !isTRUE(faissR::cuvs_available())) {

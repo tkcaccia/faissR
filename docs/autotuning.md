@@ -70,7 +70,7 @@ implementation routes recorded in benchmark output, not separate public
 | `ivfpq` | `faiss_ivfpq` speed/balanced tiers | CPU memory-pressure tier | Low recall on many datasets; use only when memory reduction is the priority [6]. |
 | `ivfpq` | `faiss_gpu_ivfpq` | CUDA memory-pressure tier | Fast but low recall in this benchmark; explicit opt-in only. |
 | `ivfpq` | `cuda_cuvs_ivfpq` | CUDA memory-pressure tier | Direct Euclidean/L2 benchmark route. Better than FAISS GPU IVFPQ on some datasets but still not an accuracy-first default. |
-| `nsg` | `faiss_nsg` speed/balanced tiers | CPU graph candidate | Can be accurate but failed on some datasets with fewer than k neighbours; use safer params or retry. |
+| `nsg` | `cpu_nsg` speed/balanced tiers | CPU graph candidate | Native faissR NSG-style route for all public metrics; avoids linked-FAISS NSG aborts in public calls. |
 | `nndescent` | `cpu_nndescent` speed/balanced tiers | CPU graph speed tier | Native faissR NN-descent route; useful as an explicit Euclidean, normalized cosine/correlation, or raw inner-product graph-search candidate, but recall was usually lower than HNSW. |
 | `nndescent` | `cuda_cuvs_nndescent` | CUDA graph speed tier | Fast and useful at around 0.99 recall on some datasets; failed on COIL20. |
 | `nndescent` | `cuda_native_nndescent` | CUDA raw inner-product tier | Native CUDA candidate-refinement route used by public `backend = "cuda", method = "nndescent", metric = "inner_product"` because direct cuVS NN-descent does not expose raw IP. |
@@ -196,9 +196,8 @@ CPU-auto default.
   Default calls now use deterministic no-pilot parameters, so benchmark reports
   must include measured recall. Explicit pilot/cache tuning stops when it cannot
   meet the target recall instead of silently returning a poor result.
-- FAISS NSG can return fewer neighbours than requested on some datasets. Keep
-  safer defaults and consider adding a retry path before using it as an auto
-  default.
+- Public CPU NSG now uses the native faissR NSG-style route for all metrics.
+  Keep reporting recall before considering it as a broad auto default.
 - cuVS NN-Descent failed on COIL20 with a CUDA invalid-argument error. It should
   remain explicit or secondary until more robust guards are added.
 - IVFPQ methods are often fast or memory-efficient, but recall was frequently
