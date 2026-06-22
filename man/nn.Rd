@@ -83,8 +83,8 @@ available and RcppHNSW/hnswlib when FAISS is unavailable.
 FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, native CPU NN-descent raw
 dot-product search, native CUDA NN-descent candidate refinement, and CUDA
 HNSW through a maximum-inner-product-to-L2 transform where available. FAISS GPU
-CAGRA can also provide transformed raw-inner-product CAGRA when available.
-Direct cuVS NN-descent and direct cuVS CAGRA do not expose safe
+CAGRA and direct cuVS CAGRA do not currently expose a safe transformed
+raw-inner-product route. Direct cuVS NN-descent also does not expose safe
 raw-inner-product search.
 Unsupported backend combinations fail clearly instead of returning neighbours
 computed under a different metric.}

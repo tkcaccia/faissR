@@ -2213,9 +2213,9 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "hnsw", "inner_product"),
     "cuda_cuvs_hnsw"
   )
-  expect_true(
-    faissR:::resolve_public_nn_backend("cuda", "cagra", "inner_product") %in%
-      c("faiss_gpu_cagra", "cuda_cuvs_cagra")
+  expect_error(
+    faissR:::resolve_public_nn_backend("cuda", "cagra", "inner_product"),
+    "does not currently support"
   )
   expect_true(
     faissR:::resolve_public_nn_backend("cuda", "cagra", "cosine") %in%
@@ -3655,7 +3655,7 @@ test_that("backend_info reports native availability without crashing", {
   expect_match(info$supported_metrics[info$backend == "cpu"], "cosine")
   expect_match(info$supported_metrics[info$backend == "cpu"], "correlation")
   expect_match(info$supported_metrics[info$backend == "cpu"], "inner_product")
-  expect_match(info$supported_metrics[info$backend == "faiss_gpu_cuvs"], "CAGRA inner_product uses a MIPS-to-L2 transform")
+  expect_match(info$supported_metrics[info$backend == "faiss_gpu_cuvs"], "CAGRA inner_product is disabled")
   expect_match(info$supported_metrics[info$backend == "cuvs"], "public CUDA NN-descent inner_product uses native CUDA")
 
   cuda_info <- faissR:::cuda_device_info_json_cpp()

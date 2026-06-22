@@ -94,7 +94,7 @@ CUDA and keep CUDA backend metadata.
 | `"vamana"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native robust-pruned candidate graph inspired by DiskANN/Vamana; CPU/CUDA refine exact top-k within candidate rows. Cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
 | `"nsg"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Public CPU NSG uses faissR's native NSG-style candidate graph for all metrics. CUDA NSG is self-KNN only; cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
 | `"nndescent"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native CPU NN-descent supports raw inner-product search; CPU/CUDA cosine and correlation use normalized Euclidean graph search. CUDA raw inner product uses faissR's native CUDA candidate-refinement route because direct cuVS NN-descent does not expose raw inner product. FAISS NNDescent is experimental opt-in because linked FAISS builds can abort during graph construction. |
-| `"cagra"` | unsupported | euclidean, cosine, correlation; inner_product only when FAISS GPU CAGRA is selected | CUDA-only FAISS/cuVS graph search; cosine/correlation use normalized Euclidean graph search. Direct cuVS CAGRA inner product is disabled until the transformed route is safe. |
+| `"cagra"` | unsupported | euclidean, cosine, correlation | CUDA-only FAISS/cuVS graph search; cosine/correlation use normalized Euclidean graph search. Raw inner-product CAGRA is disabled until a reliable transformed route is available. |
 
 Programmatic form:
 
@@ -380,8 +380,8 @@ the default FAISS-then-cuVS rule.
   cuVS CAGRA.
 - `metric = "cosine"` and `metric = "correlation"` use normalized Euclidean
   graph search and return `1 - similarity` distances.
-- Raw inner-product CAGRA is available only through FAISS GPU CAGRA. Direct
-  cuVS CAGRA inner product is disabled until the transformed route is safe.
+- Raw inner-product CAGRA is disabled for both FAISS GPU CAGRA and direct
+  cuVS CAGRA until a reliable transformed route is available.
 - Direct cuVS CAGRA uses deterministic no-pilot defaults for
   `tuning = "auto"`; explicit `tuning = "cache"` or `"pilot"` runs recall
   tuning.
