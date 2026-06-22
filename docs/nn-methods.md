@@ -51,7 +51,7 @@ The `runtime_reason` labels are machine-readable, for example `available`,
 | `"flat"` | yes | FAISS Flat | FAISS GPU Flat | FAISS [1-2,16] |
 | `"bruteforce"` | yes | native CPU exact | cuVS brute force | cuVS [3] |
 | `"grid"` | yes | native 2D/3D grid | native CUDA 2D/3D grid | native faissR implementation |
-| `"hnsw"` | approximate | FAISS HNSW for all metrics when FAISS is available; RcppHNSW/hnswlib fallback | cuVS HNSW for Euclidean plus normalized cosine/correlation | HNSW/cuVS [3,5,16,22-23] |
+| `"hnsw"` | approximate | FAISS HNSW for all metrics when FAISS is available; RcppHNSW/hnswlib fallback | cuVS HNSW for Euclidean, normalized cosine/correlation, and transformed raw inner product | HNSW/cuVS [3,5,16,22-23] |
 | `"ivf"` | approximate | FAISS IVF-Flat | FAISS GPU IVF-Flat | FAISS IVF [1-2,16] |
 | `"ivfpq"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
 | `"vamana"` | approximate | native Vamana candidate graph | native Vamana candidate graph with CUDA refinement | DiskANN/Vamana [3,24] |
@@ -167,10 +167,11 @@ RcppHNSW/hnswlib for the HNSW route.
 CUDA `method = "hnsw"` maps to `cuda_cuvs_hnsw` when RAPIDS cuVS HNSW is
 available. This route builds a CUDA CAGRA index, converts it to a cuVS HNSW
 index, and searches through the cuVS HNSW wrapper. faissR exposes it for
-Euclidean/L2 plus normalized cosine/correlation; raw inner product remains an
-expected unsupported combination. CUHNSW is acknowledged as related Apache-2.0
-CUDA HNSW prior software, but faissR does not vendor or copy CUHNSW source
-[3,22-23].
+Euclidean/L2, normalized cosine/correlation, and raw inner product through the
+same maximum-inner-product-to-L2 extra-dimension transform used by CUDA CAGRA.
+Returned raw inner-product distances follow faissR's smaller-is-better shifted
+distance convention. CUHNSW is acknowledged as related Apache-2.0 CUDA HNSW
+prior software, but faissR does not vendor or copy CUHNSW source [3,22-23].
 
 ## `"exact"`
 
@@ -227,11 +228,19 @@ benchmarks. It is not a general high-dimensional ANN algorithm.
 
 ## `"hnsw"`
 
-`method = "hnsw"` requests FAISS CPU HNSW, a graph-based approximate nearest
-neighbour index based on Hierarchical Navigable Small World graphs [5,16].
+`method = "hnsw"` requests an HNSW graph-based approximate nearest-neighbour
+route based on Hierarchical Navigable Small World graphs [5,16].
 
-- It is CPU-only in faissR.
-- It is often a strong default for large high-dimensional CPU self-KNN.
+- On CPU, faissR uses FAISS HNSW when FAISS is available, with
+  RcppHNSW/hnswlib as the fallback.
+- On CUDA, faissR uses RAPIDS cuVS HNSW when that library is available; the
+  cuVS HNSW route is built from a CUDA CAGRA index and searched through the
+  cuVS HNSW wrapper [3,22].
+- CPU and CUDA HNSW support Euclidean, cosine, correlation, and inner product
+  through the metric transforms described above.
+- HNSW is often a strong default for large high-dimensional CPU self-KNN, while
+  CUDA HNSW is useful when the runtime has cuVS HNSW but the user wants the
+  explicit HNSW graph route rather than CAGRA.
 - Tuning parameters include the graph degree `M`, construction effort, and
   search effort.
 

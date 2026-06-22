@@ -890,6 +890,20 @@ test_that("backend docs describe explicit HNSW auto CUDA routing", {
   expect_true(grepl("transformed raw inner-product", prose, fixed = TRUE))
 })
 
+test_that("NN methods page describes CUDA HNSW and raw inner-product support", {
+  docs_file <- test_path("../../docs/nn-methods.md")
+  if (!file.exists(docs_file)) {
+    skip("NN methods documentation is not available in this installed-package test context.")
+  }
+
+  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  expect_true(grepl("cuVS HNSW for Euclidean, normalized cosine/correlation, and transformed raw inner product", prose, fixed = TRUE))
+  expect_true(grepl("maximum-inner-product-to-L2 extra-dimension transform", prose, fixed = TRUE))
+  expect_true(grepl("CPU and CUDA HNSW support Euclidean, cosine, correlation, and inner product", prose, fixed = TRUE))
+  expect_false(grepl("It is CPU-only in faissR", prose, fixed = TRUE))
+  expect_false(grepl("raw inner product remains an expected unsupported combination", prose, fixed = TRUE))
+})
+
 test_that("backend docs describe shape-dependent CUDA auto non-Euclidean capability", {
   docs_file <- test_path("../../docs/backend-capabilities.md")
   if (!file.exists(docs_file)) {
