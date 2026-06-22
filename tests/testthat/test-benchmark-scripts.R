@@ -1191,7 +1191,9 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
     method = c("fast_kmeans", "fast_kmeans", "fast_kmeans", "fast_kmeans", "stats", "stats"),
     backend = c("cuda", "cpu", "cuda", "cpu", "stats", "stats"),
     backend_used = c("cuda_faiss", "faiss", "cuda_faiss", "faiss", "stats", "stats"),
+    requested_backend = c("cuda", "cpu", "cuda", "cpu", "stats", "stats"),
     resolved_backend = c("cuda", "cpu", "cuda", "cpu", "stats", "stats"),
+    n_threads = c(2L, 2L, 2L, 2L, 2L, 2L),
     centers = c(3L, 3L, 5L, 5L, 3L, 5L),
     success_cycles = c(1L, 1L, 1L, 1L, 1L, 1L),
     median_elapsed_sec = c(3, 4, 5, 6, 7, 8),
@@ -1211,6 +1213,10 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
   expect_equal(anyDuplicated(names(out)), 0L)
   expect_equal(as.integer(out$centers), c(3L, 3L, 5L, 5L))
   expect_equal(out$fast_backend, c("cpu", "cuda", "cpu", "cuda"))
+  expect_equal(out$fast_requested_backend, c("cpu", "cuda", "cpu", "cuda"))
+  expect_equal(out$recommended_requested_backend, c("stats", "stats", "stats", "stats"))
+  expect_equal(out$fast_n_threads, c(2L, 2L, 2L, 2L))
+  expect_equal(out$recommended_n_threads, c(2L, 2L, 2L, 2L))
   expect_equal(unique(out$recommended_recommendation_basis), "fastest_within_ari_tolerance")
 })
 
@@ -1224,7 +1230,9 @@ test_that("k-means fast comparison guards withinss ratios", {
     method = c("fast_kmeans", "stats", "fast_kmeans", "stats"),
     backend = c("cpu", "stats", "cpu", "stats"),
     backend_used = c("faiss", "stats", "faiss", "stats"),
+    requested_backend = c("cpu", "stats", "cpu", "stats"),
     resolved_backend = c("cpu", "stats", "cpu", "stats"),
+    n_threads = c(2L, 2L, 2L, 2L),
     centers = c(3L, 3L, 3L, 3L),
     success_cycles = c(1L, 1L, 1L, 1L),
     median_elapsed_sec = c(1, 1, 1, 1),
@@ -1255,7 +1263,9 @@ test_that("k-means fast comparison guards speed ratios and ARI gaps", {
     method = c("fast_kmeans", "stats", "fast_kmeans", "stats"),
     backend = c("cpu", "stats", "cpu", "stats"),
     backend_used = c("faiss", "stats", "faiss", "stats"),
+    requested_backend = c("cpu", "stats", "cpu", "stats"),
     resolved_backend = c("cpu", "stats", "cpu", "stats"),
+    n_threads = c(2L, 2L, 2L, 2L),
     centers = c(3L, 3L, 3L, 3L),
     success_cycles = c(1L, 1L, 1L, 1L),
     median_elapsed_sec = c(1, 0, 1, 1),
