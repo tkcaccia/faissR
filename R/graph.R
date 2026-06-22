@@ -305,7 +305,7 @@ graph_cluster <- function(graph,
                           seed = NULL,
                           ...) {
   method <- match.arg(method)
-  requested_backend <- match.arg(backend)
+  requested_backend <- normalize_public_backend_arg(backend)
   backend <- resolve_graph_cluster_backend(requested_backend)
   graph_method <- public_nn_method_label(normalize_nn_method(graph_method))
   metric <- normalize_nn_metric(metric)

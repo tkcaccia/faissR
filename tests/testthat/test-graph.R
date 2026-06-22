@@ -175,6 +175,26 @@ test_that("graph construction rejects implementation backend labels", {
     graph_cluster(
       x,
       method = "louvain",
+      backend = "cu",
+      graph_backend = "cpu",
+      k = 5L
+    ),
+    "must be one of"
+  )
+  expect_error(
+    graph_cluster(
+      x,
+      method = "louvain",
+      backend = "cugraph",
+      graph_backend = "cpu",
+      k = 5L
+    ),
+    "must be one of"
+  )
+  expect_error(
+    graph_cluster(
+      x,
+      method = "louvain",
       backend = "cpu",
       graph_backend = "faiss",
       k = 5L
