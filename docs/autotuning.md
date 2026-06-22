@@ -78,6 +78,12 @@ implementation routes recorded in benchmark output, not separate public
 | `grid` | `cpu_grid` | Exact 2D/3D spatial path | Best for simulated 2D/3D Euclidean/cosine/correlation data; unavailable by design outside 2D/3D. |
 | `grid` | `cuda_grid` | CUDA 2D/3D spatial path | Correct for 2D/3D, but benchmark speed depends strongly on GPU model and transfer overhead. |
 
+Approximate routes now attach deterministic no-pilot tuning metadata to
+`attr(result, "approximation")`. IVF, IVFPQ/PQ, NSG, NN-descent, CAGRA, and
+HNSW report `tuning_policy`, `tuning_rule`, and shape flags where relevant;
+IVFPQ/PQ compression fields use `pq_tuning_*` names. These fields let benchmark
+tables compare parameter tiers by dataset shape, `k`, and metric without
+running extra tuning inside ordinary `nn()` calls.
 
 ## ImageNet Probe
 

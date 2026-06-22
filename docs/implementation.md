@@ -144,9 +144,10 @@ All KNN routes return a `faissR_nn` object with:
 - `attr(result, "exact")`: whether the route is exact by construction;
 - `attr(result, "approximation")`: method-specific parameters for approximate
   routes, such as `nlist`, `nprobe`, HNSW `M`, CAGRA graph degree, or tuning
-  metadata. FAISS HNSW records the deterministic `tuning_rule` selected from
-  `n`, `p`, `k`, and `metric`, plus shape flags such as high-dimensional,
-  large-`n`, small-`k`, large-`k`, and non-Euclidean routing.
+  metadata. Approximate selectors record deterministic no-pilot metadata such as
+  `tuning_policy`, `tuning_rule`, and shape flags including high-dimensional,
+  large-`n`, small-`k`, large-`k`, and non-Euclidean routing. For IVFPQ/PQ
+  compression settings, PQ-specific fields are prefixed with `pq_`.
 - `attr(result, "auto_selection")`: for requests involving
   `backend = "auto"` or `method = "auto"`, the static shape/k/metric decision
   record. It stores `policy = "static_shape_k_metric_selector"`, the predicted

@@ -2329,6 +2329,66 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
   expect_equal(manual$rule, "balanced_shape_metric")
 })
 
+test_that("approximate NN parameter selectors expose deterministic tuning metadata", {
+  old_options <- options(
+    faissR.faiss_nlist = NULL,
+    faissR.ivf_nlist = NULL,
+    faissR.faiss_nprobe = NULL,
+    faissR.ivf_nprobe = NULL,
+    faissR.faiss_pq_m = NULL,
+    faissR.faiss_pq_nbits = NULL,
+    faissR.faiss_nsg_r = NULL,
+    faissR.faiss_nsg_search_l = NULL,
+    faissR.faiss_nsg_build_type = NULL,
+    faissR.faiss_nndescent_graph_k = NULL,
+    faissR.faiss_nndescent_iter = NULL,
+    faissR.faiss_nndescent_search_l = NULL,
+    faissR.cuvs_graph_degree = NULL,
+    faissR.cuvs_intermediate_graph_degree = NULL,
+    faissR.cuvs_search_width = NULL,
+    faissR.cuvs_itopk_size = NULL,
+    faissR.cuvs_nndescent_graph_degree = NULL,
+    faissR.cuvs_nndescent_intermediate_graph_degree = NULL,
+    faissR.cuvs_nndescent_max_iterations = NULL
+  )
+  on.exit(options(old_options), add = TRUE)
+
+  ivf <- faissR:::faiss_ivf_params(70000L, 50L)
+  expect_equal(ivf$tuning_policy, "auto_shape_k")
+  expect_equal(ivf$tuning_rule, "balanced_shape_k")
+  expect_false(isTRUE(ivf$tuning_small_k))
+  expect_false(isTRUE(ivf$tuning_large_k))
+  expect_equal(anyDuplicated(names(ivf)), 0L)
+
+  large_ivf <- faissR:::faiss_ivf_params(1000000L, 100L)
+  expect_equal(large_ivf$tuning_rule, "large_n_coarse_quantizer")
+  expect_true(isTRUE(large_ivf$tuning_large_n))
+  expect_true(isTRUE(large_ivf$tuning_large_k))
+
+  pq <- faissR:::faiss_pq_params(784L)
+  expect_equal(pq$tuning_policy, "auto_dimension")
+  expect_equal(pq$tuning_rule, "high_dim_largest_divisor_pq")
+  expect_true(isTRUE(pq$tuning_high_dim))
+
+  nsg <- faissR:::faiss_nsg_params(100L)
+  expect_equal(nsg$tuning_rule, "large_k_search_l")
+  expect_true(isTRUE(nsg$tuning_large_k))
+
+  nnd <- faissR:::faiss_nndescent_params(5L)
+  expect_equal(nnd$tuning_rule, "small_k_speed")
+  expect_true(isTRUE(nnd$tuning_small_k))
+
+  cagra <- faissR:::cuvs_cagra_params(1000000L, 100L)
+  expect_equal(cagra$tuning_policy, "auto_shape_k")
+  expect_equal(cagra$tuning_rule, "large_n_large_k_graph_recall")
+  expect_true(isTRUE(cagra$tuning_large_n))
+  expect_true(isTRUE(cagra$tuning_large_k))
+
+  cuvs_nnd <- faissR:::cuvs_nndescent_params(1000000L, 50L)
+  expect_equal(cuvs_nnd$tuning_rule, "large_graph_search")
+  expect_true(isTRUE(cuvs_nnd$tuning_large_n))
+})
+
 test_that("CPU auto selector can fall back to native NNDescent for large self-KNN", {
   expect_true(faissR:::should_use_native_nndescent_auto_fallback(
     self_query = TRUE,
@@ -2621,6 +2681,8 @@ test_that("real FAISS IVF backend records approximate index metadata", {
     expect_equal(attr(out, "approximation")$requested_nlist, 16L)
     expect_equal(attr(out, "approximation")$requested_nprobe, 4L)
     expect_false(attr(out, "approximation")$ivf_parameters_adjusted)
+    expect_equal(attr(out, "approximation")$tuning_policy, "manual_options")
+    expect_equal(attr(out, "approximation")$tuning_rule, "small_k_speed")
 
     options(
       faissR.faiss_nlist = 16L,
@@ -2639,6 +2701,8 @@ test_that("real FAISS IVF backend records approximate index metadata", {
       expect_equal(attr(metric_out, "metric"), metric)
       expect_false(isTRUE(attr(metric_out, "exact")))
       expect_equal(attr(metric_out, "approximation")$metric, metric)
+      expect_equal(attr(metric_out, "approximation")$tuning_policy, "manual_options")
+      expect_equal(attr(metric_out, "approximation")$tuning_rule, "small_k_speed")
       expect_true(all(is.finite(metric_out$distances)))
     }
 
@@ -2655,6 +2719,9 @@ test_that("real FAISS IVF backend records approximate index metadata", {
       expect_equal(attr(metric_out, "metric"), metric)
       expect_false(isTRUE(attr(metric_out, "exact")))
       expect_equal(attr(metric_out, "approximation")$metric, metric)
+      expect_equal(attr(metric_out, "approximation")$tuning_policy, "manual_options")
+      expect_equal(attr(metric_out, "approximation")$tuning_rule, "small_k_speed")
+      expect_equal(attr(metric_out, "approximation")$pq_tuning_policy, "auto_dimension")
       expect_true(all(is.finite(metric_out$distances)))
     }
 

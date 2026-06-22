@@ -184,10 +184,14 @@ Method descriptions:
   small-`k`, large-`k`, and non-Euclidean shape flags used.
   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
-  cosine/correlation routes on CPU and FAISS GPU [1-2,16].
+  cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records
+  deterministic no-pilot `tuning_policy`, `tuning_rule`, and shape/k flags in
+  approximation metadata.
   \item `"ivfpq"`: FAISS inverted-file index with product quantization,
   mainly for compressed-memory approximate search. It supports L2, raw IP,
   and normalized-IP cosine/correlation routes on CPU and FAISS GPU [1-2,6,16].
+  IVF and PQ parameter selectors record deterministic tuning metadata; PQ
+  fields use `pq_tuning_*` names.
   \item `"nsg"`: FAISS CPU NSG graph-search index when exposed by the linked
   FAISS build. It is exposed for Euclidean/L2 only because linked FAISS
   graph builders can abort during normalized cosine/correlation or raw

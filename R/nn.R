@@ -585,6 +585,7 @@ nn_compute <- function(data,
       ivf_parameters_adjusted = !identical(as.integer(params$requested_nlist), as.integer(out$nlist)) ||
         !identical(as.integer(params$requested_nprobe), as.integer(out$nprobe))
     )
+    result <- append_nn_tuning_metadata(result, params)
     return(result)
   }
 
@@ -645,6 +646,7 @@ nn_compute <- function(data,
       requested_pq_nbits = as.integer(out$requested_pq_nbits),
       pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted)
     )
+    result <- append_nn_tuning_metadata(result, params, pq, .prefixes = list(NULL, "pq_"))
     return(result)
   }
 
@@ -704,6 +706,7 @@ nn_compute <- function(data,
         !identical(as.integer(params$requested_nprobe), as.integer(out$nprobe)),
       tuning = tuning_metadata
     )
+    result <- append_nn_tuning_metadata(result, params)
     return(result)
   }
 
@@ -766,6 +769,7 @@ nn_compute <- function(data,
       requested_pq_nbits = as.integer(out$requested_pq_nbits),
       pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted)
     )
+    result <- append_nn_tuning_metadata(result, params, pq, .prefixes = list(NULL, "pq_"))
     return(result)
   }
 
@@ -828,6 +832,7 @@ nn_compute <- function(data,
         !identical(as.integer(requested_search_width), as.integer(out$search_width)) ||
         !identical(as.integer(requested_itopk_size), as.integer(out$itopk_size))
     )
+    result <- append_nn_tuning_metadata(result, params)
     return(result)
   }
 
@@ -945,6 +950,7 @@ nn_compute <- function(data,
       requested_build_type = as.integer(out$requested_build_type),
       nsg_parameters_adjusted = isTRUE(out$nsg_parameters_adjusted)
     )
+    result <- append_nn_tuning_metadata(result, params)
     return(result)
   }
 
@@ -1001,6 +1007,7 @@ nn_compute <- function(data,
       requested_search_l = as.integer(out$requested_search_l),
       nndescent_parameters_adjusted = isTRUE(out$nndescent_parameters_adjusted)
     )
+    result <- append_nn_tuning_metadata(result, params)
     return(result)
   }
 
@@ -1103,6 +1110,7 @@ nn_compute <- function(data,
       search_batch_size = as.integer(out$search_batch_size),
       tuning = tuning_metadata
     )
+    result <- append_nn_tuning_metadata(result, params)
     return(result)
   }
 
@@ -1145,6 +1153,7 @@ nn_compute <- function(data,
         !identical(as.integer(params$requested_nprobe), as.integer(out$n_probes)),
       search_batch_size = as.integer(out$search_batch_size)
     )
+    result <- append_nn_tuning_metadata(result, params)
     return(result)
   }
 
@@ -1198,6 +1207,7 @@ nn_compute <- function(data,
         !identical(as.integer(pq$requested_pq_bits), as.integer(out$pq_bits)),
       search_batch_size = as.integer(out$search_batch_size)
     )
+    result <- append_nn_tuning_metadata(result, params, pq, .prefixes = list(NULL, "pq_"))
     return(result)
   }
 
@@ -1247,6 +1257,7 @@ nn_compute <- function(data,
       search_data <- metric_inputs$data
     }
     nonself_k <- if (isTRUE(exclude_self)) k else max(0L, k - 1L)
+    params <- NULL
     if (nonself_k < 1L) {
       out <- list(
         indices = matrix(seq_len(nrow(data)), nrow(data), 1L),
@@ -1280,6 +1291,7 @@ nn_compute <- function(data,
       intermediate_graph_degree = as.integer(out$intermediate_graph_degree),
       max_iterations = as.integer(out$max_iterations)
     )
+    result <- append_nn_tuning_metadata(result, params)
     return(result)
   }
 
@@ -3312,6 +3324,7 @@ faiss_ivf_normalized_metric_result <- function(data,
     tuning = tuning_metadata
   )
   if (is.null(accelerator)) attr(result, "approximation")$accelerator <- NULL
+  result <- append_nn_tuning_metadata(result, params)
   result
 }
 
@@ -3409,6 +3422,7 @@ faiss_ivfpq_normalized_metric_result <- function(data,
   if (is.null(accelerator)) attr(result, "approximation")$accelerator <- NULL
   if (is.null(attr(result, "approximation")$role)) attr(result, "approximation")$role <- NULL
   if (is.null(attr(result, "approximation")$default_candidate)) attr(result, "approximation")$default_candidate <- NULL
+  result <- append_nn_tuning_metadata(result, params, pq, .prefixes = list(NULL, "pq_"))
   result
 }
 
@@ -3531,6 +3545,32 @@ sort_knn_rows_by_distance_index <- function(result) {
     result$indices[i, ] <- result$indices[i, ord]
     result$distances[i, ] <- result$distances[i, ord]
   }
+  result
+}
+
+nn_tuning_metadata <- function(params, prefix = NULL) {
+  if (!is.list(params)) return(list())
+  fields <- c(
+    "tuning_policy", "tuning_rule", "tuning_high_dim", "tuning_large_n",
+    "tuning_small_k", "tuning_large_k", "tuning_non_euclidean"
+  )
+  fields <- fields[fields %in% names(params)]
+  out <- params[fields]
+  if (!is.null(prefix) && length(out)) {
+    names(out) <- paste0(prefix, names(out))
+  }
+  out
+}
+
+append_nn_tuning_metadata <- function(result, ..., .prefixes = NULL) {
+  params <- list(...)
+  if (!length(params)) return(result)
+  approx <- attr(result, "approximation") %||% list()
+  if (is.null(.prefixes)) .prefixes <- rep(list(NULL), length(params))
+  for (i in seq_along(params)) {
+    approx <- c(approx, nn_tuning_metadata(params[[i]], prefix = .prefixes[[i]]))
+  }
+  attr(result, "approximation") <- approx
   result
 }
 
@@ -4620,6 +4660,19 @@ ivf_probe_count <- function(nlist, k) {
 faiss_ivf_params <- function(n, k) {
   n <- as.integer(n)
   k <- as.integer(k)
+  small_k <- length(k) == 1L && !is.na(k) && k <= 10L
+  large_k <- length(k) == 1L && !is.na(k) && k >= 100L
+  large_n <- length(n) == 1L && !is.na(n) && n >= 1000000L
+  manual <- faiss_ivf_manual_params()
+  rule <- if (isTRUE(large_n)) {
+    "large_n_coarse_quantizer"
+  } else if (isTRUE(large_k)) {
+    "large_k_more_probe"
+  } else if (isTRUE(small_k)) {
+    "small_k_speed"
+  } else {
+    "balanced_shape_k"
+  }
   nlist <- faissr_option(c("faiss_nlist", "ivf_nlist"), NULL)
   nprobe <- faissr_option(c("faiss_nprobe", "ivf_nprobe"), NULL)
 
@@ -4646,7 +4699,12 @@ faiss_ivf_params <- function(n, k) {
     nlist = as.integer(nlist),
     nprobe = as.integer(nprobe),
     requested_nlist = as.integer(requested_nlist),
-    requested_nprobe = as.integer(requested_nprobe)
+    requested_nprobe = as.integer(requested_nprobe),
+    tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_shape_k",
+    tuning_rule = rule,
+    tuning_large_n = isTRUE(large_n),
+    tuning_small_k = isTRUE(small_k),
+    tuning_large_k = isTRUE(large_k)
   )
 }
 
@@ -4659,6 +4717,13 @@ faiss_ivf_manual_params <- function() {
 }
 
 cuvs_ivfpq_params <- function(p) {
+  p <- as.integer(p)
+  high_dim <- length(p) == 1L && !is.na(p) && p >= 256L
+  manual <- any(vapply(
+    c("cuvs_ivfpq_pq_dim", "ivfpq_pq_dim", "cuvs_ivfpq_pq_bits", "ivfpq_pq_bits"),
+    function(name) !is.null(faissr_option(name, NULL)),
+    logical(1)
+  ))
   pq_dim <- faissr_option(c("cuvs_ivfpq_pq_dim", "ivfpq_pq_dim"), 0L)
   pq_dim <- suppressWarnings(as.integer(pq_dim))
   requested_pq_dim <- pq_dim
@@ -4684,7 +4749,10 @@ cuvs_ivfpq_params <- function(p) {
     pq_dim = as.integer(pq_dim),
     pq_bits = pq_bits,
     requested_pq_dim = as.integer(requested_pq_dim),
-    requested_pq_bits = as.integer(requested_pq_bits)
+    requested_pq_bits = as.integer(requested_pq_bits),
+    tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_shape",
+    tuning_rule = if (isTRUE(high_dim)) "high_dim_default_pq" else "dimension_default_pq",
+    tuning_high_dim = isTRUE(high_dim)
   )
 }
 
@@ -4995,10 +5063,22 @@ faiss_pq_default_m <- function(p) {
 
 faiss_pq_params <- function(p) {
   p <- as.integer(p)
+  high_dim <- length(p) == 1L && !is.na(p) && p >= 256L
+  manual <- any(vapply(
+    c("faiss_pq_m", "faiss_pq_nbits"),
+    function(name) !is.null(faissr_option(name, NULL)),
+    logical(1)
+  ))
   m <- faiss_option_int("pq_m", faiss_pq_default_m(p), min_value = 1L, max_value = p)
   while (m > 1L && p %% m != 0L) m <- m - 1L
   nbits <- faiss_option_int("pq_nbits", 8L, min_value = 4L, max_value = 12L)
-  list(m = as.integer(m), nbits = as.integer(nbits))
+  list(
+    m = as.integer(m),
+    nbits = as.integer(nbits),
+    tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_dimension",
+    tuning_rule = if (isTRUE(high_dim)) "high_dim_largest_divisor_pq" else "dimension_largest_divisor_pq",
+    tuning_high_dim = isTRUE(high_dim)
+  )
 }
 
 faiss_hnsw_auto_policy <- function(n = NULL, p = NULL, k, metric = "euclidean") {
@@ -5095,18 +5175,48 @@ faiss_hnsw_params <- function(k, n = NULL, p = NULL, metric = "euclidean") {
 
 faiss_nsg_params <- function(k) {
   k <- as.integer(k)
+  small_k <- length(k) == 1L && !is.na(k) && k <= 10L
+  large_k <- length(k) == 1L && !is.na(k) && k >= 100L
+  manual <- any(vapply(
+    c("faiss_nsg_r", "faiss_nsg_search_l", "faiss_nsg_build_type"),
+    function(name) !is.null(faissr_option(name, NULL)),
+    logical(1)
+  ))
   r <- faiss_option_int("nsg_r", 48L, min_value = 2L, max_value = 512L)
   search_l <- faiss_option_int("nsg_search_l", max(200L, 4L * k), min_value = k, max_value = 4096L)
   build_type <- faiss_option_int("nsg_build_type", 1L, min_value = 0L, max_value = 1L)
-  list(r = as.integer(r), search_l = as.integer(search_l), build_type = as.integer(build_type))
+  list(
+    r = as.integer(r),
+    search_l = as.integer(search_l),
+    build_type = as.integer(build_type),
+    tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_k",
+    tuning_rule = if (isTRUE(large_k)) "large_k_search_l" else if (isTRUE(small_k)) "small_k_speed" else "balanced_k",
+    tuning_small_k = isTRUE(small_k),
+    tuning_large_k = isTRUE(large_k)
+  )
 }
 
 faiss_nndescent_params <- function(k) {
   k <- as.integer(k)
+  small_k <- length(k) == 1L && !is.na(k) && k <= 10L
+  large_k <- length(k) == 1L && !is.na(k) && k >= 100L
+  manual <- any(vapply(
+    c("faiss_nndescent_graph_k", "faiss_nndescent_iter", "faiss_nndescent_search_l"),
+    function(name) !is.null(faissr_option(name, NULL)),
+    logical(1)
+  ))
   graph_k <- faiss_option_int("nndescent_graph_k", max(100L, 2L * k), min_value = k, max_value = 1024L)
   n_iter <- faiss_option_int("nndescent_iter", 20L, min_value = 1L, max_value = 100L)
   search_l <- faiss_option_int("nndescent_search_l", max(graph_k, 2L * k), min_value = k, max_value = 4096L)
-  list(graph_k = as.integer(graph_k), n_iter = as.integer(n_iter), search_l = as.integer(search_l))
+  list(
+    graph_k = as.integer(graph_k),
+    n_iter = as.integer(n_iter),
+    search_l = as.integer(search_l),
+    tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_k",
+    tuning_rule = if (isTRUE(large_k)) "large_k_graph_search" else if (isTRUE(small_k)) "small_k_speed" else "balanced_k",
+    tuning_small_k = isTRUE(small_k),
+    tuning_large_k = isTRUE(large_k)
+  )
 }
 
 cuvs_option_int <- function(name, default, min_value = 1L, max_value = .Machine$integer.max) {
@@ -5126,6 +5236,19 @@ cuvs_requested_option_int <- function(name, default) {
 cuvs_cagra_params <- function(n, k) {
   n <- as.integer(n)
   k <- as.integer(k)
+  small_k <- length(k) == 1L && !is.na(k) && k <= 10L
+  large_k <- length(k) == 1L && !is.na(k) && k >= 100L
+  large_n <- length(n) == 1L && !is.na(n) && n >= 1000000L
+  manual <- cuvs_cagra_manual_params()
+  rule <- if (isTRUE(large_n) && isTRUE(large_k)) {
+    "large_n_large_k_graph_recall"
+  } else if (isTRUE(large_n)) {
+    "large_n_graph_recall"
+  } else if (isTRUE(small_k)) {
+    "small_k_graph_speed"
+  } else {
+    "balanced_graph_search"
+  }
   default_graph_degree <- max(64L, k + 1L)
   requested_graph_degree <- cuvs_requested_option_int("graph_degree", default_graph_degree)
   graph_degree <- cuvs_option_int(
@@ -5168,7 +5291,12 @@ cuvs_cagra_params <- function(n, k) {
     requested_graph_degree = as.integer(requested_graph_degree),
     requested_intermediate_graph_degree = as.integer(requested_intermediate_graph_degree),
     requested_search_width = as.integer(requested_search_width),
-    requested_itopk_size = as.integer(requested_itopk_size)
+    requested_itopk_size = as.integer(requested_itopk_size),
+    tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_shape_k",
+    tuning_rule = rule,
+    tuning_large_n = isTRUE(large_n),
+    tuning_small_k = isTRUE(small_k),
+    tuning_large_k = isTRUE(large_k)
   )
 }
 
@@ -5460,6 +5588,18 @@ cuvs_cagra_tune_params <- function(data, k, base_params, tuning = "auto") {
 cuvs_nndescent_params <- function(n, k) {
   n <- as.integer(n)
   k <- as.integer(k)
+  small_k <- length(k) == 1L && !is.na(k) && k <= 10L
+  large_k <- length(k) == 1L && !is.na(k) && k >= 100L
+  large_n <- length(n) == 1L && !is.na(n) && n >= 1000000L
+  manual <- any(vapply(
+    c(
+      "cuvs_nndescent_graph_degree",
+      "cuvs_nndescent_intermediate_graph_degree",
+      "cuvs_nndescent_max_iterations"
+    ),
+    function(name) !is.null(faissr_option(name, NULL)),
+    logical(1)
+  ))
   graph_degree <- cuvs_option_int(
     "nndescent_graph_degree",
     default = k,
@@ -5481,7 +5621,12 @@ cuvs_nndescent_params <- function(n, k) {
   list(
     graph_degree = as.integer(graph_degree),
     intermediate_graph_degree = as.integer(intermediate_graph_degree),
-    max_iterations = as.integer(max_iterations)
+    max_iterations = as.integer(max_iterations),
+    tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_shape_k",
+    tuning_rule = if (isTRUE(large_n) || isTRUE(large_k)) "large_graph_search" else if (isTRUE(small_k)) "small_k_speed" else "balanced_graph_search",
+    tuning_large_n = isTRUE(large_n),
+    tuning_small_k = isTRUE(small_k),
+    tuning_large_k = isTRUE(large_k)
   )
 }
 
@@ -5758,18 +5903,22 @@ grid_self_knn <- function(data,
 #'   fallback otherwise. Raw inner product is not available for VP-tree because
 #'   it is not a metric distance for tree pruning; use `"exact"`, `"flat"`, or
 #'   `"hnsw"` for inner-product search.
-#'   \item `"sparse"`: native exact sparse `dgCMatrix` CPU search.
-#'   \item `"hnsw"`: FAISS CPU HNSW approximate graph-search index [5,16].
-#'   Default FAISS HNSW parameters are selected by a deterministic
-#'   shape/k/metric rule without pilot tuning; result approximation metadata
-#'   records the selected `tuning_rule` and the high-dimensional, large-`n`,
-#'   small-`k`, large-`k`, and non-Euclidean shape flags used.
-#'   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
-#'   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
-#'   cosine/correlation routes on CPU and FAISS GPU [1-2,16].
-#'   \item `"ivfpq"`: FAISS inverted-file index with product quantization,
-#'   mainly for compressed-memory approximate search. It supports L2, raw IP,
-#'   and normalized-IP cosine/correlation routes on CPU and FAISS GPU [1-2,6,16].
+  #'   \item `"sparse"`: native exact sparse `dgCMatrix` CPU search.
+  #'   \item `"hnsw"`: FAISS CPU HNSW approximate graph-search index [5,16].
+  #'   Default FAISS HNSW parameters are selected by a deterministic
+  #'   shape/k/metric rule without pilot tuning; result approximation metadata
+  #'   records the selected `tuning_rule` and the high-dimensional, large-`n`,
+  #'   small-`k`, large-`k`, and non-Euclidean shape flags used.
+  #'   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
+  #'   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
+  #'   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records
+  #'   deterministic no-pilot `tuning_policy`, `tuning_rule`, and shape/k flags in
+  #'   approximation metadata.
+  #'   \item `"ivfpq"`: FAISS inverted-file index with product quantization,
+  #'   mainly for compressed-memory approximate search. It supports L2, raw IP,
+  #'   and normalized-IP cosine/correlation routes on CPU and FAISS GPU [1-2,6,16].
+  #'   IVF and PQ parameter selectors record deterministic tuning metadata; PQ
+  #'   fields use `pq_tuning_*` names.
 #'   \item `"nsg"`: FAISS CPU NSG graph-search index when exposed by the linked
 #'   FAISS build. It is exposed for Euclidean/L2 only because linked FAISS
 #'   graph builders can abort during normalized cosine/correlation or raw
