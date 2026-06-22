@@ -162,6 +162,33 @@ test_that("public API excludes retired wrapper and platform-specific helper name
   expect_false(any(grepl("metal", man_topics, ignore.case = TRUE)))
 })
 
+test_that("native routines use registered symbols without public helper leakage", {
+  root <- test_path("../../")
+  namespace_file <- file.path(root, "NAMESPACE")
+  rcpp_exports_file <- file.path(root, "src", "RcppExports.cpp")
+  docs_files <- c(
+    list.files(file.path(root, "man"), pattern = "\\.Rd$", full.names = TRUE),
+    list.files(file.path(root, "docs"), pattern = "\\.md$", full.names = TRUE),
+    file.path(root, "README.md")
+  )
+  docs_files <- docs_files[file.exists(docs_files)]
+  if (!file.exists(namespace_file) || !file.exists(rcpp_exports_file) || !length(docs_files)) {
+    skip("Source and documentation files are not available in this installed-package test context.")
+  }
+
+  namespace_text <- paste(readLines(namespace_file, warn = FALSE), collapse = "\n")
+  rcpp_exports_text <- paste(readLines(rcpp_exports_file, warn = FALSE), collapse = "\n")
+  docs_text <- paste(
+    vapply(docs_files, function(path) paste(readLines(path, warn = FALSE), collapse = "\n"), character(1L)),
+    collapse = "\n"
+  )
+
+  expect_true(grepl("useDynLib(faissR, .registration = TRUE)", namespace_text, fixed = TRUE))
+  expect_true(grepl("R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);", rcpp_exports_text, fixed = TRUE))
+  expect_true(grepl("R_useDynamicSymbols(dll, FALSE);", rcpp_exports_text, fixed = TRUE))
+  expect_false(grepl("knn_recall_cpp", docs_text, fixed = TRUE))
+})
+
 test_that("repository text excludes private benchmark machine details", {
   root <- test_path("../../")
   files <- list.files(
