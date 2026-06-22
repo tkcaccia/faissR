@@ -1814,7 +1814,14 @@ test_that("FAISS graph backends report actual and requested parameters", {
     )
     expect_error(
       internal_nn_without_self(x, k = 5L, backend = "faiss_nndescent", metric = "inner_product", n_threads = 2L),
-      "disabled"
+      "euclidean"
+    )
+    withr::with_options(
+      list(faissR.enable_faiss_nndescent = TRUE),
+      expect_error(
+        internal_nn_without_self(x, k = 5L, backend = "faiss_nndescent", metric = "inner_product", n_threads = 2L),
+        "euclidean"
+      )
     )
     expect_error(
       internal_nn_without_self(x, k = 5L, backend = "faiss_nndescent", metric = "euclidean", n_threads = 2L),

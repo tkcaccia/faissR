@@ -841,6 +841,13 @@ nn_compute <- function(data,
   }
 
   if (identical(backend, "faiss_nndescent")) {
+    if (!identical(metric, "euclidean")) {
+      stop(
+        "`backend = \"faiss_nndescent\"` is currently validated only for ",
+        "`metric = \"euclidean\"` in this FAISS build.",
+        call. = FALSE
+      )
+    }
     if (!isTRUE(faissr_option("enable_faiss_nndescent", FALSE))) {
       stop(
         "FAISS NNDescent is disabled by default because linked FAISS builds can ",
@@ -856,13 +863,6 @@ nn_compute <- function(data,
         "The real FAISS C++ NNDescent backend is not available in this build. ",
         "Reinstall faissR with `FAISS_HOME` pointing ",
         "to a FAISS installation.",
-        call. = FALSE
-      )
-    }
-    if (!identical(metric, "euclidean")) {
-      stop(
-        "`backend = \"faiss_nndescent\"` is currently validated only for ",
-        "`metric = \"euclidean\"` in this FAISS build.",
         call. = FALSE
       )
     }
@@ -3514,6 +3514,13 @@ faiss_self_knn <- function(data,
   }
   if (identical(backend, "faiss_nndescent") ||
       identical(backend, "cpu_nndescent_faiss_nndescent")) {
+    if (!identical(metric, "euclidean")) {
+      stop(
+        "`backend = \"faiss_nndescent\"` is currently validated only for ",
+        "`metric = \"euclidean\"` in this FAISS build.",
+        call. = FALSE
+      )
+    }
     if (!isTRUE(faissr_option("enable_faiss_nndescent", FALSE))) {
       stop(
         "FAISS NNDescent is disabled by default because linked FAISS builds can ",
