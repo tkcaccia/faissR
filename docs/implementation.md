@@ -104,8 +104,8 @@ Supported CUDA routes include:
 
 The validated high-performance metric is Euclidean/L2. Cosine and correlation
 are exposed for exact CPU, FAISS CPU/GPU Flat, FAISS CPU/GPU IVF-Flat,
-FAISS CPU/GPU IVFPQ, FAISS CPU HNSW, and RcppHNSW-compatible
-paths. FAISS IP-capable approximate routes implement cosine by row L2
+FAISS CPU/GPU IVFPQ, FAISS CPU HNSW, direct cuVS IVF/CAGRA/NN-Descent routes,
+and RcppHNSW-compatible paths. FAISS IP-capable approximate routes implement cosine by row L2
 normalizing the inputs before inner-product search, and correlation by row
 centering plus L2 normalization before inner-product search; both routes return
 `1 - similarity` distances. All-zero cosine rows and constant correlation rows
@@ -114,6 +114,9 @@ distance `0` and a zero-normalized row versus a nonzero row as distance `1`.
 CPU FAISS Flat uses the exact CPU scorer for those rows to preserve
 deterministic small-`k` tie handling; explicit CUDA routes remain on CUDA and
 apply the normalized-distance repair without relabelling the backend.
+Direct cuVS IVF/PQ, CAGRA, and NN-Descent use normalized Euclidean search for
+cosine/correlation and keep raw inner product disabled because the direct cuVS
+routes used by faissR are L2-based.
 Inner-product search is exposed for exact native CPU
 scoring, FAISS Flat IP routes, FAISS IVF-Flat/IVFPQ IP, FAISS HNSW
 IP, and the RcppHNSW/hnswlib IP

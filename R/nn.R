@@ -187,15 +187,17 @@ nn_compute <- function(data,
     ))
   }
   if (!identical(metric, "euclidean")) {
-    if (backend %in% c("cuvs_ivf", "cuda_cuvs_ivf",
-                              "cuvs_ivf_flat", "cuda_cuvs_ivf_flat",
-                              "cuvs_ivfpq", "cuda_cuvs_ivfpq",
-                              "cuvs_ivf_pq", "cuda_cuvs_ivf_pq")) {
+    if (identical(metric, "inner_product") &&
+        backend %in% c("cuvs_ivf", "cuda_cuvs_ivf",
+                       "cuvs_ivf_flat", "cuda_cuvs_ivf_flat",
+                       "cuvs_ivfpq", "cuda_cuvs_ivfpq",
+                       "cuvs_ivf_pq", "cuda_cuvs_ivf_pq")) {
       stop(
         "Direct cuVS IVF backends currently support only ",
-        "`metric = \"euclidean\"`. Use public `backend = \"cuda\", ",
+        "`metric = \"euclidean\"`, `\"cosine\"`, and `\"correlation\"`. ",
+        "Use public `backend = \"cuda\", ",
         "method = \"ivf\"` or `\"ivfpq\"` for FAISS GPU metric-aware IVF ",
-        "routes.",
+        "inner-product routes.",
         call. = FALSE
       )
     } else if (backend %in% c("cuvs_bruteforce", "cuda_cuvs_bruteforce", "cuda_cuvs_exact")) {
@@ -1097,22 +1099,34 @@ nn_compute <- function(data,
 
   if (backend %in% c("cuvs_ivf_flat", "cuda_cuvs_ivf_flat")) {
     require_cuvs_backend("cuVS IVF-Flat")
+    metric_inputs <- NULL
+    search_data <- data
+    search_points <- points
+    if (metric %in% c("cosine", "correlation")) {
+      metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric)
+      search_data <- metric_inputs$data
+      search_points <- metric_inputs$points
+    }
     params <- faiss_ivf_params(nrow(data), k)
     out <- nn_cuvs_ivf_flat_cpp(
-      data,
-      points,
+      search_data,
+      search_points,
       as.integer(k),
       as.integer(params$nlist),
       as.integer(params$nprobe),
       isTRUE(exclude_self)
     )
     result <- finish_nn_result(out, "cuda_cuvs_ivf_flat", k, self_query, exact = FALSE, metric = metric)
+    if (!is.null(metric_inputs)) {
+      result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
+    }
     attr(result, "approximation") <- list(
       strategy = "rapids_cuvs_ivf_flat",
       backend = "cuda_cuvs_ivf_flat",
       library = "cuvs",
       accelerator = "cuda",
       metric = metric,
+      transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
       default_candidate = FALSE,
       nlist = as.integer(out$n_lists),
       nprobe = as.integer(out$n_probes),
@@ -1127,11 +1141,19 @@ nn_compute <- function(data,
 
   if (backend %in% c("cuvs_ivfpq", "cuda_cuvs_ivfpq", "cuvs_ivf_pq", "cuda_cuvs_ivf_pq")) {
     require_cuvs_backend("cuVS IVF-PQ")
+    metric_inputs <- NULL
+    search_data <- data
+    search_points <- points
+    if (metric %in% c("cosine", "correlation")) {
+      metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric)
+      search_data <- metric_inputs$data
+      search_points <- metric_inputs$points
+    }
     params <- faiss_ivf_params(nrow(data), k)
-    pq <- cuvs_ivfpq_params(ncol(data))
+    pq <- cuvs_ivfpq_params(ncol(search_data))
     out <- nn_cuvs_ivf_pq_cpp(
-      data,
-      points,
+      search_data,
+      search_points,
       as.integer(k),
       as.integer(params$nlist),
       as.integer(params$nprobe),
@@ -1140,12 +1162,16 @@ nn_compute <- function(data,
       isTRUE(exclude_self)
     )
     result <- finish_nn_result(out, "cuda_cuvs_ivfpq", k, self_query, exact = FALSE, metric = metric)
+    if (!is.null(metric_inputs)) {
+      result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
+    }
     attr(result, "approximation") <- list(
       strategy = "rapids_cuvs_ivf_pq",
       backend = "cuda_cuvs_ivfpq",
       library = "cuvs",
       accelerator = "cuda",
       metric = metric,
+      transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
       role = "explicit_memory_pressure_backend",
       default_candidate = FALSE,
       nlist = as.integer(out$n_lists),

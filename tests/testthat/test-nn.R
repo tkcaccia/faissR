@@ -1042,12 +1042,8 @@ test_that("non-euclidean metrics use only validated backend paths", {
     "inner_product"
   )
   expect_error(
-    internal_nn(x, k = 4L, backend = "cuda_cuvs_ivf_flat", metric = "cosine"),
-    "Direct cuVS IVF.*euclidean"
-  )
-  expect_error(
     internal_nn(x, k = 4L, backend = "cuda_cuvs_ivfpq", metric = "inner_product"),
-    "Direct cuVS IVF.*euclidean"
+    "Direct cuVS IVF.*inner-product"
   )
   expect_error(
     internal_nn(x, k = 4L, backend = "cuda_cuvs_bruteforce", metric = "correlation"),
@@ -3079,7 +3075,7 @@ test_that("cuVS brute force reports Euclidean metric metadata", {
   expect_equal(attr(out, "cuvs")$resolved_backend, "cuda_cuvs_bruteforce")
 })
 
-test_that("direct cuVS IVF routes report Euclidean metric metadata", {
+test_that("direct cuVS IVF routes report metric metadata", {
   skip_if_not(cuvs_available())
 
   x <- matrix(rnorm(160L), nrow = 40L)
@@ -3089,6 +3085,16 @@ test_that("direct cuVS IVF routes report Euclidean metric metadata", {
     expect_equal(attr(out, "metric"), "euclidean", info = backend)
     expect_equal(attr(out, "approximation")$metric, "euclidean", info = backend)
     expect_equal(attr(out, "approximation")$library, "cuvs", info = backend)
+
+    cos_out <- internal_nn(x, k = 4L, backend = backend, metric = "cosine")
+    expect_equal(attr(cos_out, "metric"), "cosine", info = backend)
+    expect_equal(attr(cos_out, "approximation")$metric, "cosine", info = backend)
+    expect_match(
+      attr(cos_out, "approximation")$transform,
+      "row_l2_normalize",
+      fixed = TRUE,
+      info = backend
+    )
   }
 })
 
