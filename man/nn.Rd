@@ -13,6 +13,7 @@ nn(
     "ivf", "ivfpq", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+  output = c("double", "float"),
   n_threads = NULL
 )
 }
@@ -83,6 +84,12 @@ tuned default for the resolved method, `"cache"` reuses/stores pilot
 results, `"pilot"` tunes for this call without persisting, `"fixed"` uses
 fixed defaults with tuning metadata, and `"off"`/`"none"` disables tuning.
 Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.}
+
+\item{output}{Distance storage type for the returned object. `"double"`
+returns the default R numeric distance matrix. `"float"` returns
+`distances` as a `float::fl()`/`float32` object and records
+`attr(result, "distance_type") = "float32"`; this requires the optional
+`float` package.}
 
 \item{n_threads}{Number of CPU worker threads for CPU backends. GPU backends
 ignore this argument.}

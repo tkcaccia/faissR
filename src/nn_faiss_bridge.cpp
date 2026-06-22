@@ -12,6 +12,12 @@ List faiss_flat_knn_impl(NumericMatrix data,
                          int k,
                          bool exclude_self,
                          int n_threads);
+List faiss_flat_float32_knn_impl(SEXP data,
+                                 SEXP points,
+                                 int k,
+                                 bool exclude_self,
+                                 int n_threads,
+                                 std::string metric);
 List faiss_ivf_knn_impl(NumericMatrix data,
                         NumericMatrix points,
                         int k,
@@ -143,6 +149,55 @@ List nn_faiss_flat_cpp(NumericMatrix data,
                        bool exclude_self,
                        int n_threads) {
   return faiss_flat_knn_impl(data, points, k, exclude_self, n_threads);
+}
+
+// [[Rcpp::export]]
+List nn_faiss_flat_float32_cpp(SEXP data,
+                               SEXP points,
+                               int k,
+                               bool exclude_self,
+                               int n_threads,
+                               std::string metric) {
+  return faiss_flat_float32_knn_impl(
+    data, points, k, exclude_self, n_threads, metric
+  );
+}
+
+extern "C" SEXP faissR_nn_float32_call(SEXP x,
+                                       SEXP k,
+                                       SEXP backend,
+                                       SEXP metric,
+                                       SEXP include_self,
+                                       SEXP n_threads) {
+  BEGIN_RCPP
+  const int kk = Rcpp::as<int>(k);
+  const std::string backend_value = Rcpp::as<std::string>(backend);
+  const std::string metric_value = Rcpp::as<std::string>(metric);
+  const bool include_self_value = Rcpp::as<bool>(include_self);
+  const int n_threads_value = Rcpp::as<int>(n_threads);
+  if (backend_value != "cpu" &&
+      backend_value != "faiss" &&
+      backend_value != "cpu_faiss" &&
+      backend_value != "flat" &&
+      backend_value != "faiss_flat") {
+    Rcpp::stop(
+      "faissR_nn_float32_call currently exposes the CPU FAISS Flat float32 route"
+    );
+  }
+  Rcpp::List out = faiss_flat_float32_knn_impl(
+    x,
+    x,
+    kk,
+    !include_self_value,
+    n_threads_value,
+    metric_value
+  );
+  out["index_base"] = 1;
+  out["distance_type"] = "double";
+  out["metric"] = metric_value;
+  out["backend_used"] = metric_value == "inner_product" ? "faiss_flat_ip" : "faiss";
+  return out;
+  END_RCPP
 }
 
 // [[Rcpp::export]]

@@ -448,11 +448,25 @@ least one conversion/copy from R's column-major double matrix to backend-friendl
 buffers. For moderate datasets this overhead is small relative to KNN search;
 for very large datasets it can dominate memory use.
 
-The implementation tries to keep public inputs simple (`matrix`, `data.frame`,
-and sparse `Matrix` objects) while recording memory-sensitive behavior in
-benchmark notes. Future improvements can reduce copies by supporting explicit
-float32/on-disk data representations, but the current CRAN-oriented interface
-does not require nonstandard R vector types.
+The core FAISS KNN implementation is being moved toward float-pointer entry
+points. The first public slice accepts optional `float::fl()`/`float32` matrices
+in `nn()` and `nn_without_self()` for the CPU FAISS Flat Euclidean and
+inner-product routes. Those objects are read from their float32 payload and
+copied only once into FAISS's row-major `float*` layout, avoiding the previous
+float32-to-R-double-to-float32 path. Ordinary R double matrices still work and
+are converted once to float32 internally.
+
+Distance output remains an ordinary R numeric matrix by default. Calling
+`nn(..., output = "float")` or `nn_without_self(..., output = "float")` stores
+`distances` as a `float::fl()`/`float32` object and records
+`attr(result, "distance_type") = "float32"`. The `float` package is in
+`Suggests`; faissR does not require it unless a user supplies a float32 object
+or requests float32 distance output.
+
+faissR also registers a C-callable entry point named
+`faissR_nn_float32_call` with `R_RegisterCCallable()`. Downstream packages can
+retrieve it with `R_GetCCallable("faissR", "faissR_nn_float32_call")` and call
+the CPU FAISS Flat float32 route without going through the R wrapper layer.
 
 Sparse input is handled separately. If the input is a sparse `Matrix`, the
 native sparse CPU route can avoid densification. GPU and FAISS routes that do
@@ -477,9 +491,10 @@ Bounded ImageNet samples did work. On a 50,000-row sample with `k = 50`,
 files are listed in [Autotuning](autotuning.md).
 
 For full ImageNet-scale runs on small-memory hosts, the preferred next
-implementation step is to avoid loading the dataset as a double data frame. A
-matrix or float32/on-disk representation would remove one large conversion copy
-and make FAISS/cuVS index construction more practical.
+implementation step is to avoid loading the dataset as a double data frame.
+Using a matrix, `float::fl()` object, or on-disk float32 representation removes
+one large conversion copy and makes FAISS/cuVS index construction more
+practical.
 
 ## Licensing And Acknowledgement
 

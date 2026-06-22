@@ -106,6 +106,117 @@ bool same_matrix_storage(const NumericMatrix& data,
     data.begin() == points.begin();
 }
 
+struct MatrixViewF32 {
+  const float* data = nullptr;
+  int nrow = 0;
+  int ncol = 0;
+  bool row_major = true;
+  bool owns_data = false;
+  std::vector<float> buffer;
+};
+
+Rcpp::IntegerVector matrix_dims_from_object(SEXP x, const char* name) {
+  SEXP dim = Rf_getAttrib(x, R_DimSymbol);
+  if (Rf_isNull(dim)) {
+    SEXP data_slot = R_do_slot(x, Rf_install("Data"));
+    dim = Rf_getAttrib(data_slot, R_DimSymbol);
+  }
+  if (Rf_isNull(dim) || Rf_length(dim) != 2) {
+    Rcpp::stop("%s must be a two-dimensional float32 matrix", name);
+  }
+  Rcpp::IntegerVector dims(dim);
+  if (dims[0] < 1 || dims[1] < 1) {
+    Rcpp::stop("%s must have at least one row and one column", name);
+  }
+  if (dims[0] > std::numeric_limits<int>::max() ||
+      dims[1] > std::numeric_limits<int>::max()) {
+    Rcpp::stop("%s dimensions exceed FAISS int limits", name);
+  }
+  return dims;
+}
+
+const float* float32_slot_ptr(SEXP slot, const int expected_length, const char* name) {
+  if (TYPEOF(slot) == INTSXP) {
+    if (Rf_length(slot) != expected_length) {
+      Rcpp::stop("%s float32 payload length does not match its dimensions", name);
+    }
+    return reinterpret_cast<const float*>(INTEGER(slot));
+  }
+  if (TYPEOF(slot) == RAWSXP) {
+    const R_xlen_t expected_bytes = static_cast<R_xlen_t>(expected_length) *
+      static_cast<R_xlen_t>(sizeof(float));
+    if (Rf_xlength(slot) != expected_bytes) {
+      Rcpp::stop("%s float32 raw payload length does not match its dimensions", name);
+    }
+    return reinterpret_cast<const float*>(RAW(slot));
+  }
+  return nullptr;
+}
+
+MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
+  Rcpp::IntegerVector dims = matrix_dims_from_object(x, name);
+  MatrixViewF32 view;
+  view.nrow = dims[0];
+  view.ncol = dims[1];
+  const int expected_length = view.nrow * view.ncol;
+  SEXP slot = R_do_slot(x, Rf_install("Data"));
+
+  view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
+  view.owns_data = true;
+  view.row_major = true;
+
+  bool finite = true;
+  const float* col_major = float32_slot_ptr(slot, expected_length, name);
+  if (col_major != nullptr) {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) reduction(&& : finite)
+#endif
+    for (int r = 0; r < view.nrow; ++r) {
+      for (int c = 0; c < view.ncol; ++c) {
+        const float value = col_major[r + view.nrow * c];
+        if (!std::isfinite(value)) {
+          finite = false;
+          continue;
+        }
+        view.buffer[static_cast<std::size_t>(r) * view.ncol + c] = value;
+      }
+    }
+  } else if (TYPEOF(slot) == REALSXP) {
+    const double* col_major_double = REAL(slot);
+    if (Rf_length(slot) != expected_length) {
+      Rcpp::stop("%s payload length does not match its dimensions", name);
+    }
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) reduction(&& : finite)
+#endif
+    for (int r = 0; r < view.nrow; ++r) {
+      for (int c = 0; c < view.ncol; ++c) {
+        const double value = col_major_double[r + view.nrow * c];
+        if (!std::isfinite(value)) {
+          finite = false;
+          continue;
+        }
+        view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
+          static_cast<float>(value);
+      }
+    }
+  } else {
+    Rcpp::stop(
+      "%s must be a float::fl()/float32 object with an integer or raw @Data payload",
+      name
+    );
+  }
+  if (!finite) {
+    Rcpp::stop("FAISS float32 input requires finite values");
+  }
+  view.data = view.buffer.data();
+  return view;
+}
+
+bool same_float32_object(SEXP data, SEXP points) {
+  return data == points;
+}
+
 class OmpThreadScope {
  public:
   explicit OmpThreadScope(const int n_threads) {
@@ -282,6 +393,78 @@ List search_faiss_index(faiss::Index& index,
   );
 }
 
+List search_faiss_flat_float32(SEXP data,
+                               SEXP points,
+                               int k,
+                               bool exclude_self,
+                               int n_threads,
+                               const std::string& metric) {
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  MatrixViewF32 xq = same_float32_object(data, points) ?
+    MatrixViewF32() :
+    make_float32_matrix_view(points, "points");
+  const bool same_storage = same_float32_object(data, points);
+  const bool self_query = exclude_self || same_storage;
+  if (xb.ncol < 1 || xb.nrow < 1) {
+    Rcpp::stop("data must have at least one row and one column");
+  }
+  if (!same_storage && (xq.nrow < 1 || xq.ncol != xb.ncol)) {
+    Rcpp::stop("data and points must have the same number of columns");
+  }
+  if (k < 1 || k > xb.nrow) {
+    Rcpp::stop("k must be in [1, nrow(data)]");
+  }
+  if (exclude_self && !same_storage) {
+    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  }
+
+  const int n_points = same_storage ? xb.nrow : xq.nrow;
+  const int search_k = exclude_self ? std::min(xb.nrow, k + 1) : k;
+  const float* query_ptr = same_storage ? xb.data : xq.data;
+  const DistanceOutput output = metric == "inner_product" ?
+    DistanceOutput::InnerProduct :
+    DistanceOutput::L2Squared;
+
+  OmpThreadScope threads(n_threads);
+  std::unique_ptr<faiss::Index> index;
+  std::string index_type;
+  if (metric == "inner_product") {
+    index.reset(new faiss::IndexFlatIP(xb.ncol));
+    index_type = "IndexFlatIP";
+  } else if (metric == "euclidean") {
+    index.reset(new faiss::IndexFlatL2(xb.ncol));
+    index_type = "IndexFlatL2";
+  } else {
+    Rcpp::stop("FAISS float32 Flat input supports metric = 'euclidean' or 'inner_product'");
+  }
+
+  std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
+  std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
+  try {
+    index->add(xb.nrow, xb.data);
+    index->search(n_points, query_ptr, search_k, distances.data(), labels.data());
+  } catch (const std::exception& e) {
+    Rcpp::stop("FAISS float32 Flat search failed: %s", e.what());
+  }
+
+  List out = format_faiss_result(
+    labels,
+    distances,
+    n_points,
+    search_k,
+    k,
+    self_query,
+    exclude_self,
+    index_type,
+    true,
+    output,
+    n_threads
+  );
+  out["input_type"] = "float32";
+  out["input_layout"] = "float32_column_major_payload_to_row_major";
+  return out;
+}
+
 int clamp_positive(const int value, const int fallback, const int upper) {
   int out = value > 0 ? value : fallback;
   if (upper > 0) out = std::min(out, upper);
@@ -356,6 +539,22 @@ List faiss_flat_knn_impl(NumericMatrix data,
   return search_faiss_index(
     index, data, points, k, exclude_self, n_threads,
     "IndexFlatL2", true, DistanceOutput::L2Squared
+  );
+}
+
+List faiss_flat_float32_knn_impl(SEXP data,
+                                 SEXP points,
+                                 int k,
+                                 bool exclude_self,
+                                 int n_threads,
+                                 std::string metric) {
+  return search_faiss_flat_float32(
+    data,
+    points,
+    k,
+    exclude_self,
+    n_threads,
+    metric
   );
 }
 

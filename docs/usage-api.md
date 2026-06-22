@@ -34,18 +34,19 @@ expected to set. For the full R help page after installation, use
 ```r
 nn(data, points = data, k = NULL, backend = "auto",
    method = "auto", metric = "euclidean", tuning = "auto",
-   n_threads = NULL)
+   output = "double", n_threads = NULL)
 ```
 
 | Argument | Description |
 | --- | --- |
-| `data` | Numeric matrix, data frame, or sparse `Matrix` object with reference observations in rows and features in columns. |
-| `points` | Optional query matrix/data frame/sparse matrix with the same number of columns as `data`. Defaults to `data` for self-search. |
+| `data` | Numeric matrix, data frame, sparse `Matrix` object, or optional `float::fl()`/`float32` matrix with reference observations in rows and features in columns. The first float32 input route supports CPU FAISS Flat for Euclidean and inner-product searches without converting the source object to an R double matrix. |
+| `points` | Optional query matrix/data frame/sparse matrix/float32 matrix with the same number of columns as `data`. Defaults to `data` for self-search. Float32 reference and query inputs must both be float32 objects. |
 | `k` | Number of neighbours to return. If `NULL`, faissR chooses an automatic neighbourhood size. |
 | `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses a validated CUDA route only when the requested method/metric combination is supported and CUDA/cuVS runtime support is available, and otherwise resolves to CPU. Explicit `"cuda"` fails clearly when CUDA support or the selected CUDA combination is unavailable. |
 | `method` | Algorithm selector: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"nsg"`, `"nndescent"`, or `"cagra"` [1-6,13-16]. These are canonical lowercase public labels; resolved implementation labels such as `faiss_hnsw`, `faiss_gpu_ivf_flat`, or `cuda_cuvs_cagra` are recorded in result metadata but are not public `method` values. For example, `method = "grid", backend = "cpu"` maps to the CPU grid implementation, while `method = "grid", backend = "cuda"` maps to the CUDA grid implementation. Distance choices belong in `metric`, not `method`. Invalid backend/method combinations, such as `method = "cagra", backend = "cpu"`, stop with a clear error. |
 | `metric` | Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as canonical metric labels. Inner product is the raw dot product; cosine is the dot product after row L2 normalization; correlation is centered cosine similarity after subtracting each row mean and L2-normalizing each row. For `metric = "inner_product"`, neighbours are ranked by larger raw dot product, but returned `distances` keep faissR's smaller-is-better convention: within each query row the best returned dot product has distance `0`, and lower dot products have larger shifted distances. Euclidean/L2 is the validated high-performance route for approximate FAISS/CUDA/cuVS. Cosine and correlation use validated exact paths, FAISS CPU/GPU Flat, IVF-Flat, IVFPQ, and CPU HNSW through normalized inner-product search; CAGRA and NNDescent use normalized Euclidean graph search. All-zero cosine rows and constant correlation rows are zero-normalized edge cases: faissR treats zero-vs-zero distance as `0` and zero-vs-nonzero distance as `1`; CPU FAISS Flat uses the exact CPU scorer for those rows to preserve deterministic small-`k` tie handling, while explicit CUDA routes remain on CUDA. Inner product is supported by native exact CPU scoring, FAISS Flat IP, FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, and RcppHNSW/hnswlib fallback paths when FAISS is unavailable. NSG remains Euclidean-only because linked FAISS graph builders can abort during non-Euclidean construction; NNDescent does not expose raw inner-product search. |
 | `tuning` | Tuning policy for approximate GPU methods: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. `"auto"` uses the appropriate tuned default for the resolved method. |
+| `output` | Distance storage type: `"double"` returns the default R numeric matrix; `"float"` returns `distances` as a `float::fl()`/`float32` matrix and records `attr(result, "distance_type") = "float32"`. The `float` package is optional and used only when this output is requested or a float32 input object is supplied. |
 | `n_threads` | Number of CPU worker threads for CPU/FAISS CPU backends. GPU backends ignore this argument. |
 
 Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.
@@ -80,17 +81,19 @@ Returns a `faissR_nn` list with `indices` and `distances` matrices. Indices are
 ```r
 nn_without_self(data, k, backend = "auto",
                 method = "auto", metric = "euclidean",
-                tuning = "auto", n_threads = NULL)
+                tuning = "auto", output = "double",
+                n_threads = NULL)
 ```
 
 | Argument | Description |
 | --- | --- |
-| `data` | Numeric matrix, data frame, or sparse `Matrix` object with observations in rows. |
+| `data` | Numeric matrix, data frame, sparse `Matrix` object, or optional `float::fl()`/`float32` matrix with observations in rows. |
 | `k` | Number of non-self neighbours to return per row. |
 | `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. This wrapper uses the same backend/method/metric resolver as `nn()`, always performs self-search, and removes the diagonal self match. |
 | `method` | Same algorithm selector as `nn()`. |
 | `metric` | `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`; aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. Correlation is centered cosine similarity, not raw inner product. |
 | `tuning` | Same tuning policy as `nn()`. |
+| `output` | Distance storage type: `"double"` for an R numeric distance matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the optional `float` package is installed. |
 | `n_threads` | CPU worker threads for CPU/FAISS CPU backends. |
 
 Use this for graph construction and embedding workflows where each row should

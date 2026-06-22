@@ -26,6 +26,7 @@ Imports:
     Rcpp
 Suggests:
     Matrix,
+    float,
     RcppHNSW,
     testthat
 LinkingTo:

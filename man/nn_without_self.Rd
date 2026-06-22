@@ -12,6 +12,7 @@ nn_without_self(
     "ivf", "ivfpq", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+  output = c("double", "float"),
   n_threads = NULL
 )
 }
@@ -38,6 +39,10 @@ including metric-aware CPU HNSW routing.}
 
 \item{tuning}{Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
 tuned default for the resolved method.}
+
+\item{output}{Distance storage type: `"double"` for the default R numeric
+matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
+optional `float` package is installed.}
 
 \item{n_threads}{Number of CPU worker threads used by CPU backends.}
 }

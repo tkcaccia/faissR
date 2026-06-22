@@ -25,6 +25,19 @@ List faiss_flat_knn_impl(NumericMatrix,
   );
 }
 
+List faiss_flat_float32_knn_impl(SEXP,
+                                 SEXP,
+                                 int,
+                                 bool,
+                                 int,
+                                 std::string) {
+  Rcpp::stop(
+    "FAISS float32 Flat backend is not available. Reinstall faissR with "
+    "a FAISS C++ library visible to configure, for example "
+    "FAISS_HOME=/path/to/faiss."
+  );
+}
+
 List faiss_ivf_knn_impl(NumericMatrix,
                         NumericMatrix,
                         int,

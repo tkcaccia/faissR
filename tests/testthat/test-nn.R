@@ -113,6 +113,58 @@ test_that("nn returns exact euclidean neighbors", {
   expect_equal(unname(out$distances), unname(expected_dst))
 })
 
+test_that("nn output distance storage can be requested explicitly", {
+  x <- matrix(c(
+    0, 0,
+    1, 0,
+    0, 1,
+    2, 2
+  ), ncol = 2, byrow = TRUE)
+
+  out <- nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "double")
+  expect_true(is.matrix(out$distances))
+  expect_equal(attr(out, "distance_type"), "double")
+
+  if (requireNamespace("float", quietly = TRUE)) {
+    fout <- nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "float")
+    expect_true(inherits(fout$distances, "float32"))
+    expect_equal(attr(fout, "distance_type"), "float32")
+  } else {
+    expect_error(
+      nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "float"),
+      "requires the optional float package"
+    )
+  }
+
+  expect_error(
+    nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "single"),
+    "`output`"
+  )
+})
+
+test_that("float32 input routes through FAISS Flat when float is installed", {
+  skip_if_not_installed("float")
+  skip_if_not(faiss_available(), "FAISS is required for float32 input")
+
+  x <- matrix(c(
+    0, 0,
+    1, 0,
+    0, 1,
+    2, 2,
+    3, 3
+  ), ncol = 2, byrow = TRUE)
+  xf <- float::fl(x)
+
+  ref <- nn_without_self(x, k = 2L, backend = "cpu", method = "flat", n_threads = 2L)
+  out <- nn_without_self(xf, k = 2L, backend = "cpu", method = "flat", n_threads = 2L)
+
+  expect_equal(out$indices, ref$indices)
+  expect_equal(out$distances, ref$distances, tolerance = 1e-6)
+  expect_equal(out$input_type, "float32")
+  expect_equal(attr(out, "distance_type"), "double")
+  expect_equal(attr(out, "resolved_backend"), "faiss")
+})
+
 test_that("native exact KNN only accepts the documented metrics", {
   x <- matrix(c(
     0, 0,

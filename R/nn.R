@@ -31,6 +31,88 @@ nn_compute <- function(data,
       call. = FALSE
     )
   }
+  data_float32 <- is_float32_matrix_input(data)
+  points_float32 <- if (isTRUE(points_missing)) data_float32 else is_float32_matrix_input(points)
+  if (isTRUE(data_float32) || isTRUE(points_float32)) {
+    if (!isTRUE(data_float32) || !isTRUE(points_float32)) {
+      stop(
+        "float32 nearest-neighbour input currently requires both `data` and ",
+        "`points` to be float::fl()/float32 objects. Convert both inputs to ",
+        "float32, or pass ordinary R numeric matrices.",
+        call. = FALSE
+      )
+    }
+    data_dim <- float32_matrix_dims(data, "data")
+    points_dim <- if (isTRUE(points_missing)) {
+      data_dim
+    } else {
+      float32_matrix_dims(points, "points")
+    }
+    if (!identical(data_dim[[2L]], points_dim[[2L]])) {
+      stop("`data` and `points` must have the same number of columns.", call. = FALSE)
+    }
+    self_query <- isTRUE(points_missing) || identical(data, points)
+    if (isTRUE(exclude_self) && !isTRUE(self_query)) {
+      stop("Self-neighbor exclusion is only valid when `points` is `data`.", call. = FALSE)
+    }
+    if (is.null(k)) {
+      k <- if (data_dim[[1L]] == 1L) {
+        1L
+      } else {
+        min(
+          data_dim[[1L]],
+          auto_k(data_dim[[1L]], include_self = isTRUE(self_query) && !isTRUE(exclude_self))
+        )
+      }
+    }
+    k <- normalize_nn_positive_integer(k, "k", "`k` must be NULL or a positive integer.")
+    max_k <- if (isTRUE(exclude_self)) data_dim[[1L]] - 1L else data_dim[[1L]]
+    if (k > max_k) {
+      stop("`k` cannot be larger than the available neighbor count.", call. = FALSE)
+    }
+    n_threads <- normalize_nn_threads(n_threads)
+    metric <- normalize_nn_metric(metric)
+    if (!backend %in% c("faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat",
+                        "faiss_flat_l2", "faiss_flat_ip")) {
+      stop(
+        "float32 input currently supports the FAISS Flat routes only. ",
+        "Use `method = \"flat\"` with `backend = \"cpu\"`, or pass an ",
+        "ordinary R numeric matrix for other methods.",
+        call. = FALSE
+      )
+    }
+    if (!metric %in% c("euclidean", "inner_product")) {
+      stop(
+        "float32 FAISS Flat input currently supports `metric = \"euclidean\"` ",
+        "or `metric = \"inner_product\"`. Cosine and correlation float32 ",
+        "routes require normalized float32 transforms and are not enabled in ",
+        "this build slice.",
+        call. = FALSE
+      )
+    }
+    if (!isTRUE(faiss_available())) {
+      stop(
+        "float32 FAISS Flat input requires faissR to be built with FAISS.",
+        call. = FALSE
+      )
+    }
+    out <- nn_faiss_flat_float32_cpp(
+      data,
+      points,
+      as.integer(k),
+      isTRUE(exclude_self),
+      as.integer(n_threads),
+      metric
+    )
+    return(finish_nn_result(
+      out,
+      if (identical(metric, "inner_product")) "faiss_flat_ip" else "faiss",
+      k,
+      self_query,
+      exact = TRUE,
+      metric = metric
+    ))
+  }
   data <- as.matrix(data)
   storage.mode(data) <- "double"
   if (isTRUE(points_missing)) {
@@ -5112,6 +5194,11 @@ grid_self_knn <- function(data,
 #'   results, `"pilot"` tunes for this call without persisting, `"fixed"` uses
 #'   fixed defaults with tuning metadata, and `"off"`/`"none"` disables tuning.
 #'   Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.
+#' @param output Distance storage type for the returned object. `"double"`
+#'   returns the default R numeric distance matrix. `"float"` returns
+#'   `distances` as a `float::fl()`/`float32` object and records
+#'   `attr(result, "distance_type") = "float32"`; this requires the optional
+#'   `float` package.
 #' @param n_threads Number of CPU worker threads for CPU backends. GPU backends
 #'   ignore this argument.
 #' @return A list with integer matrix `indices` and numeric matrix `distances`.
@@ -5135,11 +5222,13 @@ nn <- function(data,
                           "sparse", "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"),
                metric = c("euclidean", "cosine", "correlation", "inner_product"),
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+               output = c("double", "float"),
                n_threads = NULL) {
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
   tuning <- normalize_nn_tuning(tuning)
   metric <- normalize_nn_metric(metric)
+  output <- normalize_nn_output(output)
   validate_public_nn_method_shape(data, method)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
   result <- nn_compute(
@@ -5156,7 +5245,7 @@ nn <- function(data,
   attr(result, "requested_backend") <- backend
   attr(result, "requested_method") <- public_nn_method_label(method)
   attr(result, "tuning") <- tuning
-  result
+  finalize_nn_output(result, output)
 }
 
 #' Nearest neighbours excluding the self match
@@ -5183,6 +5272,9 @@ nn <- function(data,
 #'   including metric-aware CPU HNSW routing.
 #' @param tuning Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
 #'   tuned default for the resolved method.
+#' @param output Distance storage type: `"double"` for the default R numeric
+#'   matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
+#'   optional `float` package is installed.
 #' @param n_threads Number of CPU worker threads used by CPU backends.
 #' @return A `faissR_nn` object with `indices` and `distances` matrices.
 #' @export
@@ -5193,11 +5285,13 @@ nn_without_self <- function(data,
                                        "sparse", "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"),
                             metric = c("euclidean", "cosine", "correlation", "inner_product"),
                             tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+                            output = c("double", "float"),
                             n_threads = NULL) {
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
   tuning <- normalize_nn_tuning(tuning)
   metric <- normalize_nn_metric(metric)
+  output <- normalize_nn_output(output)
   validate_public_nn_method_shape(data, method)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
   result <- nn_compute(
@@ -5214,7 +5308,7 @@ nn_without_self <- function(data,
   attr(result, "requested_backend") <- backend
   attr(result, "requested_method") <- public_nn_method_label(method)
   attr(result, "tuning") <- tuning
-  result
+  finalize_nn_output(result, output)
 }
 
 .knn_recall_summary <- function(approx, exact, k = NULL) {

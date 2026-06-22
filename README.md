@@ -31,6 +31,10 @@ headers and libraries discovered by `configure`.
 
 - `nn()` for native CPU references, FAISS CPU indexes, FAISS GPU indexes, and
   optional direct RAPIDS cuVS/CUDA indexes [1-6,13-16].
+- Optional float32 KNN data flow: `nn()` and `nn_without_self()` accept
+  `float::fl()` matrices on the CPU FAISS Flat Euclidean/IP route, and
+  `output = "float"` returns float32 distance matrices when the optional
+  `float` package is installed.
 - `candidate_knn()` for exact top-k ranking inside supplied candidate rows.
 - `knn_graph()` for native weighted KNN graph construction without requiring
   `igraph`; graphs can store an optional target community count for downstream

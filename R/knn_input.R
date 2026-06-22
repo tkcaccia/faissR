@@ -170,3 +170,57 @@ finish_nn_result <- function(out,
   class(out) <- c("faissR_nn", "list")
   out
 }
+
+normalize_nn_output <- function(output) {
+  output <- normalize_scalar_choice_arg(
+    output,
+    arg = "output",
+    default = "double",
+    formal_choices = c("double", "float")
+  )
+  if (is.na(output) || !nzchar(output)) output <- "double"
+  output <- tolower(trimws(output))
+  if (!output %in% c("double", "float")) {
+    stop("`output` must be one of \"double\" or \"float\".", call. = FALSE)
+  }
+  output
+}
+
+is_float32_matrix_input <- function(x) {
+  inherits(x, "float32")
+}
+
+float32_matrix_dims <- function(x, arg_name = "data") {
+  d <- dim(x)
+  if (is.null(d) || length(d) != 2L) {
+    stop("`", arg_name, "` must be a two-dimensional float::fl()/float32 matrix.", call. = FALSE)
+  }
+  d <- as.integer(d)
+  if (anyNA(d) || any(d < 1L)) {
+    stop("`", arg_name, "` must have at least one row and one column.", call. = FALSE)
+  }
+  d
+}
+
+as_float_distances <- function(x) {
+  if (!requireNamespace("float", quietly = TRUE)) {
+    stop(
+      "`output = \"float\"` requires the optional float package. ",
+      "Install it with `install.packages(\"float\")`, or use ",
+      "`output = \"double\"`.",
+      call. = FALSE
+    )
+  }
+  float::fl(x)
+}
+
+finalize_nn_output <- function(result, output = "double") {
+  output <- normalize_nn_output(output)
+  if (identical(output, "float")) {
+    result$distances <- as_float_distances(result$distances)
+    attr(result, "distance_type") <- "float32"
+  } else {
+    attr(result, "distance_type") <- "double"
+  }
+  result
+}
