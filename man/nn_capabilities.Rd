@@ -42,10 +42,12 @@ support cosine and correlation by using normalized inner-product searches.
 CAGRA and NNDescent support cosine and correlation by using normalized
 Euclidean graph search. Native CPU NNDescent and faissR's native CUDA
 NNDescent candidate-refinement route also support raw inner-product self-KNN
-through faissR's shifted dot-product distance convention. FAISS NSG remains
-Euclidean-only because linked FAISS graph builders can abort during
-non-Euclidean graph construction. Direct cuVS NNDescent and CAGRA do not
-expose raw inner-product search.
+through faissR's shifted dot-product distance convention. CUDA CAGRA/HNSW
+raw inner-product routes use a maximum-inner-product-to-L2 extra-dimension
+transform and convert returned L2 distances back to shifted inner-product
+distances. FAISS NSG remains Euclidean-only because linked FAISS graph
+builders can abort during non-Euclidean graph construction. Direct cuVS
+NNDescent does not expose raw inner-product search.
 Public CUDA \code{method = "cagra"} can resolve to FAISS GPU CAGRA or direct
 cuVS CAGRA; \code{options(faissR.cagra_implementation = "faiss_gpu")} or
 \code{"cuvs"} forces one provider, while \code{"auto"} keeps the default

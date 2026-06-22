@@ -211,11 +211,11 @@ test_that("NN metric benchmark preflights auto rows from nn_capabilities", {
   )
   caps <- nn_capabilities()
 
-  skip <- env$is_expected_skip(caps, "auto", "cagra", "inner_product")
+  skip <- env$is_expected_skip(caps, "cpu", "cagra", "inner_product")
   expect_type(skip, "list")
   expect_true(isTRUE(skip$skip))
   expect_true(nzchar(skip$reason))
-  expect_match(skip$notes, "No CPU or CUDA route|unsupported|not exposed", ignore.case = TRUE)
+  expect_match(skip$notes, "CUDA-only|unsupported", ignore.case = TRUE)
 
   auto_cap <- env$capability_status(caps, "auto", "flat", "inner_product")
   expect_true(isTRUE(auto_cap$supported))

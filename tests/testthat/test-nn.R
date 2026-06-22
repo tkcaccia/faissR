@@ -659,21 +659,24 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(all(caps$supported[caps$method == "auto" & caps$backend == "cuda"]))
   expect_true(all(!caps$supported[caps$method == "cagra" & caps$backend == "cpu"]))
   expect_true(all(caps$supported[
-    caps$method == "hnsw" & caps$backend == "cuda" &
-      caps$metric %in% c("euclidean", "cosine", "correlation")
+    caps$method == "hnsw" & caps$backend == "cuda"
   ]))
-  expect_true(all(!caps$supported[
+  hnsw_ip <- caps[
     caps$method == "hnsw" & caps$backend == "cuda" &
-      caps$metric == "inner_product"
-  ]))
+      caps$metric == "inner_product",
+    ,
+    drop = FALSE
+  ]
+  expect_true(hnsw_ip$supported)
+  expect_match(hnsw_ip$notes, "maximum-inner-product-to-L2")
   cagra_ip <- caps[
     caps$method == "cagra" & caps$backend == "cuda" &
       caps$metric == "inner_product",
     ,
     drop = FALSE
   ]
-  expect_false(cagra_ip$supported)
-  expect_match(cagra_ip$notes, "inner-product")
+  expect_true(cagra_ip$supported)
+  expect_match(cagra_ip$notes, "maximum-inner-product-to-L2")
   expect_true(all(is.na(caps$implementation[!caps$supported])))
   expect_true(all(caps$supported[caps$method == "ivf"]))
   expect_true(all(caps$supported[caps$method == "ivfpq"]))
@@ -1008,7 +1011,7 @@ test_that("backend auto explicit methods require metric-capable CUDA routes befo
       cuvs_available_value = TRUE,
       faiss_gpu_available_value = TRUE
     ),
-    "cpu"
+    "cuda"
   )
   expect_equal(
     faissR:::resolve_auto_public_nn_device(
@@ -2062,13 +2065,13 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "hnsw", "correlation"),
     "cuda_cuvs_hnsw"
   )
-  expect_error(
+  expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "hnsw", "inner_product"),
-    "inner_product"
+    "cuda_cuvs_hnsw"
   )
-  expect_error(
-    faissR:::resolve_public_nn_backend("cuda", "cagra", "inner_product"),
-    "inner_product"
+  expect_true(
+    faissR:::resolve_public_nn_backend("cuda", "cagra", "inner_product") %in%
+      c("faiss_gpu_cagra", "cuda_cuvs_cagra")
   )
   expect_true(
     faissR:::resolve_public_nn_backend("cuda", "cagra", "cosine") %in%
@@ -3370,7 +3373,7 @@ test_that("backend_info reports native availability without crashing", {
   expect_match(info$supported_metrics[info$backend == "cpu"], "cosine")
   expect_match(info$supported_metrics[info$backend == "cpu"], "correlation")
   expect_match(info$supported_metrics[info$backend == "cpu"], "inner_product")
-  expect_match(info$supported_metrics[info$backend == "faiss_gpu_cuvs"], "CAGRA excludes inner_product")
+  expect_match(info$supported_metrics[info$backend == "faiss_gpu_cuvs"], "CAGRA inner_product uses a MIPS-to-L2 transform")
   expect_match(info$supported_metrics[info$backend == "cuvs"], "public CUDA NN-descent inner_product uses native CUDA")
 
   cuda_info <- faissR:::cuda_device_info_json_cpp()

@@ -79,9 +79,9 @@ unavailable. CPU `method = "hnsw"` uses FAISS HNSW for all metrics when
 available and RcppHNSW/hnswlib when FAISS is unavailable.
 `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
 FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, native CPU NN-descent raw
-dot-product search, and native CUDA NN-descent candidate refinement where
-available. Direct cuVS NN-descent and CAGRA do not expose raw
-inner-product search.
+dot-product search, native CUDA NN-descent candidate refinement, and CUDA
+CAGRA/HNSW through a maximum-inner-product-to-L2 transform where available.
+Direct cuVS NN-descent does not expose raw inner-product search.
 Unsupported backend combinations fail clearly instead of returning neighbours
 computed under a different metric.}
 
@@ -155,8 +155,8 @@ Method descriptions:
   grid for 2D/3D Euclidean/cosine/correlation
   self-KNN, exact FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for
   Euclidean searches when appropriate, cuVS HNSW for explicit CUDA HNSW
-  Euclidean/cosine/correlation requests, and FAISS GPU Flat IP routes for
-  inner-product searches only when FAISS GPU Flat is available
+  requests, and FAISS GPU Flat IP routes for exact inner-product searches
+  when FAISS GPU Flat is available
   [1-3,5,13-15,22-23]. When `backend = "auto"` is
   combined with an explicit method, faissR first checks whether that exact
   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU
@@ -181,11 +181,11 @@ Method descriptions:
   \item `"hnsw"`: HNSW approximate graph-search index [3,5,16,22-23].
   CPU uses FAISS HNSW when available and RcppHNSW/hnswlib fallback
   otherwise. CUDA uses RAPIDS cuVS HNSW converted from a CUDA CAGRA index
-  for Euclidean plus normalized cosine/correlation; raw inner product is
-  CPU/FAISS-only in faissR. Default parameters are selected by a
-  deterministic shape/k/metric rule without pilot tuning; result
-  approximation metadata records the selected `tuning_rule` and shape
-  flags used.
+  for Euclidean plus normalized cosine/correlation; raw inner product uses
+  a maximum-inner-product-to-L2 extra-dimension transform and shifted
+  inner-product distances. Default parameters are selected by a deterministic
+  shape/k/metric rule without pilot tuning; result approximation metadata
+  records the selected `tuning_rule` and shape flags used.
   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records
@@ -208,8 +208,7 @@ Method descriptions:
   cosine, correlation, and inner product. CUDA uses faissR's native NSG-style
   self-KNN candidate graph for all public metrics; cosine/correlation use
   normalized Euclidean search and raw inner product uses shifted dot-product
-  distances. Native NSG `tuning = "auto"` uses backend-specific shape/k/metric
-  defaults and reads `faissR.cpu_nsg_*` or `faissR.cuda_nsg_*` options.
+  distances.
   \item `"nndescent"`: NN-descent approximate graph construction via
   faissR's native CPU route, direct cuVS on CUDA for Euclidean/L2 plus
   normalized cosine/correlation, or faissR's native CUDA candidate-refinement
@@ -217,12 +216,13 @@ Method descriptions:
   opt-in because linked FAISS builds can abort during graph construction
   [3-4,16].
   \item `"cagra"`: CUDA-only graph-search method via FAISS GPU CAGRA/cuVS
-  integration or direct RAPIDS cuVS CAGRA. By default faissR chooses FAISS GPU
-  CAGRA when that route is available and otherwise direct cuVS CAGRA; set
-  `options(faissR.cagra_implementation = "faiss_gpu")` or `"cuvs"` to force one
-  provider for benchmarking. It supports Euclidean/L2 plus cosine/correlation
-  through normalized Euclidean graph search; raw inner product is not exposed
-  [3,13-16].
+  integration or direct RAPIDS cuVS CAGRA. By default faissR chooses FAISS
+  GPU CAGRA when that route is available and otherwise direct cuVS CAGRA;
+  set `options(faissR.cagra_implementation = "faiss_gpu")` or `"cuvs"` to
+  force one provider for benchmarking. It supports Euclidean/L2,
+  cosine/correlation through normalized Euclidean graph search, and raw
+  inner product through a maximum-inner-product-to-L2 extra-dimension
+  transform [3,13-16].
 }
 
 References are numbered as in `docs/references.md` in the GitHub
