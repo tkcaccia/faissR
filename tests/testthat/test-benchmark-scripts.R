@@ -393,6 +393,27 @@ test_that("NN metric benchmark requires canonical public method labels", {
   expect_false(isTRUE(env$capability_status(caps, "cpu", "faiss_hnsw", "euclidean")$supported))
 })
 
+test_that("NN metric benchmark validates dataset selectors", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  valid <- c("COIL20", "USPS", "SimulatedUniform2D", "SimulatedUniform3D")
+
+  expect_equal(
+    env$validate_dataset_values(c("COIL20", "USPS", "COIL20"), valid),
+    c("COIL20", "USPS")
+  )
+  expect_error(
+    env$validate_dataset_values(c("COIL20", "bad_dataset"), valid),
+    "Invalid value\\(s\\): bad_dataset"
+  )
+  expect_error(
+    env$validate_dataset_values(character(), valid),
+    "at least one dataset"
+  )
+})
+
 test_that("NN metric benchmark defaults cover requested metrics and k grid", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),

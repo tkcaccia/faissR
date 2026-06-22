@@ -105,6 +105,28 @@ validate_backend_values <- function(backends, arg_name = "backends") {
   backends
 }
 
+validate_dataset_values <- function(datasets, valid_datasets, arg_name = "datasets") {
+  datasets <- unique(trimws(as.character(datasets)))
+  datasets <- datasets[nzchar(datasets)]
+  valid_datasets <- unique(trimws(as.character(valid_datasets)))
+  valid_datasets <- valid_datasets[nzchar(valid_datasets)]
+  invalid <- datasets[!datasets %in% valid_datasets]
+  if (length(invalid)) {
+    stop(
+      "`", arg_name, "` must contain only available benchmark datasets: ",
+      paste(valid_datasets, collapse = ", "),
+      ". Invalid value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  if (!length(datasets)) {
+    stop("`", arg_name, "` must contain at least one dataset.", call. = FALSE)
+  }
+  datasets
+}
+
 default_nn_k_values <- function() {
   c(5L, 10L, 15L, 50L, 100L)
 }
@@ -943,7 +965,11 @@ quality_n <- required_positive_int_arg(args$quality_n %||% 512L, "quality_n")
 quality_max_ops <- required_positive_numeric_arg(args$quality_max_ops %||% "5e9", "quality_max_ops")
 recall_threshold <- required_probability_arg(args$recall_threshold %||% "0.98", "recall_threshold")
 
-datasets <- split_arg(args$datasets, paste(c(dataset_index(data_root)$dataset, "SimulatedUniform2D", "SimulatedUniform3D"), collapse = ","))
+available_datasets <- c(dataset_index(data_root)$dataset, "SimulatedUniform2D", "SimulatedUniform3D")
+datasets <- validate_dataset_values(
+  split_arg(args$datasets, paste(available_datasets, collapse = ",")),
+  available_datasets
+)
 backends <- validate_backend_values(split_arg(args$backends, paste(default_nn_backend_values(), collapse = ",")))
 methods <- canonical_method_values(split_arg(args$methods, paste(default_nn_method_values(), collapse = ",")))
 metrics <- validate_metric_values(split_arg(args$metrics, paste(default_nn_metric_values(), collapse = ",")))
