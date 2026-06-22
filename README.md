@@ -40,7 +40,9 @@ headers and libraries discovered by `configure`.
   that searches a small deterministic resolution grid for Louvain/Leiden.
   CUDA Louvain and Leiden use RAPIDS libcugraph when faissR is built with
   libcugraph [12]; CUDA random-walking is not enabled yet.
-- `fast_kmeans()` for CPU, FAISS CPU/GPU, and optional cuVS k-means [7-8].
+- `fast_kmeans()` for CPU, FAISS CPU/GPU, and optional cuVS k-means [7-8],
+  with deterministic shape-aware defaults for `max_iter`, `n_init`, and `tol`
+  when `tuning = "auto"`.
 - `knn()` and `predict()` for kNN classification/regression, including
   immediate prediction with `knn(Xtrain, Ytrain, Xtest)` and class
   probabilities with `predict(type = "prob")`.

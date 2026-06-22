@@ -307,6 +307,14 @@ test_that("fast_kmeans docs describe effective tuning metadata", {
     expect_true(grepl("direct cuVS C API", prose, fixed = TRUE), info = basename(docs_file))
     expect_true(grepl("does not expose an explicit seed", prose, fixed = TRUE), info = basename(docs_file))
   }
+
+  readme_file <- test_path("../../README.md")
+  if (file.exists(readme_file)) {
+    readme <- paste(readLines(readme_file, warn = FALSE), collapse = " ")
+    expect_true(grepl("fast_kmeans()", readme, fixed = TRUE))
+    expect_true(grepl("deterministic shape-aware defaults", readme, fixed = TRUE))
+    expect_true(grepl('tuning = "auto"', readme, fixed = TRUE))
+  }
 })
 
 test_that("README describes public NN metrics and correlation semantics", {
