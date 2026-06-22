@@ -586,7 +586,7 @@ test_that("resolved backend labels map to stable auto-selection method and devic
   expect_equal(faissR:::nn_resolved_backend_public_method("cuda_native_nndescent"), "nndescent")
   expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_hnsw"), "hnsw")
   expect_equal(faissR:::nn_resolved_backend_public_method("faiss_gpu_cagra"), "cagra")
-  expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_bruteforce"), "exact")
+  expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_bruteforce"), "bruteforce")
   expect_equal(faissR:::nn_resolved_backend_public_method("unknown_backend"), NA_character_)
 
   expect_equal(faissR:::nn_resolved_backend_device("faiss_hnsw"), "cpu")

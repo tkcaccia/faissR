@@ -2486,7 +2486,8 @@ nn_resolved_backend_public_method <- function(backend) {
   backend <- as.character(backend)[1L]
   if (is.na(backend) || !nzchar(backend)) return(NA_character_)
   if (backend %in% c("auto", "cpu_auto", "cuda_auto", "gpu_auto")) return("auto")
-  if (backend %in% c("cpu", "cuda", "cuda_cuvs_bruteforce")) return("exact")
+  if (backend %in% c("cpu", "cuda")) return("exact")
+  if (backend %in% c("cuda_cuvs_bruteforce")) return("bruteforce")
   if (backend %in% c(
     "faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat", "faiss_flat_l2",
     "faiss_flat_ip", "faiss_flat_cosine", "faiss_flat_correlation",
