@@ -1377,6 +1377,25 @@ test_that("public backend and method resolver maps device plus method", {
   )
 })
 
+test_that("nn_capabilities supported public rows resolve through the public router", {
+  caps <- nn_capabilities()
+  supported <- caps[caps$supported, c("backend", "method", "metric"), drop = FALSE]
+  expect_gt(nrow(supported), 0L)
+
+  for (i in seq_len(nrow(supported))) {
+    row <- supported[i, , drop = FALSE]
+    label <- paste(row$backend, row$method, row$metric, sep = "/")
+    err <- tryCatch(
+      {
+        faissR:::resolve_public_nn_backend(row$backend, row$method, row$metric)
+        NULL
+      },
+      error = identity
+    )
+    expect_null(err, label = label)
+  }
+})
+
 test_that("nearest-neighbour results expose resolved backend metadata", {
   x <- matrix(rnorm(200), ncol = 4)
   out <- nn_without_self(x, k = 5L, backend = "cpu", method = "exact", n_threads = 2L)
