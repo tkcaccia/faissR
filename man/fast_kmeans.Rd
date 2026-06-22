@@ -83,8 +83,10 @@ A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
   `parameters$tuning$effective_tol` expose the same values as flat fields for
   benchmark summaries. `parameters$tuning$backend_policy` records the
   deterministic shape rule used by `backend = "auto"` to decide whether CUDA
-  has enough estimated work or input size to offset transfer overhead. The
-  default thresholds can be overridden without adding pilot work by setting
+  has enough estimated work or float32 transfer size to offset transfer
+  overhead. The policy keeps `nbytes` as the ordinary R double input footprint
+  and records `gpu_transfer_nbytes` for the float32 data passed to FAISS/cuVS.
+  The default thresholds can be overridden without adding pilot work by setting
   `options(faissR.kmeans_cuda_work_threshold = ...)`,
   `options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
   `options(faissR.kmeans_cuda_large_n_threshold = ...)`, or

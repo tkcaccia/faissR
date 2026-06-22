@@ -58,8 +58,11 @@
 #'   `parameters$tuning$effective_tol` expose the same values as flat fields for
 #'   benchmark summaries. `parameters$tuning$backend_policy` records the
 #'   deterministic shape rule used by `backend = "auto"` to decide whether CUDA
-#'   has enough estimated work or input size to offset transfer overhead. The
-#'   default thresholds can be overridden without adding pilot work by setting
+#'   has enough estimated work or float32 transfer size to offset transfer
+#'   overhead. The policy keeps `nbytes` as the ordinary R double input
+#'   footprint and records `gpu_transfer_nbytes` for the float32 data passed to
+#'   FAISS/cuVS. The default thresholds can be overridden without adding pilot
+#'   work by setting
 #'   `options(faissR.kmeans_cuda_work_threshold = ...)`,
 #'   `options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
 #'   `options(faissR.kmeans_cuda_large_n_threshold = ...)`, or
@@ -299,6 +302,10 @@ kmeans_selection_metadata <- function(requested_backend,
     centers = as.integer(centers),
     work = as.numeric(backend_policy$work %||% (as.double(n) * as.double(p) * as.double(centers))),
     nbytes = as.numeric(backend_policy$nbytes %||% (as.double(n) * as.double(p) * 8)),
+    input_nbytes = as.numeric(backend_policy$input_nbytes %||% backend_policy$nbytes %||%
+      (as.double(n) * as.double(p) * 8)),
+    gpu_transfer_nbytes = as.numeric(backend_policy$gpu_transfer_nbytes %||%
+      (as.double(n) * as.double(p) * 4)),
     n_per_center = as.numeric(backend_policy$n_per_center %||% (as.double(n) / as.double(centers))),
     backend_policy_reason = backend_policy$reason %||% NA_character_,
     explicit_backend = isTRUE(explicit_backend),
@@ -326,6 +333,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       reason = "unknown_shape",
       work = NA_real_,
       nbytes = NA_real_,
+      input_nbytes = NA_real_,
+      gpu_transfer_nbytes = NA_real_,
       n_per_center = NA_real_,
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
@@ -345,6 +354,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       reason = "invalid_shape_assume_cuda_capable",
       work = NA_real_,
       nbytes = NA_real_,
+      input_nbytes = NA_real_,
+      gpu_transfer_nbytes = NA_real_,
       n_per_center = NA_real_,
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
@@ -355,6 +366,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
   }
   work <- n * p * centers
   nbytes <- n * p * 8
+  input_nbytes <- nbytes
+  gpu_transfer_nbytes <- n * p * 4
   n_per_center <- n / centers
   if (centers == 1) {
     return(list(
@@ -362,6 +375,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       reason = "single_cluster_exact_mean",
       work = as.numeric(work),
       nbytes = as.numeric(nbytes),
+      input_nbytes = as.numeric(input_nbytes),
+      gpu_transfer_nbytes = as.numeric(gpu_transfer_nbytes),
       n_per_center = as.numeric(n_per_center),
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
@@ -376,6 +391,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       reason = "singleton_exact_identity",
       work = as.numeric(work),
       nbytes = as.numeric(nbytes),
+      input_nbytes = as.numeric(input_nbytes),
+      gpu_transfer_nbytes = as.numeric(gpu_transfer_nbytes),
       n_per_center = as.numeric(n_per_center),
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
@@ -384,12 +401,14 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       min_n_per_center = min_n_per_center
     ))
   }
-  if (n_per_center < min_n_per_center && nbytes < nbytes_threshold) {
+  if (n_per_center < min_n_per_center && gpu_transfer_nbytes < nbytes_threshold) {
     return(list(
       prefer_cuda = FALSE,
       reason = "few_points_per_center_cpu_preferred",
       work = as.numeric(work),
       nbytes = as.numeric(nbytes),
+      input_nbytes = as.numeric(input_nbytes),
+      gpu_transfer_nbytes = as.numeric(gpu_transfer_nbytes),
       n_per_center = as.numeric(n_per_center),
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
@@ -399,11 +418,11 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
     ))
   }
   prefer <- work >= work_threshold ||
-    nbytes >= nbytes_threshold ||
+    gpu_transfer_nbytes >= nbytes_threshold ||
     (n >= large_n_threshold && p >= large_p_threshold)
   reason <- if (work >= work_threshold) {
     "work_at_least_1e8"
-  } else if (nbytes >= nbytes_threshold) {
+  } else if (gpu_transfer_nbytes >= nbytes_threshold) {
     "input_at_least_256MiB"
   } else if (n >= large_n_threshold && p >= large_p_threshold) {
     "large_high_dimensional_input"
@@ -415,6 +434,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
     reason = reason,
     work = as.numeric(work),
     nbytes = as.numeric(nbytes),
+    input_nbytes = as.numeric(input_nbytes),
+    gpu_transfer_nbytes = as.numeric(gpu_transfer_nbytes),
     n_per_center = as.numeric(n_per_center),
     work_threshold = work_threshold,
     nbytes_threshold = nbytes_threshold,

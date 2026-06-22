@@ -313,9 +313,10 @@ test_that("fast_kmeans auto tuning is shape and center-count aware for benchmark
     centers = 2L
   )
   expect_true(byte_policy$prefer_cuda)
-  expect_equal(byte_policy$reason, "input_at_least_256MiB")
+  expect_equal(byte_policy$reason, "large_high_dimensional_input")
   expect_equal(byte_policy$nbytes_threshold, 256 * 1024^2)
   expect_true(byte_policy$nbytes >= byte_policy$nbytes_threshold)
+  expect_true(byte_policy$gpu_transfer_nbytes < byte_policy$nbytes_threshold)
 
   high_dim_policy <- faissR:::kmeans_auto_backend_policy(
     n = 50000L,
@@ -448,6 +449,8 @@ test_that("fast_kmeans auto backend is shape-aware", {
   expect_equal(small_policy$reason, "small_cpu_preferred")
   expect_equal(small_policy$work, 1440)
   expect_equal(small_policy$nbytes, 3840)
+  expect_equal(small_policy$input_nbytes, 3840)
+  expect_equal(small_policy$gpu_transfer_nbytes, 1920)
   expect_equal(small_policy$n_per_center, 40)
   expect_equal(small_policy$work_threshold, 1e8)
   expect_equal(small_policy$nbytes_threshold, 256 * 1024^2)
@@ -515,6 +518,8 @@ test_that("fast_kmeans auto backend is shape-aware", {
   expect_false(cuda_selection$explicit_backend)
   expect_equal(cuda_selection$backend_decision, "work_at_least_1e8")
   expect_true(cuda_selection$backend_policy_prefer_cuda)
+  expect_equal(cuda_selection$input_nbytes, work_policy$input_nbytes)
+  expect_equal(cuda_selection$gpu_transfer_nbytes, work_policy$gpu_transfer_nbytes)
   expect_true(cuda_selection$cuda_available)
   expect_true(cuda_selection$faiss_gpu_available)
   expect_false(cuda_selection$cuvs_available)
@@ -523,8 +528,20 @@ test_that("fast_kmeans auto backend is shape-aware", {
   expect_equal(cuda_selection$effective_tol, 1e-4)
 
   memory_policy <- faissR:::kmeans_auto_backend_policy(n = 9000000L, p = 4L, centers = 2L)
-  expect_true(memory_policy$prefer_cuda)
-  expect_equal(memory_policy$reason, "input_at_least_256MiB")
+  expect_false(memory_policy$prefer_cuda)
+  expect_equal(memory_policy$reason, "small_cpu_preferred")
+  expect_true(memory_policy$nbytes >= memory_policy$nbytes_threshold)
+  expect_true(memory_policy$gpu_transfer_nbytes < memory_policy$nbytes_threshold)
+
+  withr::with_options(
+    list(faissR.kmeans_cuda_work_threshold = 1e12),
+    {
+      transfer_policy <- faissR:::kmeans_auto_backend_policy(n = 20000000L, p = 4L, centers = 2L)
+      expect_true(transfer_policy$prefer_cuda)
+      expect_equal(transfer_policy$reason, "input_at_least_256MiB")
+      expect_true(transfer_policy$gpu_transfer_nbytes >= transfer_policy$nbytes_threshold)
+    }
+  )
 
   high_dim_policy <- faissR:::kmeans_auto_backend_policy(n = 60000L, p = 128L, centers = 2L)
   expect_true(high_dim_policy$prefer_cuda)

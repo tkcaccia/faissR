@@ -267,8 +267,11 @@ resolved; `parameters$tuning$effective_max_iter`,
 `parameters$tuning$effective_n_init`, and `parameters$tuning$effective_tol`
 expose the same values as flat fields for benchmark summaries.
 `parameters$tuning$backend_policy` records the deterministic `backend = "auto"`
-shape decision, including `prefer_cuda`, `reason`, estimated work, input bytes,
-and `n_per_center`. The CUDA auto gate can be adjusted for a benchmarked machine
+shape decision, including `prefer_cuda`, `reason`, estimated work, ordinary R
+input bytes, float32 GPU transfer bytes, and `n_per_center`. The CUDA auto gate
+uses `gpu_transfer_nbytes` for the size threshold because FAISS/cuVS consume
+float32 data; `nbytes` remains the R double input footprint for compatibility
+and auditing. The CUDA auto gate can be adjusted for a benchmarked machine
 with `options(faissR.kmeans_cuda_work_threshold = ...)`,
 `options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
 `options(faissR.kmeans_cuda_large_n_threshold = ...)`, and

@@ -646,8 +646,10 @@ The package records the same decision in
 `small_cpu_preferred`, `few_points_per_center_cpu_preferred`,
 `work_at_least_1e8`, `input_at_least_256MiB`, or
 `large_high_dimensional_input`, plus `single_cluster_exact_mean` and
-`singleton_exact_identity` for exact paths, the estimated work and input bytes,
-and the
+`singleton_exact_identity` for exact paths, the estimated work, ordinary R input
+bytes, and float32 GPU transfer bytes. The size gate uses
+`gpu_transfer_nbytes`, while `nbytes` stays available as the R double input
+footprint for compatibility, plus the
 deterministic threshold values (`work_threshold`, `nbytes_threshold`,
 `large_n_threshold`, `large_p_threshold`, and `min_n_per_center`) used for the
 CPU/CUDA decision.

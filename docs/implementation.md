@@ -478,6 +478,9 @@ The gate is deterministic and recorded in
 `"large_high_dimensional_input"`, `"single_cluster_exact_mean"`, or
 `"singleton_exact_identity"` so benchmark summaries can audit why
 `backend = "auto"` selected CPU or CUDA without running extra tuning jobs.
+For the size gate, the policy records both `nbytes` (ordinary R double input
+footprint) and `gpu_transfer_nbytes` (float32 data passed to FAISS/cuVS), and
+the CUDA threshold is applied to `gpu_transfer_nbytes`.
 Benchmark-derived threshold refinements can be applied without changing package
 code by setting
 `options(faissR.kmeans_cuda_work_threshold = ...)`,

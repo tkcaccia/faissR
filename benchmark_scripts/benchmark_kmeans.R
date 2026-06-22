@@ -394,6 +394,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       reason = "unknown_shape",
       work = NA_real_,
       nbytes = NA_real_,
+      input_nbytes = NA_real_,
+      gpu_transfer_nbytes = NA_real_,
       n_per_center = NA_real_,
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
@@ -413,6 +415,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       reason = "invalid_shape_assume_cuda_capable",
       work = NA_real_,
       nbytes = NA_real_,
+      input_nbytes = NA_real_,
+      gpu_transfer_nbytes = NA_real_,
       n_per_center = NA_real_,
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
@@ -423,6 +427,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
   }
   work <- n * p * centers
   nbytes <- n * p * 8
+  input_nbytes <- nbytes
+  gpu_transfer_nbytes <- n * p * 4
   n_per_center <- n / centers
   if (centers == 1) {
     return(list(
@@ -430,6 +436,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       reason = "single_cluster_exact_mean",
       work = as.numeric(work),
       nbytes = as.numeric(nbytes),
+      input_nbytes = as.numeric(input_nbytes),
+      gpu_transfer_nbytes = as.numeric(gpu_transfer_nbytes),
       n_per_center = as.numeric(n_per_center),
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
@@ -444,6 +452,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       reason = "singleton_exact_identity",
       work = as.numeric(work),
       nbytes = as.numeric(nbytes),
+      input_nbytes = as.numeric(input_nbytes),
+      gpu_transfer_nbytes = as.numeric(gpu_transfer_nbytes),
       n_per_center = as.numeric(n_per_center),
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
@@ -452,12 +462,14 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
       min_n_per_center = min_n_per_center
     ))
   }
-  if (n_per_center < min_n_per_center && nbytes < nbytes_threshold) {
+  if (n_per_center < min_n_per_center && gpu_transfer_nbytes < nbytes_threshold) {
     return(list(
       prefer_cuda = FALSE,
       reason = "few_points_per_center_cpu_preferred",
       work = as.numeric(work),
       nbytes = as.numeric(nbytes),
+      input_nbytes = as.numeric(input_nbytes),
+      gpu_transfer_nbytes = as.numeric(gpu_transfer_nbytes),
       n_per_center = as.numeric(n_per_center),
       work_threshold = work_threshold,
       nbytes_threshold = nbytes_threshold,
@@ -467,11 +479,11 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
     ))
   }
   prefer <- work >= work_threshold ||
-    nbytes >= nbytes_threshold ||
+    gpu_transfer_nbytes >= nbytes_threshold ||
     (n >= large_n_threshold && p >= large_p_threshold)
   reason <- if (work >= work_threshold) {
     "work_at_least_1e8"
-  } else if (nbytes >= nbytes_threshold) {
+  } else if (gpu_transfer_nbytes >= nbytes_threshold) {
     "input_at_least_256MiB"
   } else if (n >= large_n_threshold && p >= large_p_threshold) {
     "large_high_dimensional_input"
@@ -483,6 +495,8 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
     reason = reason,
     work = as.numeric(work),
     nbytes = as.numeric(nbytes),
+    input_nbytes = as.numeric(input_nbytes),
+    gpu_transfer_nbytes = as.numeric(gpu_transfer_nbytes),
     n_per_center = as.numeric(n_per_center),
     work_threshold = work_threshold,
     nbytes_threshold = nbytes_threshold,
@@ -587,6 +601,7 @@ result_row <- function(dataset, n, p, method, backend, centers, cycle, n_threads
                        selection_backend_decision = NA_character_,
                        selection_work = NA_real_,
                        selection_nbytes = NA_real_,
+                       selection_gpu_transfer_nbytes = NA_real_,
                        selection_n_per_center = NA_real_,
                        selection_cuda_available = NA,
                        selection_faiss_gpu_available = NA,
@@ -634,6 +649,7 @@ result_row <- function(dataset, n, p, method, backend, centers, cycle, n_threads
     selection_backend_decision = selection_backend_decision,
     selection_work = selection_work,
     selection_nbytes = selection_nbytes,
+    selection_gpu_transfer_nbytes = selection_gpu_transfer_nbytes,
     selection_n_per_center = selection_n_per_center,
     selection_cuda_available = as.logical(selection_cuda_available),
     selection_faiss_gpu_available = as.logical(selection_faiss_gpu_available),
@@ -736,6 +752,7 @@ summarize_kmeans_cycles <- function(ok) {
       selection_backend_decision = dominant_value(x$selection_backend_decision),
       median_selection_work = finite_median(x$selection_work),
       median_selection_nbytes = finite_median(x$selection_nbytes),
+      median_selection_gpu_transfer_nbytes = finite_median(x$selection_gpu_transfer_nbytes),
       median_selection_n_per_center = finite_median(x$selection_n_per_center),
       selection_cuda_available = any(x$selection_cuda_available %in% TRUE, na.rm = TRUE),
       selection_faiss_gpu_available = any(x$selection_faiss_gpu_available %in% TRUE, na.rm = TRUE),
@@ -813,7 +830,8 @@ compare_fast_kmeans_to_recommendations <- function(cycle_summary, recommendation
     "selection_predicted_backend", "selection_reason",
     "selection_explicit_backend", "selection_backend_decision",
     "median_selection_work",
-    "median_selection_nbytes", "median_selection_n_per_center",
+    "median_selection_nbytes", "median_selection_gpu_transfer_nbytes",
+    "median_selection_n_per_center",
     "selection_cuda_available", "selection_faiss_gpu_available",
     "selection_cuvs_available"
   )
@@ -866,7 +884,8 @@ compare_auto_kmeans_to_recommendations <- function(cycle_summary, recommendation
     "selection_predicted_backend", "selection_reason",
     "selection_explicit_backend", "selection_backend_decision",
     "median_selection_work",
-    "median_selection_nbytes", "median_selection_n_per_center",
+    "median_selection_nbytes", "median_selection_gpu_transfer_nbytes",
+    "median_selection_n_per_center",
     "selection_cuda_available", "selection_faiss_gpu_available",
     "selection_cuvs_available"
   )
@@ -1160,6 +1179,7 @@ run_one <- function(x, labels, dataset_name, method, backend, centers,
       selection_backend_decision = selection$backend_decision %||% if (identical(method, "stats")) "stats_kmeans" else NA_character_,
       selection_work = selection$work %||% NA_real_,
       selection_nbytes = selection$nbytes %||% NA_real_,
+      selection_gpu_transfer_nbytes = selection$gpu_transfer_nbytes %||% NA_real_,
       selection_n_per_center = selection$n_per_center %||% NA_real_,
       selection_cuda_available = selection$cuda_available %||% NA,
       selection_faiss_gpu_available = selection$faiss_gpu_available %||% NA,
@@ -1307,6 +1327,7 @@ for (dataset_name in datasets) {
             selection_backend_decision = if (!identical(backend, "auto")) paste0("explicit_", backend) else backend_policy$reason %||% NA_character_,
             selection_work = backend_policy$work %||% auto_params$work,
             selection_nbytes = backend_policy$nbytes %||% NA_real_,
+            selection_gpu_transfer_nbytes = backend_policy$gpu_transfer_nbytes %||% NA_real_,
             selection_n_per_center = backend_policy$n_per_center %||% auto_params$n_per_center,
             selection_cuda_available = cuda_available(),
             selection_faiss_gpu_available = kmeans_faiss_gpu_available(),

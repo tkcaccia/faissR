@@ -1808,6 +1808,8 @@ test_that("k-means benchmark mirrors fast_kmeans auto CUDA shape gate", {
   expect_false(small_policy$prefer_cuda)
   expect_equal(small_policy$reason, "small_cpu_preferred")
   expect_equal(small_policy$work_threshold, 1e8)
+  expect_equal(small_policy$nbytes, 3840)
+  expect_equal(small_policy$gpu_transfer_nbytes, 1920)
   expect_equal(small_policy$nbytes_threshold, 256 * 1024^2)
   expect_equal(small_policy$large_n_threshold, 50000)
   expect_equal(small_policy$large_p_threshold, 128)
@@ -1898,6 +1900,7 @@ test_that("k-means benchmark records static selection metadata", {
     selection_backend_decision = "explicit_cpu",
     selection_work = 1200,
     selection_nbytes = 3200,
+    selection_gpu_transfer_nbytes = 1600,
     selection_n_per_center = 33.3,
     selection_cuda_available = FALSE,
     selection_faiss_gpu_available = FALSE,
@@ -1924,6 +1927,7 @@ test_that("k-means benchmark records static selection metadata", {
   expect_equal(summary$selection_backend_decision, "explicit_cpu")
   expect_equal(summary$median_selection_work, 1200)
   expect_equal(summary$median_selection_nbytes, 3200)
+  expect_equal(summary$median_selection_gpu_transfer_nbytes, 1600)
   expect_equal(summary$median_selection_n_per_center, 33.3)
   expect_false(summary$any_hit_max_iter)
   expect_true(summary$all_converged)
@@ -2097,6 +2101,7 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
     selection_backend_decision = c("explicit_cuda", "explicit_cpu", "explicit_cuda", "explicit_cpu", "stats_kmeans", "stats_kmeans"),
     median_selection_work = c(300, 300, 500, 500, NA, NA),
     median_selection_nbytes = c(2400, 2400, 4000, 4000, NA, NA),
+    median_selection_gpu_transfer_nbytes = c(1200, 1200, 2000, 2000, NA, NA),
     median_selection_n_per_center = c(10, 10, 10, 10, NA, NA),
     selection_cuda_available = c(TRUE, TRUE, TRUE, TRUE, NA, NA),
     selection_faiss_gpu_available = c(TRUE, TRUE, TRUE, TRUE, NA, NA),
@@ -2170,6 +2175,7 @@ test_that("k-means auto comparison audits global recommendation", {
     selection_backend_decision = c("small_cpu_preferred", "explicit_cuda", "stats_kmeans"),
     median_selection_work = c(300, 300, NA),
     median_selection_nbytes = c(2400, 2400, NA),
+    median_selection_gpu_transfer_nbytes = c(1200, 1200, NA),
     median_selection_n_per_center = c(10, 10, NA),
     selection_cuda_available = c(TRUE, TRUE, NA),
     selection_faiss_gpu_available = c(TRUE, TRUE, NA),
