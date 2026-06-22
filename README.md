@@ -33,11 +33,13 @@ headers and libraries discovered by `configure`.
   optional direct RAPIDS cuVS/CUDA indexes [1-6,13-16].
 - `candidate_knn()` for exact top-k ranking inside supplied candidate rows.
 - `knn_graph()` for native weighted KNN graph construction without requiring
-  `igraph`.
+  `igraph`; graphs can store an optional target community count for downstream
+  Louvain/Leiden clustering.
 - `graph_cluster()` for native C++/OpenMP random-walk, Louvain, and
-  Leiden-style clustering [9-11]. CUDA Louvain and Leiden use RAPIDS libcugraph
-  when faissR is built with libcugraph [12]; CUDA random-walking is not enabled
-  yet.
+  Leiden-style clustering [9-11], including an optional `n_clusters` target
+  that searches a small deterministic resolution grid for Louvain/Leiden.
+  CUDA Louvain and Leiden use RAPIDS libcugraph when faissR is built with
+  libcugraph [12]; CUDA random-walking is not enabled yet.
 - `fast_kmeans()` for CPU, FAISS CPU/GPU, and optional cuVS k-means [7-8].
 - `knn()` and `predict()` for kNN classification/regression, including
   immediate prediction with `knn(Xtrain, Ytrain, Xtest)` and class
@@ -133,8 +135,11 @@ library(faissR)
 x <- scale(as.matrix(iris[, 1:4]))
 nn_res <- nn(x, k = 15, backend = "auto", metric = "euclidean", n_threads = 4)
 
-cl <- graph_cluster(nn_res, method = "leiden", backend = "cpu", n_runs = 2, n_threads = 2)
+graph <- knn_graph(nn_res, weight = "snn", n_clusters = 3)
+cl <- graph_cluster(graph, method = "leiden", backend = "cpu",
+                    n_runs = 2, n_threads = 2)
 table(cl$membership)
+cl$selected_resolution
 ```
 
 ## License
