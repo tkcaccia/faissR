@@ -406,7 +406,10 @@ settings. For benchmark-like shapes, MNIST70k with 10 centres uses the
 low-dimensional data uses `large_fast_convergence` with 50 iterations, one
 restart, and `tol = 1e-3`, while a small 50,000 x 10 / 100-cluster job uses
 `small_many_centers_multistart` with 100 iterations and three restarts. These
-are fixed rules, not pilot benchmark loops. The
+are fixed rules, not pilot benchmark loops. When `centers = 1`,
+`fast_kmeans()` uses the exact CPU column mean for `backend = "auto"` and
+`"cpu"` and records `single_cluster_exact_mean`, because iterative k-means
+cannot improve that solution on any backend. The
 `resolved_from` field records whether `max_iter`, `n_init`, and `tol` were
 selected by auto/default rules or supplied explicitly.
 `result$parameters$tuning$effective` records the final values used after

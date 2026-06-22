@@ -552,12 +552,15 @@ auditable. The skip decision is derived from `kmeans_runtime_capabilities.csv`.
 `backend = "auto"` resolves to CPU instead of becoming an expected
 skip when no k-means-capable CUDA route is available, and it can also resolve
 to CPU for small k-means jobs where the deterministic shape gate estimates that
-GPU launch/copy overhead would dominate. Unexpected runtime errors remain
-failed rows and are not replaced with CPU timings.
+GPU launch/copy overhead would dominate. `centers = 1` is also resolved to the
+exact CPU column-mean solution, even for very large matrices, because no
+iterative CPU or CUDA k-means backend can improve that objective. Unexpected
+runtime errors remain failed rows and are not replaced with CPU timings.
 The package records the same decision in
 `parameters$tuning$backend_policy`, including a reason string such as
 `small_cpu_preferred`, `work_at_least_1e8`, `input_at_least_256MiB`, or
-`large_high_dimensional_input`, the estimated work and input bytes, and the
+`large_high_dimensional_input`, plus `single_cluster_exact_mean` for the exact
+one-cluster path, the estimated work and input bytes, and the
 deterministic threshold values (`work_threshold`, `nbytes_threshold`,
 `large_n_threshold`, and `large_p_threshold`) used for the CPU/CUDA decision.
 Benchmark rows also record `selection_*` columns from

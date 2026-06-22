@@ -306,6 +306,8 @@ test_that("fast_kmeans docs describe effective tuning metadata", {
     expect_true(grepl("final values", prose, fixed = TRUE), info = basename(docs_file))
     expect_true(grepl("direct cuVS C API", prose, fixed = TRUE), info = basename(docs_file))
     expect_true(grepl("does not expose an explicit seed", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("centers = 1", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("single_cluster_exact_mean", prose, fixed = TRUE), info = basename(docs_file))
   }
 
   readme_file <- test_path("../../README.md")
@@ -814,6 +816,8 @@ test_that("benchmark documentation describes k-means tuning rule details", {
   expect_true(grepl("tuning_rule_detail", prose, fixed = TRUE))
   expect_true(grepl("small_low_work_multistart", prose, fixed = TRUE))
   expect_true(grepl("large_fast_convergence", prose, fixed = TRUE))
+  expect_true(grepl("single_cluster_exact_mean", prose, fixed = TRUE))
+  expect_true(grepl("exact CPU column-mean solution", prose, fixed = TRUE))
 })
 
 test_that("NN capability docs describe runtime reason codes", {

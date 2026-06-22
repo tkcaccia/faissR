@@ -1465,6 +1465,7 @@ test_that("k-means benchmark mirrors fast_kmeans auto CUDA shape gate", {
   expect_true(env$kmeans_auto_prefers_cuda(n = 70000L, p = 784L, centers = 10L))
   expect_true(env$kmeans_auto_prefers_cuda(n = 500000L, p = 32L, centers = 10L))
   expect_true(env$kmeans_auto_prefers_cuda(n = NULL, p = NULL, centers = NULL))
+  expect_false(env$kmeans_auto_prefers_cuda(n = 1000000L, p = 784L, centers = 1L))
 
   small_policy <- env$kmeans_auto_backend_policy(n = 120L, p = 4L, centers = 3L)
   expect_false(small_policy$prefer_cuda)
@@ -1478,6 +1479,11 @@ test_that("k-means benchmark mirrors fast_kmeans auto CUDA shape gate", {
   expect_true(work_policy$prefer_cuda)
   expect_equal(work_policy$reason, "work_at_least_1e8")
   expect_true(work_policy$work >= work_policy$work_threshold)
+
+  one_cluster <- env$kmeans_auto_backend_policy(n = 1000000L, p = 784L, centers = 1L)
+  expect_false(one_cluster$prefer_cuda)
+  expect_equal(one_cluster$reason, "single_cluster_exact_mean")
+  expect_equal(one_cluster$n_per_center, 1000000)
 })
 
 test_that("k-means benchmark fallback auto params mirror package metadata", {
@@ -1488,6 +1494,7 @@ test_that("k-means benchmark fallback auto params mirror package metadata", {
   env$getFromNamespace <- function(...) stop("simulate unavailable package helper")
 
   shapes <- list(
+    list(n = 70000L, p = 784L, centers = 1L, tuning = "auto"),
     list(n = 70000L, p = 784L, centers = 10L, tuning = " Auto "),
     list(n = 50000L, p = 10L, centers = 100L, tuning = "auto"),
     list(n = 200000L, p = 50L, centers = 100L, tuning = "FIXED"),

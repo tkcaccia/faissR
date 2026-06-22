@@ -391,6 +391,19 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
   work <- n * p * centers
   nbytes <- n * p * 8
   n_per_center <- n / centers
+  if (centers == 1) {
+    return(list(
+      prefer_cuda = FALSE,
+      reason = "single_cluster_exact_mean",
+      work = as.numeric(work),
+      nbytes = as.numeric(nbytes),
+      n_per_center = as.numeric(n_per_center),
+      work_threshold = work_threshold,
+      nbytes_threshold = nbytes_threshold,
+      large_n_threshold = large_n_threshold,
+      large_p_threshold = large_p_threshold
+    ))
+  }
   prefer <- work >= work_threshold ||
     nbytes >= nbytes_threshold ||
     (n >= large_n_threshold && p >= large_p_threshold)
