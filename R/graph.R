@@ -283,7 +283,9 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   supplied and `method` is omitted, faissR uses `"louvain"` as the
 #'   target-count clustering method. The target must be a positive integer and
 #'   cannot exceed the number of graph vertices.
-#' @param objective_function Reserved for Leiden-compatible APIs.
+#' @param objective_function Community objective. Only `"modularity"` is
+#'   currently implemented by the native CPU and CUDA clustering paths; CPM is
+#'   not accepted until the implementation can optimize and report it honestly.
 #' @param n_iterations Native clustering iterations.
 #' @param steps Random-walk propagation depth.
 #' @param seed Optional seed used to make repeated runs reproducible.
@@ -354,7 +356,7 @@ graph_cluster <- function(graph,
                           n_runs = 1L,
                           resolution = 1,
                           n_clusters = NULL,
-                          objective_function = c("modularity", "CPM"),
+                          objective_function = c("modularity"),
                           n_iterations = 10L,
                           steps = 4L,
                           seed = NULL,
@@ -617,12 +619,16 @@ normalize_graph_objective_function <- function(objective_function) {
     objective_function,
     arg = "objective_function",
     default = "modularity",
-    formal_choices = c("modularity", "CPM")
+    formal_choices = c("modularity")
   )
   if (is.na(objective_function) || !nzchar(objective_function)) objective_function <- "modularity"
   objective_function <- trimws(objective_function)
-  if (!objective_function %in% c("modularity", "CPM")) {
-    stop("`objective_function` must be one of \"modularity\" or \"CPM\".", call. = FALSE)
+  if (!objective_function %in% c("modularity")) {
+    stop(
+      "`objective_function` must be \"modularity\". CPM is not implemented ",
+      "in the current native graph clustering backend.",
+      call. = FALSE
+    )
   }
   objective_function
 }

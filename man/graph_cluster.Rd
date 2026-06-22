@@ -23,7 +23,7 @@ graph_cluster(
   n_runs = 1L,
   resolution = 1,
   n_clusters = NULL,
-  objective_function = c("modularity", "CPM"),
+  objective_function = c("modularity"),
   n_iterations = 10L,
   steps = 4L,
   seed = NULL,
@@ -66,7 +66,9 @@ to reduce repeated Louvain/Leiden passes. This is a convenience target, not a
 hard guarantee. If \code{n_clusters} is supplied and \code{method} is omitted,
 faissR uses \code{"louvain"} as the target-count clustering method. The target
 must be a positive integer and cannot exceed the number of graph vertices.}
-\item{objective_function}{Reserved for Leiden-compatible APIs; currently recorded in parameters.}
+\item{objective_function}{Community objective. Only \code{"modularity"} is
+currently implemented by the native CPU and CUDA clustering paths; CPM is not
+accepted until the implementation can optimize and report it honestly.}
 \item{n_iterations}{Native clustering iteration count.}
 \item{steps}{Random-walk propagation depth.}
 \item{seed}{Optional seed for reproducible repeated CPU runs.}

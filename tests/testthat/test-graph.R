@@ -666,7 +666,11 @@ test_that("graph_cluster requires canonical objective-function labels", {
   x <- matrix(rnorm(80), ncol = 4)
 
   expect_equal(faissR:::normalize_graph_objective_function(NULL), "modularity")
-  expect_equal(faissR:::normalize_graph_objective_function("CPM"), "CPM")
+  expect_equal(faissR:::normalize_graph_objective_function("modularity"), "modularity")
+  expect_error(
+    faissR:::normalize_graph_objective_function("CPM"),
+    "CPM is not implemented"
+  )
   expect_error(
     faissR:::normalize_graph_objective_function(c("CPM", "modularity")),
     "`objective_function` must be a single value"
@@ -681,6 +685,17 @@ test_that("graph_cluster requires canonical objective-function labels", {
       objective_function = "C"
     ),
     "objective_function"
+  )
+  expect_error(
+    graph_cluster(
+      x,
+      method = "leiden",
+      backend = "cpu",
+      graph_backend = "cpu",
+      k = 5L,
+      objective_function = "CPM"
+    ),
+    "CPM is not implemented"
   )
 })
 
