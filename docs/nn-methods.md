@@ -74,7 +74,7 @@ CUDA and keep CUDA backend metadata.
 
 | Method | CPU metrics | CUDA metrics | Notes |
 | --- | --- | --- | --- |
-| `"auto"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA auto uses FAISS GPU Flat for cosine/correlation/IP and shape-aware CUDA routes for Euclidean. |
+| `"auto"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA auto uses shape-aware CUDA grid for large 2D/3D Euclidean/cosine/correlation self-KNN, and FAISS GPU Flat for non-grid cosine/correlation/IP when available. |
 | `"exact"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA cosine/correlation/IP use FAISS GPU Flat variants when available. |
 | `"flat"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS Flat L2/IP plus normalized Flat IP transforms. |
 | `"bruteforce"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA Euclidean can use cuVS brute force; non-Euclidean routes use FAISS GPU Flat. |

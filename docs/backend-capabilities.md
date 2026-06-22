@@ -117,9 +117,10 @@ them.
 
 The capability table is design-level. Runtime auto-selection can still choose
 CPU when the public CUDA design route needs a missing optional component. For
-example, CUDA cosine, correlation, and inner-product auto routes require FAISS
-GPU Flat; on a cuVS-only runtime, `backend = "auto"` keeps those metrics on CPU
-instead of selecting an unavailable FAISS GPU index.
+example, CUDA cosine and correlation auto routes can use CUDA grid for large
+2D/3D self-KNN, but non-grid CUDA cosine, correlation, and inner-product auto
+routes require FAISS GPU Flat; on a cuVS-only runtime, `backend = "auto"` keeps
+those metrics on CPU instead of selecting an unavailable FAISS GPU index.
 FAISS CPU and FAISS GPU availability are checked separately at execution time:
 explicit FAISS GPU Flat, IVF, IVFPQ, and CAGRA routes require a FAISS build
 that reports GPU support, not only a CPU FAISS installation.

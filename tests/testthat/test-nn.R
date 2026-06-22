@@ -243,6 +243,16 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_equal(cuda_bruteforce_cor$implementation, "FAISS GPU Flat")
   expect_match(cuda_bruteforce_cor$notes, "FAISS GPU Flat")
   expect_match(cuda_bruteforce_cor$notes, "Euclidean/L2-only")
+
+  cuda_auto_cor <- caps[
+    caps$backend == "cuda" & caps$method == "auto" & caps$metric == "correlation",
+    ,
+    drop = FALSE
+  ]
+  expect_equal(nrow(cuda_auto_cor), 1L)
+  expect_match(cuda_auto_cor$notes, "CUDA grid")
+  expect_match(cuda_auto_cor$notes, "FAISS GPU Flat")
+  expect_match(cuda_auto_cor$notes, "cuVS-only")
 })
 
 test_that("nn_capabilities agrees with public backend resolver", {

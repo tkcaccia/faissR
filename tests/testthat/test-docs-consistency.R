@@ -695,10 +695,12 @@ test_that("autotuning docs describe CUDA auto non-Euclidean routing", {
   }
 
   prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  expect_true(grepl("CUDA grid", prose, fixed = TRUE))
+  expect_true(grepl("Euclidean/cosine/correlation", prose, fixed = TRUE))
   expect_true(grepl("FAISS[[:space:]]+GPU[[:space:]]+Flat[[:space:]]+IP[[:space:]]+routes", prose))
   expect_true(grepl("cosine", prose, fixed = TRUE))
   expect_true(grepl("correlation", prose, fixed = TRUE))
   expect_true(grepl("inner-product", prose, fixed = TRUE))
   expect_true(grepl("cuVS-only runtimes", prose, fixed = TRUE))
-  expect_true(grepl("non-grid non-Euclidean searches on CPU", prose, fixed = TRUE))
+  expect_true(grepl("non-grid[[:space:]]+non-Euclidean searches on CPU", prose))
 })
