@@ -318,6 +318,91 @@ List format_faiss_result(const std::vector<faiss::idx_t>& labels,
                          const bool exclude_self,
                          const std::string& index_type,
                          const bool exact,
+                         const DistanceOutput distance_output,
+                         const int n_threads,
+                         const int nlist,
+                         const int nprobe,
+                         const int graph_degree,
+                         const int search_width);
+
+List search_faiss_flat_float32_ptr(const float* data,
+                                   const int n,
+                                   const int p,
+                                   const float* points,
+                                   const int n_points,
+                                   const int k,
+                                   const bool exclude_self,
+                                   const bool self_query,
+                                   const int n_threads,
+                                   const std::string& metric) {
+  if (data == nullptr || points == nullptr) {
+    Rcpp::stop("FAISS float32 Flat search received a null data pointer");
+  }
+  if (n < 1 || p < 1 || n_points < 1) {
+    Rcpp::stop("FAISS float32 Flat search requires positive dimensions");
+  }
+  if (k < 1 || k > n) {
+    Rcpp::stop("k must be in [1, nrow(data)]");
+  }
+  const bool normalized_metric = metric == "cosine" || metric == "correlation";
+  const DistanceOutput output = metric == "inner_product" ?
+    DistanceOutput::InnerProduct :
+    (normalized_metric ? DistanceOutput::OneMinusInnerProduct : DistanceOutput::L2Squared);
+
+  OmpThreadScope threads(n_threads);
+  std::unique_ptr<faiss::Index> index;
+  std::string index_type;
+  if (metric == "inner_product" || normalized_metric) {
+    index.reset(new faiss::IndexFlatIP(p));
+    index_type = "IndexFlatIP";
+  } else if (metric == "euclidean") {
+    index.reset(new faiss::IndexFlatL2(p));
+    index_type = "IndexFlatL2";
+  } else {
+    Rcpp::stop(
+      "FAISS float32 Flat input supports metric = 'euclidean', "
+      "'cosine', 'correlation', or 'inner_product'"
+    );
+  }
+
+  const int search_k = exclude_self ? std::min(n, k + 1) : k;
+  std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
+  std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
+  try {
+    index->add(n, data);
+    index->search(n_points, points, search_k, distances.data(), labels.data());
+  } catch (const std::exception& e) {
+    Rcpp::stop("FAISS float32 Flat search failed: %s", e.what());
+  }
+
+  return format_faiss_result(
+    labels,
+    distances,
+    n_points,
+    search_k,
+    k,
+    self_query,
+    exclude_self,
+    index_type,
+    true,
+    output,
+    n_threads,
+    NA_INTEGER,
+    NA_INTEGER,
+    NA_INTEGER,
+    NA_INTEGER
+  );
+}
+
+List format_faiss_result(const std::vector<faiss::idx_t>& labels,
+                         const std::vector<float>& distances,
+                         const int n_points,
+                         const int search_k,
+                         const int out_k,
+                         const bool self_query,
+                         const bool exclude_self,
+                         const std::string& index_type,
+                         const bool exact,
                          const DistanceOutput distance_output = DistanceOutput::L2Squared,
                          const int n_threads = 1,
                          const int nlist = NA_INTEGER,
@@ -574,50 +659,19 @@ List search_faiss_flat_float32(SEXP data,
     normalize_float32_view(xq, metric);
 
   const int n_points = same_storage ? xb.nrow : xq.nrow;
-  const int search_k = exclude_self ? std::min(xb.nrow, k + 1) : k;
   const float* query_ptr = same_storage ? xb.data : xq.data;
   const bool normalized_metric = metric == "cosine" || metric == "correlation";
-  const DistanceOutput output = metric == "inner_product" ?
-    DistanceOutput::InnerProduct :
-    (normalized_metric ? DistanceOutput::OneMinusInnerProduct : DistanceOutput::L2Squared);
-
-  OmpThreadScope threads(n_threads);
-  std::unique_ptr<faiss::Index> index;
-  std::string index_type;
-  if (metric == "inner_product" || normalized_metric) {
-    index.reset(new faiss::IndexFlatIP(xb.ncol));
-    index_type = "IndexFlatIP";
-  } else if (metric == "euclidean") {
-    index.reset(new faiss::IndexFlatL2(xb.ncol));
-    index_type = "IndexFlatL2";
-  } else {
-    Rcpp::stop(
-      "FAISS float32 Flat input supports metric = 'euclidean', "
-      "'cosine', 'correlation', or 'inner_product'"
-    );
-  }
-
-  std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
-  std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
-  try {
-    index->add(xb.nrow, xb.data);
-    index->search(n_points, query_ptr, search_k, distances.data(), labels.data());
-  } catch (const std::exception& e) {
-    Rcpp::stop("FAISS float32 Flat search failed: %s", e.what());
-  }
-
-  List out = format_faiss_result(
-    labels,
-    distances,
+  List out = search_faiss_flat_float32_ptr(
+    xb.data,
+    xb.nrow,
+    xb.ncol,
+    query_ptr,
     n_points,
-    search_k,
     k,
-    self_query,
     exclude_self,
-    index_type,
-    true,
-    output,
-    n_threads
+    self_query,
+    n_threads,
+    metric
   );
   if (normalized_metric) {
     restore_zero_normalized_float32_rows(
