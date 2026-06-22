@@ -44,7 +44,7 @@ backend_info <- function() {
       "flat, ivf, ivfpq, hnsw, nsg; GPU flat/ivf/ivfpq/cagra when FAISS GPU is available",
       "ivf, ivfpq, cagra",
       "bruteforce, nndescent, cagra",
-      "grid plus CUDA-capable FAISS/cuVS methods",
+      "grid, flat, bruteforce, ivf, ivfpq, nndescent, cagra where compiled",
       "graph_cluster louvain, leiden"
     ),
     supported_metrics = c(
