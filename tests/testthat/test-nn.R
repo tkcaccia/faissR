@@ -1841,6 +1841,62 @@ test_that("CPU auto selector is k and metric aware on benchmark k grid", {
   }
 })
 
+test_that("CPU auto selector canonicalizes metric aliases", {
+  work_size <- as.double(70000L) * as.double(70000L) * as.double(784L)
+  expect_equal(
+    faissR:::select_cpu_auto_backend(
+      self_query = TRUE,
+      n = 70000L,
+      p = 784L,
+      n_points = 70000L,
+      k = 5L,
+      work_size = work_size,
+      metric = "pearson"
+    ),
+    faissR:::select_cpu_auto_backend(
+      self_query = TRUE,
+      n = 70000L,
+      p = 784L,
+      n_points = 70000L,
+      k = 5L,
+      work_size = work_size,
+      metric = "correlation"
+    )
+  )
+  expect_equal(
+    faissR:::select_cpu_auto_backend(
+      self_query = TRUE,
+      n = 70000L,
+      p = 784L,
+      n_points = 70000L,
+      k = 5L,
+      work_size = work_size,
+      metric = "dot-product"
+    ),
+    faissR:::select_cpu_auto_backend(
+      self_query = TRUE,
+      n = 70000L,
+      p = 784L,
+      n_points = 70000L,
+      k = 5L,
+      work_size = work_size,
+      metric = "inner_product"
+    )
+  )
+  expect_error(
+    faissR:::select_cpu_auto_backend(
+      self_query = TRUE,
+      n = 70000L,
+      p = 784L,
+      n_points = 70000L,
+      k = 5L,
+      work_size = work_size,
+      metric = "manhattan"
+    ),
+    "`metric` must be one of"
+  )
+})
+
 test_that("CUDA auto selector is shape-aware", {
   skip_if_not(cuda_available() || cuvs_available())
 

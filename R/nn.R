@@ -2233,6 +2233,7 @@ select_cpu_auto_backend <- function(self_query,
                                     k,
                                     work_size,
                                     metric = "euclidean") {
+  metric <- normalize_nn_metric(metric)
   if (!identical(metric, "euclidean")) {
     if (metric %in% c("cosine", "correlation") &&
         isTRUE(self_query) &&
