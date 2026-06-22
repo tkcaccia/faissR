@@ -157,10 +157,11 @@ CPU when the public CUDA design route needs a missing optional component. For
 example, CUDA cosine and correlation auto routes can use CUDA grid for large
 2D/3D self-KNN. Non-grid CUDA cosine, correlation, and inner-product auto
 routes use FAISS GPU Flat for exact small/query workloads when available, and
-can select FAISS GPU/direct cuVS CAGRA for large self-KNN. On a cuVS-only
-runtime, `backend = "auto"` keeps small non-Euclidean workloads on CPU instead
-of selecting an unavailable FAISS GPU Flat index, but can use direct cuVS CAGRA
-for large non-Euclidean self-search. The same check is applied to explicit
+can select FAISS GPU/direct cuVS graph routes for large self-KNN. On a
+cuVS-only runtime, CUDA auto non-Euclidean capability rows are reported as
+runtime-available but shape-dependent: large self-KNN graph searches can use
+cuVS HNSW/CAGRA, while small/query workloads stay on CPU instead of selecting
+an unavailable FAISS GPU Flat index. The same check is applied to explicit
 methods such as `"flat"`, `"ivf"`, and `"ivfpq"` under `backend = "auto"`.
 FAISS CPU and FAISS GPU availability are checked separately at execution time:
 explicit FAISS GPU Flat, IVF, IVFPQ, and CAGRA routes require a FAISS build

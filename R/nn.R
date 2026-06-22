@@ -2047,20 +2047,28 @@ nn_cuda_auto_runtime_available <- function(metric,
       }
     ))
   }
-  ok <- isTRUE(faiss_gpu_available_value)
+  ok <- isTRUE(faiss_gpu_available_value) ||
+    isTRUE(cuvs_available_value) ||
+    (metric %in% c("cosine", "correlation") && isTRUE(cuda_available_value))
   list(
     available = ok,
-    reason = if (ok) "available" else "missing_faiss_gpu",
-    notes = if (ok) {
+    reason = if (ok) "available" else "missing_cuda_route",
+    notes = if (isTRUE(faiss_gpu_available_value)) {
       "CUDA auto non-Euclidean route is available through FAISS GPU Flat metric-aware search."
+    } else if (isTRUE(cuvs_available_value)) {
+      paste(
+        "CUDA auto non-Euclidean route is shape-dependent on this runtime:",
+        "large self-KNN graph searches can use cuVS graph routes, while",
+        "general exact non-Euclidean search still requires FAISS GPU Flat."
+      )
     } else if (isTRUE(cuda_available_value) && metric %in% c("cosine", "correlation")) {
       paste(
-        "CUDA auto non-Euclidean route requires FAISS GPU Flat for general",
-        "search; native CUDA grid may apply only to eligible 2D/3D",
-        "self-search datasets."
+        "CUDA auto non-Euclidean route is shape-dependent on this runtime:",
+        "native CUDA grid may apply to eligible 2D/3D self-search datasets,",
+        "while general exact non-Euclidean search still requires FAISS GPU Flat."
       )
     } else {
-      "CUDA auto non-Euclidean route requires FAISS GPU Flat support."
+      "CUDA auto non-Euclidean route requires FAISS GPU Flat, cuVS graph support, or an eligible native CUDA grid route."
     }
   )
 }

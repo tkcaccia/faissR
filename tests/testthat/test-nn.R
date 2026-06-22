@@ -937,9 +937,29 @@ test_that("cuda_auto runtime availability distinguishes cuVS and FAISS GPU metri
     cuvs_available_value = TRUE,
     faiss_gpu_available_value = FALSE
   )
-  expect_false(cosine_cuvs_only$available)
+  expect_true(cosine_cuvs_only$available)
+  expect_match(cosine_cuvs_only$notes, "shape-dependent")
+  expect_match(cosine_cuvs_only$notes, "cuVS graph")
   expect_match(cosine_cuvs_only$notes, "FAISS GPU Flat")
-  expect_match(cosine_cuvs_only$notes, "2D/3D")
+
+  correlation_native_cuda <- faissR:::nn_cuda_auto_runtime_available(
+    "correlation",
+    cuda_available_value = TRUE,
+    cuvs_available_value = FALSE,
+    faiss_gpu_available_value = FALSE
+  )
+  expect_true(correlation_native_cuda$available)
+  expect_match(correlation_native_cuda$notes, "shape-dependent")
+  expect_match(correlation_native_cuda$notes, "2D/3D")
+
+  ip_native_cuda <- faissR:::nn_cuda_auto_runtime_available(
+    "inner_product",
+    cuda_available_value = TRUE,
+    cuvs_available_value = FALSE,
+    faiss_gpu_available_value = FALSE
+  )
+  expect_false(ip_native_cuda$available)
+  expect_equal(ip_native_cuda$reason, "missing_cuda_route")
 
   ip_faiss_gpu <- faissR:::nn_cuda_auto_runtime_available(
     "inner_product",
