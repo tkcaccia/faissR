@@ -70,7 +70,7 @@ implementation routes recorded in benchmark output, not separate public
 | `ivfpq` | `faiss_gpu_ivfpq` | CUDA memory-pressure tier | Fast but low recall in this benchmark; explicit opt-in only. |
 | `ivfpq` | `cuda_cuvs_ivfpq` | CUDA memory-pressure tier | Direct Euclidean/L2 benchmark route. Better than FAISS GPU IVFPQ on some datasets but still not an accuracy-first default. |
 | `nsg` | `faiss_nsg` speed/balanced tiers | CPU graph candidate | Can be accurate but failed on some datasets with fewer than k neighbours; use safer params or retry. |
-| `nndescent` | `cpu_nndescent` speed/balanced tiers | CPU graph speed tier | Native faissR NN-descent route; useful as an explicit Euclidean or normalized cosine/correlation graph-search candidate, but recall was usually lower than HNSW. |
+| `nndescent` | `cpu_nndescent` speed/balanced tiers | CPU graph speed tier | Native faissR NN-descent route; useful as an explicit Euclidean, normalized cosine/correlation, or raw inner-product graph-search candidate, but recall was usually lower than HNSW. |
 | `nndescent` | `cuda_cuvs_nndescent` | CUDA graph speed tier | Fast and useful at around 0.99 recall on some datasets; failed on COIL20. |
 | `cagra` | `faiss_gpu_cagra` | CUDA graph high-recall tier | Reliable high-recall CAGRA path through FAISS/cuVS integration [13-15]. |
 | `cagra` | `cuda_cuvs_cagra` | Direct cuVS CAGRA | Guarded by pilot recall. Direct cuVS CAGRA had anomalously poor MNIST recall; do not trust without pilot success. |

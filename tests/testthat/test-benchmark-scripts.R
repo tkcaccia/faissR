@@ -1037,7 +1037,7 @@ test_that("legacy Benchmark #1 validates scalar numeric controls", {
   )
 })
 
-test_that("legacy Benchmark #1 exposes normalized faissR NNDescent metrics", {
+test_that("legacy Benchmark #1 exposes faissR NNDescent metric support", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
     "if (worker)"
@@ -1047,8 +1047,9 @@ test_that("legacy Benchmark #1 exposes normalized faissR NNDescent metrics", {
     expect_true(isTRUE(env$method_metric_applicable(method, "l2")$ok))
     expect_true(isTRUE(env$method_metric_applicable(method, "cosine")$ok))
     expect_true(isTRUE(env$method_metric_applicable(method, "correlation")$ok))
-    expect_false(isTRUE(env$method_metric_applicable(method, "inner_product")$ok))
   }
+  expect_true(isTRUE(env$method_metric_applicable("faissR_cpu_nndescent", "inner_product")$ok))
+  expect_false(isTRUE(env$method_metric_applicable("faissR_cuda_cuvs_nndescent", "inner_product")$ok))
 })
 
 test_that("legacy Benchmark #1 best ranking is quality-aware before speed", {
