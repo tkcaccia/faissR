@@ -609,6 +609,46 @@ recommend_nn_methods <- function(cycle_summary, recall_threshold) {
   out[order(out$dataset, out$backend, out$metric, out$k), , drop = FALSE]
 }
 
+recommend_nn_global_methods <- function(cycle_summary, recall_threshold) {
+  out <- do.call(rbind, lapply(
+    split(cycle_summary, paste(cycle_summary$dataset, cycle_summary$metric, cycle_summary$k, sep = "__")),
+    function(x) {
+      has_recall <- is.finite(x$median_recall_at_k)
+      if (any(has_recall)) {
+        candidates <- x[has_recall & x$median_recall_at_k >= recall_threshold, , drop = FALSE]
+        if (nrow(candidates)) {
+          candidates <- candidates[order(
+            candidates$median_elapsed_sec,
+            -ifelse(is.finite(candidates$median_recall_at_k), candidates$median_recall_at_k, -Inf),
+            -ifelse(is.finite(candidates$min_recall_at_k), candidates$min_recall_at_k, -Inf),
+            -ifelse(is.finite(candidates$median_min_recall_at_k), candidates$median_min_recall_at_k, -Inf),
+            candidates$backend,
+            candidates$method
+          ), , drop = FALSE]
+          candidates$recommendation_basis <- "global_fastest_at_recall_threshold"
+          return(candidates[1L, , drop = FALSE])
+        }
+        candidates <- x[has_recall, , drop = FALSE]
+        candidates <- candidates[order(
+          -candidates$median_recall_at_k,
+          -ifelse(is.finite(candidates$min_recall_at_k), candidates$min_recall_at_k, -Inf),
+          -ifelse(is.finite(candidates$median_min_recall_at_k), candidates$median_min_recall_at_k, -Inf),
+          candidates$median_elapsed_sec,
+          candidates$backend,
+          candidates$method
+        ), , drop = FALSE]
+        candidates$recommendation_basis <- "global_best_recall_below_threshold"
+        return(candidates[1L, , drop = FALSE])
+      }
+      candidates <- x[order(x$median_elapsed_sec, x$backend, x$method), , drop = FALSE]
+      candidates$recommendation_basis <- "global_speed_only_no_recall"
+      candidates[1L, , drop = FALSE]
+    }
+  ))
+  row.names(out) <- NULL
+  out[order(out$dataset, out$metric, out$k), , drop = FALSE]
+}
+
 compare_auto_to_recommendations <- function(cycle_summary, recommendations) {
   if (!nrow(recommendations)) return(recommendations)
   auto <- cycle_summary[cycle_summary$method == "auto", , drop = FALSE]
@@ -645,6 +685,45 @@ compare_auto_to_recommendations <- function(cycle_summary, recommendations) {
     comparison$auto_median_recall_at_k
   )
   comparison[order(comparison$dataset, comparison$backend, comparison$metric, comparison$k), , drop = FALSE]
+}
+
+compare_auto_to_global_recommendations <- function(cycle_summary, recommendations) {
+  if (!nrow(recommendations)) return(recommendations)
+  auto <- cycle_summary[cycle_summary$method == "auto", , drop = FALSE]
+  if (!nrow(auto)) return(data.frame())
+  keys <- c("dataset", "metric", "k")
+  auto_keep <- c(
+    keys, "backend", "method", "result_backend", "result_requested_backend",
+    "result_requested_method", "result_tuning",
+    "auto_predicted_method", "auto_predicted_device",
+    "resolved_backend", "implementation_backend",
+    "preflight_route", "route_parameters", "tuning_status",
+    "n_threads", "success_cycles", "median_elapsed_sec",
+    "median_recall_at_k", "min_recall_at_k", "median_min_recall_at_k",
+    "recall_reference", "median_recall_query_n"
+  )
+  auto_keep <- auto_keep[auto_keep %in% names(cycle_summary)]
+  rec_keep <- c(auto_keep, "recommendation_basis")
+  auto <- auto[, auto_keep, drop = FALSE]
+  recommendations <- recommendations[, rec_keep, drop = FALSE]
+  names(auto)[match(auto_keep[-seq_along(keys)], names(auto))] <- paste0("auto_", auto_keep[-seq_along(keys)])
+  names(recommendations)[match(rec_keep[-seq_along(keys)], names(recommendations))] <- paste0("recommended_", rec_keep[-seq_along(keys)])
+  comparison <- merge(auto, recommendations, by = keys, all = FALSE)
+  if (!nrow(comparison)) return(comparison)
+  comparison$auto_is_recommended_method <- comparison$auto_method == comparison$recommended_method
+  comparison$auto_uses_recommended_requested_backend <- comparison$auto_backend == comparison$recommended_backend
+  comparison$auto_uses_recommended_result_backend <- comparison$auto_result_backend == comparison$recommended_result_backend
+  comparison$auto_uses_recommended_resolved_backend <- comparison$auto_resolved_backend == comparison$recommended_resolved_backend
+  comparison$auto_uses_recommended_implementation <- comparison$auto_implementation_backend == comparison$recommended_implementation_backend
+  comparison$auto_median_speed_ratio <- safe_positive_ratio(
+    comparison$auto_median_elapsed_sec,
+    comparison$recommended_median_elapsed_sec
+  )
+  comparison$auto_median_recall_gap <- safe_difference(
+    comparison$recommended_median_recall_at_k,
+    comparison$auto_median_recall_at_k
+  )
+  comparison[order(comparison$dataset, comparison$metric, comparison$k, comparison$auto_backend), , drop = FALSE]
 }
 
 compare_auto_to_fastest <- function(ok, fastest) {
@@ -1293,11 +1372,29 @@ if (nrow(ok)) {
     )
   }
 
+  global_recommendations <- recommend_nn_global_methods(cycle_summary, recall_threshold)
+  if (nrow(global_recommendations)) {
+    utils::write.csv(
+      global_recommendations,
+      file.path(out_dir, "nn_metric_global_recommendations_from_cycles.csv"),
+      row.names = FALSE
+    )
+  }
+
   aggregate_auto <- compare_auto_to_recommendations(cycle_summary, recommendations)
   if (nrow(aggregate_auto)) {
     utils::write.csv(
       aggregate_auto,
       file.path(out_dir, "nn_metric_auto_vs_cycle_recommendation.csv"),
+      row.names = FALSE
+    )
+  }
+
+  global_aggregate_auto <- compare_auto_to_global_recommendations(cycle_summary, global_recommendations)
+  if (nrow(global_aggregate_auto)) {
+    utils::write.csv(
+      global_aggregate_auto,
+      file.path(out_dir, "nn_metric_auto_vs_global_recommendation.csv"),
       row.names = FALSE
     )
   }
@@ -1358,6 +1455,8 @@ materials <- c(
   "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/metric/k and reports success counts, median/min/max elapsed time, recall stability, CPU thread count, preflight route, compact route-parameter metadata, tuning status, and the dominant implementation backend.",
   "`nn_metric_recommendations_from_cycles.csv` selects one method per dataset/backend/metric/k. When recall is available, it selects the fastest method whose median recall is at least `recall_threshold`; tied median times are broken by higher median recall, minimum recall, and median minimum recall. If no method reaches the threshold it selects the best-recall row and marks it as below threshold, breaking tied median recall by minimum recall, median minimum recall, and then speed. When recall is unavailable for the group, it selects the fastest successful row and marks the recommendation as speed-only.",
   "`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate `method = \"auto\"` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median recall gap, CPU thread count, preflight route, route-parameter/tuning metadata, and backend/implementation agreement. Speed ratios and recall gaps are `NA` when the required timing or recall values are unavailable or invalid.",
+  "`nn_metric_global_recommendations_from_cycles.csv` pools requested CPU/CUDA/auto backends before selecting the fastest successful method within the recall threshold for each dataset/metric/k combination. This table audits the globally fastest observed backend/method route instead of only the fastest route inside each requested-backend group.",
+  "`nn_metric_auto_vs_global_recommendation.csv` compares aggregate `method = \"auto\"` rows with those global recommendations and records requested-backend agreement, result-backend agreement, resolved-backend agreement, implementation agreement, speed ratio, and recall gap. This table is intended for refining no-pilot `method = \"auto\"` selectors across CPU/CUDA choices.",
   "`nn_metric_best_by_dataset_backend_metric_k_cycle.csv` stores the best row within each cycle using the same recall-threshold rule as the cycle recommendations: fastest above threshold, best recall below threshold, and fastest when recall is unavailable; `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the overall best row across cycles with the same rule for backward-compatible summaries.",
   "The script does not add benchmark-only helpers to the package API."
 )

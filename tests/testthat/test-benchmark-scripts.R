@@ -31,6 +31,8 @@ test_that("benchmark materials document key row-level and summary outputs", {
       "nn_metric_cycle_summary.csv",
       "nn_metric_recommendations_from_cycles.csv",
       "nn_metric_auto_vs_cycle_recommendation.csv",
+      "nn_metric_global_recommendations_from_cycles.csv",
+      "nn_metric_auto_vs_global_recommendation.csv",
       "nn_metric_best_by_dataset_backend_metric_k.csv",
       "nn_metric_best_by_dataset_backend_metric_k_cycle.csv",
       "nn_metric_fastest_at_recall_threshold.csv",
@@ -665,6 +667,57 @@ test_that("NN metric auto comparison preserves recommendation basis", {
   expect_equal(out$recommended_route_parameters, "approximation.m=16;approximation.ef_search=150")
   expect_equal(out$auto_n_threads, 2L)
   expect_equal(out$recommended_n_threads, 2L)
+})
+
+test_that("NN metric global recommendations pool across requested backends", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = c("A", "A", "A", "A"),
+    backend = c("auto", "cpu", "cuda", "cuda"),
+    method = c("auto", "hnsw", "flat", "ivf"),
+    metric = c("euclidean", "euclidean", "euclidean", "euclidean"),
+    k = c(50L, 50L, 50L, 50L),
+    result_backend = c("faiss_hnsw", "faiss_hnsw", "faiss_gpu_flat_l2", "faiss_gpu_ivf_flat"),
+    result_requested_backend = c("auto", "cpu", "cuda", "cuda"),
+    result_requested_method = c("auto", "hnsw", "flat", "ivf"),
+    result_tuning = c("auto", "auto", "auto", "auto"),
+    auto_predicted_method = c("hnsw", NA_character_, NA_character_, NA_character_),
+    auto_predicted_device = c("cpu", NA_character_, NA_character_, NA_character_),
+    resolved_backend = c("faiss_hnsw", "faiss_hnsw", "faiss_gpu_flat_l2", "faiss_gpu_ivf_flat"),
+    implementation_backend = c("faiss_hnsw", "faiss_hnsw", "faiss_gpu_flat_l2", "faiss_gpu_ivf_flat"),
+    preflight_route = c("faiss_hnsw", "faiss_hnsw", "faiss_gpu_flat_l2", "faiss_gpu_ivf_flat"),
+    route_parameters = c("hnsw", "hnsw", "flat", "ivf"),
+    tuning_status = c("balanced", "balanced", NA_character_, "fixed"),
+    n_threads = c(2L, 2L, 2L, 2L),
+    success_cycles = c(2L, 2L, 2L, 2L),
+    median_elapsed_sec = c(4, 5, 2, 3),
+    median_recall_at_k = c(0.99, 0.995, 0.99, 0.96),
+    min_recall_at_k = c(0.98, 0.99, 0.98, 0.95),
+    median_min_recall_at_k = c(0.98, 0.99, 0.98, 0.95),
+    recall_reference = c("sample", "sample", "sample", "sample"),
+    median_recall_query_n = c(512, 512, 512, 512)
+  )
+
+  rec <- env$recommend_nn_global_methods(cycle_summary, recall_threshold = 0.98)
+  expect_equal(nrow(rec), 1L)
+  expect_equal(rec$backend, "cuda")
+  expect_equal(rec$method, "flat")
+  expect_equal(rec$recommendation_basis, "global_fastest_at_recall_threshold")
+
+  out <- env$compare_auto_to_global_recommendations(cycle_summary, rec)
+  expect_equal(anyDuplicated(names(out)), 0L)
+  expect_true("auto_backend" %in% names(out))
+  expect_true("recommended_backend" %in% names(out))
+  auto_row <- out[out$auto_method == "auto", , drop = FALSE]
+  expect_equal(nrow(auto_row), 1L)
+  expect_equal(auto_row$recommended_backend, "cuda")
+  expect_false(auto_row$auto_uses_recommended_requested_backend)
+  expect_false(auto_row$auto_uses_recommended_implementation)
+  expect_equal(auto_row$auto_median_speed_ratio, 2)
+  expect_equal(auto_row$auto_median_recall_gap, 0)
 })
 
 test_that("NN metric benchmark extracts compact backend route parameters", {

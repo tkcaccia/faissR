@@ -172,6 +172,13 @@ ratio, median recall gap, CPU thread count, preflight route,
 route-parameter/tuning metadata, backend/implementation agreement, and the
 recommendation basis used for the recommended row. Speed ratios and recall gaps
 are `NA` when the required timing or recall values are unavailable or invalid.
+`nn_metric_global_recommendations_from_cycles.csv` pools requested CPU, CUDA,
+and auto backends before selecting the fastest row at the recall threshold for
+each dataset/metric/k combination. `nn_metric_auto_vs_global_recommendation.csv`
+compares aggregate auto rows with those global recommendations, making it the
+main audit for whether no-pilot `method = "auto"` selected the fastest observed
+CPU/CUDA implementation rather than only the best row in the same requested
+backend group.
 `nn_metric_best_by_dataset_backend_metric_k_cycle.csv` keeps the best row within
 each cycle using the same recall-threshold rule: fastest above threshold,
 best recall below threshold, and fastest when recall is unavailable.
@@ -464,6 +471,11 @@ speed for below-threshold groups. The
 recall-qualified, below-threshold, or speed-only comparisons. Cycle summaries
 and auto comparisons also preserve `n_threads` and `preflight_route`, so CPU
 threading and public route decisions remain auditable after aggregation.
+`nn_metric_global_recommendations_from_cycles.csv` and
+`nn_metric_auto_vs_global_recommendation.csv` repeat the recommendation and auto
+comparison after pooling requested backends. These files expose cases where
+auto is locally reasonable inside its requested backend group but a different
+CPU/CUDA route is globally faster at the same recall target.
 
 Example CPU run:
 
