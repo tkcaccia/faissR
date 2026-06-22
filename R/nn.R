@@ -1784,8 +1784,6 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
   }
   if (identical(method, "auto")) {
     if (identical(device, "cuda")) {
-      non_euclidean_auto <- cuda_auto_non_euclidean_backend(metric, requested_device = requested_device)
-      if (!is.na(non_euclidean_auto)) return(non_euclidean_auto)
       return("cuda_auto")
     }
     return("cpu_auto")
@@ -2042,15 +2040,17 @@ select_cuda_auto_backend <- function(self_query,
   if (!isTRUE(cuda_available()) && !isTRUE(cuvs_available())) {
     stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
   }
+  if (isTRUE(self_query) && p %in% c(2L, 3L) &&
+      metric %in% c("euclidean", "cosine", "correlation") &&
+      isTRUE(cuda_available()) && n >= 10000L) {
+    return("cuda_grid")
+  }
   non_euclidean_auto <- cuda_auto_non_euclidean_backend(
     metric,
     requested_device = "cuda",
     require_available = TRUE
   )
   if (!is.na(non_euclidean_auto)) return(non_euclidean_auto)
-  if (isTRUE(self_query) && p %in% c(2L, 3L) && isTRUE(cuda_available()) && n >= 10000L) {
-    return("cuda_grid")
-  }
   if (!isTRUE(self_query)) {
     if (isTRUE(faiss_gpu_available())) return("faiss_gpu_flat_l2")
     if (isTRUE(cuvs_available())) return("cuda_cuvs_bruteforce")
@@ -2147,6 +2147,18 @@ select_cpu_auto_backend <- function(self_query,
                                     work_size,
                                     metric = "euclidean") {
   if (!identical(metric, "euclidean")) {
+    if (metric %in% c("cosine", "correlation") &&
+        isTRUE(self_query) &&
+        should_use_grid2d_self_knn(
+          self_query = TRUE,
+          n = n,
+          p = p,
+          k = k,
+          exclude_self = FALSE,
+          metric = metric
+        )) {
+      return("cpu_grid")
+    }
     exact_work <- faissr_option("cpu_auto_exact_work", 2e8)
     exact_work <- suppressWarnings(as.numeric(exact_work))
     if (length(exact_work) != 1L || is.na(exact_work) || !is.finite(exact_work)) {
@@ -2309,7 +2321,8 @@ should_use_grid2d_self_knn <- function(self_query,
                                        exclude_self,
                                        metric) {
   if (!isTRUE(self_query)) return(FALSE)
-  if (!identical(metric, "euclidean")) return(FALSE)
+  metric <- normalize_nn_metric(metric)
+  if (!metric %in% c("euclidean", "cosine", "correlation")) return(FALSE)
   if (!as.integer(p) %in% c(2L, 3L)) return(FALSE)
   if (as.integer(n) < 10000L) return(FALSE)
   nonself_k <- if (isTRUE(exclude_self)) as.integer(k) else as.integer(k) - 1L

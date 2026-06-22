@@ -426,7 +426,7 @@ graph_cluster <- function(graph,
       tuning = tuning,
       n_threads = n_threads
     )
-    input_backend <- attr(knn, "backend") %||% attr(knn, "resolved_backend") %||% resolved
+    input_backend <- attr(knn, "resolved_backend") %||% attr(knn, "backend") %||% resolved
   } else {
     resolved <- normalize_public_backend_arg(graph_backend, arg = "graph_backend")
     graph_requested_backend <- resolved
@@ -439,7 +439,7 @@ graph_cluster <- function(graph,
       tuning = tuning,
       n_threads = n_threads
     )
-    input_backend <- attr(knn, "backend") %||% attr(knn, "resolved_backend") %||% resolved
+    input_backend <- attr(knn, "resolved_backend") %||% attr(knn, "backend") %||% resolved
   }
 
   knn_input <- coerce_knn_input(knn, arg_name = "graph")

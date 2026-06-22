@@ -1231,15 +1231,15 @@ test_that("public backend and method resolver maps device plus method", {
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "auto", "cosine"),
-    "faiss_gpu_flat_cosine"
+    "cuda_auto"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "auto", "correlation"),
-    "faiss_gpu_flat_correlation"
+    "cuda_auto"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "auto", "inner_product"),
-    "faiss_gpu_flat_ip"
+    "cuda_auto"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "grid", "euclidean"),
@@ -1488,6 +1488,39 @@ test_that("CPU auto selector is shape-aware", {
     work_size = 20000 * 20000 * 2
   )
   expect_equal(low_dim, "cpu_grid")
+
+  low_dim_cosine <- faissR:::select_cpu_auto_backend(
+    self_query = TRUE,
+    n = 20000L,
+    p = 2L,
+    n_points = 20000L,
+    k = 50L,
+    work_size = 20000 * 20000 * 2,
+    metric = "cosine"
+  )
+  expect_equal(low_dim_cosine, "cpu_grid")
+
+  low_dim_correlation <- faissR:::select_cpu_auto_backend(
+    self_query = TRUE,
+    n = 20000L,
+    p = 3L,
+    n_points = 20000L,
+    k = 50L,
+    work_size = 20000 * 20000 * 3,
+    metric = "correlation"
+  )
+  expect_equal(low_dim_correlation, "cpu_grid")
+
+  low_dim_inner_product <- faissR:::select_cpu_auto_backend(
+    self_query = TRUE,
+    n = 20000L,
+    p = 2L,
+    n_points = 20000L,
+    k = 50L,
+    work_size = 20000 * 20000 * 2,
+    metric = "inner_product"
+  )
+  expect_false(identical(low_dim_inner_product, "cpu_grid"))
 
   large <- faissR:::select_cpu_auto_backend(
     self_query = TRUE,
