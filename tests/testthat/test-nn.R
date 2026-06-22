@@ -2139,6 +2139,47 @@ test_that("nn_capabilities supported public rows resolve through the public rout
   }
 })
 
+test_that("CPU-supported public method/metric rows execute on smoke data", {
+  set.seed(9091)
+  dense <- matrix(rnorm(20L * 6L), nrow = 20L)
+  spatial <- matrix(runif(40L * 2L), ncol = 2L)
+  nsg_dense <- matrix(rnorm(200L * 8L), nrow = 200L)
+  sparse <- Matrix::Matrix(dense, sparse = TRUE)
+  caps <- nn_capabilities()
+  checked <- caps[
+    caps$supported &
+      caps$backend == "cpu" &
+      caps$method != "auto",
+    c("method", "metric"),
+    drop = FALSE
+  ]
+
+  for (i in seq_len(nrow(checked))) {
+    method <- checked$method[[i]]
+    metric <- checked$metric[[i]]
+    data <- switch(
+      method,
+      grid = spatial,
+      sparse = sparse,
+      nsg = nsg_dense,
+      dense
+    )
+    label <- paste(method, metric)
+    out <- nn_without_self(
+      data,
+      k = 3L,
+      backend = "cpu",
+      method = method,
+      metric = metric,
+      n_threads = 2L
+    )
+    expect_true(inherits(out, "faissR_nn"), info = label)
+    expect_equal(dim(out$indices), c(nrow(data), 3L), info = label)
+    expect_equal(dim(as.matrix(out$distances)), c(nrow(data), 3L), info = label)
+    expect_equal(attr(out, "metric"), metric, info = label)
+  }
+})
+
 test_that("nearest-neighbour results expose resolved backend metadata", {
   x <- matrix(rnorm(200), ncol = 4)
   out <- nn_without_self(x, k = 5L, backend = "cpu", method = "exact", n_threads = 2L)
