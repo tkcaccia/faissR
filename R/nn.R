@@ -2499,7 +2499,7 @@ select_cpu_auto_backend <- function(self_query,
   if (length(exact_work) != 1L || is.na(exact_work) || !is.finite(exact_work)) {
     exact_work <- 2e8
   }
-  if (work_size <= exact_work || n < 5000L || k < 10L || p < 2L) {
+  if (work_size <= exact_work || n < 5000L || p < 2L) {
     return("cpu")
   }
   if (isTRUE(self_query) && n >= 1000000L && isTRUE(faiss_available())) {

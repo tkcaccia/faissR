@@ -2187,10 +2187,9 @@ test_that("CPU auto selector is k and metric aware on benchmark k grid", {
     )
   }, character(1L))
 
-  expect_equal(routes$route[routes$metric == "euclidean" & routes$k == 5L], "cpu")
   expect_equal(
-    routes$route[routes$metric == "euclidean" & routes$k >= 10L],
-    rep(if (faiss_available()) "faiss_hnsw" else if (requireNamespace("RcppHNSW", quietly = TRUE)) "hnsw" else "cpu_nndescent", 4L)
+    routes$route[routes$metric == "euclidean"],
+    rep(if (faiss_available()) "faiss_hnsw" else if (requireNamespace("RcppHNSW", quietly = TRUE)) "hnsw" else "cpu_nndescent", length(k_values))
   )
 
   for (metric in c("cosine", "correlation", "inner_product")) {

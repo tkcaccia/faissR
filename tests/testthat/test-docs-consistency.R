@@ -864,6 +864,23 @@ test_that("benchmark documentation distinguishes requested and actual graph clus
   expect_true(grepl("convenience target, not a hard guarantee", prose, fixed = TRUE))
 })
 
+test_that("GitHub docs describe the bounded target-cluster resolution grid", {
+  docs_files <- c(
+    test_path("../../README.md"),
+    test_path("../../docs", c("usage-api.md", "implementation.md")),
+    test_path("../../man/graph_cluster.Rd")
+  )
+  docs_files <- docs_files[file.exists(docs_files)]
+  if (!length(docs_files)) {
+    skip("GitHub or reference documentation files are not available in this installed-package test context.")
+  }
+
+  prose <- paste(unlist(lapply(docs_files, readLines, warn = FALSE)), collapse = " ")
+  expect_true(grepl("bounded deterministic", prose, fixed = TRUE))
+  expect_false(grepl("small deterministic grid of resolution", prose, fixed = TRUE))
+  expect_false(grepl("small deterministic resolution grid", prose, fixed = TRUE))
+})
+
 test_that("autotuning method settings table keeps public and implementation labels separate", {
   docs_file <- test_path("../../docs/autotuning.md")
   if (!file.exists(docs_file)) {

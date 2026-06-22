@@ -127,11 +127,13 @@ Policy summary:
   for large non-Euclidean self-KNN when FAISS is unavailable; native CPU
   NN-descent is the final large self-KNN fallback when neither FAISS nor
   RcppHNSW is available.
-  On the benchmark `k` grid, large high-dimensional CPU self-search keeps
-  `k = 5` on an exact route and switches to HNSW from `k = 10` upward when a
-  graph-search backend is available; non-Euclidean `k = 5` can use exact FAISS
-  Flat, and explicit CPU HNSW uses deterministic `n`, `p`, `k`, and `metric`
-  tiers without running a pilot benchmark.
+  On the benchmark `k` grid, large high-dimensional CPU self-search uses
+  graph-search routes across `k = 5, 10, 15, 50, and 100` when FAISS HNSW,
+  RcppHNSW/hnswlib, or native CPU NN-descent is available; small `k` alone is
+  not enough reason to run exact CPU on MNIST/FashionMNIST-scale workloads.
+  Non-self non-Euclidean `k = 5` can still use exact FAISS Flat, and explicit
+  CPU HNSW uses deterministic `n`, `p`, `k`, and `metric` tiers without
+  running a pilot benchmark.
   Flat metric routes when FAISS is available.
 - `backend = "cuda", method = "auto"`: CUDA grid for large 2D/3D
   Euclidean/cosine/correlation self-KNN; FAISS GPU Flat for small and medium

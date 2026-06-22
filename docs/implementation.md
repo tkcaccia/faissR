@@ -340,7 +340,7 @@ for Louvain and Leiden. The same target can also be stored on the graph with
 `graph_cluster()` calls unless the caller supplies a different target. Stored
 targets are ignored by `method = "random_walking"`; explicitly passing
 `n_clusters` to random-walking remains an error. The graph is built once, then
-faissR evaluates a small deterministic grid of resolution values around the supplied
+faissR evaluates a bounded deterministic grid of resolution values around the supplied
 `resolution` and keeps the result whose number of communities is closest to
 `m`, breaking ties by modularity. The selected resolution and search table are
 returned in the result metadata as `selected_resolution` and
