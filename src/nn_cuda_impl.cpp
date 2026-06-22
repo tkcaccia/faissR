@@ -35,6 +35,7 @@ int faissr_cuda_row_candidate_knn(const double* data,
                                       int n_features,
                                       int n_candidates,
                                       int k,
+                                      int metric_kind,
                                       int* out_indices,
                                       double* out_distances);
 int faissr_cuda_grid_self_knn(const double* data,
@@ -153,7 +154,8 @@ List cuda_landmark_candidate_knn_impl(NumericMatrix data,
 
 List cuda_row_candidate_knn_impl(NumericMatrix data,
                                  IntegerMatrix candidate_indices,
-                                 int k) {
+                                 int k,
+                                 std::string metric) {
   const int n = data.nrow();
   const int n_features = data.ncol();
   const int n_candidates = candidate_indices.ncol();
@@ -165,6 +167,12 @@ List cuda_row_candidate_knn_impl(NumericMatrix data,
   if (k < 1 || k >= n) Rcpp::stop("k must be in [1, nrow(data) - 1]");
   if (k > kMaxCudaK) Rcpp::stop("CUDA backend currently supports k <= %d", kMaxCudaK);
   if (!faissr_cuda_available()) Rcpp::stop("No CUDA device is available.");
+  int metric_kind = 0;
+  if (metric == "inner_product") {
+    metric_kind = 1;
+  } else if (metric != "euclidean") {
+    Rcpp::stop("CUDA row candidate KNN supports euclidean or inner_product scoring");
+  }
 
   IntegerMatrix indices(n, k);
   NumericMatrix distances(n, k);
@@ -175,6 +183,7 @@ List cuda_row_candidate_knn_impl(NumericMatrix data,
     n_features,
     n_candidates,
     k,
+    metric_kind,
     indices.begin(),
     distances.begin()
   );
@@ -187,6 +196,7 @@ List cuda_row_candidate_knn_impl(NumericMatrix data,
   );
   result.attr("cuda_kernel") = "row_candidate_knn";
   result.attr("candidate_columns") = n_candidates;
+  result.attr("metric_kind") = metric;
   return result;
 }
 

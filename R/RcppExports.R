@@ -153,8 +153,8 @@ landmark_candidate_knn_cuda_cpp <- function(data, projection_indices, k, bucket_
     .Call(`_faissR_landmark_candidate_knn_cuda_cpp`, data, projection_indices, k, bucket_cols, query_cols)
 }
 
-row_candidate_knn_cuda_cpp <- function(data, candidate_indices, k) {
-    .Call(`_faissR_row_candidate_knn_cuda_cpp`, data, candidate_indices, k)
+row_candidate_knn_cuda_cpp <- function(data, candidate_indices, k, metric) {
+    .Call(`_faissR_row_candidate_knn_cuda_cpp`, data, candidate_indices, k, metric)
 }
 
 cuda_grid_self_knn_cpp <- function(data, k, bins_per_dim) {

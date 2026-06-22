@@ -19,7 +19,8 @@ List cuda_landmark_candidate_knn_impl(NumericMatrix data,
                                       int query_cols);
 List cuda_row_candidate_knn_impl(NumericMatrix data,
                                  IntegerMatrix candidate_indices,
-                                 int k);
+                                 int k,
+                                 std::string metric);
 List cuda_grid_self_knn_impl(NumericMatrix data,
                              int k,
                              int bins_per_dim);
@@ -56,8 +57,9 @@ List landmark_candidate_knn_cuda_cpp(NumericMatrix data,
 // [[Rcpp::export]]
 List row_candidate_knn_cuda_cpp(NumericMatrix data,
                                 IntegerMatrix candidate_indices,
-                                int k) {
-  return cuda_row_candidate_knn_impl(data, candidate_indices, k);
+                                int k,
+                                std::string metric) {
+  return cuda_row_candidate_knn_impl(data, candidate_indices, k, metric);
 }
 
 // [[Rcpp::export]]

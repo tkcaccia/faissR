@@ -31,7 +31,8 @@ List cuda_landmark_candidate_knn_impl(NumericMatrix,
 
 List cuda_row_candidate_knn_impl(NumericMatrix,
                                  IntegerMatrix,
-                                 int) {
+                                 int,
+                                 std::string) {
   Rcpp::stop("CUDA row-candidate KNN is available only when the package is built with CUDA support.");
 }
 

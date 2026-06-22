@@ -22,8 +22,9 @@
 #'   inner product. CPU inner-product scoring ranks by larger raw dot product,
 #'   while returned `distances` are shifted within each query so the best
 #'   returned dot product has distance `0`. CUDA candidate scoring supports
-#'   Euclidean directly and cosine/correlation through normalized Euclidean
-#'   scoring; raw inner-product CUDA candidate scoring is not exposed.
+#'   Euclidean directly, cosine/correlation through normalized Euclidean
+#'   scoring, and raw inner-product scoring through a dedicated CUDA kernel
+#'   mode that preserves the same shifted-distance convention as CPU.
 #' @param n_threads CPU threads for the CPU backend.
 #' @param exclude_self If `TRUE`, remove each query row from its own candidate
 #'   set. This is valid only for self-query candidate KNN.
@@ -81,9 +82,6 @@ candidate_knn <- function(data,
   }
 
   if (identical(backend, "cuda")) {
-    if (identical(metric, "inner_product")) {
-      stop("CUDA candidate KNN does not support `metric = \"inner_product\"`.", call. = FALSE)
-    }
     if (!exclude_self) {
       stop("CUDA candidate KNN currently requires `exclude_self = TRUE`.", call. = FALSE)
     }
@@ -99,7 +97,8 @@ candidate_knn <- function(data,
       metric_inputs <- normalized_euclidean_metric_inputs(x, q, self_query, metric)
       search_x <- metric_inputs$data
     }
-    out <- row_candidate_knn_cuda_cpp(search_x, cand, as.integer(k))
+    cuda_metric <- if (identical(metric, "inner_product")) "inner_product" else "euclidean"
+    out <- row_candidate_knn_cuda_cpp(search_x, cand, as.integer(k), cuda_metric)
     result <- finish_nn_result(out, "cuda_candidate", k, TRUE, exact = FALSE, metric = metric)
     if (!is.null(metric_inputs)) {
       result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
@@ -108,6 +107,7 @@ candidate_knn <- function(data,
       candidate_columns = as.integer(ncol(cand)),
       exclude_self = exclude_self,
       exact_within_candidates = TRUE,
+      cuda_metric = cuda_metric,
       transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform
     )
     return(result)

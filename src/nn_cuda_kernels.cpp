@@ -506,6 +506,19 @@ __device__ float self_distance_sq(const float* data,
   return dist;
 }
 
+__device__ float self_dot_product(const float* data,
+                                  int a,
+                                  int b,
+                                  int n,
+                                  int n_features) {
+  float dot = 0.0f;
+  for (int c = 0; c < n_features; ++c) {
+    dot += data[static_cast<std::size_t>(c) * n + a] *
+      data[static_cast<std::size_t>(c) * n + b];
+  }
+  return dot;
+}
+
 __global__ void landmark_candidate_knn_serial_kernel(const float* data,
                                                      const int* projection_indices,
                                                      int* out_idx,
@@ -668,9 +681,11 @@ __global__ void row_candidate_knn_kernel(const float* data,
                                          int n,
                                          int n_features,
                                          int k,
-                                         int n_candidates) {
+                                         int n_candidates,
+                                         int metric_kind) {
   const int q = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
   if (q >= n) return;
+  const bool inner_product = metric_kind == 1;
 
   float best_dist[kMaxCudaK];
   int best_idx[kMaxCudaK];
@@ -682,8 +697,11 @@ __global__ void row_candidate_knn_kernel(const float* data,
   for (int c = 0; c < n_candidates; ++c) {
     const int candidate = candidate_indices[static_cast<std::size_t>(c) * n + q] - 1;
     if (candidate < 0 || candidate >= n || candidate == q) continue;
+    const float score = inner_product ?
+      -self_dot_product(data, q, candidate, n, n_features) :
+      self_distance_sq(data, q, candidate, n, n_features);
     insert_unique_candidate(
-      self_distance_sq(data, q, candidate, n, n_features),
+      score,
       candidate,
       best_dist,
       best_idx,
@@ -694,8 +712,11 @@ __global__ void row_candidate_knn_kernel(const float* data,
   if (best_idx[k - 1] == INT_MAX) {
     for (int candidate = 0; candidate < n && best_idx[k - 1] == INT_MAX; ++candidate) {
       if (candidate == q) continue;
+      const float score = inner_product ?
+        -self_dot_product(data, q, candidate, n, n_features) :
+        self_distance_sq(data, q, candidate, n, n_features);
       insert_unique_candidate(
-        self_distance_sq(data, q, candidate, n, n_features),
+        score,
         candidate,
         best_dist,
         best_idx,
@@ -707,7 +728,11 @@ __global__ void row_candidate_knn_kernel(const float* data,
   for (int j = 0; j < k; ++j) {
     const std::size_t offset = static_cast<std::size_t>(j) * n + q;
     out_idx[offset] = best_idx[j] + 1;
-    out_dist[offset] = sqrtf(fmaxf(best_dist[j], 0.0f));
+    if (inner_product) {
+      out_dist[offset] = fmaxf(best_dist[j] - best_dist[0], 0.0f);
+    } else {
+      out_dist[offset] = sqrtf(fmaxf(best_dist[j], 0.0f));
+    }
   }
 }
 
@@ -1409,6 +1434,7 @@ extern "C" int faissr_cuda_row_candidate_knn(const double* data,
                                                  int n_features,
                                                  int n_candidates,
                                                  int k,
+                                                 int metric_kind,
                                                  int* out_indices,
                                                  double* out_distances) {
   last_error.clear();
@@ -1418,7 +1444,8 @@ extern "C" int faissr_cuda_row_candidate_knn(const double* data,
     return 1;
   }
   if (n < 2 || n_features < 1 || n_candidates < 1 ||
-      k < 1 || k >= n || k > kMaxCudaK) {
+      k < 1 || k >= n || k > kMaxCudaK ||
+      (metric_kind != 0 && metric_kind != 1)) {
     set_error("invalid row candidate KNN dimensions");
     return 1;
   }
@@ -1480,7 +1507,8 @@ extern "C" int faissr_cuda_row_candidate_knn(const double* data,
     n,
     n_features,
     k,
-    n_candidates
+    n_candidates,
+    metric_kind
   );
   if (check_cuda(cudaGetLastError(), "row_candidate_knn_kernel launch")) {
     cleanup();

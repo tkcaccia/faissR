@@ -37,8 +37,9 @@ require self-query candidates with `exclude_self = TRUE`.}
 inner product. CPU inner-product scoring ranks by larger raw dot product,
 while returned `distances` are shifted within each query so the best
 returned dot product has distance `0`. CUDA candidate scoring supports
-Euclidean directly and cosine/correlation through normalized Euclidean
-scoring; raw inner-product CUDA candidate scoring is not exposed.}
+Euclidean directly, cosine/correlation through normalized Euclidean
+scoring, and raw inner-product scoring through a dedicated CUDA kernel
+mode that preserves the same shifted-distance convention as CPU.}
 
 \item{n_threads}{CPU threads for the CPU backend.}
 

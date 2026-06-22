@@ -178,18 +178,20 @@ test_that("candidate_knn GPU requests do not silently fall back", {
   } else {
     expect_error(candidate_knn(x, candidates, k = 2L, backend = "cuda", exclude_self = TRUE), "CUDA")
   }
-  expect_error(
-    candidate_knn(x, candidates, k = 2L, backend = "cuda", metric = "inner_product", exclude_self = TRUE),
-    "inner_product"
-  )
+  if (!cuda_available()) {
+    expect_error(
+      candidate_knn(x, candidates, k = 2L, backend = "cuda", metric = "inner_product", exclude_self = TRUE),
+      "CUDA"
+    )
+  }
 })
 
-test_that("candidate_knn CUDA supports normalized cosine and correlation candidates", {
+test_that("candidate_knn CUDA supports normalized and inner-product candidates", {
   set.seed(931)
   x <- matrix(rnorm(36), nrow = 9)
   candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
 
-  for (metric in c("cosine", "correlation")) {
+  for (metric in c("cosine", "correlation", "inner_product")) {
     if (cuda_available()) {
       cpu <- candidate_knn(x, candidates, k = 3L, backend = "cpu", metric = metric, exclude_self = TRUE)
       cuda <- candidate_knn(x, candidates, k = 3L, backend = "cuda", metric = metric, exclude_self = TRUE)
@@ -197,7 +199,13 @@ test_that("candidate_knn CUDA supports normalized cosine and correlation candida
       expect_equal(attr(cuda, "metric"), metric)
       expect_equal(unname(cuda$indices), unname(cpu$indices))
       expect_equal(unname(cuda$distances), unname(cpu$distances), tolerance = 1e-6)
-      expect_match(attr(cuda, "candidate_knn")$transform, "normalize")
+      if (metric %in% c("cosine", "correlation")) {
+        expect_match(attr(cuda, "candidate_knn")$transform, "normalize")
+        expect_equal(attr(cuda, "candidate_knn")$cuda_metric, "euclidean")
+      } else {
+        expect_true(is.na(attr(cuda, "candidate_knn")$transform))
+        expect_equal(attr(cuda, "candidate_knn")$cuda_metric, "inner_product")
+      }
     } else {
       expect_error(
         candidate_knn(x, candidates, k = 3L, backend = "cuda", metric = metric, exclude_self = TRUE),

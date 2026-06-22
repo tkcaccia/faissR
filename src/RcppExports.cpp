@@ -588,15 +588,16 @@ BEGIN_RCPP
 END_RCPP
 }
 // row_candidate_knn_cuda_cpp
-List row_candidate_knn_cuda_cpp(NumericMatrix data, IntegerMatrix candidate_indices, int k);
-RcppExport SEXP _faissR_row_candidate_knn_cuda_cpp(SEXP dataSEXP, SEXP candidate_indicesSEXP, SEXP kSEXP) {
+List row_candidate_knn_cuda_cpp(NumericMatrix data, IntegerMatrix candidate_indices, int k, std::string metric);
+RcppExport SEXP _faissR_row_candidate_knn_cuda_cpp(SEXP dataSEXP, SEXP candidate_indicesSEXP, SEXP kSEXP, SEXP metricSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
     Rcpp::traits::input_parameter< IntegerMatrix >::type candidate_indices(candidate_indicesSEXP);
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
-    rcpp_result_gen = Rcpp::wrap(row_candidate_knn_cuda_cpp(data, candidate_indices, k));
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    rcpp_result_gen = Rcpp::wrap(row_candidate_knn_cuda_cpp(data, candidate_indices, k, metric));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1101,7 +1102,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_cuda_device_info_json_cpp", (DL_FUNC) &_faissR_cuda_device_info_json_cpp, 0},
     {"_faissR_nn_cuda_cpp", (DL_FUNC) &_faissR_nn_cuda_cpp, 4},
     {"_faissR_landmark_candidate_knn_cuda_cpp", (DL_FUNC) &_faissR_landmark_candidate_knn_cuda_cpp, 5},
-    {"_faissR_row_candidate_knn_cuda_cpp", (DL_FUNC) &_faissR_row_candidate_knn_cuda_cpp, 3},
+    {"_faissR_row_candidate_knn_cuda_cpp", (DL_FUNC) &_faissR_row_candidate_knn_cuda_cpp, 4},
     {"_faissR_cuda_grid_self_knn_cpp", (DL_FUNC) &_faissR_cuda_grid_self_knn_cpp, 3},
     {"_faissR_cuvs_available_cpp", (DL_FUNC) &_faissR_cuvs_available_cpp, 0},
     {"_faissR_cuvs_info_json_cpp", (DL_FUNC) &_faissR_cuvs_info_json_cpp, 0},
