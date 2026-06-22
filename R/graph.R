@@ -308,9 +308,11 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   `target_n_clusters`, `selected_resolution`, `target_gap`,
 #'   `resolution_selection`, and `resolution_search` record the requested
 #'   target, selected resolution, final community-count gap, deterministic
-#'   selection rule, and full resolution search table. `parameters$resolution_source`
-#'   is `"default"`, `"user"`, or `"target_auto"` depending on how the
-#'   resolution-grid seed was chosen.
+#'   selection rule, and full resolution search table. `parameters$resolution`
+#'   is `NA` for `resolution = NULL` target-auto searches; the actual automatic
+#'   center is stored in `resolution_selection$candidate_center`.
+#'   `parameters$resolution_source` is `"default"`, `"user"`, or
+#'   `"target_auto"` depending on how the resolution-grid seed was chosen.
 #' @references
 #' Blondel VD, Guillaume JL, Lambiotte R, Lefebvre E. Fast unfolding of
 #' communities in large networks. Journal of Statistical Mechanics: Theory and
@@ -662,7 +664,7 @@ validate_graph_target_cluster_count <- function(n_clusters, n_vertices) {
 normalize_graph_resolution <- function(resolution, has_target = FALSE, was_missing = FALSE) {
   if (is.null(resolution)) {
     if (isTRUE(has_target)) {
-      return(list(value = 1, source = "target_auto"))
+      return(list(value = NA_real_, source = "target_auto"))
     }
     stop("`resolution` must be a positive number, or NULL when `n_clusters` is supplied.", call. = FALSE)
   }
@@ -678,17 +680,25 @@ normalize_graph_resolution <- function(resolution, has_target = FALSE, was_missi
 
 graph_resolution_center <- function(resolution, n_clusters, n_vertices = NULL) {
   resolution <- suppressWarnings(as.numeric(resolution))
-  if (is.null(n_clusters) || is.null(n_vertices)) return(resolution)
+  resolution_is_auto <- length(resolution) != 1L || is.na(resolution) || !is.finite(resolution) || resolution <= 0
+  if (is.null(n_clusters) || is.null(n_vertices)) {
+    return(if (isTRUE(resolution_is_auto)) 1 else resolution)
+  }
   n_clusters <- suppressWarnings(as.numeric(n_clusters))
   n_vertices <- suppressWarnings(as.numeric(n_vertices))
   if (length(n_clusters) != 1L || length(n_vertices) != 1L ||
       is.na(n_clusters) || is.na(n_vertices) ||
       !is.finite(n_clusters) || !is.finite(n_vertices) ||
       n_clusters < 1 || n_vertices < 1) {
-    return(resolution)
+    return(if (isTRUE(resolution_is_auto)) 1 else resolution)
   }
   shape_center <- n_clusters / sqrt(n_vertices)
-  if (!is.finite(shape_center) || shape_center <= 0) return(resolution)
+  if (!is.finite(shape_center) || shape_center <= 0) {
+    return(if (isTRUE(resolution_is_auto)) 1 else resolution)
+  }
+  if (isTRUE(resolution_is_auto)) {
+    return(shape_center)
+  }
   shape_center <- min(max(shape_center, resolution / 4), resolution * 4)
   sqrt(resolution * shape_center)
 }
@@ -705,11 +715,15 @@ graph_resolution_grid_exponents <- function(n_vertices = NULL) {
 
 graph_resolution_candidates <- function(resolution, n_clusters, n_vertices = NULL) {
   if (is.null(n_clusters)) return(resolution)
+  resolution <- suppressWarnings(as.numeric(resolution))
+  resolution_is_auto <- length(resolution) != 1L || is.na(resolution) || !is.finite(resolution) || resolution <= 0
   center <- graph_resolution_center(resolution, n_clusters, n_vertices)
   exponents <- graph_resolution_grid_exponents(n_vertices)
   candidates <- center * (2 ^ exponents)
   candidates <- candidates[is.finite(candidates) & candidates > 0]
-  sort(unique(c(resolution, candidates)))
+  fallback <- if (isTRUE(resolution_is_auto)) 1 else resolution
+  fallback <- fallback[is.finite(fallback) & fallback > 0]
+  sort(unique(c(fallback, candidates)))
 }
 
 graph_cluster_edges_target <- function(edge_list,

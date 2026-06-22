@@ -305,12 +305,15 @@ routes, compact graph-route parameter metadata, and resolved backend metadata.
 When `n_clusters` is used, graph-clustering result metadata also records
 `target_gap`, `resolution_selection`, and a `resolution_search` table whose
 selected row is marked with `selected = TRUE`, so target-count resolution
-searches remain auditable in downstream summaries. The deterministic candidate
-center is derived from the requested resolution and, when graph size is known,
-the no-pilot shape heuristic `n_clusters / sqrt(n_vertices)`. The grid width
-is also shape-aware: small graphs use more candidates, while large graphs use a
-narrower deterministic grid to reduce repeated clustering passes during
-target-count searches. The raw and
+searches remain auditable in downstream summaries. Numeric resolution requests
+center the deterministic candidate grid near the requested resolution and,
+when graph size is known, the no-pilot shape heuristic
+`n_clusters / sqrt(n_vertices)`. `resolution = NULL` target-auto runs use the
+shape heuristic directly and record that automatic center in
+`resolution_selection$candidate_center`. The grid width is also shape-aware:
+small graphs use more candidates, while large graphs use a narrower
+deterministic grid to reduce repeated clustering passes during target-count
+searches. The raw and
 cycle-summary CSVs flatten the most important diagnostics as
 `resolution_selected_candidate`, `resolution_candidates`,
 `resolution_min_target_gap`, and

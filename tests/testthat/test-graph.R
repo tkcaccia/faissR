@@ -437,9 +437,14 @@ test_that("graph_cluster owns target cluster count", {
     n_clusters = 3L
   )
   expect_equal(auto_resolution$target_n_clusters, 3L)
-  expect_equal(auto_resolution$parameters$resolution, 1)
+  expect_true(is.na(auto_resolution$parameters$resolution))
   expect_equal(auto_resolution$parameters$resolution_source, "target_auto")
   expect_s3_class(auto_resolution$resolution_search, "data.frame")
+  expect_equal(
+    auto_resolution$resolution_selection$candidate_center,
+    3 / sqrt(g$n_vertices)
+  )
+  expect_true(auto_resolution$resolution_selection$candidate_center %in% auto_resolution$resolution_search$resolution)
 
   precomputed <- nn_without_self(x, k = 8L, backend = "cpu", n_threads = 2L)
   g_knn <- knn_graph(precomputed, k = 8L)
@@ -491,6 +496,7 @@ test_that("graph cluster-count targets are strict positive whole numbers", {
   )
   expect_equal(null_resolution$parameters$resolution_source, "target_auto")
   expect_equal(null_resolution$parameters$n_clusters, 2L)
+  expect_true(is.na(null_resolution$parameters$resolution))
 
   expect_error(
     graph_cluster(
@@ -543,6 +549,20 @@ test_that("target cluster resolution candidates are bounded and deterministic", 
   expect_equal(max(candidates), 16)
   expect_equal(length(candidates), 17L)
   expect_equal(faissR:::graph_resolution_candidates(0.5, NULL), 0.5)
+
+  auto_center <- faissR:::graph_resolution_center(
+    resolution = NA_real_,
+    n_clusters = 3L,
+    n_vertices = 120L
+  )
+  expect_equal(auto_center, 3 / sqrt(120))
+  auto_candidates <- faissR:::graph_resolution_candidates(
+    resolution = NA_real_,
+    n_clusters = 3L,
+    n_vertices = 120L
+  )
+  expect_true(auto_center %in% auto_candidates)
+  expect_true(1 %in% auto_candidates)
 
   shape_center <- faissR:::graph_resolution_center(
     resolution = 1,
