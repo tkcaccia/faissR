@@ -1669,17 +1669,17 @@ test_that("auto GPU preselector does not require CUDA when only CPU FAISS is ava
     faissR:::resolve_auto_knn_gpu_backend(
       backend = "auto",
       self_query = TRUE,
-      n_points = 20000L,
-      n = 20000L,
+      n_points = 400000L,
+      n = 400000L,
       p = 50L,
       k = 50L,
-      work_size = 20000 * 20000 * 50,
+      work_size = as.double(400000L) * as.double(400000L) * 50,
       metric = "cosine",
       cuda_available_value = TRUE,
       cuvs_available_value = TRUE,
       faiss_gpu_available_value = FALSE
     ),
-    NA_character_
+    "cuda_cuvs_cagra"
   )
 })
 
@@ -2800,6 +2800,69 @@ test_that("CUDA auto selector has deterministic k and metric policy", {
     ),
     "FAISS GPU Flat"
   )
+
+  large_metric_work <- as.double(300000L) * as.double(300000L) * 64
+  for (metric in c("cosine", "correlation", "inner_product")) {
+    expect_equal(
+      faissR:::cuda_auto_non_euclidean_backend(
+        metric,
+        requested_device = "cuda",
+        self_query = TRUE,
+        n = 300000L,
+        p = 64L,
+        n_points = 300000L,
+        k = 50L,
+        work_size = large_metric_work,
+        cuda_available_value = TRUE,
+        cuvs_available_value = TRUE,
+        faiss_gpu_available_value = FALSE,
+        require_available = TRUE
+      ),
+      "cuda_cuvs_cagra",
+      info = metric
+    )
+    expect_equal(
+      faissR:::cuda_auto_non_euclidean_backend(
+        metric,
+        requested_device = "cuda",
+        self_query = TRUE,
+        n = 300000L,
+        p = 64L,
+        n_points = 300000L,
+        k = 50L,
+        work_size = large_metric_work,
+        cuda_available_value = TRUE,
+        cuvs_available_value = FALSE,
+        faiss_gpu_available_value = TRUE,
+        require_available = TRUE
+      ),
+      "faiss_gpu_cagra",
+      info = metric
+    )
+    expect_equal(
+      faissR:::cuda_auto_non_euclidean_backend(
+        metric,
+        requested_device = "cuda",
+        self_query = FALSE,
+        n = 200000L,
+        p = 64L,
+        n_points = 1000L,
+        k = 50L,
+        work_size = as.double(200000L) * 1000 * 64,
+        cuda_available_value = TRUE,
+        cuvs_available_value = TRUE,
+        faiss_gpu_available_value = TRUE,
+        require_available = TRUE
+      ),
+      switch(
+        metric,
+        cosine = "faiss_gpu_flat_cosine",
+        correlation = "faiss_gpu_flat_correlation",
+        inner_product = "faiss_gpu_flat_ip"
+      ),
+      info = metric
+    )
+  }
 
   n <- 500000L
   p <- 32L

@@ -154,9 +154,10 @@ Method descriptions:
   depending on data shape, size, and available libraries. CUDA auto uses CUDA
   grid for 2D/3D Euclidean/cosine/correlation
   self-KNN, exact FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for
-  Euclidean searches when appropriate, cuVS HNSW for explicit CUDA HNSW
-  requests, and FAISS GPU Flat IP routes for exact inner-product searches
-  when FAISS GPU Flat is available
+  Euclidean searches when appropriate, FAISS GPU/direct cuVS CAGRA for large
+  cosine, correlation, and inner-product self-KNN, cuVS HNSW for explicit CUDA
+  HNSW requests, and FAISS GPU Flat IP routes for exact small/query
+  non-Euclidean searches when FAISS GPU Flat is available
   [1-3,5,13-15,22-23]. When `backend = "auto"` is
   combined with an explicit method, faissR first checks whether that exact
   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU
