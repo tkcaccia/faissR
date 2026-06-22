@@ -798,9 +798,15 @@ recommend_kmeans_methods <- function(cycle_summary, ari_tolerance, group_cols = 
     } else {
       rep(Inf, nrow(candidates))
     }
+    min_ari <- if ("min_ari" %in% names(candidates)) {
+      candidates$min_ari
+    } else {
+      rep(-Inf, nrow(candidates))
+    }
     candidates <- candidates[order(
       candidates$median_elapsed_sec,
       -ifelse(is.finite(candidates$median_ari), candidates$median_ari, -Inf),
+      -ifelse(is.finite(min_ari), min_ari, -Inf),
       ifelse(is.finite(withinss), withinss, Inf)
     ), , drop = FALSE]
     candidates[1L, , drop = FALSE]
@@ -1462,7 +1468,7 @@ materials <- c(
   "`kmeans_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, elapsed time, and total within-cluster sum of squares for a compact backwards-compatible summary. `kmeans_best_by_dataset_centers.csv` keeps the best successful row per dataset/centers combination so different requested cluster counts remain auditable.",
   "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. Speedups, ARI deltas, and withinss ratios are `NA` when the required timing or quality values are missing or invalid. The k-means benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs.",
   "`kmeans_cycle_summary.csv` aggregates successful rows across cycles by dataset/method/backend/centers and reports success counts, median/min/max elapsed time, ARI stability, withinss stability, iteration counts, whether any cycle hit `max_iter`, whether all cycles converged before the iteration cap, selected parameter medians, deterministic tuning rule/shape metadata, static selection metadata, and resolved backend metadata.",
-  "`kmeans_recommendations_from_cycles.csv` selects the fastest row within `ari_tolerance` of the best median ARI for each dataset/centers combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median times are broken by higher median ARI and then lower median total within-cluster sum of squares. When ARI is unavailable it selects the fastest median-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
+  "`kmeans_recommendations_from_cycles.csv` selects the fastest row within `ari_tolerance` of the best median ARI for each dataset/centers combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median times are broken by higher median ARI, higher minimum ARI across cycles, and then lower median total within-cluster sum of squares. When ARI is unavailable it selects the fastest median-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
   "`kmeans_backend_recommendations_from_cycles.csv` applies the same rule within each dataset/centers/backend group, so CPU, CUDA, auto, and stats rows can be tuned or reported separately without changing the overall recommendation file.",
   "`kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median ARI gap, withinss ratio, selected tuning metadata, requested/resolved backend metadata, CPU thread count, static selection metadata, and backend/implementation agreement. Speed ratios, ARI gaps, and withinss ratios are `NA` when the required timing or quality values are missing or invalid.",
   "`kmeans_auto_vs_global_recommendation.csv` filters that comparison to aggregate `fast_kmeans(backend = \"auto\")` rows and compares them with the pooled global recommendation for the same dataset/centers combination. It records requested-backend, resolved-backend, implementation, speed, ARI, withinss, deterministic tuning, and static no-pilot backend-selection agreement so the k-means auto backend selector can be refined from benchmark evidence.",

@@ -630,9 +630,9 @@ for comparing different requested cluster counts.
 `--ari_tolerance` must be a non-negative number and is validated before
 datasets are loaded. `--cycles` must be positive when supplied and otherwise
 defaults to 10.
-When ARI is available and median times tie, higher median ARI and then lower
-median total within-cluster sum of squares break the tie. When ARI is
-unavailable it selects the fastest median-time row. The
+When ARI is available and median times tie, higher median ARI, higher minimum
+ARI across cycles, and then lower median total within-cluster sum of squares
+break the tie. When ARI is unavailable it selects the fastest median-time row. The
 `recommendation_basis` column records whether the row was selected as
 `"fastest_within_ari_tolerance"` or `"speed_only_no_ari"`.
 `kmeans_backend_recommendations_from_cycles.csv` applies the same rule within

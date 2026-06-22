@@ -2023,24 +2023,29 @@ test_that("k-means benchmark can recommend within backend groups", {
   expect_equal(by_backend$method, c("fast_kmeans", "fast_kmeans", "stats"))
 })
 
-test_that("k-means benchmark recommendation ties prefer higher ARI then lower withinss", {
+test_that("k-means benchmark recommendation ties prefer ARI stability then lower withinss", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_kmeans.R"),
     "args <- parse_args()"
   )
   cycle_summary <- data.frame(
-    dataset = c("A", "A", "B", "B"),
-    centers = c(2L, 2L, 2L, 2L),
-    method = c("lower_ari", "higher_ari", "higher_withinss", "lower_withinss"),
-    backend = c("cpu", "cpu", "cpu", "cpu"),
-    metric = c("euclidean", "euclidean", "euclidean", "euclidean"),
-    median_ari = c(0.89, 0.90, 0.90, 0.90),
-    median_elapsed_sec = c(1, 1, 1, 1),
-    median_tot_withinss = c(10, 12, 20, 15)
+    dataset = c("A", "A", "B", "B", "C", "C"),
+    centers = c(2L, 2L, 2L, 2L, 2L, 2L),
+    method = c(
+      "lower_ari", "higher_ari",
+      "lower_min_ari", "higher_min_ari",
+      "higher_withinss", "lower_withinss"
+    ),
+    backend = rep("cpu", 6L),
+    metric = rep("euclidean", 6L),
+    median_ari = c(0.89, 0.90, 0.90, 0.90, 0.90, 0.90),
+    min_ari = c(0.88, 0.88, 0.80, 0.85, 0.85, 0.85),
+    median_elapsed_sec = c(1, 1, 1, 1, 1, 1),
+    median_tot_withinss = c(10, 12, 10, 12, 20, 15)
   )
 
   out <- env$recommend_kmeans_methods(cycle_summary, ari_tolerance = 0.02)
-  expect_equal(out$method, c("higher_ari", "lower_withinss"))
+  expect_equal(out$method, c("higher_ari", "higher_min_ari", "lower_withinss"))
 })
 
 test_that("k-means benchmark best-row ranking uses withinss after quality and speed", {

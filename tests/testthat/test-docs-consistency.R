@@ -842,7 +842,7 @@ test_that("benchmark docs describe deterministic ARI recommendation tie-breaks",
 
   prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
   expect_true(grepl("higher median ARI and then higher median modularity", prose, fixed = TRUE))
-  expect_true(grepl("higher median ARI and then lower median total within-cluster sum of squares", prose, fixed = TRUE))
+  expect_true(grepl("higher median ARI, higher minimum ARI across cycles", prose, fixed = TRUE))
 })
 
 test_that("benchmark docs describe deterministic NN recall recommendation tie-breaks", {
