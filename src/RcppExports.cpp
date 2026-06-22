@@ -10,13 +10,6 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-extern "C" SEXP faissR_nn_float32_call(SEXP x,
-                                       SEXP k,
-                                       SEXP backend,
-                                       SEXP metric,
-                                       SEXP include_self,
-                                       SEXP n_threads);
-
 // standardize_cpu_cpp
 List standardize_cpu_cpp(NumericMatrix data);
 RcppExport SEXP _faissR_standardize_cpu_cpp(SEXP dataSEXP) {
@@ -1140,8 +1133,9 @@ static const R_CallMethodDef CallEntries[] = {
     {NULL, NULL, 0}
 };
 
+void register_faissR_ccallables(DllInfo *dll);
 RcppExport void R_init_faissR(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
-    R_RegisterCCallable("faissR", "faissR_nn_float32_call", (DL_FUNC) &faissR_nn_float32_call);
     R_useDynamicSymbols(dll, FALSE);
+    register_faissR_ccallables(dll);
 }

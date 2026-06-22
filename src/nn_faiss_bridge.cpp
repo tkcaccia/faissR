@@ -200,6 +200,16 @@ extern "C" SEXP faissR_nn_float32_call(SEXP x,
   END_RCPP
 }
 
+// [[Rcpp::init]]
+void register_faissR_ccallables(DllInfo *dll) {
+  (void) dll;
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_nn_float32_call",
+    (DL_FUNC) &faissR_nn_float32_call
+  );
+}
+
 // [[Rcpp::export]]
 List nn_faiss_ivf_cpp(NumericMatrix data,
                       NumericMatrix points,
