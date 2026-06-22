@@ -451,7 +451,8 @@ metric matrix. It runs public `nn()` combinations over:
   method labels, not resolved backend labels such as `faiss_hnsw`;
 - CAGRA implementations: `--cagra_implementations=auto` by default, or
   `--cagra_implementations=faiss_gpu,cuvs` to split public `method = "cagra"`
-  rows into FAISS GPU CAGRA and direct RAPIDS cuVS CAGRA provider requests;
+  rows and CUDA-capable `method = "auto"` rows into FAISS GPU CAGRA and direct
+  RAPIDS cuVS CAGRA provider requests when those routes are selected;
 - metrics: `"euclidean"`, `"cosine"`, `"correlation"`, and
   `"inner_product"` after alias canonicalization; correlation is centered
   cosine similarity, while inner product ranks by larger raw dot product and
@@ -494,9 +495,11 @@ The result table separates `result_requested_backend`,
 `"cuda"` can be distinguished from concrete FAISS/cuVS implementation labels
 such as `"faiss_gpu_cagra"` or `"cuda_cuvs_cagra"`. The
 `cagra_implementation` column records the requested provider selector for
-public `method = "cagra"` rows and is `NA` for non-CAGRA rows; this keeps the
+public `method = "cagra"` rows and CUDA-capable `method = "auto"` rows that may
+select CAGRA; it is `NA` for rows where CAGRA cannot be selected. This keeps the
 public method namespace small while still allowing benchmark tables to compare
-FAISS GPU CAGRA against direct cuVS CAGRA.
+FAISS GPU CAGRA against direct cuVS CAGRA, including for shape-aware auto
+selection.
 The aggregate file `nn_metric_recommendations_from_cycles.csv` emits one row
 per dataset/backend/metric/k: it chooses the fastest median row above the recall
 threshold when possible, the best-recall row when all measured methods are below

@@ -974,6 +974,15 @@ test_that("NN metric benchmark accounts for data-shaped method skips", {
     env$cagra_implementation_values_for("cuda", "cagra", c("faiss_gpu", "cuvs")),
     c("faiss_gpu", "cuvs")
   )
+  expect_equal(
+    env$cagra_implementation_values_for("cuda", "auto", c("faiss_gpu", "cuvs")),
+    c("faiss_gpu", "cuvs")
+  )
+  expect_equal(
+    env$cagra_implementation_values_for("auto", "auto", c("faiss_gpu", "cuvs")),
+    c("faiss_gpu", "cuvs")
+  )
+  expect_true(is.na(env$cagra_implementation_values_for("cpu", "auto", c("faiss_gpu", "cuvs"))))
   expect_true(is.na(env$cagra_implementation_values_for("cpu", "cagra", c("faiss_gpu", "cuvs"))))
   expect_error(
     env$validate_cagra_implementation_values("metal"),
