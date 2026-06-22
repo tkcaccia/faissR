@@ -282,8 +282,12 @@ class CagraIndex {
     cuvs_check(cuvsCagraIndexCreate(&index_), "cuvsCagraIndexCreate");
   }
   ~CagraIndex() {
+    reset();
+  }
+  void reset() {
     if (index_ != nullptr) {
       cuvsCagraIndexDestroy(index_);
+      index_ = nullptr;
     }
   }
   cuvsCagraIndex_t get() const { return index_; }
@@ -923,6 +927,7 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
     cuvsCagraBuild(res.get(), index_params.get(), &dataset_tensor, index.get()),
     "cuvsCagraBuild"
   );
+  cuda_sync("cuvsCagraBuild synchronize");
 
   CagraSearchParams search_params;
   if (itopk_size > 0) {
@@ -1000,6 +1005,7 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
       ),
       "cudaMemcpy(distances)"
     );
+    cuda_sync("cuvsCagraSearch copy synchronize");
   }
 
   List out = format_int64_result(
@@ -1028,6 +1034,13 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
     requested_intermediate_graph_degree != intermediate_graph_degree ||
     requested_search_width != search_width || requested_itopk_size != itopk_size;
   out["search_batch_size"] = batch_size;
+  index.reset();
+  cuda_sync("cuvsCagraIndexDestroy synchronize");
+  neighbors_d.reset(res.get(), 0);
+  distances_d.reset(res.get(), 0);
+  query_d.reset(res.get(), 0);
+  dataset_d.reset(res.get(), 0);
+  cuda_sync("cuVS CAGRA device buffers release synchronize");
   return out;
 }
 
