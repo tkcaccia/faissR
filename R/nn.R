@@ -1000,12 +1000,13 @@ nn_compute <- function(data,
       as.integer(params$nprobe),
       isTRUE(exclude_self)
     )
-    result <- finish_nn_result(out, "cuda_cuvs_ivf_flat", k, self_query, exact = FALSE)
+    result <- finish_nn_result(out, "cuda_cuvs_ivf_flat", k, self_query, exact = FALSE, metric = metric)
     attr(result, "approximation") <- list(
       strategy = "rapids_cuvs_ivf_flat",
       backend = "cuda_cuvs_ivf_flat",
       library = "cuvs",
       accelerator = "cuda",
+      metric = metric,
       default_candidate = FALSE,
       nlist = as.integer(out$n_lists),
       nprobe = as.integer(out$n_probes),
@@ -1032,12 +1033,13 @@ nn_compute <- function(data,
       as.integer(pq$pq_bits),
       isTRUE(exclude_self)
     )
-    result <- finish_nn_result(out, "cuda_cuvs_ivfpq", k, self_query, exact = FALSE)
+    result <- finish_nn_result(out, "cuda_cuvs_ivfpq", k, self_query, exact = FALSE, metric = metric)
     attr(result, "approximation") <- list(
       strategy = "rapids_cuvs_ivf_pq",
       backend = "cuda_cuvs_ivfpq",
       library = "cuvs",
       accelerator = "cuda",
+      metric = metric,
       role = "explicit_memory_pressure_backend",
       default_candidate = FALSE,
       nlist = as.integer(out$n_lists),

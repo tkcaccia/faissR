@@ -2109,6 +2109,19 @@ test_that("cuVS brute force reports Euclidean metric metadata", {
   expect_equal(attr(out, "cuvs")$resolved_backend, "cuda_cuvs_bruteforce")
 })
 
+test_that("direct cuVS IVF routes report Euclidean metric metadata", {
+  skip_if_not(cuvs_available())
+
+  x <- matrix(rnorm(160L), nrow = 40L)
+  for (backend in c("cuda_cuvs_ivf_flat", "cuda_cuvs_ivfpq")) {
+    out <- internal_nn(x, k = 4L, backend = backend, metric = "euclidean")
+
+    expect_equal(attr(out, "metric"), "euclidean", info = backend)
+    expect_equal(attr(out, "approximation")$metric, "euclidean", info = backend)
+    expect_equal(attr(out, "approximation")$library, "cuvs", info = backend)
+  }
+})
+
 test_that("cuVS CAGRA reports actual and requested graph parameters", {
   skip_if_not(cuvs_available())
 
