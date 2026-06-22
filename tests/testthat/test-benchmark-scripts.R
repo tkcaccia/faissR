@@ -39,6 +39,7 @@ test_that("benchmark materials document key row-level and summary outputs", {
     ),
     graph = c(
       "graph_cluster_benchmark_config.csv",
+      "graph_cluster_nn_capabilities.csv",
       "graph_cluster_benchmark_results.csv",
       "graph_cluster_best_by_dataset.csv",
       "graph_cluster_best_by_dataset_k_target.csv",
@@ -49,6 +50,7 @@ test_that("benchmark materials document key row-level and summary outputs", {
     ),
     kmeans = c(
       "kmeans_benchmark_config.csv",
+      "kmeans_runtime_capabilities.csv",
       "kmeans_benchmark_results.csv",
       "kmeans_best_by_dataset.csv",
       "kmeans_best_by_dataset_centers.csv",
@@ -1149,6 +1151,36 @@ test_that("k-means benchmark defaults cover fast_kmeans stats and public backend
     env$valid_kmeans_tuning_values(),
     c("auto", "fixed", "off", "none")
   )
+})
+
+test_that("k-means benchmark records runtime capability preflight", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+  caps <- env$kmeans_runtime_capabilities()
+
+  expect_s3_class(caps, "data.frame")
+  expect_true(all(c(
+    "method", "backend", "runtime_available", "resolved_backend",
+    "runtime_notes", "cuda_available", "faiss_gpu_available", "cuvs_available"
+  ) %in% names(caps)))
+  expect_equal(caps$backend, c("auto", "cpu", "cuda", "stats"))
+
+  cuda <- env$kmeans_runtime_status("fast_kmeans", "cuda", caps)
+  expect_equal(cuda$resolved_backend, "cuda")
+  expect_equal(
+    cuda$runtime_available,
+    isTRUE(faissR::cuda_available()) &&
+      (isTRUE(faissR::faiss_gpu_available()) || isTRUE(faissR::cuvs_available()))
+  )
+
+  skip_reason <- env$kmeans_expected_skip("fast_kmeans", "cuda")
+  if (isTRUE(cuda$runtime_available)) {
+    expect_null(skip_reason)
+  } else {
+    expect_match(skip_reason, "CUDA k-means")
+  }
 })
 
 test_that("k-means benchmark validates method and backend selectors", {

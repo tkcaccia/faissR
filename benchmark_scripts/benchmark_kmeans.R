@@ -722,14 +722,64 @@ kmeans_faiss_gpu_available <- function() {
   is.function(helper) && isTRUE(helper())
 }
 
+kmeans_runtime_capabilities <- function() {
+  cuda_runtime <- isTRUE(faissR::cuda_available())
+  faiss_gpu <- isTRUE(kmeans_faiss_gpu_available())
+  cuvs <- isTRUE(faissR::cuvs_available())
+  cuda_ok <- cuda_runtime && (faiss_gpu || cuvs)
+  data.frame(
+    method = c("fast_kmeans", "fast_kmeans", "fast_kmeans", "stats"),
+    backend = c("auto", "cpu", "cuda", "stats"),
+    supported = c(TRUE, TRUE, TRUE, TRUE),
+    runtime_available = c(TRUE, TRUE, cuda_ok, TRUE),
+    resolved_backend = c(
+      if (cuda_ok) "shape_aware_auto_cpu_or_cuda" else "cpu",
+      "cpu",
+      "cuda",
+      "stats"
+    ),
+    implementation = c(
+      if (cuda_ok) "faiss CPU/FAISS GPU/cuVS selected by shape gate" else "faiss/native CPU",
+      "faiss/native CPU",
+      "FAISS GPU k-means or direct cuVS k-means",
+      "stats::kmeans"
+    ),
+    runtime_notes = c(
+      if (cuda_ok) {
+        "Auto may select CUDA for sufficiently large shape/work estimates."
+      } else {
+        "Auto resolves to CPU because no k-means-capable CUDA route is available."
+      },
+      "CPU k-means route is available.",
+      if (cuda_ok) {
+        "CUDA k-means route is available."
+      } else {
+        "CUDA k-means requires a CUDA runtime plus FAISS GPU k-means or direct cuVS k-means."
+      },
+      "Base stats::kmeans is available."
+    ),
+    cuda_available = c(cuda_runtime, cuda_runtime, cuda_runtime, cuda_runtime),
+    faiss_gpu_available = c(faiss_gpu, faiss_gpu, faiss_gpu, faiss_gpu),
+    cuvs_available = c(cuvs, cuvs, cuvs, cuvs),
+    stringsAsFactors = FALSE
+  )
+}
+
+kmeans_runtime_status <- function(method, backend, caps = kmeans_runtime_capabilities()) {
+  method <- tolower(as.character(method)[1L])
+  backend <- tolower(as.character(backend)[1L])
+  hit <- caps[caps$method == method & caps$backend == backend, , drop = FALSE]
+  if (!nrow(hit)) return(NULL)
+  hit[1L, , drop = FALSE]
+}
+
 kmeans_expected_skip <- function(method, backend) {
   method <- tolower(as.character(method)[1L])
   backend <- tolower(as.character(backend)[1L])
   if (!identical(method, "fast_kmeans")) return(NULL)
-  if (backend %in% c("cuda", "cuda_faiss", "faiss_gpu", "cuda_cuvs", "cuvs") &&
-      (!isTRUE(faissR::cuda_available()) ||
-       (!isTRUE(kmeans_faiss_gpu_available()) && !isTRUE(faissR::cuvs_available())))) {
-    return(paste(
+  status <- kmeans_runtime_status(method, backend)
+  if (!is.null(status) && !isTRUE(status$runtime_available[[1L]])) {
+    return(status$runtime_notes[[1L]] %||% paste(
       "CUDA k-means requires a CUDA runtime plus FAISS GPU k-means or direct cuVS k-means;",
       "explicit CUDA requests are expected skips in this faissR build/runtime."
     ))
@@ -877,6 +927,8 @@ config <- data.frame(
   stringsAsFactors = FALSE
 )
 utils::write.csv(config, file.path(out_dir, "kmeans_benchmark_config.csv"), row.names = FALSE)
+kmeans_capabilities <- kmeans_runtime_capabilities()
+utils::write.csv(kmeans_capabilities, file.path(out_dir, "kmeans_runtime_capabilities.csv"), row.names = FALSE)
 
 results <- list()
 row_id <- 0L
@@ -1047,6 +1099,7 @@ materials <- c(
   sprintf("- Requested centers fallback: `%s`; `--centers` must be a positive integer and labels override this fallback when available", fallback_centers),
   "",
   "`kmeans_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `kmeans_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, selected parameters, ARI, within-cluster sums of squares, and backend metadata.",
+  "`kmeans_runtime_capabilities.csv` records the runtime availability table used for k-means preflight, including CUDA, FAISS GPU, and cuVS availability and whether explicit CUDA k-means requests can run in the current build.",
   "The result table records cycle, elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, total within-cluster sum of squares, iterations, selected k-means parameters, deterministic tuning policy/rule/shape metadata, and ARI against dataset labels when labels are available.",
   "`kmeans_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, elapsed time, and total within-cluster sum of squares for a compact backwards-compatible summary. `kmeans_best_by_dataset_centers.csv` keeps the best successful row per dataset/centers combination so different requested cluster counts remain auditable.",
   "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. Speedups, ARI deltas, and withinss ratios are `NA` when the required timing or quality values are missing or invalid. The `cycle` column supports repeated benchmark cycles such as `--cycles=10` for speed/ARI tuning.",

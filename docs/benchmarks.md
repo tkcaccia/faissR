@@ -459,7 +459,10 @@ and `backend_used`, so `"auto"` device policy and the actual implementation
 (`"faiss"`, `"cpu"`, `"cuda_faiss"`, `"cuda_cuvs"`, or `"stats"`) can be
 audited directly. The run configuration is saved as
 `kmeans_benchmark_config.csv`, and the raw row-level result table is saved as
-`kmeans_benchmark_results.csv`. `--centers` must be a positive integer; when
+`kmeans_benchmark_results.csv`. The runtime preflight table is saved as
+`kmeans_runtime_capabilities.csv`, including CUDA, FAISS GPU, and cuVS
+availability and whether explicit CUDA k-means requests are runnable in the
+current build. `--centers` must be a positive integer; when
 dataset labels are available, the benchmark uses the label-derived cluster
 count for that dataset and otherwise uses the validated `--centers` fallback.
 The config includes `available_datasets`, the validated real plus simulated
@@ -509,7 +512,8 @@ policy, expected-skip policy, and output-file definitions.
 Explicit CUDA/library combinations that are known unavailable before execution
 are recorded as `status = "expected_skip"` with `expected_skip = TRUE`, while
 `resolved_backend` remains `"cuda"` so the skipped public device request is
-auditable. `backend = "auto"` resolves to CPU instead of becoming an expected
+auditable. The skip decision is derived from `kmeans_runtime_capabilities.csv`.
+`backend = "auto"` resolves to CPU instead of becoming an expected
 skip when no k-means-capable CUDA route is available, and it can also resolve
 to CPU for small k-means jobs where the deterministic shape gate estimates that
 GPU launch/copy overhead would dominate. Unexpected runtime errors remain
