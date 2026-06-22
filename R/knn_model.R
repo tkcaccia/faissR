@@ -257,7 +257,12 @@ normalize_knn_model_k <- function(k, n_train) {
 }
 
 normalize_knn_task <- function(task) {
-  task <- as.character(task)[1L]
+  task <- normalize_scalar_choice_arg(
+    task,
+    arg = "task",
+    default = "auto",
+    formal_choices = c("auto", "classification", "regression")
+  )
   if (is.na(task) || !nzchar(task)) task <- "auto"
   task <- trimws(task)
   if (!task %in% c("auto", "classification", "regression")) {
@@ -267,7 +272,12 @@ normalize_knn_task <- function(task) {
 }
 
 normalize_knn_vote <- function(vote) {
-  vote <- as.character(vote)[1L]
+  vote <- normalize_scalar_choice_arg(
+    vote,
+    arg = "vote",
+    default = "majority",
+    formal_choices = c("majority", "weighted")
+  )
   if (is.na(vote) || !nzchar(vote)) vote <- "majority"
   vote <- trimws(vote)
   if (!vote %in% c("majority", "weighted")) {
@@ -277,7 +287,12 @@ normalize_knn_vote <- function(vote) {
 }
 
 normalize_knn_type <- function(type) {
-  type <- as.character(type)[1L]
+  type <- normalize_scalar_choice_arg(
+    type,
+    arg = "type",
+    default = "response",
+    formal_choices = c("response", "prob")
+  )
   if (is.na(type) || !nzchar(type)) type <- "response"
   type <- trimws(type)
   if (!type %in% c("response", "prob")) {
