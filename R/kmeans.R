@@ -67,9 +67,8 @@ fast_kmeans <- function(data,
   if (!all(is.finite(x))) {
     stop("`data` must contain only finite values.", call. = FALSE)
   }
-  centers <- suppressWarnings(as.integer(centers))
-  if (length(centers) != 1L || is.na(centers) || !is.finite(centers) ||
-      centers < 1L || centers > nrow(x)) {
+  centers <- normalize_kmeans_whole_number(centers, "centers", min_value = 1L)
+  if (centers > nrow(x)) {
     stop("`centers` must be an integer in [1, nrow(data)].", call. = FALSE)
   }
   auto_params <- kmeans_auto_params(
@@ -83,8 +82,8 @@ fast_kmeans <- function(data,
     n_init = kmeans_value_source(n_init),
     tol = kmeans_value_source(tol)
   )
-  max_iter <- normalize_kmeans_positive_int(max_iter, auto_params$max_iter)
-  n_init <- normalize_kmeans_positive_int(n_init, auto_params$n_init)
+  max_iter <- normalize_kmeans_positive_int(max_iter, auto_params$max_iter, "max_iter")
+  n_init <- normalize_kmeans_positive_int(n_init, auto_params$n_init, "n_init")
   n_threads <- normalize_nn_threads(n_threads)
   seed <- normalize_kmeans_seed(seed)
   tol <- normalize_kmeans_tol(tol, auto_params$tol)
@@ -408,28 +407,29 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
   )
 }
 
-normalize_kmeans_positive_int <- function(x, fallback) {
+normalize_kmeans_positive_int <- function(x, fallback, arg = "value") {
   if (is.character(x) && length(x) == 1L && identical(tolower(x), "auto")) {
     return(as.integer(fallback))
   }
-  normalize_positive_int(x, fallback)
+  normalize_positive_int(x, fallback, arg = arg)
 }
 
 normalize_kmeans_seed <- function(seed) {
-  seed <- suppressWarnings(as.integer(seed))
-  if (length(seed) != 1L || is.na(seed) || !is.finite(seed)) {
+  seed <- suppressWarnings(as.numeric(seed))
+  if (length(seed) != 1L || is.na(seed) || !is.finite(seed) ||
+      abs(seed - round(seed)) > sqrt(.Machine$double.eps)) {
     stop("`seed` must be a single finite integer.", call. = FALSE)
   }
-  seed
+  as.integer(round(seed))
 }
 
 normalize_kmeans_streaming_batch_size <- function(streaming_batch_size) {
-  streaming_batch_size <- suppressWarnings(as.integer(streaming_batch_size))
-  if (length(streaming_batch_size) != 1L || is.na(streaming_batch_size) ||
-      !is.finite(streaming_batch_size) || streaming_batch_size < 0L) {
-    stop("`streaming_batch_size` must be a single non-negative integer.", call. = FALSE)
-  }
-  streaming_batch_size
+  normalize_kmeans_whole_number(
+    streaming_batch_size,
+    "streaming_batch_size",
+    min_value = 0L,
+    message = "`streaming_batch_size` must be a single non-negative integer."
+  )
 }
 
 normalize_kmeans_tol <- function(x, fallback) {
@@ -441,12 +441,27 @@ normalize_kmeans_tol <- function(x, fallback) {
   as.numeric(x)
 }
 
-normalize_positive_int <- function(x, fallback) {
-  x <- suppressWarnings(as.integer(x))
-  if (length(x) != 1L || is.na(x) || !is.finite(x) || x < 1L) {
-    x <- fallback
+normalize_positive_int <- function(x, fallback, arg = "value") {
+  normalize_kmeans_whole_number(x, arg, min_value = 1L)
+}
+
+normalize_kmeans_whole_number <- function(x,
+                                          arg,
+                                          min_value = 1L,
+                                          message = NULL) {
+  value <- suppressWarnings(as.numeric(x))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) ||
+      value < min_value || abs(value - round(value)) > sqrt(.Machine$double.eps)) {
+    if (is.null(message)) {
+      if (min_value <= 0L) {
+        message <- paste0("`", arg, "` must be a single non-negative integer.")
+      } else {
+        message <- paste0("`", arg, "` must be a single positive integer.")
+      }
+    }
+    stop(message, call. = FALSE)
   }
-  as.integer(x)
+  as.integer(round(value))
 }
 
 kmeans_value_source <- function(x) {

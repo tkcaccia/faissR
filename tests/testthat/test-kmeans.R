@@ -245,8 +245,13 @@ test_that("fast_kmeans validates scalar seed and streaming batch size", {
   expect_equal(faissR:::normalize_kmeans_seed(12L), 12L)
   expect_equal(faissR:::normalize_kmeans_streaming_batch_size(0L), 0L)
   expect_equal(faissR:::normalize_kmeans_streaming_batch_size(128L), 128L)
+  expect_error(faissR:::normalize_kmeans_seed(1.5), "single finite integer")
   expect_error(faissR:::normalize_kmeans_seed(c(1L, 2L)), "single finite integer")
   expect_error(faissR:::normalize_kmeans_seed(NA_integer_), "single finite integer")
+  expect_error(
+    faissR:::normalize_kmeans_streaming_batch_size(1.5),
+    "single non-negative integer"
+  )
   expect_error(
     faissR:::normalize_kmeans_streaming_batch_size(c(0L, 128L)),
     "single non-negative integer"
@@ -262,6 +267,31 @@ test_that("fast_kmeans validates scalar seed and streaming batch size", {
   expect_error(
     fast_kmeans(x, centers = 2, backend = "cpu", streaming_batch_size = c(0L, 128L), n_threads = 2),
     "streaming_batch_size"
+  )
+})
+
+test_that("fast_kmeans integer controls reject fractional values", {
+  x <- matrix(rnorm(40), ncol = 4)
+
+  expect_error(
+    fast_kmeans(x, centers = 2.5, backend = "cpu", n_threads = 2),
+    "`centers` must be a single positive integer"
+  )
+  expect_error(
+    fast_kmeans(x, centers = 2, backend = "cpu", max_iter = 2.5, n_threads = 2),
+    "`max_iter` must be a single positive integer"
+  )
+  expect_error(
+    fast_kmeans(x, centers = 2, backend = "cpu", n_init = 1.5, n_threads = 2),
+    "`n_init` must be a single positive integer"
+  )
+  expect_error(
+    fast_kmeans(x, centers = 2, backend = "cpu", seed = 1.5, n_threads = 2),
+    "`seed` must be a single finite integer"
+  )
+  expect_error(
+    fast_kmeans(x, centers = 2, backend = "cpu", streaming_batch_size = 1.5, n_threads = 2),
+    "`streaming_batch_size` must be a single non-negative integer"
   )
 })
 
