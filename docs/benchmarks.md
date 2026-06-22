@@ -263,10 +263,11 @@ The config includes `available_datasets`, the validated real plus simulated
 dataset names accepted by the `--datasets` selector, so subset runs remain
 auditable.
 `graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by
-dataset/k/graph-backend/cluster-backend/method/weight and reports success
-counts, median/min/max graph, clustering, and total time, ARI stability,
-modularity stability, graph size, community counts, CPU thread count, preflight
-routes, and resolved backend metadata.
+dataset/k/graph-backend/graph-method/metric/cluster-backend/clustering-method/
+weight/target-cluster-count and reports success counts, median/min/max graph,
+clustering, and total time, ARI stability, modularity stability, graph size,
+community counts, CPU thread count, preflight routes, compact graph-route
+parameter metadata, and resolved backend metadata.
 `graph_cluster_nn_capabilities.csv` stores the graph-construction
 `nn_capabilities(runtime = TRUE)` table, including `runtime_reason` and
 `runtime_notes` for runtime-unavailable KNN routes.
@@ -285,11 +286,13 @@ the R object.
 `graph_cluster_best_by_dataset.csv` keeps a compact best successful row per
 dataset after ranking by ARI, modularity, and total time for backward-compatible
 summaries. `graph_cluster_best_by_dataset_k_target.csv` keeps the same
-best-row ranking per dataset/k/target-cluster-count combination, which is the
-safer table for comparing neighbourhood sizes and Louvain/Leiden target counts.
+best-row ranking per dataset/k/graph-method/metric/target-cluster-count
+combination, which is the safer table for comparing neighbourhood sizes, KNN
+graph routes, metrics, and Louvain/Leiden target counts.
 `graph_cluster_recommendations_from_cycles.csv` selects the fastest successful
 graph/clustering method row within `ari_tolerance` of the best median ARI for
-each dataset/k/graph-backend/cluster-backend/target-cluster-count combination;
+each dataset/k/graph-backend/graph-method/metric/cluster-backend/
+target-cluster-count combination;
 when ARI is available and median total times tie, higher median ARI and then
 higher median modularity break the tie. `--ari_tolerance` must be a
 non-negative number and is validated before datasets are loaded. `--threads`

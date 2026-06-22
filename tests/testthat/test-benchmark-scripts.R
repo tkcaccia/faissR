@@ -2353,6 +2353,59 @@ test_that("graph benchmark recommendations are grouped by backend and target clu
   )
 })
 
+test_that("graph benchmark recommendations stay separated by graph method and metric", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = rep("A", 8L),
+    k = rep(15L, 8L),
+    graph_backend = rep("cpu", 8L),
+    graph_method = rep(c("auto", "hnsw", "auto", "hnsw"), each = 2L),
+    metric = rep(c("euclidean", "euclidean", "cosine", "cosine"), each = 2L),
+    graph_resolved_backend = rep("cpu", 8L),
+    graph_preflight_route = rep("cpu", 8L),
+    graph_route_parameters = rep(NA_character_, 8L),
+    cluster_backend = rep("cpu", 8L),
+    cluster_resolved_backend = rep("cpu", 8L),
+    cluster_preflight_route = rep("cpu", 8L),
+    method = rep(c("louvain", "leiden"), 4L),
+    weight = rep("snn", 8L),
+    n = rep(100L, 8L),
+    p = rep(4L, 8L),
+    n_threads = rep(2L, 8L),
+    success_cycles = rep(2L, 8L),
+    median_graph_sec = rep(1, 8L),
+    median_cluster_sec = rep(c(4, 1), 4L),
+    median_total_sec = rep(c(5, 2), 4L),
+    median_ari = c(0.90, 0.90, 0.91, 0.91, 0.80, 0.80, 0.81, 0.81),
+    min_ari = c(0.90, 0.90, 0.91, 0.91, 0.80, 0.80, 0.81, 0.81),
+    median_modularity = rep(0.4, 8L),
+    median_n_communities = rep(3, 8L),
+    median_selected_resolution = rep(1, 8L),
+    n_clusters_requested = rep(3L, 8L),
+    n_clusters_source = rep("labels", 8L),
+    graph_cached = rep(TRUE, 8L)
+  )
+
+  local <- env$recommend_graph_cluster_methods(cycle_summary, ari_tolerance = 0.01)
+  global <- env$recommend_graph_cluster_global_methods(cycle_summary, ari_tolerance = 0.01)
+
+  expect_equal(nrow(local), 4L)
+  expect_equal(nrow(global), 4L)
+  expect_setequal(
+    paste(local$graph_method, local$metric, sep = "/"),
+    c("auto/euclidean", "hnsw/euclidean", "auto/cosine", "hnsw/cosine")
+  )
+  expect_setequal(
+    paste(global$graph_method, global$metric, sep = "/"),
+    c("auto/euclidean", "hnsw/euclidean", "auto/cosine", "hnsw/cosine")
+  )
+  expect_equal(local$method, rep("leiden", 4L))
+  expect_equal(global$method, rep("leiden", 4L))
+})
+
 test_that("graph benchmark recommendation ties prefer higher ARI then modularity", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
