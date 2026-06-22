@@ -437,7 +437,9 @@ normalize_kmeans_tol <- function(x, fallback) {
     return(as.numeric(fallback))
   }
   x <- suppressWarnings(as.numeric(x))
-  if (length(x) != 1L || is.na(x) || !is.finite(x) || x < 0) x <- fallback
+  if (length(x) != 1L || is.na(x) || !is.finite(x) || x < 0) {
+    stop("`tol` must be `auto` or a single non-negative finite number.", call. = FALSE)
+  }
   as.numeric(x)
 }
 

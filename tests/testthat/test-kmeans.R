@@ -295,6 +295,27 @@ test_that("fast_kmeans integer controls reject fractional values", {
   )
 })
 
+test_that("fast_kmeans rejects invalid explicit tolerance values", {
+  x <- matrix(rnorm(40), ncol = 4)
+
+  expect_error(
+    fast_kmeans(x, centers = 2, backend = "cpu", tol = c(1e-4, 1e-5), n_threads = 2),
+    "`tol` must be `auto` or a single non-negative finite number"
+  )
+  expect_error(
+    fast_kmeans(x, centers = 2, backend = "cpu", tol = -1e-4, n_threads = 2),
+    "`tol` must be `auto` or a single non-negative finite number"
+  )
+  expect_error(
+    fast_kmeans(x, centers = 2, backend = "cpu", tol = "small", n_threads = 2),
+    "`tol` must be `auto` or a single non-negative finite number"
+  )
+  expect_error(
+    fast_kmeans(x, centers = 2, backend = "cpu", tol = NA_real_, n_threads = 2),
+    "`tol` must be `auto` or a single non-negative finite number"
+  )
+})
+
 test_that("fast_kmeans CUDA requests never silently use CPU", {
   x <- matrix(rnorm(80), ncol = 4)
   out <- tryCatch(
