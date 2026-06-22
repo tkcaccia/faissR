@@ -148,8 +148,9 @@ elapsed time, recall stability, CPU thread count, preflight route, and the
 dominant implementation backend. New runs also preserve the public request
 stored on `nn()` results (`result_requested_backend`,
 `result_requested_method`, and `result_tuning`), compact `route_parameters`
-metadata from FAISS/cuVS/native result attributes, and `tuning_status` when a
-backend reports tuning.
+metadata from FAISS/cuVS/native result attributes, explicit
+`auto_predicted_method` and `auto_predicted_device` fields from no-pilot auto
+selection, and `tuning_status` when a backend reports tuning.
 For deterministic no-pilot routes such as FAISS CPU HNSW, the compact
 parameters include `tuning_rule` and shape flags, and `tuning_status` records
 that rule so speed/recall summaries remain interpretable across dataset shape,
@@ -238,9 +239,10 @@ Expected skips are marked with `expected_skip = TRUE` and a machine-readable
 without parsing the prose error message.
 The raw table and cycle summaries also preserve compact
 `graph_route_parameters` from the KNN route that built the graph, including
-FAISS/cuVS/grid parameter and deterministic tuning metadata when present. This
-lets graph ARI/speed comparisons distinguish, for example, two HNSW-built
-graphs that used different `tuning_rule` or `ef_search` settings.
+FAISS/cuVS/grid parameter, auto-selection predicted method/device, and
+deterministic tuning metadata when present. This lets graph ARI/speed
+comparisons distinguish, for example, two HNSW-built graphs that used different
+`tuning_rule` or `ef_search` settings.
 The config includes `available_datasets`, the validated real plus simulated
 dataset names accepted by the `--datasets` selector, so subset runs remain
 auditable.

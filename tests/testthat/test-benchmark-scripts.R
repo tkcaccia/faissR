@@ -626,6 +626,8 @@ test_that("NN metric auto comparison preserves recommendation basis", {
     result_requested_backend = c("auto", "cpu"),
     result_requested_method = c("auto", "hnsw"),
     result_tuning = c("auto", "auto"),
+    auto_predicted_method = c("hnsw", NA_character_),
+    auto_predicted_device = c("cpu", NA_character_),
     resolved_backend = c("faiss_hnsw", "faiss_hnsw"),
     implementation_backend = c("faiss_hnsw", "faiss_hnsw"),
     preflight_route = c("faiss_hnsw", "faiss_hnsw"),
@@ -653,6 +655,8 @@ test_that("NN metric auto comparison preserves recommendation basis", {
   expect_equal(out$auto_result_requested_method, "auto")
   expect_equal(out$recommended_result_requested_method, "hnsw")
   expect_equal(out$auto_result_tuning, "auto")
+  expect_equal(out$auto_auto_predicted_method, "hnsw")
+  expect_equal(out$auto_auto_predicted_device, "cpu")
   expect_equal(out$auto_preflight_route, "faiss_hnsw")
   expect_equal(out$recommended_preflight_route, "faiss_hnsw")
   expect_equal(out$auto_route_parameters, "approximation.m=16;approximation.ef_search=150")
@@ -679,6 +683,14 @@ test_that("NN metric benchmark extracts compact backend route parameters", {
     tuning = list(status = "target_met", results = data.frame(recall = 0.99))
   )
   attr(out, "spatial_index") <- list(strategy = "ignored_grid", bins_per_dim = 32L)
+  attr(out, "auto_selection") <- list(
+    policy = "static_shape_k_metric_selector",
+    predicted_backend = "faiss_hnsw",
+    predicted_method = "hnsw",
+    predicted_device = "cpu",
+    reason = "cpu_auto_shape_selector",
+    slow_tuning = FALSE
+  )
 
   params <- env$nn_route_parameters(out)
   expect_match(params, "approximation.strategy=faiss_IndexHNSWFlat", fixed = TRUE)
@@ -688,6 +700,9 @@ test_that("NN metric benchmark extracts compact backend route parameters", {
   expect_match(params, "approximation.tuning_rule=balanced_shape_metric", fixed = TRUE)
   expect_match(params, "approximation.tuning_high_dim=TRUE", fixed = TRUE)
   expect_match(params, "spatial_index.bins_per_dim=32", fixed = TRUE)
+  expect_match(params, "auto_selection.predicted_method=hnsw", fixed = TRUE)
+  expect_match(params, "auto_selection.predicted_device=cpu", fixed = TRUE)
+  expect_match(params, "auto_selection.reason=cpu_auto_shape_selector", fixed = TRUE)
   expect_equal(env$nn_tuning_status(out), "target_met")
 
   attr(out, "approximation")$tuning <- NULL
@@ -2341,6 +2356,8 @@ test_that("graph benchmark extracts compact graph KNN route parameters", {
     nn_auto_selection = list(
       policy = "static_shape_k_metric_selector",
       predicted_backend = "faiss_hnsw",
+      predicted_method = "hnsw",
+      predicted_device = "cpu",
       slow_tuning = FALSE
     )
   )
@@ -2351,6 +2368,8 @@ test_that("graph benchmark extracts compact graph KNN route parameters", {
   expect_match(params, "nn_approximation.ef_search=150", fixed = TRUE)
   expect_match(params, "nn_approximation.tuning_rule=balanced_shape_metric", fixed = TRUE)
   expect_match(params, "nn_auto_selection.policy=static_shape_k_metric_selector", fixed = TRUE)
+  expect_match(params, "nn_auto_selection.predicted_method=hnsw", fixed = TRUE)
+  expect_match(params, "nn_auto_selection.predicted_device=cpu", fixed = TRUE)
   expect_match(params, "nn_auto_selection.slow_tuning=FALSE", fixed = TRUE)
 })
 

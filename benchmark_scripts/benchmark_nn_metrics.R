@@ -362,6 +362,8 @@ result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threa
                        result_requested_backend = NA_character_,
                        result_requested_method = NA_character_,
                        result_tuning = NA_character_,
+                       auto_predicted_method = NA_character_,
+                       auto_predicted_device = NA_character_,
                        resolved_backend = NA_character_,
                        implementation_backend = NA_character_,
                        preflight_route = NA_character_,
@@ -393,6 +395,8 @@ result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threa
     result_requested_backend = result_requested_backend,
     result_requested_method = result_requested_method,
     result_tuning = result_tuning,
+    auto_predicted_method = auto_predicted_method,
+    auto_predicted_device = auto_predicted_device,
     resolved_backend = resolved_backend,
     implementation_backend = implementation_backend,
     preflight_route = preflight_route,
@@ -442,7 +446,8 @@ nn_route_parameters <- function(out) {
     faiss = attr(out, "faiss") %||% list(),
     cuvs = attr(out, "cuvs") %||% list(),
     spatial_index = attr(out, "spatial_index") %||% list(),
-    sparse = attr(out, "sparse") %||% list()
+    sparse = attr(out, "sparse") %||% list(),
+    auto_selection = attr(out, "auto_selection") %||% list()
   )
   keys <- c(
     "strategy", "library", "accelerator", "metric", "transform", "role",
@@ -459,7 +464,9 @@ nn_route_parameters <- function(out) {
     "search_width", "itopk_size", "requested_graph_degree",
     "requested_intermediate_graph_degree", "requested_search_width",
     "requested_itopk_size", "bins_per_dim", "n_cells",
-    "index_type", "search_batch_size", "n_threads"
+    "index_type", "search_batch_size", "n_threads",
+    "policy", "predicted_backend", "predicted_method", "predicted_device",
+    "reason", "n", "p", "k", "work_size", "slow_tuning"
   )
   pieces <- character()
   for (source_name in names(sources)) {
@@ -551,6 +558,8 @@ summarize_nn_cycles <- function(ok) {
       result_requested_backend = dominant_column(x, "result_requested_backend"),
       result_requested_method = dominant_column(x, "result_requested_method"),
       result_tuning = dominant_column(x, "result_tuning"),
+      auto_predicted_method = dominant_column(x, "auto_predicted_method"),
+      auto_predicted_device = dominant_column(x, "auto_predicted_device"),
       resolved_backend = dominant_value(x$resolved_backend),
       implementation_backend = dominant_value(x$implementation_backend),
       preflight_route = dominant_value(x$preflight_route),
@@ -608,6 +617,7 @@ compare_auto_to_recommendations <- function(cycle_summary, recommendations) {
   auto_keep <- c(
     keys, "method", "result_backend", "result_requested_backend",
     "result_requested_method", "result_tuning",
+    "auto_predicted_method", "auto_predicted_device",
     "resolved_backend", "implementation_backend",
     "preflight_route", "route_parameters", "tuning_status",
     "n_threads", "success_cycles", "median_elapsed_sec",
@@ -644,6 +654,7 @@ compare_auto_to_fastest <- function(ok, fastest) {
   auto_keep <- c(
     keys, "result_backend", "result_requested_backend",
     "result_requested_method", "result_tuning",
+    "auto_predicted_method", "auto_predicted_device",
     "resolved_backend", "implementation_backend",
     "route_parameters", "tuning_status", "elapsed_sec", "recall_at_k",
     "recall_reference", "recall_query_n"
@@ -651,6 +662,7 @@ compare_auto_to_fastest <- function(ok, fastest) {
   fastest_keep <- c(
     keys, "method", "result_backend", "result_requested_backend",
     "result_requested_method", "result_tuning",
+    "auto_predicted_method", "auto_predicted_device",
     "resolved_backend", "implementation_backend",
     "route_parameters", "tuning_status", "elapsed_sec", "recall_at_k",
     "recall_reference", "recall_query_n"
@@ -1043,6 +1055,7 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
         n_threads = n_threads
       )
     }, timeout)
+    auto_selection <- attr(out, "auto_selection") %||% list()
     elapsed <- proc.time()[["elapsed"]] - started
     recall <- if (is.null(reference)) {
       data.frame(recall_at_k = NA_real_, median_recall_at_k = NA_real_, min_recall_at_k = NA_real_)
@@ -1072,6 +1085,8 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
       result_requested_backend = attr(out, "requested_backend") %||% backend,
       result_requested_method = attr(out, "requested_method") %||% method,
       result_tuning = attr(out, "tuning") %||% "auto",
+      auto_predicted_method = auto_selection$predicted_method %||% NA_character_,
+      auto_predicted_device = auto_selection$predicted_device %||% NA_character_,
       resolved_backend = attr(out, "resolved_backend") %||% attr(out, "backend") %||% NA_character_,
       implementation_backend = nn_implementation_backend(out),
       preflight_route = preflight_route,
@@ -1336,7 +1351,7 @@ materials <- c(
   "`method = \"grid\"` is included in the default public method list but is recorded as an expected skip for datasets outside two or three columns, because it is a native low-dimensional spatial search route.",
   "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, and resolved backend fields.",
   "`nn_metric_capabilities.csv` stores the capability table used for that preflight, including `resolved_backend`, `runtime_available`, `runtime_reason`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
-  "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_requested_backend`, `result_requested_method`, and `result_tuning` record the public request stored on successful `nn()` results. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes, including deterministic FAISS HNSW `tuning_rule` and shape flags when present. `tuning_status` records backend tuning status, or the deterministic no-pilot tuning rule for routes such as FAISS CPU HNSW.",
+  "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_requested_backend`, `result_requested_method`, and `result_tuning` record the public request stored on successful `nn()` results. `auto_predicted_method` and `auto_predicted_device` record the public method/device class predicted by `attr(result, \"auto_selection\")` for auto requests, without parsing internal backend labels. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes and auto-selection metadata, including deterministic FAISS HNSW `tuning_rule`, shape flags, predicted method/device, and no-pilot auto-selection reason when present. `tuning_status` records backend tuning status, or the deterministic no-pilot tuning rule for routes such as FAISS CPU HNSW.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",
   "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches. Speed ratios and recall gaps are reported as `NA` when the required timing or recall values are missing or invalid.",
