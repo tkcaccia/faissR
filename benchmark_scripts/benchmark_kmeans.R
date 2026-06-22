@@ -767,6 +767,58 @@ compare_fast_kmeans_to_recommendations <- function(cycle_summary, recommendation
   comparison[order(comparison$dataset, comparison$centers, comparison$fast_backend), , drop = FALSE]
 }
 
+compare_auto_kmeans_to_recommendations <- function(cycle_summary, recommendations) {
+  if (!nrow(recommendations)) return(recommendations)
+  auto <- cycle_summary[
+    cycle_summary$method == "fast_kmeans" & cycle_summary$backend == "auto",
+    ,
+    drop = FALSE
+  ]
+  if (!nrow(auto)) return(data.frame())
+  keys <- c("dataset", "centers")
+  keep <- c(
+    keys, "method", "backend", "backend_used", "requested_backend",
+    "resolved_backend", "n_threads", "success_cycles", "median_elapsed_sec",
+    "median_ari", "min_ari", "median_tot_withinss", "median_iter",
+    "median_max_iter", "any_hit_max_iter", "all_converged",
+    "median_n_init", "median_tol", "tuning_policy",
+    "tuning_rule", "tuning_rule_detail",
+    "median_tuning_work", "median_tuning_n_per_center",
+    "tuning_high_dim", "tuning_large_n", "tuning_many_centers",
+    "tuning_small_many_centers", "tuning_few_points_many_centers",
+    "selection_policy", "selection_slow_tuning",
+    "selection_predicted_backend", "selection_reason", "median_selection_work",
+    "median_selection_nbytes", "median_selection_n_per_center",
+    "selection_cuda_available", "selection_faiss_gpu_available",
+    "selection_cuvs_available"
+  )
+  keep <- keep[keep %in% names(cycle_summary)]
+  rec_keep <- c(keep, "recommendation_basis")
+  auto <- auto[, keep, drop = FALSE]
+  recommendations <- recommendations[, rec_keep, drop = FALSE]
+  names(auto)[match(keep[-seq_along(keys)], names(auto))] <- paste0("auto_", keep[-seq_along(keys)])
+  names(recommendations)[match(rec_keep[-seq_along(keys)], names(recommendations))] <- paste0("recommended_", rec_keep[-seq_along(keys)])
+  comparison <- merge(auto, recommendations, by = keys, all = FALSE)
+  if (!nrow(comparison)) return(comparison)
+  comparison$auto_is_recommended_method <- comparison$auto_method == comparison$recommended_method
+  comparison$auto_uses_recommended_requested_backend <- comparison$auto_backend == comparison$recommended_backend
+  comparison$auto_uses_recommended_resolved_backend <- comparison$auto_resolved_backend == comparison$recommended_resolved_backend
+  comparison$auto_uses_recommended_implementation <- comparison$auto_backend_used == comparison$recommended_backend_used
+  comparison$auto_median_speed_ratio <- safe_positive_ratio(
+    comparison$auto_median_elapsed_sec,
+    comparison$recommended_median_elapsed_sec
+  )
+  comparison$auto_median_ari_gap <- safe_difference(
+    comparison$recommended_median_ari,
+    comparison$auto_median_ari
+  )
+  comparison$auto_withinss_ratio <- safe_positive_ratio(
+    comparison$auto_median_tot_withinss,
+    comparison$recommended_median_tot_withinss
+  )
+  comparison[order(comparison$dataset, comparison$centers), , drop = FALSE]
+}
+
 compare_fast_kmeans_to_stats <- function(ok) {
   fast_rows <- ok[ok$method == "fast_kmeans", , drop = FALSE]
   stats_rows <- ok[ok$method == "stats", , drop = FALSE]
@@ -1265,6 +1317,15 @@ if (nrow(ok)) {
     )
   }
 
+  auto_fast <- compare_auto_kmeans_to_recommendations(cycle_summary, recommendations)
+  if (nrow(auto_fast)) {
+    utils::write.csv(
+      auto_fast,
+      file.path(out_dir, "kmeans_auto_vs_global_recommendation.csv"),
+      row.names = FALSE
+    )
+  }
+
   comparison <- compare_fast_kmeans_to_stats(ok)
   if (nrow(comparison)) {
     utils::write.csv(
@@ -1301,6 +1362,7 @@ materials <- c(
   "`kmeans_recommendations_from_cycles.csv` selects the fastest row within `ari_tolerance` of the best median ARI for each dataset/centers combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median times are broken by higher median ARI and then lower median total within-cluster sum of squares. When ARI is unavailable it selects the fastest median-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
   "`kmeans_backend_recommendations_from_cycles.csv` applies the same rule within each dataset/centers/backend group, so CPU, CUDA, auto, and stats rows can be tuned or reported separately without changing the overall recommendation file.",
   "`kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median ARI gap, withinss ratio, selected tuning metadata, requested/resolved backend metadata, CPU thread count, static selection metadata, and backend/implementation agreement. Speed ratios, ARI gaps, and withinss ratios are `NA` when the required timing or quality values are missing or invalid.",
+  "`kmeans_auto_vs_global_recommendation.csv` filters that comparison to aggregate `fast_kmeans(backend = \"auto\")` rows and compares them with the pooled global recommendation for the same dataset/centers combination. It records requested-backend, resolved-backend, implementation, speed, ARI, withinss, deterministic tuning, and static no-pilot backend-selection agreement so the k-means auto backend selector can be refined from benchmark evidence.",
   "Explicit CUDA requests whose required CUDA, FAISS GPU, or cuVS k-means runtime is unavailable are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`; `resolved_backend` remains `cuda` so the skipped public device request is auditable. `backend = \"auto\"` resolves to CPU instead of becoming an expected skip when no k-means-capable CUDA route is available, and also resolves to CPU for small k-means shapes where the deterministic shape gate estimates that GPU launch/copy overhead would dominate. `centers = 1` is resolved to the exact CPU column-mean solution and records `single_cluster_exact_mean`, even for large matrices, because no iterative CPU or CUDA k-means backend can improve that objective. Unexpected runtime errors remain failed rows rather than being replaced with CPU timings."
 )
 writeLines(materials, file.path(out_dir, "MATERIALS_AND_METHODS_kmeans.md"))

@@ -62,6 +62,7 @@ test_that("benchmark materials document key row-level and summary outputs", {
       "kmeans_recommendations_from_cycles.csv",
       "kmeans_backend_recommendations_from_cycles.csv",
       "kmeans_fast_vs_cycle_recommendation.csv",
+      "kmeans_auto_vs_global_recommendation.csv",
       "kmeans_fast_vs_stats.csv",
       "MATERIALS_AND_METHODS_kmeans.md"
     )
@@ -1838,6 +1839,68 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
   expect_equal(out$recommended_selection_policy, rep("stats", 4))
   expect_equal(out$fast_selection_predicted_backend, c("cpu", "cuda", "cpu", "cuda"))
   expect_equal(unique(out$recommended_recommendation_basis), "fastest_within_ari_tolerance")
+})
+
+test_that("k-means auto comparison audits global recommendation", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+  cycle_summary <- data.frame(
+    dataset = c("A", "A", "A"),
+    method = c("fast_kmeans", "fast_kmeans", "stats"),
+    backend = c("auto", "cuda", "stats"),
+    backend_used = c("faiss", "cuda_faiss", "stats"),
+    requested_backend = c("auto", "cuda", "stats"),
+    resolved_backend = c("cpu", "cuda", "stats"),
+    n_threads = c(2L, 2L, 2L),
+    centers = c(3L, 3L, 3L),
+    success_cycles = c(2L, 2L, 2L),
+    median_elapsed_sec = c(4, 2, 6),
+    median_ari = c(0.90, 0.90, 0.89),
+    min_ari = c(0.89, 0.89, 0.88),
+    median_tot_withinss = c(10, 10, 11),
+    median_iter = c(5, 5, 5),
+    median_max_iter = c(100, 100, 100),
+    any_hit_max_iter = c(FALSE, FALSE, FALSE),
+    all_converged = c(TRUE, TRUE, TRUE),
+    median_n_init = c(3, 3, 1),
+    median_tol = c(1e-4, 1e-4, 1e-4),
+    tuning_policy = c("auto", "auto", "stats"),
+    tuning_rule = c("medium", "medium", "stats_kmeans"),
+    tuning_rule_detail = c("auto_cpu", "cuda_fast", "stats"),
+    median_tuning_work = c(300, 300, NA),
+    median_tuning_n_per_center = c(10, 10, NA),
+    tuning_high_dim = c(FALSE, FALSE, NA),
+    tuning_large_n = c(FALSE, FALSE, NA),
+    tuning_many_centers = c(FALSE, FALSE, NA),
+    tuning_small_many_centers = c(FALSE, FALSE, NA),
+    tuning_few_points_many_centers = c(FALSE, FALSE, NA),
+    selection_policy = c("static_shape_center_backend_selector", "explicit_backend", "stats"),
+    selection_slow_tuning = c(FALSE, FALSE, FALSE),
+    selection_predicted_backend = c("cpu", NA_character_, "stats"),
+    selection_reason = c("small_cpu_preferred", "explicit_cuda", "stats_kmeans"),
+    median_selection_work = c(300, 300, NA),
+    median_selection_nbytes = c(2400, 2400, NA),
+    median_selection_n_per_center = c(10, 10, NA),
+    selection_cuda_available = c(TRUE, TRUE, NA),
+    selection_faiss_gpu_available = c(TRUE, TRUE, NA),
+    selection_cuvs_available = c(FALSE, FALSE, NA)
+  )
+  recommendations <- cycle_summary[2, , drop = FALSE]
+  recommendations$recommendation_basis <- "fastest_within_ari_tolerance"
+
+  out <- env$compare_auto_kmeans_to_recommendations(cycle_summary, recommendations)
+  expect_equal(anyDuplicated(names(out)), 0L)
+  expect_equal(nrow(out), 1L)
+  expect_equal(out$recommended_backend, "cuda")
+  expect_false(out$auto_uses_recommended_requested_backend)
+  expect_false(out$auto_uses_recommended_resolved_backend)
+  expect_false(out$auto_uses_recommended_implementation)
+  expect_equal(out$auto_median_speed_ratio, 2)
+  expect_equal(out$auto_median_ari_gap, 0)
+  expect_equal(out$auto_selection_predicted_backend, "cpu")
+  expect_equal(out$recommended_selection_reason, "explicit_cuda")
 })
 
 test_that("k-means fast comparison guards withinss ratios", {

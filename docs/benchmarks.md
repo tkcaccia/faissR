@@ -568,6 +568,11 @@ CPU thread count, static no-pilot selection metadata, backend/implementation
 agreement, and the recommendation basis used for the recommended row. Speed
 ratios, ARI gaps, and withinss ratios are `NA` when the required timing or
 quality values are missing or invalid.
+`kmeans_auto_vs_global_recommendation.csv` compares aggregate
+`fast_kmeans(backend = "auto")` rows with the pooled global recommendation for
+the same dataset/centers combination and records requested-backend,
+resolved-backend, implementation, timing, ARI, withinss, deterministic tuning,
+and static no-pilot backend-selection agreement.
 `MATERIALS_AND_METHODS_kmeans.md` records the corresponding paper-ready
 methods text, including centers selection, ARI/withinss reporting, tuning
 policy, expected-skip policy, and output-file definitions.
