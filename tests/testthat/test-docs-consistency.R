@@ -496,6 +496,18 @@ test_that("benchmark documentation describes canonical metric aliases once", {
   expect_true(grepl("--metrics=euclidean,cosine,correlation,inner_product", prose, fixed = TRUE))
 })
 
+test_that("benchmark documentation describes saved dataset selector universe", {
+  docs_file <- test_path("../../docs/benchmarks.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  expect_true(grepl("available_datasets", prose, fixed = TRUE))
+  expect_true(grepl("validated real plus simulated dataset names", prose, fixed = TRUE))
+  expect_true(grepl("--datasets", prose, fixed = TRUE))
+})
+
 test_that("autotuning method settings table keeps public and implementation labels separate", {
   docs_file <- test_path("../../docs/autotuning.md")
   if (!file.exists(docs_file)) {

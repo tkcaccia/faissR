@@ -210,6 +210,9 @@ complete graph-plus-clustering workflow represented by the row.
 The run configuration is saved as `graph_cluster_benchmark_config.csv`, and
 the raw row-level result table is saved as
 `graph_cluster_benchmark_results.csv`, including graph vertex and edge counts.
+The config includes `available_datasets`, the validated real plus simulated
+dataset names accepted by the `--datasets` selector, so subset runs remain
+auditable.
 `graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by
 dataset/k/graph-backend/cluster-backend/method/weight and reports success
 counts, median/min/max graph, clustering, and total time, ARI stability,
@@ -327,6 +330,9 @@ for the run is saved as `nn_metric_capabilities.csv`, including public
 preflight first checks the explicit auto capability row, then checks the
 resolved CPU/CUDA route and records expected skips when that route requires
 unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.
+The config includes `available_datasets`, the validated real plus simulated
+dataset names accepted by the `--datasets` selector, which makes partial or
+subset reruns traceable to the full benchmark universe.
 The sparse route is also recorded as an expected skip for dense benchmark
 matrices so dense datasets are not converted just to exercise a sparse-specific
 method.
@@ -400,6 +406,8 @@ audited directly. The run configuration is saved as
 `kmeans_benchmark_results.csv`. `--centers` must be a positive integer; when
 dataset labels are available, the benchmark uses the label-derived cluster
 count for that dataset and otherwise uses the validated `--centers` fallback.
+The config includes `available_datasets`, the validated real plus simulated
+dataset names accepted by the `--datasets` selector.
 Method and backend selectors are validated before loading datasets, so typos in
 `--methods` or `--backends` stop the run instead of becoming failed benchmark
 rows. `--threads`, `--timeout`, and `--cycles` must be positive integers and
