@@ -11,8 +11,9 @@ design without checking the current compiled/runtime libraries. When
 \code{runtime_reason}, and \code{runtime_notes} columns for the current
 installation. \code{runtime_reason} uses stable labels such as
 \code{"available"}, \code{"unsupported_combination"}, \code{"missing_faiss"},
-\code{"missing_faiss_gpu"}, \code{"missing_cuda"}, and \code{"missing_cuvs"}
-for benchmark preflight tables.}
+\code{"missing_faiss_gpu"}, \code{"missing_cuda"},
+\code{"missing_cuda_route"}, and \code{"missing_cuvs"} for benchmark
+preflight tables.}
 }
 \value{
 A data frame with one row per public \code{method}, \code{backend}

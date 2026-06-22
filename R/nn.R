@@ -1954,8 +1954,9 @@ cuda_cagra_route_available <- function(faiss_gpu_available_value = faiss_gpu_ava
 #'   `resolved_backend`, `runtime_available`, `runtime_reason`, and
 #'   `runtime_notes` columns for the current installation. `runtime_reason`
 #'   uses stable labels such as `"available"`, `"unsupported_combination"`,
-#'   `"missing_faiss"`, `"missing_faiss_gpu"`, `"missing_cuda"`, and
-#'   `"missing_cuvs"` for benchmark preflight tables.
+#'   `"missing_faiss"`, `"missing_faiss_gpu"`, `"missing_cuda"`,
+#'   `"missing_cuda_route"`, and `"missing_cuvs"` for benchmark preflight
+#'   tables.
 #' @return A data frame with one row per public `method`, `backend` (`"auto"`,
 #'   `"cpu"`, or `"cuda"`), and `metric` combination. Columns include
 #'   `supported`, `exact`, `implementation`, and `notes`. If `runtime = TRUE`,

@@ -284,8 +284,9 @@ and auditing. The CUDA auto gate can be adjusted for a benchmarked machine
 with `options(faissR.kmeans_cuda_work_threshold = ...)`,
 `options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
 `options(faissR.kmeans_cuda_large_n_threshold = ...)`, and
-`options(faissR.kmeans_cuda_large_p_threshold = ...)`; these options only change
-the static threshold rule and do not run pilot tuning.
+`options(faissR.kmeans_cuda_large_p_threshold = ...)`, and
+`options(faissR.kmeans_cuda_min_n_per_center = ...)`; these options only
+change the static threshold rule and do not run pilot tuning.
 `parameters$tuning$selection` records the compact no-pilot device decision;
 `selection$explicit_backend` and `selection$backend_decision` distinguish
 explicit `"cpu"`/`"cuda"` calls from automatic shape-policy choices.
