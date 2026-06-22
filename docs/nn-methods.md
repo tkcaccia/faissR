@@ -118,7 +118,9 @@ expected skips, not algorithmic failures.
   FAISS HNSW for large high-dimensional self-search, including non-Euclidean
   HNSW when FAISS exposes it, FAISS Flat exact search for larger cosine,
   correlation, or inner-product query/exact workloads, and RcppHNSW/hnswlib as
-  the large non-Euclidean self-search fallback when FAISS is unavailable
+  the preferred large non-Euclidean self-search fallback when FAISS is
+  unavailable. If neither FAISS nor RcppHNSW is available, CPU auto can use
+  faissR's native CPU NN-descent for large self-KNN instead of exact brute force
   [1-2,5,16].
 - CUDA auto uses CUDA grid for large 2D/3D Euclidean/cosine/correlation self-search, exact FAISS
   GPU Flat or cuVS brute force for small/medium Euclidean searches, FAISS GPU

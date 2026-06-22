@@ -125,8 +125,9 @@ Invalid combinations stop clearly before computation; for example,
 Method descriptions:
 \itemize{
   \item `"auto"`: shape-aware selector for the selected backend. CPU auto
-  uses exact, grid, FAISS IVF, or FAISS HNSW depending on data shape and
-  size. CUDA auto uses CUDA grid for 2D/3D Euclidean/cosine/correlation
+  uses exact, grid, FAISS IVF, FAISS HNSW, or native CPU NN-descent fallback
+  depending on data shape, size, and available libraries. CUDA auto uses CUDA
+  grid for 2D/3D Euclidean/cosine/correlation
   self-KNN, exact FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for
   Euclidean searches when appropriate, and FAISS GPU Flat IP routes for
   cosine, correlation, and inner-product searches only when FAISS GPU Flat is

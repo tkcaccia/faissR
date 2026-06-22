@@ -1945,7 +1945,7 @@ test_that("CPU auto selector is shape-aware", {
     k = 50L,
     work_size = 20000 * 20000 * 100
   )
-  expect_true(large %in% c("faiss_hnsw", "hnsw", "cpu"))
+  expect_true(large %in% c("faiss_hnsw", "hnsw", "cpu_nndescent"))
   if (faiss_available()) expect_equal(large, "faiss_hnsw")
 
   million_row <- faissR:::select_cpu_auto_backend(
@@ -1956,7 +1956,7 @@ test_that("CPU auto selector is shape-aware", {
     k = 50L,
     work_size = 1200000 * 1200000 * 32
   )
-  expect_true(million_row %in% c("faiss_ivf", "hnsw", "cpu"))
+  expect_true(million_row %in% c("faiss_ivf", "hnsw", "cpu_nndescent"))
   if (faiss_available()) expect_equal(million_row, "faiss_ivf")
 
   small_non_euclidean <- faissR:::select_cpu_auto_backend(
@@ -2015,11 +2015,13 @@ test_that("CPU auto selector is shape-aware", {
     work_size = 20000 * 20000 * 100,
     metric = "cosine"
   )
-  expect_true(large_non_euclidean %in% c("faiss_hnsw", "hnsw", "cpu"))
+  expect_true(large_non_euclidean %in% c("faiss_hnsw", "hnsw", "cpu_nndescent"))
   if (faiss_available()) {
     expect_equal(large_non_euclidean, "faiss_hnsw")
   } else if (requireNamespace("RcppHNSW", quietly = TRUE)) {
     expect_equal(large_non_euclidean, "hnsw")
+  } else {
+    expect_equal(large_non_euclidean, "cpu_nndescent")
   }
 })
 
@@ -2045,7 +2047,7 @@ test_that("CPU auto selector is k and metric aware on benchmark k grid", {
   expect_equal(routes$route[routes$metric == "euclidean" & routes$k == 5L], "cpu")
   expect_equal(
     routes$route[routes$metric == "euclidean" & routes$k >= 10L],
-    rep(if (faiss_available()) "faiss_hnsw" else if (requireNamespace("RcppHNSW", quietly = TRUE)) "hnsw" else "cpu", 4L)
+    rep(if (faiss_available()) "faiss_hnsw" else if (requireNamespace("RcppHNSW", quietly = TRUE)) "hnsw" else "cpu_nndescent", 4L)
   )
 
   for (metric in c("cosine", "correlation", "inner_product")) {
@@ -2062,9 +2064,33 @@ test_that("CPU auto selector is k and metric aware on benchmark k grid", {
     }
     expect_equal(
       routes$route[routes$metric == metric & routes$k >= 10L],
-      rep(if (faiss_available()) "faiss_hnsw" else if (requireNamespace("RcppHNSW", quietly = TRUE)) "hnsw" else "cpu", 4L)
+      rep(if (faiss_available()) "faiss_hnsw" else if (requireNamespace("RcppHNSW", quietly = TRUE)) "hnsw" else "cpu_nndescent", 4L)
     )
   }
+})
+
+test_that("CPU auto selector can fall back to native NNDescent for large self-KNN", {
+  expect_true(faissR:::should_use_native_nndescent_auto_fallback(
+    self_query = TRUE,
+    n = 70000L,
+    p = 784L,
+    k = 50L,
+    work_size = as.double(70000L) * as.double(70000L) * as.double(784L)
+  ))
+  expect_false(faissR:::should_use_native_nndescent_auto_fallback(
+    self_query = FALSE,
+    n = 70000L,
+    p = 784L,
+    k = 50L,
+    work_size = as.double(70000L) * as.double(70000L) * as.double(784L)
+  ))
+  expect_false(faissR:::should_use_native_nndescent_auto_fallback(
+    self_query = TRUE,
+    n = 70000L,
+    p = 784L,
+    k = 5L,
+    work_size = as.double(70000L) * as.double(70000L) * as.double(784L)
+  ))
 })
 
 test_that("CPU auto selector canonicalizes metric aliases", {

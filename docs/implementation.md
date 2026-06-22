@@ -170,7 +170,9 @@ too memory-heavy, FAISS HNSW for large high-dimensional self-KNN across all
 supported CPU metrics when FAISS is available, and FAISS Flat exact search for
 larger cosine/correlation/inner-product query or exact workloads before falling
 back to RcppHNSW/hnswlib for large non-Euclidean self-search when FAISS is
-unavailable [1-2,5]. On CUDA, it uses CUDA grid search for large 2D/3D
+unavailable. If neither FAISS nor RcppHNSW is available, CPU auto can use
+native CPU NN-descent for large self-KNN instead of exact brute force
+[1-2,5]. On CUDA, it uses CUDA grid search for large 2D/3D
 Euclidean/cosine/correlation self-KNN, exact FAISS GPU Flat or cuVS brute force
 for small and medium Euclidean searches, FAISS GPU CAGRA for very large
 Euclidean self-KNN when FAISS GPU/cuVS integration is available, and FAISS GPU

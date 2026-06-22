@@ -124,7 +124,9 @@ Policy summary:
   high-dimensional CPU self-KNN, including cosine, correlation, and
   inner-product HNSW when FAISS is available; FAISS Flat exact search for larger
   non-Euclidean query or exact workloads; RcppHNSW/hnswlib remains the fallback
-  for large non-Euclidean self-KNN when FAISS is unavailable.
+  for large non-Euclidean self-KNN when FAISS is unavailable; native CPU
+  NN-descent is the final large self-KNN fallback when neither FAISS nor
+  RcppHNSW is available.
   On the benchmark `k` grid, large high-dimensional CPU self-search keeps
   `k = 5` on an exact route and switches to HNSW from `k = 10` upward when a
   graph-search backend is available; non-Euclidean `k = 5` can use exact FAISS
