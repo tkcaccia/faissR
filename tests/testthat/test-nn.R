@@ -3336,6 +3336,7 @@ test_that("backend_info reports native availability without crashing", {
   expect_false(any(is.na(info$available)))
   expect_false(any(grepl("faiss_|cuda_cuvs|cpu_", info$public_call)))
   expect_true(all(grepl("implementation", info$resolved_route)))
+  expect_false(grepl("cagra", info$supported_methods[info$backend == "cpu"]))
   expect_match(info$supported_methods[info$backend == "faiss"], "hnsw")
   expect_match(info$supported_methods[info$backend == "faiss"], "cagra")
   expect_match(info$supported_methods[info$backend == "faiss_gpu_cuvs"], "cagra")

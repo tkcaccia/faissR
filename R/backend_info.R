@@ -40,7 +40,7 @@ backend_info <- function() {
       "cuda"
     ),
     supported_methods = c(
-      "auto, exact, flat, bruteforce, grid, vptree, sparse, hnsw, ivf, ivfpq, nsg, nndescent, cagra",
+      "auto, exact, flat, bruteforce, grid, vptree, sparse, hnsw, ivf, ivfpq, nsg, nndescent",
       "flat, ivf, ivfpq, hnsw, nsg; GPU flat/ivf/ivfpq/cagra when FAISS GPU is available",
       "ivf, ivfpq, cagra",
       "bruteforce, nndescent, cagra",
