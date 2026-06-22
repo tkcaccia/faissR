@@ -259,7 +259,7 @@ fast_kmeans(data, centers, backend = "auto",
 | `n_threads` | CPU worker threads for FAISS/statistics paths. |
 | `streaming_batch_size` | cuVS host-data streaming batch size. Use `0` to let cuVS choose its default. |
 | `init` | Initialization method: `"kmeans++"` or `"random"` where supported. |
-| `tuning` | `"auto"` uses deterministic rules based on `nrow(data)`, `ncol(data)`, `centers`, and `n / centers`; small many-cluster jobs can use extra restarts without pilot runs, while large/high-dimensional jobs use cheaper defaults. `centers = 1` uses the exact CPU column-mean solution and records `single_cluster_exact_mean`; `centers = nrow(data)` uses the exact singleton assignment and records `singleton_exact_identity`. `"fixed"`, `"off"`, and `"none"` keep the historical defaults unless explicit parameter values are supplied. |
+| `tuning` | `"auto"` uses deterministic rules based on `nrow(data)`, `ncol(data)`, `centers`, and `n / centers`; small many-cluster jobs can use extra restarts without pilot runs, while large/high-dimensional jobs use cheaper defaults. `centers = 1` uses the exact column-mean solution for every backend request and records `single_cluster_exact_mean`; `centers = nrow(data)` uses the exact singleton assignment for every backend request and records `singleton_exact_identity`. Explicit CUDA requests for these exact cases return the trivial result and do not launch GPU work. `"fixed"`, `"off"`, and `"none"` keep the historical defaults unless explicit parameter values are supplied. |
 
 Returns cluster labels, centers, within-cluster sums of squares, cluster sizes,
 iteration count, `converged`, `hit_max_iter`, backend, and parameters,

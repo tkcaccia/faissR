@@ -183,8 +183,9 @@ test_that("fast_kmeans uses an exact trivial solution for one cluster on CPU and
   expect_s3_class(fit, "faissR_kmeans")
   expect_equal(fit$backend, "trivial")
   expect_equal(fit$parameters$requested_backend, "auto")
-  expect_equal(fit$parameters$resolved_backend, "cpu")
+  expect_equal(fit$parameters$resolved_backend, "trivial")
   expect_true(isTRUE(fit$parameters$exact_trivial_solution))
+  expect_match(fit$parameters$backend_resolution_note, "no iterative CPU or CUDA backend was launched")
   expect_equal(fit$cluster, rep.int(1L, nrow(x)))
   expect_equal(fit$centers, expected_center)
   expect_equal(fit$withinss, expected_within)
@@ -203,8 +204,17 @@ test_that("fast_kmeans uses an exact trivial solution for one cluster on CPU and
 
   cpu_fit <- fast_kmeans(x, centers = 1L, backend = "cpu", seed = 99, n_threads = 2)
   expect_equal(cpu_fit$backend, "trivial")
+  expect_equal(cpu_fit$parameters$resolved_backend, "trivial")
   expect_equal(cpu_fit$centers, expected_center)
   expect_equal(cpu_fit$tot.withinss, expected_within)
+
+  cuda_fit <- fast_kmeans(x, centers = 1L, backend = "cuda", seed = 99, n_threads = 2)
+  expect_equal(cuda_fit$backend, "trivial")
+  expect_equal(cuda_fit$parameters$requested_backend, "cuda")
+  expect_equal(cuda_fit$parameters$resolved_backend, "trivial")
+  expect_equal(cuda_fit$centers, expected_center)
+  expect_equal(cuda_fit$tot.withinss, expected_within)
+  expect_match(cuda_fit$parameters$backend_resolution_note, "Exact one-cluster solution")
 })
 
 test_that("fast_kmeans uses an exact trivial solution for singleton clusters on CPU and auto", {
@@ -215,8 +225,9 @@ test_that("fast_kmeans uses an exact trivial solution for singleton clusters on 
   expect_s3_class(fit, "faissR_kmeans")
   expect_equal(fit$backend, "trivial")
   expect_equal(fit$parameters$requested_backend, "auto")
-  expect_equal(fit$parameters$resolved_backend, "cpu")
+  expect_equal(fit$parameters$resolved_backend, "trivial")
   expect_true(isTRUE(fit$parameters$exact_trivial_solution))
+  expect_match(fit$parameters$backend_resolution_note, "no iterative CPU or CUDA backend was launched")
   expect_equal(fit$cluster, seq_len(nrow(x)))
   expect_equal(fit$centers, x)
   expect_equal(fit$withinss, rep.int(0, nrow(x)))
@@ -235,8 +246,17 @@ test_that("fast_kmeans uses an exact trivial solution for singleton clusters on 
 
   cpu_fit <- fast_kmeans(x, centers = nrow(x), backend = "cpu", seed = 99, n_threads = 2)
   expect_equal(cpu_fit$backend, "trivial")
+  expect_equal(cpu_fit$parameters$resolved_backend, "trivial")
   expect_equal(cpu_fit$centers, x)
   expect_equal(cpu_fit$tot.withinss, 0)
+
+  cuda_fit <- fast_kmeans(x, centers = nrow(x), backend = "cuda", seed = 99, n_threads = 2)
+  expect_equal(cuda_fit$backend, "trivial")
+  expect_equal(cuda_fit$parameters$requested_backend, "cuda")
+  expect_equal(cuda_fit$parameters$resolved_backend, "trivial")
+  expect_equal(cuda_fit$centers, x)
+  expect_equal(cuda_fit$tot.withinss, 0)
+  expect_match(cuda_fit$parameters$backend_resolution_note, "Exact singleton solution")
 })
 
 test_that("kmeans auto parameter helper canonicalizes tuning labels", {

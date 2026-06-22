@@ -56,12 +56,14 @@ Small many-cluster jobs can use extra restarts when `n / centers` remains
 large enough, and cheap many-cluster jobs with few observations per center
 also use a small multistart budget for stability; large or
 high-dimensional jobs use cheaper iteration and tolerance defaults.
-`centers = 1` uses the exact column-mean solution for `backend = "auto"`
-and `"cpu"` with `max_iter = 1`, `n_init = 1`, and `tol = 0`, records
+`centers = 1` uses the exact column-mean solution for every backend request
+with `max_iter = 1`, `n_init = 1`, and `tol = 0`, records
 `single_cluster_exact_mean`, and stays on CPU because no iterative
 k-means backend can improve that solution.
-`centers = nrow(data)` uses the exact singleton assignment for `backend = "auto"`
-and `"cpu"` and records `singleton_exact_identity`.
+`centers = nrow(data)` uses the exact singleton assignment for every backend
+request and records `singleton_exact_identity`; explicit CUDA requests are
+recorded as resolved by the exact faissR trivial route rather than launching
+GPU work.
 `"fixed"`, `"off"`, and `"none"` use the historical fixed defaults unless
 `max_iter`, `n_init`, or `tol` are explicitly supplied.}
 }

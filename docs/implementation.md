@@ -451,12 +451,14 @@ low-dimensional data uses `large_fast_convergence` with 50 iterations, one
 restart, and `tol = 1e-3`, while a small 50,000 x 10 / 100-cluster job uses
 `small_many_centers_multistart` with 100 iterations and three restarts. These
 are fixed rules, not pilot benchmark loops. When `centers = 1`,
-`fast_kmeans()` uses the exact CPU column mean for `backend = "auto"` and
-`"cpu"` and records `single_cluster_exact_mean`, because iterative k-means
-cannot improve that solution on any backend. When `centers = nrow(data)`,
-`fast_kmeans()` uses the exact singleton assignment for `backend = "auto"` and
-`"cpu"` and records `singleton_exact_identity`, because every observation is
-already its own optimal cluster. The
+`fast_kmeans()` uses the exact column mean for every backend request and records
+`single_cluster_exact_mean`, because iterative k-means cannot improve that
+solution on any backend. When `centers = nrow(data)`, `fast_kmeans()` uses the
+exact singleton assignment for every backend request and records
+`singleton_exact_identity`, because every observation is already its own optimal
+cluster. Explicit CUDA requests for these exact cases return the trivial result
+and record `parameters$resolved_backend = "trivial"` rather than launching GPU
+work. The
 `resolved_from` field records whether `max_iter`, `n_init`, and `tol` were
 selected by auto/default rules or supplied explicitly.
 `result$parameters$tuning$effective` records the final values used after
