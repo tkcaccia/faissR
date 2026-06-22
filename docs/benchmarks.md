@@ -299,6 +299,10 @@ raw and summary CSVs record this request as `graph_cagra_implementation`, so
 auto graph-clustering audits can separate provider choice from public method
 choice. The benchmark calls pass this provider through faissR's per-call
 `cagra_implementation` argument, avoiding shared option state between rows.
+For rows with `graph_cagra_implementation = "cuvs"`, `--cagra_build_algos`
+can split direct cuVS CAGRA construction into `auto`, `ivf_pq`,
+`nn_descent`, and `iterative_cagra_search`; raw and summary CSVs record this
+request as `graph_cagra_build_algo`.
 The config includes `available_datasets`, the validated real plus simulated
 dataset names accepted by the `--datasets` selector, so subset runs remain
 auditable.
@@ -489,6 +493,9 @@ metric matrix. It runs public `nn()` combinations over:
   `--cagra_implementations=faiss_gpu,cuvs` to split public `method = "cagra"`
   rows and CUDA-capable `method = "auto"` rows into FAISS GPU CAGRA and direct
   RAPIDS cuVS CAGRA provider requests when those routes are selected;
+- Direct cuVS CAGRA build algorithms: `--cagra_build_algos=auto` by default,
+  or `--cagra_build_algos=auto,ivf_pq,nn_descent,iterative_cagra_search` to
+  audit direct cuVS CAGRA graph construction modes separately;
 - metrics: `"euclidean"`, `"cosine"`, `"correlation"`, and
   `"inner_product"` after alias canonicalization; correlation is centered
   cosine similarity, while inner product ranks by larger raw dot product and

@@ -31,6 +31,9 @@
 #'   the global `faissR.cagra_implementation` option; `"auto"` prefers FAISS GPU
 #'   CAGRA then direct cuVS CAGRA, while `"faiss_gpu"` or `"cuvs"` force one
 #'   provider.
+#' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm passed
+#'   to \code{\link{nn}()} for direct cuVS CAGRA routes. `NULL` uses the global
+#'   `faissR.cuvs_cagra_build_algo` option.
 #' @param task `"auto"`, `"classification"`, or `"regression"`. `"auto"` treats
 #'   numeric responses as regression and other response types as classification.
 #' @param k Default number of neighbours used by `predict()` and by immediate
@@ -65,6 +68,7 @@ knn <- function(Xtrain,
                 metric = c("euclidean", "cosine", "correlation", "inner_product"),
                 tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                 cagra_implementation = NULL,
+                cagra_build_algo = NULL,
                 task = c("auto", "classification", "regression"),
                 k = 15L,
                 n_threads = NULL,
@@ -84,6 +88,7 @@ knn <- function(Xtrain,
     metric = metric,
     tuning = tuning,
     cagra_implementation = cagra_implementation,
+    cagra_build_algo = cagra_build_algo,
     task = task,
     k = k,
     n_threads = n_threads
@@ -98,6 +103,7 @@ knn <- function(Xtrain,
     backend = backend,
     tuning = tuning,
     cagra_implementation = cagra_implementation,
+    cagra_build_algo = cagra_build_algo,
     vote = vote,
     type = type,
     ...
@@ -111,6 +117,7 @@ knn_model_fit <- function(Xtrain,
                           metric = c("euclidean", "cosine", "correlation", "inner_product"),
                           tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                           cagra_implementation = NULL,
+                          cagra_build_algo = NULL,
                           task = c("auto", "classification", "regression"),
                           k = 15L,
                           n_threads = NULL) {
@@ -119,6 +126,7 @@ knn_model_fit <- function(Xtrain,
   tuning <- normalize_nn_tuning(tuning)
   metric <- normalize_nn_metric(metric)
   cagra_implementation <- normalize_cagra_implementation_arg(cagra_implementation)
+  cagra_build_algo <- normalize_cagra_build_algo_arg(cagra_build_algo)
   task <- normalize_knn_task(task)
   x <- as.matrix(Xtrain)
   storage.mode(x) <- "double"
@@ -162,6 +170,7 @@ knn_model_fit <- function(Xtrain,
       method = method,
       tuning = tuning,
       cagra_implementation = cagra_implementation,
+      cagra_build_algo = cagra_build_algo,
       metric = metric,
       k = k,
       n_threads = n_threads
@@ -185,6 +194,9 @@ knn_model_fit <- function(Xtrain,
 #'   defaults.
 #' @param cagra_implementation CUDA CAGRA provider for this prediction call.
 #'   `NULL` reuses the fitted model's setting, then the global option.
+#' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm for
+#'   this prediction call. `NULL` reuses the fitted model's setting, then the
+#'   global option.
 #' @param vote `"majority"` or `"weighted"` for classification; `"majority"`
 #'   means an unweighted neighbour mean for regression.
 #' @param type `"response"` for class/regression predictions or `"prob"` for
@@ -201,6 +213,7 @@ predict.faissR_knn_model <- function(object,
                                       backend = c("auto", "cpu", "cuda"),
                                       tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                                       cagra_implementation = NULL,
+                                      cagra_build_algo = NULL,
                                       vote = c("majority", "weighted"),
                                       type = c("response", "prob"),
                                       ...) {
@@ -209,7 +222,11 @@ predict.faissR_knn_model <- function(object,
   if (is.null(cagra_implementation)) {
     cagra_implementation <- object$cagra_implementation %||% NULL
   }
+  if (is.null(cagra_build_algo)) {
+    cagra_build_algo <- object$cagra_build_algo %||% NULL
+  }
   cagra_implementation <- normalize_cagra_implementation_arg(cagra_implementation)
+  cagra_build_algo <- normalize_cagra_build_algo_arg(cagra_build_algo)
   vote <- normalize_knn_vote(vote)
   type <- normalize_knn_type(type)
   query <- validate_knn_model_query(object, newdata)
@@ -225,6 +242,7 @@ predict.faissR_knn_model <- function(object,
     metric = object$metric,
     tuning = tuning,
     cagra_implementation = cagra_implementation,
+    cagra_build_algo = cagra_build_algo,
     n_threads = object$n_threads
   )
   if (identical(object$task, "classification")) {
@@ -242,7 +260,8 @@ predict.faissR_knn_model <- function(object,
       backend,
       object$method %||% "auto",
       tuning,
-      cagra_implementation
+      cagra_implementation,
+      cagra_build_algo
     )
     if (identical(type, "prob")) {
       return(proba)
@@ -256,7 +275,8 @@ predict.faissR_knn_model <- function(object,
       backend,
       object$method %||% "auto",
       tuning,
-      cagra_implementation
+      cagra_implementation,
+      cagra_build_algo
     ))
   }
   if (identical(type, "prob")) {
@@ -275,12 +295,14 @@ predict.faissR_knn_model <- function(object,
     backend,
     object$method %||% "auto",
     tuning,
-    cagra_implementation
+    cagra_implementation,
+    cagra_build_algo
   )
 }
 
 attach_knn_prediction_metadata <- function(out, neighbours, k, backend, method, tuning,
-                                           cagra_implementation = NULL) {
+                                           cagra_implementation = NULL,
+                                           cagra_build_algo = NULL) {
   distance_type <- neighbours$distance_type %||% NA_character_
   if (is.na(distance_type)) {
     distance_type <- if (inherits(neighbours$distances, "float32") ||
@@ -296,6 +318,7 @@ attach_knn_prediction_metadata <- function(out, neighbours, k, backend, method, 
     requested_method = attr(neighbours, "requested_method") %||% public_nn_method_label(normalize_nn_method(method)),
     tuning = attr(neighbours, "tuning") %||% tuning,
     cagra_implementation = cagra_implementation %||% NA_character_,
+    cagra_build_algo = cagra_build_algo %||% NA_character_,
     backend = attr(neighbours, "backend") %||% NA_character_,
     resolved_backend = attr(neighbours, "resolved_backend") %||% attr(neighbours, "backend") %||% NA_character_,
     metric = attr(neighbours, "metric") %||% NA_character_,

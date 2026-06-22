@@ -11,6 +11,7 @@
   backend = c("auto", "cpu", "cuda"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   cagra_implementation = NULL,
+  cagra_build_algo = NULL,
   vote = c("majority", "weighted"),
   type = c("response", "prob"),
   ...
@@ -33,6 +34,10 @@ opt-in.}
 
 \item{cagra_implementation}{CUDA CAGRA provider for this prediction call.
 \code{NULL} reuses the fitted model's setting, then the global option.}
+
+\item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm for
+this prediction call. \code{NULL} reuses the fitted model's setting, then the
+global option.}
 
 \item{vote}{`"majority"` or `"weighted"` for classification; `"majority"`
 means an unweighted neighbour mean for regression.}

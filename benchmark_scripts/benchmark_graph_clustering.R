@@ -197,11 +197,66 @@ validate_cagra_implementation_values <- function(values, arg_name = "cagra_imple
   values
 }
 
+default_cagra_build_algo_values <- function() {
+  "auto"
+}
+
+valid_cagra_build_algo_values <- function() {
+  c("auto", "ivf_pq", "nn_descent", "iterative_cagra_search")
+}
+
+canonical_cagra_build_algo_key <- function(value) {
+  aliases <- c(
+    auto = "auto",
+    default = "auto",
+    ivfpq = "ivf_pq",
+    ivf_pq = "ivf_pq",
+    nndescent = "nn_descent",
+    nn_descent = "nn_descent",
+    iterative = "iterative_cagra_search",
+    iterative_cagra = "iterative_cagra_search",
+    iterative_cagra_search = "iterative_cagra_search"
+  )
+  key <- tolower(trimws(as.character(value)))
+  key <- gsub("[[:space:]-]+", "_", key)
+  out <- unname(aliases[key])
+  out[is.na(out)] <- key[is.na(out)]
+  out
+}
+
+validate_cagra_build_algo_values <- function(values, arg_name = "cagra_build_algos") {
+  raw <- trimws(as.character(values))
+  raw <- raw[nzchar(raw)]
+  values <- unique(canonical_cagra_build_algo_key(raw))
+  invalid <- values[!values %in% valid_cagra_build_algo_values()]
+  if (length(invalid)) {
+    stop(
+      "`", arg_name, "` must contain only: ",
+      paste(valid_cagra_build_algo_values(), collapse = ", "),
+      ". Invalid value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  if (!length(values)) {
+    stop("`", arg_name, "` must contain at least one CAGRA build algorithm.", call. = FALSE)
+  }
+  values
+}
+
 cagra_implementation_values_for <- function(graph_backend, graph_method, cagra_implementations) {
   graph_backend <- tolower(trimws(as.character(graph_backend)[1L]))
   graph_method <- tolower(trimws(as.character(graph_method)[1L]))
   if (graph_method %in% c("auto", "cagra") && graph_backend %in% c("auto", "cuda")) {
     return(cagra_implementations)
+  }
+  NA_character_
+}
+
+cagra_build_algo_values_for <- function(graph_cagra_implementation, cagra_build_algos) {
+  if (!is.na(graph_cagra_implementation) && identical(graph_cagra_implementation, "cuvs")) {
+    return(cagra_build_algos)
   }
   NA_character_
 }
@@ -384,6 +439,7 @@ result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, 
                        weight, n_clusters, n_threads, status, error = NA_character_,
                        graph_method = "auto", metric = "euclidean",
                        graph_cagra_implementation = NA_character_,
+                       graph_cagra_build_algo = NA_character_,
                        n_clusters_source = NA_character_,
                        load_sec = NA_real_, graph_sec = NA_real_,
                        cluster_sec = NA_real_, total_sec = NA_real_,
@@ -424,6 +480,7 @@ result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, 
     graph_method = graph_method,
     metric = metric,
     graph_cagra_implementation = graph_cagra_implementation,
+    graph_cagra_build_algo = graph_cagra_build_algo,
     graph_resolved_backend = graph_resolved_backend,
     graph_preflight_route = graph_preflight_route,
     graph_route_parameters = graph_route_parameters,
@@ -1204,7 +1261,8 @@ label_target_clusters <- function(labels, target_mode) {
 build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
                              n_threads, timeout, cycle = 1L,
                              graph_method = "auto", metric = "euclidean",
-                             graph_cagra_implementation = NA_character_) {
+                             graph_cagra_implementation = NA_character_,
+                             graph_cagra_build_algo = NA_character_) {
   n <- nrow(data_obj$data)
   p <- ncol(data_obj$data)
   started <- proc.time()[["elapsed"]]
@@ -1223,6 +1281,7 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
         method = graph_method,
         metric = metric,
         cagra_implementation = if (is.na(graph_cagra_implementation)) NULL else graph_cagra_implementation,
+        cagra_build_algo = if (is.na(graph_cagra_build_algo)) NULL else graph_cagra_build_algo,
         weight = weight,
         n_threads = n_threads
       )
@@ -1263,6 +1322,7 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
         graph_method = graph_method,
         metric = metric,
         graph_cagra_implementation = graph_cagra_implementation,
+        graph_cagra_build_algo = graph_cagra_build_algo,
         weight = weight,
         n_clusters = NULL,
         n_threads = n_threads,
@@ -1283,7 +1343,8 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
                             cluster_backend, method, weight, n_threads,
                             target_mode, target_resolution_mode, seed, timeout, cycle = 1L,
                             graph_method = "auto", metric = "euclidean",
-                            graph_cagra_implementation = NA_character_) {
+                            graph_cagra_implementation = NA_character_,
+                            graph_cagra_build_algo = NA_character_) {
   n <- nrow(data_obj$data)
   p <- ncol(data_obj$data)
   labels <- data_obj$labels
@@ -1339,6 +1400,7 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       graph_method = graph_method,
       metric = metric,
       graph_cagra_implementation = graph_cagra_implementation,
+      graph_cagra_build_algo = graph_cagra_build_algo,
       weight = weight,
       n_clusters = n_clusters_requested,
       n_clusters_source = n_clusters_source,
@@ -1469,6 +1531,9 @@ metrics <- validate_choice_values(
 cagra_implementations <- validate_cagra_implementation_values(
   split_arg(args$cagra_implementations, paste(default_cagra_implementation_values(), collapse = ","))
 )
+cagra_build_algos <- validate_cagra_build_algo_values(
+  split_arg(args$cagra_build_algos, paste(default_cagra_build_algo_values(), collapse = ","))
+)
 graph_backends <- validate_choice_values(
   split_arg(args$graph_backends, paste(default_graph_backends(), collapse = ",")),
   default_graph_backends(),
@@ -1488,13 +1553,14 @@ graph_capabilities <- graph_nn_capabilities()
 
 config <- data.frame(
   key = c("data_root", "out_dir", "available_datasets", "datasets", "methods",
-          "graph_methods", "metrics", "cagra_implementations", "graph_backends", "cluster_backends",
+          "graph_methods", "metrics", "cagra_implementations", "cagra_build_algos", "graph_backends", "cluster_backends",
           "k_values", "threads", "timeout", "weight", "target_clusters",
           "target_resolution", "cycles", "ari_tolerance", "seed"),
   value = c(data_root, out_dir, paste(available_datasets, collapse = ","),
             paste(datasets, collapse = ","), paste(methods, collapse = ","),
             paste(graph_methods, collapse = ","), paste(metrics, collapse = ","),
             paste(cagra_implementations, collapse = ","),
+            paste(cagra_build_algos, collapse = ","),
             paste(graph_backends, collapse = ","), paste(cluster_backends, collapse = ","),
             paste(k_values, collapse = ","), n_threads, timeout, weight, target_mode,
             target_resolution_mode,
@@ -1537,6 +1603,7 @@ for (dataset_name in datasets) {
       for (graph_method in graph_methods) {
         for (metric in metrics) {
           for (graph_cagra_implementation in cagra_implementation_values_for(graph_backend, graph_method, cagra_implementations)) {
+            for (graph_cagra_build_algo in cagra_build_algo_values_for(graph_cagra_implementation, cagra_build_algos)) {
             for (cycle in seq_len(cycles)) {
               cycle_seed <- seed + (cycle - 1L) * 1000003L
               graph_preflight_route <- graph_build_preflight_route(
@@ -1587,7 +1654,8 @@ for (dataset_name in datasets) {
                   cycle = cycle,
                   graph_method = graph_method,
                   metric = metric,
-                  graph_cagra_implementation = graph_cagra_implementation
+                  graph_cagra_implementation = graph_cagra_implementation,
+                  graph_cagra_build_algo = graph_cagra_build_algo
                 )
               }
               for (cluster_backend in cluster_backends) {
@@ -1616,6 +1684,7 @@ for (dataset_name in datasets) {
                     graph_method = graph_method,
                     metric = metric,
                     graph_cagra_implementation = graph_cagra_implementation,
+                    graph_cagra_build_algo = graph_cagra_build_algo,
                     cluster_backend = cluster_backend,
                     method = method,
                     weight = if (identical(graph_build$status, "success")) graph_build$weight else weight,
@@ -1656,6 +1725,7 @@ for (dataset_name in datasets) {
                     graph_method = graph_method,
                     metric = metric,
                     graph_cagra_implementation = graph_cagra_implementation,
+                    graph_cagra_build_algo = graph_cagra_build_algo,
                     cluster_backend = cluster_backend,
                     method = method,
                     weight = weight,
@@ -1706,7 +1776,8 @@ for (dataset_name in datasets) {
                     cycle = cycle,
                     graph_method = graph_method,
                     metric = metric,
-                    graph_cagra_implementation = graph_cagra_implementation
+                    graph_cagra_implementation = graph_cagra_implementation,
+                    graph_cagra_build_algo = graph_cagra_build_algo
                   )
                 }
                 row$load_sec <- load_sec
@@ -1721,12 +1792,17 @@ for (dataset_name in datasets) {
                     "[%s] dataset=%s cycle=%s k=%s graph=%s/%s cagra=%s metric=%s cluster=%s method=%s status=%s total=%.3f\n",
                     format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
                     dataset_name, cycle, k, graph_backend, graph_method,
-                    ifelse(is.na(graph_cagra_implementation), "NA", graph_cagra_implementation),
+                    paste0(
+                      ifelse(is.na(graph_cagra_implementation), "NA", graph_cagra_implementation),
+                      "/",
+                      ifelse(is.na(graph_cagra_build_algo), "NA", graph_cagra_build_algo)
+                    ),
                     metric, cluster_backend, method,
                     row$status, row$total_sec
                   )
                 )
               }
+            }
             }
           }
         }
@@ -1810,6 +1886,7 @@ materials <- c(
   sprintf("- Graph NN methods: `%s`", paste(graph_methods, collapse = "`, `")),
   sprintf("- Graph metrics: `%s`", paste(metrics, collapse = "`, `")),
   sprintf("- CAGRA implementation selectors: `%s`", paste(cagra_implementations, collapse = "`, `")),
+  sprintf("- Direct cuVS CAGRA build algorithms: `%s`", paste(cagra_build_algos, collapse = "`, `")),
   sprintf("- Clustering backends: `%s`", paste(cluster_backends, collapse = "`, `")),
   sprintf("- k values: `%s`", paste(k_values, collapse = "`, `")),
   sprintf("- Cycles: `%s`", cycles),
@@ -1819,7 +1896,7 @@ materials <- c(
   sprintf("- Target resolution mode: `%s`", target_resolution_mode),
   "",
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
-  "`graph_cluster_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `graph_cluster_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, graph timings, clustering timings, memory, graph vertex/edge counts, ARI, modularity, graph NN method/metric, the requested `graph_cagra_implementation` for CUDA-capable CAGRA and auto graph routes, compact `graph_route_parameters` from the KNN route that built the graph, and backend metadata. Auto KNN graph routes include no-pilot `predicted_backend`, `predicted_method`, `predicted_device`, explicit backend/method flags, and backend/method decision metadata when available; these are also written as first-class `graph_auto_*` columns for direct filtering and comparison.",
+  "`graph_cluster_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `graph_cluster_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, graph timings, clustering timings, memory, graph vertex/edge counts, ARI, modularity, graph NN method/metric, the requested `graph_cagra_implementation` for CUDA-capable CAGRA and auto graph routes, the requested direct-cuVS `graph_cagra_build_algo` when `graph_cagra_implementation = \"cuvs\"`, compact `graph_route_parameters` from the KNN route that built the graph, and backend metadata. Auto KNN graph routes include no-pilot `predicted_backend`, `predicted_method`, `predicted_device`, explicit backend/method flags, and backend/method decision metadata when available; these are also written as first-class `graph_auto_*` columns for direct filtering and comparison.",
   "`graph_cluster_nn_capabilities.csv` stores the `faissR::nn_capabilities(runtime = TRUE)` table used to preflight graph KNN construction, including `runtime_reason` and `runtime_notes`. Runtime-unavailable graph routes are recorded as expected skips before a graph is built.",
   "`target_clusters` is normalized to either `\"labels\"` or `\"none\"`; invalid values stop before the benchmark starts. `target_resolution` is normalized to either `\"auto\"` or `\"default\"`; `\"auto\"` passes `resolution = NULL` whenever a Louvain/Leiden target count is available, while `\"default\"` uses the historical `resolution = 1` seed. When `target_clusters = \"labels\"`, Louvain and Leiden call `graph_cluster(n_clusters = length(unique(labels)))`. Random-walking rows receive no `n_clusters` value because random-walking intentionally has no cluster-count target.",
   "`n_clusters_requested` records the requested target community count for Louvain/Leiden rows. This is a convenience target, not a hard guarantee; the actual community count is stored separately as `n_communities`. `n_clusters_source` records whether that target came from dataset labels or no target, and `target_resolution_mode` records whether the benchmark used the shape-seeded `resolution = NULL` target-auto path or the default numeric resolution seed. When a target is used, faissR evaluates a bounded deterministic resolution grid; `resolution_candidate_center`, `target_gap`, `resolution_selection`, `resolution_selected_candidate`, `resolution_candidates`, `resolution_min_target_gap`, `resolution_selected_is_min_gap`, and the selected resolution summarize the deterministic resolution-search decision.",

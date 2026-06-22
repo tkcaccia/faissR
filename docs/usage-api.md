@@ -140,7 +140,8 @@ by another method.
 knn_graph(data, knn = NULL, k = 50L, backend = "auto",
           method = NULL, nn_method = "auto",
           metric = "euclidean", tuning = "auto",
-          cagra_implementation = NULL, weight = "auto",
+          cagra_implementation = NULL, cagra_build_algo = NULL,
+          weight = "auto",
           mutual = FALSE, prune = 0, n_threads = NULL)
 ```
 
@@ -155,6 +156,7 @@ knn_graph(data, knn = NULL, k = 50L, backend = "auto",
 | `metric` | Distance metric passed to `nn_without_self()` when neighbours must be computed from `data`; aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. Correlation is centered cosine similarity, not raw inner product. Inner-product graph construction ranks by larger raw dot product and reuses faissR's shifted smaller-is-better distance convention from `nn()`. |
 | `tuning` | Tuning policy passed to `nn_without_self()` when neighbours must be computed from `data`. |
 | `cagra_implementation` | CUDA CAGRA provider passed to `nn_without_self()` when neighbours must be computed from `data`. |
+| `cagra_build_algo` | Direct RAPIDS cuVS CAGRA graph-build algorithm passed to `nn_without_self()` when neighbours must be computed from `data`. See `nn()`. |
 | `weight` | Edge weighting: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. `"auto"` uses shared-nearest-neighbour weights for input space and distance weights for embedding space. |
 | `mutual` | If `TRUE`, keep only reciprocal nearest-neighbour edges. |
 | `prune` | Drop edges with weight less than or equal to this non-negative threshold. |
@@ -173,7 +175,8 @@ metadata, and FAISS/cuVS/grid attributes for benchmark auditing.
 graph_cluster(graph, method = "random_walking", backend = "auto",
               k = 50L, graph_backend = "auto", graph_method = "auto",
               metric = "euclidean", tuning = "auto",
-              cagra_implementation = NULL, weight = "auto",
+              cagra_implementation = NULL, cagra_build_algo = NULL,
+              weight = "auto",
               mutual = FALSE, prune = 0, n_threads = NULL,
               n_runs = 1L, resolution = 1, n_clusters = NULL,
               objective_function = "modularity",
@@ -191,6 +194,7 @@ graph_cluster(graph, method = "random_walking", backend = "auto",
 | `metric` | Distance metric passed to `nn_without_self()` when faissR needs to build the KNN graph internally; aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. Correlation is centered cosine similarity, not raw inner product. Inner-product graph construction ranks by larger raw dot product and reuses faissR's shifted smaller-is-better distance convention from `nn()`. |
 | `tuning` | Tuning policy passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
 | `cagra_implementation` | CUDA CAGRA provider passed to `nn_without_self()` when faissR builds the KNN graph internally. |
+| `cagra_build_algo` | Direct RAPIDS cuVS CAGRA graph-build algorithm passed to `nn_without_self()` when faissR builds the KNN graph internally. See `nn()`. |
 | `weight` | Graph edge weighting passed to `knn_graph()`: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. |
 | `mutual` | If `TRUE`, build a mutual-nearest-neighbour graph. |
 | `prune` | Non-negative edge pruning threshold. |
@@ -304,7 +308,8 @@ that actually ran, such as `"faiss"`, `"cpu"`, `"cuda_faiss"`, or `"cuda_cuvs"`.
 
 ```r
 model <- knn(Xtrain, Ytrain, backend = "auto", method = "auto",
-             tuning = "auto", cagra_implementation = NULL, k = 15L)
+             tuning = "auto", cagra_implementation = NULL,
+             cagra_build_algo = NULL, k = 15L)
 pred  <- knn(Xtrain, Ytrain, Xtest, type = "response")
 prob  <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 ```
@@ -319,6 +324,7 @@ prob  <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 | `metric` | Distance metric passed to `nn()`: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as canonical metric labels. Correlation is centered cosine similarity, not raw inner product. |
 | `tuning` | Tuning policy passed to `nn()`. `"auto"` uses the deterministic default for the resolved method; `"cache"` and `"pilot"` opt into pilot tuning where implemented. FAISS GPU IVF pilot/cache tuning is Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware defaults. |
 | `cagra_implementation` | CUDA CAGRA provider passed to `nn()` for fitting/immediate prediction. |
+| `cagra_build_algo` | Direct RAPIDS cuVS CAGRA graph-build algorithm passed to `nn()` for direct cuVS CAGRA routes. |
 | `task` | `"auto"`, `"classification"`, or `"regression"`. `"auto"` treats numeric `Ytrain` as regression and non-numeric `Ytrain` as classification. |
 | `k` | Default number of neighbours used for prediction. |
 | `n_threads` | CPU worker threads passed to `nn()`. |
@@ -338,6 +344,7 @@ auto-selection metadata when present.
 ```r
 predict(object, newdata, k = NULL,
         backend = "auto", tuning = "auto", cagra_implementation = NULL,
+        cagra_build_algo = NULL,
         vote = "majority", type = "response", ...)
 ```
 
@@ -349,6 +356,7 @@ predict(object, newdata, k = NULL,
 | `backend` | Device backend for the prediction-time neighbour search: `"auto"`, `"cpu"`, or `"cuda"`. The fitted model's method and metric are reused. |
 | `tuning` | Prediction-time tuning policy. `"auto"` uses the deterministic default for the resolved method; `"cache"` and `"pilot"` opt into pilot tuning. |
 | `cagra_implementation` | CUDA CAGRA provider for this prediction call. `NULL` reuses the fitted model setting, then the global option. |
+| `cagra_build_algo` | Direct RAPIDS cuVS CAGRA graph-build algorithm for this prediction call. `NULL` reuses the fitted model setting, then the global option. |
 | `vote` | `"majority"` for unweighted classification votes or regression means; `"weighted"` for inverse-distance weighting. |
 | `type` | `"response"` for predicted labels/values or `"prob"` for classification probabilities. |
 | `...` | Reserved for future options. |
