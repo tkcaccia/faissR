@@ -27,7 +27,8 @@
 reused.}
 
 \item{tuning}{Tuning policy used for this prediction call. `"auto"` uses the
-tuned default for the resolved method.}
+deterministic default for the resolved method; `"cache"` and `"pilot"` opt into
+pilot tuning.}
 
 \item{vote}{`"majority"` or `"weighted"` for classification; `"majority"`
 means an unweighted neighbour mean for regression.}

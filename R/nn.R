@@ -4810,10 +4810,10 @@ cuvs_ivfpq_params <- function(p) {
 faiss_gpu_ivf_tune_policy <- function(tuning = "auto") {
   tuning <- normalize_nn_tuning(tuning)
   if (!identical(tuning, "auto")) return(tuning)
-  policy <- faissr_option("faiss_gpu_ivf_tune_policy", "cache")
+  policy <- faissr_option("faiss_gpu_ivf_tune_policy", "fixed")
   policy <- tolower(as.character(policy)[1L])
   if (!policy %in% c("cache", "pilot", "fixed", "off")) {
-    policy <- "cache"
+    policy <- "fixed"
   }
   policy
 }
@@ -4830,7 +4830,8 @@ faiss_gpu_ivf_tune_cache_file <- function() {
 
 faiss_gpu_ivf_should_tune <- function(data, k, self_query, tuning = "auto") {
   tuning <- normalize_nn_tuning(tuning)
-  if (identical(tuning, "off")) return(FALSE)
+  policy <- faiss_gpu_ivf_tune_policy(tuning)
+  if (!policy %in% c("cache", "pilot")) return(FALSE)
   if (!isTRUE(self_query)) return(FALSE)
   if (!isTRUE(faiss_gpu_available())) return(FALSE)
   if (isTRUE(faiss_ivf_manual_params())) return(FALSE)
@@ -5361,7 +5362,8 @@ cuvs_cagra_manual_params <- function() {
 
 cuvs_cagra_should_tune <- function(data, k, self_query, tuning = "auto") {
   tuning <- normalize_nn_tuning(tuning)
-  if (identical(tuning, "off")) return(FALSE)
+  policy <- cuvs_cagra_tune_policy(tuning)
+  if (!policy %in% c("cache", "pilot")) return(FALSE)
   if (!isTRUE(self_query)) return(FALSE)
   if (!isTRUE(cuvs_available())) return(FALSE)
   if (isTRUE(cuvs_cagra_manual_params())) return(FALSE)
@@ -5378,10 +5380,10 @@ cuvs_cagra_should_tune <- function(data, k, self_query, tuning = "auto") {
 cuvs_cagra_tune_policy <- function(tuning = "auto") {
   tuning <- normalize_nn_tuning(tuning)
   if (!identical(tuning, "auto")) return(tuning)
-  policy <- faissr_option("cuvs_cagra_tune_policy", "cache")
+  policy <- faissr_option("cuvs_cagra_tune_policy", "fixed")
   policy <- tolower(as.character(policy)[1L])
   if (!policy %in% c("cache", "pilot", "fixed", "off")) {
-    policy <- "cache"
+    policy <- "fixed"
   }
   policy
 }
@@ -6067,10 +6069,11 @@ grid_self_knn <- function(data,
 #'   expose raw inner-product search.
 #'   Unsupported backend combinations fail clearly instead of returning neighbours
 #'   computed under a different metric.
-#' @param tuning Tuning policy for approximate GPU methods. `"auto"` uses the
-#'   tuned default for the resolved method, `"cache"` reuses/stores pilot
-#'   results, `"pilot"` tunes for this call without persisting, `"fixed"` uses
-#'   fixed defaults with tuning metadata, and `"off"`/`"none"` disables tuning.
+#' @param tuning Tuning policy for approximate methods. `"auto"` uses
+#'   deterministic no-pilot defaults for the resolved method, `"cache"`
+#'   reuses/stores pilot results, `"pilot"` tunes for this call without
+#'   persisting, `"fixed"` uses fixed defaults with tuning metadata, and
+#'   `"off"`/`"none"` disables tuning.
 #'   FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
 #'   `k`, and `metric`, including separate small-`k` Euclidean,
 #'   small-`k` metric-aware, balanced, and high-recall tiers; explicit
@@ -6186,7 +6189,7 @@ nn <- function(data,
 #'   inner product; see \code{\link{nn}()} for metric/backend support details,
 #'   including metric-aware CPU HNSW routing.
 #' @param tuning Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
-#'   tuned default for the resolved method.
+#'   deterministic no-pilot default for the resolved method.
 #' @param output Distance storage type: `"double"` for the default R numeric
 #'   matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
 #'   optional `float` package is installed. `float::fl()` input matrices use

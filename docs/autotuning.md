@@ -45,8 +45,8 @@ implementation routes recorded in benchmark output, not separate public
 - Treat IVFPQ backends as memory-pressure tools, not accuracy-first defaults.
   Product quantization is useful for compression, but it changes recall
   behaviour [6].
-- Treat direct cuVS CAGRA as experimental on high-dimensional raw data until
-  pilot tuning proves adequate recall. The FAISS GPU CAGRA route
+- Treat direct cuVS CAGRA as experimental on high-dimensional raw data unless
+  recall is measured or explicit pilot/cache tuning proves adequate recall. The FAISS GPU CAGRA route
   (`method = "cagra"`, resolved as `faiss_gpu_cagra` when available) was
   reliable in the same MNIST test where direct cuVS CAGRA was not [13-15].
 
@@ -65,7 +65,7 @@ implementation routes recorded in benchmark output, not separate public
 | `ivf` | `faiss_ivf` speed tier | CPU IVF speed tier | nprobe = 4; too low-recall on many datasets, not a default accuracy path. |
 | `ivf` | `faiss_ivf` balanced tier | CPU IVF middle tier | Default `nprobe` now uses at least 16 probes; useful when HNSW is not desired. |
 | `ivf` | `faiss_ivf` high-recall tier | CPU IVF high-recall tier | nprobe = 16 in the benchmark; often much better recall, but slower on image data. |
-| `ivf` | `faiss_gpu_ivf_flat` | CUDA IVF-Flat | Useful but not consistently faster than exact GPU on these sample sizes; keep pilot/cache tuning enabled. |
+| `ivf` | `faiss_gpu_ivf_flat` | CUDA IVF-Flat | Useful but not consistently faster than exact GPU on these sample sizes; use explicit `tuning = "cache"` or `"pilot"` when a run should validate candidate `nlist`/`nprobe` settings. |
 | `ivf` | `cuda_cuvs_ivf_flat` | CUDA cuVS IVF-Flat | Direct Euclidean/L2 benchmark route. Fast on low-dimensional flow/simulated data at about 0.99-0.999 recall; not high-recall default. |
 | `ivfpq` | `faiss_ivfpq` speed/balanced tiers | CPU memory-pressure tier | Low recall on many datasets; use only when memory reduction is the priority [6]. |
 | `ivfpq` | `faiss_gpu_ivfpq` | CUDA memory-pressure tier | Fast but low recall in this benchmark; explicit opt-in only. |
@@ -74,7 +74,7 @@ implementation routes recorded in benchmark output, not separate public
 | `nndescent` | `cpu_nndescent` speed/balanced tiers | CPU graph speed tier | Native faissR NN-descent route; useful as an explicit Euclidean, normalized cosine/correlation, or raw inner-product graph-search candidate, but recall was usually lower than HNSW. |
 | `nndescent` | `cuda_cuvs_nndescent` | CUDA graph speed tier | Fast and useful at around 0.99 recall on some datasets; failed on COIL20. |
 | `cagra` | `faiss_gpu_cagra` | CUDA graph high-recall tier | Reliable high-recall CAGRA path through FAISS/cuVS integration [13-15]. |
-| `cagra` | `cuda_cuvs_cagra` | Direct cuVS CAGRA | Guarded by pilot recall. Direct cuVS CAGRA had anomalously poor MNIST recall; do not trust without pilot success. |
+| `cagra` | `cuda_cuvs_cagra` | Direct cuVS CAGRA | `tuning = "auto"` uses deterministic defaults; explicit `tuning = "cache"` or `"pilot"` adds a recall guard. Direct cuVS CAGRA had anomalously poor MNIST recall; do not trust without measured recall or pilot success. |
 | `grid` | `cpu_grid` | Exact 2D/3D spatial path | Best for simulated 2D/3D Euclidean/cosine/correlation data; unavailable by design outside 2D/3D. |
 | `grid` | `cuda_grid` | CUDA 2D/3D spatial path | Correct for 2D/3D, but benchmark speed depends strongly on GPU model and transfer overhead. |
 
@@ -180,8 +180,9 @@ CPU-auto default.
 ## Known Issues From The Run
 
 - Direct cuVS CAGRA can produce very low recall on high-dimensional raw MNIST.
-  The package now stops when pilot tuning cannot meet the target recall, instead
-  of silently returning a poor result.
+  Default calls now use deterministic no-pilot parameters, so benchmark reports
+  must include measured recall. Explicit pilot/cache tuning stops when it cannot
+  meet the target recall instead of silently returning a poor result.
 - FAISS NSG can return fewer neighbours than requested on some datasets. Keep
   safer defaults and consider adding a retry path before using it as an auto
   default.

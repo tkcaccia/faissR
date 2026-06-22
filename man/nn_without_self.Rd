@@ -39,7 +39,7 @@ inner product; see \code{\link{nn}()} for metric/backend support details,
 including metric-aware CPU HNSW routing.}
 
 \item{tuning}{Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
-tuned default for the resolved method.}
+deterministic no-pilot default for the resolved method.}
 
 \item{output}{Distance storage type: `"double"` for the default R numeric
 matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the

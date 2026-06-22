@@ -85,10 +85,11 @@ expose raw inner-product search.
 Unsupported backend combinations fail clearly instead of returning neighbours
 computed under a different metric.}
 
-\item{tuning}{Tuning policy for approximate GPU methods. `"auto"` uses the
-tuned default for the resolved method, `"cache"` reuses/stores pilot
-results, `"pilot"` tunes for this call without persisting, `"fixed"` uses
-fixed defaults with tuning metadata, and `"off"`/`"none"` disables tuning.
+\item{tuning}{Tuning policy for approximate methods. `"auto"` uses
+deterministic no-pilot defaults for the resolved method, `"cache"`
+reuses/stores pilot results, `"pilot"` tunes for this call without
+persisting, `"fixed"` uses fixed defaults with tuning metadata, and
+`"off"`/`"none"` disables tuning.
 FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
 `k`, and `metric`, including separate small-`k` Euclidean,
 small-`k` metric-aware, balanced, and high-recall tiers; explicit

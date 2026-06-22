@@ -201,9 +201,11 @@ whereas `method = "grid", backend = "cuda"` resolves to the CUDA grid
 implementation. Invalid combinations fail before computation; for example,
 `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only.
 
-Direct cuVS CAGRA is guarded by pilot recall tuning; if the pilot does not meet
-the configured recall target, the function stops and recommends FAISS GPU CAGRA
-or cuVS brute force rather than silently returning a poor graph-search result.
+Direct cuVS CAGRA uses deterministic no-pilot defaults for `tuning = "auto"`.
+If the user explicitly requests `tuning = "cache"` or `tuning = "pilot"`, faissR
+runs recall tuning; if that pilot does not meet the configured recall target, the
+function stops and recommends FAISS GPU CAGRA or cuVS brute force rather than
+silently returning a poor graph-search result.
 
 IVF probe defaults are conservative enough to avoid misleading speed-only
 results. IVFPQ is treated as an explicit memory-pressure backend because product
@@ -249,18 +251,19 @@ The public `tuning` argument controls method-specific tuning for approximate GPU
 routes. Its default, `tuning = "auto"`, means “use the appropriate default
 policy for the resolved method.” Current policies are intentionally conservative:
 
+- `auto`: use deterministic no-pilot defaults for the resolved method;
 - `cache`: run a pilot tuning step when needed and reuse/store the selected
   parameters;
 - `pilot`: run the pilot for this call without persisting the result;
 - `fixed`: use fixed defaults but still record tuning metadata;
 - `off`/`none`: disable tuning.
 
-FAISS GPU IVF tuning tests candidate `nlist`/`nprobe` settings on a sample and
-selects the fastest candidate that meets the recall target when possible. cuVS
-CAGRA tuning tests graph/search parameters and rejects the route if the pilot
-cannot meet the configured minimum recall. This behavior was added because some
-direct cuVS CAGRA runs were fast but produced untrustworthy recall on raw
-high-dimensional data.
+When explicitly requested, FAISS GPU IVF tuning tests candidate `nlist`/`nprobe`
+settings on a sample and selects the fastest candidate that meets the recall
+target when possible. Explicit cuVS CAGRA tuning tests graph/search parameters
+and rejects the route if the pilot cannot meet the configured minimum recall.
+This opt-in behavior exists because some direct cuVS CAGRA runs were fast but
+produced untrustworthy recall on raw high-dimensional data.
 
 ## `nn_without_self()`
 

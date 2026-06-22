@@ -2159,6 +2159,18 @@ test_that("public tuning policy normalizes and can override defaults", {
     faissR.cuvs_cagra_tune_policy = old_cagra
   ), add = TRUE)
   options(
+    faissR.faiss_gpu_ivf_tune_policy = NULL,
+    faissR.cuvs_cagra_tune_policy = NULL
+  )
+  expect_equal(faissR:::faiss_gpu_ivf_tune_policy("auto"), "fixed")
+  expect_equal(faissR:::cuvs_cagra_tune_policy("auto"), "fixed")
+  options(
+    faissR.faiss_gpu_ivf_tune_policy = "not-a-policy",
+    faissR.cuvs_cagra_tune_policy = "not-a-policy"
+  )
+  expect_equal(faissR:::faiss_gpu_ivf_tune_policy("auto"), "fixed")
+  expect_equal(faissR:::cuvs_cagra_tune_policy("auto"), "fixed")
+  options(
     faissR.faiss_gpu_ivf_tune_policy = "fixed",
     faissR.cuvs_cagra_tune_policy = "fixed"
   )
@@ -2169,18 +2181,22 @@ test_that("public tuning policy normalizes and can override defaults", {
     matrix(0, nrow = 30000L, ncol = 2L),
     k = 50L,
     self_query = TRUE,
+    tuning = "auto"
+  ))
+  expect_false(faissR:::faiss_gpu_ivf_should_tune(
+    matrix(0, nrow = 30000L, ncol = 2L),
+    k = 50L,
+    self_query = TRUE,
     tuning = "off"
   ))
-  if (!faiss_gpu_available()) {
-    expect_false(faissR:::faiss_gpu_ivf_should_tune(
-      matrix(0, nrow = 30000L, ncol = 2L),
-      k = 50L,
-      self_query = TRUE,
-      tuning = "auto"
-    ))
-  }
   expect_equal(faissR:::cuvs_cagra_tune_policy("auto"), "fixed")
   expect_equal(faissR:::cuvs_cagra_tune_policy("cache"), "cache")
+  expect_false(faissR:::cuvs_cagra_should_tune(
+    matrix(0, nrow = 30000L, ncol = 2L),
+    k = 50L,
+    self_query = TRUE,
+    tuning = "auto"
+  ))
 })
 
 

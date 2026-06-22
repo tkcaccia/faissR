@@ -72,8 +72,9 @@ for example `method = "grid"` or `method = "cagra"`. Thus
 `nn(x, backend = "cuda", method = "grid")` uses the CUDA grid route, while
 `nn(x, backend = "cpu", method = "cagra")` stops because CAGRA is CUDA-only.
 With the default `method = "auto"`, faissR chooses the most appropriate method
-for the selected backend. With `tuning = "auto"`, approximate GPU methods use
-the tuned defaults identified for the resolved method.
+for the selected backend. With `tuning = "auto"`, approximate methods use
+deterministic defaults identified for the resolved method; pilot/cache tuning is
+opt-in with `tuning = "cache"` or `tuning = "pilot"`.
 The public nearest-neighbour metrics are `"euclidean"`, `"cosine"`,
 `"correlation"`, and `"inner_product"`. Correlation is centered cosine
 similarity, whereas inner product is the raw dot product; distance choices

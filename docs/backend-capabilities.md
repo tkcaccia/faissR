@@ -80,7 +80,7 @@ a CPU FAISS route in faissR.
 | FAISS NNDescent | experimental opt-in | no | Disabled by default because linked FAISS builds can abort during graph construction; public CPU `method = "nndescent"` uses the native implementation [4,16]. |
 | FAISS GPU CAGRA/cuVS integration | no | yes, if FAISS GPU/cuVS integration is built | Uses FAISS GPU indexes backed by NVIDIA cuVS where available; cosine/correlation use normalized Euclidean search [13-15]. |
 | RAPIDS cuVS brute force | no | yes, if cuVS is built | Exact direct cuVS Euclidean/L2 route; public non-Euclidean CUDA exact/brute-force calls use FAISS GPU Flat instead [1-3,16]. |
-| RAPIDS cuVS CAGRA | no | yes, if cuVS is built | Direct CUDA graph-search route, guarded by pilot tuning; cosine/correlation use normalized Euclidean search [3]. |
+| RAPIDS cuVS CAGRA | no | yes, if cuVS is built | Direct CUDA graph-search route with deterministic no-pilot defaults; explicit `tuning = "cache"` or `"pilot"` can run recall-guarded pilot tuning. Cosine/correlation use normalized Euclidean search [3]. |
 | RAPIDS cuVS IVF/PQ | no | yes, if cuVS is built | Direct cuVS approximate Euclidean/L2 routes; cosine/correlation use normalized Euclidean search. Raw inner product is not exposed in the direct cuVS IVF/PQ route; use public FAISS GPU `method = "ivf"`/`"ivfpq"` for IVF/IP search [3,6]. |
 | RAPIDS cuVS NN-descent | no | yes, if cuVS is built | CUDA NN-descent route for Euclidean/L2 plus normalized cosine/correlation [3-4]. |
 
@@ -151,11 +151,10 @@ that reports GPU support, not only a CPU FAISS installation.
 
 ## Tuning And Approximation Metadata
 
-Approximate GPU routes can use `tuning = "auto"` to select the package's
-recommended method-specific policy. FAISS GPU IVF can tune `nlist` and
-`nprobe`; cuVS CAGRA can tune graph/search parameters and stop if pilot recall
-does not meet the target. Approximate results record relevant parameters in
-`attr(result, "approximation")`.
+Approximate GPU routes use deterministic no-pilot defaults for
+`tuning = "auto"`. FAISS GPU IVF records fixed shape-aware `nlist`/`nprobe`
+metadata, and cuVS CAGRA records fixed graph/search metadata. Approximate
+results record relevant parameters in `attr(result, "approximation")`.
 Approximate selectors use deterministic no-pilot parameter rules unless the user
 explicitly enables a pilot/cache policy for routes such as FAISS GPU IVF or cuVS
 CAGRA. IVF, IVFPQ/PQ, NSG, NN-descent, CAGRA, and HNSW record

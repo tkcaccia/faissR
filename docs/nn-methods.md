@@ -345,7 +345,9 @@ RAPIDS cuVS CAGRA when available [3,13-16].
 - `metric = "cosine"` and `metric = "correlation"` use normalized Euclidean
   graph search and return `1 - similarity` distances.
 - Raw inner-product CAGRA is not exposed.
-- Direct cuVS CAGRA is guarded by pilot recall tuning.
+- Direct cuVS CAGRA uses deterministic no-pilot defaults for
+  `tuning = "auto"`; explicit `tuning = "cache"` or `"pilot"` runs recall
+  tuning.
 
 CAGRA is an important CUDA graph-search method. In faissR, it should be treated
 as an approximate route: report its parameters and recall, especially on raw
@@ -362,9 +364,10 @@ Approximate methods should be reported with:
 - `k`, metric, and whether self-neighbours were excluded;
 - recall@k or an explicit note that quality was not evaluated.
 
-`tuning = "auto"` is the default. FAISS GPU IVF and cuVS CAGRA can run pilot
-tuning and cache selected parameters. `tuning = "off"` disables this behavior
-when deterministic fixed-parameter runs are required.
+`tuning = "auto"` is the default and uses deterministic fixed rules. FAISS GPU
+IVF and cuVS CAGRA can still run pilot tuning and cache selected parameters when
+called explicitly with `tuning = "cache"` or `tuning = "pilot"`. `tuning = "off"`
+disables optional tuning.
 
 Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.
 

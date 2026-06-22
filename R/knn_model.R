@@ -22,7 +22,8 @@
 #'   raw inner product; see \code{\link{nn}()} for the metric transforms and
 #'   backend support matrix.
 #' @param tuning Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
-#'   tuned default for the resolved method.
+#'   deterministic default for the resolved method; pilot/cache tuning is
+#'   opt-in.
 #' @param task `"auto"`, `"classification"`, or `"regression"`. `"auto"` treats
 #'   numeric responses as regression and other response types as classification.
 #' @param k Default number of neighbours used by `predict()` and by immediate
@@ -157,7 +158,8 @@ knn_model_fit <- function(Xtrain,
 #'   `"cpu"`, or `"cuda"`. The fitted model's method and metric are always
 #'   reused.
 #' @param tuning Tuning policy used for this prediction call. `"auto"` uses the
-#'   tuned default for the resolved method.
+#'   deterministic default for the resolved method; pilot/cache tuning is
+#'   opt-in.
 #' @param vote `"majority"` or `"weighted"` for classification; `"majority"`
 #'   means an unweighted neighbour mean for regression.
 #' @param type `"response"` for class/regression predictions or `"prob"` for
