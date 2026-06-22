@@ -769,6 +769,12 @@ test_that("NN metric benchmark accounts for data-shaped method skips", {
   expect_match(grid_skip$notes, "4 columns")
   expect_null(env$nn_data_expected_skip(matrix(rnorm(20), ncol = 2), "grid"))
   expect_null(env$nn_data_expected_skip(matrix(rnorm(30), ncol = 3), "grid"))
+  nsg_skip <- env$nn_data_expected_skip(matrix(rnorm(80 * 4), ncol = 4), "nsg")
+  expect_type(nsg_skip, "list")
+  expect_true(isTRUE(nsg_skip$skip))
+  expect_match(nsg_skip$notes, "more than 100 training rows")
+  expect_match(nsg_skip$notes, "80 rows")
+  expect_null(env$nn_data_expected_skip(matrix(rnorm(120 * 4), ncol = 4), "nsg"))
   expect_null(env$nn_data_expected_skip(matrix(rnorm(20), ncol = 4), "flat"))
 })
 
@@ -1704,6 +1710,11 @@ test_that("graph benchmark preflights graph method and metric skips", {
 
   nnd_ip <- env$graph_build_expected_skip("cpu", graph_method = "nndescent", metric = "inner_product", x = dense)
   expect_match(nnd_ip, "inner-product|inner_product")
+
+  nsg_skip <- env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(80 * 4), ncol = 4))
+  expect_match(nsg_skip, "more than 100 training rows")
+  expect_match(nsg_skip, "80 rows")
+  expect_null(env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(120 * 4), ncol = 4)))
 })
 
 test_that("graph benchmark recommendations are grouped by backend and target cluster count", {

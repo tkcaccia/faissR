@@ -121,6 +121,9 @@ is intended for sparse `Matrix` inputs.
 The public `method = "grid"` route is also recorded as an expected skip for
 datasets that are not two- or three-dimensional, because that method is a
 native low-dimensional spatial search route.
+The public `method = "nsg"` route is recorded as an expected skip for datasets
+with 100 or fewer rows, because linked FAISS NSG builds require more than 100
+training rows before graph construction can start.
 Unsupported method/backend/metric combinations are preflighted with
 `nn_capabilities()` and the public backend resolver, then written as expected
 skips. Runtime expected skips also record when a resolved route requires
@@ -327,7 +330,8 @@ choices before any dataset is loaded. `--graph_methods` accepts the same public
 NN method labels as `nn()` and `knn_graph()`, while `--metrics` accepts the four
 public NN metrics. Unsupported graph method/backend/metric combinations are
 recorded as expected skips using `nn_capabilities()` and data-shape checks such
-as the 2D/3D requirement for `method = "grid"`. When
+as the 2D/3D requirement for `method = "grid"` and the more-than-100-row FAISS
+NSG construction requirement for `method = "nsg"`. When
 `--target_clusters=labels` is
 used, Louvain and Leiden use `n_clusters = length(unique(dataset$labels))`. If
 the selected method set contains only Louvain and Leiden, the benchmark stores

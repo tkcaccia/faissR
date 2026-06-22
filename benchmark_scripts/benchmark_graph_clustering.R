@@ -607,6 +607,12 @@ graph_build_expected_skip <- function(graph_backend, graph_method = "auto", metr
       return(sprintf("`graph_method = \"grid\"` supports only two- or three-column matrices. This dataset has %s columns.", if (length(p) == 1L && !is.na(p)) as.character(p) else "an unknown number of"))
     }
   }
+  if (identical(graph_method, "nsg") && !is.null(x)) {
+    n <- nrow(x)
+    if (length(n) != 1L || is.na(n) || n <= 100L) {
+      return(sprintf("FAISS NSG requires more than 100 training rows in this FAISS build. This dataset has %s rows.", if (length(n) == 1L && !is.na(n)) as.character(n) else "an unknown number of"))
+    }
+  }
   if (identical(graph_method, "sparse") && !inherits(x, "sparseMatrix") && !inherits(x, "dgCMatrix")) {
     return("`graph_method = \"sparse\"` requires sparse Matrix input; dense benchmark datasets are recorded as expected skips.")
   }

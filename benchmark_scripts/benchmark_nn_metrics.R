@@ -947,6 +947,24 @@ nn_data_expected_skip <- function(x, method) {
     }
     return(NULL)
   }
+  if (identical(method, "nsg")) {
+    n <- nrow(x)
+    if (length(n) != 1L || is.na(n) || n <= 100L) {
+      return(list(
+        skip = TRUE,
+        route = NA_character_,
+        notes = sprintf(
+          paste(
+            "FAISS NSG requires more than 100 training rows in this FAISS build.",
+            "This dataset has %s rows, so NSG is recorded as an expected skip",
+            "instead of a method failure."
+          ),
+          if (length(n) == 1L && !is.na(n)) as.character(n) else "an unknown number of"
+        )
+      ))
+    }
+    return(NULL)
+  }
   if (!identical(method, "sparse")) return(NULL)
   if (inherits(x, "sparseMatrix") || inherits(x, "dgCMatrix")) return(NULL)
   list(
