@@ -250,6 +250,37 @@ test_that("GitHub and reference docs describe direct cuVS brute-force metric sco
   }
 })
 
+test_that("GitHub and reference docs describe grid cosine/correlation support", {
+  docs_files <- c(
+    test_path("../../docs", c(
+      "backend-capabilities.md",
+      "implementation.md",
+      "nn-methods.md",
+      "usage-api.md"
+    )),
+    test_path("../../man/nn.Rd")
+  )
+  missing <- !file.exists(docs_files)
+  if (any(missing)) {
+    skip("GitHub or reference documentation files are not available in this installed-package test context.")
+  }
+
+  for (docs_file in docs_files) {
+    prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+    expect_true(
+      grepl("grid", prose, fixed = TRUE) &&
+        grepl("cosine", prose, fixed = TRUE) &&
+        grepl("correlation", prose, fixed = TRUE),
+      info = basename(docs_file)
+    )
+    expect_false(
+      grepl("grid for large 2D/3D Euclidean self-search", prose, fixed = TRUE) ||
+        grepl("grid search for large 2D/3D Euclidean self-KNN", prose, fixed = TRUE),
+      info = basename(docs_file)
+    )
+  }
+})
+
 test_that("GitHub documentation pages do not duplicate headings", {
   docs_files <- c(
     test_path("../../README.md"),

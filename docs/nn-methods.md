@@ -106,13 +106,13 @@ expected skips, not algorithmic failures.
   selected method and metric have a validated CUDA route and CUDA/cuVS runtime
   support is available, CPU otherwise.
 - CPU auto uses exact CPU for small work, native grid for large 2D/3D
-  Euclidean self-search, FAISS IVF for some million-row low-dimensional cases,
+  Euclidean/cosine/correlation self-search, FAISS IVF for some million-row low-dimensional cases,
   FAISS HNSW for large high-dimensional self-search, including non-Euclidean
   HNSW when FAISS exposes it, FAISS Flat exact search for larger cosine,
   correlation, or inner-product query/exact workloads, and RcppHNSW/hnswlib as
   the large non-Euclidean self-search fallback when FAISS is unavailable
   [1-2,5,16].
-- CUDA auto uses CUDA grid for large 2D/3D Euclidean self-search, exact FAISS
+- CUDA auto uses CUDA grid for large 2D/3D Euclidean/cosine/correlation self-search, exact FAISS
   GPU Flat or cuVS brute force for small/medium Euclidean searches, FAISS GPU
   CAGRA for very large Euclidean self-search when available, and FAISS GPU
   Flat IP routes for cosine, correlation, and inner-product searches only when
@@ -179,7 +179,7 @@ costs, and batching can differ.
 
 `method = "grid"` uses faissR's native spatial grid implementation.
 
-- On CPU, it supports 2D/3D Euclidean self-KNN.
+- On CPU, it supports 2D/3D Euclidean, cosine, and correlation self-KNN.
 - On CUDA, it supports the CUDA 2D/3D grid route when compiled.
 - It errors for higher-dimensional data.
 

@@ -114,7 +114,8 @@ selectors on simulated shapes and benchmark dataset folders.
 Policy summary:
 
 - `backend = "cpu", method = "auto"`: exact CPU for small work; CPU grid for
-  large Euclidean 2D/3D self-KNN; FAISS IVF for million-row Euclidean self-KNN
+  large Euclidean/cosine/correlation 2D/3D self-KNN; FAISS IVF for million-row
+  Euclidean self-KNN
   where HNSW graph construction is too memory-heavy; FAISS HNSW for large
   high-dimensional CPU self-KNN, including cosine, correlation, and
   inner-product HNSW when FAISS is available; FAISS Flat exact search for larger

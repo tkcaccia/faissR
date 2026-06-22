@@ -43,7 +43,7 @@ list with method-specific parameters.
 
 | `method` | CPU route | CUDA route | Main use |
 | --- | --- | --- | --- |
-| `"auto"` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, or FAISS GPU CAGRA for Euclidean; FAISS GPU Flat IP routes for cosine, correlation, and inner product when FAISS GPU Flat is available. | Default general-purpose choice. |
+| `"auto"` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid for Euclidean/cosine/correlation 2D/3D self-KNN; FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for Euclidean; FAISS GPU Flat IP routes for cosine, correlation, and inner product when FAISS GPU Flat is available. | Default general-purpose choice. |
 | `"exact"` | Native exact CPU KNN. | FAISS GPU Flat if available; Euclidean can otherwise use direct cuVS brute force. | Exact/high-recall baseline [1-3,16]. |
 | `"flat"` | FAISS Flat L2/IP; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP while explicit CUDA calls remain on CUDA. | Exact FAISS exhaustive search [1-2,16]. |
 | `"bruteforce"` | Native exact CPU KNN. | Euclidean prefers direct RAPIDS cuVS brute force; cosine, correlation, and inner product use FAISS GPU Flat when available. | Exhaustive route, useful for FAISS/cuVS comparisons [1-3,16]. |
