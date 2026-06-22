@@ -1102,6 +1102,23 @@ test_that("auto GPU preselector does not require CUDA when only CPU FAISS is ava
   } else {
     skip("CUDA/cuVS runtime is available; CPU-only auto fallback is not exercised here.")
   }
+
+  expect_equal(
+    faissR:::resolve_auto_knn_gpu_backend(
+      backend = "auto",
+      self_query = TRUE,
+      n_points = 20000L,
+      n = 20000L,
+      p = 50L,
+      k = 50L,
+      work_size = 20000 * 20000 * 50,
+      metric = "cosine",
+      cuda_available_value = TRUE,
+      cuvs_available_value = TRUE,
+      faiss_gpu_available_value = FALSE
+    ),
+    NA_character_
+  )
 })
 
 test_that("non-Euclidean CUDA auto requires FAISS GPU Flat support", {
@@ -1213,7 +1230,7 @@ test_that("public backend and method resolver maps device plus method", {
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("auto", "auto", "cosine"),
-    "cpu_auto"
+    "auto"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("auto", "hnsw", "euclidean"),

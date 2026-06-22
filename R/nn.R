@@ -91,9 +91,7 @@ nn_compute <- function(data,
     ))
   }
   if (!identical(metric, "euclidean")) {
-    if (identical(backend, "auto")) {
-      backend <- "cpu"
-    } else if (backend %in% c("cuvs_ivf", "cuda_cuvs_ivf",
+    if (backend %in% c("cuvs_ivf", "cuda_cuvs_ivf",
                               "cuvs_ivf_flat", "cuda_cuvs_ivf_flat",
                               "cuvs_ivfpq", "cuda_cuvs_ivfpq",
                               "cuvs_ivf_pq", "cuda_cuvs_ivf_pq")) {
@@ -157,7 +155,7 @@ nn_compute <- function(data,
     } else if (identical(metric, "inner_product") &&
                backend %in% c("vptree", "cpu_vptree")) {
       stop("VP-tree nearest-neighbour search does not support `metric = \"inner_product\"`.", call. = FALSE)
-    } else if (!backend %in% c("cpu", "cpu_auto", "hnsw", "rcpphnsw", "cpu_hnsw",
+    } else if (!backend %in% c("auto", "cpu", "cpu_auto", "hnsw", "rcpphnsw", "cpu_hnsw",
                                "faiss_hnsw", "faiss_ivf", "faiss_ivf_flat",
                                "faiss_ivfpq", "faiss_nsg", "faiss_nndescent",
                                "cpu_nndescent",
@@ -1787,6 +1785,9 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
     }
   }
   if (identical(method, "auto")) {
+    if (identical(requested_device, "auto")) {
+      return("auto")
+    }
     if (identical(device, "cuda")) {
       return("cuda_auto")
     }
@@ -2002,13 +2003,16 @@ resolve_auto_knn_gpu_backend <- function(backend,
                                          p,
                                          k,
                                          work_size,
-                                         metric = "euclidean") {
+                                         metric = "euclidean",
+                                         cuda_available_value = cuda_available(),
+                                         cuvs_available_value = cuvs_available(),
+                                         faiss_gpu_available_value = faiss_gpu_available()) {
   if (!identical(backend, "auto")) return(NA_character_)
   metric <- normalize_nn_metric(metric)
   non_euclidean_auto <- cuda_auto_non_euclidean_backend(
     metric,
     requested_device = "auto",
-    faiss_gpu_available_value = faiss_gpu_available()
+    faiss_gpu_available_value = faiss_gpu_available_value
   )
   if (!is.na(non_euclidean_auto)) {
     return(if (identical(non_euclidean_auto, "cpu_auto")) NA_character_ else non_euclidean_auto)
@@ -2016,17 +2020,20 @@ resolve_auto_knn_gpu_backend <- function(backend,
   if (!isTRUE(self_query)) return(NA_character_)
   if (k > 256L) return(NA_character_)
   if (work_size < 5e8) return(NA_character_)
-  if (!isTRUE(cuda_available()) && !isTRUE(cuvs_available())) {
+  if (!isTRUE(cuda_available_value) && !isTRUE(cuvs_available_value)) {
     return(NA_character_)
   }
-  select_cuda_auto_backend(
-    self_query = self_query,
-    n = n,
-    p = p,
-    n_points = n_points,
-    k = k,
-    work_size = work_size,
-    metric = metric
+  tryCatch(
+    select_cuda_auto_backend(
+      self_query = self_query,
+      n = n,
+      p = p,
+      n_points = n_points,
+      k = k,
+      work_size = work_size,
+      metric = metric
+    ),
+    error = function(e) NA_character_
   )
 }
 
