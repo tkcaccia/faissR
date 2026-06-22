@@ -268,6 +268,9 @@ policy. Supported edge weights include:
 The graph object stores `k`, weighting, pruning, mutual-edge filtering, optional
 target community count, and KNN backend/method/metric/tuning metadata. It does
 not require `igraph`.
+Inner-product graph construction inherits the `nn()` metric contract:
+neighbours are ranked by larger raw dot product, while edge weighting receives
+shifted smaller-is-better distances.
 
 The graph construction layer deliberately accepts precomputed KNN output. This
 allows expensive FAISS/cuVS searches to be reused across clustering, embedding,

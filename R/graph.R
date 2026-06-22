@@ -22,7 +22,10 @@
 #' @param metric Distance metric passed to \code{\link{nn_without_self}()} when
 #'   `knn` is not supplied. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and
 #'   `"ip"` are accepted and stored as canonical metric labels. Correlation is
-#'   centered cosine similarity, not raw inner product.
+#'   centered cosine similarity, not raw inner product. Inner-product graph
+#'   construction ranks neighbours by larger raw dot product while reusing
+#'   faissR's shifted smaller-is-better distance convention from
+#'   \code{\link{nn}()}.
 #' @param tuning Tuning policy passed to \code{\link{nn_without_self}()} when
 #'   `knn` is not supplied.
 #' @param weight Graph weighting. `"auto"` uses SNN/Jaccard weights for input
@@ -237,7 +240,9 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   `graph` is a matrix or embedding. Aliases such as `"l2"`,
 #'   `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as canonical
 #'   metric labels. Correlation is centered cosine similarity, not raw inner
-#'   product.
+#'   product. Inner-product graph construction ranks neighbours by larger raw
+#'   dot product while reusing faissR's shifted smaller-is-better distance
+#'   convention from \code{\link{nn}()}.
 #' @param tuning Tuning policy passed to \code{\link{nn_without_self}()} when
 #'   `graph` is a matrix or embedding.
 #' @param weight KNN graph weighting. See \code{\link{knn_graph}()}.

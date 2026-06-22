@@ -133,7 +133,7 @@ knn_graph(data, knn = NULL, k = 50L, backend = "auto",
 | `backend` | Device backend passed to `nn_without_self()` when neighbours must be computed from `data`: `"auto"`, `"cpu"`, or `"cuda"`. |
 | `method` | Alias for `nn_method`, matching the public method argument used by `nn()` and `knn()`. If both are supplied they must agree after alias normalization. |
 | `nn_method` | Nearest-neighbour method passed to `nn_without_self()` when neighbours must be computed from `data`; kept for existing graph-specific code. |
-| `metric` | Distance metric passed to `nn_without_self()` when neighbours must be computed from `data`; aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. Correlation is centered cosine similarity, not raw inner product. |
+| `metric` | Distance metric passed to `nn_without_self()` when neighbours must be computed from `data`; aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. Correlation is centered cosine similarity, not raw inner product. Inner-product graph construction ranks by larger raw dot product and reuses faissR's shifted smaller-is-better distance convention from `nn()`. |
 | `tuning` | Tuning policy passed to `nn_without_self()` when neighbours must be computed from `data`. |
 | `weight` | Edge weighting: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. `"auto"` uses shared-nearest-neighbour weights for input space and distance weights for embedding space. |
 | `mutual` | If `TRUE`, keep only reciprocal nearest-neighbour edges. |
@@ -167,7 +167,7 @@ graph_cluster(graph, method = "random_walking", backend = "auto",
 | `k` | Number of neighbours when `graph` is raw data or an embedding rather than a graph/KNN object. |
 | `graph_backend` | Backend passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
 | `graph_method` | Nearest-neighbour method passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
-| `metric` | Distance metric passed to `nn_without_self()` when faissR needs to build the KNN graph internally; aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. Correlation is centered cosine similarity, not raw inner product. |
+| `metric` | Distance metric passed to `nn_without_self()` when faissR needs to build the KNN graph internally; aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. Correlation is centered cosine similarity, not raw inner product. Inner-product graph construction ranks by larger raw dot product and reuses faissR's shifted smaller-is-better distance convention from `nn()`. |
 | `tuning` | Tuning policy passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
 | `weight` | Graph edge weighting passed to `knn_graph()`: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. |
 | `mutual` | If `TRUE`, build a mutual-nearest-neighbour graph. |

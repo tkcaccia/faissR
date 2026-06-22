@@ -597,6 +597,23 @@ test_that("graph_cluster docs describe clustered graph size metadata", {
   }
 })
 
+test_that("graph docs describe inherited inner-product distance semantics", {
+  docs_files <- c(
+    test_path("../../docs", c("usage-api.md", "implementation.md")),
+    test_path("../../man", c("knn_graph.Rd", "graph_cluster.Rd"))
+  )
+  docs_files <- docs_files[file.exists(docs_files)]
+  if (!length(docs_files)) {
+    skip("GitHub or reference documentation files are not available in this installed-package test context.")
+  }
+  for (docs_file in docs_files) {
+    prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+    expect_true(grepl("Inner-product graph construction", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("larger raw dot product", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("shifted smaller-is-better", prose, fixed = TRUE), info = basename(docs_file))
+  }
+})
+
 test_that("benchmark docs describe deterministic ARI recommendation tie-breaks", {
   docs_file <- test_path("../../docs/benchmarks.md")
   if (!file.exists(docs_file)) {
