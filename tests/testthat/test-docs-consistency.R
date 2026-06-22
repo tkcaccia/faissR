@@ -119,6 +119,38 @@ test_that("public API excludes retired wrapper and platform-specific helper name
   expect_false(any(grepl("metal", man_topics, ignore.case = TRUE)))
 })
 
+test_that("repository text excludes private benchmark machine details", {
+  root <- test_path("../../")
+  files <- list.files(
+    root,
+    pattern = "\\.(R|Rd|md|cpp|h|hpp|in)$|^(DESCRIPTION|NAMESPACE|LICENSE|CITATION)$",
+    recursive = TRUE,
+    full.names = TRUE
+  )
+  files <- files[!grepl("(^|/)\\.git(/|$)|(^|/)faissR\\.Rcheck(/|$)", files)]
+  files <- files[!grepl("(^|/)tests/testthat/test-docs-consistency\\.R$", files)]
+  expect_gt(length(files), 0L)
+
+  forbidden <- c(
+    "chiamaka",
+    "137\\.158\\.",
+    "\\$Life_2025\\$",
+    "/mnt/sata_ssd",
+    "fastEmbedR_BENCHMARK",
+    "fastEmbedR/Data",
+    "micromamba/envs"
+  )
+  text <- vapply(
+    files,
+    function(path) paste(readLines(path, warn = FALSE), collapse = "\n"),
+    character(1L)
+  )
+  for (pattern in forbidden) {
+    hits <- names(text)[grepl(pattern, text, ignore.case = TRUE)]
+    expect_equal(hits, character(), label = pattern)
+  }
+})
+
 test_that("GitHub docs list all public availability helpers", {
   files <- test_path("../../", c(
     "README.md",
