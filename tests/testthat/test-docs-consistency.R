@@ -1055,8 +1055,19 @@ test_that("GitHub docs describe the bounded target-cluster resolution grid", {
 
   prose <- paste(unlist(lapply(docs_files, readLines, warn = FALSE)), collapse = " ")
   expect_true(grepl("bounded deterministic", prose, fixed = TRUE))
+  expect_true(grepl("shape-aware", prose, fixed = TRUE))
   expect_false(grepl("small deterministic grid of resolution", prose, fixed = TRUE))
   expect_false(grepl("small deterministic resolution grid", prose, fixed = TRUE))
+})
+
+test_that("README keeps n_clusters on graph_cluster not knn_graph", {
+  readme <- test_path("../../README.md")
+  if (!file.exists(readme)) {
+    skip("README is not available in this installed-package test context.")
+  }
+  prose <- paste(readLines(readme, warn = FALSE), collapse = "\n")
+  expect_false(grepl("knn_graph\\([^\\n)]*n_clusters", prose))
+  expect_true(grepl("n_clusters = 3", prose, fixed = TRUE))
 })
 
 test_that("autotuning method settings table keeps public and implementation labels separate", {

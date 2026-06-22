@@ -490,6 +490,15 @@ test_that("target cluster resolution candidates are bounded and deterministic", 
   expect_lte(min(shaped), shape_center / 16)
   expect_gte(max(shaped), shape_center * 16)
   expect_lte(length(shaped), 18L)
+  expect_equal(faissR:::graph_resolution_grid_exponents(120L), seq(-4, 4, by = 0.5))
+  expect_equal(faissR:::graph_resolution_grid_exponents(10000L), seq(-3, 3, by = 0.5))
+  expect_equal(faissR:::graph_resolution_grid_exponents(50000L), seq(-2, 2, by = 0.5))
+  medium <- faissR:::graph_resolution_candidates(1, 10L, n_vertices = 10000L)
+  large <- faissR:::graph_resolution_candidates(1, 10L, n_vertices = 70000L)
+  expect_true(1 %in% medium)
+  expect_true(1 %in% large)
+  expect_lt(length(large), length(shaped))
+  expect_lte(length(large), 10L)
   expect_equal(
     faissR:::graph_resolution_center(1, 3L, n_vertices = NULL),
     1

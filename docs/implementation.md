@@ -359,10 +359,13 @@ counts or with an explicit `resolution`. If `n_clusters` is supplied and
 passing `n_clusters` to explicit random-walking remains an error. The graph is
 built once, then faissR evaluates a bounded deterministic grid of resolution
 values centered from the supplied `resolution` and, when graph size is known, a
-no-pilot shape heuristic based on `n_clusters / sqrt(n_vertices)`. It keeps the
-result whose number of communities is closest to `m`, breaking ties by
-modularity. The selected resolution, candidate center, and search table are
-returned in the result metadata as
+no-pilot shape heuristic based on `n_clusters / sqrt(n_vertices)`. The
+candidate width is shape-aware: small graphs keep the wide `2^-4` to `2^4`
+grid around the center, medium graphs use `2^-3` to `2^3`, and large graphs
+use `2^-2` to `2^2` so target-count searches do not repeat full Louvain/Leiden
+passes more than needed. It keeps the result whose number of communities is
+closest to `m`, breaking ties by modularity. The selected resolution, candidate
+center, and search table are returned in the result metadata as
 `selected_resolution`, `resolution_selection`, and `resolution_search`, with the
 requested target stored as `target_n_clusters`.
 The selected row is marked in `resolution_search$selected`; `target_gap`

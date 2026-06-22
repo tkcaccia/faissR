@@ -258,10 +258,13 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   the already-built graph and keeps the result whose community count is
 #'   closest to `n_clusters`. The grid is centered from the requested
 #'   `resolution` and, when graph size is known, a no-pilot shape heuristic
-#'   based on `n_clusters / sqrt(n_vertices)`. This is a convenience target, not
-#'   a hard guarantee. If `n_clusters` is supplied and `method` is omitted,
-#'   faissR uses `"louvain"` as the target-count clustering method. The target
-#'   must be a positive integer and cannot exceed the number of graph vertices.
+#'   based on `n_clusters / sqrt(n_vertices)`. The search width is also
+#'   shape-aware: small graphs use a wider grid, while large graphs use fewer
+#'   deterministic candidates to avoid repeated full Louvain/Leiden passes.
+#'   This is a convenience target, not a hard guarantee. If `n_clusters` is
+#'   supplied and `method` is omitted, faissR uses `"louvain"` as the
+#'   target-count clustering method. The target must be a positive integer and
+#'   cannot exceed the number of graph vertices.
 #' @param objective_function Reserved for Leiden-compatible APIs.
 #' @param n_iterations Native clustering iterations.
 #' @param steps Random-walk propagation depth.
@@ -642,10 +645,20 @@ graph_resolution_center <- function(resolution, n_clusters, n_vertices = NULL) {
   sqrt(resolution * shape_center)
 }
 
+graph_resolution_grid_exponents <- function(n_vertices = NULL) {
+  n_vertices <- suppressWarnings(as.numeric(n_vertices))
+  if (length(n_vertices) != 1L || is.na(n_vertices) || !is.finite(n_vertices) || n_vertices < 1) {
+    return(seq(-4, 4, by = 0.5))
+  }
+  if (n_vertices >= 50000) return(seq(-2, 2, by = 0.5))
+  if (n_vertices >= 10000) return(seq(-3, 3, by = 0.5))
+  seq(-4, 4, by = 0.5)
+}
+
 graph_resolution_candidates <- function(resolution, n_clusters, n_vertices = NULL) {
   if (is.null(n_clusters)) return(resolution)
   center <- graph_resolution_center(resolution, n_clusters, n_vertices)
-  exponents <- seq(-4, 4, by = 0.5)
+  exponents <- graph_resolution_grid_exponents(n_vertices)
   candidates <- center * (2 ^ exponents)
   candidates <- candidates[is.finite(candidates) & candidates > 0]
   sort(unique(c(resolution, candidates)))

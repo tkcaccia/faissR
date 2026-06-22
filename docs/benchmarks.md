@@ -297,7 +297,10 @@ When `n_clusters` is used, graph-clustering result metadata also records
 selected row is marked with `selected = TRUE`, so target-count resolution
 searches remain auditable in downstream summaries. The deterministic candidate
 center is derived from the requested resolution and, when graph size is known,
-the no-pilot shape heuristic `n_clusters / sqrt(n_vertices)`. The raw and
+the no-pilot shape heuristic `n_clusters / sqrt(n_vertices)`. The grid width
+is also shape-aware: small graphs use more candidates, while large graphs use a
+narrower deterministic grid to reduce repeated clustering passes during
+target-count searches. The raw and
 cycle-summary CSVs flatten the most important diagnostics as
 `resolution_selected_candidate`, `resolution_candidates`,
 `resolution_min_target_gap`, and

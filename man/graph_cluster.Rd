@@ -53,8 +53,10 @@ If supplied, faissR evaluates a bounded deterministic resolution grid on the
 already-built graph and keeps the result whose community count is closest to
 the target. The grid is centered from the requested \code{resolution} and,
 when graph size is known, a no-pilot shape heuristic based on
-\code{n_clusters / sqrt(n_vertices)}. This is a convenience target, not a hard
-guarantee. If \code{n_clusters} is supplied and \code{method} is omitted,
+\code{n_clusters / sqrt(n_vertices)}. The search width is shape-aware: small
+graphs use a wider deterministic grid, while large graphs use fewer candidates
+to reduce repeated Louvain/Leiden passes. This is a convenience target, not a
+hard guarantee. If \code{n_clusters} is supplied and \code{method} is omitted,
 faissR uses \code{"louvain"} as the target-count clustering method. The target
 must be a positive integer and cannot exceed the number of graph vertices.}
 \item{objective_function}{Reserved for Leiden-compatible APIs; currently recorded in parameters.}
@@ -70,8 +72,10 @@ must be a positive integer and cannot exceed the number of graph vertices.}
 \code{n_clusters} is supplied directly to \code{graph_cluster()}. When a target
 count is available for Louvain or Leiden, faissR builds or reuses the graph once,
 evaluates a bounded deterministic resolution grid centered by the requested
-\code{resolution} and graph shape, and records the selected resolution, center,
-and search table in the returned object. If \code{n_clusters} is supplied and
+\code{resolution} and graph shape. The grid width is shape-aware so large graph
+target searches use fewer deterministic candidates than small graph searches.
+faissR records the selected resolution, center, and search table in the returned
+object. If \code{n_clusters} is supplied and
 \code{method} is omitted, faissR uses \code{"louvain"} as the target-count
 clustering method. Passing \code{n_clusters} to explicit
 \code{method = "random_walking"} still errors. The target must be a positive
