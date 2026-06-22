@@ -62,6 +62,7 @@ struct DeviceArray {
 
 struct GraphHandle {
   cugraph_graph_t* graph = nullptr;
+  GraphHandle() = default;
   ~GraphHandle() {
     free();
   }
