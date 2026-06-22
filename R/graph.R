@@ -66,7 +66,6 @@ knn_graph <- function(data,
                       prune = 0,
                       n_clusters = NULL,
                       n_threads = NULL) {
-  backend <- as.character(backend)[1L]
   if (!is.null(method)) {
     method <- public_nn_method_label(normalize_nn_method(method))
     if (!missing(nn_method)) {
@@ -187,7 +186,12 @@ resolve_knn_graph_backend <- function(backend) {
 }
 
 resolve_graph_cluster_backend <- function(backend) {
-  backend <- as.character(backend)[1L]
+  backend <- normalize_scalar_choice_arg(
+    backend,
+    arg = "backend",
+    default = "auto",
+    formal_choices = c("auto", "cpu", "cuda")
+  )
   if (is.na(backend) || !nzchar(backend)) backend <- "auto"
   backend <- tolower(backend)
   if (!backend %in% c("auto", "cpu", "cuda")) {
@@ -478,7 +482,12 @@ graph_cluster <- function(graph,
 }
 
 normalize_graph_cluster_method <- function(method) {
-  method <- as.character(method)[1L]
+  method <- normalize_scalar_choice_arg(
+    method,
+    arg = "method",
+    default = "random_walking",
+    formal_choices = c("random_walking", "louvain", "leiden")
+  )
   if (is.na(method) || !nzchar(method)) method <- "random_walking"
   method <- trimws(method)
   methods <- c("random_walking", "louvain", "leiden")
@@ -492,7 +501,12 @@ normalize_graph_cluster_method <- function(method) {
 }
 
 normalize_graph_weight <- function(weight) {
-  weight <- as.character(weight)[1L]
+  weight <- normalize_scalar_choice_arg(
+    weight,
+    arg = "weight",
+    default = "auto",
+    formal_choices = c("auto", "snn", "adaptive", "distance", "binary")
+  )
   if (is.na(weight) || !nzchar(weight)) weight <- "auto"
   weight <- trimws(weight)
   weights <- c("auto", "snn", "adaptive", "distance", "binary")
@@ -506,7 +520,12 @@ normalize_graph_weight <- function(weight) {
 }
 
 normalize_graph_objective_function <- function(objective_function) {
-  objective_function <- as.character(objective_function)[1L]
+  objective_function <- normalize_scalar_choice_arg(
+    objective_function,
+    arg = "objective_function",
+    default = "modularity",
+    formal_choices = c("modularity", "CPM")
+  )
   if (is.na(objective_function) || !nzchar(objective_function)) objective_function <- "modularity"
   objective_function <- trimws(objective_function)
   if (!objective_function %in% c("modularity", "CPM")) {

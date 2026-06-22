@@ -82,7 +82,15 @@ test_that("graph builders require canonical weight labels", {
 
   expect_equal(faissR:::normalize_graph_weight(NULL), "auto")
   expect_equal(faissR:::normalize_graph_weight("adaptive"), "adaptive")
+  expect_error(
+    faissR:::normalize_graph_weight(c("distance", "binary")),
+    "`weight` must be a single value"
+  )
   expect_error(knn_graph(x, k = 5L, backend = "cpu", weight = "a"), "weight")
+  expect_error(
+    knn_graph(x, k = 5L, backend = c("cpu", "cuda")),
+    "`backend` must be a single value"
+  )
   expect_error(
     graph_cluster(x, method = "louvain", backend = "cpu", graph_backend = "cpu", k = 5L, weight = "d"),
     "weight"
@@ -331,6 +339,10 @@ test_that("graph_cluster requires canonical clustering method labels", {
   )
   expect_equal(faissR:::normalize_graph_cluster_method(NULL), "random_walking")
   expect_equal(faissR:::normalize_graph_cluster_method("leiden"), "leiden")
+  expect_error(
+    faissR:::normalize_graph_cluster_method(c("leiden", "louvain")),
+    "`method` must be a single value"
+  )
 })
 
 test_that("graph_cluster requires canonical objective-function labels", {
@@ -338,6 +350,10 @@ test_that("graph_cluster requires canonical objective-function labels", {
 
   expect_equal(faissR:::normalize_graph_objective_function(NULL), "modularity")
   expect_equal(faissR:::normalize_graph_objective_function("CPM"), "CPM")
+  expect_error(
+    faissR:::normalize_graph_objective_function(c("CPM", "modularity")),
+    "`objective_function` must be a single value"
+  )
   expect_error(
     graph_cluster(
       x,
