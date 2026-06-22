@@ -359,6 +359,9 @@ result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threa
                        status, error = NA_character_, elapsed_sec = NA_real_,
                        peak_rss_gb = NA_real_,
                        result_backend = NA_character_,
+                       result_requested_backend = NA_character_,
+                       result_requested_method = NA_character_,
+                       result_tuning = NA_character_,
                        resolved_backend = NA_character_,
                        implementation_backend = NA_character_,
                        preflight_route = NA_character_,
@@ -386,6 +389,9 @@ result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threa
     elapsed_sec = elapsed_sec,
     peak_rss_gb = peak_rss_gb,
     result_backend = result_backend,
+    result_requested_backend = result_requested_backend,
+    result_requested_method = result_requested_method,
+    result_tuning = result_tuning,
     resolved_backend = resolved_backend,
     implementation_backend = implementation_backend,
     preflight_route = preflight_route,
@@ -483,6 +489,11 @@ dominant_value <- function(x) {
   names(sort(table(x), decreasing = TRUE))[[1L]]
 }
 
+dominant_column <- function(data, column) {
+  if (!column %in% names(data)) return(NA_character_)
+  dominant_value(data[[column]])
+}
+
 finite_median <- function(x) {
   x <- suppressWarnings(as.numeric(x))
   x <- x[is.finite(x)]
@@ -528,6 +539,9 @@ summarize_nn_cycles <- function(ok) {
       median_recall_query_n = finite_median(x$recall_query_n),
       exact = any(as.logical(x$exact), na.rm = TRUE),
       result_backend = dominant_value(x$result_backend),
+      result_requested_backend = dominant_column(x, "result_requested_backend"),
+      result_requested_method = dominant_column(x, "result_requested_method"),
+      result_tuning = dominant_column(x, "result_tuning"),
       resolved_backend = dominant_value(x$resolved_backend),
       implementation_backend = dominant_value(x$implementation_backend),
       preflight_route = dominant_value(x$preflight_route),
@@ -583,7 +597,9 @@ compare_auto_to_recommendations <- function(cycle_summary, recommendations) {
   if (!nrow(auto)) return(data.frame())
   keys <- c("dataset", "backend", "metric", "k")
   auto_keep <- c(
-    keys, "method", "result_backend", "resolved_backend", "implementation_backend",
+    keys, "method", "result_backend", "result_requested_backend",
+    "result_requested_method", "result_tuning",
+    "resolved_backend", "implementation_backend",
     "preflight_route", "route_parameters", "tuning_status",
     "n_threads", "success_cycles", "median_elapsed_sec",
     "median_recall_at_k", "min_recall_at_k", "median_min_recall_at_k",
@@ -617,12 +633,16 @@ compare_auto_to_fastest <- function(ok, fastest) {
   if (!nrow(auto_rows) || is.null(fastest) || !nrow(fastest)) return(data.frame())
   keys <- c("dataset", "backend", "metric", "k", "cycle")
   auto_keep <- c(
-    keys, "result_backend", "resolved_backend", "implementation_backend",
+    keys, "result_backend", "result_requested_backend",
+    "result_requested_method", "result_tuning",
+    "resolved_backend", "implementation_backend",
     "route_parameters", "tuning_status", "elapsed_sec", "recall_at_k",
     "recall_reference", "recall_query_n"
   )
   fastest_keep <- c(
-    keys, "method", "result_backend", "resolved_backend", "implementation_backend",
+    keys, "method", "result_backend", "result_requested_backend",
+    "result_requested_method", "result_tuning",
+    "resolved_backend", "implementation_backend",
     "route_parameters", "tuning_status", "elapsed_sec", "recall_at_k",
     "recall_reference", "recall_query_n"
   )
@@ -989,6 +1009,9 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
       elapsed_sec = elapsed,
       peak_rss_gb = read_peak_rss_gb(),
       result_backend = attr(out, "backend") %||% NA_character_,
+      result_requested_backend = attr(out, "requested_backend") %||% backend,
+      result_requested_method = attr(out, "requested_method") %||% method,
+      result_tuning = attr(out, "tuning") %||% "auto",
       resolved_backend = attr(out, "resolved_backend") %||% attr(out, "backend") %||% NA_character_,
       implementation_backend = nn_implementation_backend(out),
       preflight_route = preflight_route,
@@ -1252,7 +1275,7 @@ materials <- c(
   "`method = \"grid\"` is included in the default public method list but is recorded as an expected skip for datasets outside two or three columns, because it is a native low-dimensional spatial search route.",
   "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, and resolved backend fields.",
   "`nn_metric_capabilities.csv` stores the design-level capability table used for that preflight. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
-  "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes, and `tuning_status` records backend tuning status when present.",
+  "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_requested_backend`, `result_requested_method`, and `result_tuning` record the public request stored on successful `nn()` results. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes, and `tuning_status` records backend tuning status when present.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",
   "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches. Speed ratios and recall gaps are reported as `NA` when the required timing or recall values are missing or invalid.",

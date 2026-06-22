@@ -135,9 +135,11 @@ rules. `--threads`, `--timeout`, `--cycles`, `--quality_n`, and
 `nn_metric_cycle_summary.csv` aggregates successful rows across cycles by
 dataset/backend/method/metric/k and reports success counts, median/min/max
 elapsed time, recall stability, CPU thread count, preflight route, and the
-dominant implementation backend. New runs also preserve compact
-`route_parameters` metadata from FAISS/cuVS/native result attributes and
-`tuning_status` when a backend reports tuning.
+dominant implementation backend. New runs also preserve the public request
+stored on `nn()` results (`result_requested_backend`,
+`result_requested_method`, and `result_tuning`), compact `route_parameters`
+metadata from FAISS/cuVS/native result attributes, and `tuning_status` when a
+backend reports tuning.
 `nn_metric_recommendations_from_cycles.csv` emits one row per
 dataset/backend/metric/k. When recall is available, it selects the fastest
 method whose median recall is at least the configured `recall_threshold`; if no
@@ -368,10 +370,11 @@ high-recall row and reports speed ratio, recall gap, whether auto itself was
 the fastest high-recall method, whether the result-facing backend matches, and
 whether the concrete implementation backend matches. Speed ratios and recall
 gaps are `NA` when the required timing or recall values are missing or invalid.
-The result table separates
-`result_backend`, `resolved_backend`, and `implementation_backend` so public
-device labels such as `"cuda"` can be distinguished from concrete FAISS/cuVS
-implementation labels such as `"faiss_gpu_cagra"` or `"cuda_cuvs_cagra"`.
+The result table separates `result_requested_backend`,
+`result_requested_method`, `result_tuning`, `result_backend`,
+`resolved_backend`, and `implementation_backend` so public device labels such as
+`"cuda"` can be distinguished from concrete FAISS/cuVS implementation labels
+such as `"faiss_gpu_cagra"` or `"cuda_cuvs_cagra"`.
 The aggregate file `nn_metric_recommendations_from_cycles.csv` emits one row
 per dataset/backend/metric/k: it chooses the fastest median row above the recall
 threshold when possible, the best-recall row when all measured methods are below

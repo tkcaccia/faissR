@@ -326,6 +326,9 @@ test_that("NN metric cycle summaries preserve route and thread metadata", {
     recall_query_n = c(100L, 100L),
     exact = c(FALSE, FALSE),
     result_backend = c("faiss_hnsw", "faiss_hnsw"),
+    result_requested_backend = c("auto", "auto"),
+    result_requested_method = c("auto", "auto"),
+    result_tuning = c("auto", "auto"),
     resolved_backend = c("faiss_hnsw", "faiss_hnsw"),
     implementation_backend = c("faiss_hnsw", "faiss_hnsw"),
     preflight_route = c("faiss_hnsw", "faiss_hnsw"),
@@ -334,6 +337,9 @@ test_that("NN metric cycle summaries preserve route and thread metadata", {
 
   out <- env$summarize_nn_cycles(ok)
   expect_equal(out$n_threads, 2L)
+  expect_equal(out$result_requested_backend, "auto")
+  expect_equal(out$result_requested_method, "auto")
+  expect_equal(out$result_tuning, "auto")
   expect_equal(out$preflight_route, "faiss_hnsw")
   expect_equal(out$success_cycles, 2L)
 })
@@ -584,6 +590,9 @@ test_that("NN metric auto comparison preserves recommendation basis", {
     metric = c("euclidean", "euclidean"),
     k = c(50L, 50L),
     result_backend = c("faiss_hnsw", "faiss_hnsw"),
+    result_requested_backend = c("auto", "cpu"),
+    result_requested_method = c("auto", "hnsw"),
+    result_tuning = c("auto", "auto"),
     resolved_backend = c("faiss_hnsw", "faiss_hnsw"),
     implementation_backend = c("faiss_hnsw", "faiss_hnsw"),
     preflight_route = c("faiss_hnsw", "faiss_hnsw"),
@@ -606,6 +615,11 @@ test_that("NN metric auto comparison preserves recommendation basis", {
   expect_equal(anyDuplicated(names(out)), 0L)
   expect_equal(out$recommended_recommendation_basis, "fastest_at_recall_threshold")
   expect_true("recommended_recommendation_basis" %in% names(out))
+  expect_equal(out$auto_result_requested_backend, "auto")
+  expect_equal(out$recommended_result_requested_backend, "cpu")
+  expect_equal(out$auto_result_requested_method, "auto")
+  expect_equal(out$recommended_result_requested_method, "hnsw")
+  expect_equal(out$auto_result_tuning, "auto")
   expect_equal(out$auto_preflight_route, "faiss_hnsw")
   expect_equal(out$recommended_preflight_route, "faiss_hnsw")
   expect_equal(out$auto_route_parameters, "approximation.m=16;approximation.ef_search=150")
@@ -650,6 +664,9 @@ test_that("NN metric auto comparison guards speed ratios and recall gaps", {
     metric = c("euclidean", "euclidean", "cosine", "cosine"),
     k = c(50L, 50L, 15L, 15L),
     result_backend = c("faiss_hnsw", "faiss_hnsw", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine"),
+    result_requested_backend = c("auto", "cpu", "auto", "cuda"),
+    result_requested_method = c("auto", "hnsw", "auto", "flat"),
+    result_tuning = c("auto", "auto", "auto", "auto"),
     resolved_backend = c("faiss_hnsw", "faiss_hnsw", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine"),
     implementation_backend = c("faiss_hnsw", "faiss_hnsw", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine"),
     preflight_route = c("faiss_hnsw", "faiss_hnsw", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine"),
@@ -684,6 +701,9 @@ test_that("NN metric auto-vs-fastest guards speed ratios and recall gaps", {
     k = c(50L, 15L),
     cycle = c(1L, 1L),
     result_backend = c("faiss_hnsw", "faiss_gpu_flat_cosine"),
+    result_requested_backend = c("auto", "auto"),
+    result_requested_method = c("auto", "auto"),
+    result_tuning = c("auto", "auto"),
     resolved_backend = c("faiss_hnsw", "faiss_gpu_flat_cosine"),
     implementation_backend = c("faiss_hnsw", "faiss_gpu_flat_cosine"),
     elapsed_sec = c(1, 1),
@@ -699,6 +719,9 @@ test_that("NN metric auto-vs-fastest guards speed ratios and recall gaps", {
     k = c(50L, 15L),
     cycle = c(1L, 1L),
     result_backend = c("faiss_hnsw", "faiss_gpu_flat_cosine"),
+    result_requested_backend = c("cpu", "cuda"),
+    result_requested_method = c("hnsw", "flat"),
+    result_tuning = c("auto", "auto"),
     resolved_backend = c("faiss_hnsw", "faiss_gpu_flat_cosine"),
     implementation_backend = c("faiss_hnsw", "faiss_gpu_flat_cosine"),
     elapsed_sec = c(0, 2),
@@ -710,6 +733,10 @@ test_that("NN metric auto-vs-fastest guards speed ratios and recall gaps", {
   out <- env$compare_auto_to_fastest(ok, fastest)
 
   expect_equal(out$fastest_method, c("hnsw", "flat"))
+  expect_equal(out$auto_result_requested_backend, c("auto", "auto"))
+  expect_equal(out$fastest_result_requested_backend, c("cpu", "cuda"))
+  expect_equal(out$auto_result_requested_method, c("auto", "auto"))
+  expect_equal(out$fastest_result_requested_method, c("hnsw", "flat"))
   expect_true(is.na(out$auto_speed_ratio[out$dataset == "A"]))
   expect_true(is.na(out$auto_recall_gap[out$dataset == "B"]))
   expect_true(is.finite(out$auto_speed_ratio[out$dataset == "B"]))
