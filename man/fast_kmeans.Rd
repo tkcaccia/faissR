@@ -33,8 +33,8 @@ deterministic shape-aware default.}
 \item{n_init}{Number of random restarts where supported, or `"auto"` for a
 deterministic shape-aware default.}
 
-\item{tol}{Relative convergence tolerance where supported, or `"auto"` for a
-deterministic shape-aware default.}
+\item{tol}{Single non-negative finite relative convergence tolerance where
+supported, or `"auto"` for a deterministic shape-aware default.}
 
 \item{seed}{Random seed for CPU/statistics and FAISS paths. The current
 direct cuVS C API path does not expose an explicit seed in the stable

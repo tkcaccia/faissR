@@ -15,8 +15,8 @@
 #'   deterministic shape-aware default.
 #' @param n_init Number of random restarts where supported, or `"auto"` for a
 #'   deterministic shape-aware default.
-#' @param tol Relative convergence tolerance where supported, or `"auto"` for a
-#'   deterministic shape-aware default.
+#' @param tol Single non-negative finite relative convergence tolerance where
+#'   supported, or `"auto"` for a deterministic shape-aware default.
 #' @param seed Random seed for CPU/statistics and FAISS paths. The current
 #'   direct cuVS C API path does not expose an explicit seed in the stable
 #'   params structure.
