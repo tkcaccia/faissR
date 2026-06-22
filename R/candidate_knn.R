@@ -43,6 +43,7 @@ candidate_knn <- function(data,
                           exclude_self = FALSE) {
   backend <- normalize_public_backend_arg(backend)
   metric <- normalize_nn_metric(metric)
+  exclude_self <- normalize_scalar_logical_arg(exclude_self, "exclude_self", default = FALSE)
   x <- as.matrix(data)
   storage.mode(x) <- "double"
   q <- as.matrix(points)
@@ -64,10 +65,10 @@ candidate_knn <- function(data,
   }
   n_threads <- normalize_nn_threads(n_threads)
   self_query <- nrow(x) == nrow(q) && ncol(x) == ncol(q) && identical(x, q)
-  if (isTRUE(exclude_self) && !isTRUE(self_query)) {
+  if (exclude_self && !isTRUE(self_query)) {
     stop("`exclude_self = TRUE` requires `points` to be `data`.", call. = FALSE)
   }
-  if (isTRUE(exclude_self)) {
+  if (exclude_self) {
     self_hits <- cand == row(cand)
     cand[self_hits] <- NA_integer_
   }
@@ -80,7 +81,7 @@ candidate_knn <- function(data,
     if (identical(metric, "inner_product")) {
       stop("CUDA candidate KNN does not support `metric = \"inner_product\"`.", call. = FALSE)
     }
-    if (!isTRUE(exclude_self)) {
+    if (!exclude_self) {
       stop("CUDA candidate KNN currently requires `exclude_self = TRUE`.", call. = FALSE)
     }
     if (!isTRUE(self_query)) {
@@ -102,7 +103,7 @@ candidate_knn <- function(data,
     }
     attr(result, "candidate_knn") <- list(
       candidate_columns = as.integer(ncol(cand)),
-      exclude_self = isTRUE(exclude_self),
+      exclude_self = exclude_self,
       exact_within_candidates = TRUE,
       transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform
     )
@@ -116,14 +117,14 @@ candidate_knn <- function(data,
     as.integer(k),
     metric,
     FALSE,
-    isTRUE(exclude_self),
+    exclude_self,
     TRUE,
     as.integer(n_threads)
   )
   result <- finish_nn_result(out, "cpu_candidate", k, self_query, exact = FALSE, metric = metric)
   attr(result, "candidate_knn") <- list(
     candidate_columns = as.integer(ncol(cand)),
-    exclude_self = isTRUE(exclude_self),
+    exclude_self = exclude_self,
     exact_within_candidates = TRUE,
     n_threads = as.integer(out$n_threads)
   )

@@ -109,6 +109,26 @@ test_that("candidate_knn uses strict public backend labels", {
   expect_error(candidate_knn(x, candidates, k = 2L, backend = "cuda_cuvs"), "backend")
 })
 
+test_that("candidate_knn requires scalar logical exclude_self", {
+  x <- matrix(rnorm(30), ncol = 3)
+  candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
+
+  expect_equal(faissR:::normalize_scalar_logical_arg(FALSE, "exclude_self"), FALSE)
+  expect_equal(faissR:::normalize_scalar_logical_arg(TRUE, "exclude_self"), TRUE)
+  expect_error(
+    faissR:::normalize_scalar_logical_arg(c(TRUE, FALSE), "exclude_self"),
+    "single TRUE or FALSE"
+  )
+  expect_error(
+    faissR:::normalize_scalar_logical_arg("TRUE", "exclude_self"),
+    "single TRUE or FALSE"
+  )
+  expect_error(
+    candidate_knn(x, candidates, k = 2L, backend = "cpu", exclude_self = c(TRUE, FALSE)),
+    "exclude_self"
+  )
+})
+
 test_that("candidate_knn supports CPU correlation candidates", {
   x <- matrix(c(
     1, 2, 3,

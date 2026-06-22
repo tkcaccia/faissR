@@ -1371,6 +1371,17 @@ normalize_scalar_choice_arg <- function(x, arg, default, formal_choices = NULL) 
   value[[1L]]
 }
 
+normalize_scalar_logical_arg <- function(x, arg, default = FALSE) {
+  if (is.null(x) || !length(x)) return(isTRUE(default))
+  if (length(x) != 1L || is.na(x)) {
+    stop("`", arg, "` must be a single TRUE or FALSE value.", call. = FALSE)
+  }
+  if (!is.logical(x)) {
+    stop("`", arg, "` must be a single TRUE or FALSE value.", call. = FALSE)
+  }
+  isTRUE(x)
+}
+
 normalize_public_compute_backend <- function(backend, arg = "backend") {
   backend <- normalize_scalar_choice_arg(
     backend,
