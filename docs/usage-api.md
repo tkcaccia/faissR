@@ -270,7 +270,10 @@ prob  <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 | `type` | `"response"` for class labels or regression values; `"prob"` for classification probability matrices. |
 | `...` | Reserved for future prediction options. |
 
-When `Xtest` is omitted, the return value is a `faissR_knn_model`.
+When `Xtest` is omitted, the return value is a `faissR_knn_model`. Immediate
+prediction outputs carry `attr(result, "faissR_nn")` metadata from the
+underlying `nn()` route, including requested backend/method/tuning, resolved
+backend, metric, `k`, and whether the route was exact.
 
 ## `predict()`
 
@@ -292,7 +295,8 @@ predict(object, newdata, k = NULL,
 | `...` | Reserved for future options. |
 
 For classification, use `predict(type = "prob")` to return class
-probabilities.
+probabilities. Prediction outputs carry the same `attr(result, "faissR_nn")`
+route metadata as immediate `knn(..., Xtest)` predictions.
 
 ## Availability Helpers
 

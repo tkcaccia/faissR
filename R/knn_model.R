@@ -36,7 +36,9 @@
 #'   stores the training data, response, task, backend, method, metric, tuning,
 #'   `k`, and CPU thread settings used by later \code{\link{predict}()} calls.
 #'   If `Xtest` is supplied, a factor for classification, a numeric vector for
-#'   regression, or a numeric class-probability matrix when `type = "prob"`.
+#'   regression, or a numeric class-probability matrix when `type = "prob"`;
+#'   prediction outputs carry `attr(result, "faissR_nn")` route metadata from
+#'   the underlying \code{\link{nn}()} call.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' model <- knn(x, iris$Species, backend = "cpu", k = 5)
@@ -162,7 +164,9 @@ knn_model_fit <- function(Xtrain,
 #'   class probability matrices from classification models.
 #' @param ... Reserved for future options.
 #' @return A factor for classification, a numeric vector for regression, or a
-#'   numeric class-probability matrix when `type = "prob"`.
+#'   numeric class-probability matrix when `type = "prob"`. Outputs carry
+#'   `attr(result, "faissR_nn")` route metadata from the underlying
+#'   \code{\link{nn}()} call.
 #' @export
 predict.faissR_knn_model <- function(object,
                                       newdata,
@@ -198,21 +202,38 @@ predict.faissR_knn_model <- function(object,
       levels = object$levels,
       weighted = identical(vote, "weighted")
     )
+    proba <- attach_knn_prediction_metadata(proba, neighbours, k, backend, object$method %||% "auto", tuning)
     if (identical(type, "prob")) {
       return(proba)
     }
     best <- max.col(proba, ties.method = "first")
-    return(factor(object$levels[best], levels = object$levels))
+    pred <- factor(object$levels[best], levels = object$levels)
+    return(attach_knn_prediction_metadata(pred, neighbours, k, backend, object$method %||% "auto", tuning))
   }
   if (identical(type, "prob")) {
     stop("`type = \"prob\"` is only available for classification models.", call. = FALSE)
   }
-  regression_vote(
+  pred <- regression_vote(
     response = response,
     indices = neighbours$indices,
     distances = neighbours$distances,
     weighted = identical(vote, "weighted")
   )
+  attach_knn_prediction_metadata(pred, neighbours, k, backend, object$method %||% "auto", tuning)
+}
+
+attach_knn_prediction_metadata <- function(out, neighbours, k, backend, method, tuning) {
+  attr(out, "faissR_nn") <- list(
+    k = as.integer(k),
+    requested_backend = attr(neighbours, "requested_backend") %||% backend,
+    requested_method = attr(neighbours, "requested_method") %||% public_nn_method_label(normalize_nn_method(method)),
+    tuning = attr(neighbours, "tuning") %||% tuning,
+    backend = attr(neighbours, "backend") %||% NA_character_,
+    resolved_backend = attr(neighbours, "resolved_backend") %||% attr(neighbours, "backend") %||% NA_character_,
+    metric = attr(neighbours, "metric") %||% NA_character_,
+    exact = attr(neighbours, "exact") %||% NA
+  )
+  out
 }
 
 validate_knn_model_query <- function(object, newdata) {

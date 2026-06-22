@@ -358,6 +358,22 @@ test_that("GitHub NN docs describe requested and resolved result metadata", {
   }
 })
 
+test_that("supervised kNN docs describe prediction route metadata", {
+  docs_files <- c(
+    test_path("../../docs", c("implementation.md", "usage-api.md")),
+    test_path("../../man", c("knn.Rd", "predict.faissR_knn_model.Rd"))
+  )
+  missing <- !file.exists(docs_files)
+  if (any(missing)) {
+    skip("GitHub or reference documentation files are not available in this installed-package test context.")
+  }
+
+  for (docs_file in docs_files) {
+    prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+    expect_true(grepl("faissR_nn", prose, fixed = TRUE), info = basename(docs_file))
+  }
+})
+
 test_that("GitHub and reference docs describe normalized zero-row metric semantics", {
   docs_files <- c(
     test_path("../../README.md"),

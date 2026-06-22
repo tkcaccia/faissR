@@ -22,6 +22,41 @@ test_that("knn fits models and predicts classes and probabilities", {
   expect_gt(proba[2, "b"], proba[2, "a"])
 })
 
+test_that("predict preserves nearest-neighbour route metadata", {
+  x <- matrix(c(
+    0, 0,
+    0, 1,
+    5, 5,
+    5, 6
+  ), ncol = 2, byrow = TRUE)
+  y <- factor(c("a", "a", "b", "b"))
+  fit <- knn(x, y, backend = "auto", method = "exact", metric = "cosine", tuning = "off", k = 2L)
+
+  pred <- predict(fit, x[1:2, , drop = FALSE], backend = "auto", tuning = "off")
+  proba <- predict(fit, x[1:2, , drop = FALSE], backend = "auto", tuning = "off", type = "prob")
+
+  pred_meta <- attr(pred, "faissR_nn")
+  proba_meta <- attr(proba, "faissR_nn")
+  expect_equal(pred_meta$requested_backend, "auto")
+  expect_equal(pred_meta$requested_method, "exact")
+  expect_equal(pred_meta$tuning, "off")
+  expect_equal(pred_meta$metric, "cosine")
+  expect_equal(pred_meta$k, 2L)
+  expect_equal(proba_meta$requested_backend, "auto")
+  expect_equal(proba_meta$requested_method, "exact")
+  expect_equal(proba_meta$tuning, "off")
+  expect_equal(proba_meta$metric, "cosine")
+  expect_equal(proba_meta$resolved_backend, proba_meta$backend)
+
+  reg <- knn(x, c(0, 0, 1, 1), backend = "auto", method = "exact", task = "regression", tuning = "off", k = 2L)
+  reg_pred <- predict(reg, x[1:2, , drop = FALSE], backend = "auto", tuning = "off")
+  reg_meta <- attr(reg_pred, "faissR_nn")
+  expect_equal(reg_meta$requested_backend, "auto")
+  expect_equal(reg_meta$requested_method, "exact")
+  expect_equal(reg_meta$tuning, "off")
+  expect_equal(reg_meta$metric, "euclidean")
+})
+
 test_that("weighted votes use exact matches cleanly", {
   x <- matrix(c(
     0, 0,
@@ -46,7 +81,7 @@ test_that("knn supports regression", {
   pred <- predict(fit, matrix(c(0.2, 0), ncol = 2), k = 2L)
   pred_w <- predict(fit, matrix(c(0.2, 0), ncol = 2), k = 2L, vote = "weighted")
   expect_type(pred, "double")
-  expect_equal(pred, 1, tolerance = 1e-12)
+  expect_equal(as.numeric(pred), 1, tolerance = 1e-12)
   expect_lt(pred_w, pred)
   expect_error(predict(fit, x, type = "prob"), "classification")
 })
@@ -136,7 +171,9 @@ test_that("predict uses public backend choices and reuses fitted method", {
   implicit <- predict(model, x[1:2, , drop = FALSE])
   explicit <- predict(model, x[1:2, , drop = FALSE], backend = "cpu")
 
-  expect_equal(implicit, explicit)
+  expect_equal(as.character(implicit), as.character(explicit))
+  expect_equal(attr(implicit, "faissR_nn")$requested_backend, "auto")
+  expect_equal(attr(explicit, "faissR_nn")$requested_backend, "cpu")
   expect_error(predict(model, x[1:2, , drop = FALSE], backend = "faiss"), "must be one of")
 })
 

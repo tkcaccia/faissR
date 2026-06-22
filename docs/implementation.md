@@ -415,7 +415,10 @@ prob <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 The fitted model stores the training matrix, response, task type, backend,
 method, metric, tuning policy, `k`, and thread settings. `predict()` performs
 classification or regression from neighbour votes. `predict(type = "prob")`
-returns class probabilities for classification.
+returns class probabilities for classification. Prediction outputs carry
+`attr(result, "faissR_nn")` metadata from the underlying `nn()` call, including
+requested backend/method/tuning, resolved backend, metric, `k`, and whether the
+route was exact.
 
 The supervised API intentionally reuses `nn()` rather than creating independent
 FAISS/cuVS model classes. That keeps method selection, backend validation,

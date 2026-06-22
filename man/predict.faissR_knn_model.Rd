@@ -39,7 +39,9 @@ class probability matrices from classification models.}
 }
 \value{
 A factor for classification, a numeric vector for regression, or a
-  numeric class-probability matrix when `type = "prob"`.
+  numeric class-probability matrix when `type = "prob"`. Outputs carry
+  `attr(result, "faissR_nn")` route metadata from the underlying
+  \code{\link{nn}()} call.
 }
 \description{
 Predict from a faissR kNN model
