@@ -18,7 +18,8 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
                          int graph_degree,
                          int intermediate_graph_degree,
                          int search_width,
-                         int itopk_size);
+                         int itopk_size,
+                         std::string build_algo);
 List cuvs_nndescent_self_knn_impl(NumericMatrix data,
                                   int k,
                                   int graph_degree,
@@ -80,7 +81,8 @@ List nn_cuvs_cagra_cpp(NumericMatrix data,
                        int graph_degree,
                        int intermediate_graph_degree,
                        int search_width,
-                       int itopk_size) {
+                       int itopk_size,
+                       std::string build_algo) {
   return cuvs_cagra_knn_impl(
     data,
     points,
@@ -89,7 +91,8 @@ List nn_cuvs_cagra_cpp(NumericMatrix data,
     graph_degree,
     intermediate_graph_degree,
     search_width,
-    itopk_size
+    itopk_size,
+    build_algo
   );
 }
 

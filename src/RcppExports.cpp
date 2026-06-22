@@ -607,8 +607,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // nn_cuvs_cagra_cpp
-List nn_cuvs_cagra_cpp(NumericMatrix data, NumericMatrix points, int k, bool exclude_self, int graph_degree, int intermediate_graph_degree, int search_width, int itopk_size);
-RcppExport SEXP _faissR_nn_cuvs_cagra_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP graph_degreeSEXP, SEXP intermediate_graph_degreeSEXP, SEXP search_widthSEXP, SEXP itopk_sizeSEXP) {
+List nn_cuvs_cagra_cpp(NumericMatrix data, NumericMatrix points, int k, bool exclude_self, int graph_degree, int intermediate_graph_degree, int search_width, int itopk_size, std::string build_algo);
+RcppExport SEXP _faissR_nn_cuvs_cagra_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP graph_degreeSEXP, SEXP intermediate_graph_degreeSEXP, SEXP search_widthSEXP, SEXP itopk_sizeSEXP, SEXP build_algoSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -620,7 +620,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type intermediate_graph_degree(intermediate_graph_degreeSEXP);
     Rcpp::traits::input_parameter< int >::type search_width(search_widthSEXP);
     Rcpp::traits::input_parameter< int >::type itopk_size(itopk_sizeSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_cuvs_cagra_cpp(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size));
+    Rcpp::traits::input_parameter< std::string >::type build_algo(build_algoSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_cuvs_cagra_cpp(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size, build_algo));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1065,7 +1066,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_cuvs_available_cpp", (DL_FUNC) &_faissR_cuvs_available_cpp, 0},
     {"_faissR_cuvs_info_json_cpp", (DL_FUNC) &_faissR_cuvs_info_json_cpp, 0},
     {"_faissR_nn_cuvs_bruteforce_cpp", (DL_FUNC) &_faissR_nn_cuvs_bruteforce_cpp, 4},
-    {"_faissR_nn_cuvs_cagra_cpp", (DL_FUNC) &_faissR_nn_cuvs_cagra_cpp, 8},
+    {"_faissR_nn_cuvs_cagra_cpp", (DL_FUNC) &_faissR_nn_cuvs_cagra_cpp, 9},
     {"_faissR_nn_cuvs_nndescent_self_cpp", (DL_FUNC) &_faissR_nn_cuvs_nndescent_self_cpp, 5},
     {"_faissR_nn_cuvs_hnsw_cpp", (DL_FUNC) &_faissR_nn_cuvs_hnsw_cpp, 8},
     {"_faissR_nn_cuvs_ivf_flat_cpp", (DL_FUNC) &_faissR_nn_cuvs_ivf_flat_cpp, 6},

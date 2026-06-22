@@ -161,8 +161,8 @@ nn_cuvs_bruteforce_cpp <- function(data, points, k, exclude_self) {
     .Call(`_faissR_nn_cuvs_bruteforce_cpp`, data, points, k, exclude_self)
 }
 
-nn_cuvs_cagra_cpp <- function(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size) {
-    .Call(`_faissR_nn_cuvs_cagra_cpp`, data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size)
+nn_cuvs_cagra_cpp <- function(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size, build_algo) {
+    .Call(`_faissR_nn_cuvs_cagra_cpp`, data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size, build_algo)
 }
 
 nn_cuvs_nndescent_self_cpp <- function(data, k, graph_degree, intermediate_graph_degree, max_iterations) {
@@ -260,4 +260,3 @@ kmeans_faiss_cpp <- function(data, centers, max_iter, nredo, tol, seed, n_thread
 kmeans_faiss_gpu_cpp <- function(data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus) {
     .Call(`_faissR_kmeans_faiss_gpu_cpp`, data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus)
 }
-

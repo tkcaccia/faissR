@@ -34,8 +34,8 @@ expected to set. For the full R help page after installation, use
 ```r
 nn(data, points = data, k = NULL, backend = "auto",
    method = "auto", metric = "euclidean", tuning = "auto",
-   cagra_implementation = NULL, output = "double",
-   distances = NULL, n_threads = NULL)
+   cagra_implementation = NULL, cagra_build_algo = NULL,
+   output = "double", distances = NULL, n_threads = NULL)
 ```
 
 | Argument | Description |
@@ -48,6 +48,7 @@ nn(data, points = data, k = NULL, backend = "auto",
 | `metric` | Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as canonical metric labels. Inner product is the raw dot product; cosine is the dot product after row L2 normalization; correlation is centered cosine similarity after subtracting each row mean and L2-normalizing each row. For `metric = "inner_product"`, neighbours are ranked by larger raw dot product, but returned `distances` keep faissR's smaller-is-better convention: within each query row the best returned dot product has distance `0`, and lower dot products have larger shifted distances. Euclidean/L2 is the validated high-performance route for approximate FAISS/CUDA/cuVS. Cosine and correlation use validated exact paths, FAISS CPU/GPU Flat, IVF-Flat, IVFPQ, CPU HNSW, native CPU NSG, and CUDA NSG through normalized search. All-zero cosine rows and constant correlation rows are zero-normalized edge cases: faissR treats zero-vs-zero distance as `0` and zero-vs-nonzero distance as `1`; CPU FAISS Flat uses the exact CPU scorer for those rows to preserve deterministic small-`k` tie handling, while explicit CUDA routes remain on CUDA. Inner product is supported by native exact CPU scoring, FAISS Flat IP, FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, native CPU NN-descent, native CPU NSG, RcppHNSW/hnswlib fallback paths when FAISS is unavailable, CUDA NSG self-KNN, CUDA NN-descent through faissR's native CUDA candidate-refinement route, and CUDA CAGRA/HNSW through a maximum-inner-product-to-L2 transform. Direct cuVS NN-descent still does not expose raw inner-product search. |
 | `tuning` | Tuning policy for approximate methods: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. `"auto"` uses deterministic no-pilot defaults for the resolved method; `"cache"` and `"pilot"` opt into pilot tuning. |
 | `cagra_implementation` | CUDA CAGRA provider for this call. `NULL` uses `options(faissR.cagra_implementation = ...)`; `"auto"` prefers FAISS GPU CAGRA and falls back to direct RAPIDS cuVS CAGRA; `"faiss_gpu"` or `"cuvs"` force one provider for benchmark rows. This affects `backend = "cuda", method = "cagra"` and CUDA-auto routes that select CAGRA. |
+| `cagra_build_algo` | Direct RAPIDS cuVS CAGRA graph-build algorithm for this call. `NULL` uses `options(faissR.cuvs_cagra_build_algo = "auto")`; `"auto"` keeps the cuVS default, `"ivf_pq"` requests the IVF-PQ graph builder, `"nn_descent"` requests cuVS NN-descent graph construction, and `"iterative_cagra_search"` requests cuVS iterative CAGRA graph building. This is a CAGRA construction parameter, not a fallback to a different public method, and successful results record it in `route_parameters`. |
 | `output` | Distance storage type: `"double"` returns the default R numeric matrix; `"float"` returns `distances` as a `float::fl()`/`float32` matrix and records `distance_type = "float32"` plus `attr(result, "distance_type") = "float32"`. Float32 inputs and ordinary R double inputs on CPU FAISS Flat-style float-output requests use the float-pointer FAISS route, which constructs float distance payloads directly instead of first materializing R double distances, except for zero-row cosine/correlation correction. Float32-route results also expose `input_layout` and `input_owns_data`, so downstream packages can tell whether FAISS read a direct row-compatible float32 payload or used a one-time row-major adapter buffer. The `float` package is optional and used only when this output is requested or a float32 input object is supplied. |
 | `distances` | Optional alias for `output`; use `distances = "float"` when downstream code wants the returned distance matrix to remain float32. |
 | `n_threads` | Number of CPU worker threads for CPU/FAISS CPU backends. GPU backends ignore this argument. |
@@ -82,7 +83,7 @@ stored in
 | `"vamana"` | DiskANN/Vamana-style robust-pruned candidate graph implemented in faissR. CPU refines candidate rows with native CPU scoring; CUDA refines them with the native CUDA row-candidate kernel. cuVS Vamana is acknowledged for GPU build/serialization, but current cuVS does not expose KNN search [3,24]. |
 | `"nsg"` | Navigating Spreading-out Graph style approximate search. CPU uses faissR's native NSG-style self-KNN route for all public metrics so public calls avoid unsafe linked-FAISS graph construction. CUDA uses faissR's native NSG-style self-KNN route for all public metrics, with normalized cosine/correlation and shifted dot-product inner-product distances. Native NSG `tuning = "auto"` uses backend-specific shape/k/metric defaults and reads `faissR.cpu_nsg_*` or `faissR.cuda_nsg_*` options [16,21,29]. |
 | `"nndescent"` | NN-descent style approximate graph construction. CPU uses faissR's native NNDescent route by default. CUDA maps to direct cuVS NN-descent for Euclidean/L2 plus normalized cosine/correlation, and to faissR's native CUDA candidate-refinement route for raw inner-product self-KNN. FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
-| `"cagra"` | CUDA-only graph-search method. faissR prefers FAISS GPU CAGRA when FAISS is built with NVIDIA cuVS integration and otherwise uses direct cuVS CAGRA when available. Use `cagra_implementation = "faiss_gpu"` or `"cuvs"` to force the provider for a call, or `options(faissR.cagra_implementation = ...)` to set a session default; `"auto"` keeps the default FAISS-then-cuVS rule. It supports Euclidean/L2, cosine/correlation through normalized Euclidean graph search, and raw inner product through a MIPS-to-L2 extra-dimension transform [3,13-16]. |
+| `"cagra"` | CUDA-only graph-search method. faissR prefers FAISS GPU CAGRA when FAISS is built with NVIDIA cuVS integration and otherwise uses direct cuVS CAGRA when available. Use `cagra_implementation = "faiss_gpu"` or `"cuvs"` to force the provider for a call, or `options(faissR.cagra_implementation = ...)` to set a session default; `"auto"` keeps the default FAISS-then-cuVS rule. Direct cuVS CAGRA also exposes `cagra_build_algo` (`"auto"`, `"ivf_pq"`, `"nn_descent"`, or `"iterative_cagra_search"`) as an explicit graph-construction parameter. It supports Euclidean/L2, cosine/correlation through normalized Euclidean graph search, and raw inner product through a MIPS-to-L2 extra-dimension transform [3,13-16]. |
 
 ## `nn_without_self()`
 
@@ -90,7 +91,8 @@ stored in
 nn_without_self(data, k, backend = "auto",
                 method = "auto", metric = "euclidean",
                 tuning = "auto", cagra_implementation = NULL,
-                output = "double", distances = NULL, n_threads = NULL)
+                cagra_build_algo = NULL, output = "double",
+                distances = NULL, n_threads = NULL)
 ```
 
 | Argument | Description |
@@ -102,6 +104,7 @@ nn_without_self(data, k, backend = "auto",
 | `metric` | `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`; aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted. Correlation is centered cosine similarity, not raw inner product. |
 | `tuning` | Same tuning policy as `nn()`. |
 | `cagra_implementation` | CUDA CAGRA provider for this call. See `nn()`. |
+| `cagra_build_algo` | Direct RAPIDS cuVS CAGRA graph-build algorithm for this call. See `nn()`. |
 | `output` | Distance storage type: `"double"` for an R numeric distance matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the optional `float` package is installed. |
 | `distances` | Optional alias for `output`. |
 | `n_threads` | CPU worker threads for CPU/FAISS CPU backends. |

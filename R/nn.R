@@ -1214,7 +1214,8 @@ nn_compute <- function(data,
       as.integer(params$graph_degree),
       as.integer(params$intermediate_graph_degree),
       as.integer(params$search_width),
-      as.integer(params$itopk_size)
+      as.integer(params$itopk_size),
+      cagra_build_algo_preference()
     )
     requested_graph_degree <- if (is.null(params$requested_graph_degree)) out$requested_graph_degree else params$requested_graph_degree
     requested_intermediate_graph_degree <- if (is.null(params$requested_intermediate_graph_degree)) out$requested_intermediate_graph_degree else params$requested_intermediate_graph_degree
@@ -1243,6 +1244,8 @@ nn_compute <- function(data,
       intermediate_graph_degree = as.integer(out$intermediate_graph_degree),
       search_width = as.integer(out$search_width),
       itopk_size = as.integer(out$itopk_size),
+      cagra_build_algo = out$build_algo %||% cagra_build_algo_preference(),
+      nn_descent_niter = as.integer(out$nn_descent_niter %||% NA_integer_),
       requested_graph_degree = as.integer(requested_graph_degree),
       requested_intermediate_graph_degree = as.integer(requested_intermediate_graph_degree),
       requested_search_width = as.integer(requested_search_width),
@@ -1893,6 +1896,69 @@ set_call_cagra_implementation <- function(value) {
   do.call(
     on.exit,
     list(substitute(options(faissR.cagra_implementation = OLD), list(OLD = old)), add = TRUE),
+    envir = parent
+  )
+  invisible(TRUE)
+}
+
+normalize_cagra_build_algo_value <- function(value, default = "auto", arg = NULL, strict = FALSE) {
+  if (is.null(value)) value <- default
+  value <- tolower(gsub("[[:space:]-]+", "_", as.character(value)[1L]))
+  value <- gsub("_+", "_", value)
+  value <- gsub("^_|_$", "", value)
+  if (length(value) != 1L || is.na(value) || !nzchar(value)) value <- ""
+  aliases <- c(
+    auto = "auto",
+    default = "auto",
+    auto_select = "auto",
+    ivfpq = "ivf_pq",
+    ivf_pq = "ivf_pq",
+    nndescent = "nn_descent",
+    nn_descent = "nn_descent",
+    iterative = "iterative_cagra_search",
+    iterative_cagra = "iterative_cagra_search",
+    iterative_cagra_search = "iterative_cagra_search"
+  )
+  if (!value %in% names(aliases)) {
+    if (isTRUE(strict)) {
+      arg <- arg %||% "cagra_build_algo"
+      stop(
+        "`", arg, "` must be one of \"auto\", \"ivf_pq\", ",
+        "\"nn_descent\", or \"iterative_cagra_search\".",
+        call. = FALSE
+      )
+    }
+    return(default)
+  }
+  unname(aliases[[value]])
+}
+
+cagra_build_algo_preference <- function(default = "auto") {
+  normalize_cagra_build_algo_value(
+    faissr_option("cuvs_cagra_build_algo", default),
+    default = default
+  )
+}
+
+normalize_cagra_build_algo_arg <- function(value) {
+  if (is.null(value)) return(NULL)
+  normalize_cagra_build_algo_value(
+    value,
+    default = "auto",
+    arg = "cagra_build_algo",
+    strict = TRUE
+  )
+}
+
+set_call_cagra_build_algo <- function(value) {
+  value <- normalize_cagra_build_algo_arg(value)
+  if (is.null(value)) return(invisible(FALSE))
+  old <- getOption("faissR.cuvs_cagra_build_algo")
+  options(faissR.cuvs_cagra_build_algo = value)
+  parent <- parent.frame()
+  do.call(
+    on.exit,
+    list(substitute(options(faissR.cuvs_cagra_build_algo = OLD), list(OLD = old)), add = TRUE),
     envir = parent
   )
   invisible(TRUE)
@@ -6896,6 +6962,14 @@ grid_self_knn <- function(data,
 #'   CAGRA; `"faiss_gpu"` and `"cuvs"` force one provider for benchmarking.
 #'   This argument affects only public `backend = "cuda", method = "cagra"`
 #'   requests and CUDA-auto routes that select CAGRA.
+#' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm for
+#'   this call. `NULL` uses `options(faissR.cuvs_cagra_build_algo = "auto")`.
+#'   `"auto"` keeps the cuVS default, `"ivf_pq"` requests the IVF-PQ graph
+#'   builder, `"nn_descent"` requests cuVS NN-descent graph construction, and
+#'   `"iterative_cagra_search"` requests cuVS iterative CAGRA graph building.
+#'   This is a CAGRA construction parameter, not a fallback to a different
+#'   public method; successful results record the selected value in
+#'   `attr(result, "approximation")$cagra_build_algo`.
 #' @param output Distance storage type for the returned object. `"double"`
 #'   returns the default R numeric distance matrix. `"float"` returns
 #'   `distances` as a `float::fl()`/`float32` object and records
@@ -6946,10 +7020,12 @@ nn <- function(data,
                metric = c("euclidean", "cosine", "correlation", "inner_product"),
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                cagra_implementation = NULL,
+               cagra_build_algo = NULL,
                output = c("double", "float"),
                distances = NULL,
                n_threads = NULL) {
   set_call_cagra_implementation(cagra_implementation)
+  set_call_cagra_build_algo(cagra_build_algo)
   points_missing <- missing(points)
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
@@ -7017,6 +7093,8 @@ nn <- function(data,
 #'   is Euclidean-only.
 #' @param cagra_implementation CUDA CAGRA provider for this call. See
 #'   \code{\link{nn}()}.
+#' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm for
+#'   this call. See \code{\link{nn}()}.
 #' @param output Distance storage type: `"double"` for the default R numeric
 #'   matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
 #'   optional `float` package is installed. `float::fl()` input matrices use
@@ -7040,10 +7118,12 @@ nn_without_self <- function(data,
                             metric = c("euclidean", "cosine", "correlation", "inner_product"),
                             tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                             cagra_implementation = NULL,
+                            cagra_build_algo = NULL,
                             output = c("double", "float"),
                             distances = NULL,
                             n_threads = NULL) {
   set_call_cagra_implementation(cagra_implementation)
+  set_call_cagra_build_algo(cagra_build_algo)
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
   tuning <- normalize_nn_tuning(tuning)

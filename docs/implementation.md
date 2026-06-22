@@ -214,8 +214,11 @@ availability checks respect the forced provider for Euclidean, cosine,
 correlation, and inner-product CAGRA routes. Returned approximate NN objects
 record `cagra_provider` (`"faiss_gpu"` or `"cuvs"`) and
 `cagra_provider_option` in `attr(result, "approximation")`, so benchmark tables
-can compare FAISS GPU CAGRA and direct RAPIDS cuVS CAGRA without parsing the
-resolved backend string.
+can separate provider selection from the public `method = "cagra"` request.
+Direct RAPIDS cuVS CAGRA also records `cagra_build_algo`. The default
+`"auto"` leaves cuVS' build choice unchanged; `"ivf_pq"`, `"nn_descent"`, and
+`"iterative_cagra_search"` are explicit cuVS CAGRA graph-construction choices,
+not silent fallbacks to another public method.
 
 Direct cuVS CAGRA uses deterministic no-pilot defaults for `tuning = "auto"`.
 If the user explicitly requests `tuning = "cache"` or `tuning = "pilot"`, faissR

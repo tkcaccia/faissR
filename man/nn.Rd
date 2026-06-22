@@ -14,6 +14,7 @@ nn(
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   cagra_implementation = NULL,
+  cagra_build_algo = NULL,
   output = c("double", "float"),
   distances = NULL,
   n_threads = NULL
@@ -107,6 +108,15 @@ prefers FAISS GPU CAGRA when available and otherwise direct RAPIDS cuVS
 CAGRA; `"faiss_gpu"` and `"cuvs"` force one provider for benchmarking.
 This argument affects only public `backend = "cuda", method = "cagra"`
 requests and CUDA-auto routes that select CAGRA.}
+
+\item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm for
+this call. `NULL` uses `options(faissR.cuvs_cagra_build_algo = "auto")`.
+`"auto"` keeps the cuVS default, `"ivf_pq"` requests the IVF-PQ graph
+builder, `"nn_descent"` requests cuVS NN-descent graph construction, and
+`"iterative_cagra_search"` requests cuVS iterative CAGRA graph building.
+This is a CAGRA construction parameter, not a fallback to a different
+public method; successful results record the selected value in
+`attr(result, "approximation")$cagra_build_algo`.}
 
 \item{output}{Distance storage type for the returned object. `"double"`
 returns the default R numeric distance matrix. `"float"` returns

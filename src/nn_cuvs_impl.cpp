@@ -1,6 +1,7 @@
 #include <Rcpp.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -827,7 +828,8 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
                          int graph_degree,
                          int intermediate_graph_degree,
                          int search_width,
-                         int itopk_size) {
+                         int itopk_size,
+                         std::string build_algo) {
   validate_inputs(data, points, k, exclude_self);
   const bool same_storage = same_matrix_storage(data, points);
   const bool self_query = exclude_self || same_storage;
@@ -895,6 +897,26 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
   index_params.get()->graph_degree = static_cast<std::size_t>(graph_degree);
   index_params.get()->intermediate_graph_degree =
     static_cast<std::size_t>(intermediate_graph_degree);
+  std::string selected_build_algo = build_algo;
+  std::transform(selected_build_algo.begin(), selected_build_algo.end(), selected_build_algo.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (selected_build_algo == "auto" || selected_build_algo == "auto_select") {
+    index_params.get()->build_algo = AUTO_SELECT;
+    selected_build_algo = "auto";
+  } else if (selected_build_algo == "ivf_pq" || selected_build_algo == "ivfpq") {
+    index_params.get()->build_algo = IVF_PQ;
+    selected_build_algo = "ivf_pq";
+  } else if (selected_build_algo == "nn_descent" || selected_build_algo == "nndescent") {
+    index_params.get()->build_algo = NN_DESCENT;
+    index_params.get()->nn_descent_niter =
+      static_cast<std::size_t>(env_int("FAISSR_CUVS_CAGRA_NN_DESCENT_NITER", 20, 1));
+    selected_build_algo = "nn_descent";
+  } else if (selected_build_algo == "iterative" || selected_build_algo == "iterative_cagra_search") {
+    index_params.get()->build_algo = ITERATIVE_CAGRA_SEARCH;
+    selected_build_algo = "iterative_cagra_search";
+  } else {
+    Rcpp::stop("Unsupported cuVS CAGRA build algorithm: %s", build_algo);
+  }
 
   CagraIndex index;
   cuvs_check(
@@ -995,6 +1017,9 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
   out["intermediate_graph_degree"] = intermediate_graph_degree;
   out["search_width"] = search_width;
   out["itopk_size"] = itopk_size;
+  out["build_algo"] = selected_build_algo;
+  out["nn_descent_niter"] = selected_build_algo == "nn_descent" ?
+    static_cast<int>(index_params.get()->nn_descent_niter) : NA_INTEGER;
   out["requested_graph_degree"] = requested_graph_degree;
   out["requested_intermediate_graph_degree"] = requested_intermediate_graph_degree;
   out["requested_search_width"] = requested_search_width;

@@ -13,6 +13,7 @@ nn_without_self(
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   cagra_implementation = NULL,
+  cagra_build_algo = NULL,
   output = c("double", "float"),
   distances = NULL,
   n_threads = NULL
@@ -46,6 +47,9 @@ is Euclidean-only.}
 
 \item{cagra_implementation}{CUDA CAGRA provider for this call. See
 \code{\link{nn}()}.}
+
+\item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm for
+this call. See \code{\link{nn}()}.}
 
 \item{output}{Distance storage type: `"double"` for the default R numeric
 matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
