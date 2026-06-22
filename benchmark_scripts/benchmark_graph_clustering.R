@@ -723,7 +723,7 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       selected_resolution = cluster$selected_resolution %||% NA_real_,
       graph_resolved_backend = attr(graph_obj, "faissR_graph")$resolved_backend %||% graph_backend,
       cluster_resolved_backend = cluster_params$resolved_backend %||% (cluster$backend %||% cluster_backend),
-      graph_preflight_route = graph_meta$resolved_backend %||% graph_preflight_route,
+      graph_preflight_route = graph_preflight_route,
       cluster_preflight_route = cluster_preflight_route,
       graph_cached = graph_cached
     )
@@ -748,7 +748,7 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       peak_rss_gb = read_peak_rss_gb(),
       graph_n_vertices = graph_n_vertices,
       n_edges = n_edges,
-      graph_preflight_route = graph_meta$resolved_backend %||% graph_preflight_route,
+      graph_preflight_route = graph_preflight_route,
       cluster_preflight_route = cluster_preflight_route,
       graph_cached = graph_cached
     )

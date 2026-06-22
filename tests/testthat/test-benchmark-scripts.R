@@ -1816,6 +1816,48 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
   expect_equal(out$n_threads, c(2L, 2L))
 })
 
+test_that("graph benchmark success rows keep preflight and resolved routes separate", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  set.seed(1771)
+  x <- rbind(
+    matrix(rnorm(40, -2, 0.2), ncol = 4),
+    matrix(rnorm(40, 2, 0.2), ncol = 4)
+  )
+  labels <- rep(c("a", "b"), each = 10L)
+  graph_obj <- knn_graph(x, k = 4L, backend = "cpu", weight = "distance")
+  graph_meta <- attr(graph_obj, "faissR_graph")
+  graph_meta$resolved_backend <- "faiss_hnsw"
+  attr(graph_obj, "faissR_graph") <- graph_meta
+
+  row <- env$run_cluster_one(
+    data_obj = list(data = x, labels = labels),
+    dataset_name = "A",
+    graph_obj = graph_obj,
+    graph_sec = 0.1,
+    graph_cached = TRUE,
+    graph_n_vertices = graph_obj$n_vertices,
+    n_edges = graph_obj$n_edges,
+    k = 4L,
+    graph_backend = "auto",
+    cluster_backend = "cpu",
+    method = "louvain",
+    weight = "distance",
+    n_threads = 2L,
+    target_mode = "none",
+    seed = 1L,
+    timeout = 60L,
+    cycle = 1L
+  )
+
+  expect_equal(row$status, "success")
+  expect_equal(row$graph_resolved_backend, "faiss_hnsw")
+  expect_equal(row$graph_preflight_route, env$graph_build_preflight_route("auto"))
+  expect_false(identical(row$graph_preflight_route, row$graph_resolved_backend))
+})
+
 test_that("graph benchmark recommendations preserve integer target counts", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
