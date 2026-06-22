@@ -19,6 +19,51 @@ split_arg <- function(x, default) {
   trimws(strsplit(x, ",", fixed = TRUE)[[1L]])
 }
 
+canonical_metric_key <- function(metric) {
+  aliases <- c(
+    euclidean = "euclidean",
+    l2 = "euclidean",
+    cosine = "cosine",
+    cos = "cosine",
+    correlation = "correlation",
+    cor = "correlation",
+    pearson = "correlation",
+    inner_product = "inner_product",
+    innerproduct = "inner_product",
+    ip = "inner_product",
+    dot = "inner_product",
+    dot_product = "inner_product",
+    dotproduct = "inner_product"
+  )
+  key <- tolower(trimws(as.character(metric)))
+  key <- gsub("[[:space:]-]+", "_", key)
+  out <- unname(aliases[key])
+  out[is.na(out)] <- key[is.na(out)]
+  out
+}
+
+validate_metric_values <- function(metrics, arg_name = "metrics") {
+  raw <- trimws(as.character(metrics))
+  raw <- raw[nzchar(raw)]
+  metrics <- unique(canonical_metric_key(raw))
+  valid <- valid_graph_metrics()
+  invalid <- metrics[!metrics %in% valid]
+  if (length(invalid)) {
+    stop(
+      "`", arg_name, "` must contain only faissR public metrics: ",
+      paste(valid, collapse = ", "),
+      ". Invalid value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  if (!length(metrics)) {
+    stop("`", arg_name, "` must contain at least one metric.", call. = FALSE)
+  }
+  metrics
+}
+
 required_positive_int_arg <- function(x, arg) {
   value <- suppressWarnings(as.numeric(x))
   if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 1L ||
@@ -868,7 +913,7 @@ graph_methods <- validate_choice_values(
   "graph_methods"
 )
 metrics <- validate_choice_values(
-  split_arg(args$metrics, paste(default_graph_metrics(), collapse = ",")),
+  validate_metric_values(split_arg(args$metrics, paste(default_graph_metrics(), collapse = ","))),
   valid_graph_metrics(),
   "metrics"
 )

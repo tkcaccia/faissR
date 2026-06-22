@@ -1683,6 +1683,22 @@ test_that("graph benchmark target cluster mode is explicit", {
     env$validate_choice_values(c("euclidean", "cosine"), env$valid_graph_metrics(), "metrics"),
     c("euclidean", "cosine")
   )
+  expect_equal(
+    env$canonical_metric_key(c("l2", "pearson", "ip", "dot-product")),
+    c("euclidean", "correlation", "inner_product", "inner_product")
+  )
+  expect_equal(
+    env$validate_metric_values(c("l2", "pearson", "ip", "dot-product")),
+    c("euclidean", "correlation", "inner_product")
+  )
+  expect_error(
+    env$validate_metric_values("manhattan"),
+    "Invalid value\\(s\\): manhattan"
+  )
+  expect_error(
+    env$validate_metric_values(character()),
+    "at least one metric"
+  )
   expect_error(
     env$validate_choice_values("manhattan", env$valid_graph_metrics(), "metrics"),
     "Invalid value\\(s\\): manhattan"

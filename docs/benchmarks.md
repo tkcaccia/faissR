@@ -328,7 +328,9 @@ values stop before the benchmark starts. Method, graph-backend, and
 cluster-backend selectors are also validated against the public benchmark
 choices before any dataset is loaded. `--graph_methods` accepts the same public
 NN method labels as `nn()` and `knn_graph()`, while `--metrics` accepts the four
-public NN metrics. Unsupported graph method/backend/metric combinations are
+public NN metrics and the same aliases as `nn()`, such as `l2`, `pearson`,
+`cor`, `ip`, and `dot-product`; aliases are canonicalized before preflight and
+reporting. Unsupported graph method/backend/metric combinations are
 recorded as expected skips using `nn_capabilities()` and data-shape checks such
 as the 2D/3D requirement for `method = "grid"` and the more-than-100-row FAISS
 NSG construction requirement for `method = "nsg"`. When
