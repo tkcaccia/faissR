@@ -811,7 +811,7 @@ nn_compute <- function(data,
       search_data <- metric_inputs$data
       search_points <- metric_inputs$points
     }
-    params <- cuvs_cagra_params(nrow(data), k)
+    params <- cuvs_cagra_params(nrow(data), k, p = ncol(data))
     out <- nn_faiss_gpu_cagra_cpp(
       search_data,
       search_points,
@@ -1176,7 +1176,7 @@ nn_compute <- function(data,
       search_data <- metric_inputs$data
       search_points <- metric_inputs$points
     }
-    params <- cuvs_cagra_params(nrow(data), k)
+    params <- cuvs_cagra_params(nrow(data), k, p = ncol(data))
     tuning_metadata <- NULL
     if (isTRUE(cuvs_cagra_should_tune(search_data, k, self_query, tuning = tuning))) {
       tuned <- cuvs_cagra_tune_params(search_data, k, params, tuning = tuning)
@@ -6063,23 +6063,33 @@ cuvs_requested_option_int <- function(name, default) {
   as.integer(value)
 }
 
-cuvs_cagra_params <- function(n, k) {
+cuvs_cagra_params <- function(n, k, p = NA_integer_) {
   n <- as.integer(n)
   k <- as.integer(k)
+  p <- suppressWarnings(as.integer(p))
   small_k <- length(k) == 1L && !is.na(k) && k <= 10L
   large_k <- length(k) == 1L && !is.na(k) && k >= 100L
   large_n <- length(n) == 1L && !is.na(n) && n >= 1000000L
+  small_n <- length(n) == 1L && !is.na(n) && n <= 5000L
+  high_dim <- length(p) == 1L && !is.na(p) && p >= 1024L
+  compact_build <- isTRUE(small_k) && (isTRUE(small_n) || isTRUE(high_dim))
   manual <- cuvs_cagra_manual_params()
   rule <- if (isTRUE(large_n) && isTRUE(large_k)) {
     "large_n_large_k_graph_recall"
   } else if (isTRUE(large_n)) {
     "large_n_graph_recall"
+  } else if (isTRUE(compact_build)) {
+    "small_k_compact_cagra_build"
   } else if (isTRUE(small_k)) {
     "small_k_graph_speed"
   } else {
     "balanced_graph_search"
   }
-  default_graph_degree <- max(64L, k + 1L)
+  default_graph_degree <- if (isTRUE(compact_build)) {
+    max(16L, k + 1L)
+  } else {
+    max(64L, k + 1L)
+  }
   requested_graph_degree <- cuvs_requested_option_int("graph_degree", default_graph_degree)
   graph_degree <- cuvs_option_int(
     "graph_degree",
@@ -6087,7 +6097,11 @@ cuvs_cagra_params <- function(n, k) {
     min_value = k + 1L,
     max_value = max(1L, n - 1L)
   )
-  default_intermediate_graph_degree <- max(128L, graph_degree * 2L)
+  default_intermediate_graph_degree <- if (isTRUE(compact_build)) {
+    max(32L, graph_degree * 2L)
+  } else {
+    max(128L, graph_degree * 2L)
+  }
   requested_intermediate_graph_degree <- cuvs_requested_option_int(
     "intermediate_graph_degree",
     default_intermediate_graph_degree
@@ -6105,7 +6119,11 @@ cuvs_cagra_params <- function(n, k) {
     min_value = 0L,
     max_value = 1024L
   )
-  default_itopk_size <- max(64L, graph_degree)
+  default_itopk_size <- if (isTRUE(compact_build)) {
+    max(32L, graph_degree, k)
+  } else {
+    max(64L, graph_degree)
+  }
   requested_itopk_size <- cuvs_requested_option_int("itopk_size", default_itopk_size)
   itopk_size <- cuvs_option_int(
     "itopk_size",
@@ -6125,6 +6143,9 @@ cuvs_cagra_params <- function(n, k) {
     tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_shape_k",
     tuning_rule = rule,
     tuning_large_n = isTRUE(large_n),
+    tuning_small_n = isTRUE(small_n),
+    tuning_high_dim = isTRUE(high_dim),
+    tuning_compact_build = isTRUE(compact_build),
     tuning_small_k = isTRUE(small_k),
     tuning_large_k = isTRUE(large_k)
   )
