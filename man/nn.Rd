@@ -91,7 +91,9 @@ returns the default R numeric distance matrix. `"float"` returns
 `distances` as a `float::fl()`/`float32` object and records
 `distance_type = "float32"` plus
 `attr(result, "distance_type") = "float32"`; this requires the optional
-`float` package.}
+`float` package. When `data`/`points` are `float::fl()` matrices, the
+current float32 input route uses CPU FAISS Flat for public
+`method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests.}
 
 \item{distances}{Optional alias for `output`, kept for callers that prefer
 `distances = "double"` or `distances = "float"` to describe the returned
@@ -101,9 +103,10 @@ distance storage type.}
 ignore this argument.}
 }
 \value{
-A list with integer matrix `indices`, `distances`, and stable metadata fields
-  `index_base`, `distance_type`, `metric`, and `backend_used`.
-  Indices are 1-based. The requested backend/method, tuning policy, resolved
+A list with integer matrix `indices`, `distances`, and stable
+  metadata fields `index_base`, `distance_type`, `metric`, and
+  `backend_used`. Indices are 1-based. The requested backend/method,
+  tuning policy, resolved
   backend, metric, exact/approximate flag, and self-query flag are stored in
   attributes including `attr(result, "requested_backend")`,
   `attr(result, "requested_method")`, `attr(result, "tuning")`, and

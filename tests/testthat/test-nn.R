@@ -178,6 +178,16 @@ test_that("float32 input routes through FAISS Flat when float is installed", {
 
   ref <- nn_without_self(x, k = 2L, backend = "cpu", method = "flat", n_threads = 2L)
   out <- nn_without_self(xf, k = 2L, backend = "cpu", method = "flat", n_threads = 2L)
+  auto <- nn_without_self(xf, k = 2L, backend = "cpu", method = "auto", n_threads = 2L)
+  exact <- nn_without_self(xf, k = 2L, backend = "cpu", method = "exact", n_threads = 2L)
+  fout <- nn_without_self(
+    xf,
+    k = 2L,
+    backend = "cpu",
+    method = "auto",
+    output = "float",
+    n_threads = 2L
+  )
 
   expect_equal(out$indices, ref$indices)
   expect_equal(out$distances, ref$distances, tolerance = 1e-6)
@@ -185,9 +195,19 @@ test_that("float32 input routes through FAISS Flat when float is installed", {
   expect_equal(out$index_base, 1L)
   expect_equal(out$distance_type, "double")
   expect_equal(out$metric, "euclidean")
-  expect_equal(out$backend_used, "faiss")
+  expect_equal(out$backend_used, "faiss_flat_l2")
   expect_equal(attr(out, "distance_type"), "double")
-  expect_equal(attr(out, "resolved_backend"), "faiss")
+  expect_equal(attr(out, "resolved_backend"), "faiss_flat_l2")
+  expect_equal(auto$indices, ref$indices)
+  expect_equal(auto$distances, ref$distances, tolerance = 1e-6)
+  expect_equal(auto$backend_used, "faiss_flat_l2")
+  expect_equal(attr(auto, "resolved_backend"), "faiss_flat_l2")
+  expect_equal(exact$indices, ref$indices)
+  expect_equal(exact$distances, ref$distances, tolerance = 1e-6)
+  expect_equal(exact$backend_used, "faiss_flat_l2")
+  expect_true(inherits(fout$distances, "float32"))
+  expect_equal(fout$distance_type, "float32")
+  expect_equal(attr(fout, "distance_type"), "float32")
 })
 
 test_that("float32 FAISS Flat input supports normalized metrics", {
@@ -274,6 +294,7 @@ test_that("float32 C-callable returns stable KNN metadata", {
   ), ncol = 2, byrow = TRUE))
   out <- faissR_test_float32_callable_run(x)
 
+  expect_s3_class(out, "faissR_nn")
   expect_equal(dim(out$indices), c(4L, 2L))
   expect_equal(out$index_base, 1L)
   expect_equal(out$distance_type, "double")
@@ -330,6 +351,7 @@ test_that("float32 C-callable can return float distances", {
   ), ncol = 2, byrow = TRUE))
   out <- faissR_test_float32_callable_run_output(x)
 
+  expect_s3_class(out, "faissR_nn")
   expect_equal(dim(out$indices), c(4L, 2L))
   expect_true(inherits(out$distances, "float32"))
   expect_equal(out$index_base, 1L)

@@ -72,13 +72,23 @@ nn_compute <- function(data,
     }
     n_threads <- normalize_nn_threads(n_threads)
     metric <- normalize_nn_metric(metric)
+    if (backend %in% c("auto", "cpu", "cpu_auto", "faiss", "cpu_faiss",
+                       "cpu_faiss_flat", "faiss_flat", "faiss_flat_l2")) {
+      backend <- switch(metric,
+        inner_product = "faiss_flat_ip",
+        cosine = "faiss_flat_cosine",
+        correlation = "faiss_flat_correlation",
+        "faiss_flat_l2"
+      )
+    }
     if (!backend %in% c("faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat",
                         "faiss_flat_l2", "faiss_flat_ip",
                         "faiss_flat_cosine", "faiss_flat_correlation")) {
       stop(
-        "float32 input currently supports the FAISS Flat routes only. ",
-        "Use `method = \"flat\"` with `backend = \"cpu\"`, or pass an ",
-        "ordinary R numeric matrix for other methods.",
+        "float32 input currently supports CPU FAISS Flat routes only. ",
+        "Use `backend = \"cpu\"` with `method = \"auto\"`, `\"exact\"`, ",
+        "`\"bruteforce\"`, or `\"flat\"`, or pass an ordinary R numeric ",
+        "matrix for other methods.",
         call. = FALSE
       )
     }
@@ -109,7 +119,7 @@ nn_compute <- function(data,
         inner_product = "faiss_flat_ip",
         cosine = "faiss_flat_cosine",
         correlation = "faiss_flat_correlation",
-        "faiss"
+        "faiss_flat_l2"
       ),
       k,
       self_query,
@@ -5505,15 +5515,20 @@ grid_self_knn <- function(data,
 #' @param output Distance storage type for the returned object. `"double"`
 #'   returns the default R numeric distance matrix. `"float"` returns
 #'   `distances` as a `float::fl()`/`float32` object and records
+#'   `distance_type = "float32"` plus
 #'   `attr(result, "distance_type") = "float32"`; this requires the optional
-#'   `float` package.
+#'   `float` package. When `data`/`points` are `float::fl()` matrices, the
+#'   current float32 input route uses CPU FAISS Flat for public
+#'   `method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests.
 #' @param distances Optional alias for `output`, kept for callers that prefer
 #'   `distances = "double"` or `distances = "float"` to describe the returned
 #'   distance storage type.
 #' @param n_threads Number of CPU worker threads for CPU backends. GPU backends
 #'   ignore this argument.
-#' @return A list with integer matrix `indices` and numeric matrix `distances`.
-#'   Indices are 1-based. The requested backend/method, tuning policy, resolved
+#' @return A list with integer matrix `indices`, `distances`, and stable
+#'   metadata fields `index_base`, `distance_type`, `metric`, and
+#'   `backend_used`. Indices are 1-based. The requested backend/method,
+#'   tuning policy, resolved
 #'   backend, metric, exact/approximate flag, and self-query flag are stored in
 #'   attributes including `attr(result, "requested_backend")`,
 #'   `attr(result, "requested_method")`, `attr(result, "tuning")`, and
@@ -5602,12 +5617,15 @@ nn <- function(data,
 #'   tuned default for the resolved method.
 #' @param output Distance storage type: `"double"` for the default R numeric
 #'   matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
-#'   optional `float` package is installed.
+#'   optional `float` package is installed. `float::fl()` input matrices use
+#'   the same CPU FAISS Flat float32 route described in \code{\link{nn}()}.
 #' @param distances Optional alias for `output`.
 #' @param n_threads Number of CPU worker threads used by CPU backends.
-#' @return A `faissR_nn` object with `indices` and `distances` matrices. Auto
-#'   requests also include `attr(result, "auto_selection")`, a static
-#'   shape/k/metric decision record that does not run pilot tuning.
+#' @return A `faissR_nn` object with `indices`, `distances`, and stable
+#'   metadata fields `index_base`, `distance_type`, `metric`, and
+#'   `backend_used`. Auto requests also include `attr(result,
+#'   "auto_selection")`, a static shape/k/metric decision record that does
+#'   not run pilot tuning.
 #' @export
 nn_without_self <- function(data,
                             k,

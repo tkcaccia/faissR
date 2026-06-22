@@ -43,18 +43,19 @@ tuned default for the resolved method.}
 
 \item{output}{Distance storage type: `"double"` for the default R numeric
 matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
-optional `float` package is installed. Results expose `distance_type` both as a
-list field and as `attr(result, "distance_type")`.}
+optional `float` package is installed. `float::fl()` input matrices use
+the same CPU FAISS Flat float32 route described in \code{\link{nn}()}.}
 
 \item{distances}{Optional alias for `output`.}
 
 \item{n_threads}{Number of CPU worker threads used by CPU backends.}
 }
 \value{
-A `faissR_nn` object with `indices`, `distances`, and stable metadata fields
-`index_base`, `distance_type`, `metric`, and `backend_used`. Auto requests also
-include `attr(result, "auto_selection")`, a static shape/k/metric decision
-record that does not run pilot tuning.
+A `faissR_nn` object with `indices`, `distances`, and stable
+  metadata fields `index_base`, `distance_type`, `metric`, and
+  `backend_used`. Auto requests also include `attr(result,
+  "auto_selection")`, a static shape/k/metric decision record that does
+  not run pilot tuning.
 }
 \description{
 `nn_without_self()` is a convenience wrapper around `nn()` for the common

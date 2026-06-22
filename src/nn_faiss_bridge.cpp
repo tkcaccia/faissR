@@ -240,6 +240,7 @@ List faissR_nn_float32_call_impl(SEXP x,
   out.attr("backend_used") = backend_used;
   out.attr("resolved_backend") = backend_used;
   out.attr("distance_type") = Rcpp::as<std::string>(out["distance_type"]);
+  out.attr("class") = Rcpp::CharacterVector::create("faissR_nn", "list");
   return out;
 }
 
