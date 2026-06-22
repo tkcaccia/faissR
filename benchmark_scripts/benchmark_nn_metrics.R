@@ -984,11 +984,12 @@ suppressPackageStartupMessages(library(faissR))
 capabilities <- faissR::nn_capabilities()
 
 config <- data.frame(
-  key = c("data_root", "out_dir", "datasets", "backends", "methods", "metrics",
-          "k_values", "threads", "timeout", "cycles", "quality_n", "quality_max_ops",
-          "recall_threshold", "seed"),
+  key = c("data_root", "out_dir", "available_datasets", "datasets", "backends",
+          "methods", "metrics", "k_values", "threads", "timeout", "cycles",
+          "quality_n", "quality_max_ops", "recall_threshold", "seed"),
   value = c(
-    data_root, out_dir, paste(datasets, collapse = ","), paste(backends, collapse = ","),
+    data_root, out_dir, paste(available_datasets, collapse = ","),
+    paste(datasets, collapse = ","), paste(backends, collapse = ","),
     paste(methods, collapse = ","), paste(metrics, collapse = ","),
     paste(k_values, collapse = ","), n_threads, timeout, cycles, quality_n,
     format(quality_max_ops, scientific = TRUE), recall_threshold, seed
@@ -1172,7 +1173,7 @@ materials <- c(
   "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities()` and the public backend resolver, then recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
   "`method = \"sparse\"` is included in the default public method list but is recorded as an expected skip for dense benchmark datasets, because it is intended for sparse `Matrix` inputs and should not force dense data through a sparse conversion.",
   "`method = \"grid\"` is included in the default public method list but is recorded as an expected skip for datasets outside two or three columns, because it is a native low-dimensional spatial search route.",
-  "`nn_metric_benchmark_config.csv` records the run configuration. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, recall metadata, and resolved backend fields.",
+  "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, recall metadata, and resolved backend fields.",
   "`nn_metric_capabilities.csv` stores the design-level capability table used for that preflight. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
   "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k.",

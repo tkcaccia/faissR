@@ -104,6 +104,8 @@ test_that("benchmark dataset defaults use the requested real and simulated datas
       paste(c(env$dataset_index("/data")$dataset, script$simulated), collapse = ",")
     )
     expect_equal(default_datasets, c(real_datasets, script$simulated), info = name)
+    expect_true(grepl("\"available_datasets\"", script_text, fixed = TRUE), info = name)
+    expect_true(grepl("accepted by the dataset selector", script_text, fixed = TRUE), info = name)
   }
 })
 

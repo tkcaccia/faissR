@@ -698,9 +698,11 @@ backends <- validate_choice_values(
 suppressPackageStartupMessages(library(faissR))
 
 config <- data.frame(
-  key = c("data_root", "out_dir", "datasets", "methods", "backends", "centers",
-          "threads", "timeout", "cycles", "ari_tolerance", "max_iter", "n_init", "tol", "tuning", "seed"),
-  value = c(data_root, out_dir, paste(datasets, collapse = ","), paste(methods, collapse = ","),
+  key = c("data_root", "out_dir", "available_datasets", "datasets", "methods",
+          "backends", "centers", "threads", "timeout", "cycles", "ari_tolerance",
+          "max_iter", "n_init", "tol", "tuning", "seed"),
+  value = c(data_root, out_dir, paste(available_datasets, collapse = ","),
+            paste(datasets, collapse = ","), paste(methods, collapse = ","),
             paste(backends, collapse = ","), fallback_centers, n_threads, timeout,
             cycles, ari_tolerance, max_iter, n_init, tol, tuning, seed),
   stringsAsFactors = FALSE
@@ -856,7 +858,7 @@ materials <- c(
   sprintf("- ARI tolerance for cycle recommendations: `%s`", ari_tolerance),
   sprintf("- Requested centers fallback: `%s`; `--centers` must be a positive integer and labels override this fallback when available", fallback_centers),
   "",
-  "`kmeans_benchmark_config.csv` records the run configuration. `kmeans_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, selected parameters, ARI, within-cluster sums of squares, and backend metadata.",
+  "`kmeans_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `kmeans_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, selected parameters, ARI, within-cluster sums of squares, and backend metadata.",
   "The result table records cycle, elapsed time, peak resident memory when available, requested backend, resolved backend, implementation backend used, total within-cluster sum of squares, iterations, selected k-means parameters, tuning policy, and ARI against dataset labels when labels are available.",
   "`kmeans_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, elapsed time, and total within-cluster sum of squares for a compact backwards-compatible summary. `kmeans_best_by_dataset_centers.csv` keeps the best successful row per dataset/centers combination so different requested cluster counts remain auditable.",
   "`kmeans_fast_vs_stats.csv` compares successful `fast_kmeans()` rows with successful `stats::kmeans` rows for the same dataset, cycle, and number of centers, recording speedup, ARI delta, and withinss ratio. Speedups, ARI deltas, and withinss ratios are `NA` when the required timing or quality values are missing or invalid. The `cycle` column supports repeated benchmark cycles such as `--cycles=10` for speed/ARI tuning.",
