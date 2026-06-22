@@ -362,6 +362,8 @@ result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threa
                        resolved_backend = NA_character_,
                        implementation_backend = NA_character_,
                        preflight_route = NA_character_,
+                       route_parameters = NA_character_,
+                       tuning_status = NA_character_,
                        exact = NA, recall_at_k = NA_real_,
                        median_recall_at_k = NA_real_,
                        min_recall_at_k = NA_real_,
@@ -387,6 +389,8 @@ result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threa
     resolved_backend = resolved_backend,
     implementation_backend = implementation_backend,
     preflight_route = preflight_route,
+    route_parameters = route_parameters,
+    tuning_status = tuning_status,
     exact = exact,
     recall_at_k = recall_at_k,
     median_recall_at_k = median_recall_at_k,
@@ -409,6 +413,67 @@ nn_implementation_backend <- function(out) {
     faiss$backend %||%
     attr(out, "backend") %||%
     NA_character_
+}
+
+compact_route_metadata_value <- function(x) {
+  if (is.null(x)) return(NA_character_)
+  if (is.data.frame(x) || is.matrix(x) || is.array(x)) return(NA_character_)
+  if (is.list(x)) return(NA_character_)
+  if (!length(x)) return(NA_character_)
+  if (length(x) > 1L) {
+    x <- paste(as.character(x), collapse = "|")
+  } else {
+    x <- as.character(x)
+  }
+  if (!nzchar(x) || identical(x, "NA")) NA_character_ else x
+}
+
+nn_route_parameters <- function(out) {
+  sources <- list(
+    approximation = attr(out, "approximation") %||% list(),
+    faiss = attr(out, "faiss") %||% list(),
+    cuvs = attr(out, "cuvs") %||% list(),
+    spatial_index = attr(out, "spatial_index") %||% list(),
+    sparse = attr(out, "sparse") %||% list()
+  )
+  keys <- c(
+    "strategy", "library", "accelerator", "metric", "transform", "role",
+    "nlist", "nprobe", "requested_nlist", "requested_nprobe",
+    "pq_m", "pq_nbits", "requested_pq_m", "requested_pq_nbits",
+    "pq_dim", "pq_bits", "requested_pq_dim", "requested_pq_bits",
+    "m", "ef_construction", "ef_search", "requested_m",
+    "requested_ef_construction", "requested_ef_search",
+    "r", "search_l", "build_type", "gk", "requested_r",
+    "requested_search_l", "requested_build_type",
+    "graph_degree", "intermediate_graph_degree", "max_iterations",
+    "search_width", "itopk_size", "requested_graph_degree",
+    "requested_intermediate_graph_degree", "requested_search_width",
+    "requested_itopk_size", "bins_per_dim", "n_cells",
+    "index_type", "search_batch_size", "n_threads"
+  )
+  pieces <- character()
+  for (source_name in names(sources)) {
+    source <- sources[[source_name]]
+    if (!is.list(source) || !length(source)) next
+    for (key in keys[keys %in% names(source)]) {
+      value <- compact_route_metadata_value(source[[key]])
+      if (!is.na(value)) {
+        pieces <- c(pieces, paste0(source_name, ".", key, "=", value))
+      }
+    }
+  }
+  if (!length(pieces)) return(NA_character_)
+  paste(unique(pieces), collapse = ";")
+}
+
+nn_tuning_status <- function(out) {
+  approx <- attr(out, "approximation") %||% list()
+  tuning <- approx$tuning
+  if (is.null(tuning)) return(NA_character_)
+  status <- tuning$status %||% tuning$policy %||% tuning$basis %||% NA_character_
+  status <- compact_route_metadata_value(status)
+  if (is.na(status)) return("present")
+  status
 }
 
 dominant_value <- function(x) {
@@ -466,6 +531,8 @@ summarize_nn_cycles <- function(ok) {
       resolved_backend = dominant_value(x$resolved_backend),
       implementation_backend = dominant_value(x$implementation_backend),
       preflight_route = dominant_value(x$preflight_route),
+      route_parameters = dominant_value(x$route_parameters),
+      tuning_status = dominant_value(x$tuning_status),
       recall_reference = dominant_value(x$recall_reference),
       stringsAsFactors = FALSE
     )
@@ -517,10 +584,12 @@ compare_auto_to_recommendations <- function(cycle_summary, recommendations) {
   keys <- c("dataset", "backend", "metric", "k")
   auto_keep <- c(
     keys, "method", "result_backend", "resolved_backend", "implementation_backend",
-    "preflight_route", "n_threads", "success_cycles", "median_elapsed_sec",
+    "preflight_route", "route_parameters", "tuning_status",
+    "n_threads", "success_cycles", "median_elapsed_sec",
     "median_recall_at_k", "min_recall_at_k", "median_min_recall_at_k",
     "recall_reference", "median_recall_query_n"
   )
+  auto_keep <- auto_keep[auto_keep %in% names(cycle_summary)]
   rec_keep <- c(auto_keep, "recommendation_basis")
   auto <- auto[, auto_keep, drop = FALSE]
   recommendations <- recommendations[, rec_keep, drop = FALSE]
@@ -549,12 +618,16 @@ compare_auto_to_fastest <- function(ok, fastest) {
   keys <- c("dataset", "backend", "metric", "k", "cycle")
   auto_keep <- c(
     keys, "result_backend", "resolved_backend", "implementation_backend",
-    "elapsed_sec", "recall_at_k", "recall_reference", "recall_query_n"
+    "route_parameters", "tuning_status", "elapsed_sec", "recall_at_k",
+    "recall_reference", "recall_query_n"
   )
   fastest_keep <- c(
     keys, "method", "result_backend", "resolved_backend", "implementation_backend",
-    "elapsed_sec", "recall_at_k", "recall_reference", "recall_query_n"
+    "route_parameters", "tuning_status", "elapsed_sec", "recall_at_k",
+    "recall_reference", "recall_query_n"
   )
+  auto_keep <- auto_keep[auto_keep %in% names(ok)]
+  fastest_keep <- fastest_keep[fastest_keep %in% names(fastest)]
   auto_rows <- auto_rows[, auto_keep, drop = FALSE]
   fastest <- fastest[, fastest_keep, drop = FALSE]
   names(auto_rows)[match(auto_keep[-seq_along(keys)], names(auto_rows))] <- paste0(
@@ -919,6 +992,8 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
       resolved_backend = attr(out, "resolved_backend") %||% attr(out, "backend") %||% NA_character_,
       implementation_backend = nn_implementation_backend(out),
       preflight_route = preflight_route,
+      route_parameters = nn_route_parameters(out),
+      tuning_status = nn_tuning_status(out),
       exact = isTRUE(attr(out, "exact")),
       recall_at_k = recall$recall_at_k[[1L]],
       median_recall_at_k = recall$median_recall_at_k[[1L]],
@@ -1175,15 +1250,15 @@ materials <- c(
   "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities()` and the public backend resolver, then recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
   "`method = \"sparse\"` is included in the default public method list but is recorded as an expected skip for dense benchmark datasets, because it is intended for sparse `Matrix` inputs and should not force dense data through a sparse conversion.",
   "`method = \"grid\"` is included in the default public method list but is recorded as an expected skip for datasets outside two or three columns, because it is a native low-dimensional spatial search route.",
-  "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, recall metadata, and resolved backend fields.",
+  "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, and resolved backend fields.",
   "`nn_metric_capabilities.csv` stores the design-level capability table used for that preflight. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
-  "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label.",
+  "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes, and `tuning_status` records backend tuning status when present.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",
   "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches. Speed ratios and recall gaps are reported as `NA` when the required timing or recall values are missing or invalid.",
-  "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/metric/k and reports success counts, median/min/max elapsed time, recall stability, CPU thread count, preflight route, and the dominant implementation backend.",
+  "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/metric/k and reports success counts, median/min/max elapsed time, recall stability, CPU thread count, preflight route, compact route-parameter metadata, tuning status, and the dominant implementation backend.",
   "`nn_metric_recommendations_from_cycles.csv` selects one method per dataset/backend/metric/k. When recall is available, it selects the fastest method whose median recall is at least `recall_threshold`; tied median times are broken by higher median recall, minimum recall, and median minimum recall. If no method reaches the threshold it selects the best-recall row and marks it as below threshold, breaking tied median recall by minimum recall, median minimum recall, and then speed. When recall is unavailable for the group, it selects the fastest successful row and marks the recommendation as speed-only.",
-  "`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate `method = \"auto\"` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median recall gap, CPU thread count, preflight route, and backend/implementation agreement. Speed ratios and recall gaps are `NA` when the required timing or recall values are unavailable or invalid.",
+  "`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate `method = \"auto\"` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median recall gap, CPU thread count, preflight route, route-parameter/tuning metadata, and backend/implementation agreement. Speed ratios and recall gaps are `NA` when the required timing or recall values are unavailable or invalid.",
   "`nn_metric_best_by_dataset_backend_metric_k_cycle.csv` stores the best row within each cycle using the same recall-threshold rule as the cycle recommendations: fastest above threshold, best recall below threshold, and fastest when recall is unavailable; `nn_metric_best_by_dataset_backend_metric_k.csv` keeps the overall best row across cycles with the same rule for backward-compatible summaries.",
   "The script does not add benchmark-only helpers to the package API."
 )

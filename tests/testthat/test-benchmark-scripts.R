@@ -587,6 +587,8 @@ test_that("NN metric auto comparison preserves recommendation basis", {
     resolved_backend = c("faiss_hnsw", "faiss_hnsw"),
     implementation_backend = c("faiss_hnsw", "faiss_hnsw"),
     preflight_route = c("faiss_hnsw", "faiss_hnsw"),
+    route_parameters = c("approximation.m=16;approximation.ef_search=150", "approximation.m=16;approximation.ef_search=150"),
+    tuning_status = c(NA_character_, NA_character_),
     n_threads = c(2L, 2L),
     success_cycles = c(2L, 2L),
     median_elapsed_sec = c(5, 4),
@@ -606,8 +608,34 @@ test_that("NN metric auto comparison preserves recommendation basis", {
   expect_true("recommended_recommendation_basis" %in% names(out))
   expect_equal(out$auto_preflight_route, "faiss_hnsw")
   expect_equal(out$recommended_preflight_route, "faiss_hnsw")
+  expect_equal(out$auto_route_parameters, "approximation.m=16;approximation.ef_search=150")
+  expect_equal(out$recommended_route_parameters, "approximation.m=16;approximation.ef_search=150")
   expect_equal(out$auto_n_threads, 2L)
   expect_equal(out$recommended_n_threads, 2L)
+})
+
+test_that("NN metric benchmark extracts compact backend route parameters", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  out <- list(indices = matrix(1L, 1L, 1L), distances = matrix(0, 1L, 1L))
+  attr(out, "approximation") <- list(
+    strategy = "faiss_IndexHNSWFlat",
+    backend = "faiss_hnsw",
+    library = "faiss",
+    m = 16L,
+    ef_search = 150L,
+    tuning = list(status = "target_met", results = data.frame(recall = 0.99))
+  )
+  attr(out, "spatial_index") <- list(strategy = "ignored_grid", bins_per_dim = 32L)
+
+  params <- env$nn_route_parameters(out)
+  expect_match(params, "approximation.strategy=faiss_IndexHNSWFlat", fixed = TRUE)
+  expect_match(params, "approximation.m=16", fixed = TRUE)
+  expect_match(params, "approximation.ef_search=150", fixed = TRUE)
+  expect_match(params, "spatial_index.bins_per_dim=32", fixed = TRUE)
+  expect_equal(env$nn_tuning_status(out), "target_met")
 })
 
 test_that("NN metric auto comparison guards speed ratios and recall gaps", {

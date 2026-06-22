@@ -135,7 +135,9 @@ rules. `--threads`, `--timeout`, `--cycles`, `--quality_n`, and
 `nn_metric_cycle_summary.csv` aggregates successful rows across cycles by
 dataset/backend/method/metric/k and reports success counts, median/min/max
 elapsed time, recall stability, CPU thread count, preflight route, and the
-dominant implementation backend.
+dominant implementation backend. New runs also preserve compact
+`route_parameters` metadata from FAISS/cuVS/native result attributes and
+`tuning_status` when a backend reports tuning.
 `nn_metric_recommendations_from_cycles.csv` emits one row per
 dataset/backend/metric/k. When recall is available, it selects the fastest
 method whose median recall is at least the configured `recall_threshold`; if no
@@ -149,9 +151,9 @@ unavailable for the group, it selects the fastest successful row and marks
 `nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate
 `method = "auto"` rows with those recommendations and reports median speed
 ratio, median recall gap, CPU thread count, preflight route,
-backend/implementation agreement, and the recommendation basis used for the
-recommended row. Speed ratios and recall gaps are `NA` when the required timing
-or recall values are unavailable or invalid.
+route-parameter/tuning metadata, backend/implementation agreement, and the
+recommendation basis used for the recommended row. Speed ratios and recall gaps
+are `NA` when the required timing or recall values are unavailable or invalid.
 `nn_metric_best_by_dataset_backend_metric_k_cycle.csv` keeps the best row within
 each cycle using the same recall-threshold rule: fastest above threshold,
 best recall below threshold, and fastest when recall is unavailable.
