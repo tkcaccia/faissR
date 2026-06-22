@@ -33,6 +33,7 @@ script_dir <- dirname(normalizePath(script_file, mustWork = FALSE))
 faiss_env_dir <- Sys.getenv("FAISSR_ENV_DIR", "")
 cuda_lib_dir <- Sys.getenv("FAISSR_CUDA_LIB_DIR", Sys.getenv("CUDA_HOME", ""))
 cuda_lib_dir <- if (nzchar(cuda_lib_dir)) file.path(cuda_lib_dir, "targets/x86_64-linux/lib") else ""
+process_ld_preload <- Sys.getenv("LD_PRELOAD", unset = "")
 library_candidates <- c(
   if (nzchar(faiss_env_dir)) file.path(faiss_env_dir, "lib") else "",
   if (nzchar(faiss_env_dir)) file.path(faiss_env_dir, "targets/x86_64-linux/lib") else "",
@@ -43,22 +44,17 @@ faiss_library_path <- paste(library_candidates[nzchar(library_candidates)], coll
 preload_candidates <- c(
   Sys.getenv("FAISSR_LD_PRELOAD"),
   if (nzchar(faiss_env_dir)) file.path(faiss_env_dir, "lib/libstdc++.so.6") else "",
-  Sys.getenv("LD_PRELOAD")
+  process_ld_preload
 )
 preload_candidates <- unique(preload_candidates[nzchar(preload_candidates) & file.exists(preload_candidates)])
 faiss_preload <- paste(preload_candidates, collapse = ":")
-env_updates <- list()
-if (nzchar(faiss_env_dir)) env_updates$CONDA_PREFIX <- faiss_env_dir
-if (nzchar(faiss_library_path)) env_updates$LD_LIBRARY_PATH <- faiss_library_path
-if (nzchar(faiss_preload)) env_updates$LD_PRELOAD <- faiss_preload
-if (length(env_updates)) do.call(Sys.setenv, env_updates)
 
 preload_missing_from_process <- function(preload) {
   if (!nzchar(preload)) return(FALSE)
   if (identical(Sys.getenv("FAISSR_PRELOAD_REEXEC", unset = ""), "1")) return(FALSE)
   requested <- strsplit(preload, ":", fixed = TRUE)[[1L]]
   requested <- requested[nzchar(requested)]
-  current <- strsplit(Sys.getenv("LD_PRELOAD", unset = ""), ":", fixed = TRUE)[[1L]]
+  current <- strsplit(process_ld_preload, ":", fixed = TRUE)[[1L]]
   current <- current[nzchar(current)]
   length(setdiff(requested, current)) > 0L
 }
@@ -73,6 +69,12 @@ if (preload_missing_from_process(faiss_preload)) {
   status <- system2("Rscript", c(script_file, commandArgs(trailingOnly = TRUE)), env = reexec_env)
   quit(save = "no", status = status)
 }
+
+env_updates <- list()
+if (nzchar(faiss_env_dir)) env_updates$CONDA_PREFIX <- faiss_env_dir
+if (nzchar(faiss_library_path)) env_updates$LD_LIBRARY_PATH <- faiss_library_path
+if (nzchar(faiss_preload)) env_updates$LD_PRELOAD <- faiss_preload
+if (length(env_updates)) do.call(Sys.setenv, env_updates)
 
 source(file.path(script_dir, "source.R"))
 
