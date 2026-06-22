@@ -25,11 +25,16 @@ test_that("fast_kmeans works on the CPU path", {
   expect_true(fit$backend %in% c("cpu", "faiss"))
   expect_equal(fit$parameters$requested_backend, "cpu")
   expect_equal(fit$parameters$resolved_backend, "cpu")
+  expect_equal(fit$hit_max_iter, fit$iter >= fit$parameters$max_iter)
+  expect_equal(fit$converged, !isTRUE(fit$hit_max_iter))
+  expect_equal(fit$parameters$hit_max_iter, fit$hit_max_iter)
+  expect_equal(fit$parameters$converged, fit$converged)
   printed <- capture.output(print(fit))
   expect_true(any(grepl("faissR k-means", printed, fixed = TRUE)))
   expect_true(any(grepl("backend:", printed, fixed = TRUE)))
   expect_true(any(grepl("requested backend: cpu", printed, fixed = TRUE)))
   expect_true(any(grepl("resolved backend: cpu", printed, fixed = TRUE)))
+  expect_true(any(grepl("converged before max_iter:", printed, fixed = TRUE)))
   expect_true(any(grepl("effective: max_iter=20", printed, fixed = TRUE)))
 })
 
@@ -167,6 +172,13 @@ test_that("kmeans auto parameter helper canonicalizes tuning labels", {
     ),
     "`tuning`"
   )
+})
+
+test_that("kmeans max-iteration helper is conservative for missing values", {
+  expect_true(faissR:::kmeans_hit_max_iter(10L, 10L))
+  expect_false(faissR:::kmeans_hit_max_iter(9L, 10L))
+  expect_true(is.na(faissR:::kmeans_hit_max_iter(NA_integer_, 10L)))
+  expect_true(is.na(faissR:::kmeans_hit_max_iter(10L, NA_integer_)))
 })
 
 test_that("fast_kmeans auto tuning is shape and center-count aware for benchmark shapes", {

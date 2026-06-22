@@ -409,6 +409,11 @@ extra tuning jobs. `result$parameters$tuning$selection` is the compact
 no-pilot audit record: it stores the requested and predicted backends,
 runtime capability flags, shape/work estimates, effective `max_iter`, `n_init`,
 and `tol`, and `slow_tuning = FALSE`.
+The returned object also records `hit_max_iter` and `converged`, derived from
+the effective iteration cap and the backend-reported iteration count. These
+flags are conservative convergence diagnostics for benchmark tuning: they do
+not run extra checks, but they make repeated under-iteration visible in cycle
+summaries.
 `seed` controls CPU/statistics and FAISS k-means paths. The direct cuVS C API
 path currently does not expose an explicit seed in the stable params structure,
 so repeated direct-cuVS runs use backend-controlled initialization and benchmark

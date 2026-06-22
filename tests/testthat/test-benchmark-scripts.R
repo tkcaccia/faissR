@@ -1328,6 +1328,9 @@ test_that("k-means benchmark centers argument is explicit", {
   expect_equal(env$resolve_kmeans_tol("0.001", 1e-4), 0.001)
   expect_error(env$resolve_kmeans_tol("many", 1e-4), "non-negative numeric")
   expect_error(env$resolve_kmeans_tol("-0.1", 1e-4), "non-negative numeric")
+  expect_true(env$kmeans_hit_max_iter(25L, 25L))
+  expect_false(env$kmeans_hit_max_iter(24L, 25L))
+  expect_true(is.na(env$kmeans_hit_max_iter(NA_integer_, 25L)))
 })
 
 test_that("k-means benchmark mirrors fast_kmeans auto CUDA shape gate", {
@@ -1398,6 +1401,8 @@ test_that("k-means benchmark records static selection metadata", {
     tot_withinss = 10,
     ari = 0.9,
     max_iter = 100L,
+    converged = TRUE,
+    hit_max_iter = FALSE,
     n_init = 5L,
     tol = 1e-4,
     tuning_policy = "auto",
@@ -1419,6 +1424,8 @@ test_that("k-means benchmark records static selection metadata", {
   expect_false(row$selection_slow_tuning)
   expect_equal(row$selection_predicted_backend, "cpu")
   expect_equal(row$selection_reason, "small_cpu_preferred")
+  expect_true(row$converged)
+  expect_false(row$hit_max_iter)
 
   summary <- env$summarize_kmeans_cycles(row)
   expect_equal(summary$selection_policy, "static_shape_center_backend_selector")
@@ -1428,6 +1435,8 @@ test_that("k-means benchmark records static selection metadata", {
   expect_equal(summary$median_selection_work, 1200)
   expect_equal(summary$median_selection_nbytes, 3200)
   expect_equal(summary$median_selection_n_per_center, 33.3)
+  expect_false(summary$any_hit_max_iter)
+  expect_true(summary$all_converged)
 })
 
 test_that("k-means benchmark recommendations are grouped by dataset and centers", {

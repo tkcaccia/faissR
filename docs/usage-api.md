@@ -240,8 +240,9 @@ fast_kmeans(data, centers, backend = "auto",
 | `tuning` | `"auto"` uses deterministic rules based on `nrow(data)`, `ncol(data)`, `centers`, and `n / centers`; small many-cluster jobs can use extra restarts without pilot runs, while large/high-dimensional jobs use cheaper defaults. `"fixed"`, `"off"`, and `"none"` keep the historical defaults unless explicit parameter values are supplied. |
 
 Returns cluster labels, centers, within-cluster sums of squares, cluster sizes,
-iteration count, backend, and parameters, including the k-means tuning rule used
-plus shape metadata, and whether `max_iter`, `n_init`, and `tol` were
+iteration count, `converged`, `hit_max_iter`, backend, and parameters,
+including the k-means tuning rule used plus shape metadata, and whether
+`max_iter`, `n_init`, and `tol` were
 auto-selected or supplied explicitly. `parameters$tuning$effective` records the
 final values used after explicit overrides and `"auto"` defaults have been
 resolved; `parameters$tuning$effective_max_iter`,
@@ -250,6 +251,8 @@ expose the same values as flat fields for benchmark summaries.
 `parameters$tuning$backend_policy` records the deterministic `backend = "auto"`
 shape decision, including `prefer_cuda`, `reason`, estimated work, input bytes,
 and `n_per_center`.
+`hit_max_iter` records whether the run reached the effective iteration cap; this
+helps benchmark cycles identify fast settings that may be under-iterating.
 `parameters$requested_backend` records the public backend argument,
 `parameters$resolved_backend` records the public device policy after resolving
 `"auto"`, and `backend` records the implementation

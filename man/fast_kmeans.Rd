@@ -60,7 +60,8 @@ tolerance defaults.
 }
 \value{
 A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
-  `size`, `iter`, `backend`, and `parameters`. `backend` records the
+  `size`, `iter`, `converged`, `hit_max_iter`, `backend`, and
+  `parameters`. `backend` records the
   implementation that actually ran, while `parameters$requested_backend` and
   `parameters$resolved_backend` record the public backend request and device
   policy result. `parameters$tuning` records the deterministic k-means policy,
@@ -74,7 +75,10 @@ A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
   deterministic shape rule used by `backend = "auto"` to decide whether CUDA
   has enough estimated work or input size to offset transfer overhead.
   `parameters$tuning$selection` stores the static no-pilot backend and
-  effective-parameter decision used for benchmark auditing.
+  effective-parameter decision used for benchmark auditing. `hit_max_iter`
+  records whether the run reached the effective iteration cap, and
+  `converged` is the corresponding conservative convergence flag used by
+  benchmark summaries.
 }
 \description{
 Run k-means using the fastest available backend. CPU acceleration uses

@@ -462,7 +462,8 @@ Rscript benchmark_scripts/benchmark_nn_metrics.R \
 `benchmark_scripts/benchmark_kmeans.R` compares `fast_kmeans()` with
 `backend = "auto"`, `"cpu"`, and `"cuda"` against base `stats::kmeans` by
 default. It records elapsed time, peak resident memory when available, backend
-used, total within-cluster sum of squares, iterations, selected k-means
+used, total within-cluster sum of squares, iterations, `converged`,
+`hit_max_iter`, selected k-means
 parameters, tuning policy, benchmark cycle, and ARI against `dataset$labels` when labels are
 available. The result table separates `requested_backend`, `resolved_backend`,
 and `backend_used`, so `"auto"` device policy and the actual implementation
@@ -491,8 +492,9 @@ repeat speed/ARI measurements without hand-launching the same benchmark
 multiple times. `kmeans_cycle_summary.csv`
 aggregates successful rows across cycles by dataset/method/backend/centers and
 reports success counts, median/min/max elapsed time, ARI stability, withinss
-stability, iteration counts, selected parameter medians, deterministic tuning
-rule/shape metadata, and resolved backend metadata.
+stability, iteration counts, whether any cycle hit `max_iter`, whether all
+cycles converged before the iteration cap, selected parameter medians,
+deterministic tuning rule/shape metadata, and resolved backend metadata.
 `kmeans_best_by_dataset.csv` keeps a compact best successful row per dataset
 after ranking by ARI, elapsed time, and total within-cluster sum of squares for
 backward-compatible summaries. `kmeans_best_by_dataset_centers.csv` keeps the

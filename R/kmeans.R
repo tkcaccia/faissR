@@ -35,7 +35,8 @@
 #'   `"fixed"`, `"off"`, and `"none"` use the historical fixed defaults unless
 #'   `max_iter`, `n_init`, or `tol` are explicitly supplied.
 #' @return A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
-#'   `size`, `iter`, `backend`, and `parameters`. `backend` records the
+#'   `size`, `iter`, `converged`, `hit_max_iter`, `backend`, and
+#'   `parameters`. `backend` records the
 #'   implementation that actually ran, while `parameters$requested_backend` and
 #'   `parameters$resolved_backend` record the public backend request and device
 #'   policy result. `parameters$tuning` records the deterministic k-means policy,
@@ -49,7 +50,10 @@
 #'   deterministic shape rule used by `backend = "auto"` to decide whether CUDA
 #'   has enough estimated work or input size to offset transfer overhead.
 #'   `parameters$tuning$selection` stores the static no-pilot backend and
-#'   effective-parameter decision used for benchmark auditing.
+#'   effective-parameter decision used for benchmark auditing. `hit_max_iter`
+#'   records whether the run reached the effective iteration cap, and
+#'   `converged` is the corresponding conservative convergence flag used by
+#'   benchmark summaries.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' fit <- fast_kmeans(x, centers = 3, backend = "cpu", n_threads = 2)
@@ -183,6 +187,7 @@ fast_kmeans <- function(data,
     tot.withinss = as.numeric(stats_fit$tot.withinss),
     size = as.integer(stats_fit$size),
     iter = as.integer(stats_fit$iter),
+    hit_max_iter = kmeans_hit_max_iter(stats_fit$iter, max_iter),
     backend = "cpu",
     backend_library = "stats",
     parameters = list(
@@ -198,6 +203,9 @@ fast_kmeans <- function(data,
       tuning = auto_params
     )
   )
+  out$converged <- if (is.na(out$hit_max_iter)) NA else !isTRUE(out$hit_max_iter)
+  out$parameters$hit_max_iter <- out$hit_max_iter
+  out$parameters$converged <- out$converged
   class(out) <- c("faissR_kmeans", "kmeans")
   out
 }
@@ -455,8 +463,26 @@ finish_fast_kmeans <- function(out,
   if (!is.null(requested_backend)) out$parameters$requested_backend <- requested_backend
   if (!is.null(resolved_backend)) out$parameters$resolved_backend <- resolved_backend
   if (!is.null(tuning_metadata)) out$parameters$tuning <- tuning_metadata
+  effective_max_iter <- out$parameters$max_iter %||%
+    out$parameters$tuning$effective$max_iter %||%
+    out$parameters$tuning$effective_max_iter %||%
+    NA_integer_
+  out$hit_max_iter <- kmeans_hit_max_iter(out$iter, effective_max_iter)
+  out$converged <- if (is.na(out$hit_max_iter)) NA else !isTRUE(out$hit_max_iter)
+  out$parameters$hit_max_iter <- out$hit_max_iter
+  out$parameters$converged <- out$converged
   class(out) <- c("faissR_kmeans", "kmeans")
   out
+}
+
+kmeans_hit_max_iter <- function(iter, max_iter) {
+  iter <- suppressWarnings(as.integer(iter))
+  max_iter <- suppressWarnings(as.integer(max_iter))
+  if (length(iter) != 1L || length(max_iter) != 1L ||
+      is.na(iter) || is.na(max_iter) || max_iter < 1L) {
+    return(NA)
+  }
+  iter >= max_iter
 }
 
 #' @export
@@ -475,6 +501,9 @@ print.faissR_kmeans <- function(x, ...) {
   cat("  clusters: ", length(x$size), "\n", sep = "")
   cat("  observations: ", length(x$cluster), "\n", sep = "")
   cat("  iterations: ", x$iter %||% NA_integer_, "\n", sep = "")
+  if (!is.null(x$converged) && !is.na(x$converged)) {
+    cat("  converged before max_iter: ", if (isTRUE(x$converged)) "yes" else "no", "\n", sep = "")
+  }
   if (!is.null(x$tot.withinss)) {
     cat("  total withinss: ", format(x$tot.withinss, digits = 4), "\n", sep = "")
   }
