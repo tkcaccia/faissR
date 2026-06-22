@@ -3210,6 +3210,31 @@ test_that("FAISS GPU IVF tuning cache can round-trip without CUDA", {
   expect_equal(cached$tuning$cache, "disk")
 })
 
+test_that("FAISS GPU IVF tuner calls the current metric-aware C++ signature", {
+  source_file <- test_path("../../R/nn.R")
+  if (!file.exists(source_file)) {
+    skip("Package source file is not available in this installed-package test context.")
+  }
+  source <- paste(readLines(source_file, warn = FALSE), collapse = "\n")
+
+  expect_true(grepl(
+    paste(
+      "compare_k,",
+      "          as.integer\\(cand\\$nlist\\),",
+      "          as.integer\\(cand\\$nprobe\\),",
+      "          \"euclidean\",",
+      "          \"euclidean\",",
+      "          FALSE",
+      sep = "\n"
+    ),
+    source
+  ))
+  expect_false(grepl(
+    "compare_k,\\n          as.integer\\(cand\\$nlist\\),\\n          as.integer\\(cand\\$nprobe\\),\\n          FALSE",
+    source
+  ))
+})
+
 test_that("cuVS backend reports unavailable runtime clearly", {
   skip_if(cuvs_available())
 

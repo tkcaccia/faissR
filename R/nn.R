@@ -4854,6 +4854,8 @@ faiss_gpu_ivf_tune_params <- function(data, k, base_params, tuning = "auto") {
           compare_k,
           as.integer(cand$nlist),
           as.integer(cand$nprobe),
+          "euclidean",
+          "euclidean",
           FALSE
         ),
         error = function(e) e
