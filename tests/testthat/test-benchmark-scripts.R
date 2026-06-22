@@ -1218,12 +1218,21 @@ test_that("k-means benchmark records runtime capability preflight", {
   expect_s3_class(caps, "data.frame")
   expect_true(all(c(
     "method", "backend", "runtime_available", "resolved_backend",
-    "runtime_notes", "cuda_available", "faiss_gpu_available", "cuvs_available"
+    "runtime_reason", "runtime_notes", "cuda_available",
+    "faiss_gpu_available", "cuvs_available"
   ) %in% names(caps)))
   expect_equal(caps$backend, c("auto", "cpu", "cuda", "stats"))
 
   cuda <- env$kmeans_runtime_status("fast_kmeans", "cuda", caps)
   expect_equal(cuda$resolved_backend, "cuda")
+  expect_equal(
+    cuda$runtime_reason,
+    env$kmeans_cuda_runtime_reason(
+      cuda_available_value = faissR::cuda_available(),
+      faiss_gpu_available_value = env$kmeans_faiss_gpu_available(),
+      cuvs_available_value = faissR::cuvs_available()
+    )
+  )
   expect_equal(
     cuda$runtime_available,
     isTRUE(faissR::cuda_available()) &&
@@ -1236,6 +1245,31 @@ test_that("k-means benchmark records runtime capability preflight", {
   } else {
     expect_match(skip_reason, "CUDA k-means")
   }
+
+  expect_equal(
+    env$kmeans_cuda_runtime_reason(
+      cuda_available_value = FALSE,
+      faiss_gpu_available_value = TRUE,
+      cuvs_available_value = TRUE
+    ),
+    "missing_cuda_runtime"
+  )
+  expect_match(
+    env$kmeans_cuda_runtime_notes("missing_cuda_runtime"),
+    "CUDA runtime"
+  )
+  expect_equal(
+    env$kmeans_cuda_runtime_reason(
+      cuda_available_value = TRUE,
+      faiss_gpu_available_value = FALSE,
+      cuvs_available_value = FALSE
+    ),
+    "missing_gpu_kmeans_backend"
+  )
+  expect_match(
+    env$kmeans_cuda_runtime_notes("missing_gpu_kmeans_backend"),
+    "FAISS GPU k-means|cuVS k-means"
+  )
 })
 
 test_that("k-means benchmark validates method and backend selectors", {

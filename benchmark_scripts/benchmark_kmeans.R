@@ -793,11 +793,39 @@ kmeans_faiss_gpu_available <- function() {
   is.function(helper) && isTRUE(helper())
 }
 
+kmeans_cuda_runtime_reason <- function(cuda_available_value = faissR::cuda_available(),
+                                       faiss_gpu_available_value = kmeans_faiss_gpu_available(),
+                                       cuvs_available_value = faissR::cuvs_available()) {
+  if (!isTRUE(cuda_available_value)) {
+    return("missing_cuda_runtime")
+  }
+  if (!isTRUE(faiss_gpu_available_value) && !isTRUE(cuvs_available_value)) {
+    return("missing_gpu_kmeans_backend")
+  }
+  "available"
+}
+
+kmeans_cuda_runtime_notes <- function(reason) {
+  reason <- as.character(reason)[1L]
+  switch(
+    reason,
+    available = "CUDA k-means route is available.",
+    missing_cuda_runtime = "CUDA k-means requires a CUDA runtime/device; CUDA is unavailable in the current runtime.",
+    missing_gpu_kmeans_backend = "CUDA k-means requires FAISS GPU k-means or direct cuVS k-means; neither route is available in this build/runtime.",
+    "CUDA k-means requires a CUDA runtime plus FAISS GPU k-means or direct cuVS k-means."
+  )
+}
+
 kmeans_runtime_capabilities <- function() {
   cuda_runtime <- isTRUE(faissR::cuda_available())
   faiss_gpu <- isTRUE(kmeans_faiss_gpu_available())
   cuvs <- isTRUE(faissR::cuvs_available())
-  cuda_ok <- cuda_runtime && (faiss_gpu || cuvs)
+  cuda_reason <- kmeans_cuda_runtime_reason(
+    cuda_available_value = cuda_runtime,
+    faiss_gpu_available_value = faiss_gpu,
+    cuvs_available_value = cuvs
+  )
+  cuda_ok <- identical(cuda_reason, "available")
   data.frame(
     method = c("fast_kmeans", "fast_kmeans", "fast_kmeans", "stats"),
     backend = c("auto", "cpu", "cuda", "stats"),
@@ -815,6 +843,12 @@ kmeans_runtime_capabilities <- function() {
       "FAISS GPU k-means or direct cuVS k-means",
       "stats::kmeans"
     ),
+    runtime_reason = c(
+      if (cuda_ok) "auto_shape_gate_cuda_available" else "auto_resolves_cpu_no_cuda_kmeans",
+      "available",
+      cuda_reason,
+      "available"
+    ),
     runtime_notes = c(
       if (cuda_ok) {
         "Auto may select CUDA for sufficiently large shape/work estimates."
@@ -822,11 +856,7 @@ kmeans_runtime_capabilities <- function() {
         "Auto resolves to CPU because no k-means-capable CUDA route is available."
       },
       "CPU k-means route is available.",
-      if (cuda_ok) {
-        "CUDA k-means route is available."
-      } else {
-        "CUDA k-means requires a CUDA runtime plus FAISS GPU k-means or direct cuVS k-means."
-      },
+      kmeans_cuda_runtime_notes(cuda_reason),
       "Base stats::kmeans is available."
     ),
     cuda_available = c(cuda_runtime, cuda_runtime, cuda_runtime, cuda_runtime),
