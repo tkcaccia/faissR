@@ -1238,6 +1238,14 @@ test_that("k-means benchmark mirrors fast_kmeans auto CUDA shape gate", {
   expect_true(env$kmeans_auto_prefers_cuda(n = 70000L, p = 784L, centers = 10L))
   expect_true(env$kmeans_auto_prefers_cuda(n = 500000L, p = 32L, centers = 10L))
   expect_true(env$kmeans_auto_prefers_cuda(n = NULL, p = NULL, centers = NULL))
+
+  small_policy <- env$kmeans_auto_backend_policy(n = 120L, p = 4L, centers = 3L)
+  expect_false(small_policy$prefer_cuda)
+  expect_equal(small_policy$reason, "small_cpu_preferred")
+
+  work_policy <- env$kmeans_auto_backend_policy(n = 70000L, p = 784L, centers = 10L)
+  expect_true(work_policy$prefer_cuda)
+  expect_equal(work_policy$reason, "work_at_least_1e8")
 })
 
 test_that("k-means benchmark fallback auto params mirror package metadata", {

@@ -70,7 +70,9 @@ A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
   been resolved; `parameters$tuning$effective_max_iter`,
   `parameters$tuning$effective_n_init`, and
   `parameters$tuning$effective_tol` expose the same values as flat fields for
-  benchmark summaries.
+  benchmark summaries. `parameters$tuning$backend_policy` records the
+  deterministic shape rule used by `backend = "auto"` to decide whether CUDA
+  has enough estimated work or input size to offset transfer overhead.
 }
 \description{
 Run k-means using the fastest available backend. CPU acceleration uses

@@ -497,6 +497,11 @@ skip when no k-means-capable CUDA route is available, and it can also resolve
 to CPU for small k-means jobs where the deterministic shape gate estimates that
 GPU launch/copy overhead would dominate. Unexpected runtime errors remain
 failed rows and are not replaced with CPU timings.
+The package records the same decision in
+`parameters$tuning$backend_policy`, including a reason string such as
+`small_cpu_preferred`, `work_at_least_1e8`, `input_at_least_256MiB`, or
+`large_high_dimensional_input`, so benchmark summaries can explain auto CPU/CUDA
+selection without running extra pilot jobs.
 
 Example CPU run:
 

@@ -45,7 +45,9 @@
 #'   been resolved; `parameters$tuning$effective_max_iter`,
 #'   `parameters$tuning$effective_n_init`, and
 #'   `parameters$tuning$effective_tol` expose the same values as flat fields for
-#'   benchmark summaries.
+#'   benchmark summaries. `parameters$tuning$backend_policy` records the
+#'   deterministic shape rule used by `backend = "auto"` to decide whether CUDA
+#'   has enough estimated work or input size to offset transfer overhead.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' fit <- fast_kmeans(x, centers = 3, backend = "cpu", n_threads = 2)
@@ -103,6 +105,11 @@ fast_kmeans <- function(data,
   auto_params$effective_n_init <- as.integer(n_init)
   auto_params$effective_tol <- as.numeric(tol)
   streaming_batch_size <- normalize_kmeans_streaming_batch_size(streaming_batch_size)
+  auto_params$backend_policy <- kmeans_auto_backend_policy(
+    n = nrow(x),
+    p = ncol(x),
+    centers = centers
+  )
 
   backend <- resolve_fast_kmeans_backend(
     backend,
@@ -203,8 +210,18 @@ resolve_fast_kmeans_backend <- function(backend,
 }
 
 kmeans_auto_prefers_cuda <- function(n, p, centers) {
+  isTRUE(kmeans_auto_backend_policy(n, p, centers)$prefer_cuda)
+}
+
+kmeans_auto_backend_policy <- function(n, p, centers) {
   if (is.null(n) || is.null(p) || is.null(centers)) {
-    return(TRUE)
+    return(list(
+      prefer_cuda = TRUE,
+      reason = "unknown_shape",
+      work = NA_real_,
+      nbytes = NA_real_,
+      n_per_center = NA_real_
+    ))
   }
   n <- suppressWarnings(as.double(n))
   p <- suppressWarnings(as.double(p))
@@ -212,11 +229,34 @@ kmeans_auto_prefers_cuda <- function(n, p, centers) {
   if (length(n) != 1L || length(p) != 1L || length(centers) != 1L ||
       !is.finite(n) || !is.finite(p) || !is.finite(centers) ||
       n <= 0 || p <= 0 || centers <= 0) {
-    return(TRUE)
+    return(list(
+      prefer_cuda = TRUE,
+      reason = "invalid_shape_assume_cuda_capable",
+      work = NA_real_,
+      nbytes = NA_real_,
+      n_per_center = NA_real_
+    ))
   }
   work <- n * p * centers
   nbytes <- n * p * 8
-  work >= 1e8 || nbytes >= 256 * 1024^2 || (n >= 50000 && p >= 128)
+  n_per_center <- n / centers
+  prefer <- work >= 1e8 || nbytes >= 256 * 1024^2 || (n >= 50000 && p >= 128)
+  reason <- if (work >= 1e8) {
+    "work_at_least_1e8"
+  } else if (nbytes >= 256 * 1024^2) {
+    "input_at_least_256MiB"
+  } else if (n >= 50000 && p >= 128) {
+    "large_high_dimensional_input"
+  } else {
+    "small_cpu_preferred"
+  }
+  list(
+    prefer_cuda = isTRUE(prefer),
+    reason = reason,
+    work = as.numeric(work),
+    nbytes = as.numeric(nbytes),
+    n_per_center = as.numeric(n_per_center)
+  )
 }
 
 run_cuda_kmeans <- function(x,

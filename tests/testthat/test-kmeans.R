@@ -55,6 +55,11 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(auto$parameters$tuning$small_many_centers, FALSE)
   expect_true(is.finite(auto$parameters$tuning$work))
   expect_true(is.finite(auto$parameters$tuning$n_per_center))
+  expect_false(auto$parameters$tuning$backend_policy$prefer_cuda)
+  expect_equal(auto$parameters$tuning$backend_policy$reason, "small_cpu_preferred")
+  expect_true(is.finite(auto$parameters$tuning$backend_policy$work))
+  expect_true(is.finite(auto$parameters$tuning$backend_policy$nbytes))
+  expect_true(is.finite(auto$parameters$tuning$backend_policy$n_per_center))
 
   auto_backend <- fast_kmeans(x, centers = 3, backend = "auto", seed = 12, n_threads = 2)
   expect_equal(auto_backend$parameters$requested_backend, "auto")
@@ -238,6 +243,29 @@ test_that("fast_kmeans auto backend is shape-aware", {
   expect_true(faissR:::kmeans_auto_prefers_cuda(n = 70000L, p = 784L, centers = 10L))
   expect_true(faissR:::kmeans_auto_prefers_cuda(n = 500000L, p = 32L, centers = 10L))
   expect_true(faissR:::kmeans_auto_prefers_cuda(n = NULL, p = NULL, centers = NULL))
+
+  small_policy <- faissR:::kmeans_auto_backend_policy(n = 120L, p = 4L, centers = 3L)
+  expect_false(small_policy$prefer_cuda)
+  expect_equal(small_policy$reason, "small_cpu_preferred")
+  expect_equal(small_policy$work, 1440)
+  expect_equal(small_policy$nbytes, 3840)
+  expect_equal(small_policy$n_per_center, 40)
+
+  work_policy <- faissR:::kmeans_auto_backend_policy(n = 70000L, p = 784L, centers = 10L)
+  expect_true(work_policy$prefer_cuda)
+  expect_equal(work_policy$reason, "work_at_least_1e8")
+
+  memory_policy <- faissR:::kmeans_auto_backend_policy(n = 9000000L, p = 4L, centers = 2L)
+  expect_true(memory_policy$prefer_cuda)
+  expect_equal(memory_policy$reason, "input_at_least_256MiB")
+
+  high_dim_policy <- faissR:::kmeans_auto_backend_policy(n = 60000L, p = 128L, centers = 2L)
+  expect_true(high_dim_policy$prefer_cuda)
+  expect_equal(high_dim_policy$reason, "large_high_dimensional_input")
+
+  unknown_policy <- faissR:::kmeans_auto_backend_policy(n = NULL, p = NULL, centers = NULL)
+  expect_true(unknown_policy$prefer_cuda)
+  expect_equal(unknown_policy$reason, "unknown_shape")
 
   expect_equal(
     faissR:::resolve_fast_kmeans_backend(

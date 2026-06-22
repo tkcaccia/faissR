@@ -388,6 +388,12 @@ overhead. Small jobs resolve to CPU even on CUDA-capable machines;
 `backend = "cpu"` forces the CPU route; `backend = "cuda"` requires an
 accelerated route and errors if unavailable. This makes k-means behavior
 consistent with `nn()`, `knn_graph()`, and `graph_cluster()`.
+The gate is deterministic and recorded in
+`result$parameters$tuning$backend_policy`, with a `reason` such as
+`"small_cpu_preferred"`, `"work_at_least_1e8"`,
+`"input_at_least_256MiB"`, or `"large_high_dimensional_input"` so benchmark
+summaries can audit why `backend = "auto"` selected CPU or CUDA without running
+extra tuning jobs.
 `seed` controls CPU/statistics and FAISS k-means paths. The direct cuVS C API
 path currently does not expose an explicit seed in the stable params structure,
 so repeated direct-cuVS runs use backend-controlled initialization and benchmark

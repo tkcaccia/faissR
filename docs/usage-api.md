@@ -243,6 +243,9 @@ final values used after explicit overrides and `"auto"` defaults have been
 resolved; `parameters$tuning$effective_max_iter`,
 `parameters$tuning$effective_n_init`, and `parameters$tuning$effective_tol`
 expose the same values as flat fields for benchmark summaries.
+`parameters$tuning$backend_policy` records the deterministic `backend = "auto"`
+shape decision, including `prefer_cuda`, `reason`, estimated work, input bytes,
+and `n_per_center`.
 `parameters$requested_backend` records the public backend argument,
 `parameters$resolved_backend` records the public device policy after resolving
 `"auto"`, and `backend` records the implementation

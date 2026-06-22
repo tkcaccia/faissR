@@ -249,6 +249,7 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
     return(helper(n = n, p = p, centers = centers, tuning = tuning))
   }
   work <- as.double(n) * as.double(p) * as.double(centers)
+  backend_policy <- kmeans_auto_backend_policy(n, p, centers)
   high_dim <- p >= 256L
   large_n <- n >= 100000L
   many_centers <- centers >= 100L
@@ -266,6 +267,7 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
       large_n = isTRUE(n >= 100000L),
       many_centers = isTRUE(centers >= 100L),
       small_many_centers = isTRUE(small_many_centers),
+      backend_policy = backend_policy,
       rule = "fixed_defaults"
     ))
   }
@@ -297,6 +299,7 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
     large_n = isTRUE(large_n),
     many_centers = isTRUE(many_centers),
     small_many_centers = isTRUE(small_many_centers),
+    backend_policy = backend_policy,
     rule = paste(
       "shape",
       paste0("n=", n),
@@ -309,6 +312,59 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
   )
 }
 
+kmeans_auto_backend_policy <- function(n, p, centers) {
+  helper <- tryCatch(
+    getFromNamespace("kmeans_auto_backend_policy", "faissR"),
+    error = function(e) NULL
+  )
+  if (is.function(helper)) {
+    return(helper(n = n, p = p, centers = centers))
+  }
+  if (is.null(n) || is.null(p) || is.null(centers)) {
+    return(list(
+      prefer_cuda = TRUE,
+      reason = "unknown_shape",
+      work = NA_real_,
+      nbytes = NA_real_,
+      n_per_center = NA_real_
+    ))
+  }
+  n <- suppressWarnings(as.double(n))
+  p <- suppressWarnings(as.double(p))
+  centers <- suppressWarnings(as.double(centers))
+  if (length(n) != 1L || length(p) != 1L || length(centers) != 1L ||
+      !is.finite(n) || !is.finite(p) || !is.finite(centers) ||
+      n <= 0 || p <= 0 || centers <= 0) {
+    return(list(
+      prefer_cuda = TRUE,
+      reason = "invalid_shape_assume_cuda_capable",
+      work = NA_real_,
+      nbytes = NA_real_,
+      n_per_center = NA_real_
+    ))
+  }
+  work <- n * p * centers
+  nbytes <- n * p * 8
+  n_per_center <- n / centers
+  prefer <- work >= 1e8 || nbytes >= 256 * 1024^2 || (n >= 50000 && p >= 128)
+  reason <- if (work >= 1e8) {
+    "work_at_least_1e8"
+  } else if (nbytes >= 256 * 1024^2) {
+    "input_at_least_256MiB"
+  } else if (n >= 50000 && p >= 128) {
+    "large_high_dimensional_input"
+  } else {
+    "small_cpu_preferred"
+  }
+  list(
+    prefer_cuda = isTRUE(prefer),
+    reason = reason,
+    work = as.numeric(work),
+    nbytes = as.numeric(nbytes),
+    n_per_center = as.numeric(n_per_center)
+  )
+}
+
 kmeans_auto_prefers_cuda <- function(n, p, centers) {
   helper <- tryCatch(
     getFromNamespace("kmeans_auto_prefers_cuda", "faissR"),
@@ -317,20 +373,7 @@ kmeans_auto_prefers_cuda <- function(n, p, centers) {
   if (is.function(helper)) {
     return(isTRUE(helper(n = n, p = p, centers = centers)))
   }
-  if (is.null(n) || is.null(p) || is.null(centers)) {
-    return(TRUE)
-  }
-  n <- suppressWarnings(as.double(n))
-  p <- suppressWarnings(as.double(p))
-  centers <- suppressWarnings(as.double(centers))
-  if (length(n) != 1L || length(p) != 1L || length(centers) != 1L ||
-      !is.finite(n) || !is.finite(p) || !is.finite(centers) ||
-      n <= 0 || p <= 0 || centers <= 0) {
-    return(TRUE)
-  }
-  work <- n * p * centers
-  nbytes <- n * p * 8
-  work >= 1e8 || nbytes >= 256 * 1024^2 || (n >= 50000 && p >= 128)
+  isTRUE(kmeans_auto_backend_policy(n, p, centers)$prefer_cuda)
 }
 
 resolve_kmeans_int <- function(x, fallback) {
