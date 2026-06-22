@@ -834,6 +834,8 @@ nn_compute <- function(data,
       backend = "faiss_gpu_cagra",
       library = "faiss",
       accelerator = "cuda",
+      cagra_provider = "faiss_gpu",
+      cagra_provider_option = cagra_implementation_preference(),
       metric = metric,
       transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
       distance_transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$distance_transform %||% "normalized_euclidean_squared_over_2_to_1_minus_similarity",
@@ -1230,6 +1232,9 @@ nn_compute <- function(data,
       strategy = "rapids_cuvs_cagra",
       backend = resolved_backend,
       library = "cuvs",
+      accelerator = "cuda",
+      cagra_provider = "cuvs",
+      cagra_provider_option = cagra_implementation_preference(),
       metric = metric,
       transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
       distance_transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$distance_transform %||% "normalized_euclidean_squared_over_2_to_1_minus_similarity",
@@ -1867,6 +1872,19 @@ resolve_cuda_cagra_backend <- function(faiss_gpu_available_value = faiss_gpu_ava
   }
 }
 
+cuda_cagra_route_available <- function(faiss_gpu_available_value = faiss_gpu_available(),
+                                       cuvs_available_value = cuvs_available()) {
+  selected <- resolve_cuda_cagra_backend(
+    faiss_gpu_available_value = faiss_gpu_available_value,
+    cuvs_available_value = cuvs_available_value
+  )
+  if (identical(selected, "faiss_gpu_cagra")) {
+    isTRUE(faiss_gpu_available_value)
+  } else {
+    isTRUE(cuvs_available_value)
+  }
+}
+
 #' Nearest-neighbour method capabilities
 #'
 #' `nn_capabilities()` returns the public method/backend/metric support table
@@ -1885,6 +1903,9 @@ resolve_cuda_cagra_backend <- function(faiss_gpu_available_value = faiss_gpu_ava
 #' Public CUDA `method = "cagra"` can resolve to FAISS GPU CAGRA or direct cuVS
 #' CAGRA; `options(faissR.cagra_implementation = "faiss_gpu")` or `"cuvs"`
 #' forces one provider, while `"auto"` keeps the default FAISS-then-cuVS rule.
+#' Availability preflights respect the forced provider for all CAGRA metrics,
+#' and returned approximate NN objects record `cagra_provider` plus
+#' `cagra_provider_option`.
 #'
 #' @param runtime Logical; when `FALSE` (the default), report support by design
 #'   without checking the current compiled/runtime libraries. When `TRUE`, add
@@ -2902,7 +2923,10 @@ public_nn_cuda_route_available <- function(method,
   if (identical(metric, "inner_product")) {
     if (identical(method, "nndescent")) return(isTRUE(cuda_available_value))
     if (identical(method, "cagra")) {
-      return(isTRUE(faiss_gpu_available_value) || isTRUE(cuvs_available_value))
+      return(cuda_cagra_route_available(
+        faiss_gpu_available_value = faiss_gpu_available_value,
+        cuvs_available_value = cuvs_available_value
+      ))
     }
     if (identical(method, "hnsw")) return(isTRUE(cuvs_available_value))
     return(method %in% c("exact", "bruteforce", "flat", "ivf", "ivfpq", "vamana") &&
@@ -2915,7 +2939,10 @@ public_nn_cuda_route_available <- function(method,
     if (identical(method, "grid")) return(isTRUE(cuda_available_value))
     if (identical(method, "nndescent")) return(isTRUE(cuvs_available_value))
     if (identical(method, "cagra")) {
-      return(isTRUE(faiss_gpu_available_value) || isTRUE(cuvs_available_value))
+      return(cuda_cagra_route_available(
+        faiss_gpu_available_value = faiss_gpu_available_value,
+        cuvs_available_value = cuvs_available_value
+      ))
     }
     return(FALSE)
   }
@@ -2928,17 +2955,10 @@ public_nn_cuda_route_available <- function(method,
     ivf = isTRUE(faiss_gpu_available_value),
     ivfpq = isTRUE(faiss_gpu_available_value),
     nndescent = isTRUE(cuvs_available_value),
-    cagra = {
-      selected <- resolve_cuda_cagra_backend(
-        faiss_gpu_available_value = faiss_gpu_available_value,
-        cuvs_available_value = cuvs_available_value
-      )
-      if (identical(selected, "faiss_gpu_cagra")) {
-        isTRUE(faiss_gpu_available_value)
-      } else {
-        isTRUE(cuvs_available_value)
-      }
-    },
+    cagra = cuda_cagra_route_available(
+      faiss_gpu_available_value = faiss_gpu_available_value,
+      cuvs_available_value = cuvs_available_value
+    ),
     FALSE
   )
 }
@@ -6649,7 +6669,9 @@ grid_self_knn <- function(data,
 #'   integration or direct RAPIDS cuVS CAGRA. By default faissR chooses FAISS
 #'   GPU CAGRA when that route is available and otherwise direct cuVS CAGRA;
 #'   set `options(faissR.cagra_implementation = "faiss_gpu")` or `"cuvs"` to
-#'   force one provider for benchmarking. It supports Euclidean/L2,
+#'   force one provider for benchmarking. Availability preflights respect this
+#'   forced provider for every metric, and approximation metadata records
+#'   `cagra_provider` plus `cagra_provider_option`. It supports Euclidean/L2,
 #'   cosine/correlation through normalized Euclidean graph search, and raw
 #'   inner product through a maximum-inner-product-to-L2 extra-dimension
 #'   transform [3,13-16].

@@ -84,7 +84,10 @@ is selected by `options(faissR.cagra_implementation = "auto")`, `"faiss_gpu"`,
 or `"cuvs"`. The default `"auto"` prefers FAISS GPU CAGRA when available and
 falls back to direct cuVS CAGRA; forcing `"cuvs"` is useful for isolated cuVS
 benchmarks, while forcing `"faiss_gpu"` avoids silently comparing against the
-direct cuVS route on machines where FAISS GPU CAGRA is unavailable.
+direct cuVS route on machines where FAISS GPU CAGRA is unavailable. Preflight
+availability checks respect this forced provider for every metric, and returned
+approximation metadata records `cagra_provider` plus
+`cagra_provider_option`.
 
 Approximate routes now attach deterministic no-pilot tuning metadata to
 `attr(result, "approximation")`. IVF, IVFPQ/PQ, NSG, NN-descent, CAGRA, and

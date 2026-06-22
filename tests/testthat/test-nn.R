@@ -1823,6 +1823,18 @@ test_that("CUDA CAGRA implementation can be selected by option", {
     faiss_gpu_available_value = TRUE,
     cuvs_available_value = FALSE
   ))
+  expect_true(faissR:::public_nn_cuda_route_available(
+    "cagra",
+    "cosine",
+    faiss_gpu_available_value = FALSE,
+    cuvs_available_value = TRUE
+  ))
+  expect_true(faissR:::public_nn_cuda_route_available(
+    "cagra",
+    "inner_product",
+    faiss_gpu_available_value = FALSE,
+    cuvs_available_value = TRUE
+  ))
 
   options(faissR.cagra_implementation = "unknown")
   expect_equal(
@@ -1832,6 +1844,34 @@ test_that("CUDA CAGRA implementation can be selected by option", {
     ),
     "faiss_gpu_cagra"
   )
+
+  options(faissR.cagra_implementation = "faiss_gpu")
+  expect_false(faissR:::public_nn_cuda_route_available(
+    "cagra",
+    "cosine",
+    faiss_gpu_available_value = FALSE,
+    cuvs_available_value = TRUE
+  ))
+  expect_false(faissR:::public_nn_cuda_route_available(
+    "cagra",
+    "inner_product",
+    faiss_gpu_available_value = FALSE,
+    cuvs_available_value = TRUE
+  ))
+
+  options(faissR.cagra_implementation = "cuvs")
+  expect_false(faissR:::public_nn_cuda_route_available(
+    "cagra",
+    "correlation",
+    faiss_gpu_available_value = TRUE,
+    cuvs_available_value = FALSE
+  ))
+  expect_false(faissR:::public_nn_cuda_route_available(
+    "cagra",
+    "inner_product",
+    faiss_gpu_available_value = TRUE,
+    cuvs_available_value = FALSE
+  ))
 })
 
 
@@ -3649,6 +3689,10 @@ test_that("cuVS CAGRA reports actual and requested graph parameters", {
   expect_equal(approx$itopk_size, 10L)
   expect_equal(approx$requested_itopk_size, 8L)
   expect_true(approx$cagra_parameters_adjusted)
+  expect_equal(approx$library, "cuvs")
+  expect_equal(approx$accelerator, "cuda")
+  expect_equal(approx$cagra_provider, "cuvs")
+  expect_equal(approx$cagra_provider_option, "auto")
 })
 
 test_that("CUDA backend reports unavailable runtime clearly", {

@@ -211,7 +211,13 @@ implementation. Invalid combinations fail before computation; for example,
 `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only.
 For CUDA CAGRA, `options(faissR.cagra_implementation = "auto")` keeps the
 default FAISS GPU CAGRA first, direct cuVS fallback rule; `"faiss_gpu"` or
-`"cuvs"` forces one provider for benchmark isolation.
+`"cuvs"` forces one provider for benchmark isolation. Runtime preflight and
+availability checks respect the forced provider for Euclidean, cosine,
+correlation, and inner-product CAGRA routes. Returned approximate NN objects
+record `cagra_provider` (`"faiss_gpu"` or `"cuvs"`) and
+`cagra_provider_option` in `attr(result, "approximation")`, so benchmark tables
+can compare FAISS GPU CAGRA and direct RAPIDS cuVS CAGRA without parsing the
+resolved backend string.
 
 Direct cuVS CAGRA uses deterministic no-pilot defaults for `tuning = "auto"`.
 If the user explicitly requests `tuning = "cache"` or `tuning = "pilot"`, faissR

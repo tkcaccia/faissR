@@ -51,7 +51,9 @@ NNDescent does not expose raw inner-product search.
 Public CUDA \code{method = "cagra"} can resolve to FAISS GPU CAGRA or direct
 cuVS CAGRA; \code{options(faissR.cagra_implementation = "faiss_gpu")} or
 \code{"cuvs"} forces one provider, while \code{"auto"} keeps the default
-FAISS-then-cuVS rule.
+FAISS-then-cuVS rule. Availability preflights respect the forced provider for
+all CAGRA metrics, and returned approximate NN objects record
+\code{cagra_provider} plus \code{cagra_provider_option}.
 
 Use \code{runtime = TRUE} for benchmark preflight checks that must distinguish
 a valid method/metric combination from a route that is unavailable in the

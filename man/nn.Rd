@@ -225,7 +225,9 @@ Method descriptions:
   integration or direct RAPIDS cuVS CAGRA. By default faissR chooses FAISS
   GPU CAGRA when that route is available and otherwise direct cuVS CAGRA;
   set `options(faissR.cagra_implementation = "faiss_gpu")` or `"cuvs"` to
-  force one provider for benchmarking. It supports Euclidean/L2,
+  force one provider for benchmarking. Availability preflights respect this
+  forced provider for every metric, and approximation metadata records
+  `cagra_provider` plus `cagra_provider_option`. It supports Euclidean/L2,
   cosine/correlation through normalized Euclidean graph search, and raw
   inner product through a maximum-inner-product-to-L2 extra-dimension
   transform [3,13-16].
