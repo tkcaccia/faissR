@@ -354,7 +354,8 @@ nn_compute <- function(data,
       label = gpu_ivf$label,
       strategy = gpu_ivf$strategy,
       exclude_self = isTRUE(exclude_self),
-      seed = fast_knn_approx_seed()
+      seed = fast_knn_approx_seed(),
+      metric = metric
     ))
   }
 
@@ -3443,7 +3444,12 @@ gpu_approx_self_knn <- function(data,
                                 exclude_self = FALSE,
                                 seed = 4L,
                                 label = NULL,
-                                strategy = "anchor_projection_candidate_knn") {
+                                strategy = "anchor_projection_candidate_knn",
+                                metric = "euclidean") {
+  metric <- normalize_nn_metric(metric)
+  if (!identical(metric, "euclidean")) {
+    stop("Native GPU approximate KNN currently supports only `metric = \"euclidean\"`.", call. = FALSE)
+  }
   n <- nrow(data)
   label <- if (is.null(label)) paste0(backend, "_approx") else as.character(label)
   nonself_k <- if (isTRUE(exclude_self)) k else k - 1L
@@ -3452,7 +3458,7 @@ gpu_approx_self_knn <- function(data,
       indices = matrix(seq_len(n), n, 1L),
       distances = matrix(0, n, 1L)
     )
-    return(finish_nn_result(out, label, k, TRUE, exact = FALSE))
+    return(finish_nn_result(out, label, k, TRUE, exact = FALSE, metric = metric))
   }
 
   params <- gpu_approx_params(n, nonself_k, backend = backend, label = label)
@@ -3463,7 +3469,8 @@ gpu_approx_self_knn <- function(data,
     k = params$projection_k,
     backend = backend,
     points_missing = FALSE,
-    exclude_self = FALSE
+    exclude_self = FALSE,
+    metric = metric
   )
   out <- if (identical(backend, "cuda")) {
     landmark_candidate_knn_cuda_cpp(
@@ -3481,10 +3488,11 @@ gpu_approx_self_knn <- function(data,
     out$indices <- cbind(seq_len(n), out$indices)
     out$distances <- cbind(rep(0, n), out$distances)
   }
-  result <- finish_nn_result(out, label, k, TRUE, exact = FALSE)
+  result <- finish_nn_result(out, label, k, TRUE, exact = FALSE, metric = metric)
   attr(result, "approximation") <- list(
     strategy = strategy,
     backend = backend,
+    metric = metric,
     anchors = as.integer(params$anchors),
     projection_k = as.integer(params$projection_k),
     bucket_cols = as.integer(params$bucket_cols),
@@ -3509,7 +3517,8 @@ gpu_ivf_self_knn <- function(data,
                              label,
                              strategy,
                              exclude_self = FALSE,
-                             seed = 4L) {
+                             seed = 4L,
+                             metric = "euclidean") {
   gpu_approx_self_knn(
     data,
     k = k,
@@ -3517,7 +3526,8 @@ gpu_ivf_self_knn <- function(data,
     exclude_self = exclude_self,
     seed = seed,
     label = label,
-    strategy = strategy
+    strategy = strategy,
+    metric = metric
   )
 }
 
@@ -3624,7 +3634,8 @@ gpu_nndescent_self_knn <- function(data,
     label = paste0(backend, "_ivf_seed"),
     strategy = "ivf_flat_native",
     exclude_self = TRUE,
-    seed = seed
+    seed = seed,
+    metric = "euclidean"
   )
   indices <- base$indices
   distances <- base$distances

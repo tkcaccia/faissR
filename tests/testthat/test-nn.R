@@ -2662,6 +2662,25 @@ test_that("GPU approximate KNN helpers require explicit backend requests", {
   expect_gte(params$anchors, 128L)
   expect_gte(params$projection_k, 12L)
   expect_gte(params$query_cols, params$bucket_cols)
+  expect_error(
+    faissR:::gpu_approx_self_knn(
+      matrix(rnorm(50), ncol = 5),
+      k = 2L,
+      backend = "cuda",
+      metric = "cosine"
+    ),
+    "supports only"
+  )
+  trivial <- faissR:::gpu_approx_self_knn(
+    matrix(rnorm(50), ncol = 5),
+    k = 1L,
+    backend = "cuda",
+    exclude_self = FALSE,
+    metric = "euclidean"
+  )
+  expect_equal(trivial$metric, "euclidean")
+  expect_equal(attr(trivial, "metric"), "euclidean")
+  expect_equal(trivial$backend_used, "cuda_approx")
 })
 
 test_that("approximate KNN recall metadata is attached against exact subset", {
