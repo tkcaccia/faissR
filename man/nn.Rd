@@ -111,8 +111,10 @@ requests and CUDA-auto routes that select CAGRA.}
 
 \item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm for
 this call. `NULL` uses `options(faissR.cuvs_cagra_build_algo = "auto")`.
-`"auto"` keeps the cuVS default, `"ivf_pq"` requests the IVF-PQ graph
-builder, `"nn_descent"` requests cuVS NN-descent graph construction, and
+`"auto"` applies faissR's deterministic shape-aware CAGRA build rule, choosing
+iterative CAGRA construction for compact high-dimensional self-KNN cases and
+IVF-PQ construction otherwise. `"ivf_pq"` requests the IVF-PQ graph builder,
+`"nn_descent"` requests cuVS NN-descent graph construction, and
 `"iterative_cagra_search"` requests cuVS iterative CAGRA graph building.
 This is a CAGRA construction parameter, not a fallback to a different
 public method; successful results record the selected value in

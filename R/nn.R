@@ -1177,9 +1177,10 @@ nn_compute <- function(data,
       search_points <- metric_inputs$points
     }
     params <- cuvs_cagra_params(nrow(data), k, p = ncol(data))
+    build_algo <- cuvs_cagra_build_algo_for(search_data, k, self_query, params)
     tuning_metadata <- NULL
     if (isTRUE(cuvs_cagra_should_tune(search_data, k, self_query, tuning = tuning))) {
-      tuned <- cuvs_cagra_tune_params(search_data, k, params, tuning = tuning)
+      tuned <- cuvs_cagra_tune_params(search_data, k, params, tuning = tuning, build_algo = build_algo)
       params <- tuned$params
       tuning_metadata <- tuned$tuning
       if (is.list(tuning_metadata) && !identical(tuning_metadata$status, "target_met")) {
@@ -1215,7 +1216,7 @@ nn_compute <- function(data,
       as.integer(params$intermediate_graph_degree),
       as.integer(params$search_width),
       as.integer(params$itopk_size),
-      cagra_build_algo_preference()
+      build_algo
     )
     requested_graph_degree <- if (is.null(params$requested_graph_degree)) out$requested_graph_degree else params$requested_graph_degree
     requested_intermediate_graph_degree <- if (is.null(params$requested_intermediate_graph_degree)) out$requested_intermediate_graph_degree else params$requested_intermediate_graph_degree
@@ -1938,6 +1939,22 @@ cagra_build_algo_preference <- function(default = "auto") {
     faissr_option("cuvs_cagra_build_algo", default),
     default = default
   )
+}
+
+cuvs_cagra_build_algo_for <- function(data, k, self_query, params = NULL) {
+  requested <- cagra_build_algo_preference()
+  if (!identical(requested, "auto")) return(requested)
+  n <- nrow(data)
+  p <- ncol(data)
+  k <- as.integer(k)
+  compact <- isTRUE(params$tuning_compact_build %||% FALSE)
+  small_n <- length(n) == 1L && !is.na(n) && n <= 5000L
+  high_dim <- length(p) == 1L && !is.na(p) && p >= 1024L
+  moderate_k <- length(k) == 1L && !is.na(k) && k <= 100L
+  if (isTRUE(self_query) && isTRUE(moderate_k) && (isTRUE(compact) || (isTRUE(small_n) && isTRUE(high_dim)))) {
+    return("iterative_cagra_search")
+  }
+  "ivf_pq"
 }
 
 normalize_cagra_build_algo_arg <- function(value) {
@@ -6391,7 +6408,7 @@ cuvs_cagra_candidate_params <- function(k, n) {
   unique(candidates)
 }
 
-cuvs_cagra_tune_params <- function(data, k, base_params, tuning = "auto") {
+cuvs_cagra_tune_params <- function(data, k, base_params, tuning = "auto", build_algo = "auto") {
   policy <- cuvs_cagra_tune_policy(tuning)
   if (identical(policy, "off")) {
     return(list(
@@ -6477,7 +6494,8 @@ cuvs_cagra_tune_params <- function(data, k, base_params, tuning = "auto") {
           as.integer(cand$graph_degree),
           as.integer(cand$intermediate_graph_degree),
           as.integer(cand$search_width),
-          as.integer(cand$itopk_size)
+          as.integer(cand$itopk_size),
+          build_algo
         ),
         error = function(e) e
       )
@@ -6964,9 +6982,12 @@ grid_self_knn <- function(data,
 #'   requests and CUDA-auto routes that select CAGRA.
 #' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm for
 #'   this call. `NULL` uses `options(faissR.cuvs_cagra_build_algo = "auto")`.
-#'   `"auto"` keeps the cuVS default, `"ivf_pq"` requests the IVF-PQ graph
-#'   builder, `"nn_descent"` requests cuVS NN-descent graph construction, and
-#'   `"iterative_cagra_search"` requests cuVS iterative CAGRA graph building.
+#'   `"auto"` applies faissR's deterministic shape-aware CAGRA build rule,
+#'   choosing iterative CAGRA construction for compact high-dimensional
+#'   self-KNN cases and IVF-PQ construction otherwise. `"ivf_pq"` requests the
+#'   IVF-PQ graph builder, `"nn_descent"` requests cuVS NN-descent graph
+#'   construction, and `"iterative_cagra_search"` requests cuVS iterative CAGRA
+#'   graph building.
 #'   This is a CAGRA construction parameter, not a fallback to a different
 #'   public method; successful results record the selected value in
 #'   `attr(result, "approximation")$cagra_build_algo`.
