@@ -711,9 +711,14 @@ test_that("legacy Benchmark #1 validates scalar numeric controls", {
 
   expect_equal(env$benchmark1_positive_int_arg(NULL, "threads", "4"), 4L)
   expect_equal(env$benchmark1_positive_int_arg("12", "threads", "4"), 12L)
+  expect_equal(env$benchmark1_positive_int_arg("50", "k", "15"), 50L)
   expect_equal(env$benchmark1_positive_int_arg("600", "timeout", "60"), 600L)
   expect_error(
     env$benchmark1_positive_int_arg("zero", "threads", "4"),
+    "positive integer"
+  )
+  expect_error(
+    env$benchmark1_positive_int_arg("bad", "k", "15"),
     "positive integer"
   )
   expect_error(

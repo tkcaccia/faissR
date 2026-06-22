@@ -103,8 +103,6 @@ out_dir <- args$out_dir %||% Sys.getenv(
   "FAISSR_BENCHMARK_OUT",
   file.path(getwd(), paste0("faissR_BENCHMARK1_", format(Sys.time(), "%Y%m%d_%H%M%S")))
 )
-k <- as.integer(args$k %||% "50")
-n_threads <- as.integer(args$threads %||% "4")
 metric <- benchmark1_metric_value(args$metric %||% "l2")
 
 benchmark1_k_values <- function(k_values = NULL,
@@ -165,6 +163,7 @@ quality_eval_max_ops <- benchmark1_positive_numeric_arg(
   "5e9"
 )
 n_threads <- benchmark1_positive_int_arg(args$threads, "threads", "4")
+k <- benchmark1_positive_int_arg(args$k, "k", "50")
 
 configure_cpu_threads <- function(n_threads) {
   value <- as.character(as.integer(n_threads))
