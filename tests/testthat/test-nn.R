@@ -38,6 +38,30 @@ internal_nn_without_self <- function(data,
   )
 }
 
+test_that("public nearest-neighbour wrappers expose one canonical method and metric set", {
+  canonical_methods <- c(
+    "auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
+    "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"
+  )
+  canonical_metrics <- c("euclidean", "cosine", "correlation", "inner_product")
+  wrappers <- list(
+    nn = formals(nn),
+    nn_without_self = formals(nn_without_self),
+    knn = formals(knn),
+    knn_graph = formals(knn_graph),
+    graph_cluster = formals(graph_cluster)
+  )
+
+  expect_equal(faissR:::nn_method_labels(), canonical_methods)
+  expect_equal(faissR:::nn_metric_labels(), canonical_metrics)
+  for (name in names(wrappers)) {
+    f <- wrappers[[name]]
+    method_arg <- if (identical(name, "knn_graph")) "nn_method" else if (identical(name, "graph_cluster")) "graph_method" else "method"
+    expect_equal(eval(f[[method_arg]]), canonical_methods, info = name)
+    expect_equal(eval(f$metric), canonical_metrics, info = name)
+  }
+})
+
 test_that("nn returns exact euclidean neighbors", {
   x <- matrix(c(
     0, 0,
