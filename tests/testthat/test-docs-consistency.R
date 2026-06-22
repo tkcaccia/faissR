@@ -767,15 +767,20 @@ test_that("benchmark documentation describes deterministic NN tuning metadata", 
 })
 
 test_that("benchmark documentation describes graph expected-skip reason labels", {
-  docs_file <- test_path("../../docs/benchmarks.md")
-  if (!file.exists(docs_file)) {
+  docs_files <- c(
+    test_path("../../docs/benchmarks.md"),
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R")
+  )
+  docs_files <- docs_files[file.exists(docs_files)]
+  if (!length(docs_files)) {
     skip("GitHub documentation files are not available in this installed-package test context.")
   }
 
-  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  prose <- paste(unlist(lapply(docs_files, readLines, warn = FALSE)), collapse = " ")
   expect_true(grepl("graph_cluster_benchmark_results.csv", prose, fixed = TRUE))
   expect_true(grepl("expected_skip_reason", prose, fixed = TRUE))
   expect_true(grepl("runtime, shape, and input-type skips", prose, fixed = TRUE))
+  expect_true(grepl("bounded deterministic resolution grid", prose, fixed = TRUE))
 })
 
 test_that("benchmark documentation describes graph route parameter metadata", {
@@ -806,12 +811,16 @@ test_that("benchmark documentation describes k-means runtime reason codes", {
 })
 
 test_that("benchmark documentation describes k-means tuning rule details", {
-  docs_file <- test_path("../../docs/benchmarks.md")
-  if (!file.exists(docs_file)) {
+  docs_files <- c(
+    test_path("../../docs/benchmarks.md"),
+    test_path("../../benchmark_scripts/benchmark_kmeans.R")
+  )
+  docs_files <- docs_files[file.exists(docs_files)]
+  if (!length(docs_files)) {
     skip("GitHub documentation files are not available in this installed-package test context.")
   }
 
-  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  prose <- paste(unlist(lapply(docs_files, readLines, warn = FALSE)), collapse = " ")
   expect_true(grepl("tuning_rule", prose, fixed = TRUE))
   expect_true(grepl("tuning_rule_detail", prose, fixed = TRUE))
   expect_true(grepl("small_low_work_multistart", prose, fixed = TRUE))
