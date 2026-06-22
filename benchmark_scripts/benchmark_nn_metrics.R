@@ -416,9 +416,12 @@ result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threa
 }
 
 nn_implementation_backend <- function(out) {
-  approx <- attr(out, "approximation") %||% list()
-  cuvs <- attr(out, "cuvs") %||% list()
-  faiss <- attr(out, "faiss") %||% list()
+  approx <- attr(out, "approximation", exact = TRUE)
+  if (is.null(approx)) approx <- list()
+  cuvs <- attr(out, "cuvs", exact = TRUE)
+  if (is.null(cuvs)) cuvs <- list()
+  faiss <- attr(out, "faiss", exact = TRUE)
+  if (is.null(faiss)) faiss <- list()
   attr(out, "resolved_backend") %||%
     approx$backend %||%
     cuvs$resolved_backend %||%
@@ -442,12 +445,12 @@ compact_route_metadata_value <- function(x) {
 
 nn_route_parameters <- function(out) {
   sources <- list(
-    approximation = attr(out, "approximation") %||% list(),
-    faiss = attr(out, "faiss") %||% list(),
-    cuvs = attr(out, "cuvs") %||% list(),
-    spatial_index = attr(out, "spatial_index") %||% list(),
-    sparse = attr(out, "sparse") %||% list(),
-    auto_selection = attr(out, "auto_selection") %||% list()
+    approximation = attr(out, "approximation", exact = TRUE),
+    faiss = attr(out, "faiss", exact = TRUE),
+    cuvs = attr(out, "cuvs", exact = TRUE),
+    spatial_index = attr(out, "spatial_index", exact = TRUE),
+    sparse = attr(out, "sparse", exact = TRUE),
+    auto_selection = attr(out, "auto_selection", exact = TRUE)
   )
   keys <- c(
     "strategy", "library", "accelerator", "metric", "transform", "role",
@@ -458,6 +461,9 @@ nn_route_parameters <- function(out) {
     "requested_ef_construction", "requested_ef_search",
     "tuning_policy", "tuning_rule", "tuning_high_dim", "tuning_large_n",
     "tuning_small_k", "tuning_large_k", "tuning_non_euclidean",
+    "pq_tuning_policy", "pq_tuning_rule", "pq_tuning_high_dim",
+    "pq_tuning_large_n", "pq_tuning_small_k", "pq_tuning_large_k",
+    "pq_tuning_non_euclidean",
     "r", "search_l", "build_type", "gk", "requested_r",
     "requested_search_l", "requested_build_type",
     "graph_degree", "intermediate_graph_degree", "max_iterations",
@@ -484,7 +490,8 @@ nn_route_parameters <- function(out) {
 }
 
 nn_tuning_status <- function(out) {
-  approx <- attr(out, "approximation") %||% list()
+  approx <- attr(out, "approximation", exact = TRUE)
+  if (is.null(approx)) approx <- list()
   tuning <- approx$tuning
   if (is.null(tuning)) {
     status <- approx$tuning_rule %||% approx$tuning_policy %||% NA_character_
@@ -1134,7 +1141,8 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
         n_threads = n_threads
       )
     }, timeout)
-    auto_selection <- attr(out, "auto_selection") %||% list()
+    auto_selection <- attr(out, "auto_selection", exact = TRUE)
+    if (is.null(auto_selection)) auto_selection <- list()
     elapsed <- proc.time()[["elapsed"]] - started
     recall <- if (is.null(reference)) {
       data.frame(recall_at_k = NA_real_, median_recall_at_k = NA_real_, min_recall_at_k = NA_real_)

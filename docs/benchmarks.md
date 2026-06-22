@@ -82,6 +82,13 @@ equivalent public `nn()` routes where available, execution backends, metric
 support, `public_runtime_reason`, `runtime_available`, `runtime_reason`, and
 current runtime availability notes. Runtime-unavailable faissR rows are
 recorded as skipped before loading dataset matrices.
+Successful faissR rows in `benchmark1_nn_speed_results.csv` also record the
+result-facing backend, requested public backend/method/tuning, resolved
+implementation backend, auto-selected method/device, compact
+`route_parameters`, and `tuning_status`. The compact route metadata includes
+deterministic no-pilot tuning flags for approximate FAISS/cuVS routes, including
+HNSW, IVF, PQ/IVFPQ, CAGRA, NSG, and NN-descent when those fields are attached
+to the `nn()` result.
 
 If a non-standard runtime library directory is needed, set `FAISSR_ENV_DIR`
 explicitly before launch. The script no longer treats an unrelated active

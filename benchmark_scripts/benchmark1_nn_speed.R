@@ -1044,6 +1044,96 @@ benchmark1_method_values <- function(methods, valid_methods = method_table()$met
   values
 }
 
+benchmark1_compact_route_metadata_value <- function(x) {
+  if (is.null(x)) return(NA_character_)
+  if (is.data.frame(x) || is.matrix(x) || is.array(x)) return(NA_character_)
+  if (is.list(x)) return(NA_character_)
+  if (!length(x)) return(NA_character_)
+  if (length(x) > 1L) {
+    x <- paste(as.character(x), collapse = "|")
+  } else {
+    x <- as.character(x)
+  }
+  if (!nzchar(x) || identical(x, "NA")) NA_character_ else x
+}
+
+benchmark1_implementation_backend <- function(out) {
+  approx <- attr(out, "approximation", exact = TRUE)
+  if (is.null(approx)) approx <- list()
+  cuvs <- attr(out, "cuvs", exact = TRUE)
+  if (is.null(cuvs)) cuvs <- list()
+  faiss <- attr(out, "faiss", exact = TRUE)
+  if (is.null(faiss)) faiss <- list()
+  attr(out, "resolved_backend") %||%
+    approx$backend %||%
+    cuvs$resolved_backend %||%
+    faiss$backend %||%
+    attr(out, "backend") %||%
+    NA_character_
+}
+
+benchmark1_route_parameters <- function(out) {
+  sources <- list(
+    approximation = attr(out, "approximation", exact = TRUE),
+    faiss = attr(out, "faiss", exact = TRUE),
+    cuvs = attr(out, "cuvs", exact = TRUE),
+    spatial_index = attr(out, "spatial_index", exact = TRUE),
+    sparse = attr(out, "sparse", exact = TRUE),
+    auto_selection = attr(out, "auto_selection", exact = TRUE)
+  )
+  keys <- c(
+    "strategy", "library", "accelerator", "metric", "transform", "role",
+    "nlist", "nprobe", "requested_nlist", "requested_nprobe",
+    "pq_m", "pq_nbits", "requested_pq_m", "requested_pq_nbits",
+    "pq_dim", "pq_bits", "requested_pq_dim", "requested_pq_bits",
+    "m", "ef_construction", "ef_search", "requested_m",
+    "requested_ef_construction", "requested_ef_search",
+    "tuning_policy", "tuning_rule", "tuning_high_dim", "tuning_large_n",
+    "tuning_small_k", "tuning_large_k", "tuning_non_euclidean",
+    "pq_tuning_policy", "pq_tuning_rule", "pq_tuning_high_dim",
+    "pq_tuning_large_n", "pq_tuning_small_k", "pq_tuning_large_k",
+    "pq_tuning_non_euclidean",
+    "r", "search_l", "build_type", "gk", "requested_r",
+    "requested_search_l", "requested_build_type",
+    "graph_degree", "intermediate_graph_degree", "max_iterations",
+    "search_width", "itopk_size", "requested_graph_degree",
+    "requested_intermediate_graph_degree", "requested_search_width",
+    "requested_itopk_size", "bins_per_dim", "n_cells",
+    "index_type", "search_batch_size", "n_threads",
+    "policy", "predicted_backend", "predicted_method", "predicted_device",
+    "reason", "n", "p", "k", "work_size", "slow_tuning"
+  )
+  pieces <- character()
+  for (source_name in names(sources)) {
+    source <- sources[[source_name]]
+    if (!is.list(source) || !length(source)) next
+    for (key in keys[keys %in% names(source)]) {
+      value <- benchmark1_compact_route_metadata_value(source[[key]])
+      if (!is.na(value)) {
+        pieces <- c(pieces, paste0(source_name, ".", key, "=", value))
+      }
+    }
+  }
+  if (!length(pieces)) return(NA_character_)
+  paste(unique(pieces), collapse = ";")
+}
+
+benchmark1_tuning_status <- function(out) {
+  approx <- attr(out, "approximation", exact = TRUE)
+  if (is.null(approx)) approx <- list()
+  tuning <- approx$tuning
+  if (is.null(tuning)) {
+    status <- approx$tuning_rule %||% approx$tuning_policy %||% NA_character_
+    status <- benchmark1_compact_route_metadata_value(status)
+    if (is.na(status)) return(NA_character_)
+    return(status)
+  }
+  status <- tuning$status %||% tuning$policy %||% tuning$basis %||% NA_character_
+  status <- benchmark1_compact_route_metadata_value(status)
+  if (is.na(status)) return("present")
+  status
+}
+
 invalid_worker_method_row <- function(dataset, method, k, metric, n_threads) {
   data.frame(
     dataset = dataset %||% NA_character_,
@@ -1054,6 +1144,16 @@ invalid_worker_method_row <- function(dataset, method, k, metric, n_threads) {
     execution_backend = NA_character_,
     public_backend = NA_character_,
     public_method = NA_character_,
+    result_backend = NA_character_,
+    result_requested_backend = NA_character_,
+    result_requested_method = NA_character_,
+    result_tuning = NA_character_,
+    resolved_backend = NA_character_,
+    implementation_backend = NA_character_,
+    auto_predicted_method = NA_character_,
+    auto_predicted_device = NA_character_,
+    route_parameters = NA_character_,
+    tuning_status = NA_character_,
     kind = NA_character_,
     n = NA_integer_,
     p = NA_integer_,
@@ -1103,6 +1203,16 @@ if (worker) {
     execution_backend = mm$execution_backend %||% NA_character_,
     public_backend = mm$public_backend %||% NA_character_,
     public_method = mm$public_method %||% NA_character_,
+    result_backend = NA_character_,
+    result_requested_backend = NA_character_,
+    result_requested_method = NA_character_,
+    result_tuning = NA_character_,
+    resolved_backend = NA_character_,
+    implementation_backend = NA_character_,
+    auto_predicted_method = NA_character_,
+    auto_predicted_device = NA_character_,
+    route_parameters = NA_character_,
+    tuning_status = NA_character_,
     kind = mm$kind %||% NA_character_,
     n = NA_integer_,
     p = NA_integer_,
@@ -1171,6 +1281,18 @@ if (worker) {
     start <- proc.time()[["elapsed"]]
     obj <- run_method(method, x, k, n_threads, dataset, out_dir, metric)
     row$time_sec <- proc.time()[["elapsed"]] - start
+    row$result_backend <- attr(obj, "backend") %||% NA_character_
+    row$result_requested_backend <- attr(obj, "requested_backend") %||% NA_character_
+    row$result_requested_method <- attr(obj, "requested_method") %||% NA_character_
+    row$result_tuning <- attr(obj, "tuning") %||% NA_character_
+    row$resolved_backend <- attr(obj, "resolved_backend") %||% row$result_backend
+    row$implementation_backend <- benchmark1_implementation_backend(obj)
+    auto_selection <- attr(obj, "auto_selection", exact = TRUE)
+    if (is.null(auto_selection)) auto_selection <- list()
+    row$auto_predicted_method <- auto_selection$predicted_method %||% NA_character_
+    row$auto_predicted_device <- auto_selection$predicted_device %||% NA_character_
+    row$route_parameters <- benchmark1_route_parameters(obj)
+    row$tuning_status <- benchmark1_tuning_status(obj)
     sx <- standardize_knn(obj)
     if (!is.null(sx$indices)) {
       row$output_rows <- nrow(sx$indices)
@@ -1341,6 +1463,16 @@ for (di in seq_len(nrow(datasets))) {
             execution_backend = methods$execution_backend[[mi]],
             public_backend = methods$public_backend[[mi]],
             public_method = methods$public_method[[mi]],
+            result_backend = NA_character_,
+            result_requested_backend = NA_character_,
+            result_requested_method = NA_character_,
+            result_tuning = NA_character_,
+            resolved_backend = NA_character_,
+            implementation_backend = NA_character_,
+            auto_predicted_method = NA_character_,
+            auto_predicted_device = NA_character_,
+            route_parameters = NA_character_,
+            tuning_status = NA_character_,
             kind = methods$kind[[mi]],
             n = datasets$n[[di]],
             p = datasets$p[[di]],
@@ -1422,6 +1554,7 @@ materials <- c(
   "Native CPU NNDescent is benchmarked for Euclidean, cosine, correlation, and raw inner-product metrics. Direct CUDA/cuVS NN-descent is benchmarked for Euclidean, cosine, and correlation; raw inner-product CUDA/cuVS NN-descent is recorded as unsupported.",
   "The Flat rows use the public `method = \"flat\"` route. When `metric = \"inner_product\"` is explicitly requested, faissR dispatches the same public Flat rows to the appropriate FAISS inner-product index internally instead of listing duplicate Flat-IP methods.",
   "For faissR rows, `execution_backend` records the internal backend label used by `nn_compute()`, while `public_backend` and `public_method` record the equivalent public `nn(..., backend = , method = )` route. This separates legacy benchmark labels from the public API.",
+  "Successful faissR rows also record `result_backend`, `result_requested_backend`, `result_requested_method`, `result_tuning`, `resolved_backend`, `implementation_backend`, `auto_predicted_method`, `auto_predicted_device`, compact `route_parameters`, and `tuning_status`. These fields make deterministic no-pilot tuning choices and concrete FAISS/cuVS/native routes explicit in the Benchmark #1 result table.",
   "The benchmark result table includes `backend_detail` to distinguish FAISS GPU indexes that use NVIDIA cuVS internally from direct RAPIDS cuVS API calls.",
   "`benchmark1_runtime_capabilities.csv` records the faissR Benchmark #1 method/metric preflight table, including legacy Benchmark #1 method labels, equivalent public `nn()` routes where available, execution backends, metric support, `public_runtime_reason`, `runtime_available`, `runtime_reason`, and current runtime availability notes.",
   "External R package methods tested: Rnanoflann, RANN kd-tree and bd-tree, rnndescent RPF/RNND/NND/brute-force, RcppHNSW, RcppAnnoy, BiocNeighbors VP-tree/HNSW/Annoy, uwot::similarity_graph with nn_method = fnn, annoy, hnsw, and nndescent, and cuda.ml KNN if an installed cuda.ml package exposes a recognised KNN routine. External RcppHNSW rows use Euclidean, cosine, or inner-product (`distance = \"ip\"`) modes when those metrics are requested; correlation is recorded as unavailable for the external RcppHNSW row because Benchmark #1 does not row-center data before calling that package.",

@@ -737,6 +737,9 @@ test_that("NN metric benchmark extracts compact backend route parameters", {
     tuning_rule = "balanced_shape_metric",
     tuning_high_dim = TRUE,
     tuning_large_k = FALSE,
+    pq_tuning_policy = "auto_pq_shape_metric",
+    pq_tuning_rule = "pq_high_dim_shape",
+    pq_tuning_high_dim = TRUE,
     tuning = list(status = "target_met", results = data.frame(recall = 0.99))
   )
   attr(out, "spatial_index") <- list(strategy = "ignored_grid", bins_per_dim = 32L)
@@ -757,6 +760,9 @@ test_that("NN metric benchmark extracts compact backend route parameters", {
   expect_match(params, "approximation.tuning_rule=balanced_shape_metric", fixed = TRUE)
   expect_match(params, "approximation.tuning_high_dim=TRUE", fixed = TRUE)
   expect_match(params, "approximation.tuning_large_k=FALSE", fixed = TRUE)
+  expect_match(params, "approximation.pq_tuning_policy=auto_pq_shape_metric", fixed = TRUE)
+  expect_match(params, "approximation.pq_tuning_rule=pq_high_dim_shape", fixed = TRUE)
+  expect_match(params, "approximation.pq_tuning_high_dim=TRUE", fixed = TRUE)
   expect_match(params, "spatial_index.bins_per_dim=32", fixed = TRUE)
   expect_match(params, "auto_selection.predicted_method=hnsw", fixed = TRUE)
   expect_match(params, "auto_selection.predicted_device=cpu", fixed = TRUE)
@@ -1016,6 +1022,44 @@ test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
   expect_equal(invalid_row$quality_status, "failed")
   expect_match(invalid_row$error, "invalid Benchmark #1 method")
   expect_true(is.na(invalid_row$public_method))
+  expect_true(is.na(invalid_row$route_parameters))
+  expect_true(is.na(invalid_row$tuning_status))
+})
+
+test_that("legacy Benchmark #1 extracts faissR result route and tuning metadata", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
+    "if (worker)"
+  )
+  out <- list(indices = matrix(1L, 1L, 1L), distances = matrix(0, 1L, 1L))
+  attr(out, "backend") <- "cpu"
+  attr(out, "requested_backend") <- "cpu"
+  attr(out, "requested_method") <- "faiss_hnsw"
+  attr(out, "resolved_backend") <- "faiss_hnsw"
+  attr(out, "tuning") <- "auto"
+  attr(out, "approximation") <- list(
+    strategy = "faiss_IndexHNSWFlat",
+    backend = "faiss_hnsw",
+    m = 16L,
+    ef_search = 150L,
+    tuning_policy = "auto_shape_metric",
+    tuning_rule = "balanced_shape_metric",
+    pq_tuning_rule = "pq_high_dim_shape"
+  )
+  attr(out, "auto_selection") <- list(
+    predicted_method = "faiss_hnsw",
+    predicted_device = "cpu",
+    reason = "cpu_auto_shape_selector"
+  )
+
+  params <- env$benchmark1_route_parameters(out)
+  expect_equal(env$benchmark1_implementation_backend(out), "faiss_hnsw")
+  expect_match(params, "approximation.strategy=faiss_IndexHNSWFlat", fixed = TRUE)
+  expect_match(params, "approximation.tuning_rule=balanced_shape_metric", fixed = TRUE)
+  expect_match(params, "approximation.pq_tuning_rule=pq_high_dim_shape", fixed = TRUE)
+  expect_match(params, "auto_selection.predicted_method=faiss_hnsw", fixed = TRUE)
+  expect_match(params, "auto_selection.predicted_device=cpu", fixed = TRUE)
+  expect_equal(env$benchmark1_tuning_status(out), "balanced_shape_metric")
 })
 
 test_that("legacy Benchmark #1 records faissR runtime capability preflight", {
