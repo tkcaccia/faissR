@@ -472,8 +472,11 @@ audited directly. The run configuration is saved as
 `kmeans_benchmark_config.csv`, and the raw row-level result table is saved as
 `kmeans_benchmark_results.csv`. The runtime preflight table is saved as
 `kmeans_runtime_capabilities.csv`, including CUDA, FAISS GPU, and cuVS
-availability and whether explicit CUDA k-means requests are runnable in the
-current build. `--centers` must be a positive integer; when
+availability, `runtime_reason`, human-readable `runtime_notes`, and whether
+explicit CUDA k-means requests are runnable in the current build. The
+`runtime_reason` field distinguishes available routes from
+`missing_cuda_runtime` and `missing_gpu_kmeans_backend` preflight skips.
+`--centers` must be a positive integer; when
 dataset labels are available, the benchmark uses the label-derived cluster
 count for that dataset and otherwise uses the validated `--centers` fallback.
 The config includes `available_datasets`, the validated real plus simulated

@@ -739,6 +739,20 @@ test_that("benchmark documentation describes saved dataset selector universe", {
   expect_true(grepl("--datasets", prose, fixed = TRUE))
 })
 
+test_that("benchmark documentation describes k-means runtime reason codes", {
+  docs_file <- test_path("../../docs/benchmarks.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  expect_true(grepl("kmeans_runtime_capabilities.csv", prose, fixed = TRUE))
+  expect_true(grepl("runtime_reason", prose, fixed = TRUE))
+  expect_true(grepl("runtime_notes", prose, fixed = TRUE))
+  expect_true(grepl("missing_cuda_runtime", prose, fixed = TRUE))
+  expect_true(grepl("missing_gpu_kmeans_backend", prose, fixed = TRUE))
+})
+
 test_that("benchmark documentation distinguishes requested and actual graph cluster counts", {
   docs_file <- test_path("../../docs/benchmarks.md")
   if (!file.exists(docs_file)) {
