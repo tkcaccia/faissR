@@ -2183,6 +2183,8 @@ test_that("backend_info reports native availability without crashing", {
   ) %in% names(info)))
   expect_true(isTRUE(info$available[info$backend == "cpu"]))
   expect_false(any(is.na(info$available)))
+  expect_false(any(grepl("faiss_|cuda_cuvs|cpu_", info$public_call)))
+  expect_true(all(grepl("implementation", info$resolved_route)))
 
   cuda_info <- faissR:::cuda_device_info_json_cpp()
   expect_type(cuda_info, "character")

@@ -8,8 +8,8 @@ backend_info()
 }
 \value{
 A data frame with one row per compiled/runtime backend family and
-  columns describing availability, public call hints, resolved/internal route
-  labels, device/runtime hints, and a short note.
+  columns describing availability, public call hints, non-public
+  implementation route labels, device/runtime hints, and a short note.
 }
 \description{
 `backend_info()` reports which `faissR` nearest-neighbour backends can

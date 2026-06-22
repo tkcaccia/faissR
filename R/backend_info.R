@@ -5,8 +5,8 @@
 #' CPU; this table is informational only.
 #'
 #' @return A data frame with one row per compiled/runtime backend family and
-#'   columns describing availability, public call hints, resolved/internal route
-#'   labels, device/runtime hints, and a short note.
+#'   columns describing availability, public call hints, non-public
+#'   implementation route labels, device/runtime hints, and a short note.
 #' @export
 backend_info <- function() {
   cuda_knn <- backend_flag(cuda_available)
@@ -30,12 +30,12 @@ backend_info <- function() {
       "graph_cluster(..., backend = \"cuda\")"
     ),
     resolved_route = c(
-      "cpu",
-      "faiss_flat_l2/faiss_ivf/faiss_hnsw/faiss_gpu_*",
-      "faiss_gpu_ivf_flat/faiss_gpu_ivfpq/faiss_gpu_cagra",
-      "cuda_cuvs_bruteforce/cuda_cuvs_nndescent/cuda_cuvs_cagra",
-      "cuda",
-      "graph_cluster(..., backend = \"cuda\")"
+      "implementation label: cpu",
+      "implementation labels include faiss_flat_l2, faiss_ivf, faiss_hnsw, and faiss_gpu_*",
+      "implementation labels include faiss_gpu_ivf_flat, faiss_gpu_ivfpq, and faiss_gpu_cagra",
+      "implementation labels include cuda_cuvs_bruteforce, cuda_cuvs_nndescent, and cuda_cuvs_cagra",
+      "implementation label: cuda",
+      "implementation route: graph_cluster(..., backend = \"cuda\")"
     ),
     device = c(
       cpu_summary(),
