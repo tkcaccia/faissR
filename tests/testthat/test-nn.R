@@ -2030,6 +2030,29 @@ test_that("backend_info reports native availability without crashing", {
   expect_match(cuda_info, "available")
 })
 
+test_that("nvidia-smi summary parses device, driver, and memory", {
+  bin <- file.path(tempdir(), paste0("fake-nvidia-smi-", Sys.getpid()))
+  dir.create(bin, showWarnings = FALSE, recursive = TRUE)
+  smi <- file.path(bin, "nvidia-smi")
+  writeLines(
+    c(
+      "#!/bin/sh",
+      "printf 'NVIDIA L40S, 555.42, 46068\\n'"
+    ),
+    smi
+  )
+  Sys.chmod(smi, "0755")
+
+  old_path <- Sys.getenv("PATH")
+  on.exit(Sys.setenv(PATH = old_path), add = TRUE)
+  Sys.setenv(PATH = paste(bin, old_path, sep = .Platform$path.sep))
+
+  summary <- faissR:::nvidia_smi_summary()
+  expect_equal(summary$device, "NVIDIA L40S")
+  expect_match(summary$runtime, "driver 555.42")
+  expect_match(summary$runtime, "46068 MiB")
+})
+
 test_that("CUDA grid auto does not silently fall back to CPU", {
   skip_if(cuda_available())
 
