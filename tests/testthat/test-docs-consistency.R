@@ -582,6 +582,17 @@ test_that("GitHub and reference docs describe CAGRA provider selection", {
   }
 })
 
+test_that("benchmark docs describe CAGRA provider benchmark selector", {
+  docs_file <- test_path("../../docs/benchmarks.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub benchmark documentation is not available in this installed-package test context.")
+  }
+  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  expect_true(grepl("--cagra_implementations", prose, fixed = TRUE))
+  expect_true(grepl("cagra_implementation", prose, fixed = TRUE))
+  expect_true(grepl("faiss_gpu,cuvs", prose, fixed = TRUE))
+})
+
 test_that("GitHub and reference docs describe grid cosine/correlation support", {
   docs_files <- c(
     test_path("../../docs", c(

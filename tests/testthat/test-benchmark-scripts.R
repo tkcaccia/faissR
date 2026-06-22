@@ -413,6 +413,43 @@ test_that("NN metric cycle summaries preserve route and thread metadata", {
   expect_equal(out$success_cycles, 2L)
 })
 
+test_that("NN metric cycle summaries keep CAGRA providers separate", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  ok <- data.frame(
+    dataset = c("A", "A"),
+    backend = c("cuda", "cuda"),
+    method = c("cagra", "cagra"),
+    cagra_implementation = c("faiss_gpu", "cuvs"),
+    metric = c("euclidean", "euclidean"),
+    k = c(50L, 50L),
+    n = c(100L, 100L),
+    p = c(10L, 10L),
+    n_threads = c(2L, 2L),
+    cycle = c(1L, 1L),
+    elapsed_sec = c(1, 2),
+    recall_at_k = c(0.99, 0.98),
+    min_recall_at_k = c(0.97, 0.96),
+    recall_query_n = c(100L, 100L),
+    exact = c(FALSE, FALSE),
+    result_backend = c("faiss_gpu_cagra", "cuda_cuvs_cagra"),
+    result_requested_backend = c("cuda", "cuda"),
+    result_requested_method = c("cagra", "cagra"),
+    result_tuning = c("auto", "auto"),
+    resolved_backend = c("faiss_gpu_cagra", "cuda_cuvs_cagra"),
+    implementation_backend = c("faiss_gpu_cagra", "cuda_cuvs_cagra"),
+    preflight_route = c("faiss_gpu_cagra", "cuda_cuvs_cagra"),
+    recall_reference = c("sample", "sample")
+  )
+
+  out <- env$summarize_nn_cycles(ok)
+  expect_equal(nrow(out), 2L)
+  expect_equal(sort(out$cagra_implementation), c("cuvs", "faiss_gpu"))
+  expect_equal(sort(out$implementation_backend), c("cuda_cuvs_cagra", "faiss_gpu_cagra"))
+})
+
 test_that("NN metric best-row ranking prefers recall stability before speed", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
@@ -929,6 +966,19 @@ test_that("NN metric benchmark accounts for data-shaped method skips", {
   expect_false("sparse" %in% default_methods)
   expect_false("vptree" %in% default_methods)
   expect_true("grid" %in% default_methods)
+  expect_equal(
+    env$validate_cagra_implementation_values(c("auto", "faiss", "direct-cuvs")),
+    c("auto", "faiss_gpu", "cuvs")
+  )
+  expect_equal(
+    env$cagra_implementation_values_for("cuda", "cagra", c("faiss_gpu", "cuvs")),
+    c("faiss_gpu", "cuvs")
+  )
+  expect_true(is.na(env$cagra_implementation_values_for("cpu", "cagra", c("faiss_gpu", "cuvs"))))
+  expect_error(
+    env$validate_cagra_implementation_values("metal"),
+    "cagra_implementations"
+  )
 
   dense <- matrix(rnorm(20), ncol = 4)
   grid_skip <- env$nn_data_expected_skip(dense, "grid")
@@ -972,6 +1022,7 @@ test_that("NN metric benchmark raw rows record expected-skip reason labels", {
   )
 
   expect_true("expected_skip_reason" %in% names(row))
+  expect_true("cagra_implementation" %in% names(row))
   expect_true(isTRUE(row$expected_skip))
   expect_equal(row$expected_skip_reason, "unsupported_shape")
 })

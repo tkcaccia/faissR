@@ -84,6 +84,61 @@ default_nn_backend_values <- function() {
   c("auto", "cpu", "cuda")
 }
 
+default_cagra_implementation_values <- function() {
+  "auto"
+}
+
+valid_cagra_implementation_values <- function() {
+  c("auto", "faiss_gpu", "cuvs")
+}
+
+canonical_cagra_implementation_key <- function(value) {
+  aliases <- c(
+    auto = "auto",
+    faiss = "faiss_gpu",
+    faiss_gpu = "faiss_gpu",
+    faissgpu = "faiss_gpu",
+    gpu = "faiss_gpu",
+    cuvs = "cuvs",
+    rapids = "cuvs",
+    direct_cuvs = "cuvs",
+    cuda_cuvs = "cuvs"
+  )
+  key <- tolower(trimws(as.character(value)))
+  key <- gsub("[[:space:]-]+", "_", key)
+  out <- unname(aliases[key])
+  out[is.na(out)] <- key[is.na(out)]
+  out
+}
+
+validate_cagra_implementation_values <- function(values, arg_name = "cagra_implementations") {
+  raw <- trimws(as.character(values))
+  raw <- raw[nzchar(raw)]
+  values <- unique(canonical_cagra_implementation_key(raw))
+  invalid <- values[!values %in% valid_cagra_implementation_values()]
+  if (length(invalid)) {
+    stop(
+      "`", arg_name, "` must contain only: ",
+      paste(valid_cagra_implementation_values(), collapse = ", "),
+      ". Invalid value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  if (!length(values)) {
+    stop("`", arg_name, "` must contain at least one CAGRA implementation.", call. = FALSE)
+  }
+  values
+}
+
+cagra_implementation_values_for <- function(backend, method, cagra_implementations) {
+  if (identical(canonical_method_key(method), "cagra") && backend %in% c("auto", "cuda")) {
+    return(cagra_implementations)
+  }
+  NA_character_
+}
+
 default_nn_cycles <- function() {
   10L
 }
@@ -360,6 +415,7 @@ metric_reference <- function(x, k, metric, quality_n, quality_max_ops, n_threads
 }
 
 result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threads,
+                       cagra_implementation = NA_character_,
                        status, error = NA_character_, elapsed_sec = NA_real_,
                        peak_rss_gb = NA_real_,
                        result_backend = NA_character_,
@@ -391,6 +447,7 @@ result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threa
     p = as.integer(p),
     backend = backend,
     method = method,
+    cagra_implementation = cagra_implementation,
     metric = metric,
     k = as.integer(k),
     cycle = as.integer(cycle),
@@ -558,12 +615,17 @@ finite_max <- function(x) {
 }
 
 summarize_nn_cycles <- function(ok) {
-  parts <- split(ok, paste(ok$dataset, ok$backend, ok$method, ok$metric, ok$k, sep = "__"))
+  if (!"cagra_implementation" %in% names(ok)) ok$cagra_implementation <- NA_character_
+  parts <- split(
+    ok,
+    paste(ok$dataset, ok$backend, ok$method, ok$cagra_implementation, ok$metric, ok$k, sep = "__")
+  )
   summary <- lapply(parts, function(x) {
     data.frame(
       dataset = x$dataset[[1L]],
       backend = x$backend[[1L]],
       method = x$method[[1L]],
+      cagra_implementation = dominant_column(x, "cagra_implementation"),
       metric = x$metric[[1L]],
       k = as.integer(x$k[[1L]]),
       n = as.integer(x$n[[1L]]),
@@ -600,7 +662,7 @@ summarize_nn_cycles <- function(ok) {
     )
   })
   out <- do.call(rbind, summary)
-  out[order(out$dataset, out$backend, out$metric, out$k, out$median_elapsed_sec), , drop = FALSE]
+  out[order(out$dataset, out$backend, out$metric, out$k, out$method, out$cagra_implementation, out$median_elapsed_sec), , drop = FALSE]
 }
 
 recommend_nn_methods <- function(cycle_summary, recall_threshold) {
@@ -685,7 +747,7 @@ compare_auto_to_recommendations <- function(cycle_summary, recommendations) {
   if (!nrow(auto)) return(data.frame())
   keys <- c("dataset", "backend", "metric", "k")
   auto_keep <- c(
-    keys, "method", "result_backend", "result_requested_backend",
+    keys, "method", "cagra_implementation", "result_backend", "result_requested_backend",
     "result_requested_method", "result_tuning",
     "auto_predicted_method", "auto_predicted_device",
     "auto_explicit_backend", "auto_explicit_method",
@@ -725,7 +787,7 @@ compare_auto_to_global_recommendations <- function(cycle_summary, recommendation
   if (!nrow(auto)) return(data.frame())
   keys <- c("dataset", "metric", "k")
   auto_keep <- c(
-    keys, "backend", "method", "result_backend", "result_requested_backend",
+    keys, "backend", "method", "cagra_implementation", "result_backend", "result_requested_backend",
     "result_requested_method", "result_tuning",
     "auto_predicted_method", "auto_predicted_device",
     "auto_explicit_backend", "auto_explicit_method",
@@ -765,7 +827,7 @@ compare_auto_to_fastest <- function(ok, fastest) {
   if (!nrow(auto_rows) || is.null(fastest) || !nrow(fastest)) return(data.frame())
   keys <- c("dataset", "backend", "metric", "k", "cycle")
   auto_keep <- c(
-    keys, "result_backend", "result_requested_backend",
+    keys, "cagra_implementation", "result_backend", "result_requested_backend",
     "result_requested_method", "result_tuning",
     "auto_predicted_method", "auto_predicted_device",
     "auto_explicit_backend", "auto_explicit_method",
@@ -775,7 +837,7 @@ compare_auto_to_fastest <- function(ok, fastest) {
     "recall_reference", "recall_query_n"
   )
   fastest_keep <- c(
-    keys, "method", "result_backend", "result_requested_backend",
+    keys, "method", "cagra_implementation", "result_backend", "result_requested_backend",
     "result_requested_method", "result_tuning",
     "auto_predicted_method", "auto_predicted_device",
     "auto_explicit_backend", "auto_explicit_method",
@@ -1138,13 +1200,16 @@ nn_data_expected_skip <- function(x, method, metric = "euclidean") {
 }
 
 run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_threads,
-                    timeout, reference, seed) {
+                    timeout, reference, seed, cagra_implementation = NA_character_) {
   started <- proc.time()[["elapsed"]]
   old_options <- options(
     faissR.approx_knn_seed = as.integer(seed),
     faissR.faiss_gpu_ivf_tune_seed = as.integer(seed + 11L),
     faissR.cuvs_cagra_tune_seed = as.integer(seed + 23L)
   )
+  if (!is.na(cagra_implementation)) {
+    old_options <- c(old_options, options(faissR.cagra_implementation = cagra_implementation))
+  }
   on.exit(options(old_options), add = TRUE)
   set.seed(as.integer(seed))
   preflight_route <- tryCatch(
@@ -1182,6 +1247,7 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
       p = ncol(x),
       backend = backend,
       method = method,
+      cagra_implementation = cagra_implementation,
       metric = metric,
       k = k,
       cycle = cycle,
@@ -1218,6 +1284,7 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
       p = ncol(x),
       backend = backend,
       method = method,
+      cagra_implementation = cagra_implementation,
       metric = metric,
       k = k,
       cycle = cycle,
@@ -1262,6 +1329,9 @@ datasets <- validate_dataset_values(
 backends <- validate_backend_values(split_arg(args$backends, paste(default_nn_backend_values(), collapse = ",")))
 methods <- canonical_method_values(split_arg(args$methods, paste(default_nn_method_values(), collapse = ",")))
 metrics <- validate_metric_values(split_arg(args$metrics, paste(default_nn_metric_values(), collapse = ",")))
+cagra_implementations <- validate_cagra_implementation_values(
+  split_arg(args$cagra_implementations, paste(default_cagra_implementation_values(), collapse = ","))
+)
 k_values <- required_positive_int_values(
   split_arg(args$k_values, paste(default_nn_k_values(), collapse = ",")),
   "k_values"
@@ -1269,15 +1339,31 @@ k_values <- required_positive_int_values(
 
 suppressPackageStartupMessages(library(faissR))
 capabilities <- faissR::nn_capabilities(runtime = TRUE)
+cagra_capabilities <- list()
+for (impl in cagra_implementations) {
+  old_cagra_implementation <- getOption("faissR.cagra_implementation")
+  options(faissR.cagra_implementation = impl)
+  cagra_capabilities[[impl]] <- tryCatch(
+    faissR::nn_capabilities(runtime = TRUE),
+    finally = {
+      if (is.null(old_cagra_implementation)) {
+        options(faissR.cagra_implementation = NULL)
+      } else {
+        options(faissR.cagra_implementation = old_cagra_implementation)
+      }
+    }
+  )
+}
 
 config <- data.frame(
   key = c("data_root", "out_dir", "available_datasets", "datasets", "backends",
-          "methods", "metrics", "k_values", "threads", "timeout", "cycles",
+          "methods", "cagra_implementations", "metrics", "k_values", "threads", "timeout", "cycles",
           "quality_n", "quality_max_ops", "recall_threshold", "seed"),
   value = c(
     data_root, out_dir, paste(available_datasets, collapse = ","),
     paste(datasets, collapse = ","), paste(backends, collapse = ","),
-    paste(methods, collapse = ","), paste(metrics, collapse = ","),
+    paste(methods, collapse = ","), paste(cagra_implementations, collapse = ","),
+    paste(metrics, collapse = ","),
     paste(k_values, collapse = ","), n_threads, timeout, cycles, quality_n,
     format(quality_max_ops, scientific = TRUE), recall_threshold, seed
   ),
@@ -1320,55 +1406,66 @@ for (dataset_name in datasets) {
         cycle_seed <- seed + (cycle - 1L) * 1000003L
         for (backend in backends) {
           for (method in methods) {
-            row_id <- row_id + 1L
-            expected <- is_expected_skip(capabilities, backend, method, metric)
-            if (is.null(expected)) expected <- nn_data_expected_skip(x, method, metric)
-            if (!is.null(expected)) {
-              row <- result_row(
-                dataset = dataset_name,
-                n = nrow(x),
-                p = ncol(x),
-                backend = backend,
-                method = method,
-                metric = metric,
-                k = k,
-                cycle = cycle,
-                n_threads = n_threads,
-                status = "expected_skip",
-                error = expected$notes,
-                expected_skip = TRUE,
-                expected_skip_reason = expected$reason %||% NA_character_,
-                capability_notes = expected$notes,
-                preflight_route = expected$route %||% NA_character_
+            for (cagra_implementation in cagra_implementation_values_for(backend, method, cagra_implementations)) {
+              row_id <- row_id + 1L
+              capability_table <- if (!is.na(cagra_implementation)) {
+                cagra_capabilities[[cagra_implementation]]
+              } else {
+                capabilities
+              }
+              expected <- is_expected_skip(capability_table, backend, method, metric)
+              if (is.null(expected)) expected <- nn_data_expected_skip(x, method, metric)
+              if (!is.null(expected)) {
+                row <- result_row(
+                  dataset = dataset_name,
+                  n = nrow(x),
+                  p = ncol(x),
+                  backend = backend,
+                  method = method,
+                  cagra_implementation = cagra_implementation,
+                  metric = metric,
+                  k = k,
+                  cycle = cycle,
+                  n_threads = n_threads,
+                  status = "expected_skip",
+                  error = expected$notes,
+                  expected_skip = TRUE,
+                  expected_skip_reason = expected$reason %||% NA_character_,
+                  capability_notes = expected$notes,
+                  preflight_route = expected$route %||% NA_character_
+                )
+              } else {
+                row <- run_one(
+                  x = x,
+                  dataset_name = dataset_name,
+                  backend = backend,
+                  method = method,
+                  cagra_implementation = cagra_implementation,
+                  metric = metric,
+                  k = k,
+                  cycle = cycle,
+                  n_threads = n_threads,
+                  timeout = timeout,
+                  reference = references[[ref_key]],
+                  seed = cycle_seed
+                )
+              }
+              results[[row_id]] <- row
+              utils::write.csv(
+                do.call(rbind, results),
+                file.path(out_dir, "nn_metric_benchmark_results.csv"),
+                row.names = FALSE
               )
-            } else {
-              row <- run_one(
-                x = x,
-                dataset_name = dataset_name,
-                backend = backend,
-                method = method,
-                metric = metric,
-                k = k,
-                cycle = cycle,
-                n_threads = n_threads,
-                timeout = timeout,
-                reference = references[[ref_key]],
-                seed = cycle_seed
-              )
+              cat(sprintf(
+                "[%s] dataset=%s cycle=%s backend=%s method=%s cagra=%s metric=%s k=%s status=%s elapsed=%.3f\n",
+                format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+                dataset_name, cycle, backend, method,
+                ifelse(is.na(cagra_implementation), "NA", cagra_implementation),
+                metric, k, row$status,
+                ifelse(is.na(row$elapsed_sec), 0, row$elapsed_sec)
+              ))
+              flush.console()
             }
-            results[[row_id]] <- row
-            utils::write.csv(
-              do.call(rbind, results),
-              file.path(out_dir, "nn_metric_benchmark_results.csv"),
-              row.names = FALSE
-            )
-            cat(sprintf(
-              "[%s] dataset=%s cycle=%s backend=%s method=%s metric=%s k=%s status=%s elapsed=%.3f\n",
-              format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-              dataset_name, cycle, backend, method, metric, k, row$status,
-              ifelse(is.na(row$elapsed_sec), 0, row$elapsed_sec)
-            ))
-            flush.console()
           }
         }
       }
@@ -1469,6 +1566,7 @@ materials <- c(
   "- Default simulated datasets: `SimulatedUniform2D`, `SimulatedUniform3D`",
   sprintf("- Backends: `%s`", paste(backends, collapse = "`, `")),
   sprintf("- Methods: `%s`", paste(methods, collapse = "`, `")),
+  sprintf("- CAGRA implementations: `%s`", paste(cagra_implementations, collapse = "`, `")),
   sprintf("- Metrics: `%s`", paste(metrics, collapse = "`, `")),
   sprintf("- k values: `%s`", paste(k_values, collapse = "`, `")),
   sprintf("- CPU thread cap: `%s`", n_threads),
@@ -1478,13 +1576,13 @@ materials <- c(
   "",
   "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities(runtime = TRUE)` and the public backend resolver, then recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
   "`method = \"grid\"` is included in the default public method list but is recorded as an expected skip for datasets outside two or three columns, because it is a native low-dimensional spatial search route.",
-  "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, and resolved backend fields.",
+  "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, the requested CAGRA implementation for public `method = \"cagra\"` rows, and resolved backend fields.",
   "`nn_metric_capabilities.csv` stores the capability table used for that preflight, including `resolved_backend`, `runtime_available`, `runtime_reason`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
   "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_requested_backend`, `result_requested_method`, and `result_tuning` record the public request stored on successful `nn()` results. `auto_predicted_method`, `auto_predicted_device`, `auto_explicit_backend`, `auto_explicit_method`, `auto_backend_decision`, and `auto_method_decision` record the public method/device class and explicit-vs-auto decision fields predicted by `attr(result, \"auto_selection\")` for auto requests, without parsing internal backend labels. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes and auto-selection metadata, including deterministic FAISS HNSW `tuning_rule`, shape flags, explicit backend/method flags, backend/method decision reasons, predicted method/device, and no-pilot auto-selection reason when present. `tuning_status` records backend tuning status, or the deterministic no-pilot tuning rule for routes such as FAISS CPU HNSW.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k. The NN metric benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",
   "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches. Speed ratios and recall gaps are reported as `NA` when the required timing or recall values are missing or invalid.",
-  "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/metric/k and reports success counts, median/min/max elapsed time, recall stability, CPU thread count, preflight route, compact route-parameter metadata, tuning status, and the dominant implementation backend.",
+  "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/CAGRA-implementation/metric/k and reports success counts, median/min/max elapsed time, recall stability, CPU thread count, preflight route, compact route-parameter metadata, tuning status, and the dominant implementation backend.",
   "`nn_metric_recommendations_from_cycles.csv` selects one method per dataset/backend/metric/k. When recall is available, it selects the fastest method whose median recall is at least `recall_threshold`; tied median times are broken by higher median recall, minimum recall, and median minimum recall. If no method reaches the threshold it selects the best-recall row and marks it as below threshold, breaking tied median recall by minimum recall, median minimum recall, and then speed. When recall is unavailable for the group, it selects the fastest successful row and marks the recommendation as speed-only.",
   "`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate `method = \"auto\"` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median recall gap, CPU thread count, preflight route, route-parameter/tuning metadata, and backend/implementation agreement. Speed ratios and recall gaps are `NA` when the required timing or recall values are unavailable or invalid.",
   "`nn_metric_global_recommendations_from_cycles.csv` pools requested CPU/CUDA/auto backends before selecting the fastest successful method within the recall threshold for each dataset/metric/k combination. This table audits the globally fastest observed backend/method route instead of only the fastest route inside each requested-backend group.",
