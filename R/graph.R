@@ -292,7 +292,10 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   `parameters$n_vertices` and `parameters$n_edges` record the clustered graph
 #'   size for benchmark summaries. `parameters$nn_metric_transform` and
 #'   `parameters$nn_distance_transform` preserve normalized metric conversion
-#'   metadata from the KNN route that built the graph. When a target community count is used,
+#'   metadata from the KNN route that built the graph. `parameters$nn_approximation`,
+#'   `parameters$nn_faiss`, `parameters$nn_cuvs`, `parameters$nn_spatial_index`,
+#'   `parameters$nn_sparse`, and `parameters$nn_auto_selection` preserve compact
+#'   KNN route metadata when the graph is built internally. When a target community count is used,
 #'   `target_n_clusters`, `selected_resolution`, `target_gap`,
 #'   `resolution_selection`, and `resolution_search` record the requested
 #'   target, selected resolution, final community-count gap, deterministic
@@ -510,6 +513,15 @@ graph_cluster <- function(graph,
     graph_method = graph_method,
     metric = attr(knn, "metric") %||% metric,
     tuning = tuning,
+    nn_requested_backend = attr(knn, "requested_backend") %||% graph_requested_backend,
+    nn_requested_method = attr(knn, "requested_method") %||% graph_method,
+    nn_tuning = attr(knn, "tuning") %||% tuning,
+    nn_approximation = attr(knn, "approximation") %||% NULL,
+    nn_faiss = attr(knn, "faiss") %||% NULL,
+    nn_cuvs = attr(knn, "cuvs") %||% NULL,
+    nn_spatial_index = attr(knn, "spatial_index") %||% NULL,
+    nn_sparse = attr(knn, "sparse") %||% NULL,
+    nn_auto_selection = attr(knn, "auto_selection") %||% NULL,
     nn_metric_transform = attr(knn, "metric_transform") %||% knn$metric_transform %||% NULL,
     nn_distance_transform = attr(knn, "distance_transform") %||% NULL,
     graph_space = graph_space,

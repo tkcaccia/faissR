@@ -388,6 +388,11 @@ graph metadata.
 `parameters$n_vertices` and `parameters$n_edges` record the clustered graph
 size directly so benchmark summaries do not need to inspect the embedded graph
 edge list.
+Direct graph builds also preserve compact KNN route metadata in
+`parameters$nn_approximation`, `parameters$nn_faiss`, `parameters$nn_cuvs`,
+`parameters$nn_spatial_index`, `parameters$nn_sparse`, and
+`parameters$nn_auto_selection` when those fields are attached to the internal
+`nn()` result.
 
 The clustering implementation benefits from fast KNN indirectly: FAISS/cuVS can
 build the KNN graph faster, and `graph_cluster()` can then cluster that graph.

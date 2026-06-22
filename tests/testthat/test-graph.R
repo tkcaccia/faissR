@@ -633,6 +633,35 @@ test_that("graph_cluster passes method metric and tuning to internal KNN", {
   expect_equal(cl$parameters$graph_backend, "cpu")
 })
 
+test_that("graph_cluster preserves internal KNN route metadata when building a graph", {
+  set.seed(50525)
+  x <- rbind(
+    matrix(rnorm(80, -2, 0.2), ncol = 4),
+    matrix(rnorm(80, 2, 0.2), ncol = 4)
+  )
+
+  cl <- graph_cluster(
+    x,
+    method = "louvain",
+    backend = "cpu",
+    graph_backend = "cpu",
+    graph_method = "auto",
+    metric = "cosine",
+    k = 6L,
+    n_threads = 2L
+  )
+
+  expect_s3_class(cl, "faissR_graph_cluster")
+  expect_equal(cl$parameters$nn_requested_backend, "cpu")
+  expect_equal(cl$parameters$nn_requested_method, "auto")
+  expect_equal(cl$parameters$nn_tuning, "auto")
+  expect_type(cl$parameters$nn_auto_selection, "list")
+  expect_true(cl$parameters$nn_auto_selection$explicit_backend)
+  expect_false(cl$parameters$nn_auto_selection$explicit_method)
+  expect_equal(cl$parameters$nn_auto_selection$backend_decision, "explicit_cpu")
+  expect_equal(cl$parameters$nn_auto_selection$metric, "cosine")
+})
+
 test_that("graph_cluster lets graph_backend auto resolve CPU-only NN methods", {
   set.seed(5053)
   x <- rbind(

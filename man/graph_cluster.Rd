@@ -97,7 +97,11 @@ implementation, public graph backend request, and resolved KNN backend.
 record the clustered graph size for benchmark summaries.
 \code{parameters$nn_metric_transform} and
 \code{parameters$nn_distance_transform} preserve normalized metric conversion
-metadata from the KNN route that built the graph. When a target
+metadata from the KNN route that built the graph.
+\code{parameters$nn_approximation}, \code{parameters$nn_faiss},
+\code{parameters$nn_cuvs}, \code{parameters$nn_spatial_index},
+\code{parameters$nn_sparse}, and \code{parameters$nn_auto_selection}
+preserve compact KNN route metadata when the graph is built internally. When a target
 community count is used, \code{target_n_clusters},
 \code{selected_resolution}, \code{target_gap}, \code{resolution_selection},
 and \code{resolution_search} record the requested target, selected resolution,

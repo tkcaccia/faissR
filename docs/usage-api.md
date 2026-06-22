@@ -210,7 +210,11 @@ from the public graph backend request and resolved KNN route.
 `parameters$n_vertices` and `parameters$n_edges` record the clustered graph
 size for benchmark summaries. `parameters$nn_metric_transform` and
 `parameters$nn_distance_transform` preserve normalized cosine/correlation graph
-construction metadata from the KNN route.
+construction metadata from the KNN route. Direct graph builds also preserve
+compact KNN route metadata in `parameters$nn_approximation`,
+`parameters$nn_faiss`, `parameters$nn_cuvs`, `parameters$nn_spatial_index`,
+`parameters$nn_sparse`, and `parameters$nn_auto_selection` when those fields are
+attached to the internal `nn()` result.
 When a target community count is used,
 `target_n_clusters`, `selected_resolution`, `target_gap`,
 `resolution_selection`, and `resolution_search` record the requested target,
