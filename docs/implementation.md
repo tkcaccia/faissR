@@ -368,7 +368,8 @@ selected by auto/default rules or supplied explicitly.
 `result$parameters$tuning$effective` records the final values used after
 explicit overrides and `"auto"` defaults have been resolved, so benchmark code
 can summarize the effective k-means run without comparing multiple parameter
-fields.
+fields. The flat aliases `effective_max_iter`, `effective_n_init`, and
+`effective_tol` expose the same values for simple CSV summaries.
 
 The public backend policy follows the KNN device contract but adds a
 k-means-specific shape gate: `backend = "auto"` uses CUDA only when CUDA plus

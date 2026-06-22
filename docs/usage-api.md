@@ -234,7 +234,10 @@ iteration count, backend, and parameters, including the k-means tuning rule used
 plus shape metadata, and whether `max_iter`, `n_init`, and `tol` were
 auto-selected or supplied explicitly. `parameters$tuning$effective` records the
 final values used after explicit overrides and `"auto"` defaults have been
-resolved. `parameters$requested_backend` records the public backend argument,
+resolved; `parameters$tuning$effective_max_iter`,
+`parameters$tuning$effective_n_init`, and `parameters$tuning$effective_tol`
+expose the same values as flat fields for benchmark summaries.
+`parameters$requested_backend` records the public backend argument,
 `parameters$resolved_backend` records the public device policy after resolving
 `"auto"`, and `backend` records the implementation
 that actually ran, such as `"faiss"`, `"cpu"`, `"cuda_faiss"`, or `"cuda_cuvs"`.

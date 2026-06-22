@@ -299,6 +299,9 @@ test_that("fast_kmeans docs describe effective tuning metadata", {
   for (docs_file in docs_files) {
     prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
     expect_true(grepl("tuning$effective", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("effective_max_iter", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("effective_n_init", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("effective_tol", prose, fixed = TRUE), info = basename(docs_file))
     expect_true(grepl("final values", prose, fixed = TRUE), info = basename(docs_file))
   }
 })
