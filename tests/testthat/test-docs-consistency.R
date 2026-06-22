@@ -162,6 +162,58 @@ test_that("public API excludes retired wrapper and platform-specific helper name
   expect_false(any(grepl("metal", man_topics, ignore.case = TRUE)))
 })
 
+test_that("R source documentation and function signatures do not contain duplicate arguments", {
+  r_dir <- test_path("../../R")
+  if (!dir.exists(r_dir)) {
+    skip("R source files are not available in this installed-package test context.")
+  }
+
+  r_files <- list.files(r_dir, pattern = "[.]R$", full.names = TRUE)
+  expect_gt(length(r_files), 0L)
+  for (file in r_files) {
+    lines <- readLines(file, warn = FALSE)
+    block <- character()
+    block_start <- NA_integer_
+    for (i in seq_along(lines)) {
+      line <- lines[[i]]
+      if (startsWith(line, "#'")) {
+        if (!length(block)) block_start <- i
+        block <- c(block, line)
+        next
+      }
+      if (length(block)) {
+        param_lines <- block[grepl("^#'\\s*@param\\s+", block)]
+        params <- sub("^#'\\s*@param\\s+([^[:space:]]+).*$", "\\1", param_lines)
+        duplicates <- unique(params[duplicated(params)])
+        expect_false(
+          length(duplicates) > 0L,
+          info = sprintf(
+            "%s roxygen block starting at line %d duplicates @param: %s",
+            basename(file),
+            block_start,
+            paste(duplicates, collapse = ", ")
+          )
+        )
+      }
+      block <- character()
+      block_start <- NA_integer_
+    }
+  }
+
+  ns <- asNamespace("faissR")
+  function_names <- ls(ns, all.names = TRUE)
+  for (name in function_names) {
+    object <- get(name, envir = ns)
+    if (!is.function(object)) next
+    args <- names(formals(object))
+    duplicates <- unique(args[duplicated(args)])
+    expect_false(
+      length(duplicates) > 0L,
+      info = sprintf("%s duplicates formal argument(s): %s", name, paste(duplicates, collapse = ", "))
+    )
+  }
+})
+
 test_that("native routines use registered symbols without public helper leakage", {
   root <- test_path("../../")
   namespace_file <- file.path(root, "NAMESPACE")
