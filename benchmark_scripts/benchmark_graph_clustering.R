@@ -449,7 +449,7 @@ graph_route_parameters <- function(graph) {
     "m", "ef_construction", "ef_search", "requested_m",
     "requested_ef_construction", "requested_ef_search",
     "tuning_policy", "tuning_rule", "tuning_high_dim", "tuning_large_n",
-    "tuning_small_k", "tuning_non_euclidean",
+    "tuning_small_k", "tuning_large_k", "tuning_non_euclidean",
     "r", "search_l", "build_type", "gk", "requested_r",
     "requested_search_l", "requested_build_type",
     "graph_degree", "intermediate_graph_degree", "max_iterations",

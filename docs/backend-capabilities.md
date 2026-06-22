@@ -158,7 +158,8 @@ does not meet the target. Approximate results record relevant parameters in
 `attr(result, "approximation")`.
 FAISS CPU HNSW uses a deterministic no-pilot policy based on `n`, `p`, `k`, and
 `metric`; the approximation metadata records `tuning_rule` plus the shape flags
-used by that policy.
+used by that policy, including high-dimensional, large-`n`, small-`k`,
+large-`k`, and non-Euclidean indicators.
 
 Exact routes mark `attr(result, "exact") = TRUE`. Approximate routes mark
 `exact = FALSE`, and benchmark code should report recall or explicitly mark

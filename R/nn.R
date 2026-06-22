@@ -885,6 +885,7 @@ nn_compute <- function(data,
       tuning_high_dim = isTRUE(params$high_dim),
       tuning_large_n = isTRUE(params$large_n),
       tuning_small_k = isTRUE(params$small_k),
+      tuning_large_k = isTRUE(params$large_k),
       tuning_non_euclidean = isTRUE(params$non_euclidean)
     )
     return(result)
@@ -3479,6 +3480,7 @@ faiss_hnsw_normalized_metric_result <- function(data,
     tuning_high_dim = isTRUE(params$high_dim),
     tuning_large_n = isTRUE(params$large_n),
     tuning_small_k = isTRUE(params$small_k),
+    tuning_large_k = isTRUE(params$large_k),
     tuning_non_euclidean = isTRUE(params$non_euclidean)
   )
   result
@@ -4148,6 +4150,7 @@ faiss_self_knn <- function(data,
       tuning_high_dim = isTRUE(params$high_dim),
       tuning_large_n = isTRUE(params$large_n),
       tuning_small_k = isTRUE(params$small_k),
+      tuning_large_k = isTRUE(params$large_k),
       tuning_non_euclidean = isTRUE(params$non_euclidean),
       seed = as.integer(seed)
     )
@@ -5008,7 +5011,12 @@ faiss_hnsw_auto_policy <- function(n = NULL, p = NULL, k, metric = "euclidean") 
   large_k <- length(k) == 1L && !is.na(k) && k >= 100L
   non_euclidean <- !identical(metric, "euclidean")
 
-  if ((isTRUE(very_large_high_dim) && isTRUE(large_k)) ||
+  if (isTRUE(non_euclidean) && isTRUE(small_k)) {
+    rule <- "balanced_small_k_metric"
+    m <- 32L
+    ef_construction <- 160L
+    ef_search <- max(120L, 4L * k)
+  } else if ((isTRUE(very_large_high_dim) && isTRUE(large_k)) ||
       (isTRUE(non_euclidean) && (isTRUE(large_k) || isTRUE(high_dim)))) {
     rule <- "high_recall_shape_metric"
     m <- 48L
@@ -5036,6 +5044,7 @@ faiss_hnsw_auto_policy <- function(n = NULL, p = NULL, k, metric = "euclidean") 
     high_dim = isTRUE(high_dim),
     large_n = isTRUE(large_n),
     small_k = isTRUE(small_k),
+    large_k = isTRUE(large_k),
     non_euclidean = isTRUE(non_euclidean)
   )
 }
@@ -5074,6 +5083,7 @@ faiss_hnsw_params <- function(k, n = NULL, p = NULL, metric = "euclidean") {
     high_dim = auto$high_dim,
     large_n = auto$large_n,
     small_k = auto$small_k,
+    large_k = auto$large_k,
     non_euclidean = auto$non_euclidean,
     requested_m = as.integer(auto$m),
     requested_ef_construction = as.integer(auto$ef_construction),
@@ -5750,7 +5760,8 @@ grid_self_knn <- function(data,
 #'   \item `"hnsw"`: FAISS CPU HNSW approximate graph-search index [5,16].
 #'   Default FAISS HNSW parameters are selected by a deterministic
 #'   shape/k/metric rule without pilot tuning; result approximation metadata
-#'   records the selected `tuning_rule` and the shape flags used.
+#'   records the selected `tuning_rule` and the high-dimensional, large-`n`,
+#'   small-`k`, large-`k`, and non-Euclidean shape flags used.
 #'   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
 #'   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
 #'   cosine/correlation routes on CPU and FAISS GPU [1-2,16].
@@ -5865,8 +5876,10 @@ grid_self_knn <- function(data,
 #'   results, `"pilot"` tunes for this call without persisting, `"fixed"` uses
 #'   fixed defaults with tuning metadata, and `"off"`/`"none"` disables tuning.
 #'   FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
-#'   `k`, and `metric`; explicit `faissR.faiss_hnsw_*` options override those
-#'   defaults. Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.
+#'   `k`, and `metric`, including separate small-`k` Euclidean,
+#'   small-`k` metric-aware, balanced, and high-recall tiers; explicit
+#'   `faissR.faiss_hnsw_*` options override those defaults. Advanced tuning and
+#'   cache knobs use `options(faissR.<name> = ...)`.
 #' @param output Distance storage type for the returned object. `"double"`
 #'   returns the default R numeric distance matrix. `"float"` returns
 #'   `distances` as a `float::fl()`/`float32` object and records

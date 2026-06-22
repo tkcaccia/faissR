@@ -680,6 +680,7 @@ test_that("NN metric benchmark extracts compact backend route parameters", {
     tuning_policy = "auto_shape_metric",
     tuning_rule = "balanced_shape_metric",
     tuning_high_dim = TRUE,
+    tuning_large_k = FALSE,
     tuning = list(status = "target_met", results = data.frame(recall = 0.99))
   )
   attr(out, "spatial_index") <- list(strategy = "ignored_grid", bins_per_dim = 32L)
@@ -699,6 +700,7 @@ test_that("NN metric benchmark extracts compact backend route parameters", {
   expect_match(params, "approximation.tuning_policy=auto_shape_metric", fixed = TRUE)
   expect_match(params, "approximation.tuning_rule=balanced_shape_metric", fixed = TRUE)
   expect_match(params, "approximation.tuning_high_dim=TRUE", fixed = TRUE)
+  expect_match(params, "approximation.tuning_large_k=FALSE", fixed = TRUE)
   expect_match(params, "spatial_index.bins_per_dim=32", fixed = TRUE)
   expect_match(params, "auto_selection.predicted_method=hnsw", fixed = TRUE)
   expect_match(params, "auto_selection.predicted_device=cpu", fixed = TRUE)
@@ -2351,7 +2353,8 @@ test_that("graph benchmark extracts compact graph KNN route parameters", {
       backend = "faiss_hnsw",
       m = 32L,
       ef_search = 150L,
-      tuning_rule = "balanced_shape_metric"
+      tuning_rule = "balanced_shape_metric",
+      tuning_large_k = FALSE
     ),
     nn_auto_selection = list(
       policy = "static_shape_k_metric_selector",
@@ -2367,6 +2370,7 @@ test_that("graph benchmark extracts compact graph KNN route parameters", {
   expect_match(params, "nn_approximation.m=32", fixed = TRUE)
   expect_match(params, "nn_approximation.ef_search=150", fixed = TRUE)
   expect_match(params, "nn_approximation.tuning_rule=balanced_shape_metric", fixed = TRUE)
+  expect_match(params, "nn_approximation.tuning_large_k=FALSE", fixed = TRUE)
   expect_match(params, "nn_auto_selection.policy=static_shape_k_metric_selector", fixed = TRUE)
   expect_match(params, "nn_auto_selection.predicted_method=hnsw", fixed = TRUE)
   expect_match(params, "nn_auto_selection.predicted_device=cpu", fixed = TRUE)

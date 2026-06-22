@@ -145,6 +145,13 @@ route. The record keeps the internal `predicted_backend` and also exposes
 without parsing implementation labels or rerunning any tuning logic inside
 `nn()`.
 
+FAISS CPU HNSW adds method-specific no-pilot tuning metadata in
+`attr(result, "approximation")`. The policy records `tuning_rule` plus
+high-dimensional, large-`n`, small-`k`, large-`k`, and non-Euclidean flags, so
+benchmarks can distinguish the low-dimensional small-`k` speed tier, the
+small-`k` metric-aware tier, the general balanced tier, and the high-recall
+large-`k`/high-dimensional tier [5].
+
 ## `"hnsw"` Metrics
 
 CPU `method = "hnsw"` is metric-aware. When FAISS is available, faissR uses

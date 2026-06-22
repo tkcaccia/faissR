@@ -2263,6 +2263,21 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
   expect_true(isTRUE(balanced$high_dim))
   expect_true(isTRUE(balanced$large_n))
 
+  small_k_metric <- faissR:::faiss_hnsw_params(
+    k = 5L,
+    n = 70000L,
+    p = 784L,
+    metric = "cosine"
+  )
+  expect_equal(small_k_metric$rule, "balanced_small_k_metric")
+  expect_equal(small_k_metric$m, 32L)
+  expect_equal(small_k_metric$ef_construction, 160L)
+  expect_equal(small_k_metric$ef_search, 120L)
+  expect_true(isTRUE(small_k_metric$small_k))
+  expect_false(isTRUE(small_k_metric$large_k))
+  expect_true(isTRUE(small_k_metric$non_euclidean))
+  expect_equal(anyDuplicated(names(small_k_metric)), 0L)
+
   high_recall <- faissR:::faiss_hnsw_params(
     k = 100L,
     n = 70000L,
@@ -2274,6 +2289,7 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
   expect_equal(high_recall$ef_construction, 240L)
   expect_equal(high_recall$ef_search, 300L)
   expect_true(isTRUE(high_recall$non_euclidean))
+  expect_true(isTRUE(high_recall$large_k))
 
   options(faissR.faiss_hnsw_m = 40L)
   manual <- faissR:::faiss_hnsw_params(

@@ -152,9 +152,10 @@ metadata from FAISS/cuVS/native result attributes, explicit
 `auto_predicted_method` and `auto_predicted_device` fields from no-pilot auto
 selection, and `tuning_status` when a backend reports tuning.
 For deterministic no-pilot routes such as FAISS CPU HNSW, the compact
-parameters include `tuning_rule` and shape flags, and `tuning_status` records
-that rule so speed/recall summaries remain interpretable across dataset shape,
-metric, and `k`.
+parameters include `tuning_rule` and shape flags such as high-dimensional,
+large-`n`, small-`k`, large-`k`, and non-Euclidean indicators, and
+`tuning_status` records that rule so speed/recall summaries remain
+interpretable across dataset shape, metric, and `k`.
 `nn_metric_recommendations_from_cycles.csv` emits one row per
 dataset/backend/metric/k. When recall is available, it selects the fastest
 method whose median recall is at least the configured `recall_threshold`; if no
