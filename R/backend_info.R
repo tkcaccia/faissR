@@ -25,9 +25,9 @@ backend_info <- function() {
     knn_available = c(TRUE, faiss_knn, faiss$gpu && cuda_knn, cuvs_knn, cuda_knn, FALSE),
     public_call = c(
       "backend = \"cpu\"",
-      "backend = \"cpu\" or \"cuda\", method = \"flat\"/\"ivf\"/\"hnsw\"/\"cagra\" as supported",
+      "backend = \"cpu\" or \"cuda\", method = \"flat\"/\"ivf\"/\"ivfpq\"/\"hnsw\"/\"cagra\" as supported",
       "backend = \"cuda\", method = \"ivf\"/\"ivfpq\"/\"cagra\"",
-      "backend = \"cuda\", method = \"bruteforce\"/\"nndescent\"/\"cagra\"",
+      "backend = \"cuda\", method = \"bruteforce\"/\"nndescent\"/\"hnsw\"/\"cagra\"",
       "backend = \"cuda\"",
       "graph_cluster(..., backend = \"cuda\")"
     ),
@@ -40,16 +40,16 @@ backend_info <- function() {
       "cuda"
     ),
     supported_methods = c(
-      "auto, exact, flat, bruteforce, grid, hnsw, ivf, ivfpq, nsg, nndescent",
+      "auto, exact, flat, bruteforce, grid, hnsw, ivf, ivfpq, vamana, nsg, nndescent",
       "flat, ivf, ivfpq, hnsw, nsg; GPU flat/ivf/ivfpq/cagra when FAISS GPU is available",
       "ivf, ivfpq, cagra",
-      "bruteforce, nndescent, cagra",
-      "grid, flat, bruteforce, ivf, ivfpq, nndescent, cagra where compiled",
+      "bruteforce, nndescent, hnsw, cagra",
+      "grid, flat, bruteforce, hnsw, ivf, ivfpq, vamana, nsg, nndescent, cagra where compiled",
       "graph_cluster louvain, leiden"
     ),
     supported_metrics = c(
       "euclidean, cosine, correlation, inner_product; method-specific exclusions in nn_capabilities()",
-      "euclidean, cosine, correlation, inner_product for Flat/IVF/IVFPQ/HNSW and public NSG; explicit FAISS NSG is Euclidean-only",
+      "euclidean, cosine, correlation, inner_product for Flat/IVF/IVFPQ/HNSW; public NSG uses the native CPU route for all metrics, while explicit FAISS NSG is Euclidean-only",
       "euclidean, cosine, correlation, inner_product for IVF/IVFPQ/CAGRA; CAGRA inner_product uses a MIPS-to-L2 transform",
       "euclidean for direct brute force; euclidean plus normalized cosine/correlation for direct IVF/PQ and direct cuVS NN-descent; CAGRA/HNSW inner_product uses a MIPS-to-L2 transform; public CUDA NN-descent inner_product uses native CUDA candidate refinement",
       "euclidean, cosine, correlation, inner_product where the selected CUDA method supports the metric",
@@ -59,8 +59,8 @@ backend_info <- function() {
       "implementation label: cpu",
       "implementation labels include faiss_flat_l2, faiss_ivf, faiss_hnsw, and faiss_gpu_*",
       "implementation labels include faiss_gpu_ivf_flat, faiss_gpu_ivfpq, and faiss_gpu_cagra",
-      "implementation labels include cuda_cuvs_bruteforce, cuda_cuvs_nndescent, and cuda_cuvs_cagra",
-      "implementation label: cuda",
+      "implementation labels include cuda_cuvs_bruteforce, cuda_cuvs_nndescent, cuda_cuvs_hnsw, and cuda_cuvs_cagra",
+      "implementation labels include cuda_grid, cuda_vamana, cuda_nsg, and cuda_nndescent; exact CUDA may report cuda",
       "implementation route: graph_cluster(..., backend = \"cuda\")"
     ),
     device = c(

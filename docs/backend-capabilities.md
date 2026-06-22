@@ -117,11 +117,12 @@ non-public implementation route labels, device/runtime hints, and notes. The
 `resolved_route` column is diagnostic metadata; values such as `faiss_hnsw` or
 `cuda_cuvs_cagra` are implementation labels, not accepted public `method`
 values. For public CAGRA calls, keep `method = "cagra"` and select the CUDA
-provider with `options(faissR.cagra_implementation = "auto")`,
-`"faiss_gpu"`, or `"cuvs"` when a benchmark must force FAISS GPU CAGRA or
-direct cuVS CAGRA. The forced provider is respected for Euclidean, cosine,
-correlation, and inner-product preflight checks. Returned approximate NN
-objects record the resolved provider in `attr(result, "approximation")` as
+provider with the per-call `cagra_implementation = "auto"`, `"faiss_gpu"`, or
+`"cuvs"` argument when a benchmark must force FAISS GPU CAGRA or direct cuVS
+CAGRA. The session option `options(faissR.cagra_implementation = ...)` remains
+available as a default. The forced provider is respected for Euclidean, cosine,
+correlation, and inner-product preflight checks. Returned approximate NN objects
+record the resolved provider in `attr(result, "approximation")` as
 `cagra_provider` and the normalized selector as `cagra_provider_option`.
 The boolean helpers return a single
 `TRUE`/`FALSE` value. They are useful for diagnostics and examples, but
