@@ -132,8 +132,8 @@ default_graph_nn_methods <- function() {
 
 valid_graph_nn_methods <- function() {
   c(
-    "auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
-    "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"
+    "auto", "exact", "flat", "bruteforce", "grid",
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"
   )
 }
 
@@ -456,7 +456,6 @@ graph_route_parameters <- function(graph) {
     nn_faiss = meta$nn_faiss %||% list(),
     nn_cuvs = meta$nn_cuvs %||% list(),
     nn_spatial_index = meta$nn_spatial_index %||% list(),
-    nn_sparse = meta$nn_sparse %||% list(),
     nn_auto_selection = meta$nn_auto_selection %||% list(),
     nn_metric = list(
       metric_transform = meta$nn_metric_transform %||% NA_character_,
@@ -1027,12 +1026,6 @@ graph_build_expected_skip <- function(graph_backend, graph_method = "auto", metr
         notes = sprintf("FAISS NSG requires more than 100 training rows in this FAISS build. This dataset has %s rows.", if (length(n) == 1L && !is.na(n)) as.character(n) else "an unknown number of")
       ))
     }
-  }
-  if (identical(graph_method, "sparse") && !inherits(x, "sparseMatrix") && !inherits(x, "dgCMatrix")) {
-    return(list(
-      reason = "unsupported_input_type",
-      notes = "`graph_method = \"sparse\"` requires sparse Matrix input; dense benchmark datasets are recorded as expected skips."
-    ))
   }
   if (identical(graph_backend, "cuda") &&
       !isTRUE(faissR::cuda_available()) &&

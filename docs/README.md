@@ -20,7 +20,7 @@ backends [3,12-15].
 
 - [Installation](installation.md): CRAN/source-build expectations, mandatory
   FAISS, and optional CUDA/RAPIDS libraries.
-- [Implementation](implementation.md): dense KNN, sparse/candidate KNN, native
+- [Implementation](implementation.md): dense KNN, candidate KNN, native
   graphs, graph clustering, k-means, kNN prediction, and backend rules.
 - [Examples](examples.md): compact examples based on iris.
 - [Benchmarks](benchmarks.md): benchmark design for speed, recall, memory, and

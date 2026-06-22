@@ -40,8 +40,8 @@ internal_nn_without_self <- function(data,
 
 test_that("public nearest-neighbour wrappers expose one canonical method and metric set", {
   canonical_methods <- c(
-    "auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
-    "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"
+    "auto", "exact", "flat", "bruteforce", "grid",
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"
   )
   canonical_metrics <- c("euclidean", "cosine", "correlation", "inner_product")
   wrappers <- list(
@@ -638,8 +638,8 @@ test_that("public NN APIs validate tuning at the exported boundary", {
 test_that("nn_capabilities documents the public method metric matrix", {
   caps <- nn_capabilities()
   methods <- c(
-    "auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
-    "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"
+    "auto", "exact", "flat", "bruteforce", "grid",
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"
   )
   metrics <- c("euclidean", "cosine", "correlation", "inner_product")
 
@@ -656,7 +656,6 @@ test_that("nn_capabilities documents the public method metric matrix", {
 
   expect_true(caps$supported[caps$method == "flat" & caps$metric == "correlation" & caps$backend == "cuda"])
   expect_true(all(caps$supported[caps$method == "auto" & caps$backend == "cuda"]))
-  expect_true(caps$supported[caps$method == "sparse" & caps$metric == "inner_product" & caps$backend == "cpu"])
   expect_true(all(!caps$supported[caps$method == "cagra" & caps$backend == "cpu"]))
   expect_true(all(caps$supported[
     caps$method == "hnsw" & caps$backend == "cuda" &
@@ -668,6 +667,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
   ]))
   expect_true(all(caps$supported[caps$method == "ivf"]))
   expect_true(all(caps$supported[caps$method == "ivfpq"]))
+  expect_true(all(caps$supported[caps$method == "vamana"]))
   expect_true(all(caps$supported[
     caps$method == "grid" & caps$metric %in% c("euclidean", "cosine", "correlation")
   ]))
@@ -680,7 +680,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(all(!caps$supported[
     caps$method == "nsg" & caps$backend == "cpu" & caps$metric != "euclidean"
   ]))
-  expect_true(all(!caps$supported[caps$method == "nsg" & caps$backend == "cuda"]))
+  expect_true(all(caps$supported[caps$method == "nsg" & caps$backend == "cuda"]))
   expect_true(all(caps$supported[
     caps$method == "nndescent" & caps$metric %in% c("euclidean", "cosine", "correlation")
   ]))
@@ -693,7 +693,8 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(!caps$supported[
     caps$method == "nndescent" & caps$backend == "cuda" & caps$metric == "inner_product"
   ])
-  expect_true(all(!caps$supported[caps$method == "vptree" & caps$metric == "inner_product"]))
+  expect_false("sparse" %in% caps$method)
+  expect_false("vptree" %in% caps$method)
 
   cuda_bruteforce_l2 <- caps[
     caps$backend == "cuda" & caps$method == "bruteforce" & caps$metric == "euclidean",
@@ -818,9 +819,8 @@ test_that("runtime-available CPU capability rows execute across public metrics",
   dense <- matrix(rnorm(180L * 8L), nrow = 180L)
   low_dim <- matrix(rnorm(120L * 2L), nrow = 120L)
   ivfpq_dense <- matrix(rnorm(700L * 4L), nrow = 700L)
-  sparse <- Matrix::Matrix(dense, sparse = TRUE)
   smoke_methods <- c(
-    "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
+    "exact", "flat", "bruteforce", "grid",
     "hnsw", "ivf", "ivfpq", "nndescent"
   )
   runtime_caps <- nn_capabilities(runtime = TRUE)
@@ -840,7 +840,6 @@ test_that("runtime-available CPU capability rows execute across public metrics",
     x <- switch(
       row$method,
       grid = low_dim,
-      sparse = sparse,
       ivfpq = ivfpq_dense,
       dense
     )
@@ -1102,104 +1101,12 @@ test_that("faissR options use the faissR namespace only", {
   expect_equal(faissR:::faiss_ivf_params(1000L, 10L)$requested_nlist, 32L)
 })
 
-test_that("nn accepts sparse Matrix inputs on the native sparse CPU path", {
+
+test_that("nn rejects sparse Matrix inputs after sparse method removal", {
   skip_if_not_installed("Matrix")
-  x <- matrix(c(
-    0, 0, 1, 0,
-    1, 0, 0, 0,
-    0, 2, 0, 0,
-    3, 0, 0, 4
-  ), ncol = 4, byrow = TRUE)
-  sx <- Matrix::Matrix(x, sparse = TRUE)
-
-  dense <- nn(x, k = 3L, backend = "cpu")
-  sparse <- nn(sx, k = 3L, backend = "auto")
-
-  expect_equal(attr(sparse, "backend"), "cpu_sparse")
-  expect_true(isTRUE(attr(sparse, "exact")))
-  expect_equal(unname(sparse$indices), unname(dense$indices))
-  expect_equal(unname(sparse$distances), unname(dense$distances), tolerance = 1e-12)
-  expect_true(isTRUE(attr(sparse, "sparse")$input))
-})
-
-test_that("nn sparse query path matches dense query path", {
-  skip_if_not_installed("Matrix")
-  data <- matrix(c(
-    0, 0, 1,
-    1, 0, 0,
-    0, 2, 0,
-    2, 2, 1
-  ), ncol = 3, byrow = TRUE)
-  points <- matrix(c(
-    1, 0, 0,
-    0, 1, 1
-  ), ncol = 3, byrow = TRUE)
-
-  dense <- nn(data, points, k = 2L, backend = "cpu")
-  sparse <- internal_nn(
-    Matrix::Matrix(data, sparse = TRUE),
-    Matrix::Matrix(points, sparse = TRUE),
-    k = 2L,
-    backend = "cpu_sparse"
-  )
-
-  expect_equal(attr(sparse, "backend"), "cpu_sparse")
-  expect_equal(unname(sparse$indices), unname(dense$indices))
-  expect_equal(unname(sparse$distances), unname(dense$distances), tolerance = 1e-12)
-})
-
-test_that("nn sparse cosine and correlation match dense CPU", {
-  skip_if_not_installed("Matrix")
-  x <- matrix(c(
-    1, 0, 0, 2,
-    0, 1, 0, 0,
-    1, 1, 0, 0,
-    0, 0, 3, 0
-  ), ncol = 4, byrow = TRUE)
-  sx <- Matrix::Matrix(x, sparse = TRUE)
-
-  dense_cos <- nn(x, k = 3L, backend = "cpu", metric = "cosine")
-  sparse_cos <- internal_nn(sx, k = 3L, backend = "cpu_sparse", metric = "cosine")
-  expect_equal(unname(sparse_cos$indices), unname(dense_cos$indices))
-  expect_equal(unname(sparse_cos$distances), unname(dense_cos$distances), tolerance = 1e-12)
-
-  dense_cor <- nn(x, k = 3L, backend = "cpu", metric = "correlation")
-  sparse_cor <- internal_nn(sx, k = 3L, backend = "cpu_sparse", metric = "correlation")
-  expect_equal(unname(sparse_cor$indices), unname(dense_cor$indices))
-  expect_equal(unname(sparse_cor$distances), unname(dense_cor$distances), tolerance = 1e-12)
-
-  dense_ip <- nn(x, k = 3L, backend = "cpu", metric = "inner_product")
-  sparse_ip <- internal_nn(sx, k = 3L, backend = "cpu_sparse", metric = "inner_product")
-  expect_equal(unname(sparse_ip$indices), unname(dense_ip$indices))
-  expect_equal(unname(sparse_ip$distances), unname(dense_ip$distances), tolerance = 1e-12)
-
-  for (metric in c("cosine", "correlation", "inner_product")) {
-    public_sparse <- nn(x, k = 3L, backend = "auto", method = "sparse", metric = metric)
-    public_exact <- nn(x, k = 3L, backend = "cpu", method = "exact", metric = metric)
-    expect_equal(attr(public_sparse, "backend"), "cpu_sparse")
-    expect_equal(attr(public_sparse, "metric"), metric)
-    expect_equal(unname(public_sparse$indices), unname(public_exact$indices))
-    expect_equal(unname(public_sparse$distances), unname(public_exact$distances), tolerance = 1e-12)
-  }
-})
-
-test_that("nn_without_self works with sparse Matrix input", {
-  skip_if_not_installed("Matrix")
-  x <- matrix(c(
-    0, 0, 1,
-    1, 0, 0,
-    0, 2, 0,
-    2, 2, 1
-  ), ncol = 3, byrow = TRUE)
-  sx <- Matrix::Matrix(x, sparse = TRUE)
-
-  dense <- nn_without_self(x, k = 2L, backend = "cpu")
-  sparse <- nn_without_self(sx, k = 2L, backend = "auto")
-
-  expect_equal(attr(sparse, "backend"), "cpu_sparse")
-  expect_equal(unname(sparse$indices), unname(dense$indices))
-  expect_equal(unname(sparse$distances), unname(dense$distances), tolerance = 1e-12)
-  expect_false(any(sparse$indices[, 1L] == seq_len(nrow(x))))
+  sx <- Matrix::Matrix(matrix(0, nrow = 4L, ncol = 3L), sparse = TRUE)
+  expect_error(nn(sx, k = 2L), "Sparse Matrix input is no longer supported")
+  expect_error(nn_without_self(sx, k = 2L), "Sparse Matrix input is no longer supported")
 })
 
 test_that("nn returns exact cosine neighbors on CPU", {
@@ -1569,121 +1476,6 @@ test_that("public grid method rejects higher-dimensional data explicitly", {
   )
 })
 
-test_that("VP-tree self KNN matches exact CPU neighbors", {
-  set.seed(12131)
-  x <- matrix(runif(1800L), nrow = 300L)
-  k <- 9L
-
-  exact <- nn(x, k = k, backend = "cpu", n_threads = 2L)
-  tree <- internal_nn(x, k = k, backend = "vptree", n_threads = 2L)
-
-  expect_equal(attr(tree, "backend"), "cpu_vptree")
-  expect_true(isTRUE(attr(tree, "exact")))
-  expect_equal(attr(tree, "spatial_index")$strategy, "native_exact_vptree")
-  expect_equal(tree$indices, exact$indices)
-  expect_equal(tree$distances, exact$distances, tolerance = 5e-6)
-})
-
-test_that("VP-tree query KNN matches exact CPU neighbors", {
-  set.seed(12132)
-  data <- matrix(runif(1600L), nrow = 320L)
-  points <- matrix(runif(350L), nrow = 70L)
-  k <- 11L
-
-  exact <- nn(data, points, k = k, backend = "cpu", n_threads = 2L)
-  tree <- internal_nn(data, points, k = k, backend = "cpu_vptree", n_threads = 2L)
-
-  expect_equal(attr(tree, "backend"), "cpu_vptree")
-  expect_true(isTRUE(attr(tree, "exact")))
-  expect_equal(attr(tree, "spatial_index")$strategy, "native_exact_vptree")
-  expect_equal(tree$indices, exact$indices)
-  expect_equal(tree$distances, exact$distances, tolerance = 5e-6)
-})
-
-test_that("VP-tree supports exact cosine and correlation metrics", {
-  set.seed(12133)
-  x <- matrix(rnorm(120L), ncol = 4L)
-  points <- matrix(rnorm(32L), ncol = 4L)
-  k <- 6L
-
-  for (metric in c("cosine", "correlation")) {
-    exact_self <- nn(x, k = k, backend = "cpu", method = "exact", metric = metric, n_threads = 2L)
-    tree_self <- nn(x, k = k, backend = "cpu", method = "vptree", metric = metric, n_threads = 2L)
-    expect_equal(attr(tree_self, "backend"), "cpu_vptree")
-    expect_equal(attr(tree_self, "metric"), metric)
-    expect_equal(attr(tree_self, "spatial_index")$metric_transform %in% c(
-      "row_l2_normalize_then_vptree",
-      "row_center_l2_normalize_then_vptree"
-    ), TRUE)
-    expect_equal(unname(tree_self$indices), unname(exact_self$indices))
-    expect_equal(unname(tree_self$distances), unname(exact_self$distances), tolerance = 1e-5)
-
-    exact_query <- nn(x, points, k = k, backend = "cpu", method = "exact", metric = metric, n_threads = 2L)
-    tree_query <- internal_nn(x, points, k = k, backend = "cpu_vptree", metric = metric, n_threads = 2L)
-    expect_equal(unname(tree_query$indices), unname(exact_query$indices))
-    expect_equal(unname(tree_query$distances), unname(exact_query$distances), tolerance = 1e-5)
-  }
-
-  expect_error(
-    nn(x, k = k, backend = "cpu", method = "vptree", metric = "inner_product"),
-    "inner-product|inner_product"
-  )
-  expect_error(
-    internal_nn(x, k = k, backend = "cpu_vptree", metric = "inner_product", n_threads = 2L),
-    "inner-product|inner_product"
-  )
-  expect_error(
-    internal_nn(x, points, k = k, backend = "cpu_vptree", metric = "inner_product", n_threads = 2L),
-    "inner-product|inner_product"
-  )
-})
-
-test_that("VP-tree cosine and correlation use exact fallback for zero-normalized rows", {
-  x <- rbind(
-    matrix(0, nrow = 2L, ncol = 4L),
-    matrix(rnorm(96L), ncol = 4L)
-  )
-  points <- rbind(
-    matrix(0, nrow = 1L, ncol = 4L),
-    matrix(rnorm(28L), ncol = 4L)
-  )
-  k <- 6L
-
-  for (metric in c("cosine", "correlation")) {
-    exact_self <- nn(x, k = k, backend = "cpu", method = "exact", metric = metric, n_threads = 2L)
-    tree_self <- nn(x, k = k, backend = "cpu", method = "vptree", metric = metric, n_threads = 2L)
-    expect_equal(attr(tree_self, "backend"), "cpu_vptree")
-    expect_true(isTRUE(attr(tree_self, "spatial_index")$fallback))
-    expect_equal(unname(tree_self$indices), unname(exact_self$indices))
-    expect_equal(unname(tree_self$distances), unname(exact_self$distances), tolerance = 1e-12)
-
-    exact_query <- nn(x, points, k = k, backend = "cpu", method = "exact", metric = metric, n_threads = 2L)
-    tree_query <- internal_nn(x, points, k = k, backend = "cpu_vptree", metric = metric, n_threads = 2L)
-    expect_true(isTRUE(attr(tree_query, "spatial_index")$fallback))
-    expect_equal(unname(tree_query$indices), unname(exact_query$indices))
-    expect_equal(unname(tree_query$distances), unname(exact_query$distances), tolerance = 1e-12)
-  }
-})
-
-test_that("generic CPU spatial KNN falls back to VP-tree for thin data", {
-  set.seed(1214)
-  x <- cbind(runif(3000L), rnorm(3000L, sd = 1e-5), rnorm(3000L, sd = 1e-5))
-  k <- 12L
-
-  exact <- nn_without_self(x, k = k, backend = "cpu", n_threads = 2L)
-  spatial <- internal_nn_without_self(x, k = k, backend = "cpu_grid", n_threads = 2L)
-
-  expect_equal(attr(spatial, "backend"), "cpu_vptree")
-  expect_equal(attr(spatial, "spatial_index")$strategy, "native_exact_vptree")
-  recall <- mean(vapply(seq_len(nrow(x)), function(i) {
-    length(intersect(spatial$indices[i, ], exact$indices[i, ])) / k
-  }, numeric(1)))
-  expect_gt(recall, 0.999)
-  spatial_dist <- t(apply(spatial$distances, 1L, sort))
-  exact_dist <- t(apply(exact$distances, 1L, sort))
-  expect_equal(spatial_dist, exact_dist, tolerance = 5e-5)
-})
-
 test_that("generic CPU spatial KNN keeps duplicate-heavy data on grid", {
   set.seed(1215)
   base <- matrix(runif(20L), ncol = 2L)
@@ -1998,17 +1790,17 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("auto", "hnsw", "euclidean"),
     if (faiss_available()) "faiss_hnsw" else "hnsw"
   )
-  expect_equal(
+  expect_error(
     faissR:::resolve_public_nn_backend("auto", "vptree", "cosine"),
-    "cpu_vptree"
+    "`method` must be one of"
   )
-  expect_equal(
+  expect_error(
     faissR:::resolve_public_nn_backend("auto", "sparse", "inner_product"),
-    "cpu_sparse"
+    "`method` must be one of"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("auto", "nsg", "euclidean"),
-    "faiss_nsg"
+    if (cuda_available()) "cuda_nsg" else "faiss_nsg"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "grid", "euclidean"),
@@ -2151,9 +1943,37 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "ivfpq", "cosine"),
     "faiss_gpu_ivfpq"
   )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "vamana", "euclidean"),
+    "cpu_vamana"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "vamana", "correlation"),
+    "cuda_vamana"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "vamana", "inner_product"),
+    "cuda_vamana"
+  )
   expect_error(
     faissR:::resolve_public_nn_backend("cpu", "nsg", "correlation"),
     "euclidean"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "nsg", "euclidean"),
+    "cuda_nsg"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "nsg", "cosine"),
+    "cuda_nsg"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "nsg", "correlation"),
+    "cuda_nsg"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "nsg", "inner_product"),
+    "cuda_nsg"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "nndescent", "inner_product"),
@@ -2177,8 +1997,7 @@ test_that("public backend and method resolver maps device plus method", {
   )
   expect_error(
     faissR:::resolve_public_nn_backend("cuda", "hnsw", "inner_product"),
-    'CUDA `method = "hnsw"` does not support `metric = "inner_product"`',
-    fixed = TRUE
+    "inner_product"
   )
   expect_error(
     faissR:::resolve_public_nn_backend("cuda", "cagra", "inner_product"),
@@ -2242,7 +2061,6 @@ test_that("CPU-supported public method/metric rows execute on smoke data", {
   dense <- matrix(rnorm(20L * 6L), nrow = 20L)
   spatial <- matrix(runif(40L * 2L), ncol = 2L)
   nsg_dense <- matrix(rnorm(200L * 8L), nrow = 200L)
-  sparse <- Matrix::Matrix(dense, sparse = TRUE)
   caps <- nn_capabilities()
   checked <- caps[
     caps$supported &
@@ -2258,7 +2076,6 @@ test_that("CPU-supported public method/metric rows execute on smoke data", {
     data <- switch(
       method,
       grid = spatial,
-      sparse = sparse,
       nsg = nsg_dense,
       dense
     )
@@ -2275,6 +2092,28 @@ test_that("CPU-supported public method/metric rows execute on smoke data", {
     expect_equal(dim(out$indices), c(nrow(data), 3L), info = label)
     expect_equal(dim(as.matrix(out$distances)), c(nrow(data), 3L), info = label)
     expect_equal(attr(out, "metric"), metric, info = label)
+  }
+})
+
+test_that("native Vamana returns metric-aware CPU self-KNN results", {
+  set.seed(240124)
+  x <- matrix(rnorm(90L * 5L), nrow = 90L)
+
+  for (metric in c("euclidean", "cosine", "correlation", "inner_product")) {
+    out <- internal_nn_without_self(
+      x,
+      k = 6L,
+      backend = "cpu_vamana",
+      metric = metric,
+      n_threads = 2L
+    )
+    approx <- attr(out, "approximation")
+    expect_equal(dim(out$indices), c(nrow(x), 6L), info = metric)
+    expect_equal(attr(out, "backend"), "cpu_vamana", info = metric)
+    expect_equal(attr(out, "metric"), metric, info = metric)
+    expect_equal(approx$backend, "cpu_vamana", info = metric)
+    expect_equal(approx$strategy, "native_vamana_candidate_graph", info = metric)
+    expect_true(all(is.finite(out$distances)), info = metric)
   }
 })
 
@@ -3430,6 +3269,14 @@ test_that("CUDA grid auto does not silently fall back to CPU", {
     internal_nn(x, k = 4L, backend = "cuda_grid_auto"),
     "No CUDA GPU backend is available"
   )
+  expect_error(
+    internal_nn(x, k = 4L, backend = "cuda_nsg"),
+    "No CUDA GPU backend is available"
+  )
+  expect_error(
+    internal_nn(x, k = 4L, backend = "cuda_vamana"),
+    "No CUDA GPU backend is available"
+  )
 })
 
 test_that("RcppHNSW implementation backend is available when the suggested package is installed", {
@@ -3472,6 +3319,29 @@ test_that("CUDA grid auto matches exact CPU grid results", {
   expect_true(isTRUE(attr(gpu, "exact")))
   expect_equal(gpu$indices, cpu$indices)
   expect_equal(gpu$distances, cpu$distances, tolerance = 1e-5)
+})
+
+test_that("CUDA NSG returns metric-aware self-KNN results", {
+  skip_if_not(cuda_available())
+
+  set.seed(1449)
+  x <- matrix(rnorm(120L * 8L), nrow = 120L)
+  for (metric in c("euclidean", "cosine", "correlation", "inner_product")) {
+    out <- internal_nn_without_self(
+      x,
+      k = 8L,
+      backend = "cuda_nsg",
+      metric = metric,
+      n_threads = 2L
+    )
+    approx <- attr(out, "approximation")
+    expect_equal(dim(out$indices), c(nrow(x), 8L), info = metric)
+    expect_equal(attr(out, "backend"), "cuda_nsg", info = metric)
+    expect_equal(attr(out, "metric"), metric, info = metric)
+    expect_equal(approx$backend, "cuda_nsg", info = metric)
+    expect_equal(approx$strategy, "native_cuda_nsg_candidate_graph", info = metric)
+    expect_true(all(is.finite(out$distances)), info = metric)
+  }
 })
 
 test_that("CUDA NN-descent requests use RAPIDS cuVS", {

@@ -277,6 +277,9 @@ method_metric_applicable <- function(method, metric) {
     "faissR_faiss_gpu_ivf_flat",
     "faissR_faiss_gpu_ivfpq",
     "faissR_faiss_hnsw",
+    "faissR_cpu_vamana",
+    "faissR_cuda_vamana",
+    "faissR_cuda_nsg",
     "faissR_cpu_nndescent",
     "RcppHNSW_hnsw"
   )
@@ -298,6 +301,9 @@ method_metric_applicable <- function(method, metric) {
     "faissR_faiss_gpu_ivf_flat",
     "faissR_faiss_gpu_ivfpq",
     "faissR_faiss_hnsw",
+    "faissR_cpu_vamana",
+    "faissR_cuda_vamana",
+    "faissR_cuda_nsg",
     "faissR_cpu_nndescent",
     "faissR_cuda_cuvs_nndescent",
     "RcppHNSW_hnsw",
@@ -319,6 +325,9 @@ method_metric_applicable <- function(method, metric) {
       "faissR_faiss_gpu_ivf_flat",
       "faissR_faiss_gpu_ivfpq",
       "faissR_faiss_hnsw",
+      "faissR_cpu_vamana",
+      "faissR_cuda_vamana",
+      "faissR_cuda_nsg",
       "faissR_cpu_nndescent",
       "faissR_cuda_cuvs_nndescent"
     )
@@ -645,7 +654,10 @@ faissr_benchmark_route <- function(method) {
     faiss_gpu_ivfpq = list(execution_backend = "faiss_gpu_ivfpq", public_backend = "cuda", public_method = "ivfpq"),
     faiss_gpu_cagra = list(execution_backend = "faiss_gpu_cagra", public_backend = "cuda", public_method = "cagra"),
     faiss_hnsw = list(execution_backend = "faiss_hnsw", public_backend = "cpu", public_method = "hnsw"),
+    cpu_vamana = list(execution_backend = "cpu_vamana", public_backend = "cpu", public_method = "vamana"),
+    cuda_vamana = list(execution_backend = "cuda_vamana", public_backend = "cuda", public_method = "vamana"),
     faiss_nsg = list(execution_backend = "faiss_nsg", public_backend = "cpu", public_method = "nsg"),
+    cuda_nsg = list(execution_backend = "cuda_nsg", public_backend = "cuda", public_method = "nsg"),
     cpu_nndescent = list(execution_backend = "cpu_nndescent", public_backend = "cpu", public_method = "nndescent"),
     cpu_grid = list(execution_backend = "cpu_grid", public_backend = "cpu", public_method = "grid"),
     cuda_exact = list(execution_backend = "cuda_cuvs_bruteforce", public_backend = "cuda", public_method = "bruteforce"),
@@ -846,10 +858,6 @@ run_method <- function(method, x, k, n_threads, dataset, out_dir, metric) {
       RcppHNSW::hnsw_knn(x, k = k, distance = rcpphnsw_distance_arg(metric), M = 16, ef_construction = 200, ef = max(50, 3 * k), n_threads = n_threads, progress = "none")
     },
     RcppAnnoy_euclidean = annoy_knn(x, k, n_threads = n_threads),
-    BiocNeighbors_vptree = {
-      if (!available_pkg("BiocNeighbors")) stop("BiocNeighbors unavailable")
-      BiocNeighbors::findKNN(x, k = k, BNPARAM = BiocNeighbors::VptreeParam(distance = "Euclidean"), num.threads = n_threads)
-    },
     BiocNeighbors_hnsw = {
       if (!available_pkg("BiocNeighbors")) stop("BiocNeighbors unavailable")
       BiocNeighbors::findKNN(x, k = k, BNPARAM = BiocNeighbors::HnswParam(distance = if (identical(metric, "cosine")) "Cosine" else "Euclidean", nlinks = 16, ef.construction = 200, ef.search = max(50, 3 * k)), num.threads = n_threads)
@@ -920,7 +928,10 @@ method_table <- function() {
       "faissR_faiss_gpu_ivfpq",
       "faissR_faiss_gpu_cagra",
       "faissR_faiss_hnsw",
+      "faissR_cpu_vamana",
+      "faissR_cuda_vamana",
       "faissR_faiss_nsg",
+      "faissR_cuda_nsg",
       "faissR_cpu_nndescent",
       "faissR_cpu_grid",
       "faissR_cuda_exact",
@@ -939,7 +950,6 @@ method_table <- function() {
       "rnndescent_bruteforce",
       "RcppHNSW_hnsw",
       "RcppAnnoy_euclidean",
-      "BiocNeighbors_vptree",
       "BiocNeighbors_hnsw",
       "BiocNeighbors_annoy",
       "uwot_similarity_graph_fnn",
@@ -951,24 +961,24 @@ method_table <- function() {
       "Rtsne_neighbors"
     ),
     implementation = c(
-      rep("faissR", 20),
+      rep("faissR", 23),
       "Rnanoflann", "RANN", "RANN",
       "rnndescent", "rnndescent", "rnndescent", "rnndescent",
       "RcppHNSW", "RcppAnnoy",
-      "BiocNeighbors", "BiocNeighbors", "BiocNeighbors",
+      "BiocNeighbors", "BiocNeighbors",
       "uwot", "uwot", "uwot", "uwot",
       "cuda.ml",
       "umap", "Rtsne"
     ),
     backend = c(
-      "CPU", "CPU", "CPU", "CUDA", "CPU", "CPU", "CUDA", "CUDA", "CUDA", "CPU", "CPU", "CPU",
+      "CPU", "CPU", "CPU", "CUDA", "CPU", "CPU", "CUDA", "CUDA", "CUDA", "CPU", "CPU", "CUDA", "CPU", "CUDA", "CPU",
       "CPU", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA",
-      rep("CPU", 16),
+      rep("CPU", 15),
       "CUDA",
       "CPU", "CPU"
     ),
     kind = c(
-      rep("knn_search", 37),
+      rep("knn_search", 39),
       "knn_consumer",
       "not_applicable"
     ),
@@ -978,6 +988,9 @@ method_table <- function() {
   methods$backend_detail[methods$method == "faissR_faiss_gpu_ivf_flat"] <- "FAISS GPU + cuVS integrated IVF-Flat"
   methods$backend_detail[methods$method == "faissR_faiss_gpu_ivfpq"] <- "FAISS GPU + cuVS integrated IVF-PQ"
   methods$backend_detail[methods$method == "faissR_faiss_gpu_cagra"] <- "FAISS GPU + cuVS integrated CAGRA"
+  methods$backend_detail[methods$method == "faissR_cpu_vamana"] <- "Native Vamana candidate graph"
+  methods$backend_detail[methods$method == "faissR_cuda_vamana"] <- "Native Vamana candidate graph + CUDA refinement"
+  methods$backend_detail[methods$method == "faissR_cuda_nsg"] <- "Native CUDA NSG candidate graph"
   methods$backend_detail[methods$method %in% c(
     "faissR_cuda_cuvs_ivf_flat",
     "faissR_cuda_cuvs_ivfpq",
@@ -1015,7 +1028,12 @@ benchmark_method_aliases <- function(methods) {
     hnsw = "faissR_faiss_hnsw",
     ivf = "faissR_faiss_ivf",
     ivfpq = "faissR_faiss_ivfpq",
+    vamana = "faissR_cpu_vamana",
+    cuda_vamana = "faissR_cuda_vamana",
+    faissR_cuda_vamana = "faissR_cuda_vamana",
     nsg = "faissR_faiss_nsg",
+    cuda_nsg = "faissR_cuda_nsg",
+    faissR_cuda_nsg = "faissR_cuda_nsg",
     nndescent = "faissR_cpu_nndescent",
     cagra = "faissR_faiss_gpu_cagra",
     cuda_ivf = "faissR_cuda_cuvs_ivf_flat",
@@ -1567,7 +1585,7 @@ materials <- c(
   "`benchmark1_best_by_dataset.csv` and `benchmark1_ranked_speed_quality_memory.csv` rank successful KNN-search rows by recall@k, neighbour-rank correlation, mean relative distance error, elapsed time, and peak memory. This keeps fast but low-recall rows from being reported as the best method.",
   "The faissR CUDA/cuVS NN-descent output was saved for every dataset where the method completed successfully.",
   "",
-  "faissR methods tested: exact CPU, RcppHNSW wrapper, FAISS Flat, FAISS CPU IVF/IVF-Flat, FAISS CPU IVFPQ, FAISS GPU Flat, FAISS GPU IVF-Flat with NVIDIA cuVS integration, FAISS GPU IVF-PQ with NVIDIA cuVS integration, FAISS HNSW, FAISS NSG, native CPU NNDescent, CPU grid on simulated 2D/3D only, native CUDA exact, native CUDA IVF, CUDA grid on simulated 2D/3D only, direct RAPIDS cuVS IVF-Flat, direct RAPIDS cuVS IVF-PQ, direct cuVS brute force, direct cuVS CAGRA, and direct cuVS NN-descent.",
+  "faissR methods tested: exact CPU, RcppHNSW wrapper, FAISS Flat, FAISS CPU IVF/IVF-Flat, FAISS CPU IVFPQ, FAISS GPU Flat, FAISS GPU IVF-Flat with NVIDIA cuVS integration, FAISS GPU IVF-PQ with NVIDIA cuVS integration, FAISS HNSW, FAISS NSG, native CUDA NSG candidate graph, native CPU NNDescent, CPU grid on simulated 2D/3D only, native CUDA exact, native CUDA IVF, CUDA grid on simulated 2D/3D only, direct RAPIDS cuVS IVF-Flat, direct RAPIDS cuVS IVF-PQ, direct cuVS brute force, direct cuVS CAGRA, and direct cuVS NN-descent.",
   "Native CPU NNDescent is benchmarked for Euclidean, cosine, correlation, and raw inner-product metrics. Direct CUDA/cuVS NN-descent is benchmarked for Euclidean, cosine, and correlation; raw inner-product CUDA/cuVS NN-descent is recorded as unsupported.",
   "The Flat rows use the public `method = \"flat\"` route. When `metric = \"inner_product\"` is explicitly requested, faissR dispatches the same public Flat rows to the appropriate FAISS inner-product index internally instead of listing duplicate Flat-IP methods.",
   "For faissR rows, `execution_backend` records the internal backend label used by `nn_compute()`, while `public_backend` and `public_method` record the equivalent public `nn(..., backend = , method = )` route. This separates legacy benchmark labels from the public API.",

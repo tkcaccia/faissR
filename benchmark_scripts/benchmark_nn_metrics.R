@@ -75,8 +75,8 @@ default_nn_metric_values <- function() {
 
 default_nn_method_values <- function() {
   c(
-    "auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
-    "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"
+    "auto", "exact", "flat", "bruteforce", "grid",
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"
   )
 }
 
@@ -461,7 +461,6 @@ nn_route_parameters <- function(out) {
     faiss = attr(out, "faiss", exact = TRUE),
     cuvs = attr(out, "cuvs", exact = TRUE),
     spatial_index = attr(out, "spatial_index", exact = TRUE),
-    sparse = attr(out, "sparse", exact = TRUE),
     auto_selection = attr(out, "auto_selection", exact = TRUE),
     nn_metric = list(
       metric_transform = attr(out, "metric_transform", exact = TRUE) %||%
@@ -1134,18 +1133,7 @@ nn_data_expected_skip <- function(x, method) {
     }
     return(NULL)
   }
-  if (!identical(method, "sparse")) return(NULL)
-  if (inherits(x, "sparseMatrix") || inherits(x, "dgCMatrix")) return(NULL)
-  list(
-    skip = TRUE,
-    route = NA_character_,
-    reason = "unsupported_input_type",
-    notes = paste(
-      "`method = \"sparse\"` is a sparse Matrix route. The benchmark datasets",
-      "loaded by this script are dense matrices, so sparse is recorded as an",
-      "expected skip to avoid converting dense data into a sparse representation."
-    )
-  )
+  NULL
 }
 
 run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_threads,
@@ -1488,7 +1476,6 @@ materials <- c(
   sprintf("- Fastest-method recall threshold: `%s`", recall_threshold),
   "",
   "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities(runtime = TRUE)` and the public backend resolver, then recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
-  "`method = \"sparse\"` is included in the default public method list but is recorded as an expected skip for dense benchmark datasets, because it is intended for sparse `Matrix` inputs and should not force dense data through a sparse conversion.",
   "`method = \"grid\"` is included in the default public method list but is recorded as an expected skip for datasets outside two or three columns, because it is a native low-dimensional spatial search route.",
   "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, and resolved backend fields.",
   "`nn_metric_capabilities.csv` stores the capability table used for that preflight, including `resolved_backend`, `runtime_available`, `runtime_reason`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",

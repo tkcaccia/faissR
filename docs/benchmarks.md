@@ -130,9 +130,6 @@ Unknown metric names now stop the script instead of silently falling back to
 the default metric set, so command-line typos cannot contaminate timing tables.
 `--k_values` must contain one or more positive integers; malformed entries stop
 the script before datasets are loaded.
-The public `method = "sparse"` route is included in the default method list,
-but dense benchmark datasets record it as an expected skip because that route
-is intended for sparse `Matrix` inputs.
 The public `method = "grid"` route is also recorded as an expected skip for
 datasets that are not two- or three-dimensional, because that method is a
 native low-dimensional spatial search route.
@@ -440,7 +437,7 @@ metric matrix. It runs public `nn()` combinations over:
 - backends: `"auto"`, `"cpu"`, `"cuda"`, or any subset passed with
   `--backends`;
 - methods: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`,
-  `"vptree"`, `"sparse"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"nsg"`,
+`"hnsw"`, `"ivf"`, `"ivfpq"`, `"nsg"`,
   `"nndescent"`, and `"cagra"`; these must be canonical lowercase public
   method labels, not resolved backend labels such as `faiss_hnsw`;
 - metrics: `"euclidean"`, `"cosine"`, `"correlation"`, and
@@ -465,11 +462,7 @@ resolved CPU/CUDA route and records expected skips when that route requires
 unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.
 The config includes `available_datasets`, the validated real plus simulated
 dataset names accepted by the `--datasets` selector, which makes partial or
-subset reruns traceable to the full benchmark universe.
-The sparse route is also recorded as an expected skip for dense benchmark
-matrices so dense datasets are not converted just to exercise a sparse-specific
-method.
-Unexpected runtime errors remain ordinary failed rows. Recall is computed
+subset reruns traceable to the full benchmark universe.Unexpected runtime errors remain ordinary failed rows. Recall is computed
 against exact CPU references when feasible. Small datasets use a full exact
 self-KNN reference; larger datasets use a deterministic sample of query rows
 when `quality_n * nrow(data) * ncol(data)` fits `--quality_max_ops`. The
@@ -636,7 +629,7 @@ such as `small_low_work_multistart`, `medium_single_start`, or
 `n`/`p`/`centers`/work trace for auditing. Many-center k-means summaries also
 record `tuning_small_many_centers` and `tuning_few_points_many_centers`, so
 benchmark tables can distinguish stable multistart rules for well-populated
-and sparse-per-center cluster requests.
+and many-center cluster requests.
 
 Example CPU run:
 

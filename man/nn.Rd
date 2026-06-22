@@ -9,8 +9,8 @@ nn(
   points = data,
   k = NULL,
   backend = c("auto", "cpu", "cuda"),
-  method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse", "hnsw",
-    "ivf", "ivfpq", "nsg", "nndescent", "cagra"),
+  method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
+    "vamana", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   output = c("double", "float"),
@@ -19,16 +19,15 @@ nn(
 )
 }
 \arguments{
-\item{data}{Numeric matrix/data frame, sparse `Matrix` object, or optional
-`float::fl()`/`float32` object of reference observations in rows. Sparse
-inputs use the native exact `dgCMatrix` backend for `backend = "auto"` or
-`"cpu"`. Float32 inputs use the CPU FAISS Flat float32 route for public
+\item{data}{Numeric matrix/data frame or optional `float::fl()`/`float32`
+object of reference observations in rows. Float32 inputs use the CPU FAISS
+Flat float32 route for public
 `method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests and
 can be paired with ordinary R double query matrices.}
 
-\item{points}{Numeric matrix/data frame, sparse `Matrix` object, or optional
-`float::fl()`/`float32` query object with observations in rows. Defaults
-to `data`. A float32 query can be paired with an ordinary R double
+\item{points}{Numeric matrix/data frame or optional `float::fl()`/`float32`
+query object with observations in rows. Defaults to `data`. A float32
+query can be paired with an ordinary R double
 reference matrix on the CPU FAISS Flat float32 route.}
 
 \item{k}{Number of neighbors to return. `NULL` chooses the package's
@@ -43,8 +42,8 @@ support or the selected CUDA combination is unavailable.}
 
 \item{method}{Algorithm selector. `"auto"` chooses a shape-aware default for
 the selected backend. Other values include `"exact"`, `"flat"`,
-`"bruteforce"`, `"grid"`, `"vptree"`, `"sparse"`, `"hnsw"`, `"ivf"`,
-`"ivfpq"`, `"nsg"`, `"nndescent"`, and `"cagra"`. Use these canonical
+`"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`,
+`"ivfpq"`, `"vamana"`, `"nsg"`, `"nndescent"`, and `"cagra"`. Use these canonical
 lowercase method labels; resolved implementation labels such as
 `"faiss_hnsw"` are not public `method` values. Unsupported
 backend/method combinations fail clearly; for example,
@@ -178,13 +177,6 @@ Method descriptions:
   Euclidean grid search. Explicit grid requests error for
   higher-dimensional matrices; use `"auto"` to let faissR choose a non-grid
   method when appropriate.
-  \item `"vptree"`: native exact CPU vantage-point-tree search for
-  Euclidean, cosine, and correlation. Cosine/correlation use normalized
-  Euclidean tree search when rows are nonzero/nonconstant and exact CPU
-  fallback otherwise. Raw inner product is not available for VP-tree because
-  it is not a metric distance for tree pruning; use `"exact"`, `"flat"`, or
-  `"hnsw"` for inner-product search.
-  \item `"sparse"`: native exact sparse `dgCMatrix` CPU search.
   \item `"hnsw"`: HNSW approximate graph-search index [3,5,16,22-23].
   CPU uses FAISS HNSW when available and RcppHNSW/hnswlib fallback
   otherwise. CUDA uses RAPIDS cuVS HNSW converted from a CUDA CAGRA index
@@ -203,10 +195,17 @@ Method descriptions:
   and normalized-IP cosine/correlation routes on CPU and FAISS GPU [1-2,6,16].
   IVF and PQ parameter selectors record deterministic tuning metadata; PQ
   fields use `pq_tuning_*` names.
-  \item `"nsg"`: FAISS CPU NSG graph-search index when exposed by the linked
-  FAISS build. It is exposed for Euclidean/L2 only because linked FAISS
-  graph builders can abort during normalized cosine/correlation or raw
-  inner-product construction [16].
+  \item `"vamana"`: DiskANN/Vamana-style robust-pruned candidate graph
+  implemented in faissR [24]. CPU refines exact top-k within candidate rows
+  using native CPU scoring; CUDA refines candidates with faissR's native
+  CUDA row-candidate kernel. cuVS Vamana is acknowledged for GPU
+  build/serialization, but current cuVS documentation does not expose KNN
+  search for this index.
+  \item `"nsg"`: Navigating Spreading-out Graph style approximate search
+  [16,21,29]. CPU uses FAISS NSG for Euclidean/L2 when exposed by the linked
+  FAISS build. CUDA uses faissR's native NSG-style self-KNN candidate graph
+  for all public metrics; cosine/correlation use normalized Euclidean search
+  and raw inner product uses shifted dot-product distances.
   \item `"nndescent"`: NN-descent approximate graph construction via
   faissR's native CPU route or cuVS on CUDA. The native CPU route supports
   Euclidean/L2 and raw inner-product self-KNN; cosine/correlation use

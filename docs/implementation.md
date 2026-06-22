@@ -84,12 +84,11 @@ approximate metadata.
 Supported CPU routes include:
 
 - native exact dense CPU search;
-- native exact sparse `dgCMatrix` search;
 - FAISS CPU Flat, IVF-Flat, IVF-PQ, HNSW, NSG, and NN-Descent when present in
   the linked FAISS build [1-6,16];
 - RcppHNSW as an optional CRAN-friendly fallback;
 - exact 2D/3D grid routes for low-dimensional Euclidean, cosine, and
-  correlation self-KNN, plus VP-tree routes for low-dimensional metric search;
+  correlation self-KNN;
   VP-tree also supports cosine/correlation through normalized Euclidean search
   when rows are nonzero/nonconstant.
 
@@ -240,12 +239,11 @@ public method names map to different concrete functions depending on `backend`.
 | `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP while staying on CUDA for explicit CUDA calls. | Exact FAISS route [1-2,16]. |
 | `bruteforce` | Native exact CPU route. | Euclidean prefers direct cuVS brute force; non-Euclidean metrics use FAISS GPU Flat when available. | Useful for comparing direct cuVS against FAISS GPU Flat [1-3,16]. |
 | `grid` | Native 2D/3D exact spatial grid. | CUDA 2D/3D grid. | Errors outside two or three columns. |
-| `vptree` | Native exact CPU VP-tree for Euclidean, cosine, and correlation; zero-normalized non-Euclidean rows use exact CPU fallback. | Unsupported. | Low-dimensional CPU helper. |
-| `sparse` | Native exact sparse `dgCMatrix` route. | Unsupported. | Avoids densifying sparse matrices. |
 | `hnsw` | FAISS CPU HNSW. | RAPIDS cuVS HNSW from a CUDA CAGRA index for Euclidean/cosine/correlation. | High-recall graph-search route; CUDA raw inner product is not exposed [3,5,16,22-23]. |
 | `ivf` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | Coarse-list approximate route [1-2,16]. |
 | `ivfpq` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | Compressed approximate route [6,16]. |
-| `nsg` | FAISS CPU NSG for Euclidean/L2 only. | Unsupported. | Optional FAISS graph-search baseline; cosine, correlation, and raw inner product are guarded off because the linked FAISS graph builder can abort during non-L2 construction [16]. |
+| `vamana` | Native DiskANN/Vamana-style robust-pruned candidate graph with CPU refinement. | Native DiskANN/Vamana-style robust-pruned candidate graph with CUDA row-candidate refinement. | Distinct pruned directed graph route implemented in faissR; cuVS Vamana currently provides build/serialization rather than KNN search [3,24]. |
+| `nsg` | FAISS CPU NSG for Euclidean/L2 only. | Native CUDA NSG-style self-KNN candidate graph for all public metrics. | Optional graph-search baseline; CPU non-L2 routes are guarded off because the linked FAISS graph builder can abort during non-L2 construction [16,21,29]. |
 | `nndescent` | Native CPU NNDescent for Euclidean/L2, cosine, correlation, and raw inner product. | Direct cuVS NN-descent for Euclidean/L2, cosine, and correlation. | Approximate KNN graph construction; cosine/correlation use normalized Euclidean search, CPU raw inner product uses shifted dot-product distances, CUDA raw inner product is not exposed, and FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
 | `cagra` | Unsupported. | FAISS GPU CAGRA preferred, direct cuVS CAGRA fallback. Cosine/correlation use normalized Euclidean graph search. | CUDA-only graph-search method; raw inner product is not exposed [3,13-16]. |
 
@@ -391,7 +389,7 @@ size directly so benchmark summaries do not need to inspect the embedded graph
 edge list.
 Direct graph builds also preserve compact KNN route metadata in
 `parameters$nn_approximation`, `parameters$nn_faiss`, `parameters$nn_cuvs`,
-`parameters$nn_spatial_index`, `parameters$nn_sparse`, and
+`parameters$nn_spatial_index`, and
 `parameters$nn_auto_selection` when those fields are attached to the internal
 `nn()` result.
 
@@ -586,11 +584,6 @@ Both callables return a stable KNN list with `indices`, `distances`,
 `index_base = 1L`, `distance_type`, `metric`, and `backend_used`. When
 `distances = "float"`, the optional `float` package is required at runtime and
 the returned `distances` component is a `float::fl()`/`float32` matrix.
-
-Sparse input is handled separately. If the input is a sparse `Matrix`, the
-native sparse CPU route can avoid densification. GPU and FAISS routes that do
-not support sparse input fail or densify only when explicitly requested, rather
-than pretending to preserve sparse semantics.
 
 ## Large Data And ImageNet
 

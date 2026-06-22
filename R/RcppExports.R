@@ -113,14 +113,6 @@ annoy_self_knn_cpp <- function(data, k, n_trees, leaf_size, search_k, seed, para
     .Call(`_faissR_annoy_self_knn_cpp`, data, k, n_trees, leaf_size, search_k, seed, parallel, cores)
 }
 
-vptree_self_knn_cpp <- function(data, k, parallel, cores) {
-    .Call(`_faissR_vptree_self_knn_cpp`, data, k, parallel, cores)
-}
-
-vptree_query_knn_cpp <- function(data, points, k, parallel, cores) {
-    .Call(`_faissR_vptree_query_knn_cpp`, data, points, k, parallel, cores)
-}
-
 grid2d_self_knn_cpp <- function(data, k, parallel, cores, bins_per_dim) {
     .Call(`_faissR_grid2d_self_knn_cpp`, data, k, parallel, cores, bins_per_dim)
 }
@@ -267,9 +259,5 @@ kmeans_faiss_cpp <- function(data, centers, max_iter, nredo, tol, seed, n_thread
 
 kmeans_faiss_gpu_cpp <- function(data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus) {
     .Call(`_faissR_kmeans_faiss_gpu_cpp`, data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus)
-}
-
-sparse_nn_cpp <- function(data, points, k, metric, exclude_self, self_query) {
-    .Call(`_faissR_sparse_nn_cpp`, data, points, k, metric, exclude_self, self_query)
 }
 

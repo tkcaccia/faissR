@@ -28,7 +28,6 @@ Distance choices belong in `metric`, not in `method`.
 | Large CUDA graph search | `nn(x, k, backend = "cuda", method = "cagra")` |
 | Memory-pressure approximate search | `nn(x, k, backend = "cpu", method = "ivfpq")` or `nn(x, k, backend = "cuda", method = "ivfpq")` |
 | 2D/3D spatial self-KNN | `nn(x, k, backend = "cpu", method = "grid")` or `nn(x, k, backend = "cuda", method = "grid")` |
-| Sparse matrix input | `nn(x, k, backend = "cpu", method = "sparse")` |
 
 Use `backend_info()` to inspect which compiled CPU, FAISS, CUDA, cuVS, and
 cuGraph capabilities are available on a given machine.
@@ -52,12 +51,11 @@ The `runtime_reason` labels are machine-readable, for example `available`,
 | `"flat"` | yes | FAISS Flat | FAISS GPU Flat | FAISS [1-2,16] |
 | `"bruteforce"` | yes | native CPU exact | cuVS brute force | cuVS [3] |
 | `"grid"` | yes | native 2D/3D grid | native CUDA 2D/3D grid | native faissR implementation |
-| `"vptree"` | yes | native CPU VP-tree | unsupported | VP-tree/metric search [20] |
-| `"sparse"` | yes | native sparse CPU | unsupported | native faissR sparse implementation |
 | `"hnsw"` | approximate | FAISS HNSW for all metrics when FAISS is available; RcppHNSW/hnswlib fallback | cuVS HNSW for Euclidean plus normalized cosine/correlation | HNSW/cuVS [3,5,16,22-23] |
 | `"ivf"` | approximate | FAISS IVF-Flat | FAISS GPU IVF-Flat | FAISS IVF [1-2,16] |
 | `"ivfpq"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
-| `"nsg"` | approximate | FAISS NSG when exposed | unsupported | NSG/FAISS [16,21] |
+| `"vamana"` | approximate | native Vamana candidate graph | native Vamana candidate graph with CUDA refinement | DiskANN/Vamana [3,24] |
+| `"nsg"` | approximate | FAISS NSG for Euclidean/L2 when exposed | native CUDA NSG-style candidate graph for all public metrics | NSG/FAISS [16,21,29] |
 | `"nndescent"` | approximate | native CPU NNDescent | cuVS NN-descent | NN-descent/cuVS [3-4,16] |
 | `"cagra"` | approximate | unsupported | FAISS GPU CAGRA or cuVS CAGRA | FAISS/cuVS CAGRA [3,13-16] |
 
@@ -90,12 +88,11 @@ CUDA and keep CUDA backend metadata.
 | `"flat"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS Flat L2/IP plus normalized Flat IP transforms. |
 | `"bruteforce"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA Euclidean can use cuVS brute force; non-Euclidean routes use FAISS GPU Flat. |
 | `"grid"` | euclidean, cosine, correlation | euclidean, cosine, correlation | 2D/3D self-KNN only; cosine/correlation use normalized Euclidean grid search. |
-| `"vptree"` | euclidean, cosine, correlation | unsupported | Inner product is not a metric for VP-tree pruning. |
-| `"sparse"` | euclidean, cosine, correlation, inner_product | unsupported | Exact sparse CPU route for `Matrix` inputs. |
 | `"hnsw"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation | CPU FAISS HNSW is used for all metrics when available; CUDA uses cuVS HNSW converted from CAGRA for Euclidean and normalized cosine/correlation. |
 | `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
 | `"ivfpq"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVFPQ supports L2/IP; cosine/correlation use normalized IVFPQ IP. |
-| `"nsg"` | euclidean | unsupported | CPU FAISS NSG is Euclidean/L2-only in faissR because this linked FAISS graph builder can abort for non-L2 construction. |
+| `"vamana"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native robust-pruned candidate graph inspired by DiskANN/Vamana; CPU/CUDA refine exact top-k within candidate rows. Cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
+| `"nsg"` | euclidean | euclidean, cosine, correlation, inner_product | CPU FAISS NSG is Euclidean/L2-only in faissR because this linked FAISS graph builder can abort for non-L2 construction. CUDA NSG is self-KNN only; cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
 | `"nndescent"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation | Native CPU NN-descent supports raw inner-product search; CPU/CUDA cosine and correlation use normalized Euclidean graph search. CUDA cuVS NN-descent does not expose raw inner product. FAISS NNDescent is experimental opt-in because linked FAISS builds can abort during graph construction. |
 | `"cagra"` | unsupported | euclidean, cosine, correlation | CUDA-only FAISS/cuVS graph search; cosine/correlation use normalized Euclidean graph search. |
 
@@ -225,37 +222,6 @@ costs, and batching can differ.
 Grid search is intended for low-dimensional spatial data or simulated 2D/3D
 benchmarks. It is not a general high-dimensional ANN algorithm.
 
-## `"vptree"`
-
-`method = "vptree"` uses a native exact CPU vantage-point tree inspired by
-metric-space nearest-neighbour search [20].
-
-- It is CPU-only.
-- It supports Euclidean directly.
-- It supports cosine and correlation by normalizing rows, running the Euclidean
-  VP-tree, and converting chord distances back to `1 - similarity`.
-- If zero or constant rows make that normalized tree transform unsafe, faissR
-  falls back to the native exact CPU scorer and records the fallback in
-  `attr(result, "spatial_index")`.
-- It does not support raw inner-product search because inner product is not a
-  metric for VP-tree pruning.
-- It is mainly useful for low-dimensional data where tree pruning reduces work.
-
-For high-dimensional image or cytometry-style data, FAISS HNSW, IVF, or exact
-GPU routes are usually more relevant.
-
-## `"sparse"`
-
-`method = "sparse"` uses faissR's native exact sparse CPU route for sparse
-`Matrix` inputs.
-
-- It avoids densifying `dgCMatrix` input.
-- It is CPU-only.
-- It is an exact route for the supported sparse metrics.
-
-Use this method when preserving sparse representation matters more than using
-FAISS/CUDA acceleration.
-
 ## `"hnsw"`
 
 `method = "hnsw"` requests FAISS CPU HNSW, a graph-based approximate nearest
@@ -303,18 +269,45 @@ IVFPQ is a memory-pressure method. It can be fast and memory-efficient, but
 recall can drop substantially. Treat it as explicit opt-in when memory matters,
 not as the default accuracy-first method.
 
+## `"vamana"`
+
+`method = "vamana"` requests a DiskANN/Vamana-style robust-pruned graph route
+implemented inside faissR [24].
+
+- CPU `method = "vamana"` builds a candidate graph, applies Vamana-style
+  robust pruning controlled by `alpha`, and refines exact top-k neighbours
+  inside each candidate row with faissR's CPU candidate KNN scorer.
+- CUDA `method = "vamana"` uses the same candidate graph semantics and refines
+  candidate rows with faissR's native CUDA row-candidate KNN kernel.
+- Euclidean, cosine, correlation, and inner product are supported for self-KNN.
+  Cosine/correlation use normalized Euclidean search; inner product uses
+  shifted dot-product distances to preserve smaller-is-better output.
+- Deterministic defaults expose `options(faissR.vamana_r)`,
+  `options(faissR.vamana_search_l)`, `options(faissR.vamana_alpha)`, and
+  `options(faissR.vamana_prune_max_work)`.
+
+cuVS exposes Vamana/DiskANN GPU index construction and DiskANN-compatible
+serialization [3], but current cuVS documentation states that Vamana search is
+not exposed yet. Therefore faissR does not pretend that this route is a direct
+cuVS search method; it uses faissR-owned candidate refinement while recording
+the DiskANN/Vamana inspiration and cuVS build path in documentation.
+
 ## `"nsg"`
 
-`method = "nsg"` requests FAISS CPU NSG if the linked FAISS build exposes it.
-NSG is a graph-based approximate nearest-neighbour method designed to build a
-navigating graph with a sparse, search-friendly structure [16,21].
+`method = "nsg"` requests a Navigating Spreading-out Graph style approximate
+nearest-neighbour graph [21].
 
-- It is CPU-only in faissR.
-- Availability depends on the linked FAISS build.
-- It is kept as an optional graph-search baseline.
-- It supports Euclidean/L2 directly.
-- Cosine, correlation, and raw inner-product NSG are not exposed because some
-  linked FAISS graph builders can abort during non-L2 construction.
+- CPU `method = "nsg"` uses FAISS NSG if the linked FAISS build exposes it and
+  remains Euclidean/L2-only because linked FAISS graph builders can abort
+  during non-L2 construction [16].
+- CUDA `method = "nsg"` uses faissR's native CUDA NSG-style self-KNN route. It
+  builds a sparse candidate graph, prunes candidates with an NSG/MRNG-style
+  rule, and refines rows with the native CUDA row-candidate KNN kernel.
+- CUDA NSG supports Euclidean, cosine, correlation, and inner product for
+  self-KNN. Cosine/correlation use normalized Euclidean search; inner product
+  uses the package-wide shifted dot-product distance convention.
+- Query-vs-reference CUDA NSG graph traversal is not exposed yet; explicit CUDA
+  NSG currently requires self-KNN.
 
 When using NSG, check whether the backend returns the requested number of
 neighbours and measure recall on a representative subset.

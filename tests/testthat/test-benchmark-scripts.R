@@ -36,8 +36,8 @@ test_that("NN metric benchmark defaults cover full method metric backend and k g
   expect_setequal(
     env$default_nn_method_values(),
     c(
-      "auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
-      "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"
+      "auto", "exact", "flat", "bruteforce", "grid",
+      "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"
     )
   )
   expect_equal(env$default_nn_k_values(), c(5L, 10L, 15L, 50L, 100L))
@@ -185,20 +185,24 @@ test_that("benchmark dataset defaults use the requested real and simulated datas
   }
 })
 
-test_that("NN metric benchmark preflights unsupported NSG metrics as expected skips", {
+test_that("NN metric benchmark preflights CPU-only NSG metric limits as expected skips", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
     "args <- parse_args()"
   )
   caps <- nn_capabilities()
 
-  for (backend in c("auto", "cpu")) {
-    for (metric in c("cosine", "correlation", "inner_product")) {
-      skip <- env$is_expected_skip(caps, backend, "nsg", metric)
-      expect_type(skip, "list")
-      expect_true(isTRUE(skip$skip))
-      expect_true(nzchar(skip$reason))
-      expect_match(skip$notes, "euclidean|non-Euclidean|unsupported|rejected|No CPU or CUDA route", ignore.case = TRUE)
+  for (metric in c("cosine", "correlation", "inner_product")) {
+    skip <- env$is_expected_skip(caps, "cpu", "nsg", metric)
+    expect_type(skip, "list")
+    expect_true(isTRUE(skip$skip))
+    expect_true(nzchar(skip$reason))
+    expect_match(skip$notes, "euclidean|unsupported|rejected", ignore.case = TRUE)
+
+    cuda_skip <- env$is_expected_skip(caps, "cuda", "nsg", metric)
+    if (!is.null(cuda_skip)) {
+      expect_true(isTRUE(cuda_skip$skip))
+      expect_match(cuda_skip$reason, "runtime_unavailable|missing_cuda_route")
     }
   }
 })
@@ -210,7 +214,7 @@ test_that("NN metric benchmark preflights auto rows from nn_capabilities", {
   )
   caps <- nn_capabilities()
 
-  skip <- env$is_expected_skip(caps, "auto", "nsg", "inner_product")
+  skip <- env$is_expected_skip(caps, "auto", "cagra", "inner_product")
   expect_type(skip, "list")
   expect_true(isTRUE(skip$skip))
   expect_true(nzchar(skip$reason))
@@ -535,7 +539,7 @@ test_that("NN metric benchmark requires canonical public method labels", {
   )
   expect_error(
     env$canonical_method_values(c("HNSW", "faiss_hnsw")),
-    "Valid value\\(s\\): auto, exact, flat, bruteforce, grid, vptree, sparse, hnsw, ivf, ivfpq, nsg, nndescent, cagra"
+    "Valid value\\(s\\): auto, exact, flat, bruteforce, grid, hnsw, ivf, ivfpq, vamana, nsg, nndescent, cagra"
   )
   expect_error(
     env$canonical_method_values(character()),
@@ -925,16 +929,11 @@ test_that("NN metric benchmark accounts for data-shaped method skips", {
   )
 
   default_methods <- env$default_nn_method_values()
-  expect_true("sparse" %in% default_methods)
+  expect_false("sparse" %in% default_methods)
+  expect_false("vptree" %in% default_methods)
   expect_true("grid" %in% default_methods)
 
   dense <- matrix(rnorm(20), ncol = 4)
-  sparse_skip <- env$nn_data_expected_skip(dense, "sparse")
-  expect_type(sparse_skip, "list")
-  expect_true(isTRUE(sparse_skip$skip))
-  expect_equal(sparse_skip$reason, "unsupported_input_type")
-  expect_match(sparse_skip$notes, "sparse Matrix")
-
   grid_skip <- env$nn_data_expected_skip(dense, "grid")
   expect_type(grid_skip, "list")
   expect_true(isTRUE(grid_skip$skip))
@@ -1315,6 +1314,30 @@ test_that("legacy Benchmark #1 exposes faissR NNDescent metric support", {
   }
   expect_true(isTRUE(env$method_metric_applicable("faissR_cpu_nndescent", "inner_product")$ok))
   expect_false(isTRUE(env$method_metric_applicable("faissR_cuda_cuvs_nndescent", "inner_product")$ok))
+  for (metric in c("l2", "cosine", "correlation", "inner_product")) {
+    expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_nsg", metric)$ok), info = metric)
+    expect_true(isTRUE(env$method_metric_applicable("faissR_cpu_vamana", metric)$ok), info = metric)
+    expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_vamana", metric)$ok), info = metric)
+  }
+  methods <- env$method_table()
+  cpu_vamana <- methods[methods$method == "faissR_cpu_vamana", , drop = FALSE]
+  expect_equal(nrow(cpu_vamana), 1L)
+  expect_equal(cpu_vamana$execution_backend, "cpu_vamana")
+  expect_equal(cpu_vamana$public_backend, "cpu")
+  expect_equal(cpu_vamana$public_method, "vamana")
+  expect_equal(cpu_vamana$backend_detail, "Native Vamana candidate graph")
+  cuda_vamana <- methods[methods$method == "faissR_cuda_vamana", , drop = FALSE]
+  expect_equal(nrow(cuda_vamana), 1L)
+  expect_equal(cuda_vamana$execution_backend, "cuda_vamana")
+  expect_equal(cuda_vamana$public_backend, "cuda")
+  expect_equal(cuda_vamana$public_method, "vamana")
+  expect_equal(cuda_vamana$backend_detail, "Native Vamana candidate graph + CUDA refinement")
+  cuda_nsg <- methods[methods$method == "faissR_cuda_nsg", , drop = FALSE]
+  expect_equal(nrow(cuda_nsg), 1L)
+  expect_equal(cuda_nsg$execution_backend, "cuda_nsg")
+  expect_equal(cuda_nsg$public_backend, "cuda")
+  expect_equal(cuda_nsg$public_method, "nsg")
+  expect_equal(cuda_nsg$backend_detail, "Native CUDA NSG candidate graph")
 })
 
 test_that("legacy Benchmark #1 best ranking is quality-aware before speed", {
@@ -2300,10 +2323,6 @@ test_that("graph benchmark preflights graph method and metric skips", {
   expect_match(grid_skip$notes, "two- or three-column")
   expect_match(grid_skip$notes, "4 columns")
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "grid", metric = "euclidean", x = dense[, 1:2]))
-
-  sparse_skip <- env$graph_build_expected_skip("cpu", graph_method = "sparse", metric = "euclidean", x = dense)
-  expect_equal(sparse_skip$reason, "unsupported_input_type")
-  expect_match(sparse_skip$notes, "sparse Matrix")
 
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nndescent", metric = "inner_product", x = dense))
   nnd_cuda_ip <- env$graph_build_expected_skip("cuda", graph_method = "nndescent", metric = "inner_product", x = dense)

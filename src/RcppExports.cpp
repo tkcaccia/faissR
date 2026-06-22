@@ -447,35 +447,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// vptree_self_knn_cpp
-List vptree_self_knn_cpp(NumericMatrix data, int k, bool parallel, int cores);
-RcppExport SEXP _faissR_vptree_self_knn_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP parallelSEXP, SEXP coresSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
-    Rcpp::traits::input_parameter< int >::type k(kSEXP);
-    Rcpp::traits::input_parameter< bool >::type parallel(parallelSEXP);
-    Rcpp::traits::input_parameter< int >::type cores(coresSEXP);
-    rcpp_result_gen = Rcpp::wrap(vptree_self_knn_cpp(data, k, parallel, cores));
-    return rcpp_result_gen;
-END_RCPP
-}
-// vptree_query_knn_cpp
-List vptree_query_knn_cpp(NumericMatrix data, NumericMatrix points, int k, bool parallel, int cores);
-RcppExport SEXP _faissR_vptree_query_knn_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP parallelSEXP, SEXP coresSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
-    Rcpp::traits::input_parameter< NumericMatrix >::type points(pointsSEXP);
-    Rcpp::traits::input_parameter< int >::type k(kSEXP);
-    Rcpp::traits::input_parameter< bool >::type parallel(parallelSEXP);
-    Rcpp::traits::input_parameter< int >::type cores(coresSEXP);
-    rcpp_result_gen = Rcpp::wrap(vptree_query_knn_cpp(data, points, k, parallel, cores));
-    return rcpp_result_gen;
-END_RCPP
-}
 // grid2d_self_knn_cpp
 List grid2d_self_knn_cpp(NumericMatrix data, int k, bool parallel, int cores, int bins_per_dim);
 RcppExport SEXP _faissR_grid2d_self_knn_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP parallelSEXP, SEXP coresSEXP, SEXP bins_per_dimSEXP) {
@@ -1052,22 +1023,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// sparse_nn_cpp
-List sparse_nn_cpp(S4 data, S4 points, int k, std::string metric, bool exclude_self, bool self_query);
-RcppExport SEXP _faissR_sparse_nn_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP metricSEXP, SEXP exclude_selfSEXP, SEXP self_querySEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< S4 >::type data(dataSEXP);
-    Rcpp::traits::input_parameter< S4 >::type points(pointsSEXP);
-    Rcpp::traits::input_parameter< int >::type k(kSEXP);
-    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
-    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
-    Rcpp::traits::input_parameter< bool >::type self_query(self_querySEXP);
-    rcpp_result_gen = Rcpp::wrap(sparse_nn_cpp(data, points, k, metric, exclude_self, self_query));
-    return rcpp_result_gen;
-END_RCPP
-}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_faissR_standardize_cpu_cpp", (DL_FUNC) &_faissR_standardize_cpu_cpp, 1},
@@ -1098,8 +1053,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nndescent_self_knn_cpp", (DL_FUNC) &_faissR_nndescent_self_knn_cpp, 10},
     {"_faissR_ivf_self_knn_cpp", (DL_FUNC) &_faissR_ivf_self_knn_cpp, 7},
     {"_faissR_annoy_self_knn_cpp", (DL_FUNC) &_faissR_annoy_self_knn_cpp, 8},
-    {"_faissR_vptree_self_knn_cpp", (DL_FUNC) &_faissR_vptree_self_knn_cpp, 4},
-    {"_faissR_vptree_query_knn_cpp", (DL_FUNC) &_faissR_vptree_query_knn_cpp, 5},
     {"_faissR_grid2d_self_knn_cpp", (DL_FUNC) &_faissR_grid2d_self_knn_cpp, 5},
     {"_faissR_grid3d_self_knn_cpp", (DL_FUNC) &_faissR_grid3d_self_knn_cpp, 5},
     {"_faissR_candidate_knn_cpp", (DL_FUNC) &_faissR_candidate_knn_cpp, 9},
@@ -1137,7 +1090,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_faiss_gpu_cagra_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_cagra_cpp, 8},
     {"_faissR_kmeans_faiss_cpp", (DL_FUNC) &_faissR_kmeans_faiss_cpp, 8},
     {"_faissR_kmeans_faiss_gpu_cpp", (DL_FUNC) &_faissR_kmeans_faiss_gpu_cpp, 7},
-    {"_faissR_sparse_nn_cpp", (DL_FUNC) &_faissR_sparse_nn_cpp, 6},
     {NULL, NULL, 0}
 };
 

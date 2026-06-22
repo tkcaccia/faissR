@@ -33,6 +33,12 @@
 21. Fu C, Xiang C, Wang C, Cai D. Fast approximate nearest neighbor search with the navigating spreading-out graph. Proc VLDB Endow 2019;12:461-74.
 22. RAPIDS Development Team. cuVS HNSW C API documentation. Available from: https://docs.rapids.ai/api/cuvs/stable/c_api/neighbors_hnsw_c/.
 23. Kim J. CUHNSW: CUDA implementation of Hierarchical Navigable Small World Graph algorithm [software, Apache-2.0]. Available from: https://github.com/js1010/cuhnsw.
+24. Subramanya SJ, Devvrit, Kadekodi R, Krishaswamy R, Simhadri HV. DiskANN: Fast Accurate Billion-point Nearest Neighbor Search on a Single Node. NeurIPS 2019.
+25. Groh F, Ruppert L, Wieschollek P, Lensch HPA. GGNN: Graph-based GPU Nearest Neighbor Search. IEEE Trans Big Data 2023.
+26. Zhao W, Tan S, Li P. SONG: Approximate Nearest Neighbor Search on GPU. ICDE 2020.
+27. Venkatasubba K, Khan S, Singh S, Simhadri HV, Vedurada J. BANG: Billion-Scale Approximate Nearest Neighbour Search Using a Single GPU. IEEE Trans Big Data 2025.
+28. Gui Y, Li Z, Li Q, et al. PilotANN: Memory-Bounded GPU Acceleration for Vector Search. arXiv:2503.21206.
+29. Fu C, Xiang C, Wang C, Cai D. NSG: Navigating Spreading-out Graph for Approximate Nearest Neighbor Search [software, MIT]. Available from: https://github.com/ZJULearning/nsg.
 
 ## Software Acknowledgements
 
@@ -40,7 +46,7 @@
 rather than vendoring those libraries [1-3,12-16]. HNSW, NN-descent, IVF,
 product quantization, flat search, k-means, Louvain, Leiden, and random-walk
 clustering are acknowledged as algorithmic and software foundations where the
-compiled backend exposes them [1-11,16,20-23].
+compiled backend exposes them [1-11,16,20-28].
 
 Native CPU graph clustering is faissR C++/OpenMP code inspired by the Louvain,
 Leiden, walktrap/random-walk, and multicore graph-clustering literature
@@ -50,4 +56,11 @@ documented by FAISS, NVIDIA, and Meta [13-15]. Direct cuVS routes call RAPIDS
 cuVS C/C++ libraries [3]. Direct CUDA HNSW uses the RAPIDS cuVS HNSW wrapper
 path documented by NVIDIA/RAPIDS [22]. CUHNSW is acknowledged as related
 Apache-2.0 CUDA HNSW prior software, but no CUHNSW source code is vendored or
-copied into faissR [23]. The package does not use a Python/cuGraph bridge.
+copied into faissR [23]. The native Vamana route is inspired by DiskANN/Vamana
+robust-pruned graph construction [24] and uses faissR-owned candidate
+refinement code; GGNN, SONG, BANG, and PilotANN are acknowledged as related GPU
+ANN systems and design references, but their source code is not vendored or
+copied into faissR [25-28]. The native CUDA NSG-style route is inspired by the
+NSG paper and official MIT-licensed NSG software, but no ZJULearning/nsg source
+code is vendored or copied into faissR [21,29]. The package does not use a
+Python/cuGraph bridge.

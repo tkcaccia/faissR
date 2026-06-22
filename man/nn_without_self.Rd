@@ -8,8 +8,8 @@ nn_without_self(
   data,
   k,
   backend = c("auto", "cpu", "cuda"),
-  method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse", "hnsw",
-    "ivf", "ivfpq", "nsg", "nndescent", "cagra"),
+  method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
+    "vamana", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   output = c("double", "float"),
@@ -18,7 +18,7 @@ nn_without_self(
 )
 }
 \arguments{
-\item{data}{Numeric matrix/data frame or sparse `Matrix` object with
+\item{data}{Numeric matrix/data frame with
 observations in rows.}
 
 \item{k}{Number of non-self neighbours to return.}

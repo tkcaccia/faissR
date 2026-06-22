@@ -279,26 +279,18 @@ test_that("knn_graph accepts method as an alias for nn_method", {
   )
 })
 
-test_that("knn_graph lets auto backend resolve CPU-only NN methods", {
+test_that("knn_graph rejects removed NN methods", {
   set.seed(5042)
   x <- matrix(rnorm(160), ncol = 4)
 
-  g <- knn_graph(
+  expect_error(knn_graph(
     x,
     k = 6L,
     backend = "auto",
     nn_method = "vptree",
     metric = "cosine",
     n_threads = 2L
-  )
-  meta <- attr(g, "faissR_graph")
-
-  expect_s3_class(g, "faissR_graph")
-  expect_equal(meta$requested_backend, "auto")
-  expect_equal(meta$resolved_backend, "cpu_vptree")
-  expect_equal(meta$nn_backend, "cpu_vptree")
-  expect_equal(meta$nn_method, "vptree")
-  expect_equal(meta$metric, "cosine")
+  ), "`method` must be one of")
 })
 
 test_that("graph construction rejects implementation backend labels", {
@@ -672,7 +664,7 @@ test_that("graph_cluster lets graph_backend auto resolve CPU-only NN methods", {
     matrix(rnorm(80, 2, 0.3), ncol = 4)
   )
 
-  cl <- graph_cluster(
+  expect_error(graph_cluster(
     x,
     method = "louvain",
     backend = "cpu",
@@ -681,14 +673,7 @@ test_that("graph_cluster lets graph_backend auto resolve CPU-only NN methods", {
     metric = "cosine",
     k = 6L,
     n_threads = 2L
-  )
-
-  expect_s3_class(cl, "faissR_graph_cluster")
-  expect_equal(cl$parameters$graph_backend, "cpu_vptree")
-  expect_equal(cl$parameters$graph_requested_backend, "auto")
-  expect_equal(cl$parameters$graph_resolved_backend, "cpu_vptree")
-  expect_equal(cl$parameters$graph_method, "vptree")
-  expect_equal(cl$parameters$metric, "cosine")
+  ), "`method` must be one of")
 })
 
 test_that("graph_cluster keeps random-walking on CPU", {

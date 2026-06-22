@@ -11,8 +11,8 @@ graph_cluster(
   backend = c("auto", "cpu", "cuda"),
   k = 50L,
   graph_backend = "auto",
-  graph_method = c("auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
-    "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"),
+  graph_method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf",
+    "ivfpq", "vamana", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   weight = c("auto", "snn", "adaptive", "distance", "binary"),
@@ -100,8 +100,8 @@ record the clustered graph size for benchmark summaries.
 \code{parameters$nn_distance_transform} preserve normalized metric conversion
 metadata from the KNN route that built the graph.
 \code{parameters$nn_approximation}, \code{parameters$nn_faiss},
-\code{parameters$nn_cuvs}, \code{parameters$nn_spatial_index},
-\code{parameters$nn_sparse}, and \code{parameters$nn_auto_selection}
+\code{parameters$nn_cuvs}, \code{parameters$nn_spatial_index}, and
+\code{parameters$nn_auto_selection}
 preserve compact KNN route metadata when the graph is built internally. When a target
 community count is used, \code{target_n_clusters},
 \code{selected_resolution}, \code{target_gap}, \code{resolution_selection},
