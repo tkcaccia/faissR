@@ -140,6 +140,18 @@ nn_compute <- function(data,
     } else if (backend %in% c("cuda_auto", "gpu_auto")) {
       backend <- "cuda_auto"
     } else if (metric %in% c("cosine", "correlation") &&
+               backend %in% c("grid", "cpu_grid", "grid2d", "cpu_grid2d",
+                              "grid3d", "cpu_grid3d", "cuda_grid",
+                              "cuda_grid_auto", "gpu_grid", "cuda_grid2d",
+                              "cuda_grid3d")) {
+      backend <- backend
+    } else if (identical(metric, "inner_product") &&
+               backend %in% c("grid", "cpu_grid", "grid2d", "cpu_grid2d",
+                              "grid3d", "cpu_grid3d", "cuda_grid",
+                              "cuda_grid_auto", "gpu_grid", "cuda_grid2d",
+                              "cuda_grid3d")) {
+      stop("Grid nearest-neighbour search does not support `metric = \"inner_product\"`.", call. = FALSE)
+    } else if (metric %in% c("cosine", "correlation") &&
                backend %in% c("vptree", "cpu_vptree")) {
       backend <- "cpu_vptree"
     } else if (identical(metric, "inner_product") &&
@@ -1282,8 +1294,8 @@ nn_compute <- function(data,
     if (!isTRUE(self_query)) {
       stop("`backend = \"cuda_grid_auto\"` is only available for self-KNN searches.", call. = FALSE)
     }
-    if (!identical(metric, "euclidean")) {
-      stop("`backend = \"cuda_grid_auto\"` supports only Euclidean distances.", call. = FALSE)
+    if (identical(metric, "inner_product")) {
+      stop("`backend = \"cuda_grid_auto\"` does not support inner-product search.", call. = FALSE)
     }
     if (!ncol(data) %in% c(2L, 3L)) {
       stop("`backend = \"cuda_grid_auto\"` supports only two- or three-column matrices.", call. = FALSE)
@@ -1291,10 +1303,16 @@ nn_compute <- function(data,
     if (!isTRUE(cuda_available())) {
       stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
     }
+    metric_inputs <- NULL
+    search_data <- data
+    if (metric %in% c("cosine", "correlation")) {
+      metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric)
+      search_data <- metric_inputs$data
+    }
     nonself_k <- if (isTRUE(exclude_self)) k else k - 1L
-    bins <- grid_bins_per_dim(nrow(data), nonself_k, ncol(data))
+    bins <- grid_bins_per_dim(nrow(search_data), nonself_k, ncol(search_data))
     out <- cuda_grid_self_knn_cpp(
-      data,
+      search_data,
       as.integer(nonself_k),
       as.integer(bins)
     )
@@ -1304,10 +1322,14 @@ nn_compute <- function(data,
     }
     resolved <- if (ncol(data) == 3L) "cuda_grid3d" else "cuda_grid2d"
     result <- finish_nn_result(out, resolved, k, self_query, exact = TRUE, metric = metric)
+    if (!is.null(metric_inputs)) {
+      result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
+    }
     attr(result, "spatial_index") <- list(
       strategy = if (ncol(data) == 3L) "native_cuda_exact_uniform_grid_3d" else "native_cuda_exact_uniform_grid_2d",
       backend = resolved,
       exact = TRUE,
+      metric_transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
       bins_per_dim = as.integer(out$bins_per_dim),
       n_cells = as.integer(out$n_cells)
     )
@@ -1318,18 +1340,36 @@ nn_compute <- function(data,
     if (!isTRUE(self_query)) {
       stop("`backend = \"cpu_grid\"` is only available for self-KNN searches.", call. = FALSE)
     }
-    if (!identical(metric, "euclidean")) {
-      stop("`backend = \"cpu_grid\"` supports only Euclidean distances.", call. = FALSE)
+    if (identical(metric, "inner_product")) {
+      stop("`backend = \"cpu_grid\"` does not support inner-product search.", call. = FALSE)
+    }
+    metric_inputs <- NULL
+    search_data <- data
+    if (metric %in% c("cosine", "correlation")) {
+      metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric)
+      search_data <- metric_inputs$data
+    }
+    grid_backend <- backend
+    if (!is.null(metric_inputs) && backend %in% c("grid", "cpu_grid")) {
+      grid_backend <- if (ncol(search_data) == 3L) "cpu_grid3d" else "cpu_grid2d"
     }
     out <- grid_self_knn(
-      data,
+      search_data,
       k = k,
-      backend = backend,
+      backend = grid_backend,
       exclude_self = isTRUE(exclude_self),
       n_threads = n_threads
     )
     result <- finish_nn_result(out, attr(out, "spatial_index")$backend, k, self_query, exact = TRUE, metric = metric)
+    if (!is.null(metric_inputs)) {
+      result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
+    }
     attr(result, "spatial_index") <- attr(out, "spatial_index")
+    attr(result, "spatial_index")$metric_transform <- if (is.null(metric_inputs)) {
+      NA_character_
+    } else {
+      metric_inputs$transform
+    }
     return(result)
   }
 
@@ -1600,10 +1640,14 @@ nn_capability_row <- function(method, backend, metric) {
     implementation <- if (identical(backend, "cpu")) "FAISS CPU Flat" else "FAISS GPU Flat"
     notes <- "Cosine uses row L2 normalization plus Flat IP; correlation uses row centering plus L2 normalization plus Flat IP."
   } else if (identical(method, "grid")) {
-    supported <- euclidean
+    supported <- non_ip_metric
     exact <- if (supported) TRUE else NA
     implementation <- if (identical(backend, "cpu")) "native CPU 2D/3D grid" else "native CUDA 2D/3D grid"
-    notes <- if (supported) "Only valid for 2D/3D self-KNN." else "Grid search supports only Euclidean distances."
+    notes <- if (supported) {
+      "Only valid for 2D/3D self-KNN. Cosine/correlation use normalized Euclidean grid search."
+    } else {
+      "Grid search does not expose raw inner-product search."
+    }
   } else if (identical(method, "vptree")) {
     supported <- identical(backend, "cpu") && non_ip_metric
     exact <- if (supported) TRUE else NA
@@ -1750,23 +1794,25 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
     }
     return("cpu_auto")
   }
-    if (!metric %in% c("euclidean", "inner_product") && identical(device, "cuda") &&
-      !method %in% c("exact", "bruteforce", "flat", "ivf", "ivfpq", "nndescent", "cagra")) {
+  if (!metric %in% c("euclidean", "inner_product") && identical(device, "cuda") &&
+      !method %in% c("exact", "bruteforce", "flat", "grid", "ivf", "ivfpq", "nndescent", "cagra")) {
     if (identical(requested_device, "auto")) {
       device <- "cpu"
     } else {
       stop(
         "CUDA nearest-neighbour approximate methods currently support only ",
         "`metric = \"euclidean\"` or `metric = \"inner_product\"`. ",
-        "Use `method = \"flat\"`, `\"ivf\"`, `\"ivfpq\"`, `\"exact\"`, ",
-        "or `\"bruteforce\"` for validated CUDA cosine/correlation search.",
+        "Use `method = \"flat\"`, `method = \"grid\"`, `method = \"ivf\"`, ",
+        "`method = \"ivfpq\"`, `method = \"exact\"`, or ",
+        "`method = \"bruteforce\"` for validated CUDA cosine/correlation ",
+        "search.",
         call. = FALSE
       )
     }
   }
   if (identical(device, "cpu")) {
-    if (identical(method, "grid") && !identical(metric, "euclidean")) {
-      stop("CPU `method = \"grid\"` supports only `metric = \"euclidean\"`.", call. = FALSE)
+    if (identical(method, "grid") && identical(metric, "inner_product")) {
+      stop("CPU `method = \"grid\"` does not support `metric = \"inner_product\"`.", call. = FALSE)
     }
     if (identical(method, "vptree") && identical(metric, "inner_product")) {
       stop("CPU `method = \"vptree\"` does not support `metric = \"inner_product\"`.", call. = FALSE)
@@ -4918,9 +4964,11 @@ grid_self_knn <- function(data,
 #'   CPU search. On CUDA, Euclidean prefers RAPIDS cuVS brute force; cosine,
 #'   correlation, and inner product use FAISS GPU Flat when available because
 #'   direct cuVS brute force is Euclidean/L2-only in faissR [1-3,16].
-#'   \item `"grid"`: native exact 2D/3D Euclidean spatial grid search. Explicit
-#'   grid requests error for higher-dimensional matrices; use `"auto"` to let
-#'   faissR choose a non-grid method when appropriate.
+#'   \item `"grid"`: native exact 2D/3D spatial grid search for Euclidean,
+#'   cosine, and correlation self-KNN. Cosine/correlation use normalized
+#'   Euclidean grid search. Explicit grid requests error for
+#'   higher-dimensional matrices; use `"auto"` to let faissR choose a non-grid
+#'   method when appropriate.
 #'   \item `"vptree"`: native exact CPU vantage-point-tree search for
 #'   Euclidean, cosine, and correlation. Cosine/correlation use normalized
 #'   Euclidean tree search when rows are nonzero/nonconstant and exact CPU
@@ -5002,7 +5050,8 @@ grid_self_knn <- function(data,
 #'   aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and
 #'   stored as canonical metric labels.
 #'   `"euclidean"` is the validated high-performance default. `"cosine"` and
-#'   `"correlation"` are implemented for exact CPU KNN, FAISS CPU/GPU Flat,
+#'   `"correlation"` are implemented for exact CPU KNN, native 2D/3D grid
+#'   search, FAISS CPU/GPU Flat,
 #'   FAISS CPU/GPU IVF-Flat, FAISS CPU/GPU IVFPQ, FAISS CPU HNSW,
 #'   and RcppHNSW. FAISS approximate IP-capable routes use row L2 normalization
 #'   for cosine and row centering plus L2 normalization for correlation before

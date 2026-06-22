@@ -48,7 +48,8 @@ backend/method combinations fail clearly; for example,
 aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and
 stored as canonical metric labels.
 `"euclidean"` is the validated high-performance default. `"cosine"` and
-`"correlation"` are implemented for exact CPU KNN, FAISS CPU/GPU Flat,
+`"correlation"` are implemented for exact CPU KNN, native 2D/3D grid search,
+FAISS CPU/GPU Flat,
 FAISS CPU/GPU IVF-Flat, FAISS CPU/GPU IVFPQ, FAISS CPU HNSW,
 and RcppHNSW. FAISS approximate IP-capable routes use row L2 normalization
 for cosine and row centering plus L2 normalization for correlation before
@@ -118,9 +119,11 @@ Method descriptions:
   search. On CUDA, Euclidean prefers RAPIDS cuVS brute force; cosine,
   correlation, and inner product use FAISS GPU Flat when available because
   direct cuVS brute force is Euclidean/L2-only in faissR [1-3,16].
-  \item `"grid"`: native exact 2D/3D Euclidean spatial grid search. Explicit
-  grid requests error for higher-dimensional matrices; use `"auto"` to let
-  faissR choose a non-grid method when appropriate.
+  \item `"grid"`: native exact 2D/3D spatial grid search for Euclidean,
+  cosine, and correlation self-KNN. Cosine/correlation use normalized
+  Euclidean grid search. Explicit grid requests error for
+  higher-dimensional matrices; use `"auto"` to let faissR choose a non-grid
+  method when appropriate.
   \item `"vptree"`: native exact CPU vantage-point-tree search for
   Euclidean, cosine, and correlation. Cosine/correlation use normalized
   Euclidean tree search when rows are nonzero/nonconstant and exact CPU

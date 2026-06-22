@@ -37,7 +37,8 @@ implementation routes recorded in benchmark output, not separate public
 - Prefer `method = "hnsw"` for CPU approximate self-KNN. In this benchmark its
   FAISS HNSW implementation route gave a better speed/accuracy balance than
   NN-Descent [4-5].
-- Prefer `method = "grid"` for 2D/3D Euclidean simulated data. The grid
+- Prefer `method = "grid"` for 2D/3D Euclidean, cosine, or correlation
+  simulated data. The grid
   backends are intentionally unavailable for higher-dimensional data.
 - Treat IVFPQ backends as memory-pressure tools, not accuracy-first defaults.
   Product quantization is useful for compression, but it changes recall
@@ -71,7 +72,7 @@ implementation routes recorded in benchmark output, not separate public
 | `nndescent` | `cuda_cuvs_nndescent` | CUDA graph speed tier | Fast and useful at around 0.99 recall on some datasets; failed on COIL20. |
 | `cagra` | `faiss_gpu_cagra` | CUDA graph high-recall tier | Reliable high-recall CAGRA path through FAISS/cuVS integration [13-15]. |
 | `cagra` | `cuda_cuvs_cagra` | Direct cuVS CAGRA | Guarded by pilot recall. Direct cuVS CAGRA had anomalously poor MNIST recall; do not trust without pilot success. |
-| `grid` | `cpu_grid` | Exact 2D/3D spatial path | Best for simulated 2D/3D Euclidean data; unavailable by design outside 2D/3D. |
+| `grid` | `cpu_grid` | Exact 2D/3D spatial path | Best for simulated 2D/3D Euclidean/cosine/correlation data; unavailable by design outside 2D/3D. |
 | `grid` | `cuda_grid` | CUDA 2D/3D spatial path | Correct for 2D/3D, but benchmark speed depends strongly on GPU model and transfer overhead. |
 
 

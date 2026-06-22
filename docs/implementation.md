@@ -88,7 +88,8 @@ Supported CPU routes include:
 - FAISS CPU Flat, IVF-Flat, IVF-PQ, HNSW, NSG, and NN-Descent when present in
   the linked FAISS build [1-6,16];
 - RcppHNSW as an optional CRAN-friendly fallback;
-- exact 2D/3D grid and VP-tree routes for low-dimensional Euclidean self-KNN;
+- exact 2D/3D grid routes for low-dimensional Euclidean, cosine, and
+  correlation self-KNN, plus VP-tree routes for low-dimensional metric search;
   VP-tree also supports cosine/correlation through normalized Euclidean search
   when rows are nonzero/nonconstant.
 
@@ -98,7 +99,8 @@ Supported CUDA routes include:
   [1-2,13-16];
 - direct RAPIDS cuVS brute force, CAGRA, IVF-Flat, IVF-PQ, and NN-Descent when
   cuVS is available [3,13-15];
-- native CUDA 2D/3D grid search for low-dimensional Euclidean self-KNN.
+- native CUDA 2D/3D grid search for low-dimensional Euclidean, cosine, and
+  correlation self-KNN.
 
 The validated high-performance metric is Euclidean/L2. Cosine and correlation
 are exposed for exact CPU, FAISS CPU/GPU Flat, FAISS CPU/GPU IVF-Flat,
@@ -150,7 +152,7 @@ The public KNN API separates device choice from algorithm choice:
 
 The public `method` argument selects the algorithm. `method = "auto"` is the
 shape-aware selector for the chosen device. On CPU, it uses exact CPU for small
-work, exact grid search for large 2D/3D Euclidean self-KNN, FAISS IVF for
+work, exact grid search for large 2D/3D Euclidean/cosine/correlation self-KNN, FAISS IVF for
 million-row self-KNN where HNSW graph construction is too memory-heavy, FAISS
 HNSW for large high-dimensional self-KNN across all supported CPU metrics when
 FAISS is available, and FAISS Flat exact search for larger

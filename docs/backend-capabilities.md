@@ -47,7 +47,7 @@ list with method-specific parameters.
 | `"exact"` | Native exact CPU KNN. | FAISS GPU Flat if available; Euclidean can otherwise use direct cuVS brute force. | Exact/high-recall baseline [1-3,16]. |
 | `"flat"` | FAISS Flat L2/IP; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP while explicit CUDA calls remain on CUDA. | Exact FAISS exhaustive search [1-2,16]. |
 | `"bruteforce"` | Native exact CPU KNN. | Euclidean prefers direct RAPIDS cuVS brute force; cosine, correlation, and inner product use FAISS GPU Flat when available. | Exhaustive route, useful for FAISS/cuVS comparisons [1-3,16]. |
-| `"grid"` | Native exact 2D/3D Euclidean grid. | Native CUDA 2D/3D Euclidean grid. | Low-dimensional spatial or simulated data; explicit grid requests error outside two or three columns. |
+| `"grid"` | Native exact 2D/3D grid for Euclidean, cosine, and correlation. | Native CUDA 2D/3D grid for Euclidean, cosine, and correlation. | Low-dimensional spatial or simulated data; cosine/correlation use normalized Euclidean grid search; explicit grid requests error outside two or three columns. |
 | `"vptree"` | Native exact CPU vantage-point tree for Euclidean, cosine, and correlation; zero-normalized non-Euclidean rows use exact CPU fallback. | Unsupported. | Low-dimensional CPU searches. |
 | `"sparse"` | Native exact sparse `dgCMatrix` CPU route. | Unsupported. | Sparse matrices without densifying. |
 | `"hnsw"` | FAISS CPU HNSW for all four public metrics when FAISS is available; RcppHNSW/hnswlib fallback otherwise. | Unsupported. | High-recall approximate CPU graph search [5,16]. |
@@ -68,7 +68,7 @@ a CPU FAISS route in faissR.
 | --- | --- | --- | --- |
 | Native faissR dense exact | yes | no | CRAN-friendly exact CPU baseline. |
 | Native faissR sparse exact | yes | no | Uses sparse `Matrix` input without densifying. |
-| Native faissR grid | yes | optional CUDA | 2D/3D Euclidean self-KNN only. |
+| Native faissR grid | yes | optional CUDA | 2D/3D Euclidean, cosine, and correlation self-KNN only. |
 | FAISS Flat | yes | yes, if FAISS GPU is built | Exact L2 search [1-2,16]. |
 | FAISS IVF-Flat | yes | yes, if FAISS GPU is built | Inverted-file approximate L2/IP search; cosine/correlation use normalized IP [1-2,16]. |
 | FAISS IVF-PQ | yes | yes, if FAISS GPU is built | Product-quantized approximate L2/IP search; cosine/correlation use normalized IP [6,16]. |

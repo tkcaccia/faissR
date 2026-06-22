@@ -157,6 +157,12 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(all(caps$supported[caps$method == "ivf"]))
   expect_true(all(caps$supported[caps$method == "ivfpq"]))
   expect_true(all(caps$supported[
+    caps$method == "grid" & caps$metric %in% c("euclidean", "cosine", "correlation")
+  ]))
+  expect_true(all(!caps$supported[
+    caps$method == "grid" & caps$metric == "inner_product"
+  ]))
+  expect_true(all(caps$supported[
     caps$method == "nsg" & caps$backend == "cpu" & caps$metric == "euclidean"
   ]))
   expect_true(all(!caps$supported[
@@ -704,6 +710,24 @@ test_that("3D grid self KNN matches exact CPU neighbors", {
   expect_equal(grid$distances, exact$distances, tolerance = 1e-12)
 })
 
+test_that("grid self KNN supports normalized cosine and correlation metrics", {
+  set.seed(1214)
+  x <- matrix(rnorm(9000L), ncol = 3L)
+  k <- 10L
+
+  for (metric in c("cosine", "correlation")) {
+    exact <- nn(x, k = k, backend = "cpu", method = "exact", metric = metric, n_threads = 2L)
+    grid <- internal_nn(x, k = k, backend = "cpu_grid", metric = metric, n_threads = 2L)
+
+    expect_equal(attr(grid, "backend"), "cpu_grid3d", info = metric)
+    expect_true(isTRUE(attr(grid, "exact")), info = metric)
+    expect_equal(attr(grid, "metric"), metric)
+    expect_match(attr(grid, "spatial_index")$metric_transform, "normalize_then_euclidean", info = metric)
+    expect_equal(grid$indices, exact$indices, info = metric)
+    expect_equal(grid$distances, exact$distances, tolerance = 1e-8, info = metric)
+  }
+})
+
 test_that("public grid method rejects higher-dimensional data explicitly", {
   set.seed(12130)
   x <- matrix(runif(600L), nrow = 120L)
@@ -1139,6 +1163,14 @@ test_that("public backend and method resolver maps device plus method", {
     "cpu_grid"
   )
   expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "grid", "cosine"),
+    "cpu_grid"
+  )
+  expect_error(
+    faissR:::resolve_public_nn_backend("cpu", "grid", "inner_product"),
+    "inner_product"
+  )
+  expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "auto", "euclidean"),
     "cuda_auto"
   )
@@ -1156,6 +1188,10 @@ test_that("public backend and method resolver maps device plus method", {
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "grid", "euclidean"),
+    "cuda_grid"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "grid", "correlation"),
     "cuda_grid"
   )
   expect_error(
