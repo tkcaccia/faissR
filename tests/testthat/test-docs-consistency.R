@@ -739,6 +739,18 @@ test_that("benchmark documentation describes saved dataset selector universe", {
   expect_true(grepl("--datasets", prose, fixed = TRUE))
 })
 
+test_that("benchmark documentation describes NN expected-skip reason labels", {
+  docs_file <- test_path("../../docs/benchmarks.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  expect_true(grepl("nn_metric_benchmark_results.csv", prose, fixed = TRUE))
+  expect_true(grepl("expected_skip_reason", prose, fixed = TRUE))
+  expect_true(grepl("without parsing the prose error message", prose, fixed = TRUE))
+})
+
 test_that("benchmark documentation describes k-means runtime reason codes", {
   docs_file <- test_path("../../docs/benchmarks.md")
   if (!file.exists(docs_file)) {

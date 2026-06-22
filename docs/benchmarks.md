@@ -389,7 +389,9 @@ metric matrix. It runs public `nn()` combinations over:
 
 Unsupported combinations are preflighted with `faissR::nn_capabilities(runtime = TRUE)` and
 the public backend resolver, then saved as `status = "expected_skip"` rows with
-`expected_skip = TRUE`. The run configuration is saved as
+`expected_skip = TRUE`; the raw result table also records
+`expected_skip_reason` so runtime, shape, and input-type skips can be grouped
+without parsing the prose error message. The run configuration is saved as
 `nn_metric_benchmark_config.csv`, the raw row-level result table is saved as
 `nn_metric_benchmark_results.csv`, and the runtime-aware capability table used
 for the run is saved as `nn_metric_capabilities.csv`, including public

@@ -373,6 +373,7 @@ result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threa
                        recall_reference = NA_character_,
                        recall_query_n = NA_integer_,
                        expected_skip = FALSE,
+                       expected_skip_reason = NA_character_,
                        capability_notes = NA_character_) {
   data.frame(
     dataset = dataset,
@@ -404,6 +405,7 @@ result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threa
     recall_reference = recall_reference,
     recall_query_n = as.integer(recall_query_n),
     expected_skip = isTRUE(expected_skip),
+    expected_skip_reason = expected_skip_reason,
     capability_notes = capability_notes,
     stringsAsFactors = FALSE
   )
@@ -795,6 +797,7 @@ capability_status <- function(caps, backend, method, metric) {
     return(list(
       listed = FALSE,
       supported = FALSE,
+      runtime_reason = "not_listed",
       notes = sprintf(
         "%s/%s/%s is not listed in faissR::nn_capabilities().",
         backend, method, metric
@@ -851,6 +854,7 @@ route_runtime_skip <- function(backend, method, metric) {
     return(list(
       skip = TRUE,
       route = NA_character_,
+      reason = "resolver_error",
       notes = paste(
         "faissR backend resolver rejected this method/backend/metric combination:",
         conditionMessage(route)
@@ -865,6 +869,7 @@ route_runtime_skip <- function(backend, method, metric) {
       return(list(
         skip = TRUE,
         route = route,
+        reason = "missing_faiss_gpu",
         notes = paste(
           "Resolved route `", route, "` requires FAISS GPU support and a CUDA device, ",
           "but that runtime is unavailable.", sep = ""
@@ -876,6 +881,7 @@ route_runtime_skip <- function(backend, method, metric) {
       return(list(
         skip = TRUE,
         route = route,
+        reason = "missing_cuvs",
         notes = paste(
           "Resolved route `", route, "` requires RAPIDS cuVS, ",
           "but cuVS is unavailable in the current runtime.", sep = ""
@@ -887,6 +893,7 @@ route_runtime_skip <- function(backend, method, metric) {
       return(list(
         skip = TRUE,
         route = route,
+        reason = "missing_cuda",
         notes = paste(
           "Resolved route `", route, "` requires a CUDA device, ",
           "but CUDA is unavailable in the current runtime.", sep = ""
@@ -898,6 +905,7 @@ route_runtime_skip <- function(backend, method, metric) {
       return(list(
         skip = TRUE,
         route = route,
+        reason = "missing_faiss",
         notes = paste(
           "Resolved route `", route, "` requires FAISS, ",
           "but FAISS is unavailable in the current runtime.", sep = ""
@@ -911,7 +919,7 @@ route_runtime_skip <- function(backend, method, metric) {
 auto_expected_skip <- function(caps, method, metric) {
   auto <- capability_status(caps, "auto", method, metric)
   if (!isTRUE(auto$supported)) {
-    return(list(skip = TRUE, notes = auto$notes))
+    return(list(skip = TRUE, reason = auto$runtime_reason %||% "unsupported_combination", notes = auto$notes))
   }
   runtime <- capability_runtime_skip(auto)
   if (!is.null(runtime)) return(runtime)
@@ -927,7 +935,9 @@ is_expected_skip <- function(caps, backend, method, metric) {
   }
   if (!backend %in% c("cpu", "cuda")) return(NULL)
   cap <- capability_status(caps, backend, method, metric)
-  if (!isTRUE(cap$supported)) return(list(skip = TRUE, notes = cap$notes))
+  if (!isTRUE(cap$supported)) {
+    return(list(skip = TRUE, reason = cap$runtime_reason %||% "unsupported_combination", notes = cap$notes))
+  }
   runtime <- capability_runtime_skip(cap)
   if (!is.null(runtime)) return(runtime)
   runtime <- route_runtime_skip(backend, method, metric)
@@ -937,6 +947,7 @@ is_expected_skip <- function(caps, backend, method, metric) {
       !isTRUE(faissR::cuvs_available())) {
     return(list(
       skip = TRUE,
+      reason = "missing_cuda_route",
       notes = paste(
         "backend = \"cuda\" is supported by design for this method/metric,",
         "but CUDA/cuVS is unavailable in the current runtime."
@@ -954,6 +965,7 @@ nn_data_expected_skip <- function(x, method) {
       return(list(
         skip = TRUE,
         route = NA_character_,
+        reason = "unsupported_shape",
         notes = sprintf(
           paste(
             "`method = \"grid\"` supports only two- or three-column matrices.",
@@ -972,6 +984,7 @@ nn_data_expected_skip <- function(x, method) {
       return(list(
         skip = TRUE,
         route = NA_character_,
+        reason = "insufficient_training_rows",
         notes = sprintf(
           paste(
             "FAISS NSG requires more than 100 training rows in this FAISS build.",
@@ -989,6 +1002,7 @@ nn_data_expected_skip <- function(x, method) {
   list(
     skip = TRUE,
     route = NA_character_,
+    reason = "unsupported_input_type",
     notes = paste(
       "`method = \"sparse\"` is a sparse Matrix route. The benchmark datasets",
       "loaded by this script are dense matrices, so sparse is recorded as an",
@@ -1189,6 +1203,7 @@ for (dataset_name in datasets) {
                 status = "expected_skip",
                 error = expected$notes,
                 expected_skip = TRUE,
+                expected_skip_reason = expected$reason %||% NA_character_,
                 capability_notes = expected$notes,
                 preflight_route = expected$route %||% NA_character_
               )
@@ -1312,7 +1327,7 @@ materials <- c(
   "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities(runtime = TRUE)` and the public backend resolver, then recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
   "`method = \"sparse\"` is included in the default public method list but is recorded as an expected skip for dense benchmark datasets, because it is intended for sparse `Matrix` inputs and should not force dense data through a sparse conversion.",
   "`method = \"grid\"` is included in the default public method list but is recorded as an expected skip for datasets outside two or three columns, because it is a native low-dimensional spatial search route.",
-  "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, and resolved backend fields.",
+  "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, and resolved backend fields.",
   "`nn_metric_capabilities.csv` stores the capability table used for that preflight, including `resolved_backend`, `runtime_available`, `runtime_reason`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
   "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_requested_backend`, `result_requested_method`, and `result_tuning` record the public request stored on successful `nn()` results. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes, and `tuning_status` records backend tuning status when present.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k.",

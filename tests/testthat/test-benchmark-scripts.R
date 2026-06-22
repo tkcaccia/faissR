@@ -158,6 +158,7 @@ test_that("NN metric benchmark preflights unsupported NSG metrics as expected sk
       skip <- env$is_expected_skip(caps, backend, "nsg", metric)
       expect_type(skip, "list")
       expect_true(isTRUE(skip$skip))
+      expect_true(nzchar(skip$reason))
       expect_match(skip$notes, "euclidean|non-Euclidean|unsupported|rejected|No CPU or CUDA route", ignore.case = TRUE)
     }
   }
@@ -173,6 +174,7 @@ test_that("NN metric benchmark preflights auto rows from nn_capabilities", {
   skip <- env$is_expected_skip(caps, "auto", "nsg", "inner_product")
   expect_type(skip, "list")
   expect_true(isTRUE(skip$skip))
+  expect_true(nzchar(skip$reason))
   expect_match(skip$notes, "No CPU or CUDA route|unsupported|not exposed", ignore.case = TRUE)
 
   auto_cap <- env$capability_status(caps, "auto", "flat", "inner_product")
@@ -787,11 +789,13 @@ test_that("NN metric benchmark accounts for data-shaped method skips", {
   sparse_skip <- env$nn_data_expected_skip(dense, "sparse")
   expect_type(sparse_skip, "list")
   expect_true(isTRUE(sparse_skip$skip))
+  expect_equal(sparse_skip$reason, "unsupported_input_type")
   expect_match(sparse_skip$notes, "sparse Matrix")
 
   grid_skip <- env$nn_data_expected_skip(dense, "grid")
   expect_type(grid_skip, "list")
   expect_true(isTRUE(grid_skip$skip))
+  expect_equal(grid_skip$reason, "unsupported_shape")
   expect_match(grid_skip$notes, "two- or three-column")
   expect_match(grid_skip$notes, "4 columns")
   expect_null(env$nn_data_expected_skip(matrix(rnorm(20), ncol = 2), "grid"))
@@ -799,10 +803,38 @@ test_that("NN metric benchmark accounts for data-shaped method skips", {
   nsg_skip <- env$nn_data_expected_skip(matrix(rnorm(80 * 4), ncol = 4), "nsg")
   expect_type(nsg_skip, "list")
   expect_true(isTRUE(nsg_skip$skip))
+  expect_equal(nsg_skip$reason, "insufficient_training_rows")
   expect_match(nsg_skip$notes, "more than 100 training rows")
   expect_match(nsg_skip$notes, "80 rows")
   expect_null(env$nn_data_expected_skip(matrix(rnorm(120 * 4), ncol = 4), "nsg"))
   expect_null(env$nn_data_expected_skip(matrix(rnorm(20), ncol = 4), "flat"))
+})
+
+test_that("NN metric benchmark raw rows record expected-skip reason labels", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  row <- env$result_row(
+    dataset = "A",
+    n = 100L,
+    p = 4L,
+    backend = "cpu",
+    method = "grid",
+    metric = "euclidean",
+    k = 15L,
+    cycle = 1L,
+    n_threads = 2L,
+    status = "expected_skip",
+    error = "grid requires 2D/3D data",
+    expected_skip = TRUE,
+    expected_skip_reason = "unsupported_shape",
+    capability_notes = "grid requires 2D/3D data"
+  )
+
+  expect_true("expected_skip_reason" %in% names(row))
+  expect_true(isTRUE(row$expected_skip))
+  expect_equal(row$expected_skip_reason, "unsupported_shape")
 })
 
 test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
