@@ -140,6 +140,11 @@ native low-dimensional spatial search route.
 The public `method = "nsg"` route uses faissR's native NSG-style candidate
 graph for all CPU metrics, so small datasets are tested through the same public
 route instead of being skipped for linked-FAISS NSG graph-construction limits.
+CPU `method = "ivfpq"` rows with fewer than 624 training rows are expected
+skips, because FAISS' smallest supported 4-bit product quantizer would otherwise
+train underpopulated codebooks and emit repeated warnings.
+For 624-9,983 rows, CPU IVFPQ auto tuning uses 4-bit PQ instead of 8-bit PQ for
+the same reason.
 Unsupported method/backend/metric combinations are preflighted with
 `nn_capabilities()` and the public backend resolver, then written as expected
 skips. Runtime expected skips also record when a resolved route requires

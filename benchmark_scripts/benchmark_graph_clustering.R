@@ -1103,6 +1103,20 @@ graph_build_expected_skip <- function(graph_backend, graph_method = "auto", metr
       ))
     }
   }
+  if (identical(graph_backend, "cpu") && identical(graph_method, "ivfpq") && !is.null(x)) {
+    n <- nrow(x)
+    min_n <- 624L
+    if (length(n) != 1L || is.na(n) || n < min_n) {
+      return(list(
+        reason = "insufficient_training_rows",
+        notes = sprintf(
+          "FAISS CPU IVFPQ requires at least %d training rows for the smallest supported 4-bit product quantizer. This dataset has %s rows.",
+          min_n,
+          if (length(n) == 1L && !is.na(n)) as.character(n) else "an unknown number of"
+        )
+      ))
+    }
+  }
   if (identical(graph_backend, "cuda") &&
       !isTRUE(faissR::cuda_available()) &&
       !isTRUE(faissR::cuvs_available())) {

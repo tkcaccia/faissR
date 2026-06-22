@@ -2182,6 +2182,9 @@ test_that("CPU-supported public method/metric rows execute on smoke data", {
   for (i in seq_len(nrow(checked))) {
     method <- checked$method[[i]]
     metric <- checked$metric[[i]]
+    if (identical(method, "ivfpq")) {
+      next
+    }
     data <- switch(
       method,
       grid = spatial,
@@ -2694,6 +2697,22 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   expect_equal(pq$tuning_policy, "auto_dimension")
   expect_equal(pq$tuning_rule, "high_dim_largest_divisor_pq")
   expect_true(isTRUE(pq$tuning_high_dim))
+  expect_false(isTRUE(pq$tuning_small_training))
+
+  small_training_pq <- faissR:::faiss_pq_params(12L, n = 120L)
+  expect_equal(small_training_pq$tuning_rule, "small_training_rows_minimum_pq")
+  expect_true(isTRUE(small_training_pq$tuning_small_training))
+  expect_equal(small_training_pq$min_training_rows, 624L)
+  reduced_codebook_pq <- faissR:::faiss_pq_params(12L, n = 700L)
+  expect_equal(reduced_codebook_pq$nbits, 4L)
+  expect_equal(reduced_codebook_pq$tuning_rule, "training_rows_4bit_pq")
+  expect_true(isTRUE(reduced_codebook_pq$tuning_reduced_codebook_training))
+  expect_equal(reduced_codebook_pq$min_training_rows_8bit, 9984L)
+  expect_error(
+    faissR:::validate_faiss_cpu_ivfpq_training_size(120L),
+    "at least 624 training rows"
+  )
+  expect_no_error(faissR:::validate_faiss_cpu_ivfpq_training_size(624L))
 
   nsg <- faissR:::faiss_nsg_params(100L)
   expect_equal(nsg$tuning_rule, "large_k_search_l")
@@ -3048,7 +3067,7 @@ test_that("real FAISS C++ backend is either exact or clearly unavailable", {
 
 test_that("real FAISS IVF backend records approximate index metadata", {
   set.seed(138)
-  x <- matrix(rnorm(160L * 5L), nrow = 160L)
+  x <- matrix(rnorm(700L * 5L), nrow = 700L)
   k <- 8L
 
   if (faiss_available()) {
@@ -3130,6 +3149,17 @@ test_that("real FAISS IVF backend records approximate index metadata", {
   } else {
     expect_error(internal_nn(x, k = k + 1L, backend = "faiss_ivf"), "FAISS")
   }
+})
+
+test_that("CPU IVFPQ rejects too-small training sets before FAISS warnings", {
+  skip_if_not(faiss_available())
+  set.seed(260215)
+  x <- matrix(rnorm(120L * 8L), nrow = 120L)
+
+  expect_error(
+    nn_without_self(x, k = 5L, backend = "cpu", method = "ivfpq", n_threads = 2L),
+    "at least 624 training rows"
+  )
 })
 
 test_that("FAISS graph backends reject too-small training sets clearly", {

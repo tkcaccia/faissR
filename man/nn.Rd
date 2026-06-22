@@ -201,7 +201,10 @@ Method descriptions:
   and normalized-IP cosine/correlation routes on CPU and FAISS GPU [1-2,6,16].
   It reuses the metric-aware IVF probing defaults. IVF and PQ parameter
   selectors record deterministic tuning metadata; PQ fields use
-  `pq_tuning_*` names.
+  `pq_tuning_*` names. CPU IVFPQ requires at least 624 training rows, the
+  minimum needed for FAISS' smallest supported 4-bit product quantizer without
+  undertrained-codebook warnings; for 624-9,983 rows, auto tuning uses 4-bit PQ
+  rather than the 8-bit default.
   \item `"vamana"`: DiskANN/Vamana-style robust-pruned candidate graph
   implemented in faissR [24]. CPU refines exact top-k within candidate rows
   using native CPU scoring; CUDA refines candidates with faissR's native

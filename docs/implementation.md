@@ -225,7 +225,10 @@ silently returning a poor graph-search result.
 
 IVF probe defaults are conservative enough to avoid misleading speed-only
 results. IVFPQ is treated as an explicit memory-pressure backend because product
-quantization can reduce recall substantially [6].
+quantization can reduce recall substantially [6]. CPU IVFPQ requires at least
+624 training rows so FAISS does not train underpopulated 4-bit
+product-quantizer codebooks; for 624-9,983 rows, auto tuning requests 4-bit PQ
+instead of the 8-bit default for the same training-density reason.
 FAISS HNSW uses no pilot tuning in the user call. Its default parameters are a
 static shape/k/metric policy: a speed tier for lower-dimensional Euclidean
 `k <= 10`, a balanced small-`k` tier for non-Euclidean metrics, a balanced tier

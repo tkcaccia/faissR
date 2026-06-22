@@ -84,6 +84,22 @@ default_nn_backend_values <- function() {
   c("auto", "cpu", "cuda")
 }
 
+canonical_backend_key <- function(backend) {
+  aliases <- c(
+    auto = "auto",
+    cpu = "cpu",
+    faiss_cpu = "cpu",
+    cuda = "cuda",
+    faiss_gpu = "cuda",
+    cuvs = "cuda"
+  )
+  key <- tolower(trimws(as.character(backend)))
+  key <- gsub("[[:space:]-]+", "_", key)
+  out <- unname(aliases[key])
+  out[is.na(out)] <- key[is.na(out)]
+  out
+}
+
 default_cagra_implementation_values <- function() {
   "auto"
 }
@@ -145,7 +161,7 @@ default_nn_cycles <- function() {
 }
 
 validate_backend_values <- function(backends, arg_name = "backends") {
-  backends <- unique(trimws(as.character(backends)))
+  backends <- unique(canonical_backend_key(backends))
   backends <- backends[nzchar(backends)]
   valid <- default_nn_backend_values()
   invalid <- backends[!backends %in% valid]
@@ -1156,9 +1172,10 @@ is_expected_skip <- function(caps, backend, method, metric) {
   NULL
 }
 
-nn_data_expected_skip <- function(x, method, metric = "euclidean") {
+nn_data_expected_skip <- function(x, method, metric = "euclidean", backend = "cpu") {
   method <- canonical_method_key(method)[[1L]]
   metric <- canonical_metric_key(metric)[[1L]]
+  backend <- canonical_backend_key(backend)[[1L]]
   if (identical(method, "grid")) {
     p <- ncol(x)
     if (length(p) != 1L || is.na(p) || !p %in% c(2L, 3L)) {
@@ -1177,6 +1194,27 @@ nn_data_expected_skip <- function(x, method, metric = "euclidean") {
       ))
     }
     return(NULL)
+  }
+  if (identical(backend, "cpu") && identical(method, "ivfpq")) {
+    n <- nrow(x)
+    min_n <- 624L
+    if (length(n) != 1L || is.na(n) || n < min_n) {
+      return(list(
+        skip = TRUE,
+        route = NA_character_,
+        reason = "insufficient_training_rows",
+        notes = sprintf(
+          paste(
+            "FAISS CPU IVFPQ requires at least %d training rows for the",
+            "smallest supported 4-bit product quantizer. This dataset has",
+            "%s rows, so CPU IVFPQ is recorded as an expected skip instead",
+            "of a method failure."
+          ),
+          min_n,
+          if (length(n) == 1L && !is.na(n)) as.character(n) else "an unknown number of"
+        )
+      ))
+    }
   }
   NULL
 }
@@ -1396,7 +1434,7 @@ for (dataset_name in datasets) {
                 capabilities
               }
               expected <- is_expected_skip(capability_table, backend, method, metric)
-              if (is.null(expected)) expected <- nn_data_expected_skip(x, method, metric)
+              if (is.null(expected)) expected <- nn_data_expected_skip(x, method, metric, backend)
               if (!is.null(expected)) {
                 row <- result_row(
                   dataset = dataset_name,

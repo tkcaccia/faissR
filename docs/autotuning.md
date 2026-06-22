@@ -67,7 +67,7 @@ implementation routes recorded in benchmark output, not separate public
 | `ivf` | `faiss_ivf` high-recall tier | CPU IVF high-recall tier | Larger `k` and million-row shapes increase probe breadth through deterministic `n`/`k` rules; non-Euclidean metrics add the metric-aware probe tier. This is often much better recall, but slower on image data. |
 | `ivf` | `faiss_gpu_ivf_flat` | CUDA IVF-Flat | Useful but not consistently faster than exact GPU on these sample sizes. Deterministic `tuning = "auto"` is metric-aware; explicit `tuning = "cache"` or `"pilot"` currently runs only for Euclidean IVF because the pilot reference/candidates are raw-L2. |
 | `ivf` | `cuda_cuvs_ivf_flat` | CUDA cuVS IVF-Flat | Direct Euclidean/L2 benchmark route. Fast on low-dimensional flow/simulated data at about 0.99-0.999 recall; not high-recall default. |
-| `ivfpq` | `faiss_ivfpq` speed/balanced tiers | CPU memory-pressure tier | Low recall on many datasets; use only when memory reduction is the priority [6]. |
+| `ivfpq` | `faiss_ivfpq` speed/balanced tiers | CPU memory-pressure tier | Low recall on many datasets; use only when memory reduction is the priority. Requires at least 624 training rows for the CPU FAISS route; auto tuning uses 4-bit PQ for 624-9,983 rows and 8-bit PQ above that unless manually overridden [6]. |
 | `ivfpq` | `faiss_gpu_ivfpq` | CUDA memory-pressure tier | Fast but low recall in this benchmark; explicit opt-in only. |
 | `ivfpq` | `cuda_cuvs_ivfpq` | CUDA memory-pressure tier | Direct Euclidean/L2 benchmark route. Better than FAISS GPU IVFPQ on some datasets but still not an accuracy-first default. |
 | `nsg` | `cpu_nsg` speed/balanced tiers | CPU graph candidate | Native faissR NSG-style route for all public metrics; avoids linked-FAISS NSG aborts in public calls. |
@@ -201,7 +201,9 @@ CPU-auto default.
 - cuVS NN-Descent failed on COIL20 with a CUDA invalid-argument error. It should
   remain explicit or secondary until more robust guards are added.
 - IVFPQ methods are often fast or memory-efficient, but recall was frequently
-  poor. They should be documented as compressed-memory methods.
+  poor. They should be documented as compressed-memory methods; CPU IVFPQ rows
+  below 624 training rows are expected skips, and CPU IVFPQ auto tuning uses
+  4-bit PQ for 624-9,983 rows to avoid undertrained 8-bit codebooks.
 
 ## Reproducibility
 

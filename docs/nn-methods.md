@@ -272,6 +272,14 @@ IVFPQ is a memory-pressure method. It can be fast and memory-efficient, but
 recall can drop substantially. Treat it as explicit opt-in when memory matters,
 not as the default accuracy-first method.
 
+CPU IVFPQ requires at least 624 training rows. This deterministic guard avoids
+FAISS training runs where even the smallest supported 4-bit product quantizer
+has too few training examples per codeword; smaller datasets should use
+`method = "ivf"`, `"hnsw"`, or `"flat"` instead.
+For 624-9,983 rows, auto tuning requests 4-bit PQ so the codebook size remains
+compatible with FAISS' recommended training density; 8-bit PQ is used once the
+training set is large enough unless the user overrides `faissR.faiss_pq_nbits`.
+
 ## `"vamana"`
 
 `method = "vamana"` requests a DiskANN/Vamana-style robust-pruned graph route

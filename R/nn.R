@@ -614,8 +614,9 @@ nn_compute <- function(data,
         call. = FALSE
       )
     }
+    validate_faiss_cpu_ivfpq_training_size(nrow(data))
     params <- faiss_ivf_params(nrow(data), k, metric = metric)
-    pq <- faiss_pq_params(ncol(data))
+    pq <- faiss_pq_params(ncol(data), n = nrow(data))
     if (metric %in% c("cosine", "correlation")) {
       return(faiss_ivfpq_normalized_metric_result(
         data = data,
@@ -5799,23 +5800,61 @@ faiss_pq_default_m <- function(p) {
   as.integer(candidates[[1L]])
 }
 
-faiss_pq_params <- function(p) {
+faiss_cpu_ivfpq_min_training_rows <- function() 624L
+
+faiss_cpu_ivfpq_8bit_training_rows <- function() 9984L
+
+validate_faiss_cpu_ivfpq_training_size <- function(n) {
+  n <- suppressWarnings(as.integer(n))
+  min_n <- faiss_cpu_ivfpq_min_training_rows()
+  if (length(n) != 1L || is.na(n) || n < min_n) {
+    stop(
+      "FAISS CPU IVFPQ requires at least ", min_n,
+      " training rows for the smallest supported 4-bit product quantizer. ",
+      "Use `method = \"ivf\"`, `\"hnsw\"`, or `\"flat\"` for smaller datasets.",
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
+}
+
+faiss_pq_params <- function(p, n = NULL) {
   p <- as.integer(p)
+  n <- suppressWarnings(as.integer(n %||% NA_integer_))
   high_dim <- length(p) == 1L && !is.na(p) && p >= 256L
+  small_training <- length(n) == 1L && !is.na(n) && n < faiss_cpu_ivfpq_min_training_rows()
+  reduced_codebook_training <- length(n) == 1L &&
+    !is.na(n) &&
+    n >= faiss_cpu_ivfpq_min_training_rows() &&
+    n < faiss_cpu_ivfpq_8bit_training_rows()
   manual <- any(vapply(
     c("faiss_pq_m", "faiss_pq_nbits"),
     function(name) !is.null(faissr_option(name, NULL)),
     logical(1)
   ))
+  manual_nbits <- !is.null(faissr_option("faiss_pq_nbits", NULL))
   m <- faiss_option_int("pq_m", faiss_pq_default_m(p), min_value = 1L, max_value = p)
   while (m > 1L && p %% m != 0L) m <- m - 1L
-  nbits <- faiss_option_int("pq_nbits", 8L, min_value = 4L, max_value = 12L)
+  nbits_default <- if (isTRUE(reduced_codebook_training) && !isTRUE(manual_nbits)) 4L else 8L
+  nbits <- faiss_option_int("pq_nbits", nbits_default, min_value = 4L, max_value = 12L)
   list(
     m = as.integer(m),
     nbits = as.integer(nbits),
     tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_dimension",
-    tuning_rule = if (isTRUE(high_dim)) "high_dim_largest_divisor_pq" else "dimension_largest_divisor_pq",
-    tuning_high_dim = isTRUE(high_dim)
+    tuning_rule = if (isTRUE(small_training)) {
+      "small_training_rows_minimum_pq"
+    } else if (isTRUE(reduced_codebook_training) && !isTRUE(manual_nbits)) {
+      "training_rows_4bit_pq"
+    } else if (isTRUE(high_dim)) {
+      "high_dim_largest_divisor_pq"
+    } else {
+      "dimension_largest_divisor_pq"
+    },
+    tuning_high_dim = isTRUE(high_dim),
+    tuning_small_training = isTRUE(small_training),
+    tuning_reduced_codebook_training = isTRUE(reduced_codebook_training),
+    min_training_rows = faiss_cpu_ivfpq_min_training_rows(),
+    min_training_rows_8bit = faiss_cpu_ivfpq_8bit_training_rows()
   )
 }
 
@@ -6645,7 +6684,8 @@ grid_self_knn <- function(data,
 #'   and normalized-IP cosine/correlation routes on CPU and FAISS GPU [1-2,6,16].
 #'   It reuses the metric-aware IVF probing defaults. IVF and PQ parameter
 #'   selectors record deterministic tuning metadata; PQ fields use
-#'   `pq_tuning_*` names.
+#'   `pq_tuning_*` names. CPU IVFPQ requires at least 624 training rows; for
+#'   624-9,983 rows, auto tuning uses 4-bit PQ rather than the 8-bit default.
 #'   \item `"vamana"`: DiskANN/Vamana-style robust-pruned candidate graph
 #'   implemented in faissR [24]. CPU refines exact top-k within candidate rows
 #'   using native CPU scoring; CUDA refines candidates with faissR's native
