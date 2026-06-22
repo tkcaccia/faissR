@@ -5125,8 +5125,9 @@ grid_self_knn <- function(data,
 #' @param n_threads Number of CPU worker threads for CPU backends. GPU backends
 #'   ignore this argument.
 #' @return A list with integer matrix `indices` and numeric matrix `distances`.
-#'   Indices are 1-based. The resolved backend, metric, exact/approximate flag,
-#'   and self-query flag are stored as attributes.
+#'   Indices are 1-based. The requested backend/method, resolved backend,
+#'   tuning policy, metric, exact/approximate flag, and self-query flag are
+#'   stored as attributes.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu")
@@ -5149,7 +5150,7 @@ nn <- function(data,
   metric <- normalize_nn_metric(metric)
   validate_public_nn_method_shape(data, method)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
-  nn_compute(
+  result <- nn_compute(
     data,
     points,
     k,
@@ -5160,6 +5161,10 @@ nn <- function(data,
     metric = metric,
     tuning = tuning
   )
+  attr(result, "requested_backend") <- backend
+  attr(result, "requested_method") <- public_nn_method_label(method)
+  attr(result, "tuning") <- tuning
+  result
 }
 
 #' Nearest neighbours excluding the self match
@@ -5203,7 +5208,7 @@ nn_without_self <- function(data,
   metric <- normalize_nn_metric(metric)
   validate_public_nn_method_shape(data, method)
   resolved_backend <- resolve_public_nn_backend(backend, method, metric)
-  nn_compute(
+  result <- nn_compute(
     data,
     data,
     k,
@@ -5214,6 +5219,10 @@ nn_without_self <- function(data,
     metric = metric,
     tuning = tuning
   )
+  attr(result, "requested_backend") <- backend
+  attr(result, "requested_method") <- public_nn_method_label(method)
+  attr(result, "tuning") <- tuning
+  result
 }
 
 .knn_recall_summary <- function(approx, exact, k = NULL) {

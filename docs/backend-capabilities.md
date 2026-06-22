@@ -35,9 +35,12 @@ explicit CUDA request with CPU work.
 | `"cpu"` | Use CPU/native/FAISS CPU routes. | Errors for CUDA-only methods such as `method = "cagra"`. |
 | `"cuda"` | Use CUDA/FAISS GPU/cuVS routes. | Errors if CUDA/cuVS support is unavailable or if the selected method is CPU-only. |
 
-The resolved backend is stored in `attr(result, "backend")`. Some routes also
-store `attr(result, "resolved_backend")` and an `attr(result, "approximation")`
-list with method-specific parameters.
+The public request is stored in `attr(result, "requested_backend")` and
+`attr(result, "requested_method")`; the normalized tuning policy is stored in
+`attr(result, "tuning")`. The backend that ran is stored in
+`attr(result, "backend")`. Some routes also store
+`attr(result, "resolved_backend")` and an `attr(result, "approximation")` list
+with method-specific parameters.
 
 ## Nearest-Neighbour Method Mapping
 

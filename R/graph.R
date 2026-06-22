@@ -452,6 +452,10 @@ graph_cluster <- function(graph,
 
   knn_input <- coerce_knn_input(knn, arg_name = "graph")
   if (!is.na(knn_input$input_backend)) input_backend <- knn_input$input_backend
+  if ((length(graph_requested_backend) != 1L || is.na(graph_requested_backend)) &&
+      !is.na(input_backend)) {
+    graph_requested_backend <- input_backend
+  }
   if (identical(weight, "auto")) {
     weight <- if (identical(graph_space, "embedding")) "distance" else "snn"
   }

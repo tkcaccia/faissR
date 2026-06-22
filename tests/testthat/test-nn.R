@@ -150,6 +150,41 @@ test_that("public NN APIs canonicalize common metric aliases", {
   expect_error(nn(x, k = 2L, backend = "cpu", metric = "manhattan"), "metric")
 })
 
+test_that("public NN results preserve requested and resolved routing metadata", {
+  set.seed(1042)
+  x <- matrix(rnorm(80), ncol = 4)
+
+  out <- nn(
+    x,
+    k = 3L,
+    backend = "auto",
+    method = "exact",
+    metric = "l2",
+    tuning = "off",
+    n_threads = 2L
+  )
+  without_self <- nn_without_self(
+    x,
+    k = 3L,
+    backend = "auto",
+    method = "exact",
+    metric = "cos",
+    tuning = "off",
+    n_threads = 2L
+  )
+
+  expect_equal(attr(out, "requested_backend"), "auto")
+  expect_equal(attr(out, "requested_method"), "exact")
+  expect_equal(attr(out, "resolved_backend"), attr(out, "backend"))
+  expect_equal(attr(out, "metric"), "euclidean")
+  expect_equal(attr(out, "tuning"), "off")
+  expect_equal(attr(without_self, "requested_backend"), "auto")
+  expect_equal(attr(without_self, "requested_method"), "exact")
+  expect_equal(attr(without_self, "resolved_backend"), attr(without_self, "backend"))
+  expect_equal(attr(without_self, "metric"), "cosine")
+  expect_equal(attr(without_self, "tuning"), "off")
+})
+
 test_that("public NN APIs require scalar backend method metric and tuning choices", {
   x <- matrix(rnorm(40), ncol = 4)
   y <- factor(rep(c("a", "b"), each = 5L))

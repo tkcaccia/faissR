@@ -89,8 +89,9 @@ ignore this argument.}
 }
 \value{
 A list with integer matrix `indices` and numeric matrix `distances`.
-  Indices are 1-based. The resolved backend, metric, exact/approximate flag,
-  and self-query flag are stored as attributes.
+  Indices are 1-based. The requested backend/method, resolved backend,
+  tuning policy, metric, exact/approximate flag, and self-query flag are
+  stored as attributes.
 }
 \description{
 `nn()` provides a package-native nearest-neighbor entry point compatible with

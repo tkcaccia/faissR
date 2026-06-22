@@ -129,8 +129,14 @@ All KNN routes return a `faissR_nn` object with:
 - `distances`: a numeric matrix aligned with `indices`;
 - `attr(result, "backend")`: the public/resolved backend label returned to the
   user;
+- `attr(result, "requested_backend")`: the public backend argument supplied to
+  `nn()`/`nn_without_self()`;
+- `attr(result, "requested_method")`: the public method argument after alias
+  normalization;
 - `attr(result, "resolved_backend")`: when relevant, the concrete backend chosen
   behind an alias such as `backend = "cuda"`;
+- `attr(result, "tuning")`: the normalized tuning policy used by the public
+  wrapper;
 - `attr(result, "metric")`: the metric used;
 - `attr(result, "exact")`: whether the route is exact by construction;
 - `attr(result, "approximation")`: method-specific parameters for approximate

@@ -44,6 +44,30 @@ test_that("precomputed KNN graph metadata prefers resolved backend", {
   expect_equal(cl$parameters$graph_resolved_backend, "faiss_gpu_cagra")
 })
 
+test_that("precomputed KNN graph metadata fills missing requested backend", {
+  knn <- list(
+    indices = matrix(c(
+      2L, 3L,
+      1L, 3L,
+      2L, 1L
+    ), nrow = 3L, byrow = TRUE),
+    distances = matrix(c(
+      1, 2,
+      1, 1.5,
+      1.5, 2
+    ), nrow = 3L, byrow = TRUE)
+  )
+  class(knn) <- "faissR_nn"
+  attr(knn, "backend") <- "faiss_hnsw"
+  attr(knn, "metric") <- "euclidean"
+
+  cl <- graph_cluster(knn, method = "louvain", backend = "cpu", k = 2L, weight = "distance")
+
+  expect_equal(cl$parameters$graph_backend, "faiss_hnsw")
+  expect_equal(cl$parameters$graph_requested_backend, "faiss_hnsw")
+  expect_equal(cl$parameters$graph_resolved_backend, "faiss_hnsw")
+})
+
 test_that("knn_graph accepts embedding-layout objects as native layout graphs", {
   set.seed(503)
   x <- rbind(
