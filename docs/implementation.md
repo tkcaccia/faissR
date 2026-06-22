@@ -486,6 +486,15 @@ Flat float32 route without going through the R wrapper layer. The callable
 accepts either a `float::fl()`/`float32` object or an ordinary R double matrix;
 both are adapted once into the row-major `float*` buffers consumed by FAISS.
 
+For callers that need float32 distances, faissR also registers
+`faissR_nn_float32_call_output`. It has the same first six arguments plus a
+seventh string argument, `distances`, with values `"double"` or `"float"`.
+The original six-argument callable is kept as the stable double-output ABI.
+Both callables return a stable KNN list with `indices`, `distances`,
+`index_base = 1L`, `distance_type`, `metric`, and `backend_used`. When
+`distances = "float"`, the optional `float` package is required at runtime and
+the returned `distances` component is a `float::fl()`/`float32` matrix.
+
 Sparse input is handled separately. If the input is a sparse `Matrix`, the
 native sparse CPU route can avoid densification. GPU and FAISS routes that do
 not support sparse input fail or densify only when explicitly requested, rather

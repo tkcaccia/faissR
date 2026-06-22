@@ -163,18 +163,56 @@ List nn_faiss_flat_float32_cpp(SEXP data,
   );
 }
 
-extern "C" SEXP faissR_nn_float32_call(SEXP x,
-                                       SEXP k,
-                                       SEXP backend,
-                                       SEXP metric,
-                                       SEXP include_self,
-                                       SEXP n_threads) {
-  BEGIN_RCPP
+namespace {
+
+std::string float32_backend_used(const std::string& metric) {
+  if (metric == "inner_product") return "faiss_flat_ip";
+  if (metric == "cosine") return "faiss_flat_cosine";
+  if (metric == "correlation") return "faiss_flat_correlation";
+  return "faiss_flat_l2";
+}
+
+void maybe_convert_float32_distances(List& out, const std::string& distances) {
+  std::string value = distances;
+  if (value == "float32") value = "float";
+  if (value != "double" && value != "float") {
+    Rcpp::stop("`distances` must be either \"double\" or \"float\"");
+  }
+  if (value == "float") {
+    Rcpp::Environment base = Rcpp::Environment::namespace_env("base");
+    Rcpp::Function require_namespace = base["requireNamespace"];
+    const bool ok = Rcpp::as<bool>(
+      require_namespace("float", Rcpp::Named("quietly") = true)
+    );
+    if (!ok) {
+      Rcpp::stop(
+        "`distances = \"float\"` requires the optional float package"
+      );
+    }
+    Rcpp::Environment float_ns = Rcpp::Environment::namespace_env("float");
+    Rcpp::Function fl = float_ns["fl"];
+    out["distances"] = fl(out["distances"]);
+    out["distance_type"] = "float32";
+    out.attr("distance_type") = "float32";
+  } else {
+    out["distance_type"] = "double";
+    out.attr("distance_type") = "double";
+  }
+}
+
+List faissR_nn_float32_call_impl(SEXP x,
+                                 SEXP k,
+                                 SEXP backend,
+                                 SEXP metric,
+                                 SEXP include_self,
+                                 SEXP n_threads,
+                                 SEXP distances) {
   const int kk = Rcpp::as<int>(k);
   const std::string backend_value = Rcpp::as<std::string>(backend);
   const std::string metric_value = Rcpp::as<std::string>(metric);
   const bool include_self_value = Rcpp::as<bool>(include_self);
   const int n_threads_value = Rcpp::as<int>(n_threads);
+  const std::string distances_value = Rcpp::as<std::string>(distances);
   if (backend_value != "cpu" &&
       backend_value != "faiss" &&
       backend_value != "cpu_faiss" &&
@@ -192,20 +230,45 @@ extern "C" SEXP faissR_nn_float32_call(SEXP x,
     n_threads_value,
     metric_value
   );
-  const std::string backend_used =
-    metric_value == "inner_product" ? "faiss_flat_ip" :
-    (metric_value == "cosine" ? "faiss_flat_cosine" :
-    (metric_value == "correlation" ? "faiss_flat_correlation" : "faiss_flat_l2"));
+  const std::string backend_used = float32_backend_used(metric_value);
+  maybe_convert_float32_distances(out, distances_value);
   out["index_base"] = 1;
-  out["distance_type"] = "double";
   out["metric"] = metric_value;
   out["backend_used"] = backend_used;
   out.attr("index_base") = 1;
-  out.attr("distance_type") = "double";
   out.attr("metric") = metric_value;
   out.attr("backend_used") = backend_used;
   out.attr("resolved_backend") = backend_used;
+  out.attr("distance_type") = Rcpp::as<std::string>(out["distance_type"]);
   return out;
+}
+
+} // namespace
+
+extern "C" SEXP faissR_nn_float32_call(SEXP x,
+                                       SEXP k,
+                                       SEXP backend,
+                                       SEXP metric,
+                                       SEXP include_self,
+                                       SEXP n_threads) {
+  BEGIN_RCPP
+  return faissR_nn_float32_call_impl(
+    x, k, backend, metric, include_self, n_threads, Rcpp::wrap("double")
+  );
+  END_RCPP
+}
+
+extern "C" SEXP faissR_nn_float32_call_output(SEXP x,
+                                              SEXP k,
+                                              SEXP backend,
+                                              SEXP metric,
+                                              SEXP include_self,
+                                              SEXP n_threads,
+                                              SEXP distances) {
+  BEGIN_RCPP
+  return faissR_nn_float32_call_impl(
+    x, k, backend, metric, include_self, n_threads, distances
+  );
   END_RCPP
 }
 
@@ -216,6 +279,11 @@ void register_faissR_ccallables(DllInfo *dll) {
     "faissR",
     "faissR_nn_float32_call",
     (DL_FUNC) &faissR_nn_float32_call
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_nn_float32_call_output",
+    (DL_FUNC) &faissR_nn_float32_call_output
   );
 }
 

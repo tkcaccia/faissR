@@ -35,7 +35,9 @@ headers and libraries discovered by `configure`.
   `float::fl()` matrices on the CPU FAISS Flat route for all four public
   metrics, and
   `output = "float"` returns float32 distance matrices when the optional
-  `float` package is installed.
+  `float` package is installed. A versioned C-callable entry point is also
+  registered so downstream C++ packages can request the same float32 KNN
+  result format without routing through the R wrappers.
 - `candidate_knn()` for exact top-k ranking inside supplied candidate rows.
 - `knn_graph()` for native weighted KNN graph construction without requiring
   `igraph`; graphs can store an optional target community count for downstream
