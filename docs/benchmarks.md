@@ -336,9 +336,12 @@ NN method labels as `nn()` and `knn_graph()`, while `--metrics` accepts the four
 public NN metrics and the same aliases as `nn()`, such as `l2`, `pearson`,
 `cor`, `ip`, and `dot-product`; aliases are canonicalized before preflight and
 reporting. Unsupported graph method/backend/metric combinations are
-recorded as expected skips using `nn_capabilities()` and data-shape checks such
-as the 2D/3D requirement for `method = "grid"` and the more-than-100-row FAISS
-NSG construction requirement for `method = "nsg"`. When
+recorded as expected skips using `nn_capabilities(runtime = TRUE)` plus
+data-shape checks such as the 2D/3D requirement for `method = "grid"` and the
+more-than-100-row FAISS NSG construction requirement for `method = "nsg"`.
+The runtime capability table is written to
+`graph_cluster_nn_capabilities.csv`, so unavailable FAISS GPU, CUDA, and cuVS
+graph-construction routes can be audited before any graph is built. When
 `--target_clusters=labels` is
 used, Louvain and Leiden use `n_clusters = length(unique(dataset$labels))`. If
 the selected method set contains only Louvain and Leiden, the benchmark stores
@@ -370,11 +373,11 @@ metric matrix. It runs public `nn()` combinations over:
   reports shifted smaller-is-better distances;
 - k values: `5`, `10`, `15`, `50`, and `100` by default.
 
-Unsupported combinations are preflighted with `faissR::nn_capabilities()` and
+Unsupported combinations are preflighted with `faissR::nn_capabilities(runtime = TRUE)` and
 the public backend resolver, then saved as `status = "expected_skip"` rows with
 `expected_skip = TRUE`. The run configuration is saved as
 `nn_metric_benchmark_config.csv`, the raw row-level result table is saved as
-`nn_metric_benchmark_results.csv`, and the design-level capability table used
+`nn_metric_benchmark_results.csv`, and the runtime-aware capability table used
 for the run is saved as `nn_metric_capabilities.csv`, including public
 `backend = "auto"`, `"cpu"`, and `"cuda"` rows. For `backend = "auto"`, the
 preflight first checks the explicit auto capability row, then checks the

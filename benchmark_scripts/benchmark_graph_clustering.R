@@ -645,16 +645,37 @@ all_graph_cluster_expected_skips <- function(cluster_backends, methods) {
   length(checks) > 0L && all(checks)
 }
 
+.graph_nn_capabilities_cache <- NULL
+
+graph_nn_capabilities <- function() {
+  if (!is.null(.graph_nn_capabilities_cache)) return(.graph_nn_capabilities_cache)
+  .graph_nn_capabilities_cache <<- faissR::nn_capabilities(runtime = TRUE)
+  .graph_nn_capabilities_cache
+}
+
 graph_build_expected_skip <- function(graph_backend, graph_method = "auto", metric = "euclidean", x = NULL) {
   graph_backend <- tolower(as.character(graph_backend)[1L])
   graph_method <- as.character(graph_method)[1L]
   metric <- as.character(metric)[1L]
   cap <- tryCatch({
-    caps <- faissR::nn_capabilities()
+    caps <- graph_nn_capabilities()
     caps[caps$backend == graph_backend & caps$method == graph_method & caps$metric == metric, , drop = FALSE]
   }, error = function(e) data.frame())
   if (nrow(cap) && !isTRUE(cap$supported[[1L]])) {
     return(cap$notes[[1L]] %||% "This graph-construction method/backend/metric combination is unsupported by faissR::nn_capabilities().")
+  }
+  if (nrow(cap) &&
+      "runtime_available" %in% names(cap) &&
+      !is.na(cap$runtime_available[[1L]]) &&
+      !isTRUE(cap$runtime_available[[1L]])) {
+    route <- if ("resolved_backend" %in% names(cap)) cap$resolved_backend[[1L]] else NA_character_
+    notes <- if ("runtime_notes" %in% names(cap)) cap$runtime_notes[[1L]] else NA_character_
+    return(paste(
+      "Graph construction resolved route",
+      if (!is.na(route) && nzchar(route)) paste0("`", route, "`") else "is unavailable",
+      "but it is unavailable in the current runtime:",
+      notes %||% "runtime dependency is unavailable."
+    ))
   }
   if (identical(graph_method, "grid") && !is.null(x)) {
     p <- ncol(x)
@@ -944,6 +965,7 @@ weight <- args$weight %||% "auto"
 target_mode <- normalize_target_clusters_mode(args$target_clusters %||% "labels")
 
 suppressPackageStartupMessages(library(faissR))
+graph_capabilities <- graph_nn_capabilities()
 
 config <- data.frame(
   key = c("data_root", "out_dir", "available_datasets", "datasets", "methods",
@@ -959,6 +981,7 @@ config <- data.frame(
   stringsAsFactors = FALSE
 )
 utils::write.csv(config, file.path(out_dir, "graph_cluster_benchmark_config.csv"), row.names = FALSE)
+utils::write.csv(graph_capabilities, file.path(out_dir, "graph_cluster_nn_capabilities.csv"), row.names = FALSE)
 
 results <- list()
 row_id <- 0L
@@ -1225,6 +1248,7 @@ materials <- c(
   "",
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
   "`graph_cluster_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `graph_cluster_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, graph timings, clustering timings, memory, graph vertex/edge counts, ARI, modularity, graph NN method/metric, and backend metadata.",
+  "`graph_cluster_nn_capabilities.csv` stores the `faissR::nn_capabilities(runtime = TRUE)` table used to preflight graph KNN construction. Runtime-unavailable graph routes are recorded as expected skips before a graph is built.",
   "`target_clusters` is normalized to either `\"labels\"` or `\"none\"`; invalid values stop before the benchmark starts. When `target_clusters = \"labels\"`, Louvain and Leiden use `n_clusters = length(unique(labels))`. If a benchmark block contains only Louvain/Leiden, this target is stored on the graph with `knn_graph(n_clusters = ...)` and reused by `graph_cluster()`; mixed blocks that include random-walking pass the target only to Louvain/Leiden rows because random-walking intentionally has no cluster-count target.",
   "`n_clusters_requested` records the requested target community count for Louvain/Leiden rows. This is a convenience target, not a hard guarantee; the actual community count is stored separately as `n_communities`. `n_clusters_source` records whether that target came from dataset labels, a stored `knn_graph(n_clusters = ...)` target, or no target. When a target is used, `target_gap`, `resolution_selection`, and the selected resolution summarize the deterministic resolution-search decision.",
   "Each KNN graph is built once per dataset/cycle/k/graph-backend/graph-method/metric/weight combination and reused across clustering methods and clustering backends within that cycle. The `cycle` column supports repeated benchmark cycles such as `--cycles=10`; `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",

@@ -1763,6 +1763,31 @@ test_that("graph benchmark preflights graph method and metric skips", {
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(120 * 4), ncol = 4)))
 })
 
+test_that("graph benchmark preflights runtime-unavailable graph routes", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  dense <- matrix(rnorm(120 * 4), ncol = 4)
+  caps <- env$graph_nn_capabilities()
+
+  expect_true(all(c(
+    "resolved_backend", "runtime_available", "runtime_notes"
+  ) %in% names(caps)))
+
+  cuda_skip <- env$graph_build_expected_skip(
+    "cuda",
+    graph_method = "flat",
+    metric = "euclidean",
+    x = dense
+  )
+  if (isTRUE(faiss_gpu_available())) {
+    expect_null(cuda_skip)
+  } else {
+    expect_match(cuda_skip, "faiss_gpu_flat_l2|FAISS GPU|unavailable", ignore.case = TRUE)
+  }
+})
+
 test_that("graph benchmark recommendations are grouped by backend and target cluster count", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
