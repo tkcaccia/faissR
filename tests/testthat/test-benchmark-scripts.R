@@ -27,19 +27,34 @@ test_that("benchmark materials document key row-level and summary outputs", {
     nn = c(
       "nn_metric_benchmark_config.csv",
       "nn_metric_benchmark_results.csv",
-      "nn_metric_capabilities.csv"
+      "nn_metric_capabilities.csv",
+      "nn_metric_cycle_summary.csv",
+      "nn_metric_recommendations_from_cycles.csv",
+      "nn_metric_auto_vs_cycle_recommendation.csv",
+      "nn_metric_best_by_dataset_backend_metric_k.csv",
+      "nn_metric_best_by_dataset_backend_metric_k_cycle.csv",
+      "nn_metric_fastest_at_recall_threshold.csv",
+      "nn_metric_auto_vs_fastest.csv"
     ),
     graph = c(
       "graph_cluster_benchmark_config.csv",
       "graph_cluster_benchmark_results.csv",
       "graph_cluster_best_by_dataset.csv",
-      "graph_cluster_best_by_dataset_k_target.csv"
+      "graph_cluster_best_by_dataset_k_target.csv",
+      "graph_cluster_cycle_summary.csv",
+      "graph_cluster_recommendations_from_cycles.csv",
+      "graph_cluster_auto_vs_cycle_recommendation.csv"
     ),
     kmeans = c(
       "kmeans_benchmark_config.csv",
       "kmeans_benchmark_results.csv",
       "kmeans_best_by_dataset.csv",
-      "kmeans_best_by_dataset_centers.csv"
+      "kmeans_best_by_dataset_centers.csv",
+      "kmeans_cycle_summary.csv",
+      "kmeans_recommendations_from_cycles.csv",
+      "kmeans_backend_recommendations_from_cycles.csv",
+      "kmeans_fast_vs_cycle_recommendation.csv",
+      "kmeans_fast_vs_stats.csv"
     )
   )
   scripts <- c(
