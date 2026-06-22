@@ -399,6 +399,7 @@ test_that("fast_kmeans auto backend requires a k-means capable CUDA route", {
 
 test_that("fast_kmeans auto backend is shape-aware", {
   expect_false(faissR:::kmeans_auto_prefers_cuda(n = 120L, p = 4L, centers = 3L))
+  expect_false(faissR:::kmeans_auto_prefers_cuda(n = 1000000L, p = 784L, centers = 1L))
   expect_true(faissR:::kmeans_auto_prefers_cuda(n = 70000L, p = 784L, centers = 10L))
   expect_true(faissR:::kmeans_auto_prefers_cuda(n = 500000L, p = 32L, centers = 10L))
   expect_true(faissR:::kmeans_auto_prefers_cuda(n = NULL, p = NULL, centers = NULL))
@@ -456,6 +457,18 @@ test_that("fast_kmeans auto backend is shape-aware", {
       n = 120L,
       p = 4L,
       centers = 3L,
+      cuda_available_value = TRUE,
+      faiss_gpu_available_value = TRUE,
+      cuvs_available_value = TRUE
+    ),
+    "cpu"
+  )
+  expect_equal(
+    faissR:::resolve_fast_kmeans_backend(
+      "auto",
+      n = 1000000L,
+      p = 784L,
+      centers = 1L,
       cuda_available_value = TRUE,
       faiss_gpu_available_value = TRUE,
       cuvs_available_value = TRUE
