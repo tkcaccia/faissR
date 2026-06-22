@@ -312,7 +312,8 @@ selected row is marked with `selected = TRUE`, so target-count resolution
 searches remain auditable in downstream summaries. Numeric resolution requests
 center the deterministic candidate grid near the requested resolution and,
 when graph size is known, the no-pilot shape heuristic
-`n_clusters / sqrt(n_vertices)`. `resolution = NULL` target-auto runs use the
+`n_clusters / sqrt(n_vertices)`. Omitted `resolution` and `resolution = NULL`
+target-auto runs use the
 shape heuristic directly and record that automatic center in
 `resolution_selection$candidate_center`. The grid width is also shape-aware:
 small graphs use more candidates, while large graphs use a narrower
@@ -439,8 +440,8 @@ the graph benchmark before datasets are loaded.
 values stop before the benchmark starts. `--target_resolution=auto` is the
 default and passes `resolution = NULL` for Louvain/Leiden rows with a target
 cluster count, so faissR uses the shape-seeded target-count grid.
-`--target_resolution=default` uses the historical numeric `resolution = 1`
-seed. Method, graph-backend, and
+`--target_resolution=default` passes the historical numeric `resolution = 1`
+seed explicitly. Method, graph-backend, and
 cluster-backend selectors are also validated against the public benchmark
 choices before any dataset is loaded. `--graph_methods` accepts the same public
 NN method labels as `nn()` and `knn_graph()`, while `--metrics` accepts the four

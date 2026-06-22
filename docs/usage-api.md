@@ -193,8 +193,8 @@ graph_cluster(graph, method = "random_walking", backend = "auto",
 | `prune` | Non-negative edge pruning threshold. |
 | `n_threads` | CPU threads for KNN construction and native CPU clustering. |
 | `n_runs` | Number of independent clustering runs. faissR keeps the best modularity run. |
-| `resolution` | Positive resolution parameter for Louvain/Leiden-style modularity scoring. Larger values tend to produce more communities. When `n_clusters` is supplied, `resolution = NULL` asks faissR to seed the bounded target-count resolution grid from the graph-shape heuristic instead of a user value. |
-| `n_clusters` | Optional target number of communities for Louvain/Leiden. If supplied, faissR builds the KNN graph once, evaluates a bounded deterministic resolution grid, and keeps the result closest to the requested count. Numeric `resolution` values center the grid near that value and graph shape; `resolution = NULL` uses the no-pilot target-count graph-shape seed directly. The grid is shape-aware: large graphs use fewer deterministic candidates than small graphs to reduce repeated clustering passes. This is a convenience target, not a hard guarantee. If `n_clusters` is supplied and `method` is omitted, faissR uses `"louvain"` as the target-count clustering method. The target must be a positive integer and cannot exceed the graph vertex count. |
+| `resolution` | Positive resolution parameter for Louvain/Leiden-style modularity scoring. Larger values tend to produce more communities. When `n_clusters` is supplied, omitted `resolution` or `resolution = NULL` asks faissR to seed the bounded target-count resolution grid from the graph-shape heuristic instead of the numeric default. |
+| `n_clusters` | Optional target number of communities for Louvain/Leiden. If supplied, faissR builds the KNN graph once, evaluates a bounded deterministic resolution grid, and keeps the result closest to the requested count. Explicit numeric `resolution` values center the grid near that value and graph shape; omitted `resolution` or `resolution = NULL` uses the no-pilot target-count graph-shape seed directly. The grid is shape-aware: large graphs use fewer deterministic candidates than small graphs to reduce repeated clustering passes. This is a convenience target, not a hard guarantee. If `n_clusters` is supplied and `method` is omitted, faissR uses `"louvain"` as the target-count clustering method. The target must be a positive integer and cannot exceed the graph vertex count. |
 | `objective_function` | Community objective. Only `"modularity"` is currently implemented by the native CPU and CUDA clustering paths; CPM is not accepted until faissR can optimize and report it honestly. |
 | `n_iterations` | Maximum native clustering iterations. |
 | `steps` | Random-walk propagation depth for `method = "random_walking"`. |
@@ -223,11 +223,12 @@ When a target community count is used,
 `resolution_selection`, and `resolution_search` record the requested target,
 selected resolution, final community-count gap, deterministic selection rule,
 candidate center, and full resolution search table. `parameters$resolution` is
-`NA` for `resolution = NULL` target-auto searches; the actual automatic center
-is stored in `resolution_selection$candidate_center`.
+`NA` for target-auto searches where `n_clusters` is supplied and `resolution`
+is omitted or `NULL`; the actual automatic center is stored in
+`resolution_selection$candidate_center`.
 `parameters$resolution_source` is `"default"`, `"user"`, or `"target_auto"`
 depending on whether the grid seed came from the default, an explicit numeric
-`resolution`, or `resolution = NULL` with `n_clusters`.
+`resolution`, or omitted/`NULL` `resolution` with `n_clusters`.
 
 ### Graph Clustering Methods
 

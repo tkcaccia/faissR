@@ -51,15 +51,16 @@ libcugraph was detected at build time; random-walking is CPU-only.}
 \item{n_runs}{Number of independent native clustering runs. The result with the largest modularity is returned. Values greater than one can use several CPU cores.}
 \item{resolution}{Modularity resolution for Louvain/Leiden-style scoring.
 Use a positive number for direct resolution control. When \code{n_clusters}
-is supplied, \code{resolution = NULL} lets faissR seed the bounded
-deterministic grid from the no-pilot graph-shape heuristic instead of a user
-resolution.}
+is supplied and \code{resolution} is omitted or \code{NULL}, faissR seeds the
+bounded deterministic grid from the no-pilot graph-shape heuristic instead of
+the numeric default.}
 \item{n_clusters}{Optional target number of communities for Louvain/Leiden.
 If supplied, faissR evaluates a bounded deterministic resolution grid on the
 already-built graph and keeps the result whose community count is closest to
-the target. The grid is centered from the requested \code{resolution}, or
-from an automatic seed when \code{resolution = NULL}, and when graph size is
-known uses a no-pilot shape heuristic based on
+the target. The grid is centered from an explicitly requested
+\code{resolution}, or from an automatic seed when \code{resolution} is omitted
+or \code{NULL}; when graph size is known the automatic seed uses a no-pilot
+shape heuristic based on
 \code{n_clusters / sqrt(n_vertices)}. The search width is shape-aware: small
 graphs use a wider deterministic grid, while large graphs use fewer candidates
 to reduce repeated Louvain/Leiden passes. This is a convenience target, not a
@@ -80,9 +81,10 @@ accepted until the implementation can optimize and report it honestly.}
 \details{
 \code{n_clusters} is supplied directly to \code{graph_cluster()}. When a target
 count is available for Louvain or Leiden, faissR builds or reuses the graph once,
-evaluates a bounded deterministic resolution grid. Numeric \code{resolution}
-values center the grid near that value and graph shape; \code{resolution = NULL}
-uses the no-pilot target-count graph-shape seed directly. The grid width is
+evaluates a bounded deterministic resolution grid. Explicit numeric
+\code{resolution} values center the grid near that value and graph shape;
+omitted \code{resolution} or \code{resolution = NULL} uses the no-pilot
+target-count graph-shape seed directly. The grid width is
 shape-aware so large graph target searches use fewer deterministic candidates
 than small graph searches. faissR records the selected resolution, center, and
 search table in the returned object. If \code{n_clusters} is supplied and
@@ -122,9 +124,10 @@ community count is used, \code{target_n_clusters},
 \code{selected_resolution}, \code{target_gap}, \code{resolution_selection},
 and \code{resolution_search} record the requested target, selected resolution,
 final community-count gap, deterministic selection rule, and full resolution
-search table. \code{parameters$resolution} is \code{NA} for
-\code{resolution = NULL} target-auto searches; the actual automatic center is
-stored in \code{resolution_selection$candidate_center}.
+search table. \code{parameters$resolution} is \code{NA} for target-auto
+searches where \code{n_clusters} is supplied and \code{resolution} is omitted
+or \code{NULL}; the actual automatic center is stored in
+\code{resolution_selection$candidate_center}.
 \code{parameters$resolution_source} is \code{"default"}, \code{"user"}, or
 \code{"target_auto"} depending on how the resolution-grid seed was chosen.
 }

@@ -1095,6 +1095,10 @@ test_that("GitHub docs describe the bounded target-cluster resolution grid", {
   prose <- paste(unlist(lapply(docs_files, readLines, warn = FALSE)), collapse = " ")
   expect_true(grepl("bounded deterministic", prose, fixed = TRUE))
   expect_true(grepl("shape-aware", prose, fixed = TRUE))
+  expect_true(grepl("omitted `resolution`", prose, fixed = TRUE) ||
+    grepl("omitted \\code{resolution}", prose, fixed = TRUE))
+  expect_true(grepl("n_clusters", prose, fixed = TRUE))
+  expect_true(grepl("target_auto", prose, fixed = TRUE))
   expect_false(grepl("small deterministic grid of resolution", prose, fixed = TRUE))
   expect_false(grepl("small deterministic resolution grid", prose, fixed = TRUE))
 })

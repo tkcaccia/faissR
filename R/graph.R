@@ -268,14 +268,16 @@ resolve_graph_cluster_backend <- function(backend) {
 #' @param n_runs Number of independent native runs. The best modularity is kept.
 #' @param resolution Modularity resolution for Louvain/Leiden-style scoring.
 #'   Use a positive number for direct resolution control. When `n_clusters` is
-#'   supplied, `resolution = NULL` lets faissR seed the bounded deterministic
-#'   grid from the no-pilot graph-shape heuristic instead of a user resolution.
+#'   supplied and `resolution` is omitted or `NULL`, faissR seeds the bounded
+#'   deterministic grid from the no-pilot graph-shape heuristic instead of the
+#'   numeric default.
 #' @param n_clusters Optional target number of communities for Louvain/Leiden.
 #'   If supplied, faissR evaluates a bounded deterministic resolution grid on
 #'   the already-built graph and keeps the result whose community count is
-#'   closest to `n_clusters`. The grid is centered from the requested
-#'   `resolution`, or from an automatic seed when `resolution = NULL`, and
-#'   when graph size is known uses a no-pilot shape heuristic based on
+#'   closest to `n_clusters`. The grid is centered from an explicitly requested
+#'   `resolution`, or from an automatic seed when `resolution` is omitted or
+#'   `NULL`; when graph size is known the automatic seed uses a no-pilot
+#'   shape heuristic based on
 #'   `n_clusters / sqrt(n_vertices)`. The search width is also
 #'   shape-aware: small graphs use a wider grid, while large graphs use fewer
 #'   deterministic candidates to avoid repeated full Louvain/Leiden passes.
@@ -311,8 +313,9 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   `resolution_selection`, and `resolution_search` record the requested
 #'   target, selected resolution, final community-count gap, deterministic
 #'   selection rule, and full resolution search table. `parameters$resolution`
-#'   is `NA` for `resolution = NULL` target-auto searches; the actual automatic
-#'   center is stored in `resolution_selection$candidate_center`.
+#'   is `NA` for target-auto searches where `n_clusters` is supplied and
+#'   `resolution` is omitted or `NULL`; the actual automatic center is stored
+#'   in `resolution_selection$candidate_center`.
 #'   `parameters$resolution_source` is `"default"`, `"user"`, or
 #'   `"target_auto"` depending on how the resolution-grid seed was chosen.
 #' @references
@@ -391,6 +394,9 @@ graph_cluster <- function(graph,
   n_iterations <- normalize_graph_positive_int(n_iterations, "n_iterations")
   steps <- normalize_graph_positive_int(steps, "steps")
   n_clusters <- normalize_graph_target_clusters(n_clusters, method)
+  if (!is.null(n_clusters) && isTRUE(resolution_was_missing)) {
+    resolution <- NULL
+  }
   resolution_info <- normalize_graph_resolution(
     resolution,
     has_target = !is.null(n_clusters),

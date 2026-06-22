@@ -390,7 +390,8 @@ test_that("graph_cluster owns target cluster count", {
   expect_s3_class(cl, "faissR_graph_cluster")
   expect_equal(cl$target_n_clusters, 3L)
   expect_equal(cl$parameters$n_clusters, 3L)
-  expect_equal(cl$parameters$resolution_source, "default")
+  expect_true(is.na(cl$parameters$resolution))
+  expect_equal(cl$parameters$resolution_source, "target_auto")
   expect_equal(cl$parameters$requested_backend, "cpu")
   expect_equal(cl$parameters$resolved_backend, "cpu")
   expect_equal(cl$parameters$graph_backend, attr(g, "faissR_graph")$nn_backend)
@@ -413,6 +414,8 @@ test_that("graph_cluster owns target cluster count", {
   )
   expect_true(is.numeric(cl$resolution_selection$candidate_center))
   expect_equal(cl$resolution_selection$n_vertices, g$n_vertices)
+  expect_equal(cl$resolution_selection$candidate_center, 3 / sqrt(g$n_vertices))
+  expect_true(cl$resolution_selection$candidate_center %in% cl$resolution_search$resolution)
   expect_equal(cl$parameters$resolution_selection$selected_candidate, which(cl$resolution_search$selected))
   expect_lte(abs(cl$n_communities - 3L), 1L)
 
@@ -426,6 +429,21 @@ test_that("graph_cluster owns target cluster count", {
   )
   expect_equal(override$target_n_clusters, 2L)
   expect_equal(override$parameters$n_clusters, 2L)
+  expect_true(is.na(override$parameters$resolution))
+  expect_equal(override$parameters$resolution_source, "target_auto")
+
+  explicit_resolution <- graph_cluster(
+    g,
+    method = "louvain",
+    backend = "cpu",
+    n_threads = 2L,
+    seed = 1L,
+    resolution = 1,
+    n_clusters = 3L
+  )
+  expect_equal(explicit_resolution$target_n_clusters, 3L)
+  expect_equal(explicit_resolution$parameters$resolution, 1)
+  expect_equal(explicit_resolution$parameters$resolution_source, "user")
 
   auto_resolution <- graph_cluster(
     g,
@@ -859,6 +877,8 @@ test_that("graph_cluster can target a requested number of communities", {
   expect_s3_class(cl$resolution_search, "data.frame")
   expect_true(nrow(cl$resolution_search) > 1L)
   expect_equal(cl$parameters$n_clusters, 3L)
+  expect_true(is.na(cl$parameters$resolution))
+  expect_equal(cl$parameters$resolution_source, "target_auto")
   expect_equal(cl$parameters$selected_resolution, cl$selected_resolution)
   expect_equal(cl$parameters$target_gap, cl$target_gap)
   expect_equal(
@@ -900,6 +920,8 @@ test_that("graph_cluster can target a requested number of communities", {
   expect_equal(implicit$method, "louvain")
   expect_equal(implicit$target_n_clusters, 3L)
   expect_equal(implicit$parameters$n_clusters, 3L)
+  expect_true(is.na(implicit$parameters$resolution))
+  expect_equal(implicit$parameters$resolution_source, "target_auto")
   expect_equal(implicit$resolution_selection$criterion, "closest_n_communities_then_highest_modularity")
 
   expect_error(

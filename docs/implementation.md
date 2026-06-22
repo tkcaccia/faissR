@@ -365,10 +365,10 @@ counts or with an explicit `resolution`. If `n_clusters` is supplied and
 `method` is omitted, faissR uses Louvain as the target-count clustering method;
 passing `n_clusters` to explicit random-walking remains an error. The graph is
 built once, then faissR evaluates a bounded deterministic grid of resolution
-values. Numeric `resolution` values center the grid near the supplied value and
-the no-pilot shape heuristic `n_clusters / sqrt(n_vertices)`. As an alternative
-to specifying a numeric resolution, `resolution = NULL` is accepted only with
-`n_clusters` and uses the target-count graph-shape seed directly. The
+values. Explicit numeric `resolution` values center the grid near the supplied
+value and the no-pilot shape heuristic `n_clusters / sqrt(n_vertices)`. When
+`n_clusters` is supplied and `resolution` is omitted or `NULL`, faissR uses the
+target-count graph-shape seed directly. The
 candidate width is shape-aware: small graphs keep the wide `2^-4` to `2^4`
 grid around the center, medium graphs use `2^-3` to `2^3`, and large graphs
 use `2^-2` to `2^2` so target-count searches do not repeat full Louvain/Leiden
@@ -378,7 +378,7 @@ center, and search table are returned in the result metadata as
 `selected_resolution`, `resolution_selection`, and `resolution_search`, with the
 requested target stored as `target_n_clusters`. `parameters$resolution_source`
 records whether the grid seed came from the default, a user value, or
-`resolution = NULL` target-auto mode; in target-auto mode
+omitted/`NULL` target-auto mode; in target-auto mode
 `parameters$resolution` is `NA` and the actual automatic center is stored in
 `resolution_selection$candidate_center`.
 The selected row is marked in `resolution_search$selected`; `target_gap`
