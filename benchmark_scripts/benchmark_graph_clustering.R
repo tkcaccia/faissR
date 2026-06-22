@@ -896,7 +896,8 @@ k_values <- required_positive_int_values(
 available_datasets <- c(
   dataset_index(data_root)$dataset,
   "SimulatedUniform2D",
-  "SimulatedUniform3D"
+  "SimulatedUniform3D",
+  "SimulatedTiny3Clusters"
 )
 datasets <- validate_dataset_values(
   split_arg(args$datasets, paste(available_datasets, collapse = ",")),
@@ -1198,7 +1199,7 @@ materials <- c(
   sprintf("- Output directory: `%s`", out_dir),
   sprintf("- Data root: `%s`", data_root),
   sprintf("- Default real datasets: `%s`", paste(dataset_index(data_root)$dataset, collapse = "`, `")),
-  "- Default simulated datasets: `SimulatedUniform2D`, `SimulatedUniform3D`",
+  "- Default simulated datasets: `SimulatedUniform2D`, `SimulatedUniform3D`, `SimulatedTiny3Clusters`",
   sprintf("- Methods: `%s`", paste(methods, collapse = "`, `")),
   sprintf("- Graph backends: `%s`", paste(graph_backends, collapse = "`, `")),
   sprintf("- Graph NN methods: `%s`", paste(graph_methods, collapse = "`, `")),

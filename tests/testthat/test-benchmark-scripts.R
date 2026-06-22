@@ -118,7 +118,7 @@ test_that("benchmark dataset defaults use the requested real and simulated datas
     graph = list(
       path = test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
       stop = "args <- parse_args()",
-      simulated = c("SimulatedUniform2D", "SimulatedUniform3D")
+      simulated = c("SimulatedUniform2D", "SimulatedUniform3D", "SimulatedTiny3Clusters")
     ),
     kmeans = list(
       path = test_path("../../benchmark_scripts/benchmark_kmeans.R"),
@@ -482,7 +482,7 @@ test_that("NN metric benchmark validates dataset selectors", {
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
     "args <- parse_args()"
   )
-  valid <- c("COIL20", "USPS", "SimulatedUniform2D", "SimulatedUniform3D")
+  valid <- c("COIL20", "USPS", "SimulatedUniform2D", "SimulatedUniform3D", "SimulatedTiny3Clusters")
 
   expect_equal(
     env$validate_dataset_values(c("COIL20", "USPS", "COIL20"), valid),

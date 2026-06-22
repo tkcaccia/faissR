@@ -30,9 +30,10 @@ For every KNN method record:
 The benchmark scripts default to the real datasets `COIL20`, `USPS`,
 `FashionMNIST`, `FlowRepository_FR-FCM-ZYRM_files`, `flow18`, `MNIST`,
 `imagenet`, `MetRef`, and `mass41` from the configured `Data` directory.
-NN metric and graph-clustering benchmarks also include simulated uniform 2D and
-3D datasets by default; the k-means benchmark includes a small simulated
-three-cluster dataset for labelled sanity checks.
+NN metric benchmarks also include simulated uniform 2D and 3D datasets by
+default. Graph-clustering benchmarks include those uniform datasets plus a
+small labelled simulated three-cluster dataset for ARI sanity checks; the
+k-means benchmark also includes that labelled three-cluster dataset.
 
 ## Fair CPU And CUDA Runs
 
