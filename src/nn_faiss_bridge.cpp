@@ -217,7 +217,8 @@ List faissR_nn_float32_call_impl(SEXP x,
   const bool include_self_value = Rcpp::as<bool>(include_self);
   const int n_threads_value = Rcpp::as<int>(n_threads);
   const std::string distances_value = Rcpp::as<std::string>(distances);
-  if (backend_value != "cpu" &&
+  if (backend_value != "auto" &&
+      backend_value != "cpu" &&
       backend_value != "faiss" &&
       backend_value != "cpu_faiss" &&
       backend_value != "flat" &&

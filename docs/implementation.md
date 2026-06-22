@@ -541,8 +541,10 @@ faissR also registers a C-callable entry point named
 `R_RegisterCCallable()`. Downstream packages can retrieve it with
 `R_GetCCallable("faissR", "faissR_nn_float32_call")` and call the CPU FAISS
 Flat float32 route without going through the R wrapper layer. The callable
-accepts either a `float::fl()`/`float32` object or an ordinary R double matrix;
-both are adapted once into the row-major `float*` buffers consumed by FAISS.
+accepts `backend = "auto"` or CPU/FAISS Flat aliases; `"auto"` currently resolves
+to the CPU FAISS Flat float32 route. It accepts either a `float::fl()`/`float32`
+object or an ordinary R double matrix; both are adapted once into the row-major
+`float*` buffers consumed by FAISS.
 
 For callers that need float32 distances, faissR also registers
 `faissR_nn_float32_call_output`. It has the same first six arguments plus a
