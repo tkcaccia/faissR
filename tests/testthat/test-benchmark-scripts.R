@@ -1514,6 +1514,7 @@ test_that("k-means benchmark fallback auto params mirror package metadata", {
     list(n = 70000L, p = 784L, centers = 1L, tuning = "auto"),
     list(n = 70000L, p = 784L, centers = 10L, tuning = " Auto "),
     list(n = 50000L, p = 10L, centers = 100L, tuning = "auto"),
+    list(n = 1000L, p = 10L, centers = 100L, tuning = "auto"),
     list(n = 200000L, p = 50L, centers = 100L, tuning = "FIXED"),
     list(n = 200000L, p = 50L, centers = 100L, tuning = "none")
   )
@@ -1556,6 +1557,7 @@ test_that("k-means benchmark records static selection metadata", {
     tuning_rule_detail = "n=100;p=4;centers=3;n_per_center=33.33;work=1.2e+03",
     tuning_work = 1200,
     tuning_n_per_center = 33.3,
+    tuning_few_points_many_centers = FALSE,
     selection_policy = "static_shape_center_backend_selector",
     selection_slow_tuning = FALSE,
     selection_predicted_backend = "cpu",
@@ -1577,6 +1579,7 @@ test_that("k-means benchmark records static selection metadata", {
   summary <- env$summarize_kmeans_cycles(row)
   expect_equal(summary$tuning_rule, "small_low_work_multistart")
   expect_equal(summary$tuning_rule_detail, "n=100;p=4;centers=3;n_per_center=33.33;work=1.2e+03")
+  expect_false(summary$tuning_few_points_many_centers)
   expect_equal(summary$selection_policy, "static_shape_center_backend_selector")
   expect_false(summary$selection_slow_tuning)
   expect_equal(summary$selection_predicted_backend, "cpu")
@@ -1744,6 +1747,7 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
     tuning_large_n = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
     tuning_many_centers = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
     tuning_small_many_centers = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
+    tuning_few_points_many_centers = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
     selection_policy = c(
       rep("static_shape_center_backend_selector", 4),
       rep("stats", 2)

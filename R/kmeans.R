@@ -30,10 +30,12 @@
 #' @param tuning Tuning policy. `"auto"` uses deterministic defaults based on
 #'   `nrow(data)`, `ncol(data)`, and `centers` without running pilot searches.
 #'   Small many-cluster jobs can use extra restarts when `n / centers` remains
-#'   large enough; large or high-dimensional jobs use cheaper iteration and
-#'   tolerance defaults. `centers = 1` uses the exact column-mean solution for
-#'   `backend = "auto"` and `"cpu"` with `max_iter = 1`, `n_init = 1`, and
-#'   `tol = 0`, because no iterative k-means backend can improve that solution.
+#'   large enough, and cheap many-cluster jobs with few observations per center
+#'   also use a small multistart budget for stability; large or
+#'   high-dimensional jobs use cheaper iteration and tolerance defaults.
+#'   `centers = 1` uses the exact column-mean solution for `backend = "auto"`
+#'   and `"cpu"` with `max_iter = 1`, `n_init = 1`, and `tol = 0`, because no
+#'   iterative k-means backend can improve that solution.
 #'   `"fixed"`, `"off"`, and `"none"` use the historical fixed defaults unless
 #'   `max_iter`, `n_init`, or `tol` are explicitly supplied.
 #' @return A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
@@ -648,12 +650,14 @@ kmeans_auto_rule_label <- function(centers,
                                    high_dim,
                                    many_centers,
                                    small_many_centers,
+                                   few_points_many_centers,
                                    work,
                                    n,
                                    n_per_center) {
   if (centers == 1L) return("single_cluster_exact_mean")
   if (isTRUE(large_n) || work >= 5e9) return("large_fast_convergence")
   if (isTRUE(small_many_centers)) return("small_many_centers_multistart")
+  if (isTRUE(few_points_many_centers)) return("few_points_many_centers_multistart")
   if (n <= 50000L && centers <= 20L && work <= 2e8) return("small_low_work_multistart")
   if (n <= 100000L && centers <= 50L && work <= 5e8) return("medium_multistart")
   if (isTRUE(high_dim) || isTRUE(many_centers) || work >= 5e8) return("medium_single_start")
@@ -668,6 +672,7 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
   many_centers <- centers >= 100L
   n_per_center <- as.double(n) / as.double(centers)
   small_many_centers <- many_centers && n <= 50000L && work <= 2e8 && n_per_center >= 20
+  few_points_many_centers <- many_centers && n <= 50000L && work <= 2e8 && n_per_center < 20
   rule_detail <- kmeans_rule_detail(n, p, centers, n_per_center, work)
   if (!identical(tuning, "auto")) {
     return(list(
@@ -681,6 +686,7 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
       large_n = isTRUE(large_n),
       many_centers = isTRUE(many_centers),
       small_many_centers = isTRUE(small_many_centers),
+      few_points_many_centers = isTRUE(few_points_many_centers),
       rule = "fixed_defaults",
       rule_detail = rule_detail
     ))
@@ -697,13 +703,14 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
       large_n = isTRUE(large_n),
       many_centers = FALSE,
       small_many_centers = FALSE,
+      few_points_many_centers = FALSE,
       rule = "single_cluster_exact_mean",
       rule_detail = rule_detail
     ))
   }
   max_iter <- if (large_n || work >= 5e9) {
     50L
-  } else if (high_dim || (many_centers && !small_many_centers) || work >= 5e8) {
+  } else if (high_dim || (many_centers && !small_many_centers && !few_points_many_centers) || work >= 5e8) {
     75L
   } else {
     100L
@@ -711,6 +718,8 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
   n_init <- if (n <= 50000L && centers <= 20L && work <= 2e8) {
     5L
   } else if (small_many_centers) {
+    3L
+  } else if (few_points_many_centers) {
     3L
   } else if (n <= 100000L && centers <= 50L && work <= 5e8) {
     3L
@@ -728,6 +737,7 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
     high_dim = high_dim,
     many_centers = many_centers,
     small_many_centers = small_many_centers,
+    few_points_many_centers = few_points_many_centers,
     work = work,
     n = n,
     n_per_center = n_per_center
@@ -743,6 +753,7 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
     large_n = isTRUE(large_n),
     many_centers = isTRUE(many_centers),
     small_many_centers = isTRUE(small_many_centers),
+    few_points_many_centers = isTRUE(few_points_many_centers),
     rule = rule,
     rule_detail = rule_detail
   )

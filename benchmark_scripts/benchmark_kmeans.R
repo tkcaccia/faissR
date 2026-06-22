@@ -256,6 +256,7 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
   many_centers <- centers >= 100L
   n_per_center <- as.double(n) / as.double(centers)
   small_many_centers <- many_centers && n <= 50000L && work <= 2e8 && n_per_center >= 20
+  few_points_many_centers <- many_centers && n <= 50000L && work <= 2e8 && n_per_center < 20
   rule_detail <- paste(
     paste0("n=", n),
     paste0("p=", p),
@@ -276,6 +277,7 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
       large_n = isTRUE(n >= 100000L),
       many_centers = isTRUE(centers >= 100L),
       small_many_centers = isTRUE(small_many_centers),
+      few_points_many_centers = isTRUE(few_points_many_centers),
       backend_policy = backend_policy,
       rule = "fixed_defaults",
       rule_detail = rule_detail
@@ -293,6 +295,7 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
       large_n = isTRUE(large_n),
       many_centers = FALSE,
       small_many_centers = FALSE,
+      few_points_many_centers = FALSE,
       backend_policy = backend_policy,
       rule = "single_cluster_exact_mean",
       rule_detail = rule_detail
@@ -300,7 +303,7 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
   }
   max_iter <- if (large_n || work >= 5e9) {
     50L
-  } else if (high_dim || (many_centers && !small_many_centers) || work >= 5e8) {
+  } else if (high_dim || (many_centers && !small_many_centers && !few_points_many_centers) || work >= 5e8) {
     75L
   } else {
     100L
@@ -308,6 +311,8 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
   n_init <- if (n <= 50000L && centers <= 20L && work <= 2e8) {
     5L
   } else if (small_many_centers) {
+    3L
+  } else if (few_points_many_centers) {
     3L
   } else if (n <= 100000L && centers <= 50L && work <= 5e8) {
     3L
@@ -319,6 +324,8 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
     "large_fast_convergence"
   } else if (small_many_centers) {
     "small_many_centers_multistart"
+  } else if (few_points_many_centers) {
+    "few_points_many_centers_multistart"
   } else if (n <= 50000L && centers <= 20L && work <= 2e8) {
     "small_low_work_multistart"
   } else if (n <= 100000L && centers <= 50L && work <= 5e8) {
@@ -339,6 +346,7 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
     large_n = isTRUE(large_n),
     many_centers = isTRUE(many_centers),
     small_many_centers = isTRUE(small_many_centers),
+    few_points_many_centers = isTRUE(few_points_many_centers),
     backend_policy = backend_policy,
     rule = rule,
     rule_detail = rule_detail
@@ -502,6 +510,7 @@ result_row <- function(dataset, n, p, method, backend, centers, cycle, n_threads
                        tuning_large_n = NA,
                        tuning_many_centers = NA,
                        tuning_small_many_centers = NA,
+                       tuning_few_points_many_centers = NA,
                        selection_policy = NA_character_,
                        selection_slow_tuning = NA,
                        selection_predicted_backend = NA_character_,
@@ -546,6 +555,7 @@ result_row <- function(dataset, n, p, method, backend, centers, cycle, n_threads
     tuning_large_n = as.logical(tuning_large_n),
     tuning_many_centers = as.logical(tuning_many_centers),
     tuning_small_many_centers = as.logical(tuning_small_many_centers),
+    tuning_few_points_many_centers = as.logical(tuning_few_points_many_centers),
     selection_policy = selection_policy,
     selection_slow_tuning = as.logical(selection_slow_tuning),
     selection_predicted_backend = selection_predicted_backend,
@@ -645,6 +655,7 @@ summarize_kmeans_cycles <- function(ok) {
       tuning_large_n = any(x$tuning_large_n %in% TRUE, na.rm = TRUE),
       tuning_many_centers = any(x$tuning_many_centers %in% TRUE, na.rm = TRUE),
       tuning_small_many_centers = any(x$tuning_small_many_centers %in% TRUE, na.rm = TRUE),
+      tuning_few_points_many_centers = any(x$tuning_few_points_many_centers %in% TRUE, na.rm = TRUE),
       selection_policy = dominant_value(x$selection_policy),
       selection_slow_tuning = any(x$selection_slow_tuning %in% TRUE, na.rm = TRUE),
       selection_predicted_backend = dominant_value(x$selection_predicted_backend),
@@ -723,7 +734,8 @@ compare_fast_kmeans_to_recommendations <- function(cycle_summary, recommendation
     "tuning_rule", "tuning_rule_detail",
     "median_tuning_work", "median_tuning_n_per_center",
     "tuning_high_dim", "tuning_large_n", "tuning_many_centers",
-    "tuning_small_many_centers", "selection_policy", "selection_slow_tuning",
+    "tuning_small_many_centers", "tuning_few_points_many_centers",
+    "selection_policy", "selection_slow_tuning",
     "selection_predicted_backend", "selection_reason", "median_selection_work",
     "median_selection_nbytes", "median_selection_n_per_center",
     "selection_cuda_available", "selection_faiss_gpu_available",
@@ -1009,6 +1021,7 @@ run_one <- function(x, labels, dataset_name, method, backend, centers,
       tuning_large_n = tuning_meta$large_n %||% NA,
       tuning_many_centers = tuning_meta$many_centers %||% NA,
       tuning_small_many_centers = tuning_meta$small_many_centers %||% NA,
+      tuning_few_points_many_centers = tuning_meta$few_points_many_centers %||% NA,
       selection_policy = selection$policy %||% if (identical(method, "stats")) "stats" else NA_character_,
       selection_slow_tuning = selection$slow_tuning %||% if (identical(method, "stats")) FALSE else NA,
       selection_predicted_backend = selection$predicted_backend %||% if (identical(method, "stats")) "stats" else NA_character_,
@@ -1153,6 +1166,7 @@ for (dataset_name in datasets) {
             tuning_large_n = auto_params$large_n,
             tuning_many_centers = auto_params$many_centers,
             tuning_small_many_centers = auto_params$small_many_centers,
+            tuning_few_points_many_centers = auto_params$few_points_many_centers,
             selection_policy = "static_shape_center_backend_selector",
             selection_slow_tuning = FALSE,
             selection_predicted_backend = backend,

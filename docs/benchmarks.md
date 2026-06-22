@@ -577,7 +577,10 @@ CPU/CUDA selection without running extra pilot jobs.
 For k-means parameter tuning, `tuning_rule` is a categorical no-pilot label
 such as `small_low_work_multistart`, `medium_single_start`, or
 `large_fast_convergence`, while `tuning_rule_detail` stores the exact
-`n`/`p`/`centers`/work trace for auditing.
+`n`/`p`/`centers`/work trace for auditing. Many-center k-means summaries also
+record `tuning_small_many_centers` and `tuning_few_points_many_centers`, so
+benchmark tables can distinguish stable multistart rules for well-populated
+and sparse-per-center cluster requests.
 
 Example CPU run:
 

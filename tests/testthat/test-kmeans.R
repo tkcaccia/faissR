@@ -107,6 +107,21 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_true(isTRUE(small_many$small_many_centers))
   expect_equal(small_many$n_per_center, 50)
 
+  few_points_many <- faissR:::kmeans_auto_params(
+    n = 1000L,
+    p = 10L,
+    centers = 100L,
+    tuning = "auto"
+  )
+  expect_equal(few_points_many$max_iter, 100L)
+  expect_equal(few_points_many$n_init, 3L)
+  expect_equal(few_points_many$tol, 1e-4)
+  expect_equal(few_points_many$rule, "few_points_many_centers_multistart")
+  expect_true(isTRUE(few_points_many$many_centers))
+  expect_false(isTRUE(few_points_many$small_many_centers))
+  expect_true(isTRUE(few_points_many$few_points_many_centers))
+  expect_equal(few_points_many$n_per_center, 10)
+
   large_many <- faissR:::kmeans_auto_params(
     n = 200000L,
     p = 50L,
@@ -285,7 +300,23 @@ test_that("fast_kmeans auto tuning is shape and center-count aware for benchmark
   expect_equal(small_many$rule, "small_many_centers_multistart")
   expect_true(isTRUE(small_many$many_centers))
   expect_true(isTRUE(small_many$small_many_centers))
+  expect_false(isTRUE(small_many$few_points_many_centers))
   expect_equal(small_many$n_per_center, 500)
+
+  few_points_many <- faissR:::kmeans_auto_params(
+    n = 1000L,
+    p = 10L,
+    centers = 100L,
+    tuning = "auto"
+  )
+  expect_equal(few_points_many$max_iter, 100L)
+  expect_equal(few_points_many$n_init, 3L)
+  expect_equal(few_points_many$tol, 1e-4)
+  expect_equal(few_points_many$rule, "few_points_many_centers_multistart")
+  expect_true(isTRUE(few_points_many$many_centers))
+  expect_false(isTRUE(few_points_many$small_many_centers))
+  expect_true(isTRUE(few_points_many$few_points_many_centers))
+  expect_equal(few_points_many$n_per_center, 10)
 
   highdim_many <- faissR:::kmeans_auto_params(
     n = 70000L,

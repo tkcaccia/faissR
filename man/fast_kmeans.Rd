@@ -53,11 +53,13 @@ supported.}
 \item{tuning}{Tuning policy. `"auto"` uses deterministic defaults based on
 `nrow(data)`, `ncol(data)`, and `centers` without running pilot searches.
 Small many-cluster jobs can use extra restarts when `n / centers` remains
-large enough; large or high-dimensional jobs use cheaper iteration and
-tolerance defaults. `centers = 1` uses the exact column-mean solution for
-`backend = "auto"` and `"cpu"` with `max_iter = 1`, `n_init = 1`, and
-`tol = 0`, records `single_cluster_exact_mean`, and stays on CPU because no
-iterative k-means backend can improve that solution.
+large enough, and cheap many-cluster jobs with few observations per center
+also use a small multistart budget for stability; large or high-dimensional
+jobs use cheaper iteration and tolerance defaults. `centers = 1` uses the
+exact column-mean solution for `backend = "auto"` and `"cpu"` with
+`max_iter = 1`, `n_init = 1`, and `tol = 0`, records
+`single_cluster_exact_mean`, and stays on CPU because no iterative k-means
+backend can improve that solution.
 `"fixed"`, `"off"`, and `"none"` use the historical fixed defaults unless
 `max_iter`, `n_init`, or `tol` are explicitly supplied.}
 }

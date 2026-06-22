@@ -49,7 +49,8 @@ headers and libraries discovered by `configure`.
   libcugraph [12]; CUDA random-walking is not enabled yet.
 - `fast_kmeans()` for CPU, FAISS CPU/GPU, and optional cuVS k-means [7-8],
   with deterministic shape-aware defaults for `max_iter`, `n_init`, and `tol`
-  when `tuning = "auto"`.
+  when `tuning = "auto"`, including no-pilot multistart tiers for cheap
+  many-cluster jobs.
 - `knn()` and `predict()` for kNN classification/regression, including
   immediate prediction with `knn(Xtrain, Ytrain, Xtest)` and class
   probabilities with `predict(type = "prob")`.
