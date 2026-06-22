@@ -2061,6 +2061,7 @@ test_that("graph benchmark defaults cover requested methods backends and k grid"
     env$default_graph_k_values(),
     c(5L, 10L, 15L, 50L, 100L)
   )
+  expect_equal(env$default_graph_cycles(), 10L)
   expect_equal(
     env$as_int_vec_arg(c("unknown"), env$default_graph_k_values()),
     env$default_graph_k_values()

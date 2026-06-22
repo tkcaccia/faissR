@@ -240,9 +240,10 @@ are present. ARI is computed by the benchmark helper in
 `benchmark_scripts/source.R`; it is not part of the public package API.
 For reproducibility and speed, each KNN graph is built once per
 dataset/cycle/k/graph-backend/weight combination and reused across clustering
-methods and clustering backends within that cycle. The `cycle` column supports
-repeated benchmark cycles, for example `--cycles=10` for repeated speed/ARI
-improvement runs. The `graph_cached` column records reuse within a cycle.
+methods and clustering backends within that cycle. The graph benchmark defaults
+to 10 repeated cycles for speed/ARI stability; `--cycles` can override this for
+smoke tests or longer stability runs. The `graph_cached` column records reuse
+within a cycle.
 `graph_sec` is the shared graph-construction time, `cluster_sec` is
 clustering-only time, and `total_sec` is `graph_sec + cluster_sec` for the
 complete graph-plus-clustering workflow represented by the row.
@@ -291,9 +292,10 @@ graph/clustering method row within `ari_tolerance` of the best median ARI for
 each dataset/k/graph-backend/cluster-backend/target-cluster-count combination;
 when ARI is available and median total times tie, higher median ARI and then
 higher median modularity break the tie. `--ari_tolerance` must be a
-non-negative number and is validated before datasets are loaded. `--threads`,
-`--timeout`, and `--cycles` must be positive integers and are also validated
-before data loading.
+non-negative number and is validated before datasets are loaded. `--threads`
+and `--timeout` must be positive integers; `--cycles` must be positive when
+supplied and otherwise defaults to 10. These arguments are validated before
+data loading.
 When ARI is unavailable it selects the fastest median total-time row. The
 `recommendation_basis` column records whether the row was selected as
 `"fastest_within_ari_tolerance"` or `"speed_only_no_ari"`.
