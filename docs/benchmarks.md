@@ -236,6 +236,11 @@ the raw row-level result table is saved as
 Expected skips are marked with `expected_skip = TRUE` and a machine-readable
 `expected_skip_reason`, so runtime, shape, and input-type skips can be grouped
 without parsing the prose error message.
+The raw table and cycle summaries also preserve compact
+`graph_route_parameters` from the KNN route that built the graph, including
+FAISS/cuVS/grid parameter and deterministic tuning metadata when present. This
+lets graph ARI/speed comparisons distinguish, for example, two HNSW-built
+graphs that used different `tuning_rule` or `ef_search` settings.
 The config includes `available_datasets`, the validated real plus simulated
 dataset names accepted by the `--datasets` selector, so subset runs remain
 auditable.

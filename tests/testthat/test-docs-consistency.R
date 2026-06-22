@@ -776,6 +776,19 @@ test_that("benchmark documentation describes graph expected-skip reason labels",
   expect_true(grepl("runtime, shape, and input-type skips", prose, fixed = TRUE))
 })
 
+test_that("benchmark documentation describes graph route parameter metadata", {
+  docs_file <- test_path("../../docs/benchmarks.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  expect_true(grepl("graph_route_parameters", prose, fixed = TRUE))
+  expect_true(grepl("KNN route", prose, fixed = TRUE))
+  expect_true(grepl("tuning_rule", prose, fixed = TRUE))
+  expect_true(grepl("ef_search", prose, fixed = TRUE))
+})
+
 test_that("benchmark documentation describes k-means runtime reason codes", {
   docs_file <- test_path("../../docs/benchmarks.md")
   if (!file.exists(docs_file)) {

@@ -46,10 +46,12 @@
 #' @return A native `faissR_graph` edge-list object. The `faissR_graph`
 #'   attribute stores graph-construction metadata: graph size, weighting,
 #'   nearest-neighbour method, metric, tuning policy, optional
-#'   `target_n_clusters`, and requested/resolved KNN backends. For precomputed
-#'   KNN input, `nn_backend` prefers the KNN object's resolved backend when
-#'   available, so benchmark metadata records concrete FAISS/cuVS routes rather
-#'   than only the public requested backend.
+#'   `target_n_clusters`, requested/resolved KNN backends, and compact-relevant
+#'   KNN result metadata such as `nn_approximation`, `nn_faiss`, `nn_cuvs`,
+#'   `nn_spatial_index`, and `nn_auto_selection`. For precomputed KNN input,
+#'   `nn_backend` prefers the KNN object's resolved backend when available, so
+#'   benchmark metadata records concrete FAISS/cuVS routes rather than only the
+#'   public requested backend.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' g <- knn_graph(x, k = 15, backend = "cpu", n_clusters = 3)
@@ -171,6 +173,15 @@ knn_graph <- function(data,
     nn_method = nn_method,
     metric = attr(knn, "metric") %||% metric,
     tuning = tuning,
+    nn_requested_backend = attr(knn, "requested_backend") %||% requested_graph_backend,
+    nn_requested_method = attr(knn, "requested_method") %||% nn_method,
+    nn_tuning = attr(knn, "tuning") %||% tuning,
+    nn_approximation = attr(knn, "approximation") %||% NULL,
+    nn_faiss = attr(knn, "faiss") %||% NULL,
+    nn_cuvs = attr(knn, "cuvs") %||% NULL,
+    nn_spatial_index = attr(knn, "spatial_index") %||% NULL,
+    nn_sparse = attr(knn, "sparse") %||% NULL,
+    nn_auto_selection = attr(knn, "auto_selection") %||% NULL,
     input_method = input_method,
     target_n_clusters = n_clusters,
     n_vertices = edges$n_vertices,

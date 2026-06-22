@@ -2255,6 +2255,10 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
     graph_backend = c("cpu", "cpu"),
     graph_resolved_backend = c("cpu", "cpu"),
     graph_preflight_route = c("cpu", "cpu"),
+    graph_route_parameters = c(
+      "nn_approximation.strategy=faiss_IndexHNSWFlat;nn_approximation.tuning_rule=balanced_shape_metric",
+      "nn_approximation.strategy=faiss_IndexHNSWFlat;nn_approximation.tuning_rule=balanced_shape_metric"
+    ),
     cluster_backend = c("cpu", "cpu"),
     cluster_resolved_backend = c("cpu", "cpu"),
     cluster_preflight_route = c("cpu", "cpu"),
@@ -2296,6 +2300,10 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
   expect_equal(sort(out$n_clusters_source), c("labels", "stored_graph_target"))
   expect_equal(out$median_graph_n_vertices, c(100, 100))
   expect_equal(out$graph_preflight_route, c("cpu", "cpu"))
+  expect_equal(
+    out$graph_route_parameters,
+    rep("nn_approximation.strategy=faiss_IndexHNSWFlat;nn_approximation.tuning_rule=balanced_shape_metric", 2L)
+  )
   expect_equal(out$cluster_preflight_route, c("cpu", "cpu"))
   expect_equal(out$n_threads, c(2L, 2L))
   expect_equal(out$median_target_gap, c(0, 0))
@@ -2307,6 +2315,36 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
     out$resolution_selection,
     rep("closest_n_communities_then_highest_modularity", 2L)
   )
+})
+
+test_that("graph benchmark extracts compact graph KNN route parameters", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  graph <- list(from = c(1L, 2L), to = c(2L, 3L), weight = c(1, 1), n_vertices = 3L, n_edges = 2L)
+  attr(graph, "faissR_graph") <- list(
+    nn_approximation = list(
+      strategy = "faiss_IndexHNSWFlat",
+      backend = "faiss_hnsw",
+      m = 32L,
+      ef_search = 150L,
+      tuning_rule = "balanced_shape_metric"
+    ),
+    nn_auto_selection = list(
+      policy = "static_shape_k_metric_selector",
+      predicted_backend = "faiss_hnsw",
+      slow_tuning = FALSE
+    )
+  )
+
+  params <- env$graph_route_parameters(graph)
+  expect_match(params, "nn_approximation.strategy=faiss_IndexHNSWFlat", fixed = TRUE)
+  expect_match(params, "nn_approximation.m=32", fixed = TRUE)
+  expect_match(params, "nn_approximation.ef_search=150", fixed = TRUE)
+  expect_match(params, "nn_approximation.tuning_rule=balanced_shape_metric", fixed = TRUE)
+  expect_match(params, "nn_auto_selection.policy=static_shape_k_metric_selector", fixed = TRUE)
+  expect_match(params, "nn_auto_selection.slow_tuning=FALSE", fixed = TRUE)
 })
 
 test_that("graph benchmark summarizes graph_cluster resolution search diagnostics", {

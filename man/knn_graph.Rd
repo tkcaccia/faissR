@@ -46,10 +46,12 @@ positive integer and cannot exceed the number of graph vertices.}
 A native \code{faissR_graph} edge-list object. The \code{faissR_graph}
 attribute stores graph-construction metadata: graph size, weighting,
 nearest-neighbour method, metric, tuning policy, optional
-\code{target_n_clusters}, and requested/resolved KNN backends. For precomputed
-KNN input, \code{nn_backend} prefers the KNN object's resolved backend when
-available, so benchmark metadata records concrete FAISS/cuVS routes rather
-than only the public requested backend.
+\code{target_n_clusters}, requested/resolved KNN backends, and compact-relevant
+KNN result metadata such as \code{nn_approximation}, \code{nn_faiss},
+\code{nn_cuvs}, \code{nn_spatial_index}, and \code{nn_auto_selection}. For
+precomputed KNN input, \code{nn_backend} prefers the KNN object's resolved
+backend when available, so benchmark metadata records concrete FAISS/cuVS
+routes rather than only the public requested backend.
 }
 \description{
 \code{knn_graph()} turns a data matrix, a precomputed \code{nn()} result, or an embedding object with a matrix \code{layout} into a weighted nearest-neighbour graph. It returns a native \code{faissR_graph} edge-list object and does not require igraph.

@@ -154,7 +154,9 @@ Returns a native `faissR_graph` edge-list object. No `igraph` dependency is
 required. When faissR builds neighbours internally, the `faissR_graph` metadata
 includes graph size, weighting, nearest-neighbour method, metric, tuning
 policy, optional `target_n_clusters`, and the requested/resolved public KNN
-backends.
+backends. It also preserves compact-relevant KNN route metadata such as
+approximation parameters, auto-selection metadata, and FAISS/cuVS/grid
+attributes for benchmark auditing.
 
 ## `graph_cluster()`
 

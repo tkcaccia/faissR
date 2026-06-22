@@ -173,6 +173,47 @@ test_that("knn_graph passes method metric and tuning to internal KNN", {
   expect_equal(meta$resolved_backend, "cpu")
 })
 
+test_that("knn_graph stores KNN route metadata for benchmark auditing", {
+  knn <- list(
+    indices = matrix(c(
+      2L, 3L,
+      1L, 3L,
+      1L, 2L
+    ), nrow = 3L, byrow = TRUE),
+    distances = matrix(c(
+      0.1, 0.2,
+      0.1, 0.3,
+      0.2, 0.3
+    ), nrow = 3L, byrow = TRUE)
+  )
+  attr(knn, "backend") <- "faiss_hnsw"
+  attr(knn, "resolved_backend") <- "faiss_hnsw"
+  attr(knn, "requested_backend") <- "cpu"
+  attr(knn, "requested_method") <- "hnsw"
+  attr(knn, "tuning") <- "auto"
+  attr(knn, "metric") <- "euclidean"
+  attr(knn, "approximation") <- list(
+    strategy = "faiss_IndexHNSWFlat",
+    backend = "faiss_hnsw",
+    tuning_rule = "small_k_speed"
+  )
+  g <- knn_graph(
+    knn,
+    k = 2L,
+    backend = "auto",
+    method = "auto"
+  )
+  meta <- attr(g, "faissR_graph")
+
+  expect_s3_class(g, "faissR_graph")
+  expect_equal(meta$nn_requested_backend, "cpu")
+  expect_equal(meta$nn_requested_method, "hnsw")
+  expect_equal(meta$nn_tuning, "auto")
+  expect_true(is.list(meta$nn_approximation))
+  expect_equal(meta$nn_approximation$backend, "faiss_hnsw")
+  expect_equal(meta$nn_approximation$tuning_rule, "small_k_speed")
+})
+
 test_that("knn_graph accepts method as an alias for nn_method", {
   set.seed(50411)
   x <- matrix(rnorm(80), ncol = 4)
