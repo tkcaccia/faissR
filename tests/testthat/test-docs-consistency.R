@@ -184,6 +184,23 @@ test_that("reference manual keeps probability prediction inside predict", {
   expect_false(grepl("predict_proba", manual_text, fixed = TRUE))
 })
 
+test_that("fast_kmeans docs describe effective tuning metadata", {
+  docs_files <- c(
+    test_path("../../docs", c("implementation.md", "usage-api.md")),
+    test_path("../../man/fast_kmeans.Rd")
+  )
+  missing <- !file.exists(docs_files)
+  if (any(missing)) {
+    skip("GitHub or reference documentation files are not available in this installed-package test context.")
+  }
+
+  for (docs_file in docs_files) {
+    prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+    expect_true(grepl("tuning$effective", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("final values", prose, fixed = TRUE), info = basename(docs_file))
+  }
+})
+
 test_that("README describes public NN metrics and correlation semantics", {
   readme_file <- test_path("../../README.md")
   if (!file.exists(readme_file)) {

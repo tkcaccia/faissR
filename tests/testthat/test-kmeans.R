@@ -40,6 +40,12 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(auto$parameters$tuning$resolved_from$tol, "auto")
   expect_equal(auto$parameters$max_iter, 100L)
   expect_equal(auto$parameters$n_init, 5L)
+  expect_equal(auto$parameters$tuning$effective$max_iter, auto$parameters$max_iter)
+  expect_equal(auto$parameters$tuning$effective$n_init, auto$parameters$n_init)
+  expect_equal(auto$parameters$tuning$effective$tol, auto$parameters$tol)
+  expect_equal(auto$parameters$tuning$effective_max_iter, auto$parameters$max_iter)
+  expect_equal(auto$parameters$tuning$effective_n_init, auto$parameters$n_init)
+  expect_equal(auto$parameters$tuning$effective_tol, auto$parameters$tol)
   expect_equal(auto$parameters$tuning$small_many_centers, FALSE)
   expect_true(is.finite(auto$parameters$tuning$work))
   expect_true(is.finite(auto$parameters$tuning$n_per_center))
@@ -97,6 +103,9 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(explicit$parameters$tuning$resolved_from$max_iter, "explicit")
   expect_equal(explicit$parameters$tuning$resolved_from$n_init, "explicit")
   expect_equal(explicit$parameters$tuning$resolved_from$tol, "explicit")
+  expect_equal(explicit$parameters$tuning$effective$max_iter, 7L)
+  expect_equal(explicit$parameters$tuning$effective$n_init, 2L)
+  expect_equal(explicit$parameters$tuning$effective$tol, 1e-5)
 })
 
 test_that("fast_kmeans auto tuning is shape and center-count aware for benchmark shapes", {

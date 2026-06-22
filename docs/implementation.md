@@ -354,6 +354,10 @@ million-row low-dimensional data uses 50 iterations, one restart, and
 and three restarts. These are fixed rules, not pilot benchmark loops. The
 `resolved_from` field records whether `max_iter`, `n_init`, and `tol` were
 selected by auto/default rules or supplied explicitly.
+`result$parameters$tuning$effective` records the final values used after
+explicit overrides and `"auto"` defaults have been resolved, so benchmark code
+can summarize the effective k-means run without comparing multiple parameter
+fields.
 
 The public backend policy is the same as for KNN: `backend = "auto"` uses
 CUDA only when CUDA plus FAISS GPU k-means or direct cuVS k-means is compiled

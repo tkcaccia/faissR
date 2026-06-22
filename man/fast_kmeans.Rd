@@ -63,7 +63,9 @@ A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
   `parameters$resolved_backend` record the public backend request and device
   policy result. `parameters$tuning` records the deterministic k-means policy,
   shape metadata, and whether `max_iter`, `n_init`, and `tol` were
-  auto-selected or supplied explicitly.
+  auto-selected or supplied explicitly. `parameters$tuning$effective` records
+  the final values used after explicit overrides and `"auto"` defaults have
+  been resolved.
 }
 \description{
 Run k-means using the fastest available backend. CPU acceleration uses

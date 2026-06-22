@@ -38,7 +38,9 @@
 #'   `parameters$resolved_backend` record the public backend request and device
 #'   policy result. `parameters$tuning` records the deterministic k-means policy,
 #'   shape metadata, and whether `max_iter`, `n_init`, and `tol` were
-#'   auto-selected or supplied explicitly.
+#'   auto-selected or supplied explicitly. `parameters$tuning$effective` records
+#'   the final values used after explicit overrides and `"auto"` defaults have
+#'   been resolved.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' fit <- fast_kmeans(x, centers = 3, backend = "cpu", n_threads = 2)
@@ -87,6 +89,14 @@ fast_kmeans <- function(data,
   n_threads <- normalize_nn_threads(n_threads)
   seed <- normalize_kmeans_seed(seed)
   tol <- normalize_kmeans_tol(tol, auto_params$tol)
+  auto_params$effective <- list(
+    max_iter = as.integer(max_iter),
+    n_init = as.integer(n_init),
+    tol = as.numeric(tol)
+  )
+  auto_params$effective_max_iter <- as.integer(max_iter)
+  auto_params$effective_n_init <- as.integer(n_init)
+  auto_params$effective_tol <- as.numeric(tol)
   streaming_batch_size <- normalize_kmeans_streaming_batch_size(streaming_batch_size)
 
   backend <- resolve_fast_kmeans_backend(backend)
