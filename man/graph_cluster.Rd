@@ -51,8 +51,11 @@ libcugraph was detected at build time; random-walking is CPU-only.}
 \item{n_clusters}{Optional target number of communities for Louvain/Leiden.
 If supplied, faissR evaluates a bounded deterministic resolution grid on the
 already-built graph and keeps the result whose community count is closest to
-the target. This is a convenience target, not a hard guarantee. The target
-must be a positive integer and cannot exceed the number of graph vertices.}
+the target. The grid is centered from the requested \code{resolution} and,
+when graph size is known, a no-pilot shape heuristic based on
+\code{n_clusters / sqrt(n_vertices)}. This is a convenience target, not a hard
+guarantee. The target must be a positive integer and cannot exceed the number
+of graph vertices.}
 \item{objective_function}{Reserved for Leiden-compatible APIs; currently recorded in parameters.}
 \item{n_iterations}{Native clustering iteration count.}
 \item{steps}{Random-walk propagation depth.}
@@ -66,8 +69,9 @@ must be a positive integer and cannot exceed the number of graph vertices.}
 \code{n_clusters} can be supplied directly to \code{graph_cluster()} or stored
 on a graph with \code{knn_graph(n_clusters = ...)}. When a target count is
 available for Louvain or Leiden, faissR builds or reuses the graph once,
-evaluates a bounded deterministic resolution grid, and records the selected resolution and
-search table in the returned object. Stored graph targets are ignored by
+evaluates a bounded deterministic resolution grid centered by the requested
+\code{resolution} and graph shape, and records the selected resolution, center,
+and search table in the returned object. Stored graph targets are ignored by
 \code{method = "random_walking"}; explicitly passing \code{n_clusters} to
 random-walking still errors. The target must be a positive integer and cannot
 exceed the number of graph vertices.

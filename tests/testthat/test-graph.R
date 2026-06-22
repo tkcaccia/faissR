@@ -356,6 +356,8 @@ test_that("knn_graph stores an optional cluster-count target for graph_cluster",
     cl$resolution_selection$criterion,
     "closest_n_communities_then_highest_modularity"
   )
+  expect_true(is.numeric(cl$resolution_selection$candidate_center))
+  expect_equal(cl$resolution_selection$n_vertices, g$n_vertices)
   expect_equal(cl$parameters$resolution_selection$selected_candidate, which(cl$resolution_search$selected))
   expect_lte(abs(cl$n_communities - 3L), 1L)
 
@@ -434,6 +436,24 @@ test_that("target cluster resolution candidates are bounded and deterministic", 
   expect_equal(max(candidates), 16)
   expect_equal(length(candidates), 17L)
   expect_equal(faissR:::graph_resolution_candidates(0.5, NULL), 0.5)
+
+  shape_center <- faissR:::graph_resolution_center(
+    resolution = 1,
+    n_clusters = 3L,
+    n_vertices = 120L
+  )
+  shaped <- faissR:::graph_resolution_candidates(1, 3L, n_vertices = 120L)
+  expect_equal(shape_center, sqrt(3 / sqrt(120)))
+  expect_equal(shaped, sort(shaped))
+  expect_true(1 %in% shaped)
+  expect_true(shape_center %in% shaped)
+  expect_lte(min(shaped), shape_center / 16)
+  expect_gte(max(shaped), shape_center * 16)
+  expect_lte(length(shaped), 18L)
+  expect_equal(
+    faissR:::graph_resolution_center(1, 3L, n_vertices = NULL),
+    1
+  )
 })
 
 test_that("graph runtime integer controls reject fractional values", {

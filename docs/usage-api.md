@@ -186,7 +186,7 @@ graph_cluster(graph, method = "random_walking", backend = "auto",
 | `n_threads` | CPU threads for KNN construction and native CPU clustering. |
 | `n_runs` | Number of independent clustering runs. faissR keeps the best modularity run. |
 | `resolution` | Positive resolution parameter for Louvain/Leiden-style modularity scoring. Larger values tend to produce more communities. |
-| `n_clusters` | Optional target number of communities for Louvain/Leiden. If supplied, faissR builds the KNN graph once, evaluates a bounded deterministic resolution grid, and keeps the result closest to the requested count. This is a convenience target, not a hard guarantee. The target must be a positive integer and cannot exceed the graph vertex count. |
+| `n_clusters` | Optional target number of communities for Louvain/Leiden. If supplied, faissR builds the KNN graph once, evaluates a bounded deterministic resolution grid centered from the requested `resolution` and a no-pilot graph-shape heuristic, and keeps the result closest to the requested count. This is a convenience target, not a hard guarantee. The target must be a positive integer and cannot exceed the graph vertex count. |
 | `objective_function` | Reserved Leiden-compatible option. Currently accepts `"modularity"` or `"CPM"`. |
 | `n_iterations` | Maximum native clustering iterations. |
 | `steps` | Random-walk propagation depth for `method = "random_walking"`. |
@@ -207,7 +207,7 @@ size for benchmark summaries. When a target community count is used,
 `target_n_clusters`, `selected_resolution`, `target_gap`,
 `resolution_selection`, and `resolution_search` record the requested target,
 selected resolution, final community-count gap, deterministic selection rule,
-and full resolution search table.
+candidate center, and full resolution search table.
 
 ### Graph Clustering Methods
 

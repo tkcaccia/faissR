@@ -258,9 +258,12 @@ routes, and resolved backend metadata.
 When `n_clusters` is used, graph-clustering result metadata also records
 `target_gap`, `resolution_selection`, and a `resolution_search` table whose
 selected row is marked with `selected = TRUE`, so target-count resolution
-searches remain auditable in downstream summaries. The raw and cycle-summary
-CSVs flatten the most important diagnostics as `resolution_selected_candidate`,
-`resolution_candidates`, `resolution_min_target_gap`, and
+searches remain auditable in downstream summaries. The deterministic candidate
+center is derived from the requested resolution and, when graph size is known,
+the no-pilot shape heuristic `n_clusters / sqrt(n_vertices)`. The raw and
+cycle-summary CSVs flatten the most important diagnostics as
+`resolution_selected_candidate`, `resolution_candidates`,
+`resolution_min_target_gap`, and
 `resolution_selected_is_min_gap`, making it possible to check whether the
 selected resolution achieved the best observed target-count gap without opening
 the R object.
