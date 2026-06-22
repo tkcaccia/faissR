@@ -82,8 +82,10 @@ available and RcppHNSW/hnswlib when FAISS is unavailable.
 `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
 FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, native CPU NN-descent raw
 dot-product search, native CUDA NN-descent candidate refinement, and CUDA
-CAGRA/HNSW through a maximum-inner-product-to-L2 transform where available.
-Direct cuVS NN-descent does not expose raw inner-product search.
+HNSW through a maximum-inner-product-to-L2 transform where available. FAISS GPU
+CAGRA can also provide transformed raw-inner-product CAGRA when available.
+Direct cuVS NN-descent and direct cuVS CAGRA do not expose safe
+raw-inner-product search.
 Unsupported backend combinations fail clearly instead of returning neighbours
 computed under a different metric.}
 

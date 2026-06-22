@@ -1164,6 +1164,17 @@ nn_compute <- function(data,
 
   if (backend %in% c("cuda_cuvs_cagra", "cuda_cagra", "gpu_cagra")) {
     require_cuvs_backend("cuVS CAGRA")
+    if (identical(metric, "inner_product")) {
+      stop(
+        "Direct RAPIDS cuVS CAGRA is disabled for `metric = \"inner_product\"` ",
+        "because the current cuVS MIPS-to-L2 route can trigger an illegal CUDA ",
+        "memory access. Use `cagra_implementation = \"faiss_gpu\"` when FAISS GPU ",
+        "CAGRA is available, or choose a CUDA method with native inner-product ",
+        "candidate refinement such as `method = \"nsg\"`, `\"vamana\"`, or ",
+        "`\"nndescent\"`.",
+        call. = FALSE
+      )
+    }
     metric_inputs <- NULL
     search_data <- data
     search_points <- points
@@ -2022,9 +2033,12 @@ cuda_cagra_route_available <- function(faiss_gpu_available_value = faiss_gpu_ava
 #' per-query shifted dot-product distances.
 #' Direct cuVS NNDescent does not expose raw inner-product search; public CUDA
 #' `method = "nndescent", metric = "inner_product"` uses faissR's native CUDA
-#' candidate-refinement route. Public CUDA CAGRA/HNSW inner-product routes use
-#' a maximum-inner-product-to-L2 extra-dimension transform and convert returned
-#' L2 distances back to shifted inner-product distances.
+#' candidate-refinement route. Public CUDA HNSW inner-product routes use a
+#' maximum-inner-product-to-L2 extra-dimension transform and convert returned
+#' L2 distances back to shifted inner-product distances. Public CUDA CAGRA
+#' inner-product support is limited to FAISS GPU CAGRA; direct cuVS CAGRA
+#' inner product is disabled because the current transformed route can trigger
+#' an illegal CUDA memory access.
 #' Public CUDA `method = "cagra"` can resolve to FAISS GPU CAGRA or direct cuVS
 #' CAGRA; `options(faissR.cagra_implementation = "faiss_gpu")` or `"cuvs"`
 #' forces one provider, while `"auto"` keeps the default FAISS-then-cuVS rule.
@@ -2095,6 +2109,21 @@ nn_capability_runtime_row <- function(row) {
       runtime_available = FALSE,
       runtime_reason = "resolver_error",
       runtime_notes = conditionMessage(resolved),
+      stringsAsFactors = FALSE
+    ))
+  }
+  if (identical(resolved, "cuda_cuvs_cagra") &&
+      identical(normalize_nn_metric(row$metric[[1L]]), "inner_product")) {
+    return(data.frame(
+      resolved_backend = resolved,
+      runtime_available = FALSE,
+      runtime_reason = "unsupported_cuvs_cagra_inner_product",
+      runtime_notes = paste(
+        "Direct RAPIDS cuVS CAGRA is disabled for raw inner-product search",
+        "because the current MIPS-to-L2 route can trigger an illegal CUDA",
+        "memory access. Force FAISS GPU CAGRA when available or use a CUDA",
+        "method with native inner-product candidate refinement."
+      ),
       stringsAsFactors = FALSE
     ))
   }
@@ -2260,7 +2289,7 @@ nn_capability_row <- function(method, backend, metric) {
       } else if (metric %in% c("cosine", "correlation")) {
         "CUDA auto can resolve to CUDA grid for large 2D/3D self-search, FAISS GPU Flat normalized-IP search for exact small/query workloads, or cuVS HNSW/CAGRA graph routes for large self-KNN when available; cuVS-only runtimes are shape-dependent and keep small/query workloads on CPU."
       } else {
-        "CUDA auto uses FAISS GPU Flat IP for exact small/query inner-product search when FAISS GPU Flat is available, or cuVS HNSW/CAGRA graph routes for large self-KNN through a maximum-inner-product-to-L2 transform when available; cuVS-only runtimes are shape-dependent and keep small/query workloads on CPU."
+        "CUDA auto uses FAISS GPU Flat IP for exact small/query inner-product search when FAISS GPU Flat is available, or cuVS HNSW graph routes for large self-KNN through a maximum-inner-product-to-L2 transform when available; cuVS-only runtimes are shape-dependent and keep small/query workloads on CPU. Direct cuVS CAGRA is disabled for raw inner-product search."
       }
     }
   } else if (method %in% c("exact", "bruteforce")) {
@@ -2378,7 +2407,7 @@ nn_capability_row <- function(method, backend, metric) {
     notes <- if (!identical(backend, "cuda")) {
       "CAGRA is CUDA-only."
     } else if (identical(metric, "inner_product")) {
-      "Raw inner-product CAGRA uses a maximum-inner-product-to-L2 extra-dimension transform, then converts returned L2 distances back to shifted inner-product distances."
+      "Raw inner-product CAGRA is available only through FAISS GPU CAGRA. Direct cuVS CAGRA inner product is disabled because the transformed route can trigger an illegal CUDA memory access."
     } else if (identical(backend, "cuda")) {
       "CUDA-only approximate graph search; faissR.cagra_implementation selects FAISS GPU CAGRA, direct cuVS CAGRA, or the default FAISS-then-cuVS rule."
     } else {
@@ -3058,6 +3087,12 @@ public_nn_cuda_route_available <- function(method,
   if (identical(metric, "inner_product")) {
     if (identical(method, "nndescent")) return(isTRUE(cuda_available_value))
     if (identical(method, "cagra")) {
+      if (identical(resolve_cuda_cagra_backend(
+        faiss_gpu_available_value = faiss_gpu_available_value,
+        cuvs_available_value = cuvs_available_value
+      ), "cuda_cuvs_cagra")) {
+        return(FALSE)
+      }
       return(cuda_cagra_route_available(
         faiss_gpu_available_value = faiss_gpu_available_value,
         cuvs_available_value = cuvs_available_value
@@ -6956,8 +6991,9 @@ grid_self_knn <- function(data,
 #'   `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
 #'   FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, native CPU NN-descent raw
 #'   dot-product search, native CUDA NN-descent candidate refinement, and CUDA
-#'   CAGRA/HNSW through a maximum-inner-product-to-L2 transform where available.
-#'   Direct cuVS NN-descent does not expose raw inner-product search.
+#'   FAISS GPU CAGRA or CUDA HNSW through a maximum-inner-product-to-L2
+#'   transform where available. Direct cuVS NN-descent and direct cuVS CAGRA do
+#'   not expose a safe raw-inner-product route.
 #'   Unsupported backend combinations fail clearly instead of returning neighbours
 #'   computed under a different metric.
 #' @param tuning Tuning policy for approximate methods. `"auto"` uses

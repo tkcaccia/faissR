@@ -158,10 +158,12 @@ Policy summary:
   Euclidean/cosine/correlation self-KNN; FAISS GPU Flat for small and medium
   Euclidean or non-Euclidean datasets where exact GPU search is fast; FAISS GPU
   CAGRA for very large Euclidean self-KNN when available; and FAISS GPU or
-  direct cuVS CAGRA for very large cosine, correlation, and inner-product
-  self-KNN. On cuVS-only runtimes, `backend = "auto"` can select direct cuVS
-  CAGRA for large non-Euclidean self-search; smaller non-grid non-Euclidean
-  searches stay on CPU unless FAISS GPU Flat is available.
+  direct cuVS CAGRA for very large cosine/correlation self-KNN. Raw
+  inner-product CAGRA is limited to FAISS GPU CAGRA; direct cuVS CAGRA inner
+  product is disabled until the transformed route is safe. On cuVS-only
+  runtimes, `backend = "auto"` can select direct cuVS CAGRA for large
+  cosine/correlation self-search; smaller non-grid non-Euclidean searches stay
+  on CPU unless FAISS GPU Flat is available.
 
 Observed examples from the run:
 
