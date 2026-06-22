@@ -239,7 +239,12 @@ routes, and resolved backend metadata.
 When `n_clusters` is used, graph-clustering result metadata also records
 `target_gap`, `resolution_selection`, and a `resolution_search` table whose
 selected row is marked with `selected = TRUE`, so target-count resolution
-searches remain auditable in downstream summaries.
+searches remain auditable in downstream summaries. The raw and cycle-summary
+CSVs flatten the most important diagnostics as `resolution_selected_candidate`,
+`resolution_candidates`, `resolution_min_target_gap`, and
+`resolution_selected_is_min_gap`, making it possible to check whether the
+selected resolution achieved the best observed target-count gap without opening
+the R object.
 `graph_cluster_best_by_dataset.csv` keeps a compact best successful row per
 dataset after ranking by ARI, modularity, and total time for backward-compatible
 summaries. `graph_cluster_best_by_dataset_k_target.csv` keeps the same

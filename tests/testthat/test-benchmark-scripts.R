@@ -2091,6 +2091,10 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
       "closest_n_communities_then_highest_modularity",
       "closest_n_communities_then_highest_modularity"
     ),
+    resolution_selected_candidate = c(4L, 5L),
+    resolution_candidates = c(7L, 7L),
+    resolution_min_target_gap = c(0L, 0L),
+    resolution_selected_is_min_gap = c(TRUE, TRUE),
     graph_cached = c(TRUE, TRUE),
     expected_skip = c(FALSE, FALSE)
   )
@@ -2105,10 +2109,42 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
   expect_equal(out$cluster_preflight_route, c("cpu", "cpu"))
   expect_equal(out$n_threads, c(2L, 2L))
   expect_equal(out$median_target_gap, c(0, 0))
+  expect_equal(out$median_resolution_selected_candidate, c(4, 5))
+  expect_equal(out$median_resolution_candidates, c(7, 7))
+  expect_equal(out$median_resolution_min_target_gap, c(0, 0))
+  expect_true(all(out$resolution_selected_is_min_gap))
   expect_equal(
     out$resolution_selection,
     rep("closest_n_communities_then_highest_modularity", 2L)
   )
+})
+
+test_that("graph benchmark summarizes graph_cluster resolution search diagnostics", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  search <- data.frame(
+    candidate = 1:3,
+    resolution = c(0.5, 1, 2),
+    n_communities = c(2L, 3L, 5L),
+    modularity = c(0.3, 0.4, 0.35),
+    target_gap = c(1L, 0L, 2L),
+    selected = c(FALSE, TRUE, FALSE)
+  )
+  cluster <- list(
+    resolution_search = search,
+    resolution_selection = list(
+      criterion = "closest_n_communities_then_highest_modularity",
+      selected_candidate = 2L
+    )
+  )
+
+  out <- env$resolution_search_summary(cluster)
+  expect_equal(out$selected_candidate, 2L)
+  expect_equal(out$candidates, 3L)
+  expect_equal(out$min_target_gap, 0L)
+  expect_true(out$selected_is_min_gap)
 })
 
 test_that("graph benchmark success rows keep preflight and resolved routes separate", {

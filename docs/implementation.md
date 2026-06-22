@@ -329,7 +329,9 @@ returned in the result metadata as `selected_resolution` and
 The selected row is marked in `resolution_search$selected`; `target_gap`
 records the final absolute difference from the requested community count, and
 `resolution_selection` records the deterministic rule
-`closest_n_communities_then_highest_modularity`.
+`closest_n_communities_then_highest_modularity`. The graph-clustering
+benchmark flattens these diagnostics into selected-candidate, candidate-count,
+minimum-gap, and selected-is-min-gap columns for cycle-level comparison.
 The target must be a positive integer and
 cannot exceed the graph vertex count; fractional targets and impossible targets
 fail before the resolution-search loop.
