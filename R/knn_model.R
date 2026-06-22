@@ -56,8 +56,8 @@ knn <- function(Xtrain,
                 vote = c("majority", "weighted"),
                 type = c("response", "prob"),
                 ...) {
-  vote <- match.arg(vote)
-  type <- match.arg(type)
+  vote <- normalize_knn_vote(vote)
+  type <- normalize_knn_type(type)
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
   tuning <- normalize_nn_tuning(tuning)
@@ -92,7 +92,7 @@ knn_model_fit <- function(Xtrain,
   method <- normalize_nn_method(method)
   tuning <- normalize_nn_tuning(tuning)
   metric <- normalize_nn_metric(metric)
-  task <- match.arg(task)
+  task <- normalize_knn_task(task)
   x <- as.matrix(Xtrain)
   storage.mode(x) <- "double"
   if (nrow(x) < 1L || ncol(x) < 1L) {
@@ -174,8 +174,8 @@ predict.faissR_knn_model <- function(object,
     normalize_public_backend_arg(backend)
   }
   tuning <- normalize_nn_tuning(tuning)
-  vote <- match.arg(vote)
-  type <- match.arg(type)
+  vote <- normalize_knn_vote(vote)
+  type <- normalize_knn_type(type)
   query <- validate_knn_model_query(object, newdata)
   train <- model_Xtrain(object)
   response <- model_Ytrain(object)
@@ -254,6 +254,36 @@ normalize_knn_model_k <- function(k, n_train) {
     stop("`k` cannot be larger than the number of training rows.", call. = FALSE)
   }
   k
+}
+
+normalize_knn_task <- function(task) {
+  task <- as.character(task)[1L]
+  if (is.na(task) || !nzchar(task)) task <- "auto"
+  task <- trimws(task)
+  if (!task %in% c("auto", "classification", "regression")) {
+    stop("`task` must be one of \"auto\", \"classification\", or \"regression\".", call. = FALSE)
+  }
+  task
+}
+
+normalize_knn_vote <- function(vote) {
+  vote <- as.character(vote)[1L]
+  if (is.na(vote) || !nzchar(vote)) vote <- "majority"
+  vote <- trimws(vote)
+  if (!vote %in% c("majority", "weighted")) {
+    stop("`vote` must be one of \"majority\" or \"weighted\".", call. = FALSE)
+  }
+  vote
+}
+
+normalize_knn_type <- function(type) {
+  type <- as.character(type)[1L]
+  if (is.na(type) || !nzchar(type)) type <- "response"
+  type <- trimws(type)
+  if (!type %in% c("response", "prob")) {
+    stop("`type` must be one of \"response\" or \"prob\".", call. = FALSE)
+  }
+  type
 }
 
 knn_vote_weights <- function(distances, weighted) {

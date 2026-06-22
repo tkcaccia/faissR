@@ -83,6 +83,22 @@ test_that("knn validates method and tuning before returning a model", {
   )
 })
 
+test_that("knn and predict require canonical task vote and type labels", {
+  x <- matrix(rnorm(40), ncol = 4)
+  y <- rep(c("a", "b"), length.out = nrow(x))
+
+  expect_equal(faissR:::normalize_knn_task(NULL), "auto")
+  expect_equal(faissR:::normalize_knn_vote(NULL), "majority")
+  expect_equal(faissR:::normalize_knn_type(NULL), "response")
+  expect_error(knn(x, y, backend = "cpu", task = "r", k = 3L), "task")
+  expect_error(knn(x, y, x[1:2, , drop = FALSE], backend = "cpu", vote = "w", k = 3L), "vote")
+  expect_error(knn(x, y, x[1:2, , drop = FALSE], backend = "cpu", type = "p", k = 3L), "type")
+
+  model <- knn(x, y, backend = "cpu", k = 3L)
+  expect_error(predict(model, x[1:2, , drop = FALSE], vote = "w"), "vote")
+  expect_error(predict(model, x[1:2, , drop = FALSE], type = "p"), "type")
+})
+
 test_that("knn rejects implementation backend labels", {
   x <- matrix(rnorm(30), ncol = 3)
   y <- rep(c("a", "b"), length.out = nrow(x))
