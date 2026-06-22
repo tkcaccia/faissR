@@ -583,6 +583,7 @@ test_that("resolved backend labels map to stable auto-selection method and devic
   expect_equal(faissR:::nn_resolved_backend_public_method("faiss_hnsw"), "hnsw")
   expect_equal(faissR:::nn_resolved_backend_public_method("faiss_flat_cosine"), "flat")
   expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_nndescent"), "nndescent")
+  expect_equal(faissR:::nn_resolved_backend_public_method("cuda_native_nndescent"), "nndescent")
   expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_hnsw"), "hnsw")
   expect_equal(faissR:::nn_resolved_backend_public_method("faiss_gpu_cagra"), "cagra")
   expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_bruteforce"), "exact")
@@ -685,7 +686,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(caps$supported[
     caps$method == "nndescent" & caps$backend == "auto" & caps$metric == "inner_product"
   ])
-  expect_true(!caps$supported[
+  expect_true(caps$supported[
     caps$method == "nndescent" & caps$backend == "cuda" & caps$metric == "inner_product"
   ])
   expect_false("sparse" %in% caps$method)
@@ -978,7 +979,7 @@ test_that("backend auto explicit methods require metric-capable CUDA routes befo
       cuvs_available_value = TRUE,
       faiss_gpu_available_value = TRUE
     ),
-    "cpu"
+    "cuda"
   )
   expect_equal(
     faissR:::resolve_auto_public_nn_device(
@@ -1985,6 +1986,10 @@ test_that("public backend and method resolver maps device plus method", {
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "nndescent", "correlation"),
     "cuda_cuvs_nndescent"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "nndescent", "inner_product"),
+    "cuda_native_nndescent"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "hnsw", "euclidean"),
@@ -3307,7 +3312,7 @@ test_that("backend_info reports native availability without crashing", {
   expect_match(info$supported_metrics[info$backend == "cpu"], "correlation")
   expect_match(info$supported_metrics[info$backend == "cpu"], "inner_product")
   expect_match(info$supported_metrics[info$backend == "faiss_gpu_cuvs"], "CAGRA excludes inner_product")
-  expect_match(info$supported_metrics[info$backend == "cuvs"], "inner_product excluded")
+  expect_match(info$supported_metrics[info$backend == "cuvs"], "public CUDA NN-descent inner_product uses native CUDA")
 
   cuda_info <- faissR:::cuda_device_info_json_cpp()
   expect_type(cuda_info, "character")
