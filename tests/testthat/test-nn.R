@@ -152,6 +152,7 @@ test_that("public NN APIs canonicalize common metric aliases", {
 
 test_that("public NN APIs require scalar backend method metric and tuning choices", {
   x <- matrix(rnorm(40), ncol = 4)
+  y <- factor(rep(c("a", "b"), each = 5L))
 
   expect_no_error(nn(x, k = 2L))
   expect_no_error(nn_without_self(x, k = 2L))
@@ -166,6 +167,13 @@ test_that("public NN APIs require scalar backend method metric and tuning choice
   expect_error(nn(x, k = 2L, method = c("exact", "hnsw")), "`method` must be a single value")
   expect_error(nn(x, k = 2L, metric = c("cosine", "correlation")), "`metric` must be a single value")
   expect_error(nn(x, k = 2L, tuning = c("auto", "off")), "`tuning` must be a single value")
+  internal_routes <- c("faiss_hnsw", "faiss_ivf", "faiss_gpu_cagra", "cuda_cuvs_nndescent")
+  for (route in internal_routes) {
+    expect_error(nn(x, k = 2L, method = route), "canonical lowercase", info = route)
+    expect_error(nn_without_self(x, k = 2L, method = route), "canonical lowercase", info = route)
+    expect_error(knn(x, y, method = route), "canonical lowercase", info = route)
+    expect_error(knn_graph(x, k = 2L, method = route), "canonical lowercase", info = route)
+  }
   expect_error(
     faissR:::resolve_public_nn_backend(c("cpu", "cuda"), "exact", "euclidean"),
     "`backend` must be a single value"
