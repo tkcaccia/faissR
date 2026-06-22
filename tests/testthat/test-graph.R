@@ -321,6 +321,32 @@ test_that("graph cluster-count targets are strict positive whole numbers", {
   )
 })
 
+test_that("graph runtime integer controls reject fractional values", {
+  set.seed(5092)
+  x <- matrix(rnorm(40), ncol = 4)
+
+  expect_error(
+    graph_cluster(x, method = "louvain", backend = "cpu", graph_backend = "cpu", k = 4.5),
+    "`k` must be a single positive integer"
+  )
+  expect_error(
+    graph_cluster(x, method = "louvain", backend = "cpu", graph_backend = "cpu", k = 4L, n_runs = 1.5),
+    "`n_runs` must be a single positive integer"
+  )
+  expect_error(
+    graph_cluster(x, method = "leiden", backend = "cpu", graph_backend = "cpu", k = 4L, n_iterations = 2.5),
+    "`n_iterations` must be a single positive integer"
+  )
+  expect_error(
+    graph_cluster(x, method = "random_walking", backend = "cpu", graph_backend = "cpu", k = 4L, steps = 2.5),
+    "`steps` must be a single positive integer"
+  )
+  expect_error(
+    graph_cluster(x, method = "louvain", backend = "cpu", graph_backend = "cpu", k = 4L, seed = 1.5),
+    "`seed` must be a single positive integer"
+  )
+})
+
 test_that("graph_cluster runs native CPU random-walk and Louvain clustering without igraph", {
   set.seed(505)
   x <- rbind(

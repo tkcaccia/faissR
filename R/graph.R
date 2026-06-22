@@ -548,11 +548,12 @@ normalize_graph_target_clusters <- function(n_clusters, method) {
 }
 
 normalize_graph_positive_int <- function(x, arg) {
-  value <- suppressWarnings(as.integer(x))
-  if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 1L) {
+  value <- suppressWarnings(as.numeric(x))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 1L ||
+      abs(value - round(value)) > sqrt(.Machine$double.eps)) {
     stop("`", arg, "` must be a single positive integer.", call. = FALSE)
   }
-  value
+  as.integer(round(value))
 }
 
 validate_graph_target_cluster_count <- function(n_clusters, n_vertices) {
