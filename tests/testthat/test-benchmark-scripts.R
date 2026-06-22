@@ -752,6 +752,8 @@ test_that("NN metric benchmark extracts compact backend route parameters", {
     reason = "cpu_auto_shape_selector",
     slow_tuning = FALSE
   )
+  attr(out, "metric_transform") <- "row_l2_normalize_then_euclidean_graph_search"
+  attr(out, "distance_transform") <- "normalized_euclidean_squared_over_2_to_1_minus_similarity"
 
   params <- env$nn_route_parameters(out)
   expect_match(params, "approximation.strategy=faiss_IndexHNSWFlat", fixed = TRUE)
@@ -768,6 +770,8 @@ test_that("NN metric benchmark extracts compact backend route parameters", {
   expect_match(params, "auto_selection.predicted_method=hnsw", fixed = TRUE)
   expect_match(params, "auto_selection.predicted_device=cpu", fixed = TRUE)
   expect_match(params, "auto_selection.reason=cpu_auto_shape_selector", fixed = TRUE)
+  expect_match(params, "nn_metric.metric_transform=row_l2_normalize_then_euclidean_graph_search", fixed = TRUE)
+  expect_match(params, "nn_metric.distance_transform=normalized_euclidean_squared_over_2_to_1_minus_similarity", fixed = TRUE)
   expect_equal(env$nn_tuning_status(out), "target_met")
 
   attr(out, "approximation")$tuning <- NULL

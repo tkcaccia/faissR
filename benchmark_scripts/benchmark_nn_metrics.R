@@ -454,7 +454,13 @@ nn_route_parameters <- function(out) {
     cuvs = attr(out, "cuvs", exact = TRUE),
     spatial_index = attr(out, "spatial_index", exact = TRUE),
     sparse = attr(out, "sparse", exact = TRUE),
-    auto_selection = attr(out, "auto_selection", exact = TRUE)
+    auto_selection = attr(out, "auto_selection", exact = TRUE),
+    nn_metric = list(
+      metric_transform = attr(out, "metric_transform", exact = TRUE) %||%
+        out$metric_transform %||% NA_character_,
+      distance_transform = attr(out, "distance_transform", exact = TRUE) %||%
+        out$distance_transform %||% NA_character_
+    )
   )
   keys <- c(
     "strategy", "library", "accelerator", "metric", "transform", "role",
@@ -475,6 +481,7 @@ nn_route_parameters <- function(out) {
     "requested_intermediate_graph_degree", "requested_search_width",
     "requested_itopk_size", "bins_per_dim", "n_cells",
     "index_type", "search_batch_size", "n_threads",
+    "metric_transform", "distance_transform",
     "policy", "predicted_backend", "predicted_method", "predicted_device",
     "reason", "n", "p", "k", "work_size", "slow_tuning"
   )
