@@ -166,7 +166,10 @@ layout, and search are handled by FAISS.
 `method = "bruteforce"` requests exhaustive brute-force search.
 
 - On CPU, it maps to the native exact CPU route.
-- On CUDA, it prefers direct RAPIDS cuVS brute force [3].
+- On CUDA, Euclidean/L2 prefers direct RAPIDS cuVS brute force [3].
+- On CUDA, cosine, correlation, and inner product use FAISS GPU Flat when
+  available because the direct cuVS brute-force route is Euclidean/L2-only in
+  faissR [1-3,16].
 
 This method is useful for comparing FAISS GPU Flat with direct cuVS exhaustive
 search. Both are exact-style routes, but implementation details, transfer

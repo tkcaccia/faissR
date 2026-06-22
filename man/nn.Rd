@@ -107,13 +107,17 @@ Method descriptions:
   FAISS GPU Flat is available [1-3,5,13-15]. On cuVS-only runtimes,
   `backend = "auto"` keeps those non-Euclidean metrics on CPU.
   \item `"exact"`: exact nearest-neighbour search. CPU uses faissR's native
-  exact route; CUDA uses FAISS GPU Flat only when the linked FAISS build
-  reports GPU support, otherwise cuVS brute force when available [1-3,16].
+  exact route; CUDA uses FAISS GPU Flat when the linked FAISS build reports
+  GPU support. Euclidean CUDA exact search can otherwise use direct cuVS
+  brute force when available; cosine, correlation, and inner product require
+  FAISS GPU Flat metric-aware routes [1-3,16].
   \item `"flat"`: FAISS Flat exhaustive index. CPU and FAISS GPU support
   L2, IP, and normalized-IP cosine/correlation routes when available
   [1-2,16].
-  \item `"bruteforce"`: exhaustive brute-force search. CUDA prefers RAPIDS
-  cuVS brute force; CPU maps to exact CPU search [3].
+  \item `"bruteforce"`: exhaustive brute-force search. CPU maps to exact CPU
+  search. On CUDA, Euclidean prefers RAPIDS cuVS brute force; cosine,
+  correlation, and inner product use FAISS GPU Flat when available because
+  direct cuVS brute force is Euclidean/L2-only in faissR [1-3,16].
   \item `"grid"`: native exact 2D/3D Euclidean spatial grid search. Explicit
   grid requests error for higher-dimensional matrices; use `"auto"` to let
   faissR choose a non-grid method when appropriate.

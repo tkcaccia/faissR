@@ -44,9 +44,9 @@ list with method-specific parameters.
 | `method` | CPU route | CUDA route | Main use |
 | --- | --- | --- | --- |
 | `"auto"` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, or FAISS GPU CAGRA for Euclidean; FAISS GPU Flat IP routes for cosine, correlation, and inner product when FAISS GPU Flat is available. | Default general-purpose choice. |
-| `"exact"` | Native exact CPU KNN. | FAISS GPU Flat if available, otherwise direct cuVS brute force. | Exact/high-recall baseline [1-3,16]. |
+| `"exact"` | Native exact CPU KNN. | FAISS GPU Flat if available; Euclidean can otherwise use direct cuVS brute force. | Exact/high-recall baseline [1-3,16]. |
 | `"flat"` | FAISS Flat L2/IP; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP while explicit CUDA calls remain on CUDA. | Exact FAISS exhaustive search [1-2,16]. |
-| `"bruteforce"` | Native exact CPU KNN. | Direct RAPIDS cuVS brute force. | Direct exhaustive route, useful for FAISS/cuVS comparisons [3]. |
+| `"bruteforce"` | Native exact CPU KNN. | Euclidean prefers direct RAPIDS cuVS brute force; cosine, correlation, and inner product use FAISS GPU Flat when available. | Exhaustive route, useful for FAISS/cuVS comparisons [1-3,16]. |
 | `"grid"` | Native exact 2D/3D Euclidean grid. | Native CUDA 2D/3D Euclidean grid. | Low-dimensional spatial or simulated data; explicit grid requests error outside two or three columns. |
 | `"vptree"` | Native exact CPU vantage-point tree for Euclidean, cosine, and correlation; zero-normalized non-Euclidean rows use exact CPU fallback. | Unsupported. | Low-dimensional CPU searches. |
 | `"sparse"` | Native exact sparse `dgCMatrix` CPU route. | Unsupported. | Sparse matrices without densifying. |
@@ -76,7 +76,7 @@ a CPU FAISS route in faissR.
 | FAISS NSG | yes, if exposed by FAISS | no | Optional CPU graph-search index for Euclidean/L2 only; non-L2 routes are guarded off in this linked FAISS build [16]. |
 | FAISS NNDescent | experimental opt-in | no | Disabled by default because linked FAISS builds can abort during graph construction; public CPU `method = "nndescent"` uses the native implementation [4,16]. |
 | FAISS GPU CAGRA/cuVS integration | no | yes, if FAISS GPU/cuVS integration is built | Uses FAISS GPU indexes backed by NVIDIA cuVS where available; cosine/correlation use normalized Euclidean search [13-15]. |
-| RAPIDS cuVS brute force | no | yes, if cuVS is built | Exact direct cuVS route [3]. |
+| RAPIDS cuVS brute force | no | yes, if cuVS is built | Exact direct cuVS Euclidean/L2 route; public non-Euclidean CUDA exact/brute-force calls use FAISS GPU Flat instead [1-3,16]. |
 | RAPIDS cuVS CAGRA | no | yes, if cuVS is built | Direct CUDA graph-search route, guarded by pilot tuning; cosine/correlation use normalized Euclidean search [3]. |
 | RAPIDS cuVS IVF/PQ | no | yes, if cuVS is built | Direct cuVS approximate Euclidean/L2 benchmark routes; use public FAISS GPU `method = "ivf"`/`"ivfpq"` for metric-aware IVF/IP/cosine/correlation search [3,6]. |
 | RAPIDS cuVS NN-descent | no | yes, if cuVS is built | CUDA NN-descent route for Euclidean/L2 plus normalized cosine/correlation [3-4]. |

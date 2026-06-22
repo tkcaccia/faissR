@@ -222,6 +222,32 @@ test_that("GitHub and reference docs describe normalized zero-row metric semanti
   }
 })
 
+test_that("GitHub and reference docs describe direct cuVS brute-force metric scope", {
+  docs_files <- c(
+    test_path("../../docs", c(
+      "backend-capabilities.md",
+      "implementation.md",
+      "nn-methods.md",
+      "usage-api.md"
+    )),
+    test_path("../../man/nn.Rd")
+  )
+  missing <- !file.exists(docs_files)
+  if (any(missing)) {
+    skip("GitHub or reference documentation files are not available in this installed-package test context.")
+  }
+
+  for (docs_file in docs_files) {
+    prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+    expect_true(
+      grepl("direct cuVS brute force", prose, ignore.case = TRUE) &&
+        grepl("Euclidean/L2", prose, fixed = TRUE) &&
+        grepl("FAISS GPU Flat", prose, fixed = TRUE),
+      info = basename(docs_file)
+    )
+  }
+})
+
 test_that("GitHub documentation pages do not duplicate headings", {
   docs_files <- c(
     test_path("../../README.md"),
