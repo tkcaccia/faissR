@@ -660,6 +660,36 @@ test_that("nn_capabilities can report current runtime availability", {
   expect_true(is.na(unsupported$resolved_backend))
 })
 
+test_that("cuda_auto runtime availability distinguishes cuVS and FAISS GPU metric routes", {
+  euclidean_cuvs <- faissR:::nn_cuda_auto_runtime_available(
+    "euclidean",
+    cuda_available_value = FALSE,
+    cuvs_available_value = TRUE,
+    faiss_gpu_available_value = FALSE
+  )
+  expect_true(euclidean_cuvs$available)
+  expect_match(euclidean_cuvs$notes, "cuVS")
+
+  cosine_cuvs_only <- faissR:::nn_cuda_auto_runtime_available(
+    "cosine",
+    cuda_available_value = TRUE,
+    cuvs_available_value = TRUE,
+    faiss_gpu_available_value = FALSE
+  )
+  expect_false(cosine_cuvs_only$available)
+  expect_match(cosine_cuvs_only$notes, "FAISS GPU Flat")
+  expect_match(cosine_cuvs_only$notes, "2D/3D")
+
+  ip_faiss_gpu <- faissR:::nn_cuda_auto_runtime_available(
+    "inner_product",
+    cuda_available_value = FALSE,
+    cuvs_available_value = FALSE,
+    faiss_gpu_available_value = TRUE
+  )
+  expect_true(ip_faiss_gpu$available)
+  expect_match(ip_faiss_gpu$notes, "FAISS GPU Flat")
+})
+
 test_that("nn_capabilities agrees with public backend resolver", {
   caps <- nn_capabilities()
   expect_equal(sort(unique(caps$backend)), c("auto", "cpu", "cuda"))

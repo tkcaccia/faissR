@@ -1684,12 +1684,51 @@ nn_capability_runtime_row <- function(row) {
       stringsAsFactors = FALSE
     ))
   }
-  availability <- nn_resolved_backend_available(resolved)
+  availability <- if (identical(resolved, "cuda_auto")) {
+    nn_cuda_auto_runtime_available(row$metric[[1L]])
+  } else {
+    nn_resolved_backend_available(resolved)
+  }
   data.frame(
     resolved_backend = resolved,
     runtime_available = isTRUE(availability$available),
     runtime_notes = availability$notes,
     stringsAsFactors = FALSE
+  )
+}
+
+nn_cuda_auto_runtime_available <- function(metric,
+                                           cuda_available_value = cuda_available(),
+                                           cuvs_available_value = cuvs_available(),
+                                           faiss_gpu_available_value = faiss_gpu_available()) {
+  metric <- normalize_nn_metric(metric)
+  if (identical(metric, "euclidean")) {
+    ok <- isTRUE(cuda_available_value) ||
+      isTRUE(cuvs_available_value) ||
+      isTRUE(faiss_gpu_available_value)
+    return(list(
+      available = ok,
+      notes = if (ok) {
+        "CUDA auto Euclidean route is available through native CUDA, FAISS GPU, or cuVS."
+      } else {
+        "CUDA auto Euclidean route requires native CUDA, FAISS GPU, or cuVS support."
+      }
+    ))
+  }
+  ok <- isTRUE(faiss_gpu_available_value)
+  list(
+    available = ok,
+    notes = if (ok) {
+      "CUDA auto non-Euclidean route is available through FAISS GPU Flat metric-aware search."
+    } else if (isTRUE(cuda_available_value) && metric %in% c("cosine", "correlation")) {
+      paste(
+        "CUDA auto non-Euclidean route requires FAISS GPU Flat for general",
+        "search; native CUDA grid may apply only to eligible 2D/3D",
+        "self-search datasets."
+      )
+    } else {
+      "CUDA auto non-Euclidean route requires FAISS GPU Flat support."
+    }
   )
 }
 
