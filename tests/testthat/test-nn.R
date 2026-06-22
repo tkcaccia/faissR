@@ -1697,6 +1697,80 @@ test_that("CUDA auto selector is shape-aware", {
   if (faiss_gpu_available()) expect_equal(large, "faiss_gpu_cagra")
 })
 
+test_that("CUDA auto selector has deterministic k and metric policy", {
+  expect_equal(
+    faissR:::cuda_auto_non_euclidean_backend(
+      "cosine",
+      requested_device = "cuda",
+      faiss_gpu_available_value = TRUE,
+      require_available = FALSE
+    ),
+    "faiss_gpu_flat_cosine"
+  )
+  expect_equal(
+    faissR:::cuda_auto_non_euclidean_backend(
+      "correlation",
+      requested_device = "cuda",
+      faiss_gpu_available_value = TRUE,
+      require_available = FALSE
+    ),
+    "faiss_gpu_flat_correlation"
+  )
+  expect_equal(
+    faissR:::cuda_auto_non_euclidean_backend(
+      "inner_product",
+      requested_device = "cuda",
+      faiss_gpu_available_value = TRUE,
+      require_available = FALSE
+    ),
+    "faiss_gpu_flat_ip"
+  )
+  expect_equal(
+    faissR:::cuda_auto_non_euclidean_backend(
+      "cosine",
+      requested_device = "auto",
+      faiss_gpu_available_value = FALSE
+    ),
+    "cpu_auto"
+  )
+  expect_error(
+    faissR:::cuda_auto_non_euclidean_backend(
+      "cosine",
+      requested_device = "cuda",
+      faiss_gpu_available_value = FALSE,
+      require_available = TRUE
+    ),
+    "FAISS GPU Flat"
+  )
+
+  n <- 500000L
+  p <- 32L
+  work_size <- as.double(n) * as.double(n) * as.double(p)
+  k_values <- c(5L, 10L, 15L, 50L, 100L)
+  cuvs_routes <- vapply(k_values, function(k) {
+    faissR:::select_cuvs_auto_backend(
+      self_query = TRUE,
+      n = n,
+      p = p,
+      n_points = n,
+      k = k,
+      work_size = work_size
+    )
+  }, character(1L))
+  expect_equal(cuvs_routes[[1L]], "cuda_cuvs_bruteforce")
+  expect_equal(cuvs_routes[-1L], rep("cuda_cuvs_ivf_flat", 4L))
+
+  high_dim_route <- faissR:::select_cuvs_auto_backend(
+    self_query = TRUE,
+    n = n,
+    p = 256L,
+    n_points = n,
+    k = 50L,
+    work_size = as.double(n) * as.double(n) * 256
+  )
+  expect_equal(high_dim_route, "cuda_cuvs_nndescent")
+})
+
 test_that("RcppHNSW implementation backend is available when installed", {
   skip_if_not_installed("RcppHNSW")
   set.seed(127)
