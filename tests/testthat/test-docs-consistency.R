@@ -29,6 +29,27 @@ expect_rd_documents_formals <- function(topic, fun) {
   }
 }
 
+usage_section_lines <- function(lines, section) {
+  start <- match(section, lines)
+  expect_false(is.na(start), label = section)
+  next_heading <- grep("^## `", lines[(start + 1L):length(lines)])
+  end <- if (length(next_heading)) start + next_heading[[1L]] - 1L else length(lines)
+  lines[start:end]
+}
+
+usage_argument_rows <- function(lines, section) {
+  section_lines <- usage_section_lines(lines, section)
+  header <- grep("^\\| Argument \\| Description \\|$", section_lines)
+  expect_length(header, 1L)
+  rows <- character()
+  for (line in section_lines[(header + 2L):length(section_lines)]) {
+    if (!grepl("^\\|", line)) break
+    if (!grepl("^\\| `[^`]+` \\|", line)) next
+    rows <- c(rows, line)
+  }
+  sub("^\\| `([^`]+)` \\|.*$", "\\1", rows)
+}
+
 test_that("NN methods documentation metric table agrees with nn_capabilities", {
   docs_file <- test_path("../../docs/nn-methods.md")
   if (!file.exists(docs_file)) {
@@ -376,6 +397,32 @@ test_that("usage API includes all exported public workflow sections", {
       1L,
       info = section
     )
+  }
+})
+
+test_that("usage API argument tables document live function formals", {
+  docs_file <- test_path("../../docs/usage-api.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  lines <- readLines(docs_file, warn = FALSE)
+  sections <- list(
+    "## `nn()`" = names(formals(nn)),
+    "## `nn_without_self()`" = names(formals(nn_without_self)),
+    "## `candidate_knn()`" = names(formals(candidate_knn)),
+    "## `knn_graph()`" = names(formals(knn_graph)),
+    "## `graph_cluster()`" = names(formals(graph_cluster)),
+    "## `fast_kmeans()`" = names(formals(fast_kmeans)),
+    "## `knn()`" = names(formals(knn)),
+    "## `predict()`" = names(formals(getS3method("predict", "faissR_knn_model")))
+  )
+
+  for (section in names(sections)) {
+    documented <- usage_argument_rows(lines, section)
+    expected <- sections[[section]]
+    expect_equal(sort(documented), sort(expected))
+    expect_equal(documented, unique(documented))
   }
 })
 
