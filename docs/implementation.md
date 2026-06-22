@@ -379,7 +379,8 @@ list, and source acknowledgements. As with the nearest-neighbour and k-means
 APIs, `backend` records the implementation that actually ran, while
 `parameters$requested_backend` and `parameters$resolved_backend` preserve the
 public backend request and the resolved device policy for benchmark auditing.
-When `graph_cluster()` builds the graph internally, it also records
+When `graph_cluster()` builds the graph internally or receives a `faissR_graph`,
+it records
 `parameters$graph_backend`, `parameters$graph_requested_backend`, and
 `parameters$graph_resolved_backend` so benchmark outputs can distinguish the
 concrete KNN implementation from the public graph-backend request and resolved

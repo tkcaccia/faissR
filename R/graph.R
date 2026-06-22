@@ -285,7 +285,7 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   `backend` records the clustering implementation that actually ran, while
 #'   `parameters$requested_backend` and `parameters$resolved_backend` record the
 #'   public backend request and the device policy after resolving `"auto"`.
-#'   When `graph_cluster()` builds a graph internally,
+#'   When `graph_cluster()` builds or receives a `faissR_graph`,
 #'   `parameters$graph_backend`, `parameters$graph_requested_backend`, and
 #'   `parameters$graph_resolved_backend` record the concrete KNN implementation,
 #'   public graph backend request, and resolved KNN backend.
@@ -395,6 +395,12 @@ graph_cluster <- function(graph,
     if (!is.null(meta$resolved_backend)) {
       meta$graph_resolved_backend <- meta$resolved_backend
       meta$resolved_backend <- NULL
+    }
+    if (is.null(meta$graph_backend)) {
+      meta$graph_backend <- meta$nn_backend %||%
+        meta$graph_resolved_backend %||%
+        meta$graph_requested_backend %||%
+        NA_character_
     }
     graph_n_clusters <- n_clusters
     if (is.null(graph_n_clusters) && !identical(method, "random_walking") &&

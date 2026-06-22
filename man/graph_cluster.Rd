@@ -89,7 +89,8 @@ backend, graph edge list, parameters, and source acknowledgements.
 \code{backend} records the clustering implementation that actually ran, while
 \code{parameters$requested_backend} and \code{parameters$resolved_backend}
 record the public backend request and the device policy after resolving
-\code{"auto"}. When \code{graph_cluster()} builds a graph internally,
+\code{"auto"}. When \code{graph_cluster()} builds a graph internally or
+receives a \code{faissR_graph},
 \code{parameters$graph_backend}, \code{parameters$graph_requested_backend},
 and \code{parameters$graph_resolved_backend} record the concrete KNN
 implementation, public graph backend request, and resolved KNN backend.
