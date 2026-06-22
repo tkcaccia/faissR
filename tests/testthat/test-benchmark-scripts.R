@@ -900,6 +900,20 @@ test_that("legacy Benchmark #1 records faissR runtime capability preflight", {
   expect_equal(cpu_flat$public_metric, "euclidean")
   expect_equal(cpu_flat$runtime_available, faiss_available())
 
+  cpu_nnd_ip <- caps[
+    caps$method == "faissR_cpu_nndescent" & caps$metric == "inner_product",
+    ,
+    drop = FALSE
+  ]
+  expect_equal(cpu_nnd_ip$execution_backend, "cpu_nndescent")
+  expect_equal(cpu_nnd_ip$public_backend, "cpu")
+  expect_equal(cpu_nnd_ip$public_method, "nndescent")
+  expect_equal(cpu_nnd_ip$public_metric, "inner_product")
+  expect_true(isTRUE(cpu_nnd_ip$metric_supported))
+  expect_true(isTRUE(cpu_nnd_ip$public_supported))
+  expect_equal(cpu_nnd_ip$public_resolved_backend, "cpu_nndescent")
+  expect_true(isTRUE(cpu_nnd_ip$runtime_available))
+
   gpu_skip <- env$benchmark1_runtime_skip("faissR_faiss_gpu_flat_l2", "l2")
   if (isTRUE(faiss_gpu_available())) {
     expect_null(gpu_skip)
