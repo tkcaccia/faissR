@@ -224,6 +224,10 @@ other direct-cuVS CAGRA cases use the IVF-PQ graph builder. Explicit
 `"ivf_pq"`, `"nn_descent"`, and `"iterative_cagra_search"` requests are passed
 through as cuVS CAGRA graph-construction choices, not silent fallbacks to
 another public method.
+For compact high-dimensional small-`k` direct-cuVS CAGRA, the automatic graph
+degree floor is 32. This keeps the graph much smaller than the general
+64-degree default while avoiding the low-recall row observed with a 16-degree
+graph on COIL20 correlation `k = 5` and `k = 10`.
 
 Direct cuVS CAGRA uses deterministic no-pilot defaults for `tuning = "auto"`.
 If the user explicitly requests `tuning = "cache"` or `tuning = "pilot"`, faissR

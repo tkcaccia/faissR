@@ -6204,7 +6204,7 @@ cuvs_cagra_params <- function(n, k, p = NA_integer_) {
     "balanced_graph_search"
   }
   default_graph_degree <- if (isTRUE(compact_build)) {
-    max(16L, k + 1L)
+    max(32L, k + 1L)
   } else {
     max(64L, k + 1L)
   }
