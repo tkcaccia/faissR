@@ -22,6 +22,40 @@ source_benchmark_helpers <- function(path, stop_marker) {
   env
 }
 
+test_that("NN metric benchmark defaults cover full method metric backend and k grid", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+
+  expect_setequal(
+    env$default_nn_metric_values(),
+    c("euclidean", "cosine", "correlation", "inner_product")
+  )
+  expect_setequal(env$default_nn_backend_values(), c("auto", "cpu", "cuda"))
+  expect_setequal(
+    env$default_nn_method_values(),
+    c(
+      "auto", "exact", "flat", "bruteforce", "grid", "vptree", "sparse",
+      "hnsw", "ivf", "ivfpq", "nsg", "nndescent", "cagra"
+    )
+  )
+  expect_equal(env$default_nn_k_values(), c(5L, 10L, 15L, 50L, 100L))
+  expect_equal(env$default_nn_cycles(), 10L)
+  expect_equal(
+    env$validate_metric_values(c("l2", "pearson", "ip", "dot-product")),
+    c("euclidean", "correlation", "inner_product")
+  )
+  expect_error(
+    env$validate_metric_values("manhattan"),
+    "faissR public metrics"
+  )
+  expect_error(
+    env$required_positive_int_values(c("5", "0", "10"), "k_values"),
+    "positive integers"
+  )
+})
+
 test_that("benchmark materials document key row-level and summary outputs", {
   files <- list(
     nn = c(

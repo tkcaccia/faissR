@@ -668,6 +668,24 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nn_cuvs_hnsw_cpp
+List nn_cuvs_hnsw_cpp(NumericMatrix data, NumericMatrix points, int k, bool exclude_self, int graph_degree, int intermediate_graph_degree, int ef, int n_threads);
+RcppExport SEXP _faissR_nn_cuvs_hnsw_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP graph_degreeSEXP, SEXP intermediate_graph_degreeSEXP, SEXP efSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
+    Rcpp::traits::input_parameter< int >::type graph_degree(graph_degreeSEXP);
+    Rcpp::traits::input_parameter< int >::type intermediate_graph_degree(intermediate_graph_degreeSEXP);
+    Rcpp::traits::input_parameter< int >::type ef(efSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_cuvs_hnsw_cpp(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, ef, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
 // nn_cuvs_ivf_flat_cpp
 List nn_cuvs_ivf_flat_cpp(NumericMatrix data, NumericMatrix points, int k, int n_lists, int n_probes, bool exclude_self);
 RcppExport SEXP _faissR_nn_cuvs_ivf_flat_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP n_listsSEXP, SEXP n_probesSEXP, SEXP exclude_selfSEXP) {
@@ -1096,6 +1114,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_cuvs_bruteforce_cpp", (DL_FUNC) &_faissR_nn_cuvs_bruteforce_cpp, 4},
     {"_faissR_nn_cuvs_cagra_cpp", (DL_FUNC) &_faissR_nn_cuvs_cagra_cpp, 8},
     {"_faissR_nn_cuvs_nndescent_self_cpp", (DL_FUNC) &_faissR_nn_cuvs_nndescent_self_cpp, 5},
+    {"_faissR_nn_cuvs_hnsw_cpp", (DL_FUNC) &_faissR_nn_cuvs_hnsw_cpp, 8},
     {"_faissR_nn_cuvs_ivf_flat_cpp", (DL_FUNC) &_faissR_nn_cuvs_ivf_flat_cpp, 6},
     {"_faissR_nn_cuvs_ivf_pq_cpp", (DL_FUNC) &_faissR_nn_cuvs_ivf_pq_cpp, 8},
     {"_faissR_kmeans_cuvs_cpp", (DL_FUNC) &_faissR_kmeans_cuvs_cpp, 7},

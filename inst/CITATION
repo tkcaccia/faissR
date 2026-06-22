@@ -35,3 +35,23 @@ citEntry(
   url = "https://engineering.fb.com/2025/05/08/data-infrastructure/accelerating-gpu-indexes-in-faiss-with-nvidia-cuvs/",
   textVersion = "Qi J, Szilvasy G, Norris M, Gandhi V (2025). Accelerating GPU indexes in Faiss with NVIDIA cuVS. Meta Engineering. https://engineering.fb.com/2025/05/08/data-infrastructure/accelerating-gpu-indexes-in-faiss-with-nvidia-cuvs/"
 )
+
+citHeader("For direct cuVS HNSW, please acknowledge the RAPIDS cuVS HNSW API. CUHNSW is acknowledged as related Apache-2.0 CUDA HNSW prior software; faissR does not vendor or copy CUHNSW source.")
+
+citEntry(
+  entry = "Manual",
+  title = "cuVS HNSW C API documentation",
+  author = personList(person(given = "RAPIDS", family = "Development Team")),
+  year = "2026",
+  url = "https://docs.rapids.ai/api/cuvs/stable/c_api/neighbors_hnsw_c/",
+  textVersion = "RAPIDS Development Team (2026). cuVS HNSW C API documentation. https://docs.rapids.ai/api/cuvs/stable/c_api/neighbors_hnsw_c/"
+)
+
+citEntry(
+  entry = "Manual",
+  title = "CUHNSW: CUDA implementation of Hierarchical Navigable Small World Graph algorithm",
+  author = personList(person(given = "J.", family = "Kim")),
+  year = "2026",
+  url = "https://github.com/js1010/cuhnsw",
+  textVersion = "Kim J (2026). CUHNSW: CUDA implementation of Hierarchical Navigable Small World Graph algorithm. Apache-2.0 software. https://github.com/js1010/cuhnsw"
+)

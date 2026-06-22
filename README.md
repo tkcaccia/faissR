@@ -30,7 +30,7 @@ headers and libraries discovered by `configure`.
 ## Main Features
 
 - `nn()` for native CPU references, FAISS CPU indexes, FAISS GPU indexes, and
-  optional direct RAPIDS cuVS/CUDA indexes [1-6,13-16].
+  optional direct RAPIDS cuVS/CUDA indexes [1-6,13-16,22-23].
 - Optional float32 KNN data flow: `nn()` and `nn_without_self()` accept
   `float::fl()` matrices on the CPU FAISS Flat route for all four public
   metrics, and
@@ -132,8 +132,11 @@ See [Installation](docs/installation.md) for CRAN/source-build details.
   these paths report backend labels such as `GpuIndexIVFFlat_cuVS`,
   `GpuIndexIVFPQ_cuVS`, and `GpuIndexCagra_cuVS`.
 - Direct RAPIDS cuVS calls, exposed through explicit backends such as
-  `cuda_cuvs_cagra`, `cuda_cuvs_nndescent`, `cuda_cuvs_bruteforce`,
-  `cuda_cuvs_ivf_flat`, and `cuda_cuvs_ivfpq`.
+  `cuda_cuvs_cagra`, `cuda_cuvs_hnsw`, `cuda_cuvs_nndescent`,
+  `cuda_cuvs_bruteforce`, `cuda_cuvs_ivf_flat`, and `cuda_cuvs_ivfpq`.
+  The HNSW route uses RAPIDS cuVS HNSW conversion from a CUDA-built CAGRA
+  index and is documented as a cuVS wrapper route, not vendored CUDA code
+  [3,22-23].
 
 Use `backend_info()` and the attributes returned by `nn()` to confirm which
 route and parameters a result used.

@@ -271,6 +271,7 @@ nn_compute <- function(data,
                                "faiss_gpu_cagra", "cuda_faiss_cagra",
                                "cuda_cuvs_cagra", "cuda_cagra", "gpu_cagra",
                                "cuda_cuvs_nndescent", "cuvs_nndescent",
+                               "cuda_cuvs_hnsw", "cuvs_hnsw",
                                "cpu_sparse", "sparse", "sparse_cpu")) {
       stop(
         "`metric = \"", metric, "\"` currently supports only `backend = \"cpu\"` ",
@@ -1159,6 +1160,55 @@ nn_compute <- function(data,
     return(result)
   }
 
+  if (backend %in% c("cuda_cuvs_hnsw", "cuvs_hnsw")) {
+    require_cuvs_backend("cuVS HNSW")
+    metric_inputs <- NULL
+    search_data <- data
+    search_points <- points
+    if (metric %in% c("cosine", "correlation")) {
+      metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric)
+      search_data <- metric_inputs$data
+      search_points <- metric_inputs$points
+    } else if (identical(metric, "inner_product")) {
+      stop("cuVS HNSW does not support `metric = \"inner_product\"` in faissR.", call. = FALSE)
+    }
+    params <- cuvs_hnsw_params(nrow(search_data), k, n_threads = n_threads)
+    out <- nn_cuvs_hnsw_cpp(
+      search_data,
+      search_points,
+      as.integer(k),
+      isTRUE(exclude_self),
+      as.integer(params$graph_degree),
+      as.integer(params$intermediate_graph_degree),
+      as.integer(params$ef),
+      as.integer(params$n_threads)
+    )
+    result <- finish_nn_result(out, "cuda_cuvs_hnsw", k, self_query, exact = FALSE, metric = metric)
+    if (!is.null(metric_inputs)) {
+      result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
+    }
+    attr(result, "approximation") <- list(
+      strategy = "rapids_cuvs_hnsw_from_cagra",
+      backend = "cuda_cuvs_hnsw",
+      library = "cuvs",
+      accelerator = "cuda",
+      metric = metric,
+      transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
+      graph_degree = as.integer(out$graph_degree),
+      intermediate_graph_degree = as.integer(out$intermediate_graph_degree),
+      ef = as.integer(out$ef),
+      n_threads = as.integer(out$num_threads),
+      requested_graph_degree = as.integer(params$requested_graph_degree),
+      requested_intermediate_graph_degree = as.integer(params$requested_intermediate_graph_degree),
+      requested_ef = as.integer(params$requested_ef),
+      requested_n_threads = as.integer(params$requested_n_threads),
+      hnsw_parameters_adjusted = isTRUE(out$hnsw_parameters_adjusted),
+      note = "cuVS HNSW is built from a CUDA CAGRA index and searched through the cuVS HNSW wrapper."
+    )
+    result <- append_nn_tuning_metadata(result, params)
+    return(result)
+  }
+
   if (backend %in% c("cuvs_ivf_flat", "cuda_cuvs_ivf_flat")) {
     require_cuvs_backend("cuVS IVF-Flat")
     metric_inputs <- NULL
@@ -1994,13 +2044,19 @@ nn_capability_row <- function(method, backend, metric) {
     implementation <- if (identical(backend, "cpu")) "native sparse CPU exact" else NA_character_
     notes <- if (identical(backend, "cpu")) "Requires sparse Matrix input to avoid dense conversion." else "Sparse exact search is CPU-only."
   } else if (identical(method, "hnsw")) {
-    supported <- identical(backend, "cpu") && all_metrics
+    supported <- if (identical(backend, "cpu")) all_metrics else non_ip_metric
     exact <- if (supported) FALSE else NA
-    implementation <- if (identical(backend, "cpu")) "FAISS HNSW or RcppHNSW/hnswlib" else NA_character_
+    implementation <- if (identical(backend, "cpu")) {
+      "FAISS HNSW or RcppHNSW/hnswlib"
+    } else {
+      "cuVS CUDA HNSW from CAGRA"
+    }
     notes <- if (identical(backend, "cpu")) {
       "Uses FAISS HNSW for all metrics when available; cosine and correlation use normalized inner-product HNSW. Falls back to RcppHNSW/hnswlib when FAISS is unavailable."
+    } else if (supported) {
+      "Uses RAPIDS cuVS HNSW converted from a CUDA CAGRA index; cosine/correlation use normalized Euclidean search."
     } else {
-      "HNSW is CPU-only in the public API."
+      "CUDA HNSW does not expose raw inner-product search in faissR."
     }
   } else if (method %in% c("ivf", "ivfpq")) {
     supported <- all_metrics
@@ -2129,7 +2185,7 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
     return("cpu_auto")
   }
   if (!metric %in% c("euclidean", "inner_product") && identical(device, "cuda") &&
-      !method %in% c("exact", "bruteforce", "flat", "grid", "ivf", "ivfpq", "nndescent", "cagra")) {
+      !method %in% c("exact", "bruteforce", "flat", "grid", "hnsw", "ivf", "ivfpq", "nndescent", "cagra")) {
     if (identical(requested_device, "auto")) {
       device <- "cpu"
     } else {
@@ -2137,7 +2193,7 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
         "CUDA `method = \"", method, "\"` does not support ",
         "`metric = \"", metric, "\"`. Use `method = \"exact\"`, ",
         "`\"bruteforce\"`, `\"flat\"`, `\"grid\"`, `\"ivf\"`, ",
-        "`\"ivfpq\"`, `\"nndescent\"`, or `\"cagra\"` for validated ",
+        "`\"hnsw\"`, `\"ivfpq\"`, `\"nndescent\"`, or `\"cagra\"` for validated ",
         "CUDA cosine/correlation search.",
         call. = FALSE
       )
@@ -2187,7 +2243,7 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
         method %in% c("exact", "bruteforce", "flat")) {
       return("faiss_gpu_flat_ip")
     }
-    if (identical(metric, "inner_product") && !method %in% c("ivf", "ivfpq")) {
+    if (identical(metric, "inner_product") && !method %in% c("hnsw", "ivf", "ivfpq")) {
       stop("CUDA `metric = \"inner_product\"` currently supports `method = \"exact\"`, `\"bruteforce\"`, `\"flat\"`, `\"ivf\"`, or `\"ivfpq\"`.", call. = FALSE)
     }
     switch(
@@ -2196,6 +2252,14 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
       bruteforce = if (isTRUE(cuvs_available())) "cuda_cuvs_bruteforce" else if (isTRUE(faiss_gpu_available())) "faiss_gpu_flat_l2" else "cuda",
       flat = "faiss_gpu_flat_l2",
       grid = "cuda_grid",
+      hnsw = if (!identical(metric, "inner_product")) {
+        "cuda_cuvs_hnsw"
+      } else {
+        stop(
+          "CUDA `method = \"hnsw\"` does not support `metric = \"inner_product\"`.",
+          call. = FALSE
+        )
+      },
       ivf = "faiss_gpu_ivf_flat",
       ivfpq = "faiss_gpu_ivfpq",
       nndescent = if (!identical(metric, "inner_product")) {
@@ -2207,7 +2271,6 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
         )
       },
       cagra = if (isTRUE(faiss_gpu_available())) "faiss_gpu_cagra" else "cuda_cuvs_cagra",
-      hnsw = stop("`method = \"hnsw\"` is only available with `backend = \"cpu\"`.", call. = FALSE),
       nsg = stop("`method = \"nsg\"` is only available with `backend = \"cpu\"`.", call. = FALSE),
       sparse = stop("`method = \"sparse\"` is only available with `backend = \"cpu\"`.", call. = FALSE),
       vptree = stop("`method = \"vptree\"` is only available with `backend = \"cpu\"`.", call. = FALSE),
@@ -2254,7 +2317,8 @@ nn_resolved_backend_public_method <- function(backend) {
                      "cuda_grid3d")) return("grid")
   if (backend %in% c("vptree", "cpu_vptree")) return("vptree")
   if (backend %in% c("sparse", "cpu_sparse", "sparse_cpu")) return("sparse")
-  if (backend %in% c("hnsw", "rcpphnsw", "cpu_hnsw", "faiss_hnsw")) return("hnsw")
+  if (backend %in% c("hnsw", "rcpphnsw", "cpu_hnsw", "faiss_hnsw",
+                     "cuda_cuvs_hnsw", "cuvs_hnsw")) return("hnsw")
   if (backend %in% c("faiss_ivf", "cpu_faiss_index_ivf", "faiss_ivf_flat",
                      "faiss_gpu_ivf", "faiss_gpu_ivf_flat",
                      "cuda_faiss_ivf_flat", "cuvs_ivf",
@@ -2691,7 +2755,10 @@ public_nn_cuda_route_available <- function(method,
       faiss_gpu_available_value = faiss_gpu_available_value
     )$available))
   }
-  if (method %in% c("hnsw", "nsg", "sparse", "vptree")) return(FALSE)
+  if (method %in% c("nsg", "sparse", "vptree")) return(FALSE)
+  if (identical(method, "hnsw")) {
+    return(!identical(metric, "inner_product") && isTRUE(cuvs_available_value))
+  }
   if (identical(metric, "inner_product")) {
     return(method %in% c("exact", "bruteforce", "flat", "ivf", "ivfpq") &&
       isTRUE(faiss_gpu_available_value))
@@ -5372,6 +5439,48 @@ cuvs_cagra_params <- function(n, k) {
   )
 }
 
+cuvs_hnsw_params <- function(n, k, n_threads = NULL) {
+  base <- cuvs_cagra_params(n, k)
+  k <- as.integer(k)
+  n <- as.integer(n)
+  large_k <- length(k) == 1L && !is.na(k) && k >= 100L
+  large_n <- length(n) == 1L && !is.na(n) && n >= 1000000L
+  requested_ef <- cuvs_requested_option_int(
+    "hnsw_ef",
+    if (isTRUE(large_k)) max(240L, 3L * k) else max(120L, 4L * k)
+  )
+  ef <- cuvs_option_int(
+    "hnsw_ef",
+    default = requested_ef,
+    min_value = k,
+    max_value = 4096L
+  )
+  threads <- normalize_nn_threads(n_threads)
+  list(
+    graph_degree = as.integer(base$graph_degree),
+    intermediate_graph_degree = as.integer(base$intermediate_graph_degree),
+    ef = as.integer(ef),
+    n_threads = as.integer(threads),
+    requested_graph_degree = as.integer(base$requested_graph_degree),
+    requested_intermediate_graph_degree = as.integer(base$requested_intermediate_graph_degree),
+    requested_ef = as.integer(requested_ef),
+    requested_n_threads = as.integer(threads),
+    tuning_policy = base$tuning_policy,
+    tuning_rule = if (isTRUE(large_n) && isTRUE(large_k)) {
+      "large_n_large_k_hnsw_from_cagra"
+    } else if (isTRUE(large_n)) {
+      "large_n_hnsw_from_cagra"
+    } else if (isTRUE(large_k)) {
+      "large_k_hnsw_from_cagra"
+    } else {
+      "balanced_hnsw_from_cagra"
+    },
+    tuning_large_n = isTRUE(large_n),
+    tuning_large_k = isTRUE(large_k),
+    tuning_small_k = isTRUE(base$tuning_small_k)
+  )
+}
+
 .cuvs_cagra_tune_cache <- new.env(parent = emptyenv())
 .cuvs_cagra_tune_disk_cache <- new.env(parent = emptyenv())
 .cuvs_cagra_tune_disk_cache$loaded <- FALSE
@@ -5946,10 +6055,10 @@ grid_self_knn <- function(data,
 #'   depending on data shape, size, and available libraries. CUDA auto uses CUDA
 #'   grid for 2D/3D Euclidean/cosine/correlation
 #'   self-KNN, exact FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for
-#'   Euclidean searches when appropriate, and FAISS GPU Flat IP routes for
-#'   cosine, correlation, and inner-product searches only when FAISS GPU Flat is
-#'   available [1-3,5,13-15]. On cuVS-only runtimes, `backend = "auto"` keeps
-#'   non-grid non-Euclidean searches on CPU. When `backend = "auto"` is
+#'   Euclidean searches when appropriate, cuVS HNSW for explicit CUDA HNSW
+#'   Euclidean/cosine/correlation requests, and FAISS GPU Flat IP routes for
+#'   inner-product searches only when FAISS GPU Flat is available
+#'   [1-3,5,13-15,22-23]. When `backend = "auto"` is
 #'   combined with an explicit method, faissR first checks whether that exact
 #'   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU
 #'   route when that method/metric is supported on CPU.
@@ -5977,11 +6086,14 @@ grid_self_knn <- function(data,
 #'   it is not a metric distance for tree pruning; use `"exact"`, `"flat"`, or
 #'   `"hnsw"` for inner-product search.
   #'   \item `"sparse"`: native exact sparse `dgCMatrix` CPU search.
-  #'   \item `"hnsw"`: FAISS CPU HNSW approximate graph-search index [5,16].
-  #'   Default FAISS HNSW parameters are selected by a deterministic
-  #'   shape/k/metric rule without pilot tuning; result approximation metadata
-  #'   records the selected `tuning_rule` and the high-dimensional, large-`n`,
-  #'   small-`k`, large-`k`, and non-Euclidean shape flags used.
+  #'   \item `"hnsw"`: HNSW approximate graph-search index [3,5,16,22-23].
+  #'   CPU uses FAISS HNSW when available and RcppHNSW/hnswlib fallback
+  #'   otherwise. CUDA uses RAPIDS cuVS HNSW converted from a CUDA CAGRA index
+  #'   for Euclidean plus normalized cosine/correlation; raw inner product is
+  #'   CPU/FAISS-only in faissR. Default parameters are selected by a
+  #'   deterministic shape/k/metric rule without pilot tuning; result
+  #'   approximation metadata records the selected `tuning_rule` and shape
+  #'   flags used.
   #'   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
   #'   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
   #'   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records

@@ -47,14 +47,14 @@ The `runtime_reason` labels are machine-readable, for example `available`,
 
 | `method` | Exact? | CPU | CUDA | Main references |
 | --- | --- | --- | --- | --- |
-| `"auto"` | depends on selected route | yes | yes | FAISS/cuVS/HNSW/IVF/CAGRA as selected [1-6,13-16] |
+| `"auto"` | depends on selected route | yes | yes | FAISS/cuVS/HNSW/IVF/CAGRA as selected [1-6,13-16,22-23] |
 | `"exact"` | yes | native CPU exact | FAISS GPU Flat or cuVS brute force | FAISS/cuVS [1-3,16] |
 | `"flat"` | yes | FAISS Flat | FAISS GPU Flat | FAISS [1-2,16] |
 | `"bruteforce"` | yes | native CPU exact | cuVS brute force | cuVS [3] |
 | `"grid"` | yes | native 2D/3D grid | native CUDA 2D/3D grid | native faissR implementation |
 | `"vptree"` | yes | native CPU VP-tree | unsupported | VP-tree/metric search [20] |
 | `"sparse"` | yes | native sparse CPU | unsupported | native faissR sparse implementation |
-| `"hnsw"` | approximate | FAISS HNSW for all metrics when FAISS is available; RcppHNSW/hnswlib fallback | unsupported | HNSW [5,16] |
+| `"hnsw"` | approximate | FAISS HNSW for all metrics when FAISS is available; RcppHNSW/hnswlib fallback | cuVS HNSW for Euclidean plus normalized cosine/correlation | HNSW/cuVS [3,5,16,22-23] |
 | `"ivf"` | approximate | FAISS IVF-Flat | FAISS GPU IVF-Flat | FAISS IVF [1-2,16] |
 | `"ivfpq"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
 | `"nsg"` | approximate | FAISS NSG when exposed | unsupported | NSG/FAISS [16,21] |
@@ -92,7 +92,7 @@ CUDA and keep CUDA backend metadata.
 | `"grid"` | euclidean, cosine, correlation | euclidean, cosine, correlation | 2D/3D self-KNN only; cosine/correlation use normalized Euclidean grid search. |
 | `"vptree"` | euclidean, cosine, correlation | unsupported | Inner product is not a metric for VP-tree pruning. |
 | `"sparse"` | euclidean, cosine, correlation, inner_product | unsupported | Exact sparse CPU route for `Matrix` inputs. |
-| `"hnsw"` | euclidean, cosine, correlation, inner_product | unsupported | FAISS HNSW is used for all metrics when available; cosine/correlation use normalized inner-product search. |
+| `"hnsw"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation | CPU FAISS HNSW is used for all metrics when available; CUDA uses cuVS HNSW converted from CAGRA for Euclidean and normalized cosine/correlation. |
 | `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
 | `"ivfpq"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVFPQ supports L2/IP; cosine/correlation use normalized IVFPQ IP. |
 | `"nsg"` | euclidean | unsupported | CPU FAISS NSG is Euclidean/L2-only in faissR because this linked FAISS graph builder can abort for non-L2 construction. |
@@ -163,6 +163,14 @@ FAISS HNSW inner-product search [5,16]. Inner-product HNSW normalizes returned
 distances to the package convention `best_dot - dot`, so the first returned
 neighbour has distance zero. If FAISS is unavailable, faissR falls back to
 RcppHNSW/hnswlib for the HNSW route.
+
+CUDA `method = "hnsw"` maps to `cuda_cuvs_hnsw` when RAPIDS cuVS HNSW is
+available. This route builds a CUDA CAGRA index, converts it to a cuVS HNSW
+index, and searches through the cuVS HNSW wrapper. faissR exposes it for
+Euclidean/L2 plus normalized cosine/correlation; raw inner product remains an
+expected unsupported combination. CUHNSW is acknowledged as related Apache-2.0
+CUDA HNSW prior software, but faissR does not vendor or copy CUHNSW source
+[3,22-23].
 
 ## `"exact"`
 

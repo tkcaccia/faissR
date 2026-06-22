@@ -583,6 +583,7 @@ test_that("resolved backend labels map to stable auto-selection method and devic
   expect_equal(faissR:::nn_resolved_backend_public_method("faiss_hnsw"), "hnsw")
   expect_equal(faissR:::nn_resolved_backend_public_method("faiss_flat_cosine"), "flat")
   expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_nndescent"), "nndescent")
+  expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_hnsw"), "hnsw")
   expect_equal(faissR:::nn_resolved_backend_public_method("faiss_gpu_cagra"), "cagra")
   expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_bruteforce"), "exact")
   expect_equal(faissR:::nn_resolved_backend_public_method("unknown_backend"), NA_character_)
@@ -590,6 +591,7 @@ test_that("resolved backend labels map to stable auto-selection method and devic
   expect_equal(faissR:::nn_resolved_backend_device("faiss_hnsw"), "cpu")
   expect_equal(faissR:::nn_resolved_backend_device("faiss_gpu_ivf_flat"), "cuda")
   expect_equal(faissR:::nn_resolved_backend_device("cuda_cuvs_bruteforce"), "cuda")
+  expect_equal(faissR:::nn_resolved_backend_device("cuda_cuvs_hnsw"), "cuda")
   expect_equal(faissR:::nn_resolved_backend_device("cuvs_ivfpq"), "cuda")
   expect_equal(faissR:::nn_resolved_backend_device("cpu_auto"), "auto")
 })
@@ -611,7 +613,7 @@ test_that("public NN APIs require scalar backend method metric and tuning choice
   expect_error(nn(x, k = 2L, method = c("exact", "hnsw")), "`method` must be a single value")
   expect_error(nn(x, k = 2L, metric = c("cosine", "correlation")), "`metric` must be a single value")
   expect_error(nn(x, k = 2L, tuning = c("auto", "off")), "`tuning` must be a single value")
-  internal_routes <- c("faiss_hnsw", "faiss_ivf", "faiss_gpu_cagra", "cuda_cuvs_nndescent")
+  internal_routes <- c("faiss_hnsw", "faiss_ivf", "faiss_gpu_cagra", "cuda_cuvs_nndescent", "cuda_cuvs_hnsw")
   for (route in internal_routes) {
     expect_error(nn(x, k = 2L, method = route), "canonical lowercase", info = route)
     expect_error(nn_without_self(x, k = 2L, method = route), "canonical lowercase", info = route)
@@ -656,7 +658,14 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(all(caps$supported[caps$method == "auto" & caps$backend == "cuda"]))
   expect_true(caps$supported[caps$method == "sparse" & caps$metric == "inner_product" & caps$backend == "cpu"])
   expect_true(all(!caps$supported[caps$method == "cagra" & caps$backend == "cpu"]))
-  expect_true(all(!caps$supported[caps$method == "hnsw" & caps$backend == "cuda"]))
+  expect_true(all(caps$supported[
+    caps$method == "hnsw" & caps$backend == "cuda" &
+      caps$metric %in% c("euclidean", "cosine", "correlation")
+  ]))
+  expect_true(all(!caps$supported[
+    caps$method == "hnsw" & caps$backend == "cuda" &
+      caps$metric == "inner_product"
+  ]))
   expect_true(all(caps$supported[caps$method == "ivf"]))
   expect_true(all(caps$supported[caps$method == "ivfpq"]))
   expect_true(all(caps$supported[
@@ -970,6 +979,26 @@ test_that("backend auto explicit methods require metric-capable CUDA routes befo
   expect_equal(
     faissR:::resolve_auto_public_nn_device(
       "nndescent",
+      "inner_product",
+      cuda_available_value = TRUE,
+      cuvs_available_value = TRUE,
+      faiss_gpu_available_value = TRUE
+    ),
+    "cpu"
+  )
+  expect_equal(
+    faissR:::resolve_auto_public_nn_device(
+      "hnsw",
+      "euclidean",
+      cuda_available_value = FALSE,
+      cuvs_available_value = TRUE,
+      faiss_gpu_available_value = FALSE
+    ),
+    "cuda"
+  )
+  expect_equal(
+    faissR:::resolve_auto_public_nn_device(
+      "hnsw",
       "inner_product",
       cuda_available_value = TRUE,
       cuvs_available_value = TRUE,
@@ -2021,9 +2050,9 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cpu", "cagra", "euclidean"),
     "cagra.*only available.*cuda"
   )
-  expect_error(
+  expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "hnsw", "euclidean"),
-    "hnsw.*only available.*cpu"
+    "cuda_cuvs_hnsw"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "ivf", "euclidean"),
@@ -2134,9 +2163,21 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "nndescent", "correlation"),
     "cuda_cuvs_nndescent"
   )
-  expect_error(
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "hnsw", "euclidean"),
+    "cuda_cuvs_hnsw"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "hnsw", "cosine"),
+    "cuda_cuvs_hnsw"
+  )
+  expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "hnsw", "correlation"),
-    'CUDA `method = "hnsw"` does not support `metric = "correlation"`',
+    "cuda_cuvs_hnsw"
+  )
+  expect_error(
+    faissR:::resolve_public_nn_backend("cuda", "hnsw", "inner_product"),
+    'CUDA `method = "hnsw"` does not support `metric = "inner_product"`',
     fixed = TRUE
   )
   expect_error(
@@ -3605,6 +3646,7 @@ test_that("cuVS backend reports unavailable runtime clearly", {
   expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs_ivfpq"), "cuVS")
   expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs_bruteforce"), "cuVS")
   expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs_nndescent"), "cuVS")
+  expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs_hnsw"), "cuVS")
   expect_error(internal_nn(x, x, k = 2, backend = "cuda_approx"), "cuVS")
   expect_error(internal_nn(x, x, k = 2, backend = "cuda_nndescent"), "cuVS")
 })

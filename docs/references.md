@@ -31,6 +31,8 @@
 19. Kapralov M, Lattanzi S, Nouri N, Tardos J. Efficient and Local Parallel Random Walks. arXiv:2112.00655.
 20. Yianilos PN. Data structures and algorithms for nearest neighbor search in general metric spaces. In: Proceedings of the Fourth Annual ACM-SIAM Symposium on Discrete Algorithms; 1993. p. 311-21.
 21. Fu C, Xiang C, Wang C, Cai D. Fast approximate nearest neighbor search with the navigating spreading-out graph. Proc VLDB Endow 2019;12:461-74.
+22. RAPIDS Development Team. cuVS HNSW C API documentation. Available from: https://docs.rapids.ai/api/cuvs/stable/c_api/neighbors_hnsw_c/.
+23. Kim J. CUHNSW: CUDA implementation of Hierarchical Navigable Small World Graph algorithm [software, Apache-2.0]. Available from: https://github.com/js1010/cuhnsw.
 
 ## Software Acknowledgements
 
@@ -38,11 +40,14 @@
 rather than vendoring those libraries [1-3,12-16]. HNSW, NN-descent, IVF,
 product quantization, flat search, k-means, Louvain, Leiden, and random-walk
 clustering are acknowledged as algorithmic and software foundations where the
-compiled backend exposes them [1-11,16,20-21].
+compiled backend exposes them [1-11,16,20-23].
 
 Native CPU graph clustering is faissR C++/OpenMP code inspired by the Louvain,
 Leiden, walktrap/random-walk, and multicore graph-clustering literature
 [9-11,17-19]. CUDA Louvain and Leiden use RAPIDS libcugraph when available [12].
 FAISS GPU CAGRA and FAISS GPU IVF routes follow the FAISS GPU/cuVS integration
 documented by FAISS, NVIDIA, and Meta [13-15]. Direct cuVS routes call RAPIDS
-cuVS C/C++ libraries [3]. The package does not use a Python/cuGraph bridge.
+cuVS C/C++ libraries [3]. Direct CUDA HNSW uses the RAPIDS cuVS HNSW wrapper
+path documented by NVIDIA/RAPIDS [22]. CUHNSW is acknowledged as related
+Apache-2.0 CUDA HNSW prior software, but no CUHNSW source code is vendored or
+copied into faissR [23]. The package does not use a Python/cuGraph bridge.

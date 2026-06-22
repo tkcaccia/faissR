@@ -30,6 +30,10 @@
 #    include <cuvs/neighbors/ivf_pq.h>
 #    define FAISSR_HAS_CUVS_IVF_PQ 1
 #  endif
+#  if __has_include(<cuvs/neighbors/hnsw.h>)
+#    include <cuvs/neighbors/hnsw.h>
+#    define FAISSR_HAS_CUVS_HNSW 1
+#  endif
 #endif
 #include <dlpack/dlpack.h>
 
@@ -460,6 +464,62 @@ class IvfPqIndex {
 };
 #endif
 
+#ifdef FAISSR_HAS_CUVS_HNSW
+class HnswIndexParams {
+ public:
+  HnswIndexParams() {
+    cuvs_check(cuvsHnswIndexParamsCreate(&params_), "cuvsHnswIndexParamsCreate");
+  }
+  ~HnswIndexParams() {
+    if (params_ != nullptr) {
+      cuvsHnswIndexParamsDestroy(params_);
+    }
+  }
+  cuvsHnswIndexParams_t get() const { return params_; }
+  HnswIndexParams(const HnswIndexParams&) = delete;
+  HnswIndexParams& operator=(const HnswIndexParams&) = delete;
+
+ private:
+  cuvsHnswIndexParams_t params_ = nullptr;
+};
+
+class HnswSearchParams {
+ public:
+  HnswSearchParams() {
+    cuvs_check(cuvsHnswSearchParamsCreate(&params_), "cuvsHnswSearchParamsCreate");
+  }
+  ~HnswSearchParams() {
+    if (params_ != nullptr) {
+      cuvsHnswSearchParamsDestroy(params_);
+    }
+  }
+  cuvsHnswSearchParams_t get() const { return params_; }
+  HnswSearchParams(const HnswSearchParams&) = delete;
+  HnswSearchParams& operator=(const HnswSearchParams&) = delete;
+
+ private:
+  cuvsHnswSearchParams_t params_ = nullptr;
+};
+
+class HnswIndex {
+ public:
+  HnswIndex() {
+    cuvs_check(cuvsHnswIndexCreate(&index_), "cuvsHnswIndexCreate");
+  }
+  ~HnswIndex() {
+    if (index_ != nullptr) {
+      cuvsHnswIndexDestroy(index_);
+    }
+  }
+  cuvsHnswIndex_t get() const { return index_; }
+  HnswIndex(const HnswIndex&) = delete;
+  HnswIndex& operator=(const HnswIndex&) = delete;
+
+ private:
+  cuvsHnswIndex_t index_ = nullptr;
+};
+#endif
+
 cuvsFilter no_filter() {
   cuvsFilter filter;
   filter.type = NO_FILTER;
@@ -539,6 +599,54 @@ List format_int64_result(const std::vector<int64_t>& labels,
         continue;
       }
       if (label > std::numeric_limits<int>::max()) {
+        Rcpp::stop("cuVS returned a neighbor index that does not fit in R integer");
+      }
+      const std::size_t output_offset = static_cast<std::size_t>(written) * n_points + i;
+      indices_ptr[output_offset] = static_cast<int>(label) + 1;
+      const float raw = distances[result_offset];
+      dists_ptr[output_offset] = already_sqrt ? static_cast<double>(raw) :
+        std::sqrt(std::max(static_cast<double>(raw), 0.0));
+      ++written;
+    }
+    if (written < out_k) {
+      Rcpp::stop("cuVS returned fewer neighbors than requested");
+    }
+  }
+
+  return List::create(
+    Rcpp::Named("indices") = indices,
+    Rcpp::Named("distances") = dists,
+    Rcpp::Named("index_type") = index_type,
+    Rcpp::Named("exact") = exact
+  );
+}
+
+List format_uint64_result(const std::vector<uint64_t>& labels,
+                          const std::vector<float>& distances,
+                          const int n_points,
+                          const int search_k,
+                          const int out_k,
+                          const bool self_query,
+                          const bool exclude_self,
+                          const std::string& index_type,
+                          const bool exact,
+                          const bool already_sqrt = false) {
+  IntegerMatrix indices(n_points, out_k);
+  NumericMatrix dists(n_points, out_k);
+  int* indices_ptr = indices.begin();
+  double* dists_ptr = dists.begin();
+  const bool skip_self = exclude_self && self_query;
+
+  for (int i = 0; i < n_points; ++i) {
+    const std::size_t row_offset = static_cast<std::size_t>(i) * search_k;
+    int written = 0;
+    for (int j = 0; j < search_k && written < out_k; ++j) {
+      const std::size_t result_offset = row_offset + j;
+      const uint64_t label = labels[result_offset];
+      if (skip_self && label == static_cast<uint64_t>(i)) {
+        continue;
+      }
+      if (label > static_cast<uint64_t>(std::numeric_limits<int>::max())) {
         Rcpp::stop("cuVS returned a neighbor index that does not fit in R integer");
       }
       const std::size_t output_offset = static_cast<std::size_t>(written) * n_points + i;
@@ -896,6 +1004,141 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
     requested_search_width != search_width || requested_itopk_size != itopk_size;
   out["search_batch_size"] = batch_size;
   return out;
+}
+
+List cuvs_hnsw_knn_impl(NumericMatrix data,
+                        NumericMatrix points,
+                        int k,
+                        bool exclude_self,
+                        int graph_degree,
+                        int intermediate_graph_degree,
+                        int ef,
+                        int n_threads) {
+#ifndef FAISSR_HAS_CUVS_HNSW
+  Rcpp::stop(
+    "Direct cuVS HNSW is not available in this cuVS installation. "
+    "Reinstall cuVS with cuvs/neighbors/hnsw.h."
+  );
+#else
+  validate_inputs(data, points, k, exclude_self);
+  const bool same_storage = same_matrix_storage(data, points);
+  const bool self_query = exclude_self || same_storage;
+  const int n_data = data.nrow();
+  const int n_points = points.nrow();
+  const int n_features = data.ncol();
+  const int search_k = exclude_self ? std::min(n_data, k + 1) : k;
+  const int requested_graph_degree = graph_degree;
+  const int requested_intermediate_graph_degree = intermediate_graph_degree;
+  const int requested_ef = ef;
+  const int requested_n_threads = n_threads;
+
+  graph_degree = std::max(search_k, graph_degree);
+  graph_degree = std::min(graph_degree, std::max(1, n_data - 1));
+  intermediate_graph_degree = std::max(
+    intermediate_graph_degree,
+    std::max(graph_degree, graph_degree * 2)
+  );
+  intermediate_graph_degree = std::min(
+    intermediate_graph_degree,
+    std::max(1, n_data - 1)
+  );
+  ef = std::max(search_k, ef);
+  n_threads = std::max(1, n_threads);
+
+  std::vector<float> xb;
+  std::vector<float> xq;
+  copy_row_major_float(data, xb);
+  if (!same_storage) {
+    copy_row_major_float(points, xq);
+  }
+
+  CuvsResources res;
+  const std::size_t data_bytes = xb.size() * sizeof(float);
+  DeviceBuffer dataset_d(res.get(), data_bytes);
+  cuda_check(
+    cudaMemcpy(dataset_d.get(), xb.data(), data_bytes, cudaMemcpyHostToDevice),
+    "cudaMemcpy(dataset)"
+  );
+
+  int64_t dataset_shape[2] = {n_data, n_features};
+  DLManagedTensor dataset_tensor = make_tensor(
+    dataset_d.get(), dataset_shape, 2, kDLCUDA, kDLFloat, 32
+  );
+
+  CagraIndexParams cagra_params;
+  cagra_params.get()->metric = L2Expanded;
+  cagra_params.get()->graph_degree = static_cast<std::size_t>(graph_degree);
+  cagra_params.get()->intermediate_graph_degree =
+    static_cast<std::size_t>(intermediate_graph_degree);
+
+  CagraIndex cagra_index;
+  cuvs_check(
+    cuvsCagraBuild(res.get(), cagra_params.get(), &dataset_tensor, cagra_index.get()),
+    "cuvsCagraBuild"
+  );
+
+  HnswIndexParams hnsw_params;
+  HnswIndex hnsw_index;
+  cuvs_check(
+    cuvsHnswFromCagra(res.get(), hnsw_params.get(), cagra_index.get(), hnsw_index.get()),
+    "cuvsHnswFromCagra"
+  );
+
+  const float* query_ptr = same_storage ? xb.data() : xq.data();
+  int64_t query_shape[2] = {n_points, n_features};
+  int64_t output_shape[2] = {n_points, search_k};
+  std::vector<uint64_t> labels(static_cast<std::size_t>(n_points) * search_k);
+  std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
+  DLManagedTensor query_tensor = make_tensor(
+    const_cast<float*>(query_ptr), query_shape, 2, kDLCPU, kDLFloat, 32
+  );
+  DLManagedTensor neighbors_tensor = make_tensor(
+    labels.data(), output_shape, 2, kDLCPU, kDLUInt, 64
+  );
+  DLManagedTensor distances_tensor = make_tensor(
+    distances.data(), output_shape, 2, kDLCPU, kDLFloat, 32
+  );
+
+  HnswSearchParams search_params;
+  search_params.get()->ef = ef;
+  search_params.get()->num_threads = n_threads;
+  cuvs_check(
+    cuvsHnswSearch(
+      res.get(),
+      search_params.get(),
+      hnsw_index.get(),
+      &query_tensor,
+      &neighbors_tensor,
+      &distances_tensor
+    ),
+    "cuvsHnswSearch"
+  );
+
+  List out = format_uint64_result(
+    labels,
+    distances,
+    n_points,
+    search_k,
+    k,
+    self_query,
+    exclude_self,
+    "cuVS_HNSW",
+    false
+  );
+  out["graph_degree"] = graph_degree;
+  out["intermediate_graph_degree"] = intermediate_graph_degree;
+  out["ef"] = ef;
+  out["num_threads"] = n_threads;
+  out["requested_graph_degree"] = requested_graph_degree;
+  out["requested_intermediate_graph_degree"] = requested_intermediate_graph_degree;
+  out["requested_ef"] = requested_ef;
+  out["requested_num_threads"] = requested_n_threads;
+  out["hnsw_parameters_adjusted"] = requested_graph_degree != graph_degree ||
+    requested_intermediate_graph_degree != intermediate_graph_degree ||
+    requested_ef != ef ||
+    requested_n_threads != n_threads;
+  return out;
+#endif
 }
 
 List cuvs_ivf_flat_knn_impl(NumericMatrix data,

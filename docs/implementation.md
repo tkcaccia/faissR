@@ -235,14 +235,14 @@ public method names map to different concrete functions depending on `backend`.
 
 | Method | CPU behavior | CUDA behavior | Notes |
 | --- | --- | --- | --- |
-| `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, FAISS GPU CAGRA selector, or FAISS GPU Flat IP for non-Euclidean exact routes. | Default for general use. |
+| `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, cuVS HNSW, FAISS GPU CAGRA selector, or FAISS GPU Flat IP for inner-product exact routes. | Default for general use. |
 | `exact` | Native exact CPU route. | FAISS GPU Flat when available; Euclidean can otherwise use cuVS brute force. | Accuracy-first baseline. |
 | `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP while staying on CUDA for explicit CUDA calls. | Exact FAISS route [1-2,16]. |
 | `bruteforce` | Native exact CPU route. | Euclidean prefers direct cuVS brute force; non-Euclidean metrics use FAISS GPU Flat when available. | Useful for comparing direct cuVS against FAISS GPU Flat [1-3,16]. |
 | `grid` | Native 2D/3D exact spatial grid. | CUDA 2D/3D grid. | Errors outside two or three columns. |
 | `vptree` | Native exact CPU VP-tree for Euclidean, cosine, and correlation; zero-normalized non-Euclidean rows use exact CPU fallback. | Unsupported. | Low-dimensional CPU helper. |
 | `sparse` | Native exact sparse `dgCMatrix` route. | Unsupported. | Avoids densifying sparse matrices. |
-| `hnsw` | FAISS CPU HNSW. | Unsupported. | High-recall CPU graph-search route [5,16]. |
+| `hnsw` | FAISS CPU HNSW. | RAPIDS cuVS HNSW from a CUDA CAGRA index for Euclidean/cosine/correlation. | High-recall graph-search route; CUDA raw inner product is not exposed [3,5,16,22-23]. |
 | `ivf` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | Coarse-list approximate route [1-2,16]. |
 | `ivfpq` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | Compressed approximate route [6,16]. |
 | `nsg` | FAISS CPU NSG for Euclidean/L2 only. | Unsupported. | Optional FAISS graph-search baseline; cosine, correlation, and raw inner product are guarded off because the linked FAISS graph builder can abort during non-L2 construction [16]. |

@@ -154,10 +154,10 @@ Method descriptions:
   depending on data shape, size, and available libraries. CUDA auto uses CUDA
   grid for 2D/3D Euclidean/cosine/correlation
   self-KNN, exact FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for
-  Euclidean searches when appropriate, and FAISS GPU Flat IP routes for
-  cosine, correlation, and inner-product searches only when FAISS GPU Flat is
-  available [1-3,5,13-15]. On cuVS-only runtimes, `backend = "auto"` keeps
-  non-grid non-Euclidean searches on CPU. When `backend = "auto"` is
+  Euclidean searches when appropriate, cuVS HNSW for explicit CUDA HNSW
+  Euclidean/cosine/correlation requests, and FAISS GPU Flat IP routes for
+  inner-product searches only when FAISS GPU Flat is available
+  [1-3,5,13-15,22-23]. When `backend = "auto"` is
   combined with an explicit method, faissR first checks whether that exact
   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU
   route when that method/metric is supported on CPU.
@@ -185,11 +185,14 @@ Method descriptions:
   it is not a metric distance for tree pruning; use `"exact"`, `"flat"`, or
   `"hnsw"` for inner-product search.
   \item `"sparse"`: native exact sparse `dgCMatrix` CPU search.
-  \item `"hnsw"`: FAISS CPU HNSW approximate graph-search index [5,16].
-  Default FAISS HNSW parameters are selected by a deterministic
-  shape/k/metric rule without pilot tuning; result approximation metadata
-  records the selected `tuning_rule` and the high-dimensional, large-`n`,
-  small-`k`, large-`k`, and non-Euclidean shape flags used.
+  \item `"hnsw"`: HNSW approximate graph-search index [3,5,16,22-23].
+  CPU uses FAISS HNSW when available and RcppHNSW/hnswlib fallback
+  otherwise. CUDA uses RAPIDS cuVS HNSW converted from a CUDA CAGRA index
+  for Euclidean plus normalized cosine/correlation; raw inner product is
+  CPU/FAISS-only in faissR. Default parameters are selected by a
+  deterministic shape/k/metric rule without pilot tuning; result
+  approximation metadata records the selected `tuning_rule` and shape
+  flags used.
   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records
