@@ -99,6 +99,21 @@ test_that("public NN APIs canonicalize common metric aliases", {
   expect_error(nn(x, k = 2L, backend = "cpu", metric = "manhattan"), "metric")
 })
 
+test_that("public NN APIs require scalar backend method metric and tuning choices", {
+  x <- matrix(rnorm(40), ncol = 4)
+
+  expect_no_error(nn(x, k = 2L))
+  expect_no_error(nn_without_self(x, k = 2L))
+  expect_error(nn(x, k = 2L, backend = c("cpu", "cuda")), "`backend` must be a single value")
+  expect_error(nn(x, k = 2L, method = c("exact", "hnsw")), "`method` must be a single value")
+  expect_error(nn(x, k = 2L, metric = c("cosine", "correlation")), "`metric` must be a single value")
+  expect_error(nn(x, k = 2L, tuning = c("auto", "off")), "`tuning` must be a single value")
+  expect_error(
+    faissR:::resolve_public_nn_backend(c("cpu", "cuda"), "exact", "euclidean"),
+    "`backend` must be a single value"
+  )
+})
+
 test_that("public NN APIs validate tuning at the exported boundary", {
   x <- matrix(rnorm(40), ncol = 4)
 

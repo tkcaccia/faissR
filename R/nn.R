@@ -1358,8 +1358,26 @@ nn_compute <- function(data,
   finish_nn_result(out, "cpu", k, self_query, metric = metric)
 }
 
+normalize_scalar_choice_arg <- function(x, arg, default, formal_choices = NULL) {
+  value <- trimws(as.character(x))
+  value <- value[nzchar(value)]
+  if (!length(value)) return(default)
+  if (length(value) > 1L) {
+    if (!is.null(formal_choices) && identical(value, formal_choices)) {
+      return(default)
+    }
+    stop("`", arg, "` must be a single value.", call. = FALSE)
+  }
+  value[[1L]]
+}
+
 normalize_public_compute_backend <- function(backend, arg = "backend") {
-  backend <- as.character(backend)[1L]
+  backend <- normalize_scalar_choice_arg(
+    backend,
+    arg = arg,
+    default = "auto",
+    formal_choices = c("auto", "cpu", "cuda")
+  )
   if (is.na(backend) || !nzchar(backend)) backend <- "auto"
   backend <- tolower(backend)
   if (!backend %in% c("auto", "cpu", "cuda")) {
@@ -1375,7 +1393,12 @@ normalize_public_compute_backend <- function(backend, arg = "backend") {
 }
 
 normalize_public_backend_arg <- function(backend, arg = "backend") {
-  backend <- as.character(backend)[1L]
+  backend <- normalize_scalar_choice_arg(
+    backend,
+    arg = arg,
+    default = "auto",
+    formal_choices = c("auto", "cpu", "cuda")
+  )
   if (is.na(backend) || !nzchar(backend)) backend <- "auto"
   backend <- tolower(backend)
   if (!backend %in% c("auto", "cpu", "cuda")) {
@@ -1385,7 +1408,12 @@ normalize_public_backend_arg <- function(backend, arg = "backend") {
 }
 
 normalize_nn_method <- function(method) {
-  method <- as.character(method)[1L]
+  method <- normalize_scalar_choice_arg(
+    method,
+    arg = "method",
+    default = "auto",
+    formal_choices = nn_method_labels()
+  )
   if (is.na(method) || !nzchar(method)) method <- "auto"
   method <- trimws(method)
   labels <- nn_method_labels()
@@ -1619,7 +1647,12 @@ nn_capability_row <- function(method, backend, metric) {
 }
 
 normalize_nn_tuning <- function(tuning) {
-  tuning <- as.character(tuning)[1L]
+  tuning <- normalize_scalar_choice_arg(
+    tuning,
+    arg = "tuning",
+    default = "auto",
+    formal_choices = c("auto", "cache", "pilot", "fixed", "off", "none")
+  )
   if (is.na(tuning) || !nzchar(tuning)) tuning <- "auto"
   tuning <- tolower(gsub("[[:space:]_-]+", "", tuning))
   aliases <- c(
@@ -1644,7 +1677,12 @@ normalize_nn_tuning <- function(tuning) {
 }
 
 resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
-  backend_label <- as.character(backend)[1L]
+  backend_label <- normalize_scalar_choice_arg(
+    backend,
+    arg = "backend",
+    default = "auto",
+    formal_choices = c("auto", "cpu", "cuda")
+  )
   method_label <- normalize_nn_method(method)
   metric <- normalize_nn_metric(metric)
   if (!tolower(backend_label) %in% c("auto", "cpu", "cuda")) {
@@ -2146,7 +2184,6 @@ normalize_nn_threads <- function(n_threads) {
 }
 
 normalize_nn_metric <- function(metric) {
-  metric <- as.character(metric)
   aliases <- c(
     euclidean = "euclidean",
     l2 = "euclidean",
@@ -2162,12 +2199,13 @@ normalize_nn_metric <- function(metric) {
     dot_product = "inner_product",
     dotproduct = "inner_product"
   )
-  if (length(metric) < 1L) {
-    metric <- "euclidean"
-  } else if (length(metric) > 1L) {
-    metric <- metric[[1L]]
-  }
-  key <- tolower(trimws(metric[[1L]]))
+  metric <- normalize_scalar_choice_arg(
+    metric,
+    arg = "metric",
+    default = "euclidean",
+    formal_choices = nn_metric_labels()
+  )
+  key <- tolower(trimws(metric))
   key <- gsub("[[:space:]-]+", "_", key)
   if (!key %in% names(aliases)) {
     stop(
