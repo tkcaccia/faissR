@@ -232,6 +232,30 @@ test_that("NN metric benchmark preflights supported rows as runnable or runtime 
   }
 })
 
+test_that("NN metric benchmark consumes runtime capability columns when present", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  caps <- nn_capabilities(runtime = TRUE)
+
+  cpu_flat <- env$capability_status(caps, "cpu", "flat", "euclidean")
+  expect_true(isTRUE(cpu_flat$supported))
+  expect_equal(cpu_flat$resolved_backend, "faiss_flat_l2")
+  expect_equal(cpu_flat$runtime_available, faiss_available())
+  expect_true(nzchar(cpu_flat$runtime_notes))
+
+  cuda_flat <- env$is_expected_skip(caps, "cuda", "flat", "euclidean")
+  if (isTRUE(faiss_gpu_available())) {
+    expect_null(cuda_flat)
+  } else {
+    expect_type(cuda_flat, "list")
+    expect_true(isTRUE(cuda_flat$skip))
+    expect_equal(cuda_flat$route, "faiss_gpu_flat_l2")
+    expect_match(cuda_flat$notes, "FAISS GPU|not available|unavailable", ignore.case = TRUE)
+  }
+})
+
 test_that("NN metric benchmark recommendations are grouped by backend metric and k", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),

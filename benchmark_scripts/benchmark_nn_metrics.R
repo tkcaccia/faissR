@@ -804,7 +804,20 @@ capability_status <- function(caps, backend, method, metric) {
   list(
     listed = TRUE,
     supported = isTRUE(cap$supported[[1L]]),
-    notes = cap$notes[[1L]] %||% "Unsupported by faissR::nn_capabilities()."
+    notes = cap$notes[[1L]] %||% "Unsupported by faissR::nn_capabilities().",
+    resolved_backend = if ("resolved_backend" %in% names(cap)) cap$resolved_backend[[1L]] else NA_character_,
+    runtime_available = if ("runtime_available" %in% names(cap)) isTRUE(cap$runtime_available[[1L]]) else NA,
+    runtime_notes = if ("runtime_notes" %in% names(cap)) cap$runtime_notes[[1L]] else NA_character_
+  )
+}
+
+capability_runtime_skip <- function(cap) {
+  if (is.null(cap) || isTRUE(is.na(cap$runtime_available))) return(NULL)
+  if (isTRUE(cap$runtime_available)) return(NULL)
+  list(
+    skip = TRUE,
+    route = cap$resolved_backend %||% NA_character_,
+    notes = cap$runtime_notes %||% "Resolved route is unavailable in the current runtime."
   )
 }
 
@@ -898,6 +911,8 @@ auto_expected_skip <- function(caps, method, metric) {
   if (!isTRUE(auto$supported)) {
     return(list(skip = TRUE, notes = auto$notes))
   }
+  runtime <- capability_runtime_skip(auto)
+  if (!is.null(runtime)) return(runtime)
   runtime <- route_runtime_skip("auto", method, metric)
   if (!is.null(runtime)) return(runtime)
   NULL
@@ -911,6 +926,8 @@ is_expected_skip <- function(caps, backend, method, metric) {
   if (!backend %in% c("cpu", "cuda")) return(NULL)
   cap <- capability_status(caps, backend, method, metric)
   if (!isTRUE(cap$supported)) return(list(skip = TRUE, notes = cap$notes))
+  runtime <- capability_runtime_skip(cap)
+  if (!is.null(runtime)) return(runtime)
   runtime <- route_runtime_skip(backend, method, metric)
   if (!is.null(runtime)) return(runtime)
   if (identical(backend, "cuda") &&
@@ -1101,7 +1118,7 @@ k_values <- required_positive_int_values(
 )
 
 suppressPackageStartupMessages(library(faissR))
-capabilities <- faissR::nn_capabilities()
+capabilities <- faissR::nn_capabilities(runtime = TRUE)
 
 config <- data.frame(
   key = c("data_root", "out_dir", "available_datasets", "datasets", "backends",
@@ -1290,11 +1307,11 @@ materials <- c(
   sprintf("- Cycles: `%s`", cycles),
   sprintf("- Fastest-method recall threshold: `%s`", recall_threshold),
   "",
-  "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities()` and the public backend resolver, then recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
+  "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities(runtime = TRUE)` and the public backend resolver, then recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
   "`method = \"sparse\"` is included in the default public method list but is recorded as an expected skip for dense benchmark datasets, because it is intended for sparse `Matrix` inputs and should not force dense data through a sparse conversion.",
   "`method = \"grid\"` is included in the default public method list but is recorded as an expected skip for datasets outside two or three columns, because it is a native low-dimensional spatial search route.",
   "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, and resolved backend fields.",
-  "`nn_metric_capabilities.csv` stores the design-level capability table used for that preflight. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
+  "`nn_metric_capabilities.csv` stores the capability table used for that preflight, including `resolved_backend`, `runtime_available`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
   "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_requested_backend`, `result_requested_method`, and `result_tuning` record the public request stored on successful `nn()` results. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes, and `tuning_status` records backend tuning status when present.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",
