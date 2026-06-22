@@ -474,6 +474,10 @@ test_that("non-euclidean metrics use only validated backend paths", {
     internal_nn(x, k = 4L, backend = "cuda_cuvs_ivfpq", metric = "inner_product"),
     "Direct cuVS IVF.*euclidean"
   )
+  expect_error(
+    internal_nn(x, k = 4L, backend = "cuda_cuvs_bruteforce", metric = "correlation"),
+    "Direct cuVS brute-force.*euclidean"
+  )
   if (requireNamespace("RcppHNSW", quietly = TRUE)) {
     hnsw_ip <- internal_nn(x, k = 4L, backend = "hnsw", metric = "inner_product", n_threads = 2L)
     expect_equal(attr(hnsw_ip, "metric"), "inner_product")

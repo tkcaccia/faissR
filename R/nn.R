@@ -107,6 +107,14 @@ nn_compute <- function(data,
         "routes.",
         call. = FALSE
       )
+    } else if (backend %in% c("cuvs_bruteforce", "cuda_cuvs_bruteforce", "cuda_cuvs_exact")) {
+      stop(
+        "Direct cuVS brute-force backends currently support only ",
+        "`metric = \"euclidean\"`. Use public `backend = \"cuda\", ",
+        "method = \"exact\"`, `\"bruteforce\"`, or `\"flat\"` for ",
+        "FAISS GPU metric-aware exact routes.",
+        call. = FALSE
+      )
     } else if (identical(metric, "inner_product") &&
                backend %in% c("faiss_flat_l2", "faiss_flat", "cpu_faiss_flat")) {
       backend <- "faiss_flat_ip"
@@ -1051,6 +1059,13 @@ nn_compute <- function(data,
   }
 
   if (backend %in% c("cuvs_bruteforce", "cuda_cuvs_bruteforce", "cuda_cuvs_exact")) {
+    if (!identical(metric, "euclidean")) {
+      stop(
+        "Direct cuVS brute-force backends currently support only ",
+        "`metric = \"euclidean\"`.",
+        call. = FALSE
+      )
+    }
     require_cuvs_backend("cuVS brute-force")
     out <- nn_cuvs_bruteforce_cpp(
       data,
@@ -1060,7 +1075,7 @@ nn_compute <- function(data,
     )
     resolved_backend <- "cuda_cuvs_bruteforce"
     result_backend <- if (requested_backend %in% c("cuda", "gpu")) requested_backend else resolved_backend
-    result <- finish_nn_result(out, result_backend, k, self_query, exact = TRUE)
+    result <- finish_nn_result(out, result_backend, k, self_query, exact = TRUE, metric = metric)
     if (!identical(result_backend, resolved_backend)) {
       attr(result, "resolved_backend") <- resolved_backend
     }
