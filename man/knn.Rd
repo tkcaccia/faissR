@@ -44,7 +44,7 @@ including metric-aware CPU HNSW routing.}
 \item{...}{Reserved for future options.}
 }
 \value{
-If \code{Xtest} is not supplied, a fitted \code{faissR_knn_model} object. If \code{Xtest} is supplied, a factor for classification, a numeric vector for regression, or a numeric class-probability matrix when \code{type = "prob"}.
+If \code{Xtest} is not supplied, a fitted \code{faissR_knn_model} object that stores the training data, response, task, backend, method, metric, tuning, \code{k}, and CPU thread settings used by later \code{\link{predict}()} calls. If \code{Xtest} is supplied, a factor for classification, a numeric vector for regression, or a numeric class-probability matrix when \code{type = "prob"}.
 }
 \description{
 \code{knn()} is the high-level supervised kNN API. With \code{Xtrain} and \code{Ytrain} only, it returns a reusable model. With \code{Xtest}, it immediately predicts the query rows by fitting the model and calling \code{predict()} internally. The low-level nearest-neighbour search API remains \code{nn()}.

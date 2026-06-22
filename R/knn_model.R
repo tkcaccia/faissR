@@ -30,8 +30,10 @@
 #' @param type `"response"` for class/regression predictions or `"prob"` for
 #'   class probability matrices from classification models.
 #' @param ... Reserved for future options.
-#' @return If `Xtest` is not supplied, a fitted `faissR_knn_model` object. If
-#'   `Xtest` is supplied, a factor for classification, a numeric vector for
+#' @return If `Xtest` is not supplied, a fitted `faissR_knn_model` object that
+#'   stores the training data, response, task, backend, method, metric, tuning,
+#'   `k`, and CPU thread settings used by later \code{\link{predict}()} calls.
+#'   If `Xtest` is supplied, a factor for classification, a numeric vector for
 #'   regression, or a numeric class-probability matrix when `type = "prob"`.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
