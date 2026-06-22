@@ -206,11 +206,12 @@ clustering-only time, and `total_sec` is `graph_sec + cluster_sec` for the
 complete graph-plus-clustering workflow represented by the row.
 The run configuration is saved as `graph_cluster_benchmark_config.csv`, and
 the raw row-level result table is saved as
-`graph_cluster_benchmark_results.csv`.
+`graph_cluster_benchmark_results.csv`, including graph vertex and edge counts.
 `graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by
 dataset/k/graph-backend/cluster-backend/method/weight and reports success
 counts, median/min/max graph, clustering, and total time, ARI stability,
-modularity stability, community counts, and resolved backend metadata.
+modularity stability, graph size, community counts, and resolved backend
+metadata.
 `graph_cluster_best_by_dataset.csv` keeps a compact best successful row per
 dataset after ranking by ARI, modularity, and total time for backward-compatible
 summaries. `graph_cluster_best_by_dataset_k_target.csv` keeps the same

@@ -1500,6 +1500,7 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
     cluster_sec = c(2, 3),
     total_sec = c(3, 4),
     peak_rss_gb = c(1, 1),
+    graph_n_vertices = c(100L, 100L),
     n_edges = c(500L, 500L),
     n_communities = c(3L, 5L),
     modularity = c(0.4, 0.35),
@@ -1514,6 +1515,7 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
   expect_type(out$n_clusters_requested, "integer")
   expect_equal(sort(as.integer(out$n_clusters_requested)), c(3L, 5L))
   expect_equal(sort(out$n_clusters_source), c("labels", "stored_graph_target"))
+  expect_equal(out$median_graph_n_vertices, c(100, 100))
 })
 
 test_that("graph benchmark recommendations preserve integer target counts", {
