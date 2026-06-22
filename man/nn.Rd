@@ -93,8 +93,12 @@ persisting, `"fixed"` uses fixed defaults with tuning metadata, and
 FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
 `k`, and `metric`, including separate small-`k` Euclidean,
 small-`k` metric-aware, balanced, and high-recall tiers; explicit
-`faissR.faiss_hnsw_*` options override those defaults. Advanced tuning and
-cache knobs use `options(faissR.<name> = ...)`.}
+`faissR.faiss_hnsw_*` options override those defaults. FAISS IVF/IVFPQ
+use deterministic shape/k/metric-aware `nlist`/`nprobe` defaults; optional
+FAISS GPU IVF `"cache"`/`"pilot"` tuning currently runs only for Euclidean
+IVF, while non-Euclidean IVF routes use deterministic metric-aware
+defaults. Advanced tuning and cache knobs use
+`options(faissR.<name> = ...)`.}
 
 \item{output}{Distance storage type for the returned object. `"double"`
 returns the default R numeric distance matrix. `"float"` returns
@@ -190,13 +194,14 @@ Method descriptions:
   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records
-  deterministic no-pilot `tuning_policy`, `tuning_rule`, and shape/k flags in
-  approximation metadata.
+  deterministic no-pilot `tuning_policy`, `tuning_rule`, shape/k flags,
+  `tuning_metric`, and `tuning_metric_aware` in approximation metadata.
   \item `"ivfpq"`: FAISS inverted-file index with product quantization,
   mainly for compressed-memory approximate search. It supports L2, raw IP,
   and normalized-IP cosine/correlation routes on CPU and FAISS GPU [1-2,6,16].
-  IVF and PQ parameter selectors record deterministic tuning metadata; PQ
-  fields use `pq_tuning_*` names.
+  It reuses the metric-aware IVF probing defaults. IVF and PQ parameter
+  selectors record deterministic tuning metadata; PQ fields use
+  `pq_tuning_*` names.
   \item `"vamana"`: DiskANN/Vamana-style robust-pruned candidate graph
   implemented in faissR [24]. CPU refines exact top-k within candidate rows
   using native CPU scoring; CUDA refines candidates with faissR's native

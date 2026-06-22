@@ -23,7 +23,9 @@
 #'   backend support matrix.
 #' @param tuning Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
 #'   deterministic default for the resolved method; pilot/cache tuning is
-#'   opt-in.
+#'   opt-in where implemented. FAISS GPU IVF pilot/cache tuning is
+#'   Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware
+#'   defaults.
 #' @param task `"auto"`, `"classification"`, or `"regression"`. `"auto"` treats
 #'   numeric responses as regression and other response types as classification.
 #' @param k Default number of neighbours used by `predict()` and by immediate
@@ -158,7 +160,9 @@ knn_model_fit <- function(Xtrain,
 #'   reused.
 #' @param tuning Tuning policy used for this prediction call. `"auto"` uses the
 #'   deterministic default for the resolved method; pilot/cache tuning is
-#'   opt-in.
+#'   opt-in where implemented. FAISS GPU IVF pilot/cache tuning is
+#'   Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware
+#'   defaults.
 #' @param vote `"majority"` or `"weighted"` for classification; `"majority"`
 #'   means an unweighted neighbour mean for regression.
 #' @param type `"response"` for class/regression predictions or `"prob"` for

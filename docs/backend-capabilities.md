@@ -52,8 +52,8 @@ with method-specific parameters.
 | `"bruteforce"` | Native exact CPU KNN. | Euclidean prefers direct RAPIDS cuVS brute force; cosine, correlation, and inner product use FAISS GPU Flat when available. | Exhaustive route, useful for FAISS/cuVS comparisons [1-3,16]. |
 | `"grid"` | Native exact 2D/3D grid for Euclidean, cosine, and correlation. | Native CUDA 2D/3D grid for Euclidean, cosine, and correlation. | Low-dimensional spatial or simulated data; cosine/correlation use normalized Euclidean grid search; explicit grid requests error outside two or three columns. |
 | `"hnsw"` | FAISS CPU HNSW for all four public metrics when FAISS is available; RcppHNSW/hnswlib fallback otherwise. | RAPIDS cuVS HNSW for Euclidean/L2, normalized cosine/correlation, and transformed raw inner product. | High-recall graph search. CUDA HNSW is built from a CUDA CAGRA index and searched through the cuVS HNSW wrapper; raw inner product uses a maximum-inner-product-to-L2 extra-dimension transform [3,5,16,22-23]. |
-| `"ivf"` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | Large approximate search with coarse-list probing [1-2,16]. |
-| `"ivfpq"` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | Compressed-memory approximate search [6,16]. |
+| `"ivf"` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP with metric-aware default probing. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP with metric-aware deterministic defaults. | Large approximate search with coarse-list probing [1-2,16]. |
+| `"ivfpq"` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP with metric-aware IVF probing. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP with metric-aware IVF probing. | Compressed-memory approximate search [6,16]. |
 | `"vamana"` | Native DiskANN/Vamana-style robust-pruned candidate graph with CPU candidate refinement. | Native DiskANN/Vamana-style robust-pruned candidate graph with CUDA row-candidate refinement. | Distinct pruned directed graph route inspired by DiskANN/Vamana; cuVS Vamana is acknowledged for GPU build/serialization, but faissR performs KNN candidate refinement because cuVS Vamana search is not exposed yet [3,24]. |
 | `"nsg"` | FAISS CPU NSG for Euclidean/L2; native CPU NSG-style candidate graph for cosine, correlation, and inner product self-KNN. | Native CUDA NSG-style candidate graph for Euclidean, cosine, correlation, and inner product self-KNN. | Optional graph-search baseline. CPU non-L2 requests avoid unsafe linked-FAISS graph construction and use faissR-owned NSG-style candidate refinement; cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances [16,21,29]. |
 | `"nndescent"` | Native CPU NNDescent for Euclidean/L2, cosine, correlation, and raw inner product. | Direct RAPIDS cuVS NN-descent for Euclidean/L2, cosine, and correlation; faissR native CUDA candidate refinement for raw inner product. | Approximate KNN graph construction; cosine/correlation use normalized Euclidean search, CPU and native CUDA raw inner product use shifted dot-product distances, and FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
@@ -158,14 +158,15 @@ that reports GPU support, not only a CPU FAISS installation.
 ## Tuning And Approximation Metadata
 
 Approximate GPU routes use deterministic no-pilot defaults for
-`tuning = "auto"`. FAISS GPU IVF records fixed shape-aware `nlist`/`nprobe`
-metadata, and cuVS CAGRA records fixed graph/search metadata. Approximate
+`tuning = "auto"`. FAISS IVF records fixed shape/k/metric-aware
+`nlist`/`nprobe` metadata, and cuVS CAGRA records fixed graph/search metadata. Approximate
 results record relevant parameters in `attr(result, "approximation")`.
 Approximate selectors use deterministic no-pilot parameter rules unless the user
 explicitly enables a pilot/cache policy for routes such as FAISS GPU IVF or cuVS
 CAGRA. IVF, IVFPQ/PQ, NSG, NN-descent, CAGRA, and HNSW record
 `tuning_policy`, `tuning_rule`, and relevant shape flags in approximation
-metadata; PQ compression selectors use `pq_tuning_*` field names.
+metadata; IVF also records `tuning_metric`/`tuning_metric_aware`, and PQ
+compression selectors use `pq_tuning_*` field names.
 
 Exact routes mark `attr(result, "exact") = TRUE`. Approximate routes mark
 `exact = FALSE`, and benchmark code should report recall or explicitly mark

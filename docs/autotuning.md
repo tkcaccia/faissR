@@ -63,9 +63,9 @@ implementation routes recorded in benchmark output, not separate public
 | `hnsw` | `faiss_hnsw` high-recall tier | CPU high-recall tier | M = 48, efConstruction = 240, efSearch = max(220, 3k); used for large-k high-dimensional searches and high-dimensional non-Euclidean searches where normalized IP/correlation routes need extra graph-search breadth. |
 | `hnsw` | `hnsw`/hnswlib fallback | CPU fallback | Good fallback when FAISS is unavailable, but FAISS HNSW is preferred when FAISS is built. |
 | `ivf` | `faiss_ivf` speed tier | CPU IVF speed tier | nprobe = 4; too low-recall on many datasets, not a default accuracy path. |
-| `ivf` | `faiss_ivf` balanced tier | CPU IVF middle tier | Default `nprobe` now uses at least 16 probes; useful when HNSW is not desired. |
-| `ivf` | `faiss_ivf` high-recall tier | CPU IVF high-recall tier | nprobe = 16 in the benchmark; often much better recall, but slower on image data. |
-| `ivf` | `faiss_gpu_ivf_flat` | CUDA IVF-Flat | Useful but not consistently faster than exact GPU on these sample sizes; use explicit `tuning = "cache"` or `"pilot"` when a run should validate candidate `nlist`/`nprobe` settings. |
+| `ivf` | `faiss_ivf` balanced tier | CPU IVF middle tier | Default `nprobe` now uses at least 16 probes; cosine, correlation, and raw inner-product routes use a deterministic metric-aware probe increase and record `tuning_metric`/`tuning_metric_aware`. Useful when HNSW is not desired. |
+| `ivf` | `faiss_ivf` high-recall tier | CPU IVF high-recall tier | Larger `k` and million-row shapes increase probe breadth through deterministic `n`/`k` rules; non-Euclidean metrics add the metric-aware probe tier. This is often much better recall, but slower on image data. |
+| `ivf` | `faiss_gpu_ivf_flat` | CUDA IVF-Flat | Useful but not consistently faster than exact GPU on these sample sizes. Deterministic `tuning = "auto"` is metric-aware; explicit `tuning = "cache"` or `"pilot"` currently runs only for Euclidean IVF because the pilot reference/candidates are raw-L2. |
 | `ivf` | `cuda_cuvs_ivf_flat` | CUDA cuVS IVF-Flat | Direct Euclidean/L2 benchmark route. Fast on low-dimensional flow/simulated data at about 0.99-0.999 recall; not high-recall default. |
 | `ivfpq` | `faiss_ivfpq` speed/balanced tiers | CPU memory-pressure tier | Low recall on many datasets; use only when memory reduction is the priority [6]. |
 | `ivfpq` | `faiss_gpu_ivfpq` | CUDA memory-pressure tier | Fast but low recall in this benchmark; explicit opt-in only. |
@@ -89,9 +89,10 @@ direct cuVS route on machines where FAISS GPU CAGRA is unavailable.
 Approximate routes now attach deterministic no-pilot tuning metadata to
 `attr(result, "approximation")`. IVF, IVFPQ/PQ, NSG, NN-descent, CAGRA, and
 HNSW report `tuning_policy`, `tuning_rule`, and shape flags where relevant;
-IVFPQ/PQ compression fields use `pq_tuning_*` names. These fields let benchmark
-tables compare parameter tiers by dataset shape, `k`, and metric without
-running extra tuning inside ordinary `nn()` calls.
+IVF also records `tuning_metric` and `tuning_metric_aware`, and IVFPQ/PQ
+compression fields use `pq_tuning_*` names. These fields let benchmark tables
+compare parameter tiers by dataset shape, `k`, and metric without running extra
+tuning inside ordinary `nn()` calls.
 
 ## ImageNet Probe
 

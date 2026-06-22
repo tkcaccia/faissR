@@ -2607,14 +2607,28 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   ivf <- faissR:::faiss_ivf_params(70000L, 50L)
   expect_equal(ivf$tuning_policy, "auto_shape_k")
   expect_equal(ivf$tuning_rule, "balanced_shape_k")
+  expect_equal(ivf$tuning_metric, "euclidean")
+  expect_false(isTRUE(ivf$tuning_metric_aware))
   expect_false(isTRUE(ivf$tuning_small_k))
   expect_false(isTRUE(ivf$tuning_large_k))
   expect_equal(anyDuplicated(names(ivf)), 0L)
+
+  metric_ivf <- faissR:::faiss_ivf_params(70000L, 50L, metric = "correlation")
+  expect_equal(metric_ivf$tuning_rule, "metric_balanced_shape_k")
+  expect_equal(metric_ivf$tuning_metric, "correlation")
+  expect_true(isTRUE(metric_ivf$tuning_metric_aware))
+  expect_true(metric_ivf$nprobe >= ivf$nprobe)
+  expect_equal(anyDuplicated(names(metric_ivf)), 0L)
 
   large_ivf <- faissR:::faiss_ivf_params(1000000L, 100L)
   expect_equal(large_ivf$tuning_rule, "large_n_coarse_quantizer")
   expect_true(isTRUE(large_ivf$tuning_large_n))
   expect_true(isTRUE(large_ivf$tuning_large_k))
+
+  large_metric_ivf <- faissR:::faiss_ivf_params(1000000L, 100L, metric = "inner_product")
+  expect_equal(large_metric_ivf$tuning_rule, "metric_large_n_coarse_quantizer")
+  expect_equal(large_metric_ivf$tuning_metric, "inner_product")
+  expect_true(isTRUE(large_metric_ivf$tuning_metric_aware))
 
   pq <- faissR:::faiss_pq_params(784L)
   expect_equal(pq$tuning_policy, "auto_dimension")
@@ -3017,6 +3031,8 @@ test_that("real FAISS IVF backend records approximate index metadata", {
       expect_equal(attr(metric_out, "approximation")$metric, metric)
       expect_equal(attr(metric_out, "approximation")$tuning_policy, "manual_options")
       expect_equal(attr(metric_out, "approximation")$tuning_rule, "small_k_speed")
+      expect_equal(attr(metric_out, "approximation")$tuning_metric, metric)
+      expect_true(isTRUE(attr(metric_out, "approximation")$tuning_metric_aware))
       expect_true(all(is.finite(metric_out$distances)))
     }
 
@@ -3035,6 +3051,8 @@ test_that("real FAISS IVF backend records approximate index metadata", {
       expect_equal(attr(metric_out, "approximation")$metric, metric)
       expect_equal(attr(metric_out, "approximation")$tuning_policy, "manual_options")
       expect_equal(attr(metric_out, "approximation")$tuning_rule, "small_k_speed")
+      expect_equal(attr(metric_out, "approximation")$tuning_metric, metric)
+      expect_true(isTRUE(attr(metric_out, "approximation")$tuning_metric_aware))
       expect_equal(attr(metric_out, "approximation")$pq_tuning_policy, "auto_dimension")
       expect_true(all(is.finite(metric_out$distances)))
     }

@@ -39,7 +39,9 @@ inner product; see \code{\link{nn}()} for metric/backend support details,
 including metric-aware CPU HNSW routing.}
 
 \item{tuning}{Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
-deterministic no-pilot default for the resolved method.}
+deterministic no-pilot default for the resolved method. FAISS IVF/IVFPQ
+routes use metric-aware defaults; optional FAISS GPU IVF pilot/cache tuning
+is Euclidean-only.}
 
 \item{output}{Distance storage type: `"double"` for the default R numeric
 matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the

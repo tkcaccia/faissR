@@ -36,7 +36,7 @@ as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and 
 canonical metric labels. Correlation is centered cosine similarity, not raw
 inner product. See \code{nn()} for metric/backend support details, including
 metric-aware CPU HNSW routing.}
-\item{tuning}{Tuning policy passed to \code{nn()}. \code{"auto"} uses the deterministic default for the resolved method; \code{"cache"} and \code{"pilot"} opt into pilot tuning.}
+\item{tuning}{Tuning policy passed to \code{nn()}. \code{"auto"} uses the deterministic default for the resolved method; \code{"cache"} and \code{"pilot"} opt into pilot tuning where implemented. FAISS GPU IVF pilot/cache tuning is Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware defaults.}
 \item{task}{\code{"auto"}, \code{"classification"}, or \code{"regression"}. \code{"auto"} treats numeric responses as regression and other response types as classification.}
 \item{k}{Default number of neighbours used by \code{predict()} and by immediate predictions when \code{Xtest} is supplied.}
 \item{n_threads}{CPU threads passed to \code{nn()} for CPU backends.}

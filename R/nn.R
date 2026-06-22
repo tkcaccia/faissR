@@ -562,7 +562,7 @@ nn_compute <- function(data,
         call. = FALSE
       )
     }
-    params <- faiss_ivf_params(nrow(data), k)
+    params <- faiss_ivf_params(nrow(data), k, metric = metric)
     if (metric %in% c("cosine", "correlation")) {
       return(faiss_ivf_normalized_metric_result(
         data = data,
@@ -614,7 +614,7 @@ nn_compute <- function(data,
         call. = FALSE
       )
     }
-    params <- faiss_ivf_params(nrow(data), k)
+    params <- faiss_ivf_params(nrow(data), k, metric = metric)
     pq <- faiss_pq_params(ncol(data))
     if (metric %in% c("cosine", "correlation")) {
       return(faiss_ivfpq_normalized_metric_result(
@@ -675,9 +675,9 @@ nn_compute <- function(data,
         call. = FALSE
       )
     }
-    params <- faiss_ivf_params(nrow(data), k)
+    params <- faiss_ivf_params(nrow(data), k, metric = metric)
     tuning_metadata <- NULL
-    if (isTRUE(faiss_gpu_ivf_should_tune(data, k, self_query, tuning = tuning))) {
+    if (isTRUE(faiss_gpu_ivf_should_tune(data, k, self_query, tuning = tuning, metric = metric))) {
       tuned <- faiss_gpu_ivf_tune_params(data, k, params, tuning = tuning)
       params <- tuned$params
       tuning_metadata <- tuned$tuning
@@ -735,7 +735,7 @@ nn_compute <- function(data,
         call. = FALSE
       )
     }
-    params <- faiss_ivf_params(nrow(data), k)
+    params <- faiss_ivf_params(nrow(data), k, metric = metric)
     pq <- faiss_pq_params(ncol(data))
     if (metric %in% c("cosine", "correlation")) {
       return(faiss_ivfpq_normalized_metric_result(
@@ -1315,7 +1315,7 @@ nn_compute <- function(data,
       search_data <- metric_inputs$data
       search_points <- metric_inputs$points
     }
-    params <- faiss_ivf_params(nrow(data), k)
+    params <- faiss_ivf_params(nrow(data), k, metric = metric)
     out <- nn_cuvs_ivf_flat_cpp(
       search_data,
       search_points,
@@ -1358,7 +1358,7 @@ nn_compute <- function(data,
       search_data <- metric_inputs$data
       search_points <- metric_inputs$points
     }
-    params <- faiss_ivf_params(nrow(data), k)
+    params <- faiss_ivf_params(nrow(data), k, metric = metric)
     pq <- cuvs_ivfpq_params(ncol(search_data))
     out <- nn_cuvs_ivf_pq_cpp(
       search_data,
@@ -3894,7 +3894,8 @@ nn_tuning_metadata <- function(params, prefix = NULL) {
   if (!is.list(params)) return(list())
   fields <- c(
     "tuning_policy", "tuning_rule", "tuning_high_dim", "tuning_large_n",
-    "tuning_small_k", "tuning_large_k", "tuning_non_euclidean"
+    "tuning_small_k", "tuning_large_k", "tuning_non_euclidean",
+    "tuning_metric", "tuning_metric_aware"
   )
   fields <- fields[fields %in% names(params)]
   out <- params[fields]
@@ -4983,7 +4984,7 @@ faiss_self_knn <- function(data,
     )
     return(out)
   }
-  params <- faiss_ivf_params(n, k)
+  params <- faiss_ivf_params(n, k, metric = metric)
   out <- nn_faiss_ivf_cpp(
     data,
     data,
@@ -5351,20 +5352,27 @@ ivf_list_count <- function(n, k) {
   as.integer(max(4L, min(n, count, 1024L)))
 }
 
-ivf_probe_count <- function(nlist, k) {
+ivf_probe_count <- function(nlist, k, metric = "euclidean") {
   nlist <- as.integer(nlist)
   k <- as.integer(k)
-  as.integer(max(1L, min(nlist, max(16L, ceiling(sqrt(nlist)), ceiling(k / 3)))))
+  metric <- normalize_nn_metric(metric)
+  base <- max(16L, ceiling(sqrt(nlist)), ceiling(k / 3))
+  if (!identical(metric, "euclidean")) {
+    base <- max(base, ceiling(1.5 * base), ceiling(k / 2))
+  }
+  as.integer(max(1L, min(nlist, base)))
 }
 
-faiss_ivf_params <- function(n, k) {
+faiss_ivf_params <- function(n, k, metric = "euclidean") {
   n <- as.integer(n)
   k <- as.integer(k)
+  metric <- normalize_nn_metric(metric)
   small_k <- length(k) == 1L && !is.na(k) && k <= 10L
   large_k <- length(k) == 1L && !is.na(k) && k >= 100L
   large_n <- length(n) == 1L && !is.na(n) && n >= 1000000L
   manual <- faiss_ivf_manual_params()
-  rule <- if (isTRUE(large_n)) {
+  metric_aware <- !identical(metric, "euclidean")
+  base_rule <- if (isTRUE(large_n)) {
     "large_n_coarse_quantizer"
   } else if (isTRUE(large_k)) {
     "large_k_more_probe"
@@ -5372,6 +5380,11 @@ faiss_ivf_params <- function(n, k) {
     "small_k_speed"
   } else {
     "balanced_shape_k"
+  }
+  rule <- if (isTRUE(metric_aware) && !isTRUE(manual)) {
+    paste0("metric_", base_rule)
+  } else {
+    base_rule
   }
   nlist <- faissr_option(c("faiss_nlist", "ivf_nlist"), NULL)
   nprobe <- faissr_option(c("faiss_nprobe", "ivf_nprobe"), NULL)
@@ -5386,10 +5399,10 @@ faiss_ivf_params <- function(n, k) {
   }
   nlist <- max(1L, min(n, nlist))
 
-  nprobe <- if (is.null(nprobe)) ivf_probe_count(nlist, k) else suppressWarnings(as.integer(nprobe))
+  nprobe <- if (is.null(nprobe)) ivf_probe_count(nlist, k, metric = metric) else suppressWarnings(as.integer(nprobe))
   requested_nprobe <- nprobe
   if (length(nprobe) != 1L || is.na(nprobe) || !is.finite(nprobe)) {
-    nprobe <- ivf_probe_count(nlist, k)
+    nprobe <- ivf_probe_count(nlist, k, metric = metric)
   }
   if (length(requested_nprobe) != 1L || is.na(requested_nprobe) || !is.finite(requested_nprobe)) {
     requested_nprobe <- nprobe
@@ -5402,6 +5415,8 @@ faiss_ivf_params <- function(n, k) {
     requested_nprobe = as.integer(requested_nprobe),
     tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_shape_k",
     tuning_rule = rule,
+    tuning_metric = metric,
+    tuning_metric_aware = isTRUE(metric_aware),
     tuning_large_n = isTRUE(large_n),
     tuning_small_k = isTRUE(small_k),
     tuning_large_k = isTRUE(large_k)
@@ -5483,10 +5498,12 @@ faiss_gpu_ivf_tune_cache_file <- function() {
   file.path(root, "faiss_gpu_ivf_tuning.rds")
 }
 
-faiss_gpu_ivf_should_tune <- function(data, k, self_query, tuning = "auto") {
+faiss_gpu_ivf_should_tune <- function(data, k, self_query, tuning = "auto", metric = "euclidean") {
   tuning <- normalize_nn_tuning(tuning)
+  metric <- normalize_nn_metric(metric)
   policy <- faiss_gpu_ivf_tune_policy(tuning)
   if (!policy %in% c("cache", "pilot")) return(FALSE)
+  if (!identical(metric, "euclidean")) return(FALSE)
   if (!isTRUE(self_query)) return(FALSE)
   if (!isTRUE(faiss_gpu_available())) return(FALSE)
   if (isTRUE(faiss_ivf_manual_params())) return(FALSE)
@@ -6601,13 +6618,14 @@ grid_self_knn <- function(data,
 #'   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
 #'   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
 #'   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records
-#'   deterministic no-pilot `tuning_policy`, `tuning_rule`, and shape/k flags in
-#'   approximation metadata.
+#'   deterministic no-pilot `tuning_policy`, `tuning_rule`, shape/k flags,
+#'   `tuning_metric`, and `tuning_metric_aware` in approximation metadata.
 #'   \item `"ivfpq"`: FAISS inverted-file index with product quantization,
 #'   mainly for compressed-memory approximate search. It supports L2, raw IP,
 #'   and normalized-IP cosine/correlation routes on CPU and FAISS GPU [1-2,6,16].
-#'   IVF and PQ parameter selectors record deterministic tuning metadata; PQ
-#'   fields use `pq_tuning_*` names.
+#'   It reuses the metric-aware IVF probing defaults. IVF and PQ parameter
+#'   selectors record deterministic tuning metadata; PQ fields use
+#'   `pq_tuning_*` names.
 #'   \item `"vamana"`: DiskANN/Vamana-style robust-pruned candidate graph
 #'   implemented in faissR [24]. CPU refines exact top-k within candidate rows
 #'   using native CPU scoring; CUDA refines candidates with faissR's native
@@ -6731,8 +6749,12 @@ grid_self_knn <- function(data,
 #'   FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
 #'   `k`, and `metric`, including separate small-`k` Euclidean,
 #'   small-`k` metric-aware, balanced, and high-recall tiers; explicit
-#'   `faissR.faiss_hnsw_*` options override those defaults. Advanced tuning and
-#'   cache knobs use `options(faissR.<name> = ...)`.
+#'   `faissR.faiss_hnsw_*` options override those defaults. FAISS IVF/IVFPQ
+#'   use deterministic shape/k/metric-aware `nlist`/`nprobe` defaults; optional
+#'   FAISS GPU IVF `"cache"`/`"pilot"` tuning currently runs only for Euclidean
+#'   IVF, while non-Euclidean IVF routes use deterministic metric-aware
+#'   defaults. Advanced tuning and cache knobs use
+#'   `options(faissR.<name> = ...)`.
 #' @param output Distance storage type for the returned object. `"double"`
 #'   returns the default R numeric distance matrix. `"float"` returns
 #'   `distances` as a `float::fl()`/`float32` object and records
@@ -6847,7 +6869,9 @@ nn <- function(data,
 #'   inner product; see \code{\link{nn}()} for metric/backend support details,
 #'   including metric-aware CPU HNSW routing.
 #' @param tuning Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
-#'   deterministic no-pilot default for the resolved method.
+#'   deterministic no-pilot default for the resolved method. FAISS IVF/IVFPQ
+#'   routes use metric-aware defaults; optional FAISS GPU IVF pilot/cache tuning
+#'   is Euclidean-only.
 #' @param output Distance storage type: `"double"` for the default R numeric
 #'   matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
 #'   optional `float` package is installed. `float::fl()` input matrices use
