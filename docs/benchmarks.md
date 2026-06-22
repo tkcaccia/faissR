@@ -98,17 +98,24 @@ flags and backend/method decision reasons when those fields are attached to the
 If a non-standard runtime library directory is needed, set `FAISSR_ENV_DIR`
 explicitly before launch. The script no longer treats an unrelated active
 `CONDA_PREFIX` as a FAISS runtime, which avoids accidental library-path
-pollution on local machines. CPU worker threads are controlled with environment
-variables such as `OMP_NUM_THREADS`; the benchmark worker avoids loading
-optional thread-control helper packages before FAISS/cuVS.
+pollution on local machines. On Linux systems where another `libstdc++` is
+loaded before RAPIDS cuVS, also set `FAISSR_LD_PRELOAD` to the FAISS runtime
+`libstdc++.so.6`, or let Benchmark #1 derive that path from `FAISSR_ENV_DIR`
+for its child workers. `LD_PRELOAD` must be present before each worker R process
+starts; setting it after `library(faissR)` is too late for this class of dynamic
+linker failure. CPU worker threads are controlled with environment variables
+such as `OMP_NUM_THREADS`; the benchmark worker avoids loading optional
+thread-control helper packages before FAISS/cuVS.
 Benchmark #1 accepts the public metric aliases `euclidean`, `pearson`, `cor`,
 `ip`, and `innerproduct`, but unknown metric labels now stop the launcher before
 workers are submitted. Numeric controls that define the timing and quality
 envelope, including `--threads`, `--timeout`, `--quality_n`, and
 `--quality_max_ops`, are validated before workers are submitted.
 
-The same explicit-runtime convention is used by the NN metrics and k-means
-benchmark scripts.
+The same explicit-runtime convention is used by the NN metrics, k-means, and
+graph-clustering benchmark scripts. For direct single-process scripts, export
+`LD_PRELOAD` in the shell before starting `Rscript` when the runtime requires a
+newer C++ standard library than the system default.
 
 The legacy Benchmark #1 summary file `benchmark1_best_by_dataset.csv` is
 quality-aware: within each dataset/metric/k group it ranks successful KNN rows

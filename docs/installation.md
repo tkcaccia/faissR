@@ -124,6 +124,8 @@ If CUDA/cuVS/cuGraph is not available, install the CPU package with FAISS only.
 | `NVCC` | Optional explicit CUDA compiler path. |
 | `PKG_CONFIG_PATH` | Helps locate FAISS/cuVS/cuGraph `.pc` files. |
 | `LD_LIBRARY_PATH` / `DYLD_LIBRARY_PATH` | Runtime library search path on Linux/macOS. |
+| `LD_PRELOAD` | Optional Linux process-start preload. Use this for the FAISS/cuVS runtime `libstdc++.so.6` when the system C++ standard library is loaded first. |
+| `FAISSR_LD_PRELOAD` | Benchmark-launcher convenience variable forwarded to worker R processes as `LD_PRELOAD`. |
 
 CPU exact-search diagnostics can be controlled with:
 

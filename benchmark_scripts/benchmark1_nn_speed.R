@@ -48,7 +48,8 @@ preload_candidates <- c(
   if (nzchar(faiss_env_dir)) file.path(faiss_env_dir, "lib/libstdc++.so.6") else "",
   Sys.getenv("LD_PRELOAD")
 )
-faiss_preload <- paste(preload_candidates[nzchar(preload_candidates)], collapse = ":")
+preload_candidates <- unique(preload_candidates[nzchar(preload_candidates) & file.exists(preload_candidates)])
+faiss_preload <- paste(preload_candidates, collapse = ":")
 env_updates <- list()
 if (nzchar(faiss_env_dir)) env_updates$CONDA_PREFIX <- faiss_env_dir
 if (nzchar(faiss_library_path)) env_updates$LD_LIBRARY_PATH <- faiss_library_path
