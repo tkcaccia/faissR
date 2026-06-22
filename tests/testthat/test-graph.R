@@ -567,6 +567,9 @@ test_that("graph_cluster can target a requested number of communities", {
   expect_equal(cl$parameters$n_vertices, length(cl$membership))
   expect_equal(cl$parameters$n_edges, cl$graph$n_edges)
   expect_lte(abs(cl$n_communities - 3L), 1L)
+  printed <- capture.output(print(cl))
+  expect_true(any(grepl("target communities: 3", printed, fixed = TRUE)))
+  expect_true(any(grepl("selected resolution:", printed, fixed = TRUE)))
 
   expect_error(
     graph_cluster(x, method = "random_walking", backend = "cpu", graph_backend = "cpu", k = 8L, n_clusters = 3L),

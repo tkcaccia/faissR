@@ -694,6 +694,12 @@ print.faissR_graph_cluster <- function(x, ...) {
   cat("  implementation: ", x$implementation %||% "native_cpp", "\n", sep = "")
   cat("  vertices: ", length(x$membership), "\n", sep = "")
   cat("  communities: ", length(unique(x$membership)), "\n", sep = "")
+  if (!is.null(x$target_n_clusters)) {
+    cat("  target communities: ", x$target_n_clusters, "\n", sep = "")
+  }
+  if (!is.null(x$selected_resolution)) {
+    cat("  selected resolution: ", format(x$selected_resolution, digits = 4), "\n", sep = "")
+  }
   cat("  modularity: ", format(x$modularity, digits = 4), "\n", sep = "")
   invisible(x)
 }
