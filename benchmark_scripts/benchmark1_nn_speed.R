@@ -904,6 +904,23 @@ benchmark_method_aliases <- function(methods) {
   unique(out[nzchar(out)])
 }
 
+benchmark1_method_values <- function(methods, valid_methods = method_table()$method) {
+  values <- benchmark_method_aliases(strsplit(methods %||% "", ",", fixed = TRUE)[[1L]])
+  if (!length(values)) {
+    stop("`methods` must contain at least one method.", call. = FALSE)
+  }
+  invalid <- values[!values %in% valid_methods]
+  if (length(invalid)) {
+    stop(
+      "`methods` contains invalid Benchmark #1 method value(s): ",
+      paste(invalid, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  values
+}
+
 if (worker) {
   dataset <- args$dataset
   data_path <- args$data_path
@@ -1081,7 +1098,7 @@ if (!is.null(args$datasets)) {
 
 methods <- method_table()
 if (!is.null(args$methods)) {
-  wanted_methods <- benchmark_method_aliases(strsplit(args$methods, ",", fixed = TRUE)[[1L]])
+  wanted_methods <- benchmark1_method_values(args$methods, methods$method)
   methods <- methods[methods$method %in% wanted_methods, , drop = FALSE]
 }
 

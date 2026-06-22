@@ -613,6 +613,18 @@ test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
 
   aliases <- env$benchmark_method_aliases(c("flat", "faissR_faiss_flat_ip", "faissR_faiss_gpu_flat_ip"))
   expect_equal(aliases, c("faissR_faiss_flat_l2", "faissR_faiss_gpu_flat_l2"))
+  expect_equal(
+    env$benchmark1_method_values("flat,faissR_faiss_gpu_flat_ip", methods$method),
+    c("faissR_faiss_flat_l2", "faissR_faiss_gpu_flat_l2")
+  )
+  expect_error(
+    env$benchmark1_method_values("flat,unknown_method", methods$method),
+    "invalid Benchmark #1 method"
+  )
+  expect_error(
+    env$benchmark1_method_values("", methods$method),
+    "at least one method"
+  )
 
   expect_true(isTRUE(env$method_metric_applicable("faissR_faiss_flat_l2", "inner_product")$ok))
   expect_true(isTRUE(env$method_metric_applicable("faissR_faiss_gpu_flat_l2", "inner_product")$ok))
