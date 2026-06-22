@@ -30,6 +30,7 @@ List faiss_flat_float32_knn_impl(SEXP,
                                  int,
                                  bool,
                                  int,
+                                 std::string,
                                  std::string) {
   Rcpp::stop(
     "FAISS float32 Flat backend is not available. Reinstall faissR with "

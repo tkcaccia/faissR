@@ -521,6 +521,12 @@ Distance output remains an ordinary R numeric matrix by default. Calling
 `nn(..., output = "float")` or `nn_without_self(..., output = "float")` stores
 `distances` as a `float::fl()`/`float32` object and records both
 `distance_type = "float32"` and `attr(result, "distance_type") = "float32"`.
+On the float32 FAISS Flat route, faissR constructs the returned float32
+distance payload directly from FAISS's float results, so the common Euclidean,
+inner-product, cosine, and correlation cases avoid an intermediate R double
+distance matrix. The only fallback is the deterministic zero-row correction for
+cosine/correlation inputs with all-zero normalized rows, where faissR first
+repairs and sorts the double distance matrix before converting it to float32.
 KNN results also expose stable list fields for downstream packages:
 `index_base`, `metric`, and `backend_used`. The `float` package is in
 `Suggests`; faissR does not require it unless a user supplies a float32 object

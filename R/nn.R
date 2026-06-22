@@ -6,7 +6,8 @@ nn_compute <- function(data,
                        exclude_self = FALSE,
                        n_threads = NULL,
                        metric = "euclidean",
-                       tuning = "auto") {
+                       tuning = "auto",
+                       output = "double") {
   requested_backend <- backend
   tuning <- normalize_nn_tuning(tuning)
   data_sparse <- is_sparse_matrix_input(data)
@@ -117,7 +118,8 @@ nn_compute <- function(data,
       as.integer(k),
       isTRUE(exclude_self),
       as.integer(n_threads),
-      metric
+      metric,
+      output
     )
     return(finish_nn_result(
       out,
@@ -5888,7 +5890,10 @@ grid_self_knn <- function(data,
 #'   `float` package. When either `data` or `points` is a `float::fl()` matrix,
 #'   the current float32 input route uses CPU FAISS Flat for public
 #'   `method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests, with
-#'   ordinary R double inputs converted once to float32 internally.
+#'   ordinary R double inputs converted once to float32 internally. On that
+#'   route, float distance output is constructed directly from FAISS float
+#'   results instead of first materializing an R double distance matrix, except
+#'   for zero-row cosine/correlation correction.
 #' @param distances Optional alias for `output`, kept for callers that prefer
 #'   `distances = "double"` or `distances = "float"` to describe the returned
 #'   distance storage type.
@@ -5952,7 +5957,8 @@ nn <- function(data,
     exclude_self = FALSE,
     n_threads = n_threads,
     metric = metric,
-    tuning = tuning
+    tuning = tuning,
+    output = output
   )
   attr(result, "requested_backend") <- backend
   attr(result, "requested_method") <- public_nn_method_label(method)
@@ -6036,7 +6042,8 @@ nn_without_self <- function(data,
     exclude_self = TRUE,
     n_threads = n_threads,
     metric = metric,
-    tuning = tuning
+    tuning = tuning,
+    output = output
   )
   attr(result, "requested_backend") <- backend
   attr(result, "requested_method") <- public_nn_method_label(method)

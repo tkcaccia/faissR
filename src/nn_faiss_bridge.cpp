@@ -17,7 +17,8 @@ List faiss_flat_float32_knn_impl(SEXP data,
                                  int k,
                                  bool exclude_self,
                                  int n_threads,
-                                 std::string metric);
+                                 std::string metric,
+                                 std::string distance_storage);
 List faiss_ivf_knn_impl(NumericMatrix data,
                         NumericMatrix points,
                         int k,
@@ -157,9 +158,10 @@ List nn_faiss_flat_float32_cpp(SEXP data,
                                int k,
                                bool exclude_self,
                                int n_threads,
-                               std::string metric) {
+                               std::string metric,
+                               std::string distance_storage) {
   return faiss_flat_float32_knn_impl(
-    data, points, k, exclude_self, n_threads, metric
+    data, points, k, exclude_self, n_threads, metric, distance_storage
   );
 }
 
@@ -191,7 +193,9 @@ void maybe_convert_float32_distances(List& out, const std::string& distances) {
     }
     Rcpp::Environment float_ns = Rcpp::Environment::namespace_env("float");
     Rcpp::Function fl = float_ns["fl"];
-    out["distances"] = fl(out["distances"]);
+    if (!Rf_inherits(out["distances"], "float32")) {
+      out["distances"] = fl(out["distances"]);
+    }
     out["distance_type"] = "float32";
     out.attr("distance_type") = "float32";
   } else {
@@ -228,7 +232,8 @@ List faissR_nn_float32_call_impl(SEXP x,
     kk,
     !include_self_value,
     n_threads_value,
-    metric_value
+    metric_value,
+    distances_value
   );
   const std::string backend_used = float32_backend_used(metric_value);
   maybe_convert_float32_distances(out, distances_value);

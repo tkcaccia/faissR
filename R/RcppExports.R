@@ -205,8 +205,8 @@ nn_faiss_flat_cpp <- function(data, points, k, exclude_self, n_threads) {
     .Call(`_faissR_nn_faiss_flat_cpp`, data, points, k, exclude_self, n_threads)
 }
 
-nn_faiss_flat_float32_cpp <- function(data, points, k, exclude_self, n_threads, metric) {
-    .Call(`_faissR_nn_faiss_flat_float32_cpp`, data, points, k, exclude_self, n_threads, metric)
+nn_faiss_flat_float32_cpp <- function(data, points, k, exclude_self, n_threads, metric, distance_storage) {
+    .Call(`_faissR_nn_faiss_flat_float32_cpp`, data, points, k, exclude_self, n_threads, metric, distance_storage)
 }
 
 nn_faiss_ivf_cpp <- function(data, points, k, nlist, nprobe, metric, distance_output, exclude_self, n_threads) {

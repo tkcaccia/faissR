@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -323,7 +324,8 @@ List format_faiss_result(const std::vector<faiss::idx_t>& labels,
                          const int nlist,
                          const int nprobe,
                          const int graph_degree,
-                         const int search_width);
+                         const int search_width,
+                         const bool float_distances = false);
 
 List search_faiss_flat_float32_ptr(const float* data,
                                    const int n,
@@ -334,7 +336,8 @@ List search_faiss_flat_float32_ptr(const float* data,
                                    const bool exclude_self,
                                    const bool self_query,
                                    const int n_threads,
-                                   const std::string& metric) {
+                                   const std::string& metric,
+                                   const bool float_distances = false) {
   if (data == nullptr || points == nullptr) {
     Rcpp::stop("FAISS float32 Flat search received a null data pointer");
   }
@@ -390,7 +393,8 @@ List search_faiss_flat_float32_ptr(const float* data,
     NA_INTEGER,
     NA_INTEGER,
     NA_INTEGER,
-    NA_INTEGER
+    NA_INTEGER,
+    float_distances
   );
 }
 
@@ -408,11 +412,19 @@ List format_faiss_result(const std::vector<faiss::idx_t>& labels,
                          const int nlist = NA_INTEGER,
                          const int nprobe = NA_INTEGER,
                          const int graph_degree = NA_INTEGER,
-                         const int search_width = NA_INTEGER) {
+                         const int search_width = NA_INTEGER,
+                         const bool float_distances) {
   IntegerMatrix indices(n_points, out_k);
-  NumericMatrix dists(n_points, out_k);
+  NumericMatrix dists;
+  IntegerMatrix float_dists;
+  if (float_distances) {
+    float_dists = IntegerMatrix(n_points, out_k);
+  } else {
+    dists = NumericMatrix(n_points, out_k);
+  }
   int* indices_ptr = indices.begin();
-  double* dists_ptr = dists.begin();
+  double* dists_ptr = float_distances ? nullptr : dists.begin();
+  int* float_dists_ptr = float_distances ? float_dists.begin() : nullptr;
   const bool skip_self = exclude_self && self_query;
   const bool inner_product_output = distance_output == DistanceOutput::InnerProduct;
   const bool one_minus_ip_output = distance_output == DistanceOutput::OneMinusInnerProduct;
@@ -456,7 +468,16 @@ List format_faiss_result(const std::vector<faiss::idx_t>& labels,
       } else {
         value = std::sqrt(std::max(static_cast<double>(sq), 0.0));
       }
-      dists_ptr[output_offset] = value;
+      if (float_distances) {
+        const float value_f = static_cast<float>(value);
+        std::memcpy(
+          float_dists_ptr + output_offset,
+          &value_f,
+          sizeof(float)
+        );
+      } else {
+        dists_ptr[output_offset] = value;
+      }
       ++written;
     }
     if (written < out_k) {
@@ -467,9 +488,24 @@ List format_faiss_result(const std::vector<faiss::idx_t>& labels,
     Rcpp::stop("FAISS returned fewer neighbors than requested");
   }
 
+  SEXP distance_sexp = dists;
+  if (float_distances) {
+    Rcpp::Environment base = Rcpp::Environment::namespace_env("base");
+    Rcpp::Function require_namespace = base["requireNamespace"];
+    const bool ok = Rcpp::as<bool>(
+      require_namespace("float", Rcpp::Named("quietly") = true)
+    );
+    if (!ok) {
+      Rcpp::stop("`output = \"float\"` requires the optional float package");
+    }
+    Rcpp::S4 float_matrix("float32");
+    float_matrix.slot("Data") = float_dists;
+    distance_sexp = float_matrix;
+  }
+
   List out = List::create(
     Rcpp::Named("indices") = indices,
-    Rcpp::Named("distances") = dists,
+    Rcpp::Named("distances") = distance_sexp,
     Rcpp::Named("index_type") = index_type,
     Rcpp::Named("exact") = exact
   );
@@ -480,6 +516,10 @@ List format_faiss_result(const std::vector<faiss::idx_t>& labels,
   out["metric"] = distance_output == DistanceOutput::InnerProduct ?
     "inner_product_similarity_shifted_to_distance" :
     (distance_output == DistanceOutput::OneMinusInnerProduct ? "one_minus_inner_product" : "euclidean");
+  if (float_distances) {
+    out["distance_type"] = "float32";
+    out.attr("distance_type") = "float32";
+  }
   return out;
 }
 
@@ -633,7 +673,8 @@ List search_faiss_flat_float32(SEXP data,
                                int k,
                                bool exclude_self,
                                int n_threads,
-                               const std::string& metric) {
+                               const std::string& metric,
+                               const std::string& distance_storage = "double") {
   MatrixViewF32 xb = make_float32_matrix_view(data, "data");
   MatrixViewF32 xq = same_float32_object(data, points) ?
     MatrixViewF32() :
@@ -657,10 +698,25 @@ List search_faiss_flat_float32(SEXP data,
   std::vector<char> points_zero = same_storage ?
     data_zero :
     normalize_float32_view(xq, metric);
+  const bool normalized_metric = metric == "cosine" || metric == "correlation";
+  const bool wants_float_distances = distance_storage == "float" ||
+    distance_storage == "float32";
+  if (!wants_float_distances && distance_storage != "double") {
+    Rcpp::stop("`distance_storage` must be \"double\" or \"float\"");
+  }
+  auto has_zero = [](const std::vector<char>& values) {
+    for (char value : values) {
+      if (value != 0) return true;
+    }
+    return false;
+  };
+  const bool has_zero_normalized_rows = normalized_metric &&
+    (has_zero(data_zero) || has_zero(points_zero));
+  const bool direct_float_distances = wants_float_distances &&
+    !has_zero_normalized_rows;
 
   const int n_points = same_storage ? xb.nrow : xq.nrow;
   const float* query_ptr = same_storage ? xb.data : xq.data;
-  const bool normalized_metric = metric == "cosine" || metric == "correlation";
   List out = search_faiss_flat_float32_ptr(
     xb.data,
     xb.nrow,
@@ -671,9 +727,10 @@ List search_faiss_flat_float32(SEXP data,
     exclude_self,
     self_query,
     n_threads,
-    metric
+    metric,
+    direct_float_distances
   );
-  if (normalized_metric) {
+  if (normalized_metric && !direct_float_distances) {
     restore_zero_normalized_float32_rows(
       out, data_zero, points_zero, self_query, exclude_self
     );
@@ -687,6 +744,10 @@ List search_faiss_flat_float32(SEXP data,
   }
   out["input_type"] = "float32";
   out["input_layout"] = "float32_column_major_payload_to_row_major";
+  if (direct_float_distances) {
+    out["distance_type"] = "float32";
+    out.attr("distance_type") = "float32";
+  }
   return out;
 }
 
@@ -772,14 +833,16 @@ List faiss_flat_float32_knn_impl(SEXP data,
                                  int k,
                                  bool exclude_self,
                                  int n_threads,
-                                 std::string metric) {
+                                 std::string metric,
+                                 std::string distance_storage) {
   return search_faiss_flat_float32(
     data,
     points,
     k,
     exclude_self,
     n_threads,
-    metric
+    metric,
+    distance_storage
   );
 }
 

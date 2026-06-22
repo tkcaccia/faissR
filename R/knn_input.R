@@ -248,7 +248,9 @@ finalize_nn_output <- function(result, output = "double") {
   output <- normalize_nn_output(output)
   public_metric <- attr(result, "metric") %||% result$metric %||% "euclidean"
   if (identical(output, "float")) {
-    result$distances <- as_float_distances(result$distances)
+    if (!inherits(result$distances, "float32")) {
+      result$distances <- as_float_distances(result$distances)
+    }
     result$distance_type <- "float32"
     attr(result, "distance_type") <- "float32"
   } else {

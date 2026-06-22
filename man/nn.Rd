@@ -90,8 +90,8 @@ tuned default for the resolved method, `"cache"` reuses/stores pilot
 results, `"pilot"` tunes for this call without persisting, `"fixed"` uses
 fixed defaults with tuning metadata, and `"off"`/`"none"` disables tuning.
 FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
-`k`, and `metric`, including separate small-`k` Euclidean, small-`k`
-metric-aware, balanced, and high-recall tiers; explicit
+`k`, and `metric`, including separate small-`k` Euclidean,
+small-`k` metric-aware, balanced, and high-recall tiers; explicit
 `faissR.faiss_hnsw_*` options override those defaults. Advanced tuning and
 cache knobs use `options(faissR.<name> = ...)`.}
 
@@ -103,7 +103,10 @@ returns the default R numeric distance matrix. `"float"` returns
 `float` package. When either `data` or `points` is a `float::fl()` matrix,
 the current float32 input route uses CPU FAISS Flat for public
 `method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests, with
-ordinary R double inputs converted once to float32 internally.}
+ordinary R double inputs converted once to float32 internally. On that
+route, float distance output is constructed directly from FAISS float
+results instead of first materializing an R double distance matrix, except
+for zero-row cosine/correlation correction.}
 
 \item{distances}{Optional alias for `output`, kept for callers that prefer
 `distances = "double"` or `distances = "float"` to describe the returned

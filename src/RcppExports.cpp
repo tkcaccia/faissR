@@ -768,8 +768,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // nn_faiss_flat_float32_cpp
-List nn_faiss_flat_float32_cpp(SEXP data, SEXP points, int k, bool exclude_self, int n_threads, std::string metric);
-RcppExport SEXP _faissR_nn_faiss_flat_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP, SEXP metricSEXP) {
+List nn_faiss_flat_float32_cpp(SEXP data, SEXP points, int k, bool exclude_self, int n_threads, std::string metric, std::string distance_storage);
+RcppExport SEXP _faissR_nn_faiss_flat_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP, SEXP metricSEXP, SEXP distance_storageSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -779,7 +779,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
     Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_faiss_flat_float32_cpp(data, points, k, exclude_self, n_threads, metric));
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_flat_float32_cpp(data, points, k, exclude_self, n_threads, metric, distance_storage));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1115,7 +1116,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_faiss_available_cpp", (DL_FUNC) &_faissR_faiss_available_cpp, 0},
     {"_faissR_faiss_info_json_cpp", (DL_FUNC) &_faissR_faiss_info_json_cpp, 0},
     {"_faissR_nn_faiss_flat_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_cpp, 5},
-    {"_faissR_nn_faiss_flat_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_float32_cpp, 6},
+    {"_faissR_nn_faiss_flat_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_float32_cpp, 7},
     {"_faissR_nn_faiss_ivf_cpp", (DL_FUNC) &_faissR_nn_faiss_ivf_cpp, 9},
     {"_faissR_nn_faiss_flat_ip_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_ip_cpp, 5},
     {"_faissR_nn_faiss_flat_normalized_ip_distance_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_normalized_ip_distance_cpp, 5},

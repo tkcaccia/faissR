@@ -208,6 +208,12 @@ test_that("float32 input routes through FAISS Flat when float is installed", {
   expect_true(inherits(fout$distances, "float32"))
   expect_equal(fout$distance_type, "float32")
   expect_equal(attr(fout, "distance_type"), "float32")
+
+  raw_float <- faissR:::nn_faiss_flat_float32_cpp(
+    xf, xf, 2L, TRUE, 2L, "euclidean", "float"
+  )
+  expect_true(inherits(raw_float$distances, "float32"))
+  expect_equal(raw_float$distance_type, "float32")
 })
 
 test_that("float32 FAISS Flat input accepts mixed double and float32 query matrices", {
