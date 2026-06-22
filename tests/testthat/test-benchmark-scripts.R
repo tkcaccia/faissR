@@ -2309,6 +2309,28 @@ test_that("graph benchmark defaults cover requested methods backends and k grid"
   )
   expect_equal(env$default_graph_cycles(), 10L)
   expect_equal(
+    env$graph_build_preflight_route(
+      "cuda",
+      graph_method = "cagra",
+      metric = "euclidean",
+      graph_cagra_implementation = "faiss_gpu"
+    ),
+    "faiss_gpu_cagra"
+  )
+  expect_equal(
+    env$graph_build_preflight_route(
+      "cuda",
+      graph_method = "cagra",
+      metric = "euclidean",
+      graph_cagra_implementation = "cuvs"
+    ),
+    "cuda_cuvs_cagra"
+  )
+  expect_equal(
+    env$graph_build_preflight_route("cpu", graph_method = "flat", metric = "correlation"),
+    "faiss_flat_correlation"
+  )
+  expect_equal(
     env$validate_cagra_implementation_values(c("auto", "faiss", "direct-cuvs")),
     c("auto", "faiss_gpu", "cuvs")
   )

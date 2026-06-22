@@ -293,8 +293,8 @@ auditable.
 dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/
 clustering-method/weight/target-cluster-count and reports success counts, median/min/max graph,
 clustering, and total time, ARI stability, modularity stability, graph size,
-community counts, CPU thread count, preflight routes, compact graph-route
-parameter metadata, and resolved backend metadata.
+community counts, CPU thread count, method/metric/provider-aware preflight
+routes, compact graph-route parameter metadata, and resolved backend metadata.
 `graph_cluster_nn_capabilities.csv` stores the graph-construction
 `nn_capabilities(runtime = TRUE)` table, including `runtime_reason` and
 `runtime_notes` for runtime-unavailable KNN routes.
@@ -353,8 +353,10 @@ paper-ready methods text, including graph reuse, ARI/modularity reporting,
 target-cluster handling, expected-skip policy, and output-file definitions.
 The result table stores both requested and resolved public backend metadata:
 `graph_backend`/`cluster_backend` are the user requests, while
-`graph_preflight_route`/`cluster_preflight_route` show the resolver decision
-before runtime availability checks and
+`graph_preflight_route` shows the public NN resolver decision for the requested
+graph backend, method, metric, and CAGRA provider before runtime availability
+checks, while `cluster_preflight_route` shows the clustering backend resolver
+decision and
 `graph_resolved_backend`/`cluster_resolved_backend` show the public device
 policy recorded by successful result objects after `"auto"` resolution. The
 route columns and `n_threads` are also preserved in cycle summaries and

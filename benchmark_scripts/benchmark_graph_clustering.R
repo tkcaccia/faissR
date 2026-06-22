@@ -970,7 +970,22 @@ graph_cluster_expected_skip <- function(cluster_backend, method) {
   NULL
 }
 
-graph_build_preflight_route <- function(graph_backend) {
+graph_build_preflight_route <- function(graph_backend,
+                                        graph_method = "auto",
+                                        metric = "euclidean",
+                                        graph_cagra_implementation = NA_character_) {
+  old_options <- NULL
+  if (!is.na(graph_cagra_implementation)) {
+    old_options <- options(faissR.cagra_implementation = graph_cagra_implementation)
+    on.exit(options(old_options), add = TRUE)
+  }
+  helper <- tryCatch(getFromNamespace("resolve_public_nn_backend", "faissR"), error = function(e) NULL)
+  if (is.function(helper)) {
+    return(tryCatch(
+      as.character(helper(graph_backend, graph_method, metric))[1L],
+      error = function(e) NA_character_
+    ))
+  }
   helper <- tryCatch(getFromNamespace("resolve_knn_graph_backend", "faissR"), error = function(e) NULL)
   if (!is.function(helper)) return(NA_character_)
   tryCatch(as.character(helper(graph_backend))[1L], error = function(e) NA_character_)
@@ -1141,7 +1156,12 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
   n <- nrow(data_obj$data)
   p <- ncol(data_obj$data)
   started <- proc.time()[["elapsed"]]
-  graph_preflight_route <- graph_build_preflight_route(graph_backend)
+  graph_preflight_route <- graph_build_preflight_route(
+    graph_backend,
+    graph_method = graph_method,
+    metric = metric,
+    graph_cagra_implementation = graph_cagra_implementation
+  )
   old_options <- NULL
   if (!is.na(graph_cagra_implementation)) {
     old_options <- options(faissR.cagra_implementation = graph_cagra_implementation)
@@ -1219,7 +1239,12 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
   n <- nrow(data_obj$data)
   p <- ncol(data_obj$data)
   labels <- data_obj$labels
-  graph_preflight_route <- graph_build_preflight_route(graph_backend)
+  graph_preflight_route <- graph_build_preflight_route(
+    graph_backend,
+    graph_method = graph_method,
+    metric = metric,
+    graph_cagra_implementation = graph_cagra_implementation
+  )
   cluster_preflight_route <- graph_cluster_preflight_route(cluster_backend)
   n_clusters <- NULL
   n_clusters_source <- NA_character_
@@ -1458,7 +1483,12 @@ for (dataset_name in datasets) {
           for (graph_cagra_implementation in cagra_implementation_values_for(graph_backend, graph_method, cagra_implementations)) {
             for (cycle in seq_len(cycles)) {
               cycle_seed <- seed + (cycle - 1L) * 1000003L
-              graph_preflight_route <- graph_build_preflight_route(graph_backend)
+              graph_preflight_route <- graph_build_preflight_route(
+                graph_backend,
+                graph_method = graph_method,
+                metric = metric,
+                graph_cagra_implementation = graph_cagra_implementation
+              )
               graph_skip_reason <- graph_build_expected_skip(
                 graph_backend = graph_backend,
                 graph_method = graph_method,
@@ -1735,12 +1765,12 @@ materials <- c(
   "`n_clusters_requested` records the requested target community count for Louvain/Leiden rows. This is a convenience target, not a hard guarantee; the actual community count is stored separately as `n_communities`. `n_clusters_source` records whether that target came from dataset labels or no target. When a target is used, faissR evaluates a bounded deterministic resolution grid around the supplied resolution; `target_gap`, `resolution_selection`, `resolution_selected_candidate`, `resolution_candidates`, `resolution_min_target_gap`, `resolution_selected_is_min_gap`, and the selected resolution summarize the deterministic resolution-search decision.",
   "Each KNN graph is built once per dataset/cycle/k/graph-backend/graph-method/metric/weight combination and reused across clustering methods and clustering backends within that cycle. The graph benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs. `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
   "`graph_cluster_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, modularity, and total time for a compact backwards-compatible summary. `graph_cluster_best_by_dataset_k_target.csv` keeps the best successful row per dataset/k/graph-method/metric/CAGRA-provider/target-cluster-count combination so different neighbourhood sizes, KNN graph routes, CAGRA providers, metrics, and Louvain/Leiden target counts remain auditable.",
-  "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, graph size, community counts, selected resolution, target gap, resolution-selection rule, selected-candidate and candidate-count diagnostics, CPU thread count, preflight routes, compact graph-route parameter metadata, and resolved backend metadata.",
+  "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, graph size, community counts, selected resolution, target gap, resolution-selection rule, selected-candidate and candidate-count diagnostics, CPU thread count, method/metric/provider-aware preflight routes, compact graph-route parameter metadata, and resolved backend metadata.",
   "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering method row within `ari_tolerance` of the best median ARI for each dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/target-cluster-count combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median total times are broken by higher median ARI and then higher median modularity. When ARI is unavailable it selects the fastest median total-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
   "`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where graph or clustering backend was `auto` with recommendations from the same requested graph-backend/graph-method/metric/cluster-backend group and reports the recommendation basis, median speed ratio, median ARI gap, modularity gap, method agreement, and resolved-backend agreement. Speed ratios and quality gaps are `NA` when the required timing, ARI, or modularity values are unavailable or invalid.",
   "`graph_cluster_global_recommendations_from_cycles.csv` selects the fastest successful row within the ARI tolerance after pooling requested graph and clustering backends for each dataset/k/graph-method/metric/CAGRA-provider/target-cluster-count combination. This table audits the best observed CPU/CUDA route instead of only the best route inside each requested-backend group.",
   "`graph_cluster_auto_vs_global_recommendation.csv` compares aggregate auto rows with those global recommendations and records requested-backend agreement, resolved-backend agreement, method agreement, speed ratio, ARI gap, and modularity gap. This table is intended for refining graph and clustering auto selectors across CPU/CUDA choices.",
-  "`graph_backend` and `cluster_backend` record the requested public backends. `graph_preflight_route` and `cluster_preflight_route` record the public resolver decision before runtime availability checks; `graph_resolved_backend` and `cluster_resolved_backend` record the resolved device policy from successful result objects. These route columns and `n_threads` are preserved in cycle summaries and auto/recommendation comparisons, so CPU/CUDA rows can be audited without opening the R objects.",
+  "`graph_backend` and `cluster_backend` record the requested public backends. `graph_preflight_route` records the public NN resolver decision for the requested graph backend, method, metric, and CAGRA provider before runtime availability checks; `cluster_preflight_route` records the clustering backend resolver decision. `graph_resolved_backend` and `cluster_resolved_backend` record the resolved device policy from successful result objects. These route columns and `n_threads` are preserved in cycle summaries and auto/recommendation comparisons, so CPU/CUDA rows can be audited without opening the R objects.",
   "Unsupported graph-clustering combinations known from the public API, such as CUDA random_walking, are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. If every row in a graph-build block is an expected skip, graph construction is skipped and graph timing/edge columns remain `NA`.",
   "CUDA rows are recorded as expected skips when faissR was not built with the required CUDA/cuGraph support; unexpected CUDA runtime errors remain failed rows. The benchmark does not silently replace explicit CUDA clustering with CPU clustering."
 )
