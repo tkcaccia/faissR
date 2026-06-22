@@ -156,6 +156,18 @@ cagra_implementation_values_for <- function(backend, method, cagra_implementatio
   NA_character_
 }
 
+tag_cagra_capabilities <- function(cagra_capabilities) {
+  if (!length(cagra_capabilities)) return(data.frame())
+  out <- do.call(rbind, lapply(names(cagra_capabilities), function(name) {
+    x <- cagra_capabilities[[name]]
+    if (is.null(x) || !nrow(x)) return(NULL)
+    x$cagra_implementation <- name
+    x[, c("cagra_implementation", setdiff(names(x), "cagra_implementation")), drop = FALSE]
+  }))
+  row.names(out) <- NULL
+  out
+}
+
 default_nn_cycles <- function() {
   10L
 }
@@ -1389,6 +1401,14 @@ config <- data.frame(
 )
 utils::write.csv(config, file.path(out_dir, "nn_metric_benchmark_config.csv"), row.names = FALSE)
 utils::write.csv(capabilities, file.path(out_dir, "nn_metric_capabilities.csv"), row.names = FALSE)
+cagra_capabilities_out <- tag_cagra_capabilities(cagra_capabilities)
+if (nrow(cagra_capabilities_out)) {
+  utils::write.csv(
+    cagra_capabilities_out,
+    file.path(out_dir, "nn_metric_cagra_capabilities.csv"),
+    row.names = FALSE
+  )
+}
 
 results <- list()
 row_id <- 0L
@@ -1595,7 +1615,7 @@ materials <- c(
   "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities(runtime = TRUE)` and the public backend resolver, then recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
   "`method = \"grid\"` is included in the default public method list but is recorded as an expected skip for datasets outside two or three columns, because it is a native low-dimensional spatial search route.",
   "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, the requested CAGRA implementation for public `method = \"cagra\"` rows and CUDA-capable `method = \"auto\"` rows that may select CAGRA, and resolved backend fields.",
-  "`nn_metric_capabilities.csv` stores the capability table used for that preflight, including `resolved_backend`, `runtime_available`, `runtime_reason`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
+  "`nn_metric_capabilities.csv` stores the default capability table used for non-CAGRA-provider-specific preflight, including `resolved_backend`, `runtime_available`, `runtime_reason`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. When `--cagra_implementations` contains one or more provider selectors, `nn_metric_cagra_capabilities.csv` stores the matching provider-specific capability tables with a `cagra_implementation` column, so FAISS GPU CAGRA and direct cuVS CAGRA expected skips can be audited separately. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
   "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_requested_backend`, `result_requested_method`, and `result_tuning` record the public request stored on successful `nn()` results. `auto_predicted_method`, `auto_predicted_device`, `auto_explicit_backend`, `auto_explicit_method`, `auto_backend_decision`, and `auto_method_decision` record the public method/device class and explicit-vs-auto decision fields predicted by `attr(result, \"auto_selection\")` for auto requests, without parsing internal backend labels. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes and auto-selection metadata, including deterministic FAISS HNSW `tuning_rule`, shape flags, explicit backend/method flags, backend/method decision reasons, predicted method/device, and no-pilot auto-selection reason when present. `tuning_status` records backend tuning status, or the deterministic no-pilot tuning rule for routes such as FAISS CPU HNSW.",
   "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k. The NN metric benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",

@@ -471,7 +471,7 @@ metric matrix. It runs public `nn()` combinations over:
 - backends: `"auto"`, `"cpu"`, `"cuda"`, or any subset passed with
   `--backends`;
 - methods: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`,
-`"hnsw"`, `"ivf"`, `"ivfpq"`, `"nsg"`,
+`"hnsw"`, `"ivf"`, `"ivfpq"`, `"vamana"`, `"nsg"`,
   `"nndescent"`, and `"cagra"`; these must be canonical lowercase public
   method labels, not resolved backend labels such as `faiss_hnsw`;
 - CAGRA implementations: `--cagra_implementations=auto` by default, or
@@ -493,7 +493,11 @@ without parsing the prose error message. The run configuration is saved as
 `nn_metric_benchmark_results.csv`, and the runtime-aware capability table used
 for the run is saved as `nn_metric_capabilities.csv`, including public
 `backend = "auto"`, `"cpu"`, and `"cuda"` rows plus `resolved_backend`,
-`runtime_available`, `runtime_reason`, and `runtime_notes`. For
+`runtime_available`, `runtime_reason`, and `runtime_notes`. Provider-specific
+CAGRA preflight tables are also saved as `nn_metric_cagra_capabilities.csv`
+with a `cagra_implementation` column, so FAISS GPU CAGRA and direct RAPIDS
+cuVS CAGRA expected skips can be audited separately when
+`--cagra_implementations=faiss_gpu,cuvs` is used. For
 `backend = "auto"`, the
 preflight first checks the explicit auto capability row, then checks the
 resolved CPU/CUDA route and records expected skips when that route requires

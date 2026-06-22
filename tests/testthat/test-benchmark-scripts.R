@@ -62,6 +62,7 @@ test_that("benchmark materials document key row-level and summary outputs", {
       "nn_metric_benchmark_config.csv",
       "nn_metric_benchmark_results.csv",
       "nn_metric_capabilities.csv",
+      "nn_metric_cagra_capabilities.csv",
       "nn_metric_cycle_summary.csv",
       "nn_metric_recommendations_from_cycles.csv",
       "nn_metric_auto_vs_cycle_recommendation.csv",
@@ -987,6 +988,18 @@ test_that("NN metric benchmark accounts for data-shaped method skips", {
     env$validate_cagra_implementation_values("metal"),
     "cagra_implementations"
   )
+
+  caps <- data.frame(
+    backend = c("cuda", "cuda"),
+    method = c("cagra", "auto"),
+    metric = c("euclidean", "euclidean"),
+    supported = c(TRUE, TRUE),
+    stringsAsFactors = FALSE
+  )
+  tagged <- env$tag_cagra_capabilities(list(faiss_gpu = caps, cuvs = caps))
+  expect_equal(nrow(tagged), 4L)
+  expect_equal(names(tagged)[[1L]], "cagra_implementation")
+  expect_equal(sort(unique(tagged$cagra_implementation)), c("cuvs", "faiss_gpu"))
 
   dense <- matrix(rnorm(20), ncol = 4)
   grid_skip <- env$nn_data_expected_skip(dense, "grid")
