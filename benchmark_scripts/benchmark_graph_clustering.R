@@ -336,7 +336,8 @@ result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, 
                        graph_preflight_route = NA_character_,
                        cluster_preflight_route = NA_character_,
                        graph_cached = NA,
-                       expected_skip = FALSE) {
+                       expected_skip = FALSE,
+                       expected_skip_reason = NA_character_) {
   data.frame(
     dataset = dataset,
     n = as.integer(n),
@@ -377,6 +378,7 @@ result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, 
     resolution_selected_is_min_gap = if (is.na(resolution_selected_is_min_gap)) NA else isTRUE(resolution_selected_is_min_gap),
     graph_cached = if (is.na(graph_cached)) NA else isTRUE(graph_cached),
     expected_skip = isTRUE(expected_skip),
+    expected_skip_reason = expected_skip_reason,
     stringsAsFactors = FALSE
   )
 }
@@ -671,12 +673,18 @@ graph_cluster_expected_skip <- function(cluster_backend, method) {
   cluster_backend <- tolower(as.character(cluster_backend)[1L])
   method <- tolower(as.character(method)[1L])
   if (identical(cluster_backend, "cuda") && identical(method, "random_walking")) {
-    return("CUDA random_walking is not enabled; graph_cluster(method = \"random_walking\", backend = \"cuda\") is an expected skip. With backend = \"auto\", random_walking stays on CPU.")
+    return(list(
+      reason = "cuda_random_walking_unavailable",
+      notes = "CUDA random_walking is not enabled; graph_cluster(method = \"random_walking\", backend = \"cuda\") is an expected skip. With backend = \"auto\", random_walking stays on CPU."
+    ))
   }
   if (identical(cluster_backend, "cuda") &&
       method %in% c("louvain", "leiden") &&
       !isTRUE(faissR::cugraph_available())) {
-    return("CUDA graph clustering requires faissR built with RAPIDS libcugraph; explicit CUDA clustering requests are expected skips.")
+    return(list(
+      reason = "missing_cugraph",
+      notes = "CUDA graph clustering requires faissR built with RAPIDS libcugraph; explicit CUDA clustering requests are expected skips."
+    ))
   }
   NULL
 }
@@ -718,23 +726,32 @@ graph_route_runtime_skip <- function(route,
   if (is.na(route) || !nzchar(route)) return(NULL)
   if (startsWith(route, "faiss_gpu")) {
     if (!isTRUE(faiss_gpu_available_value) || !isTRUE(cuda_available_value)) {
-      return(paste0(
-        "Graph construction resolved route `", route,
-        "` requires FAISS GPU support and a CUDA device, but that runtime is unavailable."
+      return(list(
+        reason = "missing_faiss_gpu",
+        notes = paste0(
+          "Graph construction resolved route `", route,
+          "` requires FAISS GPU support and a CUDA device, but that runtime is unavailable."
+        )
       ))
     }
   } else if (startsWith(route, "cuda_cuvs")) {
     if (!isTRUE(cuvs_available_value)) {
-      return(paste0(
-        "Graph construction resolved route `", route,
-        "` requires RAPIDS cuVS, but cuVS is unavailable in the current runtime."
+      return(list(
+        reason = "missing_cuvs",
+        notes = paste0(
+          "Graph construction resolved route `", route,
+          "` requires RAPIDS cuVS, but cuVS is unavailable in the current runtime."
+        )
       ))
     }
   } else if (route %in% c("cuda", "cuda_grid")) {
     if (!isTRUE(cuda_available_value)) {
-      return(paste0(
-        "Graph construction resolved route `", route,
-        "` requires a CUDA device, but CUDA is unavailable in the current runtime."
+      return(list(
+        reason = "missing_cuda",
+        notes = paste0(
+          "Graph construction resolved route `", route,
+          "` requires a CUDA device, but CUDA is unavailable in the current runtime."
+        )
       ))
     }
   }
@@ -750,7 +767,10 @@ graph_build_expected_skip <- function(graph_backend, graph_method = "auto", metr
     caps[caps$backend == graph_backend & caps$method == graph_method & caps$metric == metric, , drop = FALSE]
   }, error = function(e) data.frame())
   if (nrow(cap) && !isTRUE(cap$supported[[1L]])) {
-    return(cap$notes[[1L]] %||% "This graph-construction method/backend/metric combination is unsupported by faissR::nn_capabilities().")
+    return(list(
+      reason = if ("runtime_reason" %in% names(cap)) cap$runtime_reason[[1L]] %||% "unsupported_combination" else "unsupported_combination",
+      notes = cap$notes[[1L]] %||% "This graph-construction method/backend/metric combination is unsupported by faissR::nn_capabilities()."
+    ))
   }
   if (nrow(cap) &&
       "runtime_available" %in% names(cap) &&
@@ -758,11 +778,14 @@ graph_build_expected_skip <- function(graph_backend, graph_method = "auto", metr
       !isTRUE(cap$runtime_available[[1L]])) {
     route <- if ("resolved_backend" %in% names(cap)) cap$resolved_backend[[1L]] else NA_character_
     notes <- if ("runtime_notes" %in% names(cap)) cap$runtime_notes[[1L]] else NA_character_
-    return(paste(
-      "Graph construction resolved route",
-      if (!is.na(route) && nzchar(route)) paste0("`", route, "`") else "is unavailable",
-      "but it is unavailable in the current runtime:",
-      notes %||% "runtime dependency is unavailable."
+    return(list(
+      reason = if ("runtime_reason" %in% names(cap)) cap$runtime_reason[[1L]] %||% "unavailable_runtime" else "unavailable_runtime",
+      notes = paste(
+        "Graph construction resolved route",
+        if (!is.na(route) && nzchar(route)) paste0("`", route, "`") else "is unavailable",
+        "but it is unavailable in the current runtime:",
+        notes %||% "runtime dependency is unavailable."
+      )
     ))
   }
   if (nrow(cap) && "resolved_backend" %in% names(cap)) {
@@ -772,22 +795,34 @@ graph_build_expected_skip <- function(graph_backend, graph_method = "auto", metr
   if (identical(graph_method, "grid") && !is.null(x)) {
     p <- ncol(x)
     if (length(p) != 1L || is.na(p) || !p %in% c(2L, 3L)) {
-      return(sprintf("`graph_method = \"grid\"` supports only two- or three-column matrices. This dataset has %s columns.", if (length(p) == 1L && !is.na(p)) as.character(p) else "an unknown number of"))
+      return(list(
+        reason = "unsupported_shape",
+        notes = sprintf("`graph_method = \"grid\"` supports only two- or three-column matrices. This dataset has %s columns.", if (length(p) == 1L && !is.na(p)) as.character(p) else "an unknown number of")
+      ))
     }
   }
   if (identical(graph_method, "nsg") && !is.null(x)) {
     n <- nrow(x)
     if (length(n) != 1L || is.na(n) || n <= 100L) {
-      return(sprintf("FAISS NSG requires more than 100 training rows in this FAISS build. This dataset has %s rows.", if (length(n) == 1L && !is.na(n)) as.character(n) else "an unknown number of"))
+      return(list(
+        reason = "insufficient_training_rows",
+        notes = sprintf("FAISS NSG requires more than 100 training rows in this FAISS build. This dataset has %s rows.", if (length(n) == 1L && !is.na(n)) as.character(n) else "an unknown number of")
+      ))
     }
   }
   if (identical(graph_method, "sparse") && !inherits(x, "sparseMatrix") && !inherits(x, "dgCMatrix")) {
-    return("`graph_method = \"sparse\"` requires sparse Matrix input; dense benchmark datasets are recorded as expected skips.")
+    return(list(
+      reason = "unsupported_input_type",
+      notes = "`graph_method = \"sparse\"` requires sparse Matrix input; dense benchmark datasets are recorded as expected skips."
+    ))
   }
   if (identical(graph_backend, "cuda") &&
       !isTRUE(faissR::cuda_available()) &&
       !isTRUE(faissR::cuvs_available())) {
-    return("CUDA graph construction requires a CUDA-capable faissR runtime; explicit CUDA graph requests are expected skips.")
+    return(list(
+      reason = "missing_cuda_route",
+      notes = "CUDA graph construction requires a CUDA-capable faissR runtime; explicit CUDA graph requests are expected skips."
+    ))
   }
   NULL
 }
@@ -1133,7 +1168,8 @@ for (dataset_name in datasets) {
                 n_edges = NA_integer_,
                 graph_preflight_route = graph_preflight_route,
                 weight = weight,
-                error = graph_skip_reason
+                error = graph_skip_reason$notes,
+                expected_skip_reason = graph_skip_reason$reason
               )
             } else if (all_graph_cluster_expected_skips(cluster_backends, methods)) {
               graph_build <- list(
@@ -1194,7 +1230,7 @@ for (dataset_name in datasets) {
                     n_clusters_source = row_target_source,
                     n_threads = n_threads,
                     status = "expected_skip",
-                    error = skip_reason,
+                    error = skip_reason$notes,
                     graph_sec = if (identical(graph_build$status, "success")) graph_build$graph_sec else NA_real_,
                     total_sec = if (identical(graph_build$status, "success")) graph_build$graph_sec else NA_real_,
                     peak_rss_gb = read_peak_rss_gb(),
@@ -1204,7 +1240,8 @@ for (dataset_name in datasets) {
                     graph_preflight_route = graph_build$graph_preflight_route %||% graph_preflight_route,
                     cluster_preflight_route = cluster_preflight_route,
                     graph_cached = identical(graph_build$status, "success"),
-                    expected_skip = TRUE
+                    expected_skip = TRUE,
+                    expected_skip_reason = skip_reason$reason
                   )
                 } else if (!identical(graph_build$status, "success")) {
                   row <- result_row(
@@ -1232,7 +1269,8 @@ for (dataset_name in datasets) {
                     graph_preflight_route = graph_build$graph_preflight_route %||% graph_preflight_route,
                     cluster_preflight_route = cluster_preflight_route,
                     graph_cached = FALSE,
-                    expected_skip = identical(graph_build$status, "expected_skip")
+                    expected_skip = identical(graph_build$status, "expected_skip"),
+                    expected_skip_reason = if (identical(graph_build$status, "expected_skip")) graph_build$expected_skip_reason %||% NA_character_ else NA_character_
                   )
                 } else {
                   row <- run_cluster_one(
@@ -1344,7 +1382,7 @@ materials <- c(
   sprintf("- Target clusters mode: `%s`", target_mode),
   "",
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
-  "`graph_cluster_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `graph_cluster_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, graph timings, clustering timings, memory, graph vertex/edge counts, ARI, modularity, graph NN method/metric, and backend metadata.",
+  "`graph_cluster_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `graph_cluster_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, graph timings, clustering timings, memory, graph vertex/edge counts, ARI, modularity, graph NN method/metric, and backend metadata.",
   "`graph_cluster_nn_capabilities.csv` stores the `faissR::nn_capabilities(runtime = TRUE)` table used to preflight graph KNN construction, including `runtime_reason` and `runtime_notes`. Runtime-unavailable graph routes are recorded as expected skips before a graph is built.",
   "`target_clusters` is normalized to either `\"labels\"` or `\"none\"`; invalid values stop before the benchmark starts. When `target_clusters = \"labels\"`, Louvain and Leiden use `n_clusters = length(unique(labels))`. If a benchmark block contains only Louvain/Leiden, this target is stored on the graph with `knn_graph(n_clusters = ...)` and reused by `graph_cluster()`; mixed blocks that include random-walking pass the target only to Louvain/Leiden rows because random-walking intentionally has no cluster-count target.",
   "`n_clusters_requested` records the requested target community count for Louvain/Leiden rows. This is a convenience target, not a hard guarantee; the actual community count is stored separately as `n_communities`. `n_clusters_source` records whether that target came from dataset labels, a stored `knn_graph(n_clusters = ...)` target, or no target. When a target is used, `target_gap`, `resolution_selection`, `resolution_selected_candidate`, `resolution_candidates`, `resolution_min_target_gap`, `resolution_selected_is_min_gap`, and the selected resolution summarize the deterministic resolution-search decision.",

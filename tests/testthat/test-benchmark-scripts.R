@@ -837,6 +837,36 @@ test_that("NN metric benchmark raw rows record expected-skip reason labels", {
   expect_equal(row$expected_skip_reason, "unsupported_shape")
 })
 
+test_that("graph benchmark raw rows record expected-skip reason labels", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  row <- env$result_row(
+    dataset = "A",
+    n = 100L,
+    p = 4L,
+    cycle = 1L,
+    k = 15L,
+    graph_backend = "cuda",
+    graph_method = "nndescent",
+    metric = "euclidean",
+    cluster_backend = "cuda",
+    method = "leiden",
+    weight = "distance",
+    n_clusters = 10L,
+    n_threads = 2L,
+    status = "expected_skip",
+    error = "CUDA graph clustering requires libcugraph",
+    expected_skip = TRUE,
+    expected_skip_reason = "missing_cugraph"
+  )
+
+  expect_true("expected_skip_reason" %in% names(row))
+  expect_true(isTRUE(row$expected_skip))
+  expect_equal(row$expected_skip_reason, "missing_cugraph")
+})
+
 test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
@@ -1982,20 +2012,24 @@ test_that("graph benchmark preflights graph method and metric skips", {
   dense <- matrix(rnorm(40), ncol = 4)
 
   grid_skip <- env$graph_build_expected_skip("cpu", graph_method = "grid", metric = "euclidean", x = dense)
-  expect_match(grid_skip, "two- or three-column")
-  expect_match(grid_skip, "4 columns")
+  expect_equal(grid_skip$reason, "unsupported_shape")
+  expect_match(grid_skip$notes, "two- or three-column")
+  expect_match(grid_skip$notes, "4 columns")
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "grid", metric = "euclidean", x = dense[, 1:2]))
 
   sparse_skip <- env$graph_build_expected_skip("cpu", graph_method = "sparse", metric = "euclidean", x = dense)
-  expect_match(sparse_skip, "sparse Matrix")
+  expect_equal(sparse_skip$reason, "unsupported_input_type")
+  expect_match(sparse_skip$notes, "sparse Matrix")
 
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nndescent", metric = "inner_product", x = dense))
   nnd_cuda_ip <- env$graph_build_expected_skip("cuda", graph_method = "nndescent", metric = "inner_product", x = dense)
-  expect_match(nnd_cuda_ip, "inner-product|inner_product")
+  expect_true(nzchar(nnd_cuda_ip$reason))
+  expect_match(nnd_cuda_ip$notes, "inner-product|inner_product")
 
   nsg_skip <- env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(80 * 4), ncol = 4))
-  expect_match(nsg_skip, "more than 100 training rows")
-  expect_match(nsg_skip, "80 rows")
+  expect_equal(nsg_skip$reason, "insufficient_training_rows")
+  expect_match(nsg_skip$notes, "more than 100 training rows")
+  expect_match(nsg_skip$notes, "80 rows")
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(120 * 4), ncol = 4)))
 })
 
@@ -2011,8 +2045,9 @@ test_that("graph benchmark preflights resolved route runtime dependencies", {
     faiss_gpu_available_value = TRUE,
     cuvs_available_value = TRUE
   )
-  expect_match(faiss_gpu_skip, "FAISS GPU")
-  expect_match(faiss_gpu_skip, "CUDA device")
+  expect_equal(faiss_gpu_skip$reason, "missing_faiss_gpu")
+  expect_match(faiss_gpu_skip$notes, "FAISS GPU")
+  expect_match(faiss_gpu_skip$notes, "CUDA device")
 
   expect_null(env$graph_route_runtime_skip(
     "faiss_gpu_flat_l2",
@@ -2027,7 +2062,8 @@ test_that("graph benchmark preflights resolved route runtime dependencies", {
     faiss_gpu_available_value = FALSE,
     cuvs_available_value = FALSE
   )
-  expect_match(cuvs_skip, "cuVS")
+  expect_equal(cuvs_skip$reason, "missing_cuvs")
+  expect_match(cuvs_skip$notes, "cuVS")
 
   cuda_skip <- env$graph_route_runtime_skip(
     "cuda_grid",
@@ -2035,7 +2071,8 @@ test_that("graph benchmark preflights resolved route runtime dependencies", {
     faiss_gpu_available_value = TRUE,
     cuvs_available_value = TRUE
   )
-  expect_match(cuda_skip, "CUDA")
+  expect_equal(cuda_skip$reason, "missing_cuda")
+  expect_match(cuda_skip$notes, "CUDA")
 })
 
 test_that("graph benchmark preflights runtime-unavailable graph routes", {
@@ -2059,7 +2096,8 @@ test_that("graph benchmark preflights runtime-unavailable graph routes", {
   if (isTRUE(faiss_gpu_available()) && isTRUE(cuda_available())) {
     expect_null(cuda_skip)
   } else {
-    expect_match(cuda_skip, "faiss_gpu_flat_l2|FAISS GPU|unavailable", ignore.case = TRUE)
+    expect_true(nzchar(cuda_skip$reason))
+    expect_match(cuda_skip$notes, "faiss_gpu_flat_l2|FAISS GPU|unavailable", ignore.case = TRUE)
   }
 })
 

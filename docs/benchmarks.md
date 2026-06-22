@@ -229,6 +229,9 @@ complete graph-plus-clustering workflow represented by the row.
 The run configuration is saved as `graph_cluster_benchmark_config.csv`, and
 the raw row-level result table is saved as
 `graph_cluster_benchmark_results.csv`, including graph vertex and edge counts.
+Expected skips are marked with `expected_skip = TRUE` and a machine-readable
+`expected_skip_reason`, so runtime, shape, and input-type skips can be grouped
+without parsing the prose error message.
 The config includes `available_datasets`, the validated real plus simulated
 dataset names accepted by the `--datasets` selector, so subset runs remain
 auditable.
