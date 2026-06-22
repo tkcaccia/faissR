@@ -307,7 +307,9 @@ prob  <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 When `Xtest` is omitted, the return value is a `faissR_knn_model`. Immediate
 prediction outputs carry `attr(result, "faissR_nn")` metadata from the
 underlying `nn()` route, including requested backend/method/tuning, resolved
-backend, metric, `k`, and whether the route was exact.
+backend, metric, `k`, whether the route was exact, approximation parameters,
+FAISS/cuVS/native route metadata, normalized metric transforms, and
+auto-selection metadata when present.
 
 ## `predict()`
 
@@ -330,7 +332,8 @@ predict(object, newdata, k = NULL,
 
 For classification, use `predict(type = "prob")` to return class
 probabilities. Prediction outputs carry the same `attr(result, "faissR_nn")`
-route metadata as immediate `knn(..., Xtest)` predictions.
+route metadata, approximation parameters, and auto-selection metadata as
+immediate `knn(..., Xtest)` predictions.
 
 ## Availability Helpers
 

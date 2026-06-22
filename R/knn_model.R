@@ -38,8 +38,9 @@
 #'   `k`, and CPU thread settings used by later \code{\link{predict}()} calls.
 #'   If `Xtest` is supplied, a factor for classification, a numeric vector for
 #'   regression, or a numeric class-probability matrix when `type = "prob"`;
-#'   prediction outputs carry `attr(result, "faissR_nn")` route metadata from
-#'   the underlying \code{\link{nn}()} call.
+#'   prediction outputs carry `attr(result, "faissR_nn")` route metadata,
+#'   approximation parameters, and auto-selection metadata from the underlying
+#'   \code{\link{nn}()} call.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' model <- knn(x, iris$Species, backend = "cpu", k = 5)
@@ -167,8 +168,8 @@ knn_model_fit <- function(Xtrain,
 #' @param ... Reserved for future options.
 #' @return A factor for classification, a numeric vector for regression, or a
 #'   numeric class-probability matrix when `type = "prob"`. Outputs carry
-#'   `attr(result, "faissR_nn")` route metadata from the underlying
-#'   \code{\link{nn}()} call.
+#'   `attr(result, "faissR_nn")` route metadata, approximation parameters, and
+#'   auto-selection metadata from the underlying \code{\link{nn}()} call.
 #' @export
 predict.faissR_knn_model <- function(object,
                                       newdata,
@@ -225,6 +226,15 @@ predict.faissR_knn_model <- function(object,
 }
 
 attach_knn_prediction_metadata <- function(out, neighbours, k, backend, method, tuning) {
+  distance_type <- neighbours$distance_type %||% NA_character_
+  if (is.na(distance_type)) {
+    distance_type <- if (inherits(neighbours$distances, "float32") ||
+                         inherits(neighbours$distances, "fl")) {
+      "float32"
+    } else {
+      "double"
+    }
+  }
   attr(out, "faissR_nn") <- list(
     k = as.integer(k),
     requested_backend = attr(neighbours, "requested_backend") %||% backend,
@@ -233,7 +243,16 @@ attach_knn_prediction_metadata <- function(out, neighbours, k, backend, method, 
     backend = attr(neighbours, "backend") %||% NA_character_,
     resolved_backend = attr(neighbours, "resolved_backend") %||% attr(neighbours, "backend") %||% NA_character_,
     metric = attr(neighbours, "metric") %||% NA_character_,
-    exact = attr(neighbours, "exact") %||% NA
+    exact = attr(neighbours, "exact") %||% NA,
+    approximation = attr(neighbours, "approximation") %||% NULL,
+    faiss = attr(neighbours, "faiss") %||% NULL,
+    cuvs = attr(neighbours, "cuvs") %||% NULL,
+    spatial_index = attr(neighbours, "spatial_index") %||% NULL,
+    sparse = attr(neighbours, "sparse") %||% NULL,
+    auto_selection = attr(neighbours, "auto_selection") %||% NULL,
+    metric_transform = attr(neighbours, "metric_transform") %||% neighbours$metric_transform %||% NULL,
+    distance_transform = attr(neighbours, "distance_transform") %||% NULL,
+    distance_type = distance_type
   )
   out
 }

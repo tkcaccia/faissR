@@ -47,6 +47,8 @@ test_that("predict preserves nearest-neighbour route metadata", {
   expect_equal(proba_meta$tuning, "off")
   expect_equal(proba_meta$metric, "cosine")
   expect_equal(proba_meta$resolved_backend, proba_meta$backend)
+  expect_true(is.null(pred_meta$auto_selection) || is.list(pred_meta$auto_selection))
+  expect_equal(pred_meta$distance_type, "double")
 
   reg <- knn(x, c(0, 0, 1, 1), backend = "auto", method = "exact", task = "regression", tuning = "off", k = 2L)
   reg_pred <- predict(reg, x[1:2, , drop = FALSE], backend = "auto", tuning = "off")
@@ -55,6 +57,27 @@ test_that("predict preserves nearest-neighbour route metadata", {
   expect_equal(reg_meta$requested_method, "exact")
   expect_equal(reg_meta$tuning, "off")
   expect_equal(reg_meta$metric, "euclidean")
+})
+
+test_that("predict carries NN auto-selection route metadata", {
+  set.seed(22)
+  x <- rbind(
+    matrix(rnorm(40, -1, 0.2), ncol = 4),
+    matrix(rnorm(40, 1, 0.2), ncol = 4)
+  )
+  y <- factor(rep(c("a", "b"), each = 10L))
+  fit <- knn(x, y, backend = "cpu", method = "auto", metric = "cosine", k = 3L)
+
+  pred <- predict(fit, x[1:2, , drop = FALSE], backend = "cpu", type = "prob")
+  meta <- attr(pred, "faissR_nn")
+
+  expect_equal(meta$requested_backend, "cpu")
+  expect_equal(meta$requested_method, "auto")
+  expect_equal(meta$metric, "cosine")
+  expect_type(meta$auto_selection, "list")
+  expect_true(meta$auto_selection$explicit_backend)
+  expect_false(meta$auto_selection$explicit_method)
+  expect_equal(meta$auto_selection$backend_decision, "explicit_cpu")
 })
 
 test_that("weighted votes use exact matches cleanly", {
