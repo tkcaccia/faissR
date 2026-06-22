@@ -318,7 +318,12 @@ finish_fast_kmeans <- function(out,
 }
 
 normalize_kmeans_tuning <- function(tuning) {
-  tuning <- as.character(tuning)[1L]
+  tuning <- normalize_scalar_choice_arg(
+    tuning,
+    arg = "tuning",
+    default = "auto",
+    formal_choices = c("auto", "fixed", "off", "none")
+  )
   if (is.na(tuning) || !nzchar(tuning)) tuning <- "auto"
   tuning <- tolower(tuning)
   if (!tuning %in% c("auto", "fixed", "off", "none")) {
@@ -328,7 +333,12 @@ normalize_kmeans_tuning <- function(tuning) {
 }
 
 normalize_kmeans_init <- function(init) {
-  init <- as.character(init)[1L]
+  init <- normalize_scalar_choice_arg(
+    init,
+    arg = "init",
+    default = "kmeans++",
+    formal_choices = c("kmeans++", "random")
+  )
   if (is.na(init) || !nzchar(init)) init <- "kmeans++"
   init <- trimws(init)
   if (!init %in% c("kmeans++", "random")) {

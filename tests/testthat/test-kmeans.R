@@ -225,6 +225,15 @@ test_that("fast_kmeans requires canonical initialization labels", {
   expect_equal(faissR:::normalize_kmeans_init("random"), "random")
   expect_error(faissR:::normalize_kmeans_init("r"), "init")
   expect_error(
+    faissR:::normalize_kmeans_init(c("random", "kmeans++")),
+    "`init` must be a single value"
+  )
+  expect_error(
+    faissR:::normalize_kmeans_tuning(c("off", "auto")),
+    "`tuning` must be a single value"
+  )
+  expect_no_error(fast_kmeans(x, centers = 2, backend = "cpu", n_threads = 2))
+  expect_error(
     fast_kmeans(x, centers = 2, backend = "cpu", init = "r", n_threads = 2),
     "init"
   )
