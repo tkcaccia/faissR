@@ -11,9 +11,11 @@
 [Backends](backend-capabilities.md) |
 [References](references.md)
 
-These notes summarize empirical `nn()` tuning runs for k = 50, Euclidean/L2
-search, raw unscaled data, and the package benchmark datasets. Important
-benchmark artifacts include:
+These notes summarize empirical `nn()` tuning probes and how they inform the
+current shape-aware defaults. The original tuning pass used k = 50,
+Euclidean/L2 search, raw unscaled data, and the package benchmark datasets; the
+current NN metric benchmark extends that work to all four public metrics and
+the k grid 5, 10, 15, 50, and 100. Important benchmark artifacts include:
 
 - `autotune_results.csv`: one row per dataset and resolved implementation
   label.

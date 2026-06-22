@@ -62,6 +62,23 @@ test_that("benchmark materials document key row-level and summary outputs", {
   }
 })
 
+test_that("benchmark scripts parse before long-running execution", {
+  scripts <- test_path("../../benchmark_scripts", c(
+    "benchmark_nn_metrics.R",
+    "benchmark_graph_clustering.R",
+    "benchmark_kmeans.R",
+    "benchmark1_nn_speed.R"
+  ))
+  missing <- scripts[!file.exists(scripts)]
+  if (length(missing)) {
+    skip("Benchmark scripts are not available in this installed-package test context.")
+  }
+
+  for (script in scripts) {
+    expect_error(parse(script), NA, info = basename(script))
+  }
+})
+
 test_that("benchmark dataset defaults use the requested real and simulated datasets", {
   real_datasets <- c(
     "COIL20",

@@ -725,3 +725,15 @@ test_that("autotuning docs describe CUDA auto non-Euclidean routing", {
   expect_true(grepl("cuVS-only runtimes", prose, fixed = TRUE))
   expect_true(grepl("non-grid[[:space:]]+non-Euclidean searches on CPU", prose))
 })
+
+test_that("autotuning docs distinguish historical probes from full NN metric benchmark", {
+  docs_file <- test_path("../../docs/autotuning.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub documentation files are not available in this installed-package test context.")
+  }
+
+  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  expect_true(grepl("original tuning pass", prose, fixed = TRUE))
+  expect_true(grepl("all four public metrics", prose, fixed = TRUE))
+  expect_true(grepl("k grid 5, 10, 15, 50, and 100", prose, fixed = TRUE))
+})
