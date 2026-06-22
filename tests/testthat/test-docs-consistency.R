@@ -400,6 +400,8 @@ test_that("fast_kmeans docs describe effective tuning metadata", {
     expect_true(grepl("does not expose an explicit seed", prose, fixed = TRUE), info = basename(docs_file))
     expect_true(grepl("centers = 1", prose, fixed = TRUE), info = basename(docs_file))
     expect_true(grepl("single_cluster_exact_mean", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("faissR.kmeans_cuda_work_threshold", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("faissR.kmeans_cuda_nbytes_threshold", prose, fixed = TRUE), info = basename(docs_file))
   }
 
   readme_file <- test_path("../../README.md")

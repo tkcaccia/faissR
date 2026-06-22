@@ -351,13 +351,15 @@ available.
 `graph_cluster(n_clusters = m)` provides a target-community-count convenience
 for Louvain and Leiden. The target belongs to `graph_cluster()`, not
 `knn_graph()`, so a precomputed graph can be reused with different target
-counts or with an explicit `resolution`. Passing `n_clusters` to
-random-walking remains an error. The graph is built once, then faissR evaluates
-a bounded deterministic grid of resolution values centered from the supplied
-`resolution` and, when graph size is known, a no-pilot shape heuristic based on
-`n_clusters / sqrt(n_vertices)`. It keeps the result whose number of communities
-is closest to `m`, breaking ties by modularity. The selected resolution,
-candidate center, and search table are returned in the result metadata as
+counts or with an explicit `resolution`. If `n_clusters` is supplied and
+`method` is omitted, faissR uses Louvain as the target-count clustering method;
+passing `n_clusters` to explicit random-walking remains an error. The graph is
+built once, then faissR evaluates a bounded deterministic grid of resolution
+values centered from the supplied `resolution` and, when graph size is known, a
+no-pilot shape heuristic based on `n_clusters / sqrt(n_vertices)`. It keeps the
+result whose number of communities is closest to `m`, breaking ties by
+modularity. The selected resolution, candidate center, and search table are
+returned in the result metadata as
 `selected_resolution`, `resolution_selection`, and `resolution_search`, with the
 requested target stored as `target_n_clusters`.
 The selected row is marked in `resolution_search$selected`; `target_gap`
@@ -454,7 +456,13 @@ The gate is deterministic and recorded in
 `"small_cpu_preferred"`, `"work_at_least_1e8"`,
 `"input_at_least_256MiB"`, or `"large_high_dimensional_input"` so benchmark
 summaries can audit why `backend = "auto"` selected CPU or CUDA without running
-extra tuning jobs. `result$parameters$tuning$selection` is the compact
+extra tuning jobs. Benchmark-derived threshold refinements can be applied
+without changing package code by setting
+`options(faissR.kmeans_cuda_work_threshold = ...)`,
+`options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
+`options(faissR.kmeans_cuda_large_n_threshold = ...)`, or
+`options(faissR.kmeans_cuda_large_p_threshold = ...)`; invalid option values
+fall back to the documented defaults. `result$parameters$tuning$selection` is the compact
 no-pilot audit record: it stores the requested and predicted backends,
 runtime capability flags, shape/work estimates, effective `max_iter`, `n_init`,
 and `tol`, `explicit_backend`, `backend_decision`, and `slow_tuning = FALSE`.

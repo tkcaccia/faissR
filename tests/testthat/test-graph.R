@@ -776,6 +776,21 @@ test_that("graph_cluster can target a requested number of communities", {
   expect_true(any(grepl("target communities: 3", printed, fixed = TRUE)))
   expect_true(any(grepl("selected resolution:", printed, fixed = TRUE)))
 
+  implicit <- graph_cluster(
+    x,
+    backend = "cpu",
+    graph_backend = "cpu",
+    k = 8L,
+    n_clusters = 3L,
+    n_threads = 2L,
+    seed = 1L
+  )
+  expect_s3_class(implicit, "faissR_graph_cluster")
+  expect_equal(implicit$method, "louvain")
+  expect_equal(implicit$target_n_clusters, 3L)
+  expect_equal(implicit$parameters$n_clusters, 3L)
+  expect_equal(implicit$resolution_selection$criterion, "closest_n_communities_then_highest_modularity")
+
   expect_error(
     graph_cluster(x, method = "random_walking", backend = "cpu", graph_backend = "cpu", k = 8L, n_clusters = 3L),
     "n_clusters"

@@ -417,6 +417,44 @@ test_that("fast_kmeans auto backend is shape-aware", {
   expect_equal(small_policy$work, 1440)
   expect_equal(small_policy$nbytes, 3840)
   expect_equal(small_policy$n_per_center, 40)
+  expect_equal(small_policy$work_threshold, 1e8)
+  expect_equal(small_policy$nbytes_threshold, 256 * 1024^2)
+  expect_equal(small_policy$large_n_threshold, 50000)
+  expect_equal(small_policy$large_p_threshold, 128)
+
+  withr::with_options(
+    list(
+      faissR.kmeans_cuda_work_threshold = 1000,
+      faissR.kmeans_cuda_nbytes_threshold = 1e9,
+      faissR.kmeans_cuda_large_n_threshold = 1e9,
+      faissR.kmeans_cuda_large_p_threshold = 1e9
+    ),
+    {
+      tuned_policy <- faissR:::kmeans_auto_backend_policy(n = 120L, p = 4L, centers = 3L)
+      expect_true(tuned_policy$prefer_cuda)
+      expect_equal(tuned_policy$reason, "work_at_least_1e8")
+      expect_equal(tuned_policy$work_threshold, 1000)
+      expect_equal(tuned_policy$nbytes_threshold, 1e9)
+      expect_equal(tuned_policy$large_n_threshold, 1e9)
+      expect_equal(tuned_policy$large_p_threshold, 1e9)
+    }
+  )
+
+  withr::with_options(
+    list(
+      faissR.kmeans_cuda_work_threshold = -1,
+      faissR.kmeans_cuda_nbytes_threshold = "bad",
+      faissR.kmeans_cuda_large_n_threshold = 0,
+      faissR.kmeans_cuda_large_p_threshold = NA
+    ),
+    {
+      fallback_policy <- faissR:::kmeans_auto_backend_policy(n = 120L, p = 4L, centers = 3L)
+      expect_equal(fallback_policy$work_threshold, 1e8)
+      expect_equal(fallback_policy$nbytes_threshold, 256 * 1024^2)
+      expect_equal(fallback_policy$large_n_threshold, 50000)
+      expect_equal(fallback_policy$large_p_threshold, 128)
+    }
+  )
 
   work_policy <- faissR:::kmeans_auto_backend_policy(n = 70000L, p = 784L, centers = 10L)
   expect_true(work_policy$prefer_cuda)

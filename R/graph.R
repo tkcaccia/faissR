@@ -259,8 +259,9 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   closest to `n_clusters`. The grid is centered from the requested
 #'   `resolution` and, when graph size is known, a no-pilot shape heuristic
 #'   based on `n_clusters / sqrt(n_vertices)`. This is a convenience target, not
-#'   a hard guarantee. The target must be a positive integer and cannot exceed
-#'   the number of graph vertices.
+#'   a hard guarantee. If `n_clusters` is supplied and `method` is omitted,
+#'   faissR uses `"louvain"` as the target-count clustering method. The target
+#'   must be a positive integer and cannot exceed the number of graph vertices.
 #' @param objective_function Reserved for Leiden-compatible APIs.
 #' @param n_iterations Native clustering iterations.
 #' @param steps Random-walk propagation depth.
@@ -332,6 +333,9 @@ graph_cluster <- function(graph,
                           steps = 4L,
                           seed = NULL,
                           ...) {
+  if (missing(method) && !is.null(n_clusters)) {
+    method <- "louvain"
+  }
   method <- normalize_graph_cluster_method(method)
   requested_backend <- normalize_public_backend_arg(backend)
   backend <- resolve_graph_cluster_backend(requested_backend)

@@ -358,10 +358,10 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
 }
 
 kmeans_auto_backend_policy <- function(n, p, centers) {
-  work_threshold <- 1e8
-  nbytes_threshold <- 256 * 1024^2
-  large_n_threshold <- 50000
-  large_p_threshold <- 128
+  work_threshold <- kmeans_option_number("kmeans_cuda_work_threshold", 1e8, min_value = 1)
+  nbytes_threshold <- kmeans_option_number("kmeans_cuda_nbytes_threshold", 256 * 1024^2, min_value = 1)
+  large_n_threshold <- kmeans_option_integer("kmeans_cuda_large_n_threshold", 50000L, min_value = 1L)
+  large_p_threshold <- kmeans_option_integer("kmeans_cuda_large_p_threshold", 128L, min_value = 1L)
   helper <- tryCatch(
     getFromNamespace("kmeans_auto_backend_policy", "faissR"),
     error = function(e) NULL
@@ -439,6 +439,19 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
     large_n_threshold = large_n_threshold,
     large_p_threshold = large_p_threshold
   )
+}
+
+kmeans_option_number <- function(name, default, min_value = -Inf) {
+  value <- suppressWarnings(as.numeric(getOption(paste0("faissR.", name), default)))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) || value < min_value) {
+    return(default)
+  }
+  as.numeric(value)
+}
+
+kmeans_option_integer <- function(name, default, min_value = 1L) {
+  value <- kmeans_option_number(name, default, min_value = min_value)
+  as.integer(round(value))
 }
 
 kmeans_auto_prefers_cuda <- function(n, p, centers) {

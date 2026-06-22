@@ -56,7 +56,12 @@
 #'   `parameters$tuning$effective_tol` expose the same values as flat fields for
 #'   benchmark summaries. `parameters$tuning$backend_policy` records the
 #'   deterministic shape rule used by `backend = "auto"` to decide whether CUDA
-#'   has enough estimated work or input size to offset transfer overhead.
+#'   has enough estimated work or input size to offset transfer overhead. The
+#'   default thresholds can be overridden without adding pilot work by setting
+#'   `options(faissR.kmeans_cuda_work_threshold = ...)`,
+#'   `options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
+#'   `options(faissR.kmeans_cuda_large_n_threshold = ...)`, or
+#'   `options(faissR.kmeans_cuda_large_p_threshold = ...)`.
 #'   `parameters$tuning$selection` stores the static no-pilot backend and
 #'   effective-parameter decision used for benchmark auditing, including
 #'   `explicit_backend` and `backend_decision` fields that distinguish an
@@ -299,10 +304,10 @@ kmeans_selection_metadata <- function(requested_backend,
 }
 
 kmeans_auto_backend_policy <- function(n, p, centers) {
-  work_threshold <- 1e8
-  nbytes_threshold <- 256 * 1024^2
-  large_n_threshold <- 50000
-  large_p_threshold <- 128
+  work_threshold <- kmeans_option_number("kmeans_cuda_work_threshold", 1e8, min_value = 1)
+  nbytes_threshold <- kmeans_option_number("kmeans_cuda_nbytes_threshold", 256 * 1024^2, min_value = 1)
+  large_n_threshold <- kmeans_option_integer("kmeans_cuda_large_n_threshold", 50000L, min_value = 1L)
+  large_p_threshold <- kmeans_option_integer("kmeans_cuda_large_p_threshold", 128L, min_value = 1L)
   if (is.null(n) || is.null(p) || is.null(centers)) {
     return(list(
       prefer_cuda = TRUE,
@@ -835,4 +840,17 @@ kmeans_value_source <- function(x) {
     return("auto")
   }
   "explicit"
+}
+
+kmeans_option_number <- function(name, default, min_value = -Inf) {
+  value <- suppressWarnings(as.numeric(faissr_option(name, default)))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) || value < min_value) {
+    return(default)
+  }
+  as.numeric(value)
+}
+
+kmeans_option_integer <- function(name, default, min_value = 1L) {
+  value <- kmeans_option_number(name, default, min_value = min_value)
+  as.integer(round(value))
 }

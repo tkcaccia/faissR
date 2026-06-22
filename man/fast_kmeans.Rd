@@ -81,7 +81,12 @@ A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
   `parameters$tuning$effective_tol` expose the same values as flat fields for
   benchmark summaries. `parameters$tuning$backend_policy` records the
   deterministic shape rule used by `backend = "auto"` to decide whether CUDA
-  has enough estimated work or input size to offset transfer overhead.
+  has enough estimated work or input size to offset transfer overhead. The
+  default thresholds can be overridden without adding pilot work by setting
+  `options(faissR.kmeans_cuda_work_threshold = ...)`,
+  `options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
+  `options(faissR.kmeans_cuda_large_n_threshold = ...)`, or
+  `options(faissR.kmeans_cuda_large_p_threshold = ...)`.
   `parameters$tuning$selection` stores the static no-pilot backend and
   effective-parameter decision used for benchmark auditing, including
   `explicit_backend` and `backend_decision` fields that distinguish an

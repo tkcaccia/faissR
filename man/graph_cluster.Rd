@@ -54,8 +54,9 @@ already-built graph and keeps the result whose community count is closest to
 the target. The grid is centered from the requested \code{resolution} and,
 when graph size is known, a no-pilot shape heuristic based on
 \code{n_clusters / sqrt(n_vertices)}. This is a convenience target, not a hard
-guarantee. The target must be a positive integer and cannot exceed the number
-of graph vertices.}
+guarantee. If \code{n_clusters} is supplied and \code{method} is omitted,
+faissR uses \code{"louvain"} as the target-count clustering method. The target
+must be a positive integer and cannot exceed the number of graph vertices.}
 \item{objective_function}{Reserved for Leiden-compatible APIs; currently recorded in parameters.}
 \item{n_iterations}{Native clustering iteration count.}
 \item{steps}{Random-walk propagation depth.}
@@ -70,7 +71,9 @@ of graph vertices.}
 count is available for Louvain or Leiden, faissR builds or reuses the graph once,
 evaluates a bounded deterministic resolution grid centered by the requested
 \code{resolution} and graph shape, and records the selected resolution, center,
-and search table in the returned object. Passing \code{n_clusters} to
+and search table in the returned object. If \code{n_clusters} is supplied and
+\code{method} is omitted, faissR uses \code{"louvain"} as the target-count
+clustering method. Passing \code{n_clusters} to explicit
 \code{method = "random_walking"} still errors. The target must be a positive
 integer and cannot exceed the number of graph vertices.
 
