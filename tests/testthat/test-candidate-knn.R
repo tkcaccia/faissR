@@ -109,6 +109,16 @@ test_that("candidate_knn uses strict public backend labels", {
   expect_error(candidate_knn(x, candidates, k = 2L, backend = "cuda_cuvs"), "backend")
 })
 
+test_that("candidate_knn validates k strictly", {
+  x <- matrix(rnorm(30), ncol = 3)
+  candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
+
+  expect_error(candidate_knn(x, candidates, k = 2.5, backend = "cpu"), "integer in")
+  expect_error(candidate_knn(x, candidates, k = c(1L, 2L), backend = "cpu"), "integer in")
+  expect_error(candidate_knn(x, candidates, k = 0L, backend = "cpu"), "integer in")
+  expect_error(candidate_knn(x, candidates, k = ncol(candidates) + 1L, backend = "cpu"), "integer in")
+})
+
 test_that("candidate_knn requires scalar logical exclude_self", {
   x <- matrix(rnorm(30), ncol = 3)
   candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)

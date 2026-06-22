@@ -59,8 +59,8 @@ candidate_knn <- function(data,
   if (nrow(cand) != nrow(q) || ncol(cand) < 1L) {
     stop("`candidates` must have one row per query and at least one column.", call. = FALSE)
   }
-  k <- suppressWarnings(as.integer(k))
-  if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L || k > ncol(cand)) {
+  k <- normalize_nn_positive_integer(k, "k", "`k` must be an integer in [1, ncol(candidates)].")
+  if (k > ncol(cand)) {
     stop("`k` must be an integer in [1, ncol(candidates)].", call. = FALSE)
   }
   n_threads <- normalize_nn_threads(n_threads)
