@@ -55,7 +55,8 @@ A `faissR_nn` object with `indices`, `distances`, and stable
   metadata fields `index_base`, `distance_type`, `metric`, and
   `backend_used`. Auto requests also include `attr(result,
   "auto_selection")`, a static shape/k/metric decision record that does
-  not run pilot tuning.
+  records the predicted internal backend, public method class, device class,
+  and does not run pilot tuning.
 }
 \description{
 `nn_without_self()` is a convenience wrapper around `nn()` for the common

@@ -473,6 +473,8 @@ test_that("public NN results preserve requested and resolved routing metadata", 
   expect_equal(auto_meta$requested_backend, "auto")
   expect_equal(auto_meta$requested_method, "exact")
   expect_equal(auto_meta$predicted_backend, attr(out, "backend"))
+  expect_equal(auto_meta$predicted_method, "exact")
+  expect_equal(auto_meta$predicted_device, "cpu")
   expect_equal(auto_meta$metric, "euclidean")
   expect_equal(auto_meta$k, 3L)
   expect_equal(auto_meta$n, nrow(x))
@@ -503,6 +505,8 @@ test_that("top-level auto reuses the metric-aware CPU auto selector after GPU de
   auto_meta <- attr(top_auto, "auto_selection")
   expect_equal(auto_meta$policy, "static_shape_k_metric_selector")
   expect_equal(auto_meta$predicted_backend, attr(top_auto, "backend"))
+  expect_equal(auto_meta$predicted_method, "flat")
+  expect_equal(auto_meta$predicted_device, "cpu")
   expect_equal(auto_meta$reason, "auto_cpu_fallback")
   expect_equal(auto_meta$metric, "cosine")
   expect_false(auto_meta$self_query)
@@ -515,6 +519,21 @@ test_that("explicit NN routes do not attach auto selection metadata", {
   out <- nn(x, k = 3L, backend = "cpu", method = "exact", tuning = "off")
 
   expect_null(attr(out, "auto_selection"))
+})
+
+test_that("resolved backend labels map to stable auto-selection method and device metadata", {
+  expect_equal(faissR:::nn_resolved_backend_public_method("faiss_hnsw"), "hnsw")
+  expect_equal(faissR:::nn_resolved_backend_public_method("faiss_flat_cosine"), "flat")
+  expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_nndescent"), "nndescent")
+  expect_equal(faissR:::nn_resolved_backend_public_method("faiss_gpu_cagra"), "cagra")
+  expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_bruteforce"), "exact")
+  expect_equal(faissR:::nn_resolved_backend_public_method("unknown_backend"), NA_character_)
+
+  expect_equal(faissR:::nn_resolved_backend_device("faiss_hnsw"), "cpu")
+  expect_equal(faissR:::nn_resolved_backend_device("faiss_gpu_ivf_flat"), "cuda")
+  expect_equal(faissR:::nn_resolved_backend_device("cuda_cuvs_bruteforce"), "cuda")
+  expect_equal(faissR:::nn_resolved_backend_device("cuvs_ivfpq"), "cuda")
+  expect_equal(faissR:::nn_resolved_backend_device("cpu_auto"), "auto")
 })
 
 test_that("public NN APIs require scalar backend method metric and tuning choices", {

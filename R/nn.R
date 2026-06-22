@@ -2175,6 +2175,59 @@ public_nn_method_label <- function(method) {
   labels[[method]] %||% method
 }
 
+nn_resolved_backend_public_method <- function(backend) {
+  backend <- as.character(backend)[1L]
+  if (is.na(backend) || !nzchar(backend)) return(NA_character_)
+  if (backend %in% c("auto", "cpu_auto", "cuda_auto", "gpu_auto")) return("auto")
+  if (backend %in% c("cpu", "cuda", "cuda_cuvs_bruteforce")) return("exact")
+  if (backend %in% c(
+    "faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat", "faiss_flat_l2",
+    "faiss_flat_ip", "faiss_flat_cosine", "faiss_flat_correlation",
+    "faiss_gpu_flat", "faiss_gpu_flat_l2", "cuda_faiss_flat_l2",
+    "faiss_gpu_flat_ip", "cuda_faiss_flat_ip",
+    "faiss_gpu_flat_cosine", "cuda_faiss_flat_cosine",
+    "faiss_gpu_flat_correlation", "cuda_faiss_flat_correlation"
+  )) return("flat")
+  if (backend %in% c("grid", "cpu_grid", "grid2d", "grid3d",
+                     "cpu_grid2d", "cpu_grid3d", "cuda_grid",
+                     "cuda_grid_auto", "gpu_grid", "cuda_grid2d",
+                     "cuda_grid3d")) return("grid")
+  if (backend %in% c("vptree", "cpu_vptree")) return("vptree")
+  if (backend %in% c("sparse", "cpu_sparse", "sparse_cpu")) return("sparse")
+  if (backend %in% c("hnsw", "rcpphnsw", "cpu_hnsw", "faiss_hnsw")) return("hnsw")
+  if (backend %in% c("faiss_ivf", "cpu_faiss_index_ivf", "faiss_ivf_flat",
+                     "faiss_gpu_ivf", "faiss_gpu_ivf_flat",
+                     "cuda_faiss_ivf_flat", "cuvs_ivf",
+                     "cuda_cuvs_ivf", "cuvs_ivf_flat",
+                     "cuda_cuvs_ivf_flat")) return("ivf")
+  if (backend %in% c("faiss_ivfpq", "faiss_gpu_ivfpq",
+                     "cuda_faiss_ivfpq", "cuvs_ivfpq",
+                     "cuda_cuvs_ivfpq", "cuvs_ivf_pq",
+                     "cuda_cuvs_ivf_pq")) return("ivfpq")
+  if (identical(backend, "faiss_nsg")) return("nsg")
+  if (backend %in% c("cpu_nndescent", "faiss_nndescent",
+                     "cuda_cuvs_nndescent", "cuvs_nndescent",
+                     "cuda_nndescent", "cuda_approx",
+                     "gpu_nndescent", "gpu_approx")) return("nndescent")
+  if (backend %in% c("faiss_gpu_cagra", "cuda_faiss_cagra",
+                     "cuda_cuvs_cagra", "cuda_cagra",
+                     "gpu_cagra")) return("cagra")
+  NA_character_
+}
+
+nn_resolved_backend_device <- function(backend) {
+  backend <- as.character(backend)[1L]
+  if (is.na(backend) || !nzchar(backend)) return(NA_character_)
+  if (backend %in% c("auto", "cpu_auto", "cuda_auto", "gpu_auto")) return("auto")
+  if (startsWith(backend, "cuda") ||
+      startsWith(backend, "gpu") ||
+      startsWith(backend, "cuvs") ||
+      startsWith(backend, "faiss_gpu")) {
+    return("cuda")
+  }
+  "cpu"
+}
+
 is_sparse_matrix_input <- function(x) {
   inherits(x, "sparseMatrix") || inherits(x, "dgCMatrix")
 }
@@ -2798,6 +2851,8 @@ nn_auto_selection_metadata <- function(data,
     requested_method = public_nn_method_label(requested_method),
     resolved_public_backend = resolved_backend,
     predicted_backend = route$selected_backend,
+    predicted_method = nn_resolved_backend_public_method(route$selected_backend),
+    predicted_device = nn_resolved_backend_device(route$selected_backend),
     reason = route$reason,
     error = route$error,
     n = shape$n,
@@ -5835,7 +5890,8 @@ grid_self_knn <- function(data,
 #'   `attr(result, "requested_method")`, `attr(result, "tuning")`, and
 #'   `attr(result, "resolved_backend")`. Auto requests also include
 #'   `attr(result, "auto_selection")`, a static shape/k/metric decision record
-#'   that does not run pilot tuning.
+#'   that records the predicted internal backend, public method class, device
+#'   class, and does not run pilot tuning.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu")
@@ -5926,7 +5982,8 @@ nn <- function(data,
 #'   metadata fields `index_base`, `distance_type`, `metric`, and
 #'   `backend_used`. Auto requests also include `attr(result,
 #'   "auto_selection")`, a static shape/k/metric decision record that does
-#'   not run pilot tuning.
+#'   records the predicted internal backend, public method class, device class,
+#'   and does not run pilot tuning.
 #' @export
 nn_without_self <- function(data,
                             k,
