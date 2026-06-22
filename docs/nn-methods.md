@@ -120,8 +120,9 @@ expected skips, not algorithmic failures.
   correlation, or inner-product query/exact workloads, and RcppHNSW/hnswlib as
   the preferred large non-Euclidean self-search fallback when FAISS is
   unavailable. If neither FAISS nor RcppHNSW is available, CPU auto can use
-  faissR's native CPU NN-descent for large self-KNN instead of exact brute force
-  [1-2,5,16].
+  faissR's native CPU NSG-style route for larger non-Euclidean self-KNN, or
+  native CPU NN-descent for other large self-KNN cases, instead of exact brute
+  force [1-2,5,16,21].
 - CUDA auto uses CUDA grid for large 2D/3D Euclidean/cosine/correlation self-search, exact FAISS
   GPU Flat or cuVS brute force for small/medium Euclidean searches, FAISS GPU
   CAGRA for very large Euclidean self-search when available, and FAISS GPU
@@ -308,6 +309,12 @@ nearest-neighbour graph [21].
   inner product for self-KNN. Cosine/correlation use normalized Euclidean
   search; inner product uses the package-wide shifted dot-product distance
   convention.
+- `tuning = "auto"` chooses backend-specific candidate-graph defaults from
+  `nrow(data)`, `ncol(data)`, `k`, and `metric`. CPU native NSG reads
+  `options(faissR.cpu_nsg_r = ...)` and `options(faissR.cpu_nsg_graph_k = ...)`
+  and allows up to 512 candidate columns; CUDA native NSG reads the matching
+  `faissR.cuda_nsg_*` options and caps candidate columns at 255 for the current
+  CUDA row-candidate kernel.
 - Query-vs-reference native NSG graph traversal is not exposed yet; explicit
   native CPU/CUDA NSG currently requires self-KNN.
 

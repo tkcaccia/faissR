@@ -2140,9 +2140,54 @@ test_that("native CPU NSG returns metric-aware self-KNN results", {
     expect_equal(approx$backend, "cpu_nsg", info = metric)
     expect_equal(approx$strategy, "native_cpu_nsg_candidate_graph", info = metric)
     expect_equal(approx$accelerator, "cpu", info = metric)
+    expect_equal(approx$graph_k_cap, 512L, info = metric)
+    expect_match(approx$tuning_rule, "cpu_nsg", info = metric)
     expect_true(all(is.finite(out$distances)), info = metric)
     expect_true(all(out$indices >= 1L & out$indices <= nrow(x)), info = metric)
   }
+})
+
+test_that("native NSG tuning is backend-specific", {
+  old_options <- options(
+    faissR.cpu_nsg_r = NULL,
+    faissR.cpu_nsg_graph_k = NULL,
+    faissR.cuda_nsg_r = NULL,
+    faissR.cuda_nsg_graph_k = NULL
+  )
+  on.exit(options(old_options), add = TRUE)
+
+  cpu <- faissR:::native_nsg_params(
+    n = 70000L,
+    p = 784L,
+    k = 50L,
+    metric = "cosine",
+    backend = "cpu"
+  )
+  cuda <- faissR:::native_nsg_params(
+    n = 70000L,
+    p = 784L,
+    k = 50L,
+    metric = "cosine",
+    backend = "cuda"
+  )
+
+  expect_equal(cpu$backend, "cpu")
+  expect_equal(cuda$backend, "cuda")
+  expect_equal(cpu$graph_k_cap, 512L)
+  expect_equal(cuda$graph_k_cap, 255L)
+  expect_match(cpu$tuning_rule, "cpu_nsg")
+  expect_match(cuda$tuning_rule, "cuda_nsg")
+
+  options(
+    faissR.cpu_nsg_graph_k = 400L,
+    faissR.cuda_nsg_graph_k = 400L
+  )
+  cpu_override <- faissR:::native_nsg_params(1000L, 256L, 50L, backend = "cpu")
+  cuda_override <- faissR:::native_nsg_params(1000L, 256L, 50L, backend = "cuda")
+  expect_equal(cpu_override$requested_graph_k, 400L)
+  expect_equal(cpu_override$graph_k, 400L)
+  expect_equal(cuda_override$requested_graph_k, 255L)
+  expect_equal(cuda_override$graph_k, 255L)
 })
 
 test_that("nearest-neighbour results expose resolved backend metadata", {
@@ -2338,13 +2383,13 @@ test_that("CPU auto selector is shape-aware", {
     work_size = 20000 * 20000 * 100,
     metric = "cosine"
   )
-  expect_true(large_non_euclidean %in% c("faiss_hnsw", "hnsw", "cpu_nndescent"))
+  expect_true(large_non_euclidean %in% c("faiss_hnsw", "hnsw", "cpu_nsg", "cpu_nndescent"))
   if (faiss_available()) {
     expect_equal(large_non_euclidean, "faiss_hnsw")
   } else if (requireNamespace("RcppHNSW", quietly = TRUE)) {
     expect_equal(large_non_euclidean, "hnsw")
   } else {
-    expect_equal(large_non_euclidean, "cpu_nndescent")
+    expect_equal(large_non_euclidean, "cpu_nsg")
   }
 })
 
@@ -2384,10 +2429,14 @@ test_that("CPU auto selector is k and metric aware on benchmark k grid", {
     } else {
       expect_equal(k5_route, "cpu")
     }
-    expect_equal(
-      routes$route[routes$metric == metric & routes$k >= 10L],
-      rep(if (faiss_available()) "faiss_hnsw" else if (requireNamespace("RcppHNSW", quietly = TRUE)) "hnsw" else "cpu_nndescent", 4L)
-    )
+    expected_large_k <- if (faiss_available()) {
+      rep("faiss_hnsw", 4L)
+    } else if (requireNamespace("RcppHNSW", quietly = TRUE)) {
+      rep("hnsw", 4L)
+    } else {
+      c("cpu_nndescent", "cpu_nndescent", "cpu_nsg", "cpu_nsg")
+    }
+    expect_equal(routes$route[routes$metric == metric & routes$k >= 10L], expected_large_k)
   }
 })
 

@@ -986,7 +986,13 @@ nn_compute <- function(data,
     } else if (identical(metric, "inner_product")) {
       refine_metric <- "inner_product"
     }
-    params <- cuda_nsg_params(nrow(search_data), ncol(search_data), k, metric = metric)
+    params <- native_nsg_params(
+      nrow(search_data),
+      ncol(search_data),
+      k,
+      metric = metric,
+      backend = if (isTRUE(use_cuda)) "cuda" else "cpu"
+    )
     out <- native_nsg_self_knn(
       search_data,
       k = k,
@@ -1012,6 +1018,7 @@ nn_compute <- function(data,
         graph_k = as.integer(params$graph_k),
         requested_r = as.integer(params$requested_r),
         requested_graph_k = as.integer(params$requested_graph_k),
+        graph_k_cap = as.integer(params$graph_k_cap),
         nsg_parameters_adjusted = !identical(as.integer(params$r), as.integer(params$requested_r)) ||
           !identical(as.integer(params$graph_k), as.integer(params$requested_graph_k)),
         tuning_policy = params$tuning_policy,
@@ -2520,6 +2527,32 @@ should_use_native_nndescent_auto_fallback <- function(self_query,
   )
 }
 
+should_use_native_nsg_auto_fallback <- function(self_query,
+                                                n,
+                                                p,
+                                                k,
+                                                work_size,
+                                                metric = "euclidean") {
+  if (!should_use_auto_cpu_approx_self_knn(
+    self_query = self_query,
+    n = n,
+    p = p,
+    k = k,
+    work_size = work_size
+  )) {
+    return(FALSE)
+  }
+  metric <- normalize_nn_metric(metric)
+  !identical(metric, "euclidean") && (k >= 50L || p >= 128L)
+}
+
+native_nsg_option_int <- function(name, default, min_value = 1L, max_value = .Machine$integer.max) {
+  value <- faissr_option(name, NULL)
+  value <- if (is.null(value)) default else suppressWarnings(as.integer(value))
+  if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- default
+  as.integer(max(min_value, min(max_value, value)))
+}
+
 select_cpu_auto_backend <- function(self_query,
                                     n,
                                     p,
@@ -2558,6 +2591,16 @@ select_cpu_auto_backend <- function(self_query,
     }
     if (isTRUE(faiss_available())) return("faiss_hnsw")
     if (isTRUE(requireNamespace("RcppHNSW", quietly = TRUE))) return("hnsw")
+    if (should_use_native_nsg_auto_fallback(
+      self_query = self_query,
+      n = n,
+      p = p,
+      k = k,
+      work_size = work_size,
+      metric = metric
+    )) {
+      return("cpu_nsg")
+    }
     if (should_use_native_nndescent_auto_fallback(
       self_query = self_query,
       n = n,
@@ -2595,6 +2638,16 @@ select_cpu_auto_backend <- function(self_query,
   }
   if (isTRUE(faiss_available())) return("faiss_hnsw")
   if (isTRUE(requireNamespace("RcppHNSW", quietly = TRUE))) return("hnsw")
+  if (should_use_native_nsg_auto_fallback(
+    self_query = self_query,
+    n = n,
+    p = p,
+    k = k,
+    work_size = work_size,
+    metric = metric
+  )) {
+    return("cpu_nsg")
+  }
   if (should_use_native_nndescent_auto_fallback(
     self_query = self_query,
     n = n,
@@ -4042,41 +4095,57 @@ gpu_nndescent_self_knn <- function(data,
   out
 }
 
-cuda_nsg_params <- function(n, p, k, metric = "euclidean") {
+native_nsg_params <- function(n, p, k, metric = "euclidean", backend = c("cpu", "cuda")) {
   n <- as.integer(n)
   p <- as.integer(p)
   k <- as.integer(k)
   metric <- normalize_nn_metric(metric)
-  large_k <- length(k) == 1L && !is.na(k) && k >= 100L
+  backend <- match.arg(backend)
+  large_k <- length(k) == 1L && !is.na(k) && k >= 50L
   high_dim <- length(p) == 1L && !is.na(p) && p >= 128L
-  default_r <- if (isTRUE(large_k) || isTRUE(high_dim)) 64L else 48L
-  requested_r <- faiss_option_int("cuda_nsg_r", default_r, min_value = 2L, max_value = 256L)
+  inner_product <- identical(metric, "inner_product")
+  default_r <- if (isTRUE(large_k) || isTRUE(high_dim) || isTRUE(inner_product)) 64L else 48L
+  option_prefix <- if (identical(backend, "cuda")) "cuda_nsg" else "cpu_nsg"
+  graph_k_cap <- if (identical(backend, "cuda")) 255L else 512L
+  requested_r <- native_nsg_option_int(
+    paste0(option_prefix, "_r"),
+    default_r,
+    min_value = 2L,
+    max_value = 256L
+  )
   r <- min(max(2L, requested_r), max(1L, n - 1L))
-  default_graph_k <- max(k, 2L * r, 64L)
-  requested_graph_k <- faiss_option_int(
-    "cuda_nsg_graph_k",
+  default_multiplier <- if (isTRUE(high_dim) || isTRUE(inner_product)) 3L else 2L
+  default_graph_k <- max(k, default_multiplier * r, 96L)
+  requested_graph_k <- native_nsg_option_int(
+    paste0(option_prefix, "_graph_k"),
     default_graph_k,
     min_value = k,
-    max_value = 255L
+    max_value = graph_k_cap
   )
-  graph_k <- min(max(k, requested_graph_k), max(1L, n - 1L), 255L)
+  graph_k <- min(max(k, requested_graph_k), max(1L, n - 1L), graph_k_cap)
   if (r > graph_k) r <- graph_k
   list(
     r = as.integer(r),
     graph_k = as.integer(graph_k),
     requested_r = as.integer(requested_r),
     requested_graph_k = as.integer(requested_graph_k),
+    backend = backend,
+    graph_k_cap = as.integer(graph_k_cap),
     tuning_policy = "auto_shape_k_metric",
     tuning_rule = if (identical(metric, "inner_product")) {
-      "inner_product_cuda_candidate_refine"
+      paste0("inner_product_", backend, "_nsg_candidate_refine")
     } else if (isTRUE(high_dim) || isTRUE(large_k)) {
-      "high_recall_cuda_nsg"
+      paste0("high_recall_", backend, "_nsg")
     } else {
-      "balanced_cuda_nsg"
+      paste0("balanced_", backend, "_nsg")
     },
     tuning_large_k = isTRUE(large_k),
     tuning_high_dim = isTRUE(high_dim)
   )
+}
+
+cuda_nsg_params <- function(n, p, k, metric = "euclidean") {
+  native_nsg_params(n = n, p = p, k = k, metric = metric, backend = "cuda")
 }
 
 nsg_pair_score <- function(data, i, j, metric = "euclidean") {
@@ -4306,7 +4375,8 @@ native_nsg_self_knn <- function(data,
   if (nrow(data) < 2L) {
     stop("Native NSG requires at least two rows.", call. = FALSE)
   }
-  graph_k <- as.integer(min(max(k, graph_k), nrow(data) - 1L, 255L))
+  graph_k_cap <- if (isTRUE(use_cuda)) 255L else 512L
+  graph_k <- as.integer(min(max(k, graph_k), nrow(data) - 1L, graph_k_cap))
   r <- as.integer(min(max(k, r), graph_k))
   if (isTRUE(use_cuda) && identical(metric, "euclidean")) {
     raw <- nn_cuda_cpp(data, data, as.integer(graph_k + 1L), FALSE)

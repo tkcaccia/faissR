@@ -207,7 +207,8 @@ Method descriptions:
   cosine, correlation, and inner product. CUDA uses faissR's native NSG-style
   self-KNN candidate graph for all public metrics; cosine/correlation use
   normalized Euclidean search and raw inner product uses shifted dot-product
-  distances.
+  distances. Native NSG `tuning = "auto"` uses backend-specific shape/k/metric
+  defaults and reads `faissR.cpu_nsg_*` or `faissR.cuda_nsg_*` options.
   \item `"nndescent"`: NN-descent approximate graph construction via
   faissR's native CPU route or cuVS on CUDA. The native CPU route supports
   Euclidean/L2 and raw inner-product self-KNN; cosine/correlation use

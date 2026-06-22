@@ -186,8 +186,9 @@ supported CPU metrics when FAISS is available, and FAISS Flat exact search for
 larger cosine/correlation/inner-product query or exact workloads before falling
 back to RcppHNSW/hnswlib for large non-Euclidean self-search when FAISS is
 unavailable. If neither FAISS nor RcppHNSW is available, CPU auto can use
-native CPU NN-descent for large self-KNN instead of exact brute force
-[1-2,5]. On CUDA, it uses CUDA grid search for large 2D/3D
+native CPU NSG-style candidate refinement for larger non-Euclidean self-KNN,
+or native CPU NN-descent for other large self-KNN cases, instead of exact brute
+force [1-2,5,21]. On CUDA, it uses CUDA grid search for large 2D/3D
 Euclidean/cosine/correlation self-KNN, exact FAISS GPU Flat or cuVS brute force
 for small and medium Euclidean searches, FAISS GPU CAGRA for very large
 Euclidean self-KNN when FAISS GPU/cuVS integration is available, and FAISS GPU
@@ -243,7 +244,7 @@ public method names map to different concrete functions depending on `backend`.
 | `ivf` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | Coarse-list approximate route [1-2,16]. |
 | `ivfpq` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | Compressed approximate route [6,16]. |
 | `vamana` | Native DiskANN/Vamana-style robust-pruned candidate graph with CPU refinement. | Native DiskANN/Vamana-style robust-pruned candidate graph with CUDA row-candidate refinement. | Distinct pruned directed graph route implemented in faissR; cuVS Vamana currently provides build/serialization rather than KNN search [3,24]. |
-| `nsg` | FAISS CPU NSG for Euclidean/L2; native CPU NSG-style self-KNN candidate graph for cosine, correlation, and inner product. | Native CUDA NSG-style self-KNN candidate graph for all public metrics. | Optional graph-search baseline; CPU non-L2 routes avoid unsafe linked-FAISS graph construction by using faissR-owned candidate pruning/refinement [16,21,29]. |
+| `nsg` | FAISS CPU NSG for Euclidean/L2; native CPU NSG-style self-KNN candidate graph for cosine, correlation, and inner product. | Native CUDA NSG-style self-KNN candidate graph for all public metrics. | Optional graph-search baseline; CPU non-L2 routes avoid unsafe linked-FAISS graph construction by using faissR-owned candidate pruning/refinement. Native CPU/CUDA NSG use backend-specific auto defaults and options (`faissR.cpu_nsg_*`, `faissR.cuda_nsg_*`) [16,21,29]. |
 | `nndescent` | Native CPU NNDescent for Euclidean/L2, cosine, correlation, and raw inner product. | Direct cuVS NN-descent for Euclidean/L2, cosine, and correlation. | Approximate KNN graph construction; cosine/correlation use normalized Euclidean search, CPU raw inner product uses shifted dot-product distances, CUDA raw inner product is not exposed, and FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
 | `cagra` | Unsupported. | FAISS GPU CAGRA preferred, direct cuVS CAGRA fallback. Cosine/correlation use normalized Euclidean graph search. | CUDA-only graph-search method; raw inner product is not exposed [3,13-16]. |
 
