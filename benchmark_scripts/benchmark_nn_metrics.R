@@ -157,11 +157,6 @@ required_positive_int_values <- function(x, arg) {
   value
 }
 
-as_int_arg <- function(x, default) {
-  value <- suppressWarnings(as.integer(x %||% default))
-  if (length(value) != 1L || is.na(value) || value < 1L) as.integer(default) else value
-}
-
 required_positive_int_arg <- function(x, arg) {
   value <- suppressWarnings(as.integer(x))
   if (length(value) != 1L || is.na(value) || value < 1L) {
@@ -958,7 +953,7 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 n_threads <- required_positive_int_arg(args$threads %||% 4L, "threads")
 configure_threads(n_threads)
-seed <- as_int_arg(args$seed, 1L)
+seed <- required_positive_int_arg(args$seed %||% 1L, "seed")
 timeout <- required_positive_int_arg(args$timeout %||% 600L, "timeout")
 cycles <- required_positive_int_arg(args$cycles %||% 1L, "cycles")
 quality_n <- required_positive_int_arg(args$quality_n %||% 512L, "quality_n")
