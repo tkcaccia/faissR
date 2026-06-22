@@ -428,6 +428,23 @@ test_that("GitHub NN docs describe requested and resolved result metadata", {
   }
 })
 
+test_that("benchmark docs describe graph method and metric reuse keys", {
+  docs_file <- test_path("../../docs/benchmarks.md")
+  if (!file.exists(docs_file)) {
+    skip("GitHub benchmark documentation is not available in this installed-package test context.")
+  }
+
+  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  expect_true(
+    grepl(
+      "dataset/cycle/k/graph-backend/graph-method/metric/weight combination",
+      prose,
+      fixed = TRUE
+    )
+  )
+  expect_true(grepl("--k_values=5,10,15,50,100", prose, fixed = TRUE))
+})
+
 test_that("supervised kNN docs describe prediction route metadata", {
   docs_files <- c(
     test_path("../../docs", c("implementation.md", "usage-api.md")),

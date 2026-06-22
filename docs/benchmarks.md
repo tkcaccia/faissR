@@ -248,11 +248,11 @@ modularity, and adjusted Rand index (ARI) against `dataset$labels` when labels
 are present. ARI is computed by the benchmark helper in
 `benchmark_scripts/source.R`; it is not part of the public package API.
 For reproducibility and speed, each KNN graph is built once per
-dataset/cycle/k/graph-backend/weight combination and reused across clustering
-methods and clustering backends within that cycle. The graph benchmark defaults
-to 10 repeated cycles for speed/ARI stability; `--cycles` can override this for
-smoke tests or longer stability runs. The `graph_cached` column records reuse
-within a cycle.
+dataset/cycle/k/graph-backend/graph-method/metric/weight combination and reused
+across clustering methods and clustering backends within that cycle. The graph
+benchmark defaults to 10 repeated cycles for speed/ARI stability; `--cycles`
+can override this for smoke tests or longer stability runs. The `graph_cached`
+column records reuse within a cycle.
 `graph_sec` is the shared graph-construction time, `cluster_sec` is
 clustering-only time, and `total_sec` is `graph_sec + cluster_sec` for the
 complete graph-plus-clustering workflow represented by the row.
