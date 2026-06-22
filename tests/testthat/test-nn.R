@@ -797,6 +797,14 @@ test_that("VP-tree supports exact cosine and correlation metrics", {
     nn(x, k = k, backend = "cpu", method = "vptree", metric = "inner_product"),
     "inner-product|inner_product"
   )
+  expect_error(
+    internal_nn(x, k = k, backend = "cpu_vptree", metric = "inner_product", n_threads = 2L),
+    "inner-product|inner_product"
+  )
+  expect_error(
+    internal_nn(x, points, k = k, backend = "cpu_vptree", metric = "inner_product", n_threads = 2L),
+    "inner-product|inner_product"
+  )
 })
 
 test_that("VP-tree cosine and correlation use exact fallback for zero-normalized rows", {

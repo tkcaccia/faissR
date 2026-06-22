@@ -156,7 +156,7 @@ nn_compute <- function(data,
       backend <- "cpu_vptree"
     } else if (identical(metric, "inner_product") &&
                backend %in% c("vptree", "cpu_vptree")) {
-      backend <- "cpu_vptree"
+      stop("VP-tree nearest-neighbour search does not support `metric = \"inner_product\"`.", call. = FALSE)
     } else if (!backend %in% c("cpu", "cpu_auto", "hnsw", "rcpphnsw", "cpu_hnsw",
                                "faiss_hnsw", "faiss_ivf", "faiss_ivf_flat",
                                "faiss_ivfpq", "faiss_nsg", "faiss_nndescent",
