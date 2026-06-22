@@ -303,6 +303,8 @@ test_that("fast_kmeans docs describe effective tuning metadata", {
     expect_true(grepl("effective_n_init", prose, fixed = TRUE), info = basename(docs_file))
     expect_true(grepl("effective_tol", prose, fixed = TRUE), info = basename(docs_file))
     expect_true(grepl("final values", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("direct cuVS C API", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("does not expose an explicit seed", prose, fixed = TRUE), info = basename(docs_file))
   }
 })
 

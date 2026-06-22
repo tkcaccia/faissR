@@ -223,7 +223,7 @@ fast_kmeans(data, centers, backend = "auto",
 | `max_iter` | Maximum number of Lloyd iterations, or `"auto"` for a deterministic shape-aware default. |
 | `n_init` | Number of random restarts where the selected backend supports it, or `"auto"` for a deterministic shape-aware default. |
 | `tol` | Non-negative convergence tolerance where supported, or `"auto"` for a deterministic shape-aware default. |
-| `seed` | Random seed for CPU/statistics and FAISS paths. |
+| `seed` | Random seed for CPU/statistics and FAISS paths. The direct cuVS C API path currently does not expose an explicit seed in the stable params structure, so repeated cuVS runs should be interpreted as backend-controlled initialization. |
 | `n_threads` | CPU worker threads for FAISS/statistics paths. |
 | `streaming_batch_size` | cuVS host-data streaming batch size. Use `0` to let cuVS choose its default. |
 | `init` | Initialization method: `"kmeans++"` or `"random"` where supported. |

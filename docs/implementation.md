@@ -382,6 +382,10 @@ overhead. Small jobs resolve to CPU even on CUDA-capable machines;
 `backend = "cpu"` forces the CPU route; `backend = "cuda"` requires an
 accelerated route and errors if unavailable. This makes k-means behavior
 consistent with `nn()`, `knn_graph()`, and `graph_cluster()`.
+`seed` controls CPU/statistics and FAISS k-means paths. The direct cuVS C API
+path currently does not expose an explicit seed in the stable params structure,
+so repeated direct-cuVS runs use backend-controlled initialization and benchmark
+cycle summaries should rely on the observed ARI/withinss stability columns.
 
 ## `knn()` And `predict()`
 
