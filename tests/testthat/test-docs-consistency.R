@@ -852,7 +852,8 @@ test_that("benchmark docs describe deterministic NN recall recommendation tie-br
   }
 
   prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
-  expect_true(grepl("higher median recall, minimum recall, and median minimum recall", prose, fixed = TRUE))
+  expect_true(grepl("higher median recall, minimum recall, median minimum recall", prose, fixed = TRUE))
+  expect_true(grepl("neighbour-rank correlation, and lower mean relative distance error", prose, fixed = TRUE))
   expect_true(grepl("below-threshold median-recall ties", prose, fixed = TRUE))
 })
 

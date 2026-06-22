@@ -161,8 +161,9 @@ also validated before datasets are loaded. `--cycles` must be positive when
 supplied and otherwise defaults to 10.
 `nn_metric_cycle_summary.csv` aggregates successful rows across cycles by
 dataset/backend/method/metric/k and reports success counts, median/min/max
-elapsed time, recall stability, CPU thread count, preflight route, and the
-dominant implementation backend. New runs also preserve the public request
+elapsed time, recall stability, mean relative distance error, neighbour-rank
+correlation, CPU thread count, preflight route, and the dominant implementation
+backend. New runs also preserve the public request
 stored on `nn()` results (`result_requested_backend`,
 `result_requested_method`, and `result_tuning`), compact `route_parameters`
 metadata from FAISS/cuVS/native result attributes, explicit
@@ -183,9 +184,10 @@ dataset/backend/metric/k. When recall is available, it selects the fastest
 method whose median recall is at least the configured `recall_threshold`; if no
 method reaches that threshold it selects the highest-recall row and marks
 `recommendation_basis = "best_recall_below_threshold"`. Above-threshold speed
-ties are broken by higher median recall, minimum recall, and median minimum
-recall; below-threshold median-recall ties are broken by minimum recall, median
-minimum recall, and then speed. When recall is
+ties are broken by higher median recall, minimum recall, median minimum recall,
+neighbour-rank correlation, and lower mean relative distance error;
+below-threshold median-recall ties are broken by minimum recall, median minimum
+recall, rank correlation, distance error, and then speed. When recall is
 unavailable for the group, it selects the fastest successful row and marks
 `recommendation_basis = "speed_only_no_recall"`.
 `nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate
@@ -509,7 +511,10 @@ against exact CPU references when feasible. Small datasets use a full exact
 self-KNN reference; larger datasets use a deterministic sample of query rows
 when `quality_n * nrow(data) * ncol(data)` fits `--quality_max_ops`. The
 `recall_reference` and `recall_query_n` columns record whether recall used a
-full or sampled exact reference. The script also writes
+full or sampled exact reference. The same exact-reference subset is also used
+to report `mean_relative_distance_error` and `rank_correlation`, so recall,
+distance quality, and rank agreement are evaluated on identical query rows.
+The script also writes
 `nn_metric_fastest_at_recall_threshold.csv`, which records the fastest
 successful method per dataset/backend/metric/k whose recall is at least
 `--recall_threshold` when recall is available. When `method = "auto"` is part
@@ -534,8 +539,8 @@ The aggregate file `nn_metric_recommendations_from_cycles.csv` emits one row
 per dataset/backend/metric/k: it chooses the fastest median row above the recall
 threshold when possible, the best-recall row when all measured methods are below
 threshold, and the fastest successful row when recall is unavailable. Ties are
-resolved deterministically with minimum-recall stability before falling back to
-speed for below-threshold groups. The
+resolved deterministically with minimum-recall stability, rank agreement, and
+distance error before falling back to speed for below-threshold groups. The
 `recommendation_basis` column records which rule was used.
 `nn_metric_auto_vs_cycle_recommendation.csv` carries this value as
 `recommended_recommendation_basis` so auto comparisons can be interpreted as

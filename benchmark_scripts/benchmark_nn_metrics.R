@@ -465,6 +465,8 @@ result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threa
                        exact = NA, recall_at_k = NA_real_,
                        median_recall_at_k = NA_real_,
                        min_recall_at_k = NA_real_,
+                       mean_relative_distance_error = NA_real_,
+                       rank_correlation = NA_real_,
                        recall_reference = NA_character_,
                        recall_query_n = NA_integer_,
                        expected_skip = FALSE,
@@ -504,6 +506,8 @@ result_row <- function(dataset, n, p, backend, method, metric, k, cycle, n_threa
     recall_at_k = recall_at_k,
     median_recall_at_k = median_recall_at_k,
     min_recall_at_k = min_recall_at_k,
+    mean_relative_distance_error = mean_relative_distance_error,
+    rank_correlation = rank_correlation,
     recall_reference = recall_reference,
     recall_query_n = as.integer(recall_query_n),
     expected_skip = isTRUE(expected_skip),
@@ -643,6 +647,13 @@ finite_max <- function(x) {
   max(x)
 }
 
+nn_summary_numeric <- function(data, column, default) {
+  if (!column %in% names(data)) return(rep(default, nrow(data)))
+  value <- suppressWarnings(as.numeric(data[[column]]))
+  value[!is.finite(value)] <- default
+  value
+}
+
 summarize_nn_cycles <- function(ok) {
   if (!"cagra_implementation" %in% names(ok)) ok$cagra_implementation <- NA_character_
   parts <- split(
@@ -669,6 +680,9 @@ summarize_nn_cycles <- function(ok) {
       min_recall_at_k = finite_min(x$recall_at_k),
       median_min_recall_at_k = finite_median(x$min_recall_at_k),
       min_min_recall_at_k = finite_min(x$min_recall_at_k),
+      median_mean_relative_distance_error = finite_median(x$mean_relative_distance_error),
+      min_rank_correlation = finite_min(x$rank_correlation),
+      median_rank_correlation = finite_median(x$rank_correlation),
       median_recall_query_n = finite_median(x$recall_query_n),
       exact = any(as.logical(x$exact), na.rm = TRUE),
       result_backend = dominant_value(x$result_backend),
@@ -706,7 +720,9 @@ recommend_nn_methods <- function(cycle_summary, recall_threshold) {
             candidates$median_elapsed_sec,
             -ifelse(is.finite(candidates$median_recall_at_k), candidates$median_recall_at_k, -Inf),
             -ifelse(is.finite(candidates$min_recall_at_k), candidates$min_recall_at_k, -Inf),
-            -ifelse(is.finite(candidates$median_min_recall_at_k), candidates$median_min_recall_at_k, -Inf)
+            -ifelse(is.finite(candidates$median_min_recall_at_k), candidates$median_min_recall_at_k, -Inf),
+            -nn_summary_numeric(candidates, "median_rank_correlation", -Inf),
+            nn_summary_numeric(candidates, "median_mean_relative_distance_error", Inf)
           ), , drop = FALSE]
           candidates$recommendation_basis <- "fastest_at_recall_threshold"
           return(candidates[1L, , drop = FALSE])
@@ -716,6 +732,8 @@ recommend_nn_methods <- function(cycle_summary, recall_threshold) {
           -candidates$median_recall_at_k,
           -ifelse(is.finite(candidates$min_recall_at_k), candidates$min_recall_at_k, -Inf),
           -ifelse(is.finite(candidates$median_min_recall_at_k), candidates$median_min_recall_at_k, -Inf),
+          -nn_summary_numeric(candidates, "median_rank_correlation", -Inf),
+          nn_summary_numeric(candidates, "median_mean_relative_distance_error", Inf),
           candidates$median_elapsed_sec
         ), , drop = FALSE]
         candidates$recommendation_basis <- "best_recall_below_threshold"
@@ -743,6 +761,8 @@ recommend_nn_global_methods <- function(cycle_summary, recall_threshold) {
             -ifelse(is.finite(candidates$median_recall_at_k), candidates$median_recall_at_k, -Inf),
             -ifelse(is.finite(candidates$min_recall_at_k), candidates$min_recall_at_k, -Inf),
             -ifelse(is.finite(candidates$median_min_recall_at_k), candidates$median_min_recall_at_k, -Inf),
+            -nn_summary_numeric(candidates, "median_rank_correlation", -Inf),
+            nn_summary_numeric(candidates, "median_mean_relative_distance_error", Inf),
             candidates$backend,
             candidates$method
           ), , drop = FALSE]
@@ -754,6 +774,8 @@ recommend_nn_global_methods <- function(cycle_summary, recall_threshold) {
           -candidates$median_recall_at_k,
           -ifelse(is.finite(candidates$min_recall_at_k), candidates$min_recall_at_k, -Inf),
           -ifelse(is.finite(candidates$median_min_recall_at_k), candidates$median_min_recall_at_k, -Inf),
+          -nn_summary_numeric(candidates, "median_rank_correlation", -Inf),
+          nn_summary_numeric(candidates, "median_mean_relative_distance_error", Inf),
           candidates$median_elapsed_sec,
           candidates$backend,
           candidates$method
@@ -785,6 +807,8 @@ compare_auto_to_recommendations <- function(cycle_summary, recommendations) {
     "preflight_route", "route_parameters", "tuning_status",
     "n_threads", "success_cycles", "median_elapsed_sec",
     "median_recall_at_k", "min_recall_at_k", "median_min_recall_at_k",
+    "median_mean_relative_distance_error", "median_rank_correlation",
+    "min_rank_correlation",
     "recall_reference", "median_recall_query_n"
   )
   auto_keep <- auto_keep[auto_keep %in% names(cycle_summary)]
@@ -825,6 +849,8 @@ compare_auto_to_global_recommendations <- function(cycle_summary, recommendation
     "preflight_route", "route_parameters", "tuning_status",
     "n_threads", "success_cycles", "median_elapsed_sec",
     "median_recall_at_k", "min_recall_at_k", "median_min_recall_at_k",
+    "median_mean_relative_distance_error", "median_rank_correlation",
+    "min_rank_correlation",
     "recall_reference", "median_recall_query_n"
   )
   auto_keep <- auto_keep[auto_keep %in% names(cycle_summary)]
@@ -863,6 +889,7 @@ compare_auto_to_fastest <- function(ok, fastest) {
     "auto_backend_decision", "auto_method_decision",
     "resolved_backend", "implementation_backend",
     "route_parameters", "tuning_status", "elapsed_sec", "recall_at_k",
+    "mean_relative_distance_error", "rank_correlation",
     "recall_reference", "recall_query_n"
   )
   fastest_keep <- c(
@@ -873,6 +900,7 @@ compare_auto_to_fastest <- function(ok, fastest) {
     "auto_backend_decision", "auto_method_decision",
     "resolved_backend", "implementation_backend",
     "route_parameters", "tuning_status", "elapsed_sec", "recall_at_k",
+    "mean_relative_distance_error", "rank_correlation",
     "recall_reference", "recall_query_n"
   )
   auto_keep <- auto_keep[auto_keep %in% names(ok)]
@@ -946,6 +974,8 @@ rank_nn_metric_success <- function(ok, include_cycle = FALSE) {
   order_args <- c(order_args, list(
     nn_metric_rank_value(ok, "recall_at_k", -Inf, higher_is_better = TRUE),
     nn_metric_rank_value(ok, "min_recall_at_k", -Inf, higher_is_better = TRUE),
+    nn_metric_rank_value(ok, "rank_correlation", -Inf, higher_is_better = TRUE),
+    nn_metric_rank_value(ok, "mean_relative_distance_error", Inf),
     nn_metric_rank_value(ok, "elapsed_sec", Inf)
   ))
   ok[do.call(order, order_args), , drop = FALSE]
@@ -964,7 +994,9 @@ select_nn_metric_best_rows <- function(ok, recall_threshold, include_cycle = FAL
         ranked <- above[order(
           nn_metric_rank_value(above, "elapsed_sec", Inf),
           nn_metric_rank_value(above, "recall_at_k", -Inf, higher_is_better = TRUE),
-          nn_metric_rank_value(above, "min_recall_at_k", -Inf, higher_is_better = TRUE)
+          nn_metric_rank_value(above, "min_recall_at_k", -Inf, higher_is_better = TRUE),
+          nn_metric_rank_value(above, "rank_correlation", -Inf, higher_is_better = TRUE),
+          nn_metric_rank_value(above, "mean_relative_distance_error", Inf)
         ), , drop = FALSE]
         return(ranked[1L, , drop = FALSE])
       }
@@ -972,6 +1004,8 @@ select_nn_metric_best_rows <- function(ok, recall_threshold, include_cycle = FAL
       ranked <- ranked[order(
         nn_metric_rank_value(ranked, "recall_at_k", -Inf, higher_is_better = TRUE),
         nn_metric_rank_value(ranked, "min_recall_at_k", -Inf, higher_is_better = TRUE),
+        nn_metric_rank_value(ranked, "rank_correlation", -Inf, higher_is_better = TRUE),
+        nn_metric_rank_value(ranked, "mean_relative_distance_error", Inf),
         nn_metric_rank_value(ranked, "elapsed_sec", Inf)
       ), , drop = FALSE]
       return(ranked[1L, , drop = FALSE])
@@ -1260,16 +1294,22 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
     auto_selection <- attr(out, "auto_selection", exact = TRUE)
     if (is.null(auto_selection)) auto_selection <- list()
     elapsed <- proc.time()[["elapsed"]] - started
-    recall <- if (is.null(reference)) {
-      data.frame(recall_at_k = NA_real_, median_recall_at_k = NA_real_, min_recall_at_k = NA_real_)
+    quality <- if (is.null(reference)) {
+      data.frame(
+        recall_at_k = NA_real_,
+        median_recall_at_k = NA_real_,
+        min_recall_at_k = NA_real_,
+        mean_relative_distance_error = NA_real_,
+        rank_correlation = NA_real_
+      )
     } else if (is.null(reference$rows)) {
-      benchmark_knn_recall(out, reference$knn, k = k)
+      benchmark_knn_quality(out, reference$knn, k = k)
     } else {
       sampled <- list(
         indices = out$indices[reference$rows, , drop = FALSE],
         distances = out$distances[reference$rows, , drop = FALSE]
       )
-      benchmark_knn_recall(sampled, reference$knn, k = k)
+      benchmark_knn_quality(sampled, reference$knn, k = k)
     }
     result_row(
       dataset = dataset_name,
@@ -1301,9 +1341,11 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
       route_parameters = nn_route_parameters(out),
       tuning_status = nn_tuning_status(out),
       exact = isTRUE(attr(out, "exact")),
-      recall_at_k = recall$recall_at_k[[1L]],
-      median_recall_at_k = recall$median_recall_at_k[[1L]],
-      min_recall_at_k = recall$min_recall_at_k[[1L]],
+      recall_at_k = quality$recall_at_k[[1L]],
+      median_recall_at_k = quality$median_recall_at_k[[1L]],
+      min_recall_at_k = quality$min_recall_at_k[[1L]],
+      mean_relative_distance_error = quality$mean_relative_distance_error[[1L]],
+      rank_correlation = quality$rank_correlation[[1L]],
       recall_reference = if (is.null(reference)) NA_character_ else reference$mode,
       recall_query_n = if (is.null(reference)) NA_integer_ else if (is.null(reference$rows)) nrow(x) else length(reference$rows)
     )
@@ -1617,11 +1659,11 @@ materials <- c(
   "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, the requested CAGRA implementation for public `method = \"cagra\"` rows and CUDA-capable `method = \"auto\"` rows that may select CAGRA, and resolved backend fields.",
   "`nn_metric_capabilities.csv` stores the default capability table used for non-CAGRA-provider-specific preflight, including `resolved_backend`, `runtime_available`, `runtime_reason`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. When `--cagra_implementations` contains one or more provider selectors, `nn_metric_cagra_capabilities.csv` stores the matching provider-specific capability tables with a `cagra_implementation` column, so FAISS GPU CAGRA and direct cuVS CAGRA expected skips can be audited separately. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
   "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_requested_backend`, `result_requested_method`, and `result_tuning` record the public request stored on successful `nn()` results. `auto_predicted_method`, `auto_predicted_device`, `auto_explicit_backend`, `auto_explicit_method`, `auto_backend_decision`, and `auto_method_decision` record the public method/device class and explicit-vs-auto decision fields predicted by `attr(result, \"auto_selection\")` for auto requests, without parsing internal backend labels. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes and auto-selection metadata, including deterministic FAISS HNSW `tuning_rule`, shape flags, explicit backend/method flags, backend/method decision reasons, predicted method/device, and no-pilot auto-selection reason when present. `tuning_status` records backend tuning status, or the deterministic no-pilot tuning rule for routes such as FAISS CPU HNSW.",
-  "Recall is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k. The NN metric benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs.",
+  "Quality is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k. The raw table reports recall@k, median recall@k, minimum recall@k, mean relative distance error, and Spearman neighbour-rank correlation on the same exact-reference rows. The NN metric benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",
   "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches. Speed ratios and recall gaps are reported as `NA` when the required timing or recall values are missing or invalid.",
-  "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/CAGRA-implementation/metric/k and reports success counts, median/min/max elapsed time, recall stability, CPU thread count, preflight route, compact route-parameter metadata, tuning status, and the dominant implementation backend.",
-  "`nn_metric_recommendations_from_cycles.csv` selects one method per dataset/backend/metric/k. When recall is available, it selects the fastest method whose median recall is at least `recall_threshold`; tied median times are broken by higher median recall, minimum recall, and median minimum recall. If no method reaches the threshold it selects the best-recall row and marks it as below threshold, breaking tied median recall by minimum recall, median minimum recall, and then speed. When recall is unavailable for the group, it selects the fastest successful row and marks the recommendation as speed-only.",
+  "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/CAGRA-implementation/metric/k and reports success counts, median/min/max elapsed time, recall stability, median mean relative distance error, median/min rank correlation, CPU thread count, preflight route, compact route-parameter metadata, tuning status, and the dominant implementation backend.",
+  "`nn_metric_recommendations_from_cycles.csv` selects one method per dataset/backend/metric/k. When recall is available, it selects the fastest method whose median recall is at least `recall_threshold`; tied median times are broken by higher median recall, minimum recall, median minimum recall, rank correlation, and lower distance error. If no method reaches the threshold it selects the best-recall row and marks it as below threshold, breaking tied median recall by minimum recall, median minimum recall, rank correlation, distance error, and then speed. When recall is unavailable for the group, it selects the fastest successful row and marks the recommendation as speed-only.",
   "`nn_metric_auto_vs_cycle_recommendation.csv` compares aggregate `method = \"auto\"` rows with those cycle-summary recommendations and reports the recommendation basis, median speed ratio, median recall gap, CPU thread count, preflight route, route-parameter/tuning metadata, and backend/implementation agreement. Speed ratios and recall gaps are `NA` when the required timing or recall values are unavailable or invalid.",
   "`nn_metric_global_recommendations_from_cycles.csv` pools requested CPU/CUDA/auto backends before selecting the fastest successful method within the recall threshold for each dataset/metric/k combination. This table audits the globally fastest observed backend/method route instead of only the fastest route inside each requested-backend group.",
   "`nn_metric_auto_vs_global_recommendation.csv` compares aggregate `method = \"auto\"` rows with those global recommendations and records requested-backend agreement, result-backend agreement, resolved-backend agreement, implementation agreement, speed ratio, and recall gap. This table is intended for refining no-pilot `method = \"auto\"` selectors across CPU/CUDA choices.",

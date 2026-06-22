@@ -412,6 +412,9 @@ test_that("NN metric cycle summaries preserve route and thread metadata", {
   expect_equal(out$result_tuning, "auto")
   expect_equal(out$preflight_route, "faiss_hnsw")
   expect_equal(out$success_cycles, 2L)
+  expect_true("median_mean_relative_distance_error" %in% names(out))
+  expect_true("median_rank_correlation" %in% names(out))
+  expect_true("min_rank_correlation" %in% names(out))
 })
 
 test_that("NN metric cycle summaries keep CAGRA providers separate", {
@@ -1582,6 +1585,21 @@ test_that("benchmark KNN recall ignores missing neighbour padding", {
   expect_equal(out$recall_at_k, 0.5)
   expect_equal(out$median_recall_at_k, 0.5)
   expect_equal(out$min_recall_at_k, 0)
+  quality <- env$benchmark_knn_quality(
+    list(
+      indices = matrix(c(1L, 2L, 2L, 4L), nrow = 2L, byrow = TRUE),
+      distances = matrix(c(0, 1, 0, 2), nrow = 2L, byrow = TRUE)
+    ),
+    list(
+      indices = matrix(c(1L, 2L, 3L, 2L), nrow = 2L, byrow = TRUE),
+      distances = matrix(c(0, 1, 0, 1), nrow = 2L, byrow = TRUE)
+    ),
+    k = 2L
+  )
+  expect_equal(quality$recall_at_k, 0.75)
+  expect_true(is.finite(quality$mean_relative_distance_error))
+  expect_true(is.finite(quality$rank_correlation))
+  expect_true(is.na(env$benchmark_finite_mean(c(Inf, NA_real_, NaN))))
   expect_error(
     env$benchmark_knn_recall(approx, exact, k = 1.5),
     "`k` must be a positive integer"
