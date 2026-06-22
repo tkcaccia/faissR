@@ -41,7 +41,7 @@ candidate_knn <- function(data,
                           metric = c("euclidean", "cosine", "correlation", "inner_product"),
                           n_threads = NULL,
                           exclude_self = FALSE) {
-  backend <- match.arg(backend)
+  backend <- normalize_public_backend_arg(backend)
   metric <- normalize_nn_metric(metric)
   x <- as.matrix(data)
   storage.mode(x) <- "double"

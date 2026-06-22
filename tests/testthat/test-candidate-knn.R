@@ -99,6 +99,16 @@ test_that("candidate_knn canonicalizes metric aliases", {
   expect_equal(attr(out, "metric"), "inner_product")
 })
 
+test_that("candidate_knn uses strict public backend labels", {
+  x <- matrix(rnorm(30), ncol = 3)
+  candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
+
+  auto <- candidate_knn(x, candidates, k = 2L, backend = "auto")
+  expect_equal(attr(auto, "backend"), "cpu_candidate")
+  expect_error(candidate_knn(x, candidates, k = 2L, backend = "a"), "backend")
+  expect_error(candidate_knn(x, candidates, k = 2L, backend = "cuda_cuvs"), "backend")
+})
+
 test_that("candidate_knn supports CPU correlation candidates", {
   x <- matrix(c(
     1, 2, 3,
