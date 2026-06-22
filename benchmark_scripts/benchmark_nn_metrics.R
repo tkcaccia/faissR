@@ -140,8 +140,11 @@ as_int_vec_arg <- function(x, default) {
 required_positive_int_values <- function(x, arg) {
   raw <- trimws(as.character(x))
   raw <- raw[nzchar(raw)]
-  value <- suppressWarnings(as.integer(raw))
-  invalid <- raw[is.na(value) | value < 1L]
+  value <- suppressWarnings(as.numeric(raw))
+  invalid <- raw[
+    is.na(value) | !is.finite(value) | value < 1L |
+      abs(value - round(value)) > sqrt(.Machine$double.eps)
+  ]
   if (length(invalid)) {
     stop(
       "`", arg, "` must contain only positive integers. Invalid value(s): ",
@@ -150,7 +153,7 @@ required_positive_int_values <- function(x, arg) {
       call. = FALSE
     )
   }
-  value <- unique(value)
+  value <- unique(as.integer(round(value)))
   if (!length(value)) {
     stop("`", arg, "` must contain at least one positive integer.", call. = FALSE)
   }
@@ -158,11 +161,12 @@ required_positive_int_values <- function(x, arg) {
 }
 
 required_positive_int_arg <- function(x, arg) {
-  value <- suppressWarnings(as.integer(x))
-  if (length(value) != 1L || is.na(value) || value < 1L) {
+  value <- suppressWarnings(as.numeric(x))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 1L ||
+      abs(value - round(value)) > sqrt(.Machine$double.eps)) {
     stop("`", arg, "` must be a positive integer.", call. = FALSE)
   }
-  value
+  as.integer(round(value))
 }
 
 required_positive_numeric_arg <- function(x, arg) {

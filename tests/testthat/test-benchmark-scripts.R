@@ -457,6 +457,10 @@ test_that("NN metric benchmark defaults cover requested metrics and k grid", {
     "Invalid value\\(s\\): 0"
   )
   expect_error(
+    env$required_positive_int_values(c("15.5"), "k_values"),
+    "Invalid value\\(s\\): 15.5"
+  )
+  expect_error(
     env$required_positive_int_values(character(), "k_values"),
     "at least one positive integer"
   )
@@ -466,8 +470,10 @@ test_that("NN metric benchmark defaults cover requested metrics and k grid", {
   expect_equal(env$required_positive_int_arg("512", "quality_n"), 512L)
   expect_equal(env$required_positive_int_arg("42", "seed"), 42L)
   expect_error(env$required_positive_int_arg("many", "cycles"), "positive integer")
+  expect_error(env$required_positive_int_arg("1.5", "cycles"), "positive integer")
   expect_error(env$required_positive_int_arg(0, "quality_n"), "positive integer")
   expect_error(env$required_positive_int_arg("many", "seed"), "positive integer")
+  expect_error(env$required_positive_int_arg("1.5", "seed"), "positive integer")
   expect_error(env$required_positive_int_arg(0, "seed"), "positive integer")
   expect_equal(env$required_positive_numeric_arg("5e9", "quality_max_ops"), 5e9)
   expect_equal(env$required_positive_numeric_arg("1000", "quality_max_ops"), 1000)
