@@ -266,7 +266,12 @@ The raw table and cycle summaries also preserve compact
 `graph_route_parameters` from the KNN route that built the graph, including
 FAISS/cuVS/grid parameter, auto-selection predicted method/device, explicit
 backend/method flags, backend/method decision reasons, and deterministic tuning
-metadata when present. For cosine/correlation graph routes that search in
+metadata when present. The most important auto-routing values are also exposed
+as first-class CSV columns:
+`graph_auto_predicted_backend`, `graph_auto_predicted_method`,
+`graph_auto_predicted_device`, `graph_auto_explicit_backend`,
+`graph_auto_explicit_method`, `graph_auto_backend_decision`, and
+`graph_auto_method_decision`. For cosine/correlation graph routes that search in
 normalized Euclidean space, this field also records the
 `metric_transform` and `distance_transform` used before clustering. This lets graph ARI/speed
 comparisons distinguish, for example, two HNSW-built graphs that used different

@@ -2547,6 +2547,13 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
       "nn_approximation.strategy=faiss_IndexHNSWFlat;nn_approximation.tuning_rule=balanced_shape_metric",
       "nn_approximation.strategy=faiss_IndexHNSWFlat;nn_approximation.tuning_rule=balanced_shape_metric"
     ),
+    graph_auto_predicted_backend = c("faiss_hnsw", "faiss_hnsw"),
+    graph_auto_predicted_method = c("hnsw", "hnsw"),
+    graph_auto_predicted_device = c("cpu", "cpu"),
+    graph_auto_explicit_backend = c(TRUE, TRUE),
+    graph_auto_explicit_method = c(FALSE, FALSE),
+    graph_auto_backend_decision = c("explicit_cpu", "explicit_cpu"),
+    graph_auto_method_decision = c("cpu_auto_shape_selector", "cpu_auto_shape_selector"),
     cluster_backend = c("cpu", "cpu"),
     cluster_resolved_backend = c("cpu", "cpu"),
     cluster_preflight_route = c("cpu", "cpu"),
@@ -2592,6 +2599,13 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
     out$graph_route_parameters,
     rep("nn_approximation.strategy=faiss_IndexHNSWFlat;nn_approximation.tuning_rule=balanced_shape_metric", 2L)
   )
+  expect_equal(out$graph_auto_predicted_backend, c("faiss_hnsw", "faiss_hnsw"))
+  expect_equal(out$graph_auto_predicted_method, c("hnsw", "hnsw"))
+  expect_equal(out$graph_auto_predicted_device, c("cpu", "cpu"))
+  expect_true(all(out$graph_auto_explicit_backend))
+  expect_false(any(out$graph_auto_explicit_method))
+  expect_equal(out$graph_auto_backend_decision, c("explicit_cpu", "explicit_cpu"))
+  expect_equal(out$graph_auto_method_decision, c("cpu_auto_shape_selector", "cpu_auto_shape_selector"))
   expect_equal(out$cluster_preflight_route, c("cpu", "cpu"))
   expect_equal(out$n_threads, c(2L, 2L))
   expect_equal(out$median_target_gap, c(0, 0))
@@ -2636,6 +2650,7 @@ test_that("graph benchmark extracts compact graph KNN route parameters", {
   )
 
   params <- env$graph_route_parameters(graph)
+  auto_fields <- env$graph_auto_selection_fields(graph)
   expect_match(params, "nn_approximation.strategy=faiss_IndexHNSWFlat", fixed = TRUE)
   expect_match(params, "nn_approximation.m=32", fixed = TRUE)
   expect_match(params, "nn_approximation.ef_search=150", fixed = TRUE)
@@ -2651,6 +2666,13 @@ test_that("graph benchmark extracts compact graph KNN route parameters", {
   expect_match(params, "nn_auto_selection.slow_tuning=FALSE", fixed = TRUE)
   expect_match(params, "nn_metric.metric_transform=row_l2_normalize_then_euclidean_graph_search", fixed = TRUE)
   expect_match(params, "nn_metric.distance_transform=normalized_euclidean_squared_over_2_to_1_minus_similarity", fixed = TRUE)
+  expect_equal(auto_fields$graph_auto_predicted_backend, "faiss_hnsw")
+  expect_equal(auto_fields$graph_auto_predicted_method, "hnsw")
+  expect_equal(auto_fields$graph_auto_predicted_device, "cpu")
+  expect_true(auto_fields$graph_auto_explicit_backend)
+  expect_false(auto_fields$graph_auto_explicit_method)
+  expect_equal(auto_fields$graph_auto_backend_decision, "explicit_cpu")
+  expect_equal(auto_fields$graph_auto_method_decision, "cpu_auto_shape_selector")
 })
 
 test_that("graph benchmark summarizes graph_cluster resolution search diagnostics", {

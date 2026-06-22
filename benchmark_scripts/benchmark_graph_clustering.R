@@ -343,6 +343,13 @@ result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, 
                        cluster_resolved_backend = NA_character_,
                        graph_preflight_route = NA_character_,
                        graph_route_parameters = NA_character_,
+                       graph_auto_predicted_backend = NA_character_,
+                       graph_auto_predicted_method = NA_character_,
+                       graph_auto_predicted_device = NA_character_,
+                       graph_auto_explicit_backend = NA,
+                       graph_auto_explicit_method = NA,
+                       graph_auto_backend_decision = NA_character_,
+                       graph_auto_method_decision = NA_character_,
                        cluster_preflight_route = NA_character_,
                        graph_cached = NA,
                        expected_skip = FALSE,
@@ -359,6 +366,13 @@ result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, 
     graph_resolved_backend = graph_resolved_backend,
     graph_preflight_route = graph_preflight_route,
     graph_route_parameters = graph_route_parameters,
+    graph_auto_predicted_backend = graph_auto_predicted_backend,
+    graph_auto_predicted_method = graph_auto_predicted_method,
+    graph_auto_predicted_device = graph_auto_predicted_device,
+    graph_auto_explicit_backend = if (is.na(graph_auto_explicit_backend)) NA else isTRUE(graph_auto_explicit_backend),
+    graph_auto_explicit_method = if (is.na(graph_auto_explicit_method)) NA else isTRUE(graph_auto_explicit_method),
+    graph_auto_backend_decision = graph_auto_backend_decision,
+    graph_auto_method_decision = graph_auto_method_decision,
     cluster_backend = cluster_backend,
     cluster_resolved_backend = cluster_resolved_backend,
     cluster_preflight_route = cluster_preflight_route,
@@ -485,6 +499,25 @@ graph_route_parameters <- function(graph) {
   paste(unique(pieces), collapse = ";")
 }
 
+graph_auto_selection_fields <- function(graph) {
+  meta <- attr(graph, "faissR_graph") %||% list()
+  auto <- meta$nn_auto_selection %||% list()
+  logical_field <- function(x) {
+    if (is.null(x) || !length(x) || is.na(x[[1L]])) return(NA)
+    isTRUE(as.logical(x[[1L]]))
+  }
+  character_field <- function(x) compact_graph_metadata_value(x)
+  list(
+    graph_auto_predicted_backend = character_field(auto$predicted_backend),
+    graph_auto_predicted_method = character_field(auto$predicted_method),
+    graph_auto_predicted_device = character_field(auto$predicted_device),
+    graph_auto_explicit_backend = logical_field(auto$explicit_backend),
+    graph_auto_explicit_method = logical_field(auto$explicit_method),
+    graph_auto_backend_decision = character_field(auto$backend_decision),
+    graph_auto_method_decision = character_field(auto$method_decision)
+  )
+}
+
 dominant_value <- function(x) {
   x <- as.character(x)
   x <- x[!is.na(x) & nzchar(x)]
@@ -532,6 +565,13 @@ ensure_graph_selector_columns <- function(x) {
   if (!"metric" %in% names(x)) x$metric <- "euclidean"
   if (!"target_gap" %in% names(x)) x$target_gap <- NA_integer_
   if (!"graph_route_parameters" %in% names(x)) x$graph_route_parameters <- NA_character_
+  if (!"graph_auto_predicted_backend" %in% names(x)) x$graph_auto_predicted_backend <- NA_character_
+  if (!"graph_auto_predicted_method" %in% names(x)) x$graph_auto_predicted_method <- NA_character_
+  if (!"graph_auto_predicted_device" %in% names(x)) x$graph_auto_predicted_device <- NA_character_
+  if (!"graph_auto_explicit_backend" %in% names(x)) x$graph_auto_explicit_backend <- NA
+  if (!"graph_auto_explicit_method" %in% names(x)) x$graph_auto_explicit_method <- NA
+  if (!"graph_auto_backend_decision" %in% names(x)) x$graph_auto_backend_decision <- NA_character_
+  if (!"graph_auto_method_decision" %in% names(x)) x$graph_auto_method_decision <- NA_character_
   if (!"median_target_gap" %in% names(x)) x$median_target_gap <- NA_real_
   if (!"resolution_selection" %in% names(x)) x$resolution_selection <- NA_character_
   if (!"resolution_selected_candidate" %in% names(x)) x$resolution_selected_candidate <- NA_integer_
@@ -558,6 +598,13 @@ summarize_graph_cycles <- function(ok) {
       graph_resolved_backend = dominant_value(x$graph_resolved_backend),
       graph_preflight_route = dominant_value(x$graph_preflight_route),
       graph_route_parameters = dominant_value(x$graph_route_parameters),
+      graph_auto_predicted_backend = dominant_value(x$graph_auto_predicted_backend),
+      graph_auto_predicted_method = dominant_value(x$graph_auto_predicted_method),
+      graph_auto_predicted_device = dominant_value(x$graph_auto_predicted_device),
+      graph_auto_explicit_backend = all_true_or_na(x$graph_auto_explicit_backend),
+      graph_auto_explicit_method = all_true_or_na(x$graph_auto_explicit_method),
+      graph_auto_backend_decision = dominant_value(x$graph_auto_backend_decision),
+      graph_auto_method_decision = dominant_value(x$graph_auto_method_decision),
       cluster_backend = x$cluster_backend[[1L]],
       cluster_resolved_backend = dominant_value(x$cluster_resolved_backend),
       cluster_preflight_route = dominant_value(x$cluster_preflight_route),
@@ -693,7 +740,11 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
   keys <- c("dataset", "k", "graph_backend", "graph_method", "metric", "cluster_backend", "n_clusters_requested")
   keep <- c(
     keys, "graph_resolved_backend", "cluster_resolved_backend", "graph_preflight_route",
-    "graph_route_parameters", "cluster_preflight_route", "method", "weight", "n_threads",
+    "graph_route_parameters", "graph_auto_predicted_backend",
+    "graph_auto_predicted_method", "graph_auto_predicted_device",
+    "graph_auto_explicit_backend", "graph_auto_explicit_method",
+    "graph_auto_backend_decision", "graph_auto_method_decision",
+    "cluster_preflight_route", "method", "weight", "n_threads",
     "success_cycles", "median_graph_sec", "median_cluster_sec", "median_total_sec",
     "median_ari", "min_ari", "median_modularity", "median_n_communities",
     "median_selected_resolution", "median_target_gap", "resolution_selection",
@@ -742,7 +793,11 @@ compare_auto_graph_to_global_recommendations <- function(cycle_summary, recommen
   keep <- c(
     keys, "graph_backend", "cluster_backend", "graph_resolved_backend",
     "cluster_resolved_backend", "graph_preflight_route",
-    "graph_route_parameters", "cluster_preflight_route", "method", "weight", "n_threads",
+    "graph_route_parameters", "graph_auto_predicted_backend",
+    "graph_auto_predicted_method", "graph_auto_predicted_device",
+    "graph_auto_explicit_backend", "graph_auto_explicit_method",
+    "graph_auto_backend_decision", "graph_auto_method_decision",
+    "cluster_preflight_route", "method", "weight", "n_threads",
     "success_cycles", "median_graph_sec", "median_cluster_sec", "median_total_sec",
     "median_ari", "min_ari", "median_modularity", "median_n_communities",
     "median_selected_resolution", "median_target_gap", "resolution_selection",
@@ -1038,7 +1093,7 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
     }, timeout)
     elapsed <- proc.time()[["elapsed"]] - started
     graph_meta <- attr(graph, "faissR_graph") %||% list()
-    list(
+    c(list(
       status = "success",
       graph = graph,
       graph_sec = elapsed,
@@ -1049,7 +1104,7 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
       graph_route_parameters = graph_route_parameters(graph),
       weight = attr(graph, "faissR_graph")$weight %||% weight,
       error = NA_character_
-    )
+    ), graph_auto_selection_fields(graph))
   }, error = function(e) {
     list(
       status = "failed",
@@ -1132,6 +1187,7 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
     total_sec <- graph_sec + cluster_wall
     cluster_params <- cluster$parameters %||% list()
     resolution_summary <- resolution_search_summary(cluster)
+    graph_auto <- graph_auto_selection_fields(graph_obj)
     result_row(
       dataset = dataset_name,
       n = n,
@@ -1166,12 +1222,20 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       resolution_selected_is_min_gap = resolution_summary$selected_is_min_gap,
       graph_resolved_backend = attr(graph_obj, "faissR_graph")$resolved_backend %||% graph_backend,
       graph_route_parameters = graph_route_parameters(graph_obj),
+      graph_auto_predicted_backend = graph_auto$graph_auto_predicted_backend,
+      graph_auto_predicted_method = graph_auto$graph_auto_predicted_method,
+      graph_auto_predicted_device = graph_auto$graph_auto_predicted_device,
+      graph_auto_explicit_backend = graph_auto$graph_auto_explicit_backend,
+      graph_auto_explicit_method = graph_auto$graph_auto_explicit_method,
+      graph_auto_backend_decision = graph_auto$graph_auto_backend_decision,
+      graph_auto_method_decision = graph_auto$graph_auto_method_decision,
       cluster_resolved_backend = cluster_params$resolved_backend %||% (cluster$backend %||% cluster_backend),
       graph_preflight_route = graph_preflight_route,
       cluster_preflight_route = cluster_preflight_route,
       graph_cached = graph_cached
     )
   }, error = function(e) {
+    graph_auto <- graph_auto_selection_fields(graph_obj)
     result_row(
       dataset = dataset_name,
       n = n,
@@ -1195,6 +1259,14 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       graph_n_vertices = graph_n_vertices,
       n_edges = n_edges,
       graph_preflight_route = graph_preflight_route,
+      graph_route_parameters = graph_route_parameters(graph_obj),
+      graph_auto_predicted_backend = graph_auto$graph_auto_predicted_backend,
+      graph_auto_predicted_method = graph_auto$graph_auto_predicted_method,
+      graph_auto_predicted_device = graph_auto$graph_auto_predicted_device,
+      graph_auto_explicit_backend = graph_auto$graph_auto_explicit_backend,
+      graph_auto_explicit_method = graph_auto$graph_auto_explicit_method,
+      graph_auto_backend_decision = graph_auto$graph_auto_backend_decision,
+      graph_auto_method_decision = graph_auto$graph_auto_method_decision,
       cluster_preflight_route = cluster_preflight_route,
       graph_cached = graph_cached
     )
@@ -1408,6 +1480,13 @@ for (dataset_name in datasets) {
                     graph_resolved_backend = if (identical(graph_build$status, "success")) graph_build$graph_resolved_backend else NA_character_,
                     graph_preflight_route = graph_build$graph_preflight_route %||% graph_preflight_route,
                     graph_route_parameters = if (identical(graph_build$status, "success")) graph_build$graph_route_parameters %||% NA_character_ else NA_character_,
+                    graph_auto_predicted_backend = if (identical(graph_build$status, "success")) graph_build$graph_auto_predicted_backend %||% NA_character_ else NA_character_,
+                    graph_auto_predicted_method = if (identical(graph_build$status, "success")) graph_build$graph_auto_predicted_method %||% NA_character_ else NA_character_,
+                    graph_auto_predicted_device = if (identical(graph_build$status, "success")) graph_build$graph_auto_predicted_device %||% NA_character_ else NA_character_,
+                    graph_auto_explicit_backend = if (identical(graph_build$status, "success")) graph_build$graph_auto_explicit_backend %||% NA else NA,
+                    graph_auto_explicit_method = if (identical(graph_build$status, "success")) graph_build$graph_auto_explicit_method %||% NA else NA,
+                    graph_auto_backend_decision = if (identical(graph_build$status, "success")) graph_build$graph_auto_backend_decision %||% NA_character_ else NA_character_,
+                    graph_auto_method_decision = if (identical(graph_build$status, "success")) graph_build$graph_auto_method_decision %||% NA_character_ else NA_character_,
                     cluster_preflight_route = cluster_preflight_route,
                     graph_cached = identical(graph_build$status, "success"),
                     expected_skip = TRUE,
@@ -1438,6 +1517,13 @@ for (dataset_name in datasets) {
                     graph_resolved_backend = if (identical(graph_build$status, "success")) graph_build$graph_resolved_backend else NA_character_,
                     graph_preflight_route = graph_build$graph_preflight_route %||% graph_preflight_route,
                     graph_route_parameters = graph_build$graph_route_parameters %||% NA_character_,
+                    graph_auto_predicted_backend = graph_build$graph_auto_predicted_backend %||% NA_character_,
+                    graph_auto_predicted_method = graph_build$graph_auto_predicted_method %||% NA_character_,
+                    graph_auto_predicted_device = graph_build$graph_auto_predicted_device %||% NA_character_,
+                    graph_auto_explicit_backend = graph_build$graph_auto_explicit_backend %||% NA,
+                    graph_auto_explicit_method = graph_build$graph_auto_explicit_method %||% NA,
+                    graph_auto_backend_decision = graph_build$graph_auto_backend_decision %||% NA_character_,
+                    graph_auto_method_decision = graph_build$graph_auto_method_decision %||% NA_character_,
                     cluster_preflight_route = cluster_preflight_route,
                     graph_cached = FALSE,
                     expected_skip = identical(graph_build$status, "expected_skip"),
@@ -1571,7 +1657,7 @@ materials <- c(
   sprintf("- Target clusters mode: `%s`", target_mode),
   "",
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
-  "`graph_cluster_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `graph_cluster_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, graph timings, clustering timings, memory, graph vertex/edge counts, ARI, modularity, graph NN method/metric, compact `graph_route_parameters` from the KNN route that built the graph, and backend metadata. Auto KNN graph routes include no-pilot `predicted_backend`, `predicted_method`, `predicted_device`, explicit backend/method flags, and backend/method decision metadata when available.",
+  "`graph_cluster_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `graph_cluster_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, graph timings, clustering timings, memory, graph vertex/edge counts, ARI, modularity, graph NN method/metric, compact `graph_route_parameters` from the KNN route that built the graph, and backend metadata. Auto KNN graph routes include no-pilot `predicted_backend`, `predicted_method`, `predicted_device`, explicit backend/method flags, and backend/method decision metadata when available; these are also written as first-class `graph_auto_*` columns for direct filtering and comparison.",
   "`graph_cluster_nn_capabilities.csv` stores the `faissR::nn_capabilities(runtime = TRUE)` table used to preflight graph KNN construction, including `runtime_reason` and `runtime_notes`. Runtime-unavailable graph routes are recorded as expected skips before a graph is built.",
   "`target_clusters` is normalized to either `\"labels\"` or `\"none\"`; invalid values stop before the benchmark starts. When `target_clusters = \"labels\"`, Louvain and Leiden use `n_clusters = length(unique(labels))`. If a benchmark block contains only Louvain/Leiden, this target is stored on the graph with `knn_graph(n_clusters = ...)` and reused by `graph_cluster()`; mixed blocks that include random-walking pass the target only to Louvain/Leiden rows because random-walking intentionally has no cluster-count target.",
   "`n_clusters_requested` records the requested target community count for Louvain/Leiden rows. This is a convenience target, not a hard guarantee; the actual community count is stored separately as `n_communities`. `n_clusters_source` records whether that target came from dataset labels, a stored `knn_graph(n_clusters = ...)` target, or no target. When a target is used, faissR evaluates a bounded deterministic resolution grid around the supplied resolution; `target_gap`, `resolution_selection`, `resolution_selected_candidate`, `resolution_candidates`, `resolution_min_target_gap`, `resolution_selected_is_min_gap`, and the selected resolution summarize the deterministic resolution-search decision.",
