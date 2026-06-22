@@ -677,6 +677,9 @@ canonical_method_values <- function(methods) {
       call. = FALSE
     )
   }
+  if (!length(methods)) {
+    stop("`methods` must contain at least one method.", call. = FALSE)
+  }
   methods
 }
 

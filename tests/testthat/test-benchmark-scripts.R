@@ -389,6 +389,10 @@ test_that("NN metric benchmark requires canonical public method labels", {
     env$canonical_method_values(c("HNSW", "faiss_hnsw")),
     "canonical lowercase"
   )
+  expect_error(
+    env$canonical_method_values(character()),
+    "at least one method"
+  )
   expect_false(isTRUE(env$capability_status(caps, "cpu", "HNSW", "euclidean")$supported))
   expect_false(isTRUE(env$capability_status(caps, "cpu", "faiss_hnsw", "euclidean")$supported))
 })
