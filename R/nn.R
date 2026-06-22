@@ -469,8 +469,8 @@ nn_compute <- function(data,
       as.integer(k),
       as.integer(params$nlist),
       as.integer(params$nprobe),
-      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
-      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
+      faiss_metric_search_arg(metric),
+      faiss_metric_distance_output_arg(metric),
       isTRUE(exclude_self),
       as.integer(n_threads)
     )
@@ -524,8 +524,8 @@ nn_compute <- function(data,
       as.integer(params$nprobe),
       as.integer(pq$m),
       as.integer(pq$nbits),
-      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
-      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
+      faiss_metric_search_arg(metric),
+      faiss_metric_distance_output_arg(metric),
       isTRUE(exclude_self),
       as.integer(n_threads)
     )
@@ -587,8 +587,8 @@ nn_compute <- function(data,
       as.integer(k),
       as.integer(params$nlist),
       as.integer(params$nprobe),
-      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
-      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
+      faiss_metric_search_arg(metric),
+      faiss_metric_distance_output_arg(metric),
       isTRUE(exclude_self)
     )
     result <- finish_nn_result(out, "faiss_gpu_ivf_flat", k, self_query, exact = FALSE, metric = metric)
@@ -643,8 +643,8 @@ nn_compute <- function(data,
       as.integer(params$nprobe),
       as.integer(pq$m),
       as.integer(pq$nbits),
-      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
-      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
+      faiss_metric_search_arg(metric),
+      faiss_metric_distance_output_arg(metric),
       isTRUE(exclude_self)
     )
     result <- finish_nn_result(out, "faiss_gpu_ivfpq", k, self_query, exact = FALSE, metric = metric)
@@ -761,8 +761,8 @@ nn_compute <- function(data,
       as.integer(params$m),
       as.integer(params$ef_construction),
       as.integer(params$ef_search),
-      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
-      if (identical(metric, "inner_product")) "inner_product" else "euclidean",
+      faiss_metric_search_arg(metric),
+      faiss_metric_distance_output_arg(metric),
       isTRUE(exclude_self),
       as.integer(n_threads)
     )
@@ -1391,7 +1391,7 @@ nn_compute <- function(data,
       if (isTRUE(exclude_self)) {
         out <- drop_self_knn_result(out, k)
       }
-      return(finish_nn_result(out, "cuda", k, self_query))
+      return(finish_nn_result(out, "cuda", k, self_query, exact = TRUE, metric = metric))
     }
     stop("No CUDA KNN backend is available on this machine.", call. = FALSE)
   }
@@ -2323,6 +2323,16 @@ normalize_nn_metric <- function(metric) {
     )
   }
   unname(aliases[[key]])
+}
+
+faiss_metric_search_arg <- function(metric) {
+  metric <- normalize_nn_metric(metric)
+  if (identical(metric, "inner_product")) "inner_product" else "euclidean"
+}
+
+faiss_metric_distance_output_arg <- function(metric) {
+  metric <- normalize_nn_metric(metric)
+  if (identical(metric, "inner_product")) "inner_product" else "euclidean"
 }
 
 should_use_grid2d_self_knn <- function(self_query,
