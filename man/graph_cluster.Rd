@@ -90,7 +90,10 @@ record the public backend request and the device policy after resolving
 and \code{parameters$graph_resolved_backend} record the concrete KNN
 implementation, public graph backend request, and resolved KNN backend.
 \code{parameters$n_vertices} and \code{parameters$n_edges}
-record the clustered graph size for benchmark summaries.
+record the clustered graph size for benchmark summaries. When a target
+community count is used, \code{target_n_clusters},
+\code{selected_resolution}, and \code{resolution_search} record the requested
+target, selected resolution, and deterministic resolution search table.
 }
 \references{
 Blondel VD, Guillaume JL, Lambiotte R, Lefebvre E. Fast unfolding of communities in large networks. Journal of Statistical Mechanics: Theory and Experiment. 2008;2008(10):P10008.

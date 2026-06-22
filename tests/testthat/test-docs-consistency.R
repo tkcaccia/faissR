@@ -586,6 +586,9 @@ test_that("graph_cluster docs describe clustered graph size metadata", {
     prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
     expect_true(grepl("parameters$n_vertices", prose, fixed = TRUE), info = basename(docs_file))
     expect_true(grepl("parameters$n_edges", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("target_n_clusters", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("selected_resolution", prose, fixed = TRUE), info = basename(docs_file))
+    expect_true(grepl("resolution_search", prose, fixed = TRUE), info = basename(docs_file))
   }
 })
 

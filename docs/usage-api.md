@@ -192,7 +192,10 @@ When `graph_cluster()` builds the graph internally,
 `parameters$graph_resolved_backend` separate the concrete KNN implementation
 from the public graph backend request and resolved KNN route.
 `parameters$n_vertices` and `parameters$n_edges` record the clustered graph
-size for benchmark summaries.
+size for benchmark summaries. When a target community count is used,
+`target_n_clusters`, `selected_resolution`, and `resolution_search` record the
+requested target, selected resolution, and deterministic resolution search
+table.
 
 ### Graph Clustering Methods
 

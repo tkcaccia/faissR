@@ -309,7 +309,9 @@ targets are ignored by `method = "random_walking"`; explicitly passing
 faissR evaluates a small deterministic grid of resolution values around the supplied
 `resolution` and keeps the result whose number of communities is closest to
 `m`, breaking ties by modularity. The selected resolution and search table are
-returned in the result metadata. The target must be a positive integer and
+returned in the result metadata as `selected_resolution` and
+`resolution_search`, with the requested target stored as `target_n_clusters`.
+The target must be a positive integer and
 cannot exceed the graph vertex count; fractional targets and impossible targets
 fail before the resolution-search loop.
 

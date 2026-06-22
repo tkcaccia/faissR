@@ -269,7 +269,10 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   `parameters$graph_resolved_backend` record the concrete KNN implementation,
 #'   public graph backend request, and resolved KNN backend.
 #'   `parameters$n_vertices` and `parameters$n_edges` record the clustered graph
-#'   size for benchmark summaries.
+#'   size for benchmark summaries. When a target community count is used,
+#'   `target_n_clusters`, `selected_resolution`, and `resolution_search` record
+#'   the requested target, selected resolution, and deterministic resolution
+#'   search table.
 #' @references
 #' Blondel VD, Guillaume JL, Lambiotte R, Lefebvre E. Fast unfolding of
 #' communities in large networks. Journal of Statistical Mechanics: Theory and
