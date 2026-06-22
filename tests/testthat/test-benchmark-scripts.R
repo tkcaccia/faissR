@@ -1068,6 +1068,25 @@ test_that("k-means benchmark mirrors fast_kmeans auto CUDA shape gate", {
   expect_true(env$kmeans_auto_prefers_cuda(n = NULL, p = NULL, centers = NULL))
 })
 
+test_that("k-means benchmark fallback auto params mirror package metadata", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_kmeans.R"),
+    "args <- parse_args()"
+  )
+  env$getFromNamespace <- function(...) stop("simulate unavailable package helper")
+
+  shapes <- list(
+    list(n = 70000L, p = 784L, centers = 10L, tuning = "auto"),
+    list(n = 50000L, p = 10L, centers = 100L, tuning = "auto"),
+    list(n = 200000L, p = 50L, centers = 100L, tuning = "fixed")
+  )
+  for (shape in shapes) {
+    fallback <- do.call(env$kmeans_auto_params, shape)
+    expected <- do.call(faissR:::kmeans_auto_params, shape)
+    expect_equal(fallback[names(expected)], expected, info = paste(shape, collapse = ","))
+  }
+})
+
 test_that("k-means benchmark recommendations are grouped by dataset and centers", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_kmeans.R"),

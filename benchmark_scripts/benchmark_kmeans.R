@@ -225,15 +225,30 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
   if (is.function(helper)) {
     return(helper(n = n, p = p, centers = centers, tuning = tuning))
   }
-  if (!identical(tuning, "auto")) {
-    return(list(max_iter = 100L, n_init = 1L, tol = 1e-4, policy = tuning))
-  }
   work <- as.double(n) * as.double(p) * as.double(centers)
+  high_dim <- p >= 256L
+  large_n <- n >= 100000L
+  many_centers <- centers >= 100L
   n_per_center <- as.double(n) / as.double(centers)
-  small_many_centers <- centers >= 100L && n <= 50000L && work <= 2e8 && n_per_center >= 20
-  max_iter <- if (n >= 100000L || work >= 5e9) {
+  small_many_centers <- many_centers && n <= 50000L && work <= 2e8 && n_per_center >= 20
+  if (!identical(tuning, "auto")) {
+    return(list(
+      policy = tuning,
+      max_iter = 100L,
+      n_init = 1L,
+      tol = 1e-4,
+      work = as.numeric(work),
+      n_per_center = as.numeric(n_per_center),
+      high_dim = isTRUE(p >= 256L),
+      large_n = isTRUE(n >= 100000L),
+      many_centers = isTRUE(centers >= 100L),
+      small_many_centers = isTRUE(small_many_centers),
+      rule = "fixed_defaults"
+    ))
+  }
+  max_iter <- if (large_n || work >= 5e9) {
     50L
-  } else if (p >= 256L || (centers >= 100L && !small_many_centers) || work >= 5e8) {
+  } else if (high_dim || (many_centers && !small_many_centers) || work >= 5e8) {
     75L
   } else {
     100L
@@ -247,8 +262,28 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
   } else {
     1L
   }
-  tol <- if (n >= 100000L || work >= 5e9) 1e-3 else 1e-4
-  list(max_iter = as.integer(max_iter), n_init = as.integer(n_init), tol = as.numeric(tol), policy = "auto")
+  tol <- if (large_n || work >= 5e9) 1e-3 else 1e-4
+  list(
+    policy = "auto",
+    max_iter = as.integer(max_iter),
+    n_init = as.integer(n_init),
+    tol = as.numeric(tol),
+    work = as.numeric(work),
+    n_per_center = as.numeric(n_per_center),
+    high_dim = isTRUE(high_dim),
+    large_n = isTRUE(large_n),
+    many_centers = isTRUE(many_centers),
+    small_many_centers = isTRUE(small_many_centers),
+    rule = paste(
+      "shape",
+      paste0("n=", n),
+      paste0("p=", p),
+      paste0("centers=", centers),
+      paste0("n_per_center=", formatC(n_per_center, digits = 4, format = "fg")),
+      paste0("work=", format(work, scientific = TRUE)),
+      sep = ";"
+    )
+  )
 }
 
 kmeans_auto_prefers_cuda <- function(n, p, centers) {
