@@ -85,7 +85,11 @@ backend, graph edge list, parameters, and source acknowledgements.
 \code{backend} records the clustering implementation that actually ran, while
 \code{parameters$requested_backend} and \code{parameters$resolved_backend}
 record the public backend request and the device policy after resolving
-\code{"auto"}. \code{parameters$n_vertices} and \code{parameters$n_edges}
+\code{"auto"}. When \code{graph_cluster()} builds a graph internally,
+\code{parameters$graph_backend}, \code{parameters$graph_requested_backend},
+and \code{parameters$graph_resolved_backend} record the concrete KNN
+implementation, public graph backend request, and resolved KNN backend.
+\code{parameters$n_vertices} and \code{parameters$n_edges}
 record the clustered graph size for benchmark summaries.
 }
 \references{

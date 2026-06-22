@@ -187,6 +187,10 @@ parameters, backend metadata, and source acknowledgements. `backend` records
 the clustering implementation that actually ran, while
 `parameters$requested_backend` and `parameters$resolved_backend` record the
 public backend request and the device policy after resolving `"auto"`.
+When `graph_cluster()` builds the graph internally,
+`parameters$graph_backend`, `parameters$graph_requested_backend`, and
+`parameters$graph_resolved_backend` separate the concrete KNN implementation
+from the public graph backend request and resolved KNN route.
 `parameters$n_vertices` and `parameters$n_edges` record the clustered graph
 size for benchmark summaries.
 

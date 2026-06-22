@@ -142,6 +142,10 @@ knn_graph <- function(data,
     weight <- if (identical(graph_space, "embedding")) "distance" else "snn"
   }
   if (!is.na(knn_input$input_backend)) input_backend <- knn_input$input_backend
+  if ((length(resolved_graph_backend) != 1L || is.na(resolved_graph_backend)) &&
+      !is.na(input_backend)) {
+    resolved_graph_backend <- input_backend
+  }
   if (knn_input$n_neighbors < k) k <- knn_input$n_neighbors
   cols <- seq_len(k)
   edges <- knn_graph_edges_cpp(
@@ -260,6 +264,10 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   `backend` records the clustering implementation that actually ran, while
 #'   `parameters$requested_backend` and `parameters$resolved_backend` record the
 #'   public backend request and the device policy after resolving `"auto"`.
+#'   When `graph_cluster()` builds a graph internally,
+#'   `parameters$graph_backend`, `parameters$graph_requested_backend`, and
+#'   `parameters$graph_resolved_backend` record the concrete KNN implementation,
+#'   public graph backend request, and resolved KNN backend.
 #'   `parameters$n_vertices` and `parameters$n_edges` record the clustered graph
 #'   size for benchmark summaries.
 #' @references
@@ -347,6 +355,7 @@ graph_cluster <- function(graph,
   graph_space <- "input"
   input_method <- NA_character_
   input_backend <- NA_character_
+  graph_requested_backend <- NA_character_
   if (inherits(graph, "faissR_graph")) {
     meta <- attr(graph, "faissR_graph") %||% list()
     if (!is.null(meta$requested_backend)) {
@@ -399,6 +408,7 @@ graph_cluster <- function(graph,
   if (is_knn_input(graph)) {
     knn <- graph
     input_method <- "nn"
+    graph_requested_backend <- attr(knn, "requested_backend") %||% NA_character_
   } else if (is_embedding_layout(graph)) {
     if (!is.matrix(graph$layout)) {
       stop("Embedding objects passed to `graph_cluster()` must contain a matrix `layout`.", call. = FALSE)
@@ -406,6 +416,7 @@ graph_cluster <- function(graph,
     graph_space <- "embedding"
     input_method <- as.character(graph$method %||% "embedding")[1L]
     resolved <- normalize_public_backend_arg(graph_backend, arg = "graph_backend")
+    graph_requested_backend <- resolved
     knn <- nn_without_self(
       graph$layout,
       k = k,
@@ -418,6 +429,7 @@ graph_cluster <- function(graph,
     input_backend <- attr(knn, "backend") %||% attr(knn, "resolved_backend") %||% resolved
   } else {
     resolved <- normalize_public_backend_arg(graph_backend, arg = "graph_backend")
+    graph_requested_backend <- resolved
     knn <- nn_without_self(
       graph,
       k = k,
@@ -460,6 +472,8 @@ graph_cluster <- function(graph,
   ans$parameters <- list(
     k = as.integer(k),
     graph_backend = input_backend,
+    graph_requested_backend = graph_requested_backend,
+    graph_resolved_backend = input_backend,
     graph_method = graph_method,
     metric = attr(knn, "metric") %||% metric,
     tuning = tuning,

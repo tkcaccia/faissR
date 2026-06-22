@@ -30,6 +30,7 @@ test_that("precomputed KNN graph metadata prefers resolved backend", {
   )
   class(knn) <- "faissR_nn"
   attr(knn, "backend") <- "cuda"
+  attr(knn, "requested_backend") <- "cuda"
   attr(knn, "resolved_backend") <- "faiss_gpu_cagra"
   attr(knn, "metric") <- "euclidean"
 
@@ -37,7 +38,10 @@ test_that("precomputed KNN graph metadata prefers resolved backend", {
   cl <- graph_cluster(knn, method = "louvain", backend = "cpu", k = 2L, weight = "distance")
 
   expect_equal(attr(g, "faissR_graph")$nn_backend, "faiss_gpu_cagra")
+  expect_equal(attr(g, "faissR_graph")$resolved_backend, "faiss_gpu_cagra")
   expect_equal(cl$parameters$graph_backend, "faiss_gpu_cagra")
+  expect_equal(cl$parameters$graph_requested_backend, "cuda")
+  expect_equal(cl$parameters$graph_resolved_backend, "faiss_gpu_cagra")
 })
 
 test_that("knn_graph accepts embedding-layout objects as native layout graphs", {
@@ -493,6 +497,8 @@ test_that("graph_cluster lets graph_backend auto resolve CPU-only NN methods", {
 
   expect_s3_class(cl, "faissR_graph_cluster")
   expect_equal(cl$parameters$graph_backend, "cpu_vptree")
+  expect_equal(cl$parameters$graph_requested_backend, "auto")
+  expect_equal(cl$parameters$graph_resolved_backend, "cpu_vptree")
   expect_equal(cl$parameters$graph_method, "vptree")
   expect_equal(cl$parameters$metric, "cosine")
 })
