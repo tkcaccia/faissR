@@ -40,7 +40,7 @@ current build/runtime status; it appends `resolved_backend`,
 GPU, CUDA, and cuVS rows can be skipped or labelled before computation starts.
 The `runtime_reason` labels are machine-readable, for example `available`,
 `unsupported_combination`, `missing_faiss`, `missing_faiss_gpu`,
-`missing_cuda`, and `missing_cuvs`.
+`missing_cuda`, `missing_cuda_route`, and `missing_cuvs`.
 
 ## Method Summary
 

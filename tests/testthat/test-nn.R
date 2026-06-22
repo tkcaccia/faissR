@@ -719,15 +719,34 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_match(cuda_bruteforce_cor$notes, "FAISS GPU Flat")
   expect_match(cuda_bruteforce_cor$notes, "Euclidean/L2-only")
 
+  cuda_auto_cosine <- caps[
+    caps$backend == "cuda" & caps$method == "auto" & caps$metric == "cosine",
+    ,
+    drop = FALSE
+  ]
   cuda_auto_cor <- caps[
     caps$backend == "cuda" & caps$method == "auto" & caps$metric == "correlation",
     ,
     drop = FALSE
   ]
+  cuda_auto_ip <- caps[
+    caps$backend == "cuda" & caps$method == "auto" & caps$metric == "inner_product",
+    ,
+    drop = FALSE
+  ]
   expect_equal(nrow(cuda_auto_cor), 1L)
+  expect_match(cuda_auto_cosine$notes, "CUDA grid")
+  expect_match(cuda_auto_cosine$notes, "FAISS GPU Flat")
+  expect_match(cuda_auto_cosine$notes, "cuVS HNSW/CAGRA")
+  expect_match(cuda_auto_cosine$notes, "shape-dependent")
   expect_match(cuda_auto_cor$notes, "CUDA grid")
   expect_match(cuda_auto_cor$notes, "FAISS GPU Flat")
-  expect_match(cuda_auto_cor$notes, "cuVS-only")
+  expect_match(cuda_auto_cor$notes, "cuVS HNSW/CAGRA")
+  expect_match(cuda_auto_cor$notes, "shape-dependent")
+  expect_match(cuda_auto_ip$notes, "FAISS GPU Flat IP")
+  expect_match(cuda_auto_ip$notes, "cuVS HNSW/CAGRA")
+  expect_match(cuda_auto_ip$notes, "maximum-inner-product-to-L2")
+  expect_match(cuda_auto_ip$notes, "shape-dependent")
 })
 
 test_that("nn_capabilities agrees with public CPU/CUDA resolver support", {

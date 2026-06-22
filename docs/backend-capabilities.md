@@ -145,8 +145,8 @@ whether that route is available in the installed build, a stable
 method/metric validity from local runtime availability, for example a valid
 FAISS GPU Flat row on a CPU-only installation. Reason labels include
 `available`, `unsupported_combination`, `missing_faiss`, `missing_faiss_gpu`,
-`missing_cuda`, and `missing_cuvs`, so benchmark scripts do not need to parse
-prose.
+`missing_cuda`, `missing_cuda_route`, and `missing_cuvs`, so benchmark scripts
+do not need to parse prose.
 
 For `metric = "inner_product"`, faissR ranks neighbours by larger raw dot
 product but reports shifted smaller-is-better distances, with the best returned

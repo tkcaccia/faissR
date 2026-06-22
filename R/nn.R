@@ -2174,9 +2174,9 @@ nn_capability_row <- function(method, backend, metric) {
       notes <- if (euclidean) {
         "Can resolve to CUDA grid, FAISS GPU Flat, cuVS brute force, FAISS GPU CAGRA, or cuVS approximate routes depending on shape and availability."
       } else if (metric %in% c("cosine", "correlation")) {
-        "CUDA auto can resolve to CUDA grid for large 2D/3D self-search; otherwise it uses validated FAISS GPU Flat normalized-IP search when FAISS GPU Flat is available, or CPU auto on cuVS-only runtimes."
+        "CUDA auto can resolve to CUDA grid for large 2D/3D self-search, FAISS GPU Flat normalized-IP search for exact small/query workloads, or cuVS HNSW/CAGRA graph routes for large self-KNN when available; cuVS-only runtimes are shape-dependent and keep small/query workloads on CPU."
       } else {
-        "CUDA auto uses FAISS GPU Flat IP for inner-product search when FAISS GPU Flat is available; otherwise backend auto uses CPU."
+        "CUDA auto uses FAISS GPU Flat IP for exact small/query inner-product search when FAISS GPU Flat is available, or cuVS HNSW/CAGRA graph routes for large self-KNN through a maximum-inner-product-to-L2 transform when available; cuVS-only runtimes are shape-dependent and keep small/query workloads on CPU."
       }
     }
   } else if (method %in% c("exact", "bruteforce")) {

@@ -1048,6 +1048,7 @@ test_that("NN capability docs describe runtime reason codes", {
   expect_true(grepl("missing_faiss", prose, fixed = TRUE))
   expect_true(grepl("missing_faiss_gpu", prose, fixed = TRUE))
   expect_true(grepl("missing_cuda", prose, fixed = TRUE))
+  expect_true(grepl("missing_cuda_route", prose, fixed = TRUE))
   expect_true(grepl("missing_cuvs", prose, fixed = TRUE))
   expect_true(grepl("unsupported_combination", prose, fixed = TRUE))
 })
