@@ -67,7 +67,9 @@ pipelines, and recall diagnostics without paying the KNN cost repeatedly.
 `benchmark_scripts/benchmark1_nn_speed.R` is the broad nearest-neighbour speed
 benchmark that includes faissR implementation labels, external R KNN packages,
 and selected KNN consumers. It defaults to `k = 5, 10, 15, 50, 100` and the
-four public metrics L2/Euclidean, cosine, correlation, and inner product. Flat
+four public metrics L2/Euclidean, cosine, correlation, and inner product.
+Correlation is centered cosine similarity, while inner product is the raw dot
+product, so benchmark rows for these metrics are not interchangeable. Flat
 inner-product searches are reported under the same public `method = "flat"` row
 rather than duplicate Flat-IP rows. Implementation-specific faissR rows,
 such as FAISS GPU IVF and direct cuVS rows, are timed through faissR's internal
@@ -106,7 +108,8 @@ follows the same positive-integer validation as the newer NN metric benchmark.
 method matrix. It benchmarks `backend = "auto"`, `"cpu"`, and `"cuda"` across
 the public methods, the four public metrics (`"euclidean"`, `"cosine"`,
 `"correlation"`, and `"inner_product"`), and `k = 5, 10, 15, 50, 100` by
-default. Metric aliases accepted by the API, such as `"l2"`, `"cor"`,
+default. Correlation and inner product keep their distinct public meanings:
+centered cosine similarity versus raw dot product. Metric aliases accepted by the API, such as `"l2"`, `"cor"`,
 `"pearson"`, and `"ip"`, are canonicalized before preflight and reporting.
 Unknown metric names now stop the script instead of silently falling back to
 the default metric set, so command-line typos cannot contaminate timing tables.
@@ -310,7 +313,8 @@ metric matrix. It runs public `nn()` combinations over:
   `"nndescent"`, and `"cagra"`; these must be canonical lowercase public
   method labels, not resolved backend labels such as `faiss_hnsw`;
 - metrics: `"euclidean"`, `"cosine"`, `"correlation"`, and
-  `"inner_product"` after alias canonicalization;
+  `"inner_product"` after alias canonicalization; correlation is centered
+  cosine similarity, while inner product is the raw dot product;
 - k values: `5`, `10`, `15`, `50`, and `100` by default.
 
 Unsupported combinations are preflighted with `faissR::nn_capabilities()` and
