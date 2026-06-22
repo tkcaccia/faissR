@@ -264,6 +264,13 @@ auto/recommendation comparisons.
 By default, graph construction and graph clustering are each tested with
 `"auto"`, `"cpu"`, and `"cuda"` backends. `backend = "auto"` may resolve to CPU
 when CUDA/cuGraph support is not available.
+Graph construction can also vary the nearest-neighbour route and metric with
+`--graph_methods` and `--metrics`. The default remains
+`--graph_methods=auto --metrics=euclidean` to keep routine graph-clustering
+runs compact, but expanded HPC runs can use public NN methods such as
+`auto,hnsw,ivf,nndescent,grid` and metrics such as
+`euclidean,cosine,correlation` to evaluate how graph construction affects
+clustering ARI and speed.
 Known unsupported graph-clustering combinations from the public API, such as
 CUDA random-walking or explicit CUDA clustering without libcugraph, are
 recorded as `status = "expected_skip"` with `expected_skip = TRUE`; if every
@@ -283,6 +290,8 @@ Rscript benchmark_scripts/benchmark_graph_clustering.R \
   --cycles=10 \
   --ari_tolerance=0.01 \
   --graph_backends=cpu \
+  --graph_methods=auto,hnsw,ivf,nndescent \
+  --metrics=euclidean,cosine,correlation \
   --cluster_backends=cpu \
   --methods=random_walking,louvain,leiden \
   --threads=12
@@ -299,6 +308,8 @@ Rscript benchmark_scripts/benchmark_graph_clustering.R \
   --cycles=10 \
   --ari_tolerance=0.01 \
   --graph_backends=cuda \
+  --graph_methods=auto,cagra,nndescent,ivf \
+  --metrics=euclidean,cosine,correlation \
   --cluster_backends=cuda \
   --methods=louvain,leiden \
   --threads=2
@@ -309,7 +320,12 @@ the graph benchmark before datasets are loaded.
 `--target_clusters` is normalized to either `labels` or `none`, and invalid
 values stop before the benchmark starts. Method, graph-backend, and
 cluster-backend selectors are also validated against the public benchmark
-choices before any dataset is loaded. When `--target_clusters=labels` is
+choices before any dataset is loaded. `--graph_methods` accepts the same public
+NN method labels as `nn()` and `knn_graph()`, while `--metrics` accepts the four
+public NN metrics. Unsupported graph method/backend/metric combinations are
+recorded as expected skips using `nn_capabilities()` and data-shape checks such
+as the 2D/3D requirement for `method = "grid"`. When
+`--target_clusters=labels` is
 used, Louvain and Leiden use `n_clusters = length(unique(dataset$labels))`. If
 the selected method set contains only Louvain and Leiden, the benchmark stores
 that target on the graph with `knn_graph(n_clusters = ...)` and lets

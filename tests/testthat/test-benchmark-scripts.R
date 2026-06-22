@@ -1643,6 +1643,40 @@ test_that("graph benchmark target cluster mode is explicit", {
     env$required_nonnegative_numeric_arg(-0.1, "ari_tolerance"),
     "non-negative numeric"
   )
+  expect_equal(env$default_graph_nn_methods(), "auto")
+  expect_true(all(c("auto", "hnsw", "ivf", "grid", "cagra") %in% env$valid_graph_nn_methods()))
+  expect_equal(env$default_graph_metrics(), "euclidean")
+  expect_equal(
+    env$validate_choice_values(c("euclidean", "cosine"), env$valid_graph_metrics(), "metrics"),
+    c("euclidean", "cosine")
+  )
+  expect_error(
+    env$validate_choice_values("manhattan", env$valid_graph_metrics(), "metrics"),
+    "Invalid value\\(s\\): manhattan"
+  )
+  expect_error(
+    env$validate_choice_values("faiss_hnsw", env$valid_graph_nn_methods(), "graph_methods"),
+    "Invalid value\\(s\\): faiss_hnsw"
+  )
+})
+
+test_that("graph benchmark preflights graph method and metric skips", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  dense <- matrix(rnorm(40), ncol = 4)
+
+  grid_skip <- env$graph_build_expected_skip("cpu", graph_method = "grid", metric = "euclidean", x = dense)
+  expect_match(grid_skip, "two- or three-column")
+  expect_match(grid_skip, "4 columns")
+  expect_null(env$graph_build_expected_skip("cpu", graph_method = "grid", metric = "euclidean", x = dense[, 1:2]))
+
+  sparse_skip <- env$graph_build_expected_skip("cpu", graph_method = "sparse", metric = "euclidean", x = dense)
+  expect_match(sparse_skip, "sparse Matrix")
+
+  nnd_ip <- env$graph_build_expected_skip("cpu", graph_method = "nndescent", metric = "inner_product", x = dense)
+  expect_match(nnd_ip, "inner-product|inner_product")
 })
 
 test_that("graph benchmark recommendations are grouped by backend and target cluster count", {
