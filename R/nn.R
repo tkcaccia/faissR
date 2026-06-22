@@ -1871,6 +1871,9 @@ resolve_cuda_cagra_backend <- function(faiss_gpu_available_value = faiss_gpu_ava
 #' Direct cuVS NNDescent and CAGRA do not expose raw inner-product search;
 #' public CUDA `method = "nndescent", metric = "inner_product"` uses faissR's
 #' native CUDA candidate-refinement route.
+#' Public CUDA `method = "cagra"` can resolve to FAISS GPU CAGRA or direct cuVS
+#' CAGRA; `options(faissR.cagra_implementation = "faiss_gpu")` or `"cuvs"`
+#' forces one provider, while `"auto"` keeps the default FAISS-then-cuVS rule.
 #'
 #' @param runtime Logical; when `FALSE` (the default), report support by design
 #'   without checking the current compiled/runtime libraries. When `TRUE`, add
@@ -2204,7 +2207,9 @@ nn_capability_row <- function(method, backend, metric) {
     supported <- identical(backend, "cuda") && metric %in% c("euclidean", "cosine", "correlation")
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cuda")) "FAISS GPU CAGRA or cuVS CAGRA" else NA_character_
-    notes <- if (identical(backend, "cuda")) {
+    notes <- if (identical(metric, "inner_product")) {
+      "CAGRA does not expose raw inner-product search in faissR."
+    } else if (identical(backend, "cuda")) {
       "CUDA-only approximate graph search; faissR.cagra_implementation selects FAISS GPU CAGRA, direct cuVS CAGRA, or the default FAISS-then-cuVS rule."
     } else {
       "CAGRA is CUDA-only."

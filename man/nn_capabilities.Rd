@@ -46,6 +46,10 @@ through faissR's shifted dot-product distance convention. FAISS NSG remains
 Euclidean-only because linked FAISS graph builders can abort during
 non-Euclidean graph construction. Direct cuVS NNDescent and CAGRA do not
 expose raw inner-product search.
+Public CUDA \code{method = "cagra"} can resolve to FAISS GPU CAGRA or direct
+cuVS CAGRA; \code{options(faissR.cagra_implementation = "faiss_gpu")} or
+\code{"cuvs"} forces one provider, while \code{"auto"} keeps the default
+FAISS-then-cuVS rule.
 
 Use \code{runtime = TRUE} for benchmark preflight checks that must distinguish
 a valid method/metric combination from a route that is unavailable in the

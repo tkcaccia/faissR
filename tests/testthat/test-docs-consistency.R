@@ -567,7 +567,7 @@ test_that("GitHub and reference docs describe CAGRA provider selection", {
       "usage-api.md",
       "autotuning.md"
     )),
-    test_path("../../man/nn.Rd")
+    test_path("../../man", c("nn.Rd", "nn_capabilities.Rd"))
   )
   missing <- !file.exists(docs_files)
   if (any(missing)) {

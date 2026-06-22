@@ -666,6 +666,14 @@ test_that("nn_capabilities documents the public method metric matrix", {
     caps$method == "hnsw" & caps$backend == "cuda" &
       caps$metric == "inner_product"
   ]))
+  cagra_ip <- caps[
+    caps$method == "cagra" & caps$backend == "cuda" &
+      caps$metric == "inner_product",
+    ,
+    drop = FALSE
+  ]
+  expect_false(cagra_ip$supported)
+  expect_match(cagra_ip$notes, "inner-product")
   expect_true(all(is.na(caps$implementation[!caps$supported])))
   expect_true(all(caps$supported[caps$method == "ivf"]))
   expect_true(all(caps$supported[caps$method == "ivfpq"]))
