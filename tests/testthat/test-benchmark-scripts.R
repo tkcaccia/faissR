@@ -1747,7 +1747,7 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
     tuning_large_n = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
     tuning_many_centers = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
     tuning_small_many_centers = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
-    tuning_few_points_many_centers = c(FALSE, FALSE, FALSE, FALSE, NA, NA),
+    tuning_few_points_many_centers = c(FALSE, TRUE, FALSE, FALSE, NA, NA),
     selection_policy = c(
       rep("static_shape_center_backend_selector", 4),
       rep("stats", 2)
@@ -1777,6 +1777,8 @@ test_that("k-means fast comparison is ordered by dataset centers and backend", {
   expect_equal(out$recommended_tuning_rule, rep("stats_kmeans", 4))
   expect_equal(out$fast_tuning_rule_detail, c("fast3", "fast3", "fast5", "fast5"))
   expect_equal(out$recommended_tuning_rule_detail, c("stats3", "stats3", "stats5", "stats5"))
+  expect_equal(out$fast_tuning_few_points_many_centers, c(TRUE, FALSE, FALSE, FALSE))
+  expect_true(all(is.na(out$recommended_tuning_few_points_many_centers)))
   expect_equal(out$fast_selection_policy, rep("static_shape_center_backend_selector", 4))
   expect_equal(out$recommended_selection_policy, rep("stats", 4))
   expect_equal(out$fast_selection_predicted_backend, c("cpu", "cuda", "cpu", "cuda"))
