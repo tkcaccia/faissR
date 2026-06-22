@@ -1,6 +1,6 @@
-subroutine fastembedr_knn_euclidean_range(data, points, n_data, n_points, &
+subroutine faissr_knn_euclidean_range(data, points, n_data, n_points, &
     n_features, k, exclude_self, query_start, query_end, indices, distances) &
-    bind(C, name = "fastembedr_knn_euclidean_range")
+    bind(C, name = "faissr_knn_euclidean_range")
   use iso_c_binding
   implicit none
 
@@ -78,4 +78,4 @@ subroutine fastembedr_knn_euclidean_range(data, points, n_data, n_points, &
   deallocate(best_idx)
   deallocate(best_dist)
   deallocate(work)
-end subroutine fastembedr_knn_euclidean_range
+end subroutine faissr_knn_euclidean_range

@@ -299,7 +299,7 @@ List graph_cluster_cugraph_edges_cpp(List edge_list, std::string method, int n_r
 
 // [[Rcpp::export]]
 bool cugraph_available_cpp() {
-#ifdef FASTEMBEDR_HAS_CUGRAPH
+#ifdef FAISSR_HAS_CUGRAPH
   return true;
 #else
   return false;

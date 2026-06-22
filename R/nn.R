@@ -1527,10 +1527,6 @@ faissr_option <- function(name, default = NULL) {
     value <- getOption(key, NULL)
     if (!is.null(value)) return(value)
   }
-  for (key in paste0("fastEmbedR.", name)) {
-    value <- getOption(key, NULL)
-    if (!is.null(value)) return(value)
-  }
   default
 }
 
@@ -5081,8 +5077,6 @@ grid_self_knn <- function(data,
 #'   results, `"pilot"` tunes for this call without persisting, `"fixed"` uses
 #'   fixed defaults with tuning metadata, and `"off"`/`"none"` disables tuning.
 #'   Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.
-#'   Legacy `fastEmbedR.<name>` option keys are still accepted as fallbacks, but
-#'   `faissR.*` takes precedence.
 #' @param n_threads Number of CPU worker threads for CPU backends. GPU backends
 #'   ignore this argument.
 #' @return A list with integer matrix `indices` and numeric matrix `distances`.

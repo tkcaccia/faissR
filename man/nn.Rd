@@ -78,9 +78,7 @@ computed under a different metric.}
 tuned default for the resolved method, `"cache"` reuses/stores pilot
 results, `"pilot"` tunes for this call without persisting, `"fixed"` uses
 fixed defaults with tuning metadata, and `"off"`/`"none"` disables tuning.
-Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.
-Legacy `fastEmbedR.<name>` option keys are still accepted as fallbacks, but
-`faissR.*` takes precedence.}
+Advanced tuning and cache knobs use `options(faissR.<name> = ...)`.}
 
 \item{n_threads}{Number of CPU worker threads for CPU backends. GPU backends
 ignore this argument.}

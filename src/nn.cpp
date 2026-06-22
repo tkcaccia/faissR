@@ -18,7 +18,7 @@ using Rcpp::LogicalMatrix;
 using Rcpp::NumericMatrix;
 
 extern "C" {
-void fastembedr_knn_euclidean_range(const double* data,
+void faissr_knn_euclidean_range(const double* data,
                                     const double* points,
                                     int n_data,
                                     int n_points,
@@ -51,7 +51,7 @@ bool neighbor_less(const Neighbor& a, const Neighbor& b) {
 }
 
 bool fortran_nn_enabled() {
-  const char* value = std::getenv("FASTEMBEDR_USE_FORTRAN_NN");
+  const char* value = std::getenv("FAISSR_USE_FORTRAN_NN");
   return value != nullptr && std::string(value) == "1";
 }
 
@@ -79,12 +79,12 @@ double env_positive_double(const char* name, const double fallback) {
 }
 
 bool use_row_major_distance_layout(const double copy_bytes) {
-  const char* forced = std::getenv("FASTEMBEDR_NN_ROW_MAJOR");
+  const char* forced = std::getenv("FAISSR_NN_ROW_MAJOR");
   if (env_is_truthy(forced)) return true;
   if (env_is_falsey(forced)) return false;
 
   const double max_mb = env_positive_double(
-    "FASTEMBEDR_NN_ROW_MAJOR_MAX_MB",
+    "FAISSR_NN_ROW_MAJOR_MAX_MB",
     2048.0
   );
   return copy_bytes <= max_mb * 1024.0 * 1024.0;
@@ -1382,7 +1382,7 @@ List nn_cpp(NumericMatrix data,
   if (distance_kind == DistanceKind::Euclidean && !square && fortran_nn_enabled()) {
     auto write_fortran = [&](const int query_start, const int query_end) {
       if (query_end <= query_start) return;
-      fastembedr_knn_euclidean_range(
+      faissr_knn_euclidean_range(
         data.begin(),
         points.begin(),
         n_data,

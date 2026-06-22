@@ -1,11 +1,11 @@
-#ifndef FASTEMBEDR_DLPACK_DLPACK_H_
-#define FASTEMBEDR_DLPACK_DLPACK_H_
+#ifndef FAISSR_DLPACK_DLPACK_H_
+#define FAISSR_DLPACK_DLPACK_H_
 
 /*
  * Minimal DLPack C ABI header for the optional RAPIDS cuVS backend.
  *
  * This header follows the stable public DLPack tensor structs and enum names
- * from dmlc/dlpack (Apache-2.0).  fastEmbedR uses only these ABI definitions
+ * from dmlc/dlpack (Apache-2.0). faissR uses only these ABI definitions
  * to pass dense matrices to cuVS through its C API.
  */
 

@@ -7,10 +7,10 @@ using Rcpp::List;
 using Rcpp::NumericMatrix;
 
 extern "C" {
-bool fastembedr_cuda_available();
-const char* fastembedr_cuda_last_error();
-const char* fastembedr_cuda_device_info_json();
-int fastembedr_cuda_knn(const double* data,
+bool faissr_cuda_available();
+const char* faissr_cuda_last_error();
+const char* faissr_cuda_device_info_json();
+int faissr_cuda_knn(const double* data,
                         const double* points,
                         int n_data,
                         int n_points,
@@ -19,7 +19,7 @@ int fastembedr_cuda_knn(const double* data,
                         int square,
                         int* out_indices,
                         double* out_distances);
-int fastembedr_cuda_landmark_candidate_knn(const double* data,
+int faissr_cuda_landmark_candidate_knn(const double* data,
                                            const int* projection_indices,
                                            int n,
                                            int n_features,
@@ -29,7 +29,7 @@ int fastembedr_cuda_landmark_candidate_knn(const double* data,
                                            int query_cols,
                                            int* out_indices,
                                            double* out_distances);
-int fastembedr_cuda_row_candidate_knn(const double* data,
+int faissr_cuda_row_candidate_knn(const double* data,
                                       const int* candidate_indices,
                                       int n,
                                       int n_features,
@@ -37,7 +37,7 @@ int fastembedr_cuda_row_candidate_knn(const double* data,
                                       int k,
                                       int* out_indices,
                                       double* out_distances);
-int fastembedr_cuda_grid_self_knn(const double* data,
+int faissr_cuda_grid_self_knn(const double* data,
                                   int n,
                                   int n_features,
                                   int k,
@@ -52,18 +52,18 @@ namespace {
 constexpr int kMaxCudaK = 256;
 
 const char* cuda_error_message() {
-  const char* msg = fastembedr_cuda_last_error();
+  const char* msg = faissr_cuda_last_error();
   return msg == nullptr ? "unknown CUDA error" : msg;
 }
 
 } // namespace
 
 bool cuda_is_available_impl() {
-  return fastembedr_cuda_available();
+  return faissr_cuda_available();
 }
 
 std::string cuda_device_info_json_impl() {
-  const char* info = fastembedr_cuda_device_info_json();
+  const char* info = faissr_cuda_device_info_json();
   return info == nullptr ? std::string("{}") : std::string(info);
 }
 
@@ -74,7 +74,7 @@ List cuda_nn_impl(NumericMatrix data,
   if (data.ncol() != points.ncol()) Rcpp::stop("data and points must have the same number of columns");
   if (k < 1 || k > data.nrow()) Rcpp::stop("k must be in [1, nrow(data)]");
   if (k > kMaxCudaK) Rcpp::stop("CUDA backend currently supports k <= %d", kMaxCudaK);
-  if (!fastembedr_cuda_available()) Rcpp::stop("No CUDA device is available.");
+  if (!faissr_cuda_available()) Rcpp::stop("No CUDA device is available.");
 
   const int n_data = data.nrow();
   const int n_points = points.nrow();
@@ -82,7 +82,7 @@ List cuda_nn_impl(NumericMatrix data,
   IntegerMatrix indices(n_points, k);
   NumericMatrix distances(n_points, k);
 
-  const int status = fastembedr_cuda_knn(
+  const int status = faissr_cuda_knn(
     data.begin(),
     points.begin(),
     n_data,
@@ -118,7 +118,7 @@ List cuda_landmark_candidate_knn_impl(NumericMatrix data,
   if (projection_k < 1) Rcpp::stop("projection_indices must have at least one column");
   if (k < 1 || k >= n) Rcpp::stop("k must be in [1, nrow(data) - 1]");
   if (k > kMaxCudaK) Rcpp::stop("CUDA backend currently supports k <= %d", kMaxCudaK);
-  if (!fastembedr_cuda_available()) Rcpp::stop("No CUDA device is available.");
+  if (!faissr_cuda_available()) Rcpp::stop("No CUDA device is available.");
 
   for (int i = 0; i < n; ++i) {
     for (int c = 0; c < projection_k; ++c) {
@@ -130,7 +130,7 @@ List cuda_landmark_candidate_knn_impl(NumericMatrix data,
 
   IntegerMatrix indices(n, k);
   NumericMatrix distances(n, k);
-  const int status = fastembedr_cuda_landmark_candidate_knn(
+  const int status = faissr_cuda_landmark_candidate_knn(
     data.begin(),
     projection_indices.begin(),
     n,
@@ -164,11 +164,11 @@ List cuda_row_candidate_knn_impl(NumericMatrix data,
   if (n_candidates < 1) Rcpp::stop("candidate_indices must have at least one column");
   if (k < 1 || k >= n) Rcpp::stop("k must be in [1, nrow(data) - 1]");
   if (k > kMaxCudaK) Rcpp::stop("CUDA backend currently supports k <= %d", kMaxCudaK);
-  if (!fastembedr_cuda_available()) Rcpp::stop("No CUDA device is available.");
+  if (!faissr_cuda_available()) Rcpp::stop("No CUDA device is available.");
 
   IntegerMatrix indices(n, k);
   NumericMatrix distances(n, k);
-  const int status = fastembedr_cuda_row_candidate_knn(
+  const int status = faissr_cuda_row_candidate_knn(
     data.begin(),
     candidate_indices.begin(),
     n,
@@ -202,12 +202,12 @@ List cuda_grid_self_knn_impl(NumericMatrix data,
   if (k < 1 || k >= n) Rcpp::stop("k must be in [1, nrow(data) - 1]");
   if (k > kMaxCudaK) Rcpp::stop("CUDA backend currently supports k <= %d", kMaxCudaK);
   if (bins_per_dim < 1) Rcpp::stop("bins_per_dim must be positive");
-  if (!fastembedr_cuda_available()) Rcpp::stop("No CUDA device is available.");
+  if (!faissr_cuda_available()) Rcpp::stop("No CUDA device is available.");
 
   IntegerMatrix indices(n, k);
   NumericMatrix distances(n, k);
   int n_cells = 0;
-  const int status = fastembedr_cuda_grid_self_knn(
+  const int status = faissr_cuda_grid_self_knn(
     data.begin(),
     n,
     n_features,

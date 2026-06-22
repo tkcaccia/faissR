@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#ifdef FASTEMBEDR_HAS_CUGRAPH
+#ifdef FAISSR_HAS_CUGRAPH
 #define FALSE CUGRAPH_FALSE
 #define TRUE CUGRAPH_TRUE
 #include <cugraph_c/array.h>
@@ -23,7 +23,7 @@ using Rcpp::IntegerVector;
 using Rcpp::List;
 using Rcpp::NumericVector;
 
-#ifdef FASTEMBEDR_HAS_CUGRAPH
+#ifdef FAISSR_HAS_CUGRAPH
 namespace {
 
 std::string cugraph_error_string(cugraph_error_t* error) {
@@ -187,7 +187,7 @@ List graph_cluster_cugraph_edges_cpp(List edge_list,
                                      int n_iterations,
                                      int steps,
                                      int seed) {
-#ifdef FASTEMBEDR_HAS_CUGRAPH
+#ifdef FAISSR_HAS_CUGRAPH
   return run_cugraph_community(edge_list, method, std::max(1, n_runs), resolution, n_iterations, seed);
 #else
   Rcpp::stop("CUDA graph clustering requires RAPIDS libcugraph at build time. Install libcugraph and rebuild faissR with FAISSR_USE_CUGRAPH=1, or use backend = 'cpu'.");

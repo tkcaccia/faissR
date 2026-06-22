@@ -103,7 +103,7 @@ knn_graph <- function(data,
       knn <- data
       graph_space <- "input"
       input_method <- "nn"
-    } else if (is_fastembedr_embedding(data)) {
+    } else if (is_embedding_layout(data)) {
       input_method <- as.character(data$method %||% "embedding")[1L]
       if (!is.matrix(data$layout)) {
         stop("Embedding objects passed to `knn_graph()` must contain a matrix `layout`.", call. = FALSE)
@@ -174,9 +174,8 @@ knn_graph <- function(data,
   edges
 }
 
-is_fastembedr_embedding <- function(x) {
-  inherits(x, "fastEmbedR_embedding") ||
-    (is.list(x) && is.matrix(x$layout) && !is.null(x$method))
+is_embedding_layout <- function(x) {
+  is.list(x) && is.matrix(x$layout) && !is.null(x$method)
 }
 
 resolve_knn_graph_backend <- function(backend) {
@@ -400,7 +399,7 @@ graph_cluster <- function(graph,
   if (is_knn_input(graph)) {
     knn <- graph
     input_method <- "nn"
-  } else if (is_fastembedr_embedding(graph)) {
+  } else if (is_embedding_layout(graph)) {
     if (!is.matrix(graph$layout)) {
       stop("Embedding objects passed to `graph_cluster()` must contain a matrix `layout`.", call. = FALSE)
     }

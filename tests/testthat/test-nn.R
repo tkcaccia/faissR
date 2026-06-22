@@ -243,17 +243,14 @@ test_that("nn_capabilities exposes auto backend as CPU/CUDA support union", {
   }
 })
 
-test_that("faissR option namespace takes precedence over legacy fastEmbedR options", {
+test_that("faissR options use the faissR namespace only", {
   old <- options(
     faissR.cpu_auto_exact_work = NULL,
-    fastEmbedR.cpu_auto_exact_work = NULL,
-    faissR.faiss_nlist = NULL,
-    fastEmbedR.faiss_nlist = NULL
+    faissR.faiss_nlist = NULL
   )
   on.exit(options(old), add = TRUE)
 
-  options(fastEmbedR.cpu_auto_exact_work = 1)
-  legacy <- faissR:::select_cpu_auto_backend(
+  default_route <- faissR:::select_cpu_auto_backend(
     self_query = TRUE,
     n = 10000L,
     p = 20L,
@@ -262,9 +259,9 @@ test_that("faissR option namespace takes precedence over legacy fastEmbedR optio
     work_size = 100,
     metric = "euclidean"
   )
-  expect_true(legacy %in% c("faiss_hnsw", "hnsw", "cpu"))
+  expect_equal(default_route, "cpu")
 
-  options(faissR.cpu_auto_exact_work = 1e9)
+  options(faissR.cpu_auto_exact_work = 1)
   current <- faissR:::select_cpu_auto_backend(
     self_query = TRUE,
     n = 10000L,
@@ -274,10 +271,9 @@ test_that("faissR option namespace takes precedence over legacy fastEmbedR optio
     work_size = 100,
     metric = "euclidean"
   )
-  expect_equal(current, "cpu")
+  expect_true(current %in% c("faiss_hnsw", "hnsw", "cpu"))
 
-  options(fastEmbedR.faiss_nlist = 16L)
-  expect_equal(faissR:::faiss_ivf_params(1000L, 10L)$requested_nlist, 16L)
+  expect_false(identical(faissR:::faiss_ivf_params(1000L, 10L)$requested_nlist, 32L))
   options(faissR.faiss_nlist = 32L)
   expect_equal(faissR:::faiss_ivf_params(1000L, 10L)$requested_nlist, 32L)
 })
@@ -644,18 +640,18 @@ test_that("CPU nn handles non-small Euclidean work", {
 })
 
 test_that("CPU nn row-major distance layout matches column-major fallback", {
-  old_row_major <- Sys.getenv("FASTEMBEDR_NN_ROW_MAJOR", unset = NA_character_)
-  old_fortran <- Sys.getenv("FASTEMBEDR_USE_FORTRAN_NN", unset = NA_character_)
+  old_row_major <- Sys.getenv("FAISSR_NN_ROW_MAJOR", unset = NA_character_)
+  old_fortran <- Sys.getenv("FAISSR_USE_FORTRAN_NN", unset = NA_character_)
   on.exit({
     if (is.na(old_row_major)) {
-      Sys.unsetenv("FASTEMBEDR_NN_ROW_MAJOR")
+      Sys.unsetenv("FAISSR_NN_ROW_MAJOR")
     } else {
-      Sys.setenv(FASTEMBEDR_NN_ROW_MAJOR = old_row_major)
+      Sys.setenv(FAISSR_NN_ROW_MAJOR = old_row_major)
     }
     if (is.na(old_fortran)) {
-      Sys.unsetenv("FASTEMBEDR_USE_FORTRAN_NN")
+      Sys.unsetenv("FAISSR_USE_FORTRAN_NN")
     } else {
-      Sys.setenv(FASTEMBEDR_USE_FORTRAN_NN = old_fortran)
+      Sys.setenv(FAISSR_USE_FORTRAN_NN = old_fortran)
     }
   }, add = TRUE)
 
@@ -664,12 +660,12 @@ test_that("CPU nn row-major distance layout matches column-major fallback", {
   points <- matrix(rnorm(65L * 11L), nrow = 65L)
 
   Sys.setenv(
-    FASTEMBEDR_USE_FORTRAN_NN = "0",
-    FASTEMBEDR_NN_ROW_MAJOR = "1"
+    FAISSR_USE_FORTRAN_NN = "0",
+    FAISSR_NN_ROW_MAJOR = "1"
   )
   row_major <- nn(data, points, k = 9L, backend = "cpu", n_threads = 2L)
 
-  Sys.setenv(FASTEMBEDR_NN_ROW_MAJOR = "0")
+  Sys.setenv(FAISSR_NN_ROW_MAJOR = "0")
   column_major <- nn(data, points, k = 9L, backend = "cpu", n_threads = 2L)
 
   expect_equal(attr(row_major, "memory_layout"), "row_major_contiguous")
@@ -1989,12 +1985,12 @@ test_that("nn matches brute-force euclidean neighbors for query points", {
 })
 
 test_that("Fortran CPU nn path matches C++ fallback", {
-  old <- Sys.getenv("FASTEMBEDR_USE_FORTRAN_NN", unset = NA_character_)
+  old <- Sys.getenv("FAISSR_USE_FORTRAN_NN", unset = NA_character_)
   on.exit({
     if (is.na(old)) {
-      Sys.unsetenv("FASTEMBEDR_USE_FORTRAN_NN")
+      Sys.unsetenv("FAISSR_USE_FORTRAN_NN")
     } else {
-      Sys.setenv(FASTEMBEDR_USE_FORTRAN_NN = old)
+      Sys.setenv(FAISSR_USE_FORTRAN_NN = old)
     }
   })
 
@@ -2002,17 +1998,17 @@ test_that("Fortran CPU nn path matches C++ fallback", {
   data <- matrix(rnorm(240), nrow = 40L)
   points <- matrix(rnorm(90), nrow = 15L)
 
-  Sys.setenv(FASTEMBEDR_USE_FORTRAN_NN = "1")
+  Sys.setenv(FAISSR_USE_FORTRAN_NN = "1")
   fortran <- nn(data, points, k = 7L, backend = "cpu")
-  Sys.setenv(FASTEMBEDR_USE_FORTRAN_NN = "0")
+  Sys.setenv(FAISSR_USE_FORTRAN_NN = "0")
   cpp <- nn(data, points, k = 7L, backend = "cpu")
 
   expect_equal(fortran$indices, cpp$indices)
   expect_equal(fortran$distances, cpp$distances, tolerance = 1e-12)
 
-  Sys.setenv(FASTEMBEDR_USE_FORTRAN_NN = "1")
+  Sys.setenv(FAISSR_USE_FORTRAN_NN = "1")
   fortran_self <- faissR:::nn_without_self(data, k = 6L, backend = "cpu")
-  Sys.setenv(FASTEMBEDR_USE_FORTRAN_NN = "0")
+  Sys.setenv(FAISSR_USE_FORTRAN_NN = "0")
   cpp_self <- faissR:::nn_without_self(data, k = 6L, backend = "cpu")
 
   expect_equal(fortran_self$indices, cpp_self$indices)

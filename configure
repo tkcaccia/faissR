@@ -2,17 +2,7 @@
 
 set -eu
 
-first_env() {
-  eval "value=\${$1:-}"
-  if [ -n "$value" ]; then
-    printf "%s" "$value"
-    return
-  fi
-  eval "value=\${$2:-}"
-  printf "%s" "$value"
-}
-
-use_cuda=$(first_env FAISSR_USE_CUDA FASTEMBEDR_USE_CUDA)
+use_cuda=${FAISSR_USE_CUDA:-}
 if [ -z "$use_cuda" ]; then use_cuda=auto; fi
 cuda_home=${CUDA_HOME:-}
 nvcc=${NVCC:-}
@@ -80,19 +70,19 @@ if [ -z "$faiss_cppflags" ] || [ -z "$faiss_libs" ]; then
   exit 1
 fi
 
-cppflags="$cppflags -DFASTEMBEDR_HAS_FAISS $faiss_cppflags"
+cppflags="$cppflags -DFAISSR_HAS_FAISS $faiss_cppflags"
 libs="$libs $faiss_libs"
 
 cuda_objects="nn_cuda_stub.o"
 cuda_rule=""
 if [ "$use_cuda" != "0" ] && [ -n "$nvcc" ] && [ -n "$cuda_home" ]; then
   cuda_arch_flags=""
-  for arch in ${FAISSR_CUDA_ARCH:-${FASTEMBEDR_CUDA_ARCH:-}}; do
+  for arch in ${FAISSR_CUDA_ARCH:-}; do
     cuda_arch_flags="$cuda_arch_flags -gencode=arch=compute_$arch,code=sm_$arch"
   done
-  cuda_extra_flags=${FAISSR_CUDA_FLAGS:-${FASTEMBEDR_CUDA_FLAGS:-}}
+  cuda_extra_flags=${FAISSR_CUDA_FLAGS:-}
   cuda_objects="nn_cuda_impl.o nn_cuda_kernels.o"
-  cppflags="$cppflags -DFASTEMBEDR_HAS_CUDA -I$cuda_home/include"
+  cppflags="$cppflags -DFAISSR_HAS_CUDA -I$cuda_home/include"
   libs="$libs -L$cuda_home/lib64 -L$cuda_home/lib -lcudart"
   cuda_rule="
 .DEFAULT_GOAL := all
@@ -104,7 +94,7 @@ nn_cuda_kernels.o: nn_cuda_kernels.cpp
 "
 fi
 
-use_cugraph=$(first_env FAISSR_USE_CUGRAPH FASTEMBEDR_USE_CUGRAPH)
+use_cugraph=${FAISSR_USE_CUGRAPH:-}
 if [ -z "$use_cugraph" ]; then use_cugraph=auto; fi
 cugraph_home=${CUGRAPH_HOME:-}
 cugraph_objects="graph_cugraph_stub.o"
@@ -145,7 +135,7 @@ if [ "$use_cugraph" != "0" ]; then
 
     if [ -n "$cugraph_cppflags" ] && [ -n "$cugraph_libs" ]; then
       cugraph_objects="graph_cugraph_impl.o"
-      cppflags="$cppflags -DFASTEMBEDR_HAS_CUGRAPH $cugraph_cppflags"
+      cppflags="$cppflags -DFAISSR_HAS_CUGRAPH $cugraph_cppflags"
       libs="$libs $cugraph_libs"
     elif [ "$use_cugraph" = "1" ]; then
       echo "FAISSR_USE_CUGRAPH=1 was requested, but RAPIDS libcugraph headers/library were not found." >&2
@@ -155,7 +145,7 @@ if [ "$use_cugraph" != "0" ]; then
   fi
 fi
 
-use_cuvs=$(first_env FAISSR_USE_CUVS FASTEMBEDR_USE_CUVS)
+use_cuvs=${FAISSR_USE_CUVS:-}
 if [ -z "$use_cuvs" ]; then use_cuvs=auto; fi
 cuvs_home=${CUVS_HOME:-}
 cuvs_objects="nn_cuvs_bridge.o nn_cuvs_stub.o"
@@ -242,7 +232,7 @@ if [ "$use_cuvs" != "0" ]; then
 
     if [ -n "$cuvs_cppflags" ] && [ -n "$cuvs_libs" ]; then
       cuvs_objects="nn_cuvs_bridge.o nn_cuvs_impl.o"
-      cppflags="$cppflags -DFASTEMBEDR_HAS_CUVS $cuvs_cppflags"
+      cppflags="$cppflags -DFAISSR_HAS_CUVS $cuvs_cppflags"
       libs="$libs $cuvs_libs"
     elif [ "$use_cuvs" = "1" ]; then
       echo "FAISSR_USE_CUVS=1 was requested, but RAPIDS cuVS headers/library were not found." >&2

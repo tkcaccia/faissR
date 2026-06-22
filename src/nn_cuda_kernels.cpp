@@ -890,7 +890,7 @@ HostCudaGrid build_host_cuda_grid(const double* data,
 
 } // namespace
 
-extern "C" bool fastembedr_cuda_available() {
+extern "C" bool faissr_cuda_available() {
   int count = 0;
   const cudaError_t code = cudaGetDeviceCount(&count);
   if (code != cudaSuccess) {
@@ -900,11 +900,11 @@ extern "C" bool fastembedr_cuda_available() {
   return count > 0;
 }
 
-extern "C" const char* fastembedr_cuda_last_error() {
+extern "C" const char* faissr_cuda_last_error() {
   return last_error.c_str();
 }
 
-extern "C" const char* fastembedr_cuda_device_info_json() {
+extern "C" const char* faissr_cuda_device_info_json() {
   int count = 0;
   cudaError_t code = cudaGetDeviceCount(&count);
   if (code != cudaSuccess) {
@@ -964,7 +964,7 @@ extern "C" const char* fastembedr_cuda_device_info_json() {
   return device_info_json.c_str();
 }
 
-extern "C" int fastembedr_cuda_knn(const double* data,
+extern "C" int faissr_cuda_knn(const double* data,
                                    const double* points,
                                    int n_data,
                                    int n_points,
@@ -1107,7 +1107,7 @@ extern "C" int fastembedr_cuda_knn(const double* data,
   return 0;
 }
 
-extern "C" int fastembedr_cuda_grid_self_knn(const double* data,
+extern "C" int faissr_cuda_grid_self_knn(const double* data,
                                              int n,
                                              int n_features,
                                              int k,
@@ -1235,7 +1235,7 @@ extern "C" int fastembedr_cuda_grid_self_knn(const double* data,
   return 0;
 }
 
-extern "C" int fastembedr_cuda_landmark_candidate_knn(const double* data,
+extern "C" int faissr_cuda_landmark_candidate_knn(const double* data,
                                                       const int* projection_indices,
                                                       int n,
                                                       int n_features,
@@ -1403,7 +1403,7 @@ extern "C" int fastembedr_cuda_landmark_candidate_knn(const double* data,
   return 0;
 }
 
-extern "C" int fastembedr_cuda_row_candidate_knn(const double* data,
+extern "C" int faissr_cuda_row_candidate_knn(const double* data,
                                                  const int* candidate_indices,
                                                  int n,
                                                  int n_features,

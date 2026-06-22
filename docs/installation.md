@@ -123,10 +123,6 @@ If CUDA/cuVS/cuGraph is not available, install the CPU package with FAISS only.
 | `PKG_CONFIG_PATH` | Helps locate FAISS/cuVS/cuGraph `.pc` files. |
 | `LD_LIBRARY_PATH` / `DYLD_LIBRARY_PATH` | Runtime library search path on Linux/macOS. |
 
-The older `FASTEMBEDR_USE_CUDA`, `FASTEMBEDR_USE_CUVS`, and
-`FASTEMBEDR_USE_CUGRAPH` variables are accepted by `configure` for compatibility
-with existing benchmark scripts. New scripts should use the `FAISSR_*` names.
-
 ## Validation
 
 ```r

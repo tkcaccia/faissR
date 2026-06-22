@@ -40,7 +40,7 @@ test_that("precomputed KNN graph metadata prefers resolved backend", {
   expect_equal(cl$parameters$graph_backend, "faiss_gpu_cagra")
 })
 
-test_that("knn_graph accepts embedding objects as native layout graphs", {
+test_that("knn_graph accepts embedding-layout objects as native layout graphs", {
   set.seed(503)
   x <- rbind(
     matrix(rnorm(80, -2, 0.2), ncol = 4),
@@ -51,7 +51,7 @@ test_that("knn_graph accepts embedding objects as native layout graphs", {
     layout = layout,
     method = "opentsne"
   )
-  class(fit) <- "fastEmbedR_embedding"
+  class(fit) <- "faissR_embedding_layout"
 
   g_embedding <- knn_graph(fit, k = 5L, backend = "cpu")
   expect_s3_class(g_embedding, "faissR_graph")

@@ -25,15 +25,15 @@
     __has_include(<faiss/gpu/GpuIndexFlat.h>) && \
     __has_include(<faiss/gpu/GpuIndexIVFFlat.h>) && \
     __has_include(<faiss/gpu/GpuIndexIVFPQ.h>)
-#define FASTEMBEDR_HAS_FAISS_GPU 1
+#define FAISSR_HAS_FAISS_GPU 1
 #include <faiss/gpu/StandardGpuResources.h>
 #include <faiss/gpu/GpuIndexFlat.h>
 #include <faiss/gpu/GpuIndexIVFFlat.h>
 #include <faiss/gpu/GpuIndexIVFPQ.h>
 #endif
 
-#if defined(FASTEMBEDR_HAS_FAISS_GPU) && __has_include(<faiss/gpu/GpuIndexCagra.h>)
-#define FASTEMBEDR_HAS_FAISS_GPU_CAGRA 1
+#if defined(FAISSR_HAS_FAISS_GPU) && __has_include(<faiss/gpu/GpuIndexCagra.h>)
+#define FAISSR_HAS_FAISS_GPU_CAGRA 1
 #include <faiss/gpu/GpuIndexCagra.h>
 #endif
 
@@ -332,12 +332,12 @@ bool faiss_is_available_impl() {
 }
 
 std::string faiss_info_json_impl() {
-#ifdef FASTEMBEDR_HAS_FAISS_GPU
+#ifdef FAISSR_HAS_FAISS_GPU
   const char* gpu = "true";
 #else
   const char* gpu = "false";
 #endif
-#ifdef FASTEMBEDR_HAS_FAISS_GPU_CAGRA
+#ifdef FAISSR_HAS_FAISS_GPU_CAGRA
   const char* gpu_cagra = "true";
 #else
   const char* gpu_cagra = "false";
@@ -389,7 +389,7 @@ List faiss_gpu_flat_knn_impl(NumericMatrix data,
                              NumericMatrix points,
                              int k,
                              bool exclude_self) {
-#ifdef FASTEMBEDR_HAS_FAISS_GPU
+#ifdef FAISSR_HAS_FAISS_GPU
   const int n_features = data.ncol();
   faiss::gpu::StandardGpuResources resources;
   faiss::gpu::GpuIndexFlatConfig config;
@@ -415,7 +415,7 @@ List faiss_gpu_flat_ip_knn_impl(NumericMatrix data,
                                 NumericMatrix points,
                                 int k,
                                 bool exclude_self) {
-#ifdef FASTEMBEDR_HAS_FAISS_GPU
+#ifdef FAISSR_HAS_FAISS_GPU
   const int n_features = data.ncol();
   faiss::gpu::StandardGpuResources resources;
   faiss::gpu::GpuIndexFlatConfig config;
@@ -441,7 +441,7 @@ List faiss_gpu_flat_normalized_ip_distance_knn_impl(NumericMatrix data,
                                                     NumericMatrix points,
                                                     int k,
                                                     bool exclude_self) {
-#ifdef FASTEMBEDR_HAS_FAISS_GPU
+#ifdef FAISSR_HAS_FAISS_GPU
   const int n_features = data.ncol();
   faiss::gpu::StandardGpuResources resources;
   faiss::gpu::GpuIndexFlatConfig config;
@@ -699,7 +699,7 @@ List faiss_gpu_ivf_flat_knn_impl(NumericMatrix data,
                                  std::string metric,
                                  std::string distance_output,
                                  bool exclude_self) {
-#ifdef FASTEMBEDR_HAS_FAISS_GPU
+#ifdef FAISSR_HAS_FAISS_GPU
   const int n_data = data.nrow();
   const int n_features = data.ncol();
   nlist = std::max(1, std::min(nlist, n_data));
@@ -754,7 +754,7 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
                               std::string metric,
                               std::string distance_output,
                               bool exclude_self) {
-#ifdef FASTEMBEDR_HAS_FAISS_GPU
+#ifdef FAISSR_HAS_FAISS_GPU
   const int n_data = data.nrow();
   const int n_features = data.ncol();
   const int requested_pq_m = pq_m;
@@ -835,7 +835,7 @@ List faiss_gpu_cagra_knn_impl(NumericMatrix data,
                               int search_width,
                               int itopk_size,
                               bool exclude_self) {
-#ifdef FASTEMBEDR_HAS_FAISS_GPU_CAGRA
+#ifdef FAISSR_HAS_FAISS_GPU_CAGRA
   validate_inputs(data, points, k, exclude_self);
   const bool same_storage = same_matrix_storage(data, points);
   const bool self_query = exclude_self || same_storage;
@@ -1039,7 +1039,7 @@ List faiss_gpu_kmeans_impl(NumericMatrix data,
                            double tol,
                            int seed,
                            bool kmeans_plus_plus) {
-#ifdef FASTEMBEDR_HAS_FAISS_GPU
+#ifdef FAISSR_HAS_FAISS_GPU
   if (data.nrow() < 1 || data.ncol() < 1) {
     Rcpp::stop("data must have at least one row and one column");
   }

@@ -14,7 +14,7 @@
 #if defined(__has_include)
 #  if __has_include(<cuvs/cluster/kmeans.h>)
 #    include <cuvs/cluster/kmeans.h>
-#    define FASTEMBEDR_HAS_CUVS_KMEANS 1
+#    define FAISSR_HAS_CUVS_KMEANS 1
 #  endif
 #endif
 #include <cuvs/distance/distance.h>
@@ -24,11 +24,11 @@
 #if defined(__has_include)
 #  if __has_include(<cuvs/neighbors/ivf_flat.h>)
 #    include <cuvs/neighbors/ivf_flat.h>
-#    define FASTEMBEDR_HAS_CUVS_IVF_FLAT 1
+#    define FAISSR_HAS_CUVS_IVF_FLAT 1
 #  endif
 #  if __has_include(<cuvs/neighbors/ivf_pq.h>)
 #    include <cuvs/neighbors/ivf_pq.h>
-#    define FASTEMBEDR_HAS_CUVS_IVF_PQ 1
+#    define FAISSR_HAS_CUVS_IVF_PQ 1
 #  endif
 #endif
 #include <dlpack/dlpack.h>
@@ -328,7 +328,7 @@ class NNDescentIndex {
   cuvsNNDescentIndex_t index_ = nullptr;
 };
 
-#ifdef FASTEMBEDR_HAS_CUVS_KMEANS
+#ifdef FAISSR_HAS_CUVS_KMEANS
 class KMeansParams {
  public:
   KMeansParams() {
@@ -348,7 +348,7 @@ class KMeansParams {
 };
 #endif
 
-#ifdef FASTEMBEDR_HAS_CUVS_IVF_FLAT
+#ifdef FAISSR_HAS_CUVS_IVF_FLAT
 class IvfFlatIndexParams {
  public:
   IvfFlatIndexParams() {
@@ -404,7 +404,7 @@ class IvfFlatIndex {
 };
 #endif
 
-#ifdef FASTEMBEDR_HAS_CUVS_IVF_PQ
+#ifdef FAISSR_HAS_CUVS_IVF_PQ
 class IvfPqIndexParams {
  public:
   IvfPqIndexParams() {
@@ -804,7 +804,7 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
 
   const int batch_size = std::min(
     n_points,
-    env_int("FASTEMBEDR_CUVS_CAGRA_BATCH_SIZE", 8192, 1)
+    env_int("FAISSR_CUVS_CAGRA_BATCH_SIZE", 8192, 1)
   );
   DeviceBuffer neighbors_d(
     res.get(),
@@ -904,7 +904,7 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix data,
                             int n_lists,
                             int n_probes,
                             bool exclude_self) {
-#ifndef FASTEMBEDR_HAS_CUVS_IVF_FLAT
+#ifndef FAISSR_HAS_CUVS_IVF_FLAT
   Rcpp::stop(
     "Direct cuVS IVF-Flat is not available in this cuVS installation. "
     "Use `backend = \"faiss_gpu_ivf_flat\"` or reinstall cuVS with "
@@ -968,12 +968,12 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix data,
   const bool small_high_dim = n_data <= 5000 && n_features >= 4096;
   const int default_kmeans_iters = small_high_dim ? 1 : 20;
   const int kmeans_iters = env_int(
-    "FASTEMBEDR_CUVS_IVF_FLAT_KMEANS_N_ITERS",
+    "FAISSR_CUVS_IVF_FLAT_KMEANS_N_ITERS",
     default_kmeans_iters,
     1
   );
   const int train_percent = env_int(
-    "FASTEMBEDR_CUVS_IVF_FLAT_TRAIN_PERCENT",
+    "FAISSR_CUVS_IVF_FLAT_TRAIN_PERCENT",
     100,
     1
   );
@@ -994,7 +994,7 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix data,
 
   const int batch_size = std::min(
     n_points,
-    env_int("FASTEMBEDR_CUVS_IVF_BATCH_SIZE", 8192, 1)
+    env_int("FAISSR_CUVS_IVF_BATCH_SIZE", 8192, 1)
   );
   DeviceBuffer neighbors_d(
     res.get(),
@@ -1093,7 +1093,7 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix data,
                           int pq_dim,
                           int pq_bits,
                           bool exclude_self) {
-#ifndef FASTEMBEDR_HAS_CUVS_IVF_PQ
+#ifndef FAISSR_HAS_CUVS_IVF_PQ
   Rcpp::stop(
     "Direct cuVS IVF-PQ is not available in this cuVS installation. "
     "Use `backend = \"faiss_gpu_ivfpq\"` or reinstall cuVS with "
@@ -1170,7 +1170,7 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix data,
 
   const int batch_size = std::min(
     n_points,
-    env_int("FASTEMBEDR_CUVS_IVF_BATCH_SIZE", 8192, 1)
+    env_int("FAISSR_CUVS_IVF_BATCH_SIZE", 8192, 1)
   );
   DeviceBuffer neighbors_d(
     res.get(),
@@ -1272,7 +1272,7 @@ List cuvs_kmeans_impl(NumericMatrix data,
                       double tol,
                       int64_t streaming_batch_size,
                       bool kmeans_plus_plus) {
-#ifndef FASTEMBEDR_HAS_CUVS_KMEANS
+#ifndef FAISSR_HAS_CUVS_KMEANS
   Rcpp::stop(
     "cuVS k-means is not available in this cuVS installation. Reinstall cuVS "
     "with cuvs/cluster/kmeans.h."
