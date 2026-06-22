@@ -896,11 +896,7 @@ benchmark_method_aliases <- function(methods) {
     nndescent = "faissR_cpu_nndescent",
     cagra = "faissR_faiss_gpu_cagra",
     cuda_ivf = "faissR_cuda_cuvs_ivf_flat",
-    faissR_cuda_ivf = "faissR_cuda_cuvs_ivf_flat",
-    faiss_flat_ip = "faissR_faiss_flat_l2",
-    faiss_gpu_flat_ip = "faissR_faiss_gpu_flat_l2",
-    faissR_faiss_flat_ip = "faissR_faiss_flat_l2",
-    faissR_faiss_gpu_flat_ip = "faissR_faiss_gpu_flat_l2"
+    faissR_cuda_ivf = "faissR_cuda_cuvs_ivf_flat"
   )
   out <- trimws(methods)
   mapped <- aliases[out]

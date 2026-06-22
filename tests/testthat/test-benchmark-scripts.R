@@ -641,11 +641,21 @@ test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
   expect_false(any(methods$method %in% c("faissR_faiss_flat_ip", "faissR_faiss_gpu_flat_ip")))
   expect_true(all(c("faissR_faiss_flat_l2", "faissR_faiss_gpu_flat_l2") %in% methods$method))
 
-  aliases <- env$benchmark_method_aliases(c("flat", "faissR_faiss_flat_ip", "faissR_faiss_gpu_flat_ip"))
-  expect_equal(aliases, c("faissR_faiss_flat_l2", "faissR_faiss_gpu_flat_l2"))
   expect_equal(
-    env$benchmark1_method_values("flat,faissR_faiss_gpu_flat_ip", methods$method),
-    c("faissR_faiss_flat_l2", "faissR_faiss_gpu_flat_l2")
+    env$benchmark_method_aliases(c("flat")),
+    "faissR_faiss_flat_l2"
+  )
+  expect_equal(
+    env$benchmark1_method_values("flat", methods$method),
+    "faissR_faiss_flat_l2"
+  )
+  expect_error(
+    env$benchmark1_method_values("faissR_faiss_flat_ip", methods$method),
+    "invalid Benchmark #1 method"
+  )
+  expect_error(
+    env$benchmark1_method_values("faissR_faiss_gpu_flat_ip", methods$method),
+    "invalid Benchmark #1 method"
   )
   expect_error(
     env$benchmark1_method_values("flat,unknown_method", methods$method),
