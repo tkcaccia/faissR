@@ -307,6 +307,15 @@ test_that("knn_graph stores an optional cluster-count target for graph_cluster",
   expect_equal(cl$parameters$n_vertices, g$n_vertices)
   expect_equal(cl$parameters$n_edges, g$n_edges)
   expect_s3_class(cl$resolution_search, "data.frame")
+  expect_true(all(c("candidate", "target_gap", "selected") %in% names(cl$resolution_search)))
+  expect_equal(sum(cl$resolution_search$selected), 1L)
+  expect_equal(cl$target_gap, abs(cl$n_communities - 3L))
+  expect_equal(cl$parameters$target_gap, cl$target_gap)
+  expect_equal(
+    cl$resolution_selection$criterion,
+    "closest_n_communities_then_highest_modularity"
+  )
+  expect_equal(cl$parameters$resolution_selection$selected_candidate, which(cl$resolution_search$selected))
   expect_lte(abs(cl$n_communities - 3L), 1L)
 
   walk <- graph_cluster(g, method = "random_walking", backend = "cpu", n_threads = 2L)
@@ -586,11 +595,25 @@ test_that("graph_cluster can target a requested number of communities", {
   expect_true(nrow(cl$resolution_search) > 1L)
   expect_equal(cl$parameters$n_clusters, 3L)
   expect_equal(cl$parameters$selected_resolution, cl$selected_resolution)
+  expect_equal(cl$parameters$target_gap, cl$target_gap)
+  expect_equal(
+    cl$parameters$resolution_selection$criterion,
+    "closest_n_communities_then_highest_modularity"
+  )
   expect_equal(cl$parameters$requested_backend, "cpu")
   expect_equal(cl$parameters$resolved_backend, "cpu")
   expect_equal(cl$parameters$n_vertices, length(cl$membership))
   expect_equal(cl$parameters$n_edges, cl$graph$n_edges)
   expect_lte(abs(cl$n_communities - 3L), 1L)
+  expect_equal(sum(cl$resolution_search$selected), 1L)
+  expect_equal(
+    cl$resolution_search$candidate[cl$resolution_search$selected],
+    cl$resolution_selection$selected_candidate
+  )
+  expect_equal(
+    cl$resolution_search$target_gap[cl$resolution_search$selected],
+    cl$target_gap
+  )
   printed <- capture.output(print(cl))
   expect_true(any(grepl("target communities: 3", printed, fixed = TRUE)))
   expect_true(any(grepl("selected resolution:", printed, fixed = TRUE)))

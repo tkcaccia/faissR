@@ -275,9 +275,10 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   public graph backend request, and resolved KNN backend.
 #'   `parameters$n_vertices` and `parameters$n_edges` record the clustered graph
 #'   size for benchmark summaries. When a target community count is used,
-#'   `target_n_clusters`, `selected_resolution`, and `resolution_search` record
-#'   the requested target, selected resolution, and deterministic resolution
-#'   search table.
+#'   `target_n_clusters`, `selected_resolution`, `target_gap`,
+#'   `resolution_selection`, and `resolution_search` record the requested
+#'   target, selected resolution, final community-count gap, deterministic
+#'   selection rule, and full resolution search table.
 #' @references
 #' Blondel VD, Guillaume JL, Lambiotte R, Lefebvre E. Fast unfolding of
 #' communities in large networks. Journal of Statistical Mechanics: Theory and
@@ -399,6 +400,8 @@ graph_cluster <- function(graph,
         resolution = resolution,
         n_clusters = graph_n_clusters,
         selected_resolution = ans$selected_resolution %||% resolution,
+        target_gap = ans$target_gap %||% NA_integer_,
+        resolution_selection = ans$resolution_selection %||% NULL,
         requested_backend = requested_backend,
         resolved_backend = backend,
         n_vertices = as.integer(graph$n_vertices),
@@ -497,6 +500,8 @@ graph_cluster <- function(graph,
     resolution = resolution,
     n_clusters = n_clusters,
     selected_resolution = ans$selected_resolution %||% resolution,
+    target_gap = ans$target_gap %||% NA_integer_,
+    resolution_selection = ans$resolution_selection %||% NULL,
     requested_backend = requested_backend,
     resolved_backend = backend,
     n_vertices = as.integer(graph_edges$n_vertices),
@@ -618,6 +623,7 @@ graph_cluster_edges_target <- function(edge_list,
                                        seed) {
   candidates <- graph_resolution_candidates(resolution, n_clusters)
   best <- NULL
+  best_index <- NA_integer_
   summary <- vector("list", length(candidates))
   for (i in seq_along(candidates)) {
     candidate_resolution <- candidates[[i]]
@@ -634,27 +640,45 @@ graph_cluster_edges_target <- function(edge_list,
     )
     ans$selected_resolution <- candidate_resolution
     summary[[i]] <- data.frame(
+      candidate = as.integer(i),
       resolution = candidate_resolution,
       n_communities = as.integer(ans$n_communities),
       modularity = as.numeric(ans$modularity),
+      target_gap = if (is.null(n_clusters)) NA_integer_ else abs(as.integer(ans$n_communities) - n_clusters),
+      selected = FALSE,
       stringsAsFactors = FALSE
     )
     if (is.null(best)) {
       best <- ans
+      best_index <- i
     } else if (is.null(n_clusters)) {
-      if (isTRUE(as.numeric(ans$modularity) > as.numeric(best$modularity))) best <- ans
+      if (isTRUE(as.numeric(ans$modularity) > as.numeric(best$modularity))) {
+        best <- ans
+        best_index <- i
+      }
     } else {
       current_gap <- abs(as.integer(ans$n_communities) - n_clusters)
       best_gap <- abs(as.integer(best$n_communities) - n_clusters)
       if (current_gap < best_gap ||
           (current_gap == best_gap && as.numeric(ans$modularity) > as.numeric(best$modularity))) {
         best <- ans
+        best_index <- i
       }
     }
   }
   if (!is.null(n_clusters)) {
     best$target_n_clusters <- as.integer(n_clusters)
-    best$resolution_search <- do.call(rbind, summary)
+    search <- do.call(rbind, summary)
+    if (!is.na(best_index) && best_index >= 1L && best_index <= nrow(search)) {
+      search$selected[[best_index]] <- TRUE
+    }
+    best$resolution_search <- search
+    best$target_gap <- abs(as.integer(best$n_communities) - as.integer(n_clusters))
+    best$resolution_selection <- list(
+      criterion = "closest_n_communities_then_highest_modularity",
+      selected_candidate = as.integer(best_index),
+      target_gap = as.integer(best$target_gap)
+    )
   }
   best
 }

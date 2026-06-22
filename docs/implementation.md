@@ -320,6 +320,10 @@ faissR evaluates a small deterministic grid of resolution values around the supp
 `m`, breaking ties by modularity. The selected resolution and search table are
 returned in the result metadata as `selected_resolution` and
 `resolution_search`, with the requested target stored as `target_n_clusters`.
+The selected row is marked in `resolution_search$selected`; `target_gap`
+records the final absolute difference from the requested community count, and
+`resolution_selection` records the deterministic rule
+`closest_n_communities_then_highest_modularity`.
 The target must be a positive integer and
 cannot exceed the graph vertex count; fractional targets and impossible targets
 fail before the resolution-search loop.

@@ -231,6 +231,10 @@ dataset/k/graph-backend/cluster-backend/method/weight and reports success
 counts, median/min/max graph, clustering, and total time, ARI stability,
 modularity stability, graph size, community counts, CPU thread count, preflight
 routes, and resolved backend metadata.
+When `n_clusters` is used, graph-clustering result metadata also records
+`target_gap`, `resolution_selection`, and a `resolution_search` table whose
+selected row is marked with `selected = TRUE`, so target-count resolution
+searches remain auditable in downstream summaries.
 `graph_cluster_best_by_dataset.csv` keeps a compact best successful row per
 dataset after ranking by ARI, modularity, and total time for backward-compatible
 summaries. `graph_cluster_best_by_dataset_k_target.csv` keeps the same

@@ -1899,6 +1899,11 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
     modularity = c(0.4, 0.35),
     ari = c(0.9, 0.8),
     selected_resolution = c(1, 2),
+    target_gap = c(0L, 0L),
+    resolution_selection = c(
+      "closest_n_communities_then_highest_modularity",
+      "closest_n_communities_then_highest_modularity"
+    ),
     graph_cached = c(TRUE, TRUE),
     expected_skip = c(FALSE, FALSE)
   )
@@ -1912,6 +1917,11 @@ test_that("graph benchmark cycle summaries preserve target cluster count", {
   expect_equal(out$graph_preflight_route, c("cpu", "cpu"))
   expect_equal(out$cluster_preflight_route, c("cpu", "cpu"))
   expect_equal(out$n_threads, c(2L, 2L))
+  expect_equal(out$median_target_gap, c(0, 0))
+  expect_equal(
+    out$resolution_selection,
+    rep("closest_n_communities_then_highest_modularity", 2L)
+  )
 })
 
 test_that("graph benchmark success rows keep preflight and resolved routes separate", {

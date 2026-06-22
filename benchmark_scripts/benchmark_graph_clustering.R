@@ -325,6 +325,8 @@ result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, 
                        n_edges = NA_integer_,
                        n_communities = NA_integer_, modularity = NA_real_,
                        ari = NA_real_, selected_resolution = NA_real_,
+                       target_gap = NA_integer_,
+                       resolution_selection = NA_character_,
                        graph_resolved_backend = NA_character_,
                        cluster_resolved_backend = NA_character_,
                        graph_preflight_route = NA_character_,
@@ -363,6 +365,8 @@ result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, 
     modularity = modularity,
     ari = ari,
     selected_resolution = selected_resolution,
+    target_gap = if (is.null(target_gap)) NA_integer_ else as.integer(target_gap),
+    resolution_selection = resolution_selection,
     graph_cached = if (is.na(graph_cached)) NA else isTRUE(graph_cached),
     expected_skip = isTRUE(expected_skip),
     stringsAsFactors = FALSE
@@ -407,6 +411,9 @@ finite_max <- function(x) {
 ensure_graph_selector_columns <- function(x) {
   if (!"graph_method" %in% names(x)) x$graph_method <- "auto"
   if (!"metric" %in% names(x)) x$metric <- "euclidean"
+  if (!"target_gap" %in% names(x)) x$target_gap <- NA_integer_
+  if (!"median_target_gap" %in% names(x)) x$median_target_gap <- NA_real_
+  if (!"resolution_selection" %in% names(x)) x$resolution_selection <- NA_character_
   x
 }
 
@@ -453,6 +460,8 @@ summarize_graph_cycles <- function(ok) {
       median_n_edges = finite_median(x$n_edges),
       median_n_communities = finite_median(x$n_communities),
       median_selected_resolution = finite_median(x$selected_resolution),
+      median_target_gap = finite_median(x$target_gap),
+      resolution_selection = dominant_value(x$resolution_selection),
       n_clusters_requested = dominant_integer(x$n_clusters_requested),
       n_clusters_source = dominant_value(x$n_clusters_source),
       graph_cached = any(as.logical(x$graph_cached), na.rm = TRUE),
@@ -516,7 +525,8 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
     "cluster_preflight_route", "method", "weight", "n_threads",
     "success_cycles", "median_graph_sec", "median_cluster_sec", "median_total_sec",
     "median_ari", "min_ari", "median_modularity", "median_n_communities",
-    "median_selected_resolution", "n_clusters_source", "graph_cached"
+    "median_selected_resolution", "median_target_gap", "resolution_selection",
+    "n_clusters_source", "graph_cached"
   )
   rec_keep <- c(keep, "recommendation_basis")
   auto <- auto[, keep, drop = FALSE]
@@ -833,6 +843,8 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       modularity = cluster$modularity %||% NA_real_,
       ari = benchmark_adjusted_rand_index(labels, cluster$membership),
       selected_resolution = cluster$selected_resolution %||% NA_real_,
+      target_gap = cluster$target_gap %||% cluster_params$target_gap %||% NA_integer_,
+      resolution_selection = (cluster$resolution_selection %||% cluster_params$resolution_selection %||% list())$criterion %||% NA_character_,
       graph_resolved_backend = attr(graph_obj, "faissR_graph")$resolved_backend %||% graph_backend,
       cluster_resolved_backend = cluster_params$resolved_backend %||% (cluster$backend %||% cluster_backend),
       graph_preflight_route = graph_preflight_route,
@@ -1214,10 +1226,10 @@ materials <- c(
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
   "`graph_cluster_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `graph_cluster_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, graph timings, clustering timings, memory, graph vertex/edge counts, ARI, modularity, graph NN method/metric, and backend metadata.",
   "`target_clusters` is normalized to either `\"labels\"` or `\"none\"`; invalid values stop before the benchmark starts. When `target_clusters = \"labels\"`, Louvain and Leiden use `n_clusters = length(unique(labels))`. If a benchmark block contains only Louvain/Leiden, this target is stored on the graph with `knn_graph(n_clusters = ...)` and reused by `graph_cluster()`; mixed blocks that include random-walking pass the target only to Louvain/Leiden rows because random-walking intentionally has no cluster-count target.",
-  "`n_clusters_requested` records the requested target community count for Louvain/Leiden rows. This is a convenience target, not a hard guarantee; the actual community count is stored separately as `n_communities`. `n_clusters_source` records whether that target came from dataset labels, a stored `knn_graph(n_clusters = ...)` target, or no target.",
+  "`n_clusters_requested` records the requested target community count for Louvain/Leiden rows. This is a convenience target, not a hard guarantee; the actual community count is stored separately as `n_communities`. `n_clusters_source` records whether that target came from dataset labels, a stored `knn_graph(n_clusters = ...)` target, or no target. When a target is used, `target_gap`, `resolution_selection`, and the selected resolution summarize the deterministic resolution-search decision.",
   "Each KNN graph is built once per dataset/cycle/k/graph-backend/graph-method/metric/weight combination and reused across clustering methods and clustering backends within that cycle. The `cycle` column supports repeated benchmark cycles such as `--cycles=10`; `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
   "`graph_cluster_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, modularity, and total time for a compact backwards-compatible summary. `graph_cluster_best_by_dataset_k_target.csv` keeps the best successful row per dataset/k/graph-method/metric/target-cluster-count combination so different neighbourhood sizes, KNN graph routes, metrics, and Louvain/Leiden target counts remain auditable.",
-  "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/graph-method/metric/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, graph size, community counts, CPU thread count, preflight routes, and resolved backend metadata.",
+  "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/graph-method/metric/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, graph size, community counts, selected resolution, target gap, resolution-selection rule, CPU thread count, preflight routes, and resolved backend metadata.",
   "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering method row within `ari_tolerance` of the best median ARI for each dataset/k/graph-backend/graph-method/metric/cluster-backend/target-cluster-count combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median total times are broken by higher median ARI and then higher median modularity. When ARI is unavailable it selects the fastest median total-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
   "`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where graph or clustering backend was `auto` with recommendations from the same requested graph-backend/graph-method/metric/cluster-backend group and reports the recommendation basis, median speed ratio, median ARI gap, modularity gap, method agreement, and resolved-backend agreement. Speed ratios and quality gaps are `NA` when the required timing, ARI, or modularity values are unavailable or invalid.",
   "`graph_backend` and `cluster_backend` record the requested public backends. `graph_preflight_route` and `cluster_preflight_route` record the public resolver decision before runtime availability checks; `graph_resolved_backend` and `cluster_resolved_backend` record the resolved device policy from successful result objects. These route columns and `n_threads` are preserved in cycle summaries and auto/recommendation comparisons, so CPU/CUDA rows can be audited without opening the R objects.",
