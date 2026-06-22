@@ -899,6 +899,10 @@ test_that("benchmark KNN recall ignores missing neighbour padding", {
   expect_equal(out$median_recall_at_k, 0.5)
   expect_equal(out$min_recall_at_k, 0)
   expect_error(
+    env$benchmark_knn_recall(approx, exact, k = 1.5),
+    "`k` must be a positive integer"
+  )
+  expect_error(
     env$benchmark_knn_recall(
       matrix(integer(), nrow = 2L, ncol = 0L),
       matrix(integer(), nrow = 2L, ncol = 0L)

@@ -7,10 +7,16 @@ benchmark_knn_recall <- function(approx, exact, k = NULL) {
     stop("Approximate and exact KNN must have the same number of rows.", call. = FALSE)
   }
   k_is_auto <- is.null(k)
-  k <- if (k_is_auto) min(ncol(approx_idx), ncol(exact_idx)) else as.integer(k)
-  if (length(k) != 1L || is.na(k) || !is.finite(k) || (!k_is_auto && k < 1L)) {
+  k <- if (k_is_auto) {
+    min(ncol(approx_idx), ncol(exact_idx))
+  } else {
+    suppressWarnings(as.numeric(k))
+  }
+  if (length(k) != 1L || is.na(k) || !is.finite(k) || (!k_is_auto && (
+      k < 1L || abs(k - round(k)) > sqrt(.Machine$double.eps)))) {
     stop("`k` must be a positive integer.", call. = FALSE)
   }
+  k <- as.integer(round(k))
   k <- min(k, ncol(approx_idx), ncol(exact_idx))
   if (k < 1L) {
     stop("KNN matrices must have at least one neighbour column.", call. = FALSE)
