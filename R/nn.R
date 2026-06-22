@@ -2168,6 +2168,11 @@ nn_capability_row <- function(method, backend, metric) {
     notes <- if (identical(backend, "cuda")) "CUDA-only approximate graph search, validated for Euclidean/L2; cosine/correlation use normalized Euclidean search." else "CAGRA is CUDA-only."
   }
 
+  if (!isTRUE(supported)) {
+    implementation <- NA_character_
+    exact <- NA
+  }
+
   data.frame(
     method = method,
     backend = backend,

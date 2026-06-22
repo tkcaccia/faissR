@@ -666,6 +666,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
     caps$method == "hnsw" & caps$backend == "cuda" &
       caps$metric == "inner_product"
   ]))
+  expect_true(all(is.na(caps$implementation[!caps$supported])))
   expect_true(all(caps$supported[caps$method == "ivf"]))
   expect_true(all(caps$supported[caps$method == "ivfpq"]))
   expect_true(all(caps$supported[caps$method == "vamana"]))
