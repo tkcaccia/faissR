@@ -119,6 +119,37 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(explicit$parameters$tuning$effective$tol, 1e-5)
 })
 
+test_that("kmeans auto parameter helper canonicalizes tuning labels", {
+  auto <- faissR:::kmeans_auto_params(
+    n = 100L,
+    p = 4L,
+    centers = 3L,
+    tuning = " Auto "
+  )
+  expect_equal(auto$policy, "auto")
+  expect_equal(auto$n_init, 5L)
+
+  fixed <- faissR:::kmeans_auto_params(
+    n = 100L,
+    p = 4L,
+    centers = 3L,
+    tuning = "NONE"
+  )
+  expect_equal(fixed$policy, "none")
+  expect_equal(fixed$n_init, 1L)
+  expect_equal(fixed$rule, "fixed_defaults")
+
+  expect_error(
+    faissR:::kmeans_auto_params(
+      n = 100L,
+      p = 4L,
+      centers = 3L,
+      tuning = "pilot"
+    ),
+    "`tuning`"
+  )
+})
+
 test_that("fast_kmeans auto tuning is shape and center-count aware for benchmark shapes", {
   mnist10 <- faissR:::kmeans_auto_params(
     n = 70000L,

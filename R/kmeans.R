@@ -463,6 +463,7 @@ normalize_kmeans_init <- function(init) {
 }
 
 kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
+  tuning <- normalize_kmeans_tuning(tuning)
   work <- as.double(n) * as.double(p) * as.double(centers)
   high_dim <- p >= 256L
   large_n <- n >= 100000L

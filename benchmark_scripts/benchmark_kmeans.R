@@ -241,6 +241,7 @@ label_center_count <- function(labels, fallback) {
 }
 
 kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
+  tuning <- validate_kmeans_tuning_value(tuning)
   helper <- tryCatch(
     getFromNamespace("kmeans_auto_params", "faissR"),
     error = function(e) NULL

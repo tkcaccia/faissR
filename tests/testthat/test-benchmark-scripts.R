@@ -1262,9 +1262,10 @@ test_that("k-means benchmark fallback auto params mirror package metadata", {
   env$getFromNamespace <- function(...) stop("simulate unavailable package helper")
 
   shapes <- list(
-    list(n = 70000L, p = 784L, centers = 10L, tuning = "auto"),
+    list(n = 70000L, p = 784L, centers = 10L, tuning = " Auto "),
     list(n = 50000L, p = 10L, centers = 100L, tuning = "auto"),
-    list(n = 200000L, p = 50L, centers = 100L, tuning = "fixed")
+    list(n = 200000L, p = 50L, centers = 100L, tuning = "FIXED"),
+    list(n = 200000L, p = 50L, centers = 100L, tuning = "none")
   )
   for (shape in shapes) {
     fallback <- do.call(env$kmeans_auto_params, shape)
