@@ -362,9 +362,11 @@ explicit overrides and `"auto"` defaults have been resolved, so benchmark code
 can summarize the effective k-means run without comparing multiple parameter
 fields.
 
-The public backend policy is the same as for KNN: `backend = "auto"` uses
-CUDA only when CUDA plus FAISS GPU k-means or direct cuVS k-means is compiled
-and available, and otherwise resolves to CPU;
+The public backend policy follows the KNN device contract but adds a
+k-means-specific shape gate: `backend = "auto"` uses CUDA only when CUDA plus
+FAISS GPU k-means or direct cuVS k-means is compiled and available and the
+estimated work is large enough to justify GPU launch and host/device copy
+overhead. Small jobs resolve to CPU even on CUDA-capable machines;
 `backend = "cpu"` forces the CPU route; `backend = "cuda"` requires an
 accelerated route and errors if unavailable. This makes k-means behavior
 consistent with `nn()`, `knn_graph()`, and `graph_cluster()`.

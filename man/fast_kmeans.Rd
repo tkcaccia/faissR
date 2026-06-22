@@ -25,7 +25,9 @@ fast_kmeans(
 
 \item{backend}{Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
 uses CUDA only when CUDA plus FAISS GPU k-means or direct cuVS k-means is
-compiled and available; otherwise it resolves to CPU.}
+compiled and available and the deterministic shape rule estimates enough
+work to offset GPU launch and host/device copy overhead; otherwise it
+resolves to CPU.}
 
 \item{max_iter}{Maximum number of Lloyd iterations, or `"auto"` for a
 deterministic shape-aware default.}

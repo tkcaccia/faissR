@@ -10,7 +10,9 @@
 #' @param centers Number of clusters.
 #' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
 #'   uses CUDA only when CUDA plus FAISS GPU k-means or direct cuVS k-means is
-#'   compiled and available; otherwise it resolves to CPU.
+#'   compiled and available and the deterministic shape rule estimates enough
+#'   work to offset GPU launch and host/device copy overhead; otherwise it
+#'   resolves to CPU.
 #' @param max_iter Maximum number of Lloyd iterations, or `"auto"` for a
 #'   deterministic shape-aware default.
 #' @param n_init Number of random restarts where supported, or `"auto"` for a
@@ -99,7 +101,12 @@ fast_kmeans <- function(data,
   auto_params$effective_tol <- as.numeric(tol)
   streaming_batch_size <- normalize_kmeans_streaming_batch_size(streaming_batch_size)
 
-  backend <- resolve_fast_kmeans_backend(backend)
+  backend <- resolve_fast_kmeans_backend(
+    backend,
+    n = nrow(x),
+    p = ncol(x),
+    centers = centers
+  )
 
   if (identical(backend, "cuda")) {
     return(run_cuda_kmeans(
@@ -174,18 +181,39 @@ fast_kmeans <- function(data,
 }
 
 resolve_fast_kmeans_backend <- function(backend,
+                                        n = NULL,
+                                        p = NULL,
+                                        centers = NULL,
                                         cuda_available_value = cuda_available(),
                                         faiss_gpu_available_value = faiss_gpu_available(),
                                         cuvs_available_value = cuvs_available()) {
   backend <- normalize_public_backend_arg(backend)
   if (identical(backend, "auto")) {
     if (isTRUE(cuda_available_value) &&
-        (isTRUE(faiss_gpu_available_value) || isTRUE(cuvs_available_value))) {
+        (isTRUE(faiss_gpu_available_value) || isTRUE(cuvs_available_value)) &&
+        isTRUE(kmeans_auto_prefers_cuda(n, p, centers))) {
       return("cuda")
     }
     return("cpu")
   }
   backend
+}
+
+kmeans_auto_prefers_cuda <- function(n, p, centers) {
+  if (is.null(n) || is.null(p) || is.null(centers)) {
+    return(TRUE)
+  }
+  n <- suppressWarnings(as.double(n))
+  p <- suppressWarnings(as.double(p))
+  centers <- suppressWarnings(as.double(centers))
+  if (length(n) != 1L || length(p) != 1L || length(centers) != 1L ||
+      !is.finite(n) || !is.finite(p) || !is.finite(centers) ||
+      n <= 0 || p <= 0 || centers <= 0) {
+    return(TRUE)
+  }
+  work <- n * p * centers
+  nbytes <- n * p * 8
+  work >= 1e8 || nbytes >= 256 * 1024^2 || (n >= 50000 && p >= 128)
 }
 
 run_cuda_kmeans <- function(x,

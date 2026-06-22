@@ -438,8 +438,10 @@ Explicit CUDA/library combinations that are known unavailable before execution
 are recorded as `status = "expected_skip"` with `expected_skip = TRUE`, while
 `resolved_backend` remains `"cuda"` so the skipped public device request is
 auditable. `backend = "auto"` resolves to CPU instead of becoming an expected
-skip when no k-means-capable CUDA route is available. Unexpected runtime errors
-remain failed rows and are not replaced with CPU timings.
+skip when no k-means-capable CUDA route is available, and it can also resolve
+to CPU for small k-means jobs where the deterministic shape gate estimates that
+GPU launch/copy overhead would dominate. Unexpected runtime errors remain
+failed rows and are not replaced with CPU timings.
 
 Example CPU run:
 
