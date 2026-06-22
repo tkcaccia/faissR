@@ -276,6 +276,8 @@ test_that("knn_graph stores an optional cluster-count target for graph_cluster",
   expect_equal(cl$parameters$n_clusters, 3L)
   expect_equal(cl$parameters$requested_backend, "cpu")
   expect_equal(cl$parameters$resolved_backend, "cpu")
+  expect_equal(cl$parameters$n_vertices, g$n_vertices)
+  expect_equal(cl$parameters$n_edges, g$n_edges)
   expect_s3_class(cl$resolution_search, "data.frame")
   expect_lte(abs(cl$n_communities - 3L), 1L)
 
@@ -556,6 +558,8 @@ test_that("graph_cluster can target a requested number of communities", {
   expect_equal(cl$parameters$selected_resolution, cl$selected_resolution)
   expect_equal(cl$parameters$requested_backend, "cpu")
   expect_equal(cl$parameters$resolved_backend, "cpu")
+  expect_equal(cl$parameters$n_vertices, length(cl$membership))
+  expect_equal(cl$parameters$n_edges, cl$graph$n_edges)
   expect_lte(abs(cl$n_communities - 3L), 1L)
 
   expect_error(

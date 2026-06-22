@@ -320,6 +320,9 @@ list, and source acknowledgements. As with the nearest-neighbour and k-means
 APIs, `backend` records the implementation that actually ran, while
 `parameters$requested_backend` and `parameters$resolved_backend` preserve the
 public backend request and the resolved device policy for benchmark auditing.
+`parameters$n_vertices` and `parameters$n_edges` record the clustered graph
+size directly so benchmark summaries do not need to inspect the embedded graph
+edge list.
 
 The clustering implementation benefits from fast KNN indirectly: FAISS/cuVS can
 build the KNN graph faster, and `graph_cluster()` can then cluster that graph.

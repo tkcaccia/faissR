@@ -259,6 +259,8 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   `backend` records the clustering implementation that actually ran, while
 #'   `parameters$requested_backend` and `parameters$resolved_backend` record the
 #'   public backend request and the device policy after resolving `"auto"`.
+#'   `parameters$n_vertices` and `parameters$n_edges` record the clustered graph
+#'   size for benchmark summaries.
 #' @references
 #' Blondel VD, Guillaume JL, Lambiotte R, Lefebvre E. Fast unfolding of
 #' communities in large networks. Journal of Statistical Mechanics: Theory and
@@ -381,6 +383,8 @@ graph_cluster <- function(graph,
         selected_resolution = ans$selected_resolution %||% resolution,
         requested_backend = requested_backend,
         resolved_backend = backend,
+        n_vertices = as.integer(graph$n_vertices),
+        n_edges = as.integer(graph$n_edges),
         objective_function = objective_function,
         n_iterations = as.integer(n_iterations),
         steps = as.integer(steps),
@@ -468,6 +472,8 @@ graph_cluster <- function(graph,
     selected_resolution = ans$selected_resolution %||% resolution,
     requested_backend = requested_backend,
     resolved_backend = backend,
+    n_vertices = as.integer(graph_edges$n_vertices),
+    n_edges = as.integer(graph_edges$n_edges),
     objective_function = objective_function,
     n_iterations = as.integer(n_iterations),
     steps = as.integer(steps),

@@ -189,6 +189,8 @@ parameters, backend metadata, and source acknowledgements. `backend` records
 the clustering implementation that actually ran, while
 `parameters$requested_backend` and `parameters$resolved_backend` record the
 public backend request and the device policy after resolving `"auto"`.
+`parameters$n_vertices` and `parameters$n_edges` record the clustered graph
+size for benchmark summaries.
 
 ### Graph Clustering Methods
 
