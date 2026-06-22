@@ -389,7 +389,15 @@ summarize_graph_cycles <- function(ok) {
 
 recommend_graph_cluster_methods <- function(cycle_summary, ari_tolerance) {
   cluster_key <- ifelse(is.na(cycle_summary$n_clusters_requested), "NA", as.character(cycle_summary$n_clusters_requested))
-  parts <- split(cycle_summary, paste(cycle_summary$dataset, cycle_summary$k, cluster_key, sep = "__"))
+  parts <- split(
+    cycle_summary,
+    paste(
+      cycle_summary$dataset, cycle_summary$k,
+      cycle_summary$graph_backend, cycle_summary$cluster_backend,
+      cluster_key,
+      sep = "__"
+    )
+  )
   recommendations <- lapply(parts, function(x) {
     has_ari <- is.finite(x$median_ari)
     candidates <- if (any(has_ari)) {
@@ -411,7 +419,7 @@ recommend_graph_cluster_methods <- function(cycle_summary, ari_tolerance) {
   })
   out <- do.call(rbind, recommendations)
   row.names(out) <- NULL
-  out[order(out$dataset, out$k, out$n_clusters_requested), , drop = FALSE]
+  out[order(out$dataset, out$k, out$graph_backend, out$cluster_backend, out$n_clusters_requested), , drop = FALSE]
 }
 
 compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations) {
@@ -422,10 +430,9 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
     drop = FALSE
   ]
   if (!nrow(auto)) return(data.frame())
-  keys <- c("dataset", "k", "n_clusters_requested")
+  keys <- c("dataset", "k", "graph_backend", "cluster_backend", "n_clusters_requested")
   keep <- c(
-    keys, "graph_backend", "graph_resolved_backend", "cluster_backend",
-    "cluster_resolved_backend", "graph_preflight_route",
+    keys, "graph_resolved_backend", "cluster_resolved_backend", "graph_preflight_route",
     "cluster_preflight_route", "method", "weight", "n_threads",
     "success_cycles", "median_graph_sec", "median_cluster_sec", "median_total_sec",
     "median_ari", "min_ari", "median_modularity", "median_n_communities",
@@ -438,8 +445,10 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
   names(recommendations)[match(rec_keep[-seq_along(keys)], names(recommendations))] <- paste0("recommended_", rec_keep[-seq_along(keys)])
   comparison <- merge(auto, recommendations, by = keys, all = FALSE)
   if (!nrow(comparison)) return(comparison)
-  comparison$auto_uses_recommended_graph_backend <- comparison$auto_graph_backend == comparison$recommended_graph_backend
-  comparison$auto_uses_recommended_cluster_backend <- comparison$auto_cluster_backend == comparison$recommended_cluster_backend
+  comparison$auto_uses_recommended_graph_backend <- TRUE
+  comparison$auto_uses_recommended_cluster_backend <- TRUE
+  comparison$auto_uses_recommended_graph_resolved_backend <- comparison$auto_graph_resolved_backend == comparison$recommended_graph_resolved_backend
+  comparison$auto_uses_recommended_cluster_resolved_backend <- comparison$auto_cluster_resolved_backend == comparison$recommended_cluster_resolved_backend
   comparison$auto_uses_recommended_method <- comparison$auto_method == comparison$recommended_method
   comparison$auto_median_speed_ratio <- safe_positive_ratio(
     comparison$auto_median_total_sec,
@@ -453,7 +462,7 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
     comparison$recommended_median_modularity,
     comparison$auto_median_modularity
   )
-  comparison[order(comparison$dataset, comparison$k, comparison$n_clusters_requested, comparison$auto_graph_backend, comparison$auto_cluster_backend, comparison$auto_method), , drop = FALSE]
+  comparison[order(comparison$dataset, comparison$k, comparison$graph_backend, comparison$cluster_backend, comparison$n_clusters_requested, comparison$auto_method), , drop = FALSE]
 }
 
 safe_positive_ratio <- function(numerator, denominator) {

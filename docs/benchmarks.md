@@ -226,20 +226,22 @@ summaries. `graph_cluster_best_by_dataset_k_target.csv` keeps the same
 best-row ranking per dataset/k/target-cluster-count combination, which is the
 safer table for comparing neighbourhood sizes and Louvain/Leiden target counts.
 `graph_cluster_recommendations_from_cycles.csv` selects the fastest successful
-graph/clustering/backend/method row within `ari_tolerance` of the best median
-ARI for each dataset/k/target-cluster-count combination; when ARI is
-available and median total times tie, higher median ARI and then higher median
-modularity break the tie. `--ari_tolerance` must be a non-negative number and
-is validated before datasets are loaded. `--threads`, `--timeout`, and
-`--cycles` must be positive integers and are also validated before data loading.
+graph/clustering method row within `ari_tolerance` of the best median ARI for
+each dataset/k/graph-backend/cluster-backend/target-cluster-count combination;
+when ARI is available and median total times tie, higher median ARI and then
+higher median modularity break the tie. `--ari_tolerance` must be a
+non-negative number and is validated before datasets are loaded. `--threads`,
+`--timeout`, and `--cycles` must be positive integers and are also validated
+before data loading.
 When ARI is unavailable it selects the fastest median total-time row. The
 `recommendation_basis` column records whether the row was selected as
 `"fastest_within_ari_tolerance"` or `"speed_only_no_ari"`.
 `graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where
-the graph or clustering backend was `"auto"` against those recommendations and
-reports the recommendation basis, median speed ratio, median ARI gap,
-modularity gap, and backend/method agreement. Speed ratios and quality gaps are
-`NA` when the required timing, ARI, or modularity values are unavailable or
+the graph or clustering backend was `"auto"` against recommendations from the
+same requested graph-backend/cluster-backend group and reports the
+recommendation basis, median speed ratio, median ARI gap, modularity gap,
+method agreement, and resolved-backend agreement. Speed ratios and quality gaps
+are `NA` when the required timing, ARI, or modularity values are unavailable or
 invalid.
 The result table stores both requested and resolved public backend metadata:
 `graph_backend`/`cluster_backend` are the user requests, while

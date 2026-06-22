@@ -1508,42 +1508,47 @@ test_that("graph benchmark target cluster mode is explicit", {
   )
 })
 
-test_that("graph benchmark recommendations are grouped by target cluster count", {
+test_that("graph benchmark recommendations are grouped by backend and target cluster count", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
     "args <- parse_args()"
   )
   cycle_summary <- data.frame(
-    dataset = c("A", "A", "A", "A", "B", "B"),
-    k = c(15L, 15L, 15L, 15L, 15L, 15L),
-    graph_backend = c("cpu", "cpu", "cpu", "cpu", "cpu", "cpu"),
-    graph_resolved_backend = c("cpu", "cpu", "cpu", "cpu", "cpu", "cpu"),
-    cluster_backend = c("cpu", "cpu", "cpu", "cpu", "cpu", "cpu"),
-    cluster_resolved_backend = c("cpu", "cpu", "cpu", "cpu", "cpu", "cpu"),
-    method = c("louvain", "leiden", "louvain", "leiden", "louvain", "leiden"),
-    weight = c("snn", "snn", "snn", "snn", "snn", "snn"),
-    success_cycles = c(1L, 1L, 1L, 1L, 1L, 1L),
-    median_graph_sec = c(1, 1, 1, 1, 1, 1),
-    median_cluster_sec = c(4, 2, 3, 1, 4, 2),
-    median_total_sec = c(5, 3, 4, 2, 5, 3),
-    median_ari = c(0.91, 0.90, 0.72, 0.71, NA, NA),
-    min_ari = c(0.91, 0.90, 0.72, 0.71, NA, NA),
-    median_modularity = c(0.4, 0.39, 0.3, 0.29, 0.2, 0.19),
-    median_n_communities = c(3, 3, 5, 5, 3, 3),
-    median_selected_resolution = c(1, 1, 2, 2, 1, 1),
-    n_clusters_requested = c(3L, 3L, 5L, 5L, 3L, 3L),
-    n_clusters_source = c("labels", "labels", "labels", "labels", "labels", "labels"),
-    graph_cached = c(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE)
+    dataset = c("A", "A", "A", "A", "A", "A", "B", "B"),
+    k = c(15L, 15L, 15L, 15L, 15L, 15L, 15L, 15L),
+    graph_backend = c("cpu", "cpu", "cpu", "cpu", "cuda", "cuda", "cpu", "cpu"),
+    graph_resolved_backend = c("cpu", "cpu", "cpu", "cpu", "cuda", "cuda", "cpu", "cpu"),
+    cluster_backend = c("cpu", "cpu", "cpu", "cpu", "cuda", "cuda", "cpu", "cpu"),
+    cluster_resolved_backend = c("cpu", "cpu", "cpu", "cpu", "cuda", "cuda", "cpu", "cpu"),
+    method = c("louvain", "leiden", "louvain", "leiden", "louvain", "leiden", "louvain", "leiden"),
+    weight = c("snn", "snn", "snn", "snn", "snn", "snn", "snn", "snn"),
+    success_cycles = c(1L, 1L, 1L, 1L, 1L, 1L, 1L, 1L),
+    median_graph_sec = c(1, 1, 1, 1, 1, 1, 1, 1),
+    median_cluster_sec = c(4, 2, 3, 1, 8, 6, 4, 2),
+    median_total_sec = c(5, 3, 4, 2, 9, 7, 5, 3),
+    median_ari = c(0.91, 0.90, 0.72, 0.71, 0.94, 0.93, NA, NA),
+    min_ari = c(0.91, 0.90, 0.72, 0.71, 0.94, 0.93, NA, NA),
+    median_modularity = c(0.4, 0.39, 0.3, 0.29, 0.5, 0.49, 0.2, 0.19),
+    median_n_communities = c(3, 3, 5, 5, 3, 3, 3, 3),
+    median_selected_resolution = c(1, 1, 2, 2, 1, 1, 1, 1),
+    n_clusters_requested = c(3L, 3L, 5L, 5L, 3L, 3L, 3L, 3L),
+    n_clusters_source = c("labels", "labels", "labels", "labels", "labels", "labels", "labels", "labels"),
+    graph_cached = c(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE)
   )
 
   out <- env$recommend_graph_cluster_methods(cycle_summary, ari_tolerance = 0.02)
-  expect_equal(nrow(out), 3L)
-  expect_equal(out$dataset, c("A", "A", "B"))
-  expect_equal(as.integer(out$n_clusters_requested), c(3L, 5L, 3L))
-  expect_equal(out$method, c("leiden", "leiden", "leiden"))
+  expect_equal(nrow(out), 4L)
+  expect_equal(out$dataset, c("A", "A", "A", "B"))
+  expect_equal(out$graph_backend, c("cpu", "cpu", "cuda", "cpu"))
+  expect_equal(out$cluster_backend, c("cpu", "cpu", "cuda", "cpu"))
+  expect_equal(as.integer(out$n_clusters_requested), c(3L, 5L, 3L, 3L))
+  expect_equal(out$method, c("leiden", "leiden", "leiden", "leiden"))
   expect_equal(
     out$recommendation_basis,
-    c("fastest_within_ari_tolerance", "fastest_within_ari_tolerance", "speed_only_no_ari")
+    c(
+      "fastest_within_ari_tolerance", "fastest_within_ari_tolerance",
+      "fastest_within_ari_tolerance", "speed_only_no_ari"
+    )
   )
 })
 
@@ -1717,29 +1722,29 @@ test_that("graph benchmark auto comparison has unique schema columns", {
     "args <- parse_args()"
   )
   cycle_summary <- data.frame(
-    dataset = c("A", "A"),
-    k = c(15L, 15L),
-    n_clusters_requested = c(3L, 3L),
-    graph_backend = c("auto", "cpu"),
-    graph_resolved_backend = c("cpu", "cpu"),
-    graph_preflight_route = c("cpu", "cpu"),
-    cluster_backend = c("auto", "cpu"),
-    cluster_resolved_backend = c("cpu", "cpu"),
-    cluster_preflight_route = c("cpu", "cpu"),
-    method = c("louvain", "leiden"),
-    weight = c("snn", "snn"),
-    n_threads = c(2L, 2L),
-    success_cycles = c(2L, 2L),
-    median_graph_sec = c(1, 1),
-    median_cluster_sec = c(3, 2),
-    median_total_sec = c(4, 3),
-    median_ari = c(0.90, 0.91),
-    min_ari = c(0.89, 0.90),
-    median_modularity = c(0.4, 0.41),
-    median_n_communities = c(3, 3),
-    median_selected_resolution = c(1, 1),
-    n_clusters_source = c("labels", "labels"),
-    graph_cached = c(TRUE, TRUE)
+    dataset = c("A", "A", "A"),
+    k = c(15L, 15L, 15L),
+    n_clusters_requested = c(3L, 3L, 3L),
+    graph_backend = c("auto", "auto", "cpu"),
+    cluster_backend = c("auto", "auto", "cpu"),
+    graph_resolved_backend = c("cpu", "cpu", "cpu"),
+    graph_preflight_route = c("cpu", "cpu", "cpu"),
+    cluster_resolved_backend = c("cpu", "cpu", "cpu"),
+    cluster_preflight_route = c("cpu", "cpu", "cpu"),
+    method = c("louvain", "leiden", "leiden"),
+    weight = c("snn", "snn", "snn"),
+    n_threads = c(2L, 2L, 2L),
+    success_cycles = c(2L, 2L, 2L),
+    median_graph_sec = c(1, 1, 1),
+    median_cluster_sec = c(3, 2, 2),
+    median_total_sec = c(4, 3, 3),
+    median_ari = c(0.90, 0.91, 0.91),
+    min_ari = c(0.89, 0.90, 0.90),
+    median_modularity = c(0.4, 0.41, 0.41),
+    median_n_communities = c(3, 3, 3),
+    median_selected_resolution = c(1, 1, 1),
+    n_clusters_source = c("labels", "labels", "labels"),
+    graph_cached = c(TRUE, TRUE, TRUE)
   )
   recommendations <- cycle_summary[2, , drop = FALSE]
   recommendations$recommendation_basis <- "fastest_within_ari_tolerance"
@@ -1748,15 +1753,24 @@ test_that("graph benchmark auto comparison has unique schema columns", {
 
   expect_equal(anyDuplicated(names(out)), 0L)
   expect_true("n_clusters_requested" %in% names(out))
+  expect_true("graph_backend" %in% names(out))
+  expect_true("cluster_backend" %in% names(out))
   expect_false("auto_n_clusters_requested" %in% names(out))
   expect_false("recommended_n_clusters_requested" %in% names(out))
-  expect_equal(out$recommended_recommendation_basis, "fastest_within_ari_tolerance")
-  expect_equal(out$auto_method, "louvain")
-  expect_equal(out$recommended_method, "leiden")
-  expect_equal(out$auto_graph_preflight_route, "cpu")
-  expect_equal(out$recommended_cluster_preflight_route, "cpu")
-  expect_equal(out$auto_n_threads, 2L)
-  expect_equal(out$recommended_n_threads, 2L)
+  expect_false("auto_graph_backend" %in% names(out))
+  expect_false("recommended_graph_backend" %in% names(out))
+  expect_true(all(out$auto_uses_recommended_graph_backend))
+  expect_true(all(out$auto_uses_recommended_cluster_backend))
+  expect_true(all(out$auto_uses_recommended_graph_resolved_backend))
+  expect_true(all(out$auto_uses_recommended_cluster_resolved_backend))
+  expect_equal(out$recommended_recommendation_basis, rep("fastest_within_ari_tolerance", nrow(out)))
+  louvain_row <- out[out$auto_method == "louvain", , drop = FALSE]
+  expect_equal(nrow(louvain_row), 1L)
+  expect_equal(louvain_row$recommended_method, "leiden")
+  expect_equal(louvain_row$auto_graph_preflight_route, "cpu")
+  expect_equal(louvain_row$recommended_cluster_preflight_route, "cpu")
+  expect_equal(louvain_row$auto_n_threads, 2L)
+  expect_equal(louvain_row$recommended_n_threads, 2L)
 })
 
 test_that("graph benchmark auto comparison guards speed and quality gaps", {
@@ -1768,10 +1782,10 @@ test_that("graph benchmark auto comparison guards speed and quality gaps", {
     dataset = c("A", "A", "B", "B"),
     k = c(15L, 15L, 15L, 15L),
     n_clusters_requested = c(3L, 3L, 3L, 3L),
-    graph_backend = c("auto", "cpu", "auto", "cpu"),
+    graph_backend = c("auto", "auto", "auto", "auto"),
     graph_resolved_backend = c("cpu", "cpu", "cpu", "cpu"),
     graph_preflight_route = c("cpu", "cpu", "cpu", "cpu"),
-    cluster_backend = c("auto", "cpu", "auto", "cpu"),
+    cluster_backend = c("auto", "auto", "auto", "auto"),
     cluster_resolved_backend = c("cpu", "cpu", "cpu", "cpu"),
     cluster_preflight_route = c("cpu", "cpu", "cpu", "cpu"),
     method = c("louvain", "leiden", "louvain", "leiden"),
@@ -1793,8 +1807,10 @@ test_that("graph benchmark auto comparison guards speed and quality gaps", {
   recommendations$recommendation_basis <- "fastest_within_ari_tolerance"
 
   out <- env$compare_auto_graph_to_recommendations(cycle_summary, recommendations)
-  expect_true(is.na(out$auto_median_speed_ratio[out$dataset == "A"]))
-  expect_true(is.na(out$auto_median_ari_gap[out$dataset == "B"]))
-  expect_true(is.na(out$auto_modularity_gap[out$dataset == "B"]))
-  expect_true(is.finite(out$auto_median_speed_ratio[out$dataset == "B"]))
+  expect_true(all(is.na(out$auto_median_speed_ratio[out$dataset == "A"])))
+  b_louvain <- out[out$dataset == "B" & out$auto_method == "louvain", , drop = FALSE]
+  expect_equal(nrow(b_louvain), 1L)
+  expect_true(is.na(b_louvain$auto_median_ari_gap))
+  expect_true(is.na(b_louvain$auto_modularity_gap))
+  expect_true(is.finite(b_louvain$auto_median_speed_ratio))
 })
