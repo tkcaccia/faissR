@@ -257,6 +257,15 @@ metric_arg_for_label <- function(metric) {
   )
 }
 
+rcpphnsw_distance_arg <- function(metric) {
+  switch(
+    metric,
+    cosine = "cosine",
+    inner_product = "ip",
+    "euclidean"
+  )
+}
+
 method_metric_applicable <- function(method, metric) {
   ip_methods <- c(
     "faissR_cpu_exact",
@@ -826,7 +835,7 @@ run_method <- function(method, x, k, n_threads, dataset, out_dir, metric) {
     },
     RcppHNSW_hnsw = {
       if (!available_pkg("RcppHNSW")) stop("RcppHNSW unavailable")
-      RcppHNSW::hnsw_knn(x, k = k, distance = if (identical(metric, "cosine")) "cosine" else "euclidean", M = 16, ef_construction = 200, ef = max(50, 3 * k), n_threads = n_threads, progress = "none")
+      RcppHNSW::hnsw_knn(x, k = k, distance = rcpphnsw_distance_arg(metric), M = 16, ef_construction = 200, ef = max(50, 3 * k), n_threads = n_threads, progress = "none")
     },
     RcppAnnoy_euclidean = annoy_knn(x, k, n_threads = n_threads),
     BiocNeighbors_vptree = {
@@ -1406,7 +1415,7 @@ materials <- c(
   "For faissR rows, `execution_backend` records the internal backend label used by `nn_compute()`, while `public_backend` and `public_method` record the equivalent public `nn(..., backend = , method = )` route. This separates legacy benchmark labels from the public API.",
   "The benchmark result table includes `backend_detail` to distinguish FAISS GPU indexes that use NVIDIA cuVS internally from direct RAPIDS cuVS API calls.",
   "`benchmark1_runtime_capabilities.csv` records the faissR Benchmark #1 method/metric preflight table, including legacy Benchmark #1 method labels, equivalent public `nn()` routes where available, execution backends, metric support, and current runtime availability.",
-  "External R package methods tested: Rnanoflann, RANN kd-tree and bd-tree, rnndescent RPF/RNND/NND/brute-force, RcppHNSW, RcppAnnoy, BiocNeighbors VP-tree/HNSW/Annoy, uwot::similarity_graph with nn_method = fnn, annoy, hnsw, and nndescent, and cuda.ml KNN if an installed cuda.ml package exposes a recognised KNN routine.",
+  "External R package methods tested: Rnanoflann, RANN kd-tree and bd-tree, rnndescent RPF/RNND/NND/brute-force, RcppHNSW, RcppAnnoy, BiocNeighbors VP-tree/HNSW/Annoy, uwot::similarity_graph with nn_method = fnn, annoy, hnsw, and nndescent, and cuda.ml KNN if an installed cuda.ml package exposes a recognised KNN routine. External RcppHNSW rows use Euclidean, cosine, or inner-product (`distance = \"ip\"`) modes when those metrics are requested; correlation is recorded as unavailable for the external RcppHNSW row because Benchmark #1 does not row-center data before calling that package.",
   "umap::umap.knn was included as a precomputed-neighbour consumer test, not as a standalone KNN search algorithm. Rtsne::Rtsne_neighbors was marked not applicable because it consumes precomputed neighbours and optimizes t-SNE rather than exporting a standalone KNN search.",
   "",
   "The benchmark records elapsed method time, load/conversion time, peak resident memory when available from `/proc/self/status`, output dimensions where an index matrix is returned, quality metrics, status, and error messages."

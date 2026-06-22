@@ -841,10 +841,15 @@ test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
 
   expect_true(isTRUE(env$method_metric_applicable("faissR_faiss_flat_l2", "inner_product")$ok))
   expect_true(isTRUE(env$method_metric_applicable("faissR_faiss_gpu_flat_l2", "inner_product")$ok))
+  expect_true(isTRUE(env$method_metric_applicable("RcppHNSW_hnsw", "inner_product")$ok))
+  expect_false(isTRUE(env$method_metric_applicable("RcppHNSW_hnsw", "correlation")$ok))
   expect_true(isTRUE(env$method_is_exact("faissR_faiss_flat_l2", "inner_product")))
   expect_true(isTRUE(env$method_is_exact("faissR_faiss_gpu_flat_l2", "inner_product")))
   expect_true(isTRUE(env$method_is_exact("faissR_cuda_cuvs_bruteforce", "l2")))
   expect_false(isTRUE(env$method_is_exact("faissR_cuda_cuvs_bruteforce", "inner_product")))
+  expect_equal(env$rcpphnsw_distance_arg("l2"), "euclidean")
+  expect_equal(env$rcpphnsw_distance_arg("cosine"), "cosine")
+  expect_equal(env$rcpphnsw_distance_arg("inner_product"), "ip")
 
   removed_cpu_route <- env$faissr_benchmark_route("faissR_faiss_flat_ip")
   removed_gpu_route <- env$faissr_benchmark_route("faissR_faiss_gpu_flat_ip")
