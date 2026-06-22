@@ -804,6 +804,55 @@ test_that("runtime-available CPU capability rows execute across public metrics",
   }
 })
 
+test_that("runtime-available CPU core methods execute across benchmark k grid", {
+  old_options <- options(
+    faissR.faiss_nlist = 16L,
+    faissR.faiss_nprobe = 16L
+  )
+  on.exit(options(old_options), add = TRUE)
+
+  set.seed(20260623)
+  x <- matrix(rnorm(240L * 8L), nrow = 240L)
+  k_values <- c(5L, 10L, 15L, 50L, 100L)
+  core_methods <- c("exact", "flat", "hnsw", "ivf", "nndescent")
+  runtime_caps <- nn_capabilities(runtime = TRUE)
+  rows <- runtime_caps[
+    runtime_caps$backend == "cpu" &
+      runtime_caps$method %in% core_methods &
+      runtime_caps$supported &
+      runtime_caps$runtime_available,
+    ,
+    drop = FALSE
+  ]
+  expect_gt(nrow(rows), 0L)
+
+  for (i in seq_len(nrow(rows))) {
+    row <- rows[i, , drop = FALSE]
+    for (k in k_values) {
+      label <- paste(row$method, row$metric, row$resolved_backend, paste0("k=", k), sep = "/")
+      out <- nn_without_self(
+        x,
+        k = k,
+        backend = "cpu",
+        method = row$method,
+        metric = row$metric,
+        tuning = "fixed",
+        n_threads = 2L
+      )
+
+      expect_true(inherits(out, "faissR_nn"), info = label)
+      expect_equal(dim(out$indices), c(nrow(x), k), info = label)
+      expect_equal(dim(as.matrix(out$distances)), c(nrow(x), k), info = label)
+      expect_equal(attr(out, "metric"), row$metric, info = label)
+      expect_equal(attr(out, "requested_method"), row$method, info = label)
+      expect_equal(attr(out, "requested_backend"), "cpu", info = label)
+      expect_equal(attr(out, "tuning"), "fixed", info = label)
+      expect_true(all(out$indices >= 1L & out$indices <= nrow(x)), info = label)
+      expect_true(all(is.finite(as.matrix(out$distances))), info = label)
+    }
+  }
+})
+
 test_that("cuda_auto runtime availability distinguishes cuVS and FAISS GPU metric routes", {
   euclidean_cuvs <- faissR:::nn_cuda_auto_runtime_available(
     "euclidean",
