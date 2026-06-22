@@ -218,6 +218,18 @@ test_that("fast_kmeans rejects implementation backend labels", {
   )
 })
 
+test_that("fast_kmeans requires canonical initialization labels", {
+  x <- matrix(rnorm(40), ncol = 4)
+
+  expect_equal(faissR:::normalize_kmeans_init(NULL), "kmeans++")
+  expect_equal(faissR:::normalize_kmeans_init("random"), "random")
+  expect_error(faissR:::normalize_kmeans_init("r"), "init")
+  expect_error(
+    fast_kmeans(x, centers = 2, backend = "cpu", init = "r", n_threads = 2),
+    "init"
+  )
+})
+
 test_that("fast_kmeans CUDA requests never silently use CPU", {
   x <- matrix(rnorm(80), ncol = 4)
   out <- tryCatch(

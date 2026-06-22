@@ -57,7 +57,7 @@ fast_kmeans <- function(data,
                         tuning = c("auto", "fixed", "off", "none")) {
   requested_backend <- normalize_public_backend_arg(backend)
   backend <- requested_backend
-  init <- match.arg(init)
+  init <- normalize_kmeans_init(init)
   tuning <- normalize_kmeans_tuning(tuning)
   x <- as.matrix(data)
   storage.mode(x) <- "double"
@@ -325,6 +325,16 @@ normalize_kmeans_tuning <- function(tuning) {
     stop("`tuning` must be one of \"auto\", \"fixed\", \"off\", or \"none\".", call. = FALSE)
   }
   tuning
+}
+
+normalize_kmeans_init <- function(init) {
+  init <- as.character(init)[1L]
+  if (is.na(init) || !nzchar(init)) init <- "kmeans++"
+  init <- trimws(init)
+  if (!init %in% c("kmeans++", "random")) {
+    stop("`init` must be one of \"kmeans++\" or \"random\".", call. = FALSE)
+  }
+  init
 }
 
 kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
