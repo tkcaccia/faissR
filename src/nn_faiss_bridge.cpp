@@ -221,8 +221,10 @@ List faissR_nn_float32_call_impl(SEXP x,
       backend_value != "cpu" &&
       backend_value != "faiss" &&
       backend_value != "cpu_faiss" &&
+      backend_value != "cpu_faiss_flat" &&
       backend_value != "flat" &&
-      backend_value != "faiss_flat") {
+      backend_value != "faiss_flat" &&
+      backend_value != "faiss_flat_l2") {
     Rcpp::stop(
       "faissR_nn_float32_call currently exposes the CPU FAISS Flat float32 route"
     );

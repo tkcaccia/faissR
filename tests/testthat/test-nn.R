@@ -342,7 +342,7 @@ test_that("float32 C-callable returns stable KNN metadata", {
       SEXP out = fn(
         x,
         Rcpp::wrap(2),
-        Rcpp::wrap(std::string("auto")),
+        Rcpp::wrap(std::string("faiss_flat_l2")),
         Rcpp::wrap(std::string("euclidean")),
         Rcpp::wrap(false),
         Rcpp::wrap(2)
