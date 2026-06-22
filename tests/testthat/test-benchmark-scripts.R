@@ -2454,6 +2454,11 @@ test_that("graph benchmark target cluster mode is explicit", {
   expect_equal(env$normalize_target_clusters_mode("dataset_labels"), "labels")
   expect_equal(env$normalize_target_clusters_mode("none"), "none")
   expect_equal(env$normalize_target_clusters_mode("off"), "none")
+  expect_equal(env$normalize_target_resolution_mode("auto"), "auto")
+  expect_equal(env$normalize_target_resolution_mode("target-auto"), "auto")
+  expect_equal(env$normalize_target_resolution_mode("default"), "default")
+  expect_equal(env$normalize_target_resolution_mode("fixed"), "default")
+  expect_error(env$normalize_target_resolution_mode("wide"), "target_resolution")
   expect_null(env$label_target_clusters(rep(letters[1:3], each = 2L), "none"))
   expect_equal(env$label_target_clusters(rep(letters[1:3], each = 2L), "labels"), 3L)
   expect_error(env$normalize_target_clusters_mode("labelled"), "target_clusters")
@@ -2993,6 +2998,7 @@ test_that("graph benchmark success rows keep preflight and resolved routes separ
     weight = "distance",
     n_threads = 2L,
     target_mode = "none",
+    target_resolution_mode = "auto",
     seed = 1L,
     timeout = 60L,
     cycle = 1L
@@ -3002,6 +3008,47 @@ test_that("graph benchmark success rows keep preflight and resolved routes separ
   expect_equal(row$graph_resolved_backend, "faiss_hnsw")
   expect_equal(row$graph_preflight_route, env$graph_build_preflight_route("auto"))
   expect_false(identical(row$graph_preflight_route, row$graph_resolved_backend))
+})
+
+test_that("graph benchmark uses target-auto resolution for label targets", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  set.seed(1772)
+  x <- rbind(
+    matrix(rnorm(40, -2, 0.2), ncol = 4),
+    matrix(rnorm(40, 2, 0.2), ncol = 4)
+  )
+  labels <- rep(c("a", "b"), each = 10L)
+  graph_obj <- knn_graph(x, k = 4L, backend = "cpu", weight = "distance")
+
+  row <- env$run_cluster_one(
+    data_obj = list(data = x, labels = labels),
+    dataset_name = "A",
+    graph_obj = graph_obj,
+    graph_sec = 0.1,
+    graph_cached = TRUE,
+    graph_n_vertices = graph_obj$n_vertices,
+    n_edges = graph_obj$n_edges,
+    k = 4L,
+    graph_backend = "cpu",
+    cluster_backend = "cpu",
+    method = "louvain",
+    weight = "distance",
+    n_threads = 2L,
+    target_mode = "labels",
+    target_resolution_mode = "auto",
+    seed = 1L,
+    timeout = 60L,
+    cycle = 1L
+  )
+
+  expect_equal(row$status, "success")
+  expect_equal(row$n_clusters_requested, 2L)
+  expect_equal(row$target_resolution_mode, "auto")
+  expect_equal(row$resolution_candidate_center, 2 / sqrt(graph_obj$n_vertices))
+  expect_true(is.finite(row$selected_resolution))
 })
 
 test_that("graph benchmark recommendations preserve integer target counts", {

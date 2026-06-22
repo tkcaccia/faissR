@@ -392,7 +392,9 @@ result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, 
                        n_communities = NA_integer_, modularity = NA_real_,
                        ari = NA_real_, selected_resolution = NA_real_,
                        target_gap = NA_integer_,
+                       target_resolution_mode = NA_character_,
                        resolution_selection = NA_character_,
+                       resolution_candidate_center = NA_real_,
                        resolution_selected_candidate = NA_integer_,
                        resolution_candidates = NA_integer_,
                        resolution_min_target_gap = NA_integer_,
@@ -454,7 +456,9 @@ result_row <- function(dataset, n, p, cycle, k, graph_backend, cluster_backend, 
     ari = ari,
     selected_resolution = selected_resolution,
     target_gap = if (is.null(target_gap)) NA_integer_ else as.integer(target_gap),
+    target_resolution_mode = target_resolution_mode,
     resolution_selection = resolution_selection,
+    resolution_candidate_center = as.numeric(resolution_candidate_center),
     resolution_selected_candidate = as.integer(resolution_selected_candidate),
     resolution_candidates = as.integer(resolution_candidates),
     resolution_min_target_gap = as.integer(resolution_min_target_gap),
@@ -490,6 +494,7 @@ resolution_search_summary <- function(cluster) {
   list(
     selected_candidate = as.integer(selected_candidate),
     candidates = as.integer(n_candidates),
+    candidate_center = as.numeric(selection$candidate_center %||% NA_real_),
     min_target_gap = as.integer(min_gap),
     selected_is_min_gap = selected_is_min_gap
   )
@@ -632,12 +637,15 @@ ensure_graph_selector_columns <- function(x) {
   if (!"graph_auto_backend_decision" %in% names(x)) x$graph_auto_backend_decision <- NA_character_
   if (!"graph_auto_method_decision" %in% names(x)) x$graph_auto_method_decision <- NA_character_
   if (!"median_target_gap" %in% names(x)) x$median_target_gap <- NA_real_
+  if (!"target_resolution_mode" %in% names(x)) x$target_resolution_mode <- NA_character_
   if (!"resolution_selection" %in% names(x)) x$resolution_selection <- NA_character_
+  if (!"resolution_candidate_center" %in% names(x)) x$resolution_candidate_center <- NA_real_
   if (!"resolution_selected_candidate" %in% names(x)) x$resolution_selected_candidate <- NA_integer_
   if (!"resolution_candidates" %in% names(x)) x$resolution_candidates <- NA_integer_
   if (!"resolution_min_target_gap" %in% names(x)) x$resolution_min_target_gap <- NA_integer_
   if (!"resolution_selected_is_min_gap" %in% names(x)) x$resolution_selected_is_min_gap <- NA
   if (!"median_resolution_selected_candidate" %in% names(x)) x$median_resolution_selected_candidate <- NA_real_
+  if (!"median_resolution_candidate_center" %in% names(x)) x$median_resolution_candidate_center <- NA_real_
   if (!"median_resolution_candidates" %in% names(x)) x$median_resolution_candidates <- NA_real_
   if (!"median_resolution_min_target_gap" %in% names(x)) x$median_resolution_min_target_gap <- NA_real_
   x
@@ -697,7 +705,9 @@ summarize_graph_cycles <- function(ok) {
       median_n_communities = finite_median(x$n_communities),
       median_selected_resolution = finite_median(x$selected_resolution),
       median_target_gap = finite_median(x$target_gap),
+      target_resolution_mode = dominant_value(x$target_resolution_mode),
       resolution_selection = dominant_value(x$resolution_selection),
+      median_resolution_candidate_center = finite_median(x$resolution_candidate_center),
       median_resolution_selected_candidate = finite_median(x$resolution_selected_candidate),
       median_resolution_candidates = finite_median(x$resolution_candidates),
       median_resolution_min_target_gap = finite_median(x$resolution_min_target_gap),
@@ -810,7 +820,8 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
     "cluster_preflight_route", "method", "weight", "n_threads",
     "success_cycles", "median_graph_sec", "median_cluster_sec", "median_total_sec",
     "median_ari", "min_ari", "median_modularity", "median_n_communities",
-    "median_selected_resolution", "median_target_gap", "resolution_selection",
+    "median_selected_resolution", "median_target_gap", "target_resolution_mode",
+    "resolution_selection", "median_resolution_candidate_center",
     "median_resolution_selected_candidate", "median_resolution_candidates",
     "median_resolution_min_target_gap", "resolution_selected_is_min_gap",
     "n_clusters_source", "graph_cached"
@@ -863,7 +874,8 @@ compare_auto_graph_to_global_recommendations <- function(cycle_summary, recommen
     "cluster_preflight_route", "method", "weight", "n_threads",
     "success_cycles", "median_graph_sec", "median_cluster_sec", "median_total_sec",
     "median_ari", "min_ari", "median_modularity", "median_n_communities",
-    "median_selected_resolution", "median_target_gap", "resolution_selection",
+    "median_selected_resolution", "median_target_gap", "target_resolution_mode",
+    "resolution_selection", "median_resolution_candidate_center",
     "median_resolution_selected_candidate", "median_resolution_candidates",
     "median_resolution_min_target_gap", "resolution_selected_is_min_gap",
     "n_clusters_source", "graph_cached"
@@ -1156,6 +1168,30 @@ normalize_target_clusters_mode <- function(target_mode) {
   unname(aliases[[target_mode]])
 }
 
+normalize_target_resolution_mode <- function(target_resolution_mode) {
+  target_resolution_mode <- tolower(trimws(as.character(target_resolution_mode)[1L] %||% "auto"))
+  key <- gsub("[[:space:]-]+", "_", target_resolution_mode)
+  aliases <- c(
+    auto = "auto",
+    target_auto = "auto",
+    shape = "auto",
+    graph_shape = "auto",
+    default = "default",
+    fixed = "default",
+    one = "default",
+    resolution1 = "default"
+  )
+  out <- unname(aliases[key])
+  if (is.na(out)) out <- key
+  if (!out %in% c("auto", "default")) {
+    stop(
+      "`target_resolution` must be one of \"auto\" or \"default\".",
+      call. = FALSE
+    )
+  }
+  out
+}
+
 label_target_clusters <- function(labels, target_mode) {
   if (!identical(target_mode, "labels") || is.null(labels)) return(NULL)
   label_count <- length(unique(labels[!is.na(labels)]))
@@ -1242,7 +1278,7 @@ build_graph_once <- function(data_obj, dataset_name, k, graph_backend, weight,
 run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
                             graph_cached, graph_n_vertices, n_edges, k, graph_backend,
                             cluster_backend, method, weight, n_threads,
-                            target_mode, seed, timeout, cycle = 1L,
+                            target_mode, target_resolution_mode, seed, timeout, cycle = 1L,
                             graph_method = "auto", metric = "euclidean",
                             graph_cagra_implementation = NA_character_) {
   n <- nrow(data_obj$data)
@@ -1262,6 +1298,8 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
     if (!is.null(n_clusters)) n_clusters_source <- target_mode
   }
   n_clusters_requested <- n_clusters
+  target_resolution_mode <- normalize_target_resolution_mode(target_resolution_mode)
+  resolution_arg <- if (!is.null(n_clusters) && identical(target_resolution_mode, "auto")) NULL else 1
 
   started <- proc.time()[["elapsed"]]
   tryCatch({
@@ -1273,6 +1311,7 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
         backend = cluster_backend,
         n_threads = n_threads,
         n_clusters = n_clusters,
+        resolution = resolution_arg,
         seed = seed
       )
       attr(out, "cluster_sec") <- proc.time()[["elapsed"]] - cluster_started
@@ -1313,7 +1352,9 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       ari = benchmark_adjusted_rand_index(labels, cluster$membership),
       selected_resolution = cluster$selected_resolution %||% NA_real_,
       target_gap = cluster$target_gap %||% cluster_params$target_gap %||% NA_integer_,
+      target_resolution_mode = if (is.null(n_clusters_requested)) NA_character_ else target_resolution_mode,
       resolution_selection = (cluster$resolution_selection %||% cluster_params$resolution_selection %||% list())$criterion %||% NA_character_,
+      resolution_candidate_center = resolution_summary$candidate_center,
       resolution_selected_candidate = resolution_summary$selected_candidate,
       resolution_candidates = resolution_summary$candidates,
       resolution_min_target_gap = resolution_summary$min_target_gap,
@@ -1349,6 +1390,7 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
       weight = weight,
       n_clusters = n_clusters_requested,
       n_clusters_source = n_clusters_source,
+      target_resolution_mode = if (is.null(n_clusters_requested)) NA_character_ else target_resolution_mode,
       n_threads = n_threads,
       status = "failed",
       error = conditionMessage(e),
@@ -1436,6 +1478,7 @@ cluster_backends <- validate_choice_values(
 )
 weight <- args$weight %||% "auto"
 target_mode <- normalize_target_clusters_mode(args$target_clusters %||% "labels")
+target_resolution_mode <- normalize_target_resolution_mode(args$target_resolution %||% "auto")
 
 suppressPackageStartupMessages(library(faissR))
 graph_capabilities <- graph_nn_capabilities()
@@ -1444,13 +1487,14 @@ config <- data.frame(
   key = c("data_root", "out_dir", "available_datasets", "datasets", "methods",
           "graph_methods", "metrics", "cagra_implementations", "graph_backends", "cluster_backends",
           "k_values", "threads", "timeout", "weight", "target_clusters",
-          "cycles", "ari_tolerance", "seed"),
+          "target_resolution", "cycles", "ari_tolerance", "seed"),
   value = c(data_root, out_dir, paste(available_datasets, collapse = ","),
             paste(datasets, collapse = ","), paste(methods, collapse = ","),
             paste(graph_methods, collapse = ","), paste(metrics, collapse = ","),
             paste(cagra_implementations, collapse = ","),
             paste(graph_backends, collapse = ","), paste(cluster_backends, collapse = ","),
             paste(k_values, collapse = ","), n_threads, timeout, weight, target_mode,
+            target_resolution_mode,
             cycles, ari_tolerance, seed),
   stringsAsFactors = FALSE
 )
@@ -1574,6 +1618,7 @@ for (dataset_name in datasets) {
                     weight = if (identical(graph_build$status, "success")) graph_build$weight else weight,
                     n_clusters = row_target_clusters,
                     n_clusters_source = row_target_source,
+                    target_resolution_mode = if (is.null(row_target_clusters)) NA_character_ else target_resolution_mode,
                     n_threads = n_threads,
                     status = "expected_skip",
                     error = skip_reason$notes,
@@ -1613,6 +1658,7 @@ for (dataset_name in datasets) {
                     weight = weight,
                     n_clusters = row_target_clusters,
                     n_clusters_source = row_target_source,
+                    target_resolution_mode = if (is.null(row_target_clusters)) NA_character_ else target_resolution_mode,
                     n_threads = n_threads,
                     status = if (identical(graph_build$status, "expected_skip")) "expected_skip" else "failed",
                     error = graph_build$error,
@@ -1651,6 +1697,7 @@ for (dataset_name in datasets) {
                     weight = graph_build$weight,
                     n_threads = n_threads,
                     target_mode = target_mode,
+                    target_resolution_mode = target_resolution_mode,
                     seed = cycle_seed,
                     timeout = timeout,
                     cycle = cycle,
@@ -1766,15 +1813,16 @@ materials <- c(
   sprintf("- ARI tolerance for cycle recommendations: `%s`", ari_tolerance),
   sprintf("- CPU thread cap: `%s`", n_threads),
   sprintf("- Target clusters mode: `%s`", target_mode),
+  sprintf("- Target resolution mode: `%s`", target_resolution_mode),
   "",
   "ARI is computed in `benchmark_scripts/source.R` from labels stored in each dataset object. ARI is `NA` when labels are unavailable.",
   "`graph_cluster_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `graph_cluster_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, graph timings, clustering timings, memory, graph vertex/edge counts, ARI, modularity, graph NN method/metric, the requested `graph_cagra_implementation` for CUDA-capable CAGRA and auto graph routes, compact `graph_route_parameters` from the KNN route that built the graph, and backend metadata. Auto KNN graph routes include no-pilot `predicted_backend`, `predicted_method`, `predicted_device`, explicit backend/method flags, and backend/method decision metadata when available; these are also written as first-class `graph_auto_*` columns for direct filtering and comparison.",
   "`graph_cluster_nn_capabilities.csv` stores the `faissR::nn_capabilities(runtime = TRUE)` table used to preflight graph KNN construction, including `runtime_reason` and `runtime_notes`. Runtime-unavailable graph routes are recorded as expected skips before a graph is built.",
-  "`target_clusters` is normalized to either `\"labels\"` or `\"none\"`; invalid values stop before the benchmark starts. When `target_clusters = \"labels\"`, Louvain and Leiden call `graph_cluster(n_clusters = length(unique(labels)))`. Random-walking rows receive no `n_clusters` value because random-walking intentionally has no cluster-count target.",
-  "`n_clusters_requested` records the requested target community count for Louvain/Leiden rows. This is a convenience target, not a hard guarantee; the actual community count is stored separately as `n_communities`. `n_clusters_source` records whether that target came from dataset labels or no target. When a target is used, faissR evaluates a bounded deterministic resolution grid around the supplied resolution; `target_gap`, `resolution_selection`, `resolution_selected_candidate`, `resolution_candidates`, `resolution_min_target_gap`, `resolution_selected_is_min_gap`, and the selected resolution summarize the deterministic resolution-search decision.",
+  "`target_clusters` is normalized to either `\"labels\"` or `\"none\"`; invalid values stop before the benchmark starts. `target_resolution` is normalized to either `\"auto\"` or `\"default\"`; `\"auto\"` passes `resolution = NULL` whenever a Louvain/Leiden target count is available, while `\"default\"` uses the historical `resolution = 1` seed. When `target_clusters = \"labels\"`, Louvain and Leiden call `graph_cluster(n_clusters = length(unique(labels)))`. Random-walking rows receive no `n_clusters` value because random-walking intentionally has no cluster-count target.",
+  "`n_clusters_requested` records the requested target community count for Louvain/Leiden rows. This is a convenience target, not a hard guarantee; the actual community count is stored separately as `n_communities`. `n_clusters_source` records whether that target came from dataset labels or no target, and `target_resolution_mode` records whether the benchmark used the shape-seeded `resolution = NULL` target-auto path or the default numeric resolution seed. When a target is used, faissR evaluates a bounded deterministic resolution grid; `resolution_candidate_center`, `target_gap`, `resolution_selection`, `resolution_selected_candidate`, `resolution_candidates`, `resolution_min_target_gap`, `resolution_selected_is_min_gap`, and the selected resolution summarize the deterministic resolution-search decision.",
   "Each KNN graph is built once per dataset/cycle/k/graph-backend/graph-method/metric/weight combination and reused across clustering methods and clustering backends within that cycle. The graph benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs. `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
   "`graph_cluster_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, modularity, and total time for a compact backwards-compatible summary. `graph_cluster_best_by_dataset_k_target.csv` keeps the best successful row per dataset/k/graph-method/metric/CAGRA-provider/target-cluster-count combination so different neighbourhood sizes, KNN graph routes, CAGRA providers, metrics, and Louvain/Leiden target counts remain auditable.",
-  "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, graph size, community counts, selected resolution, target gap, resolution-selection rule, selected-candidate and candidate-count diagnostics, CPU thread count, method/metric/provider-aware preflight routes, compact graph-route parameter metadata, and resolved backend metadata.",
+  "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, graph size, community counts, selected resolution, target gap, target-resolution mode, resolution-selection rule, candidate-center, selected-candidate and candidate-count diagnostics, CPU thread count, method/metric/provider-aware preflight routes, compact graph-route parameter metadata, and resolved backend metadata.",
   "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering method row within `ari_tolerance` of the best median ARI for each dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/target-cluster-count combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median total times are broken by higher median ARI and then higher median modularity. When ARI is unavailable it selects the fastest median total-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
   "`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where graph or clustering backend was `auto` with recommendations from the same requested graph-backend/graph-method/metric/cluster-backend group and reports the recommendation basis, median speed ratio, median ARI gap, modularity gap, method agreement, and resolved-backend agreement. Speed ratios and quality gaps are `NA` when the required timing, ARI, or modularity values are unavailable or invalid.",
   "`graph_cluster_global_recommendations_from_cycles.csv` selects the fastest successful row within the ARI tolerance after pooling requested graph and clustering backends for each dataset/k/graph-method/metric/CAGRA-provider/target-cluster-count combination. This table audits the best observed CPU/CUDA route instead of only the best route inside each requested-backend group.",

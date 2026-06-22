@@ -297,8 +297,10 @@ auditable.
 dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/
 clustering-method/weight/target-cluster-count and reports success counts, median/min/max graph,
 clustering, and total time, ARI stability, modularity stability, graph size,
-community counts, CPU thread count, method/metric/provider-aware preflight
-routes, compact graph-route parameter metadata, and resolved backend metadata.
+community counts, selected resolution, target gap, target-resolution mode,
+resolution candidate center, selected-candidate/candidate-count diagnostics,
+CPU thread count, method/metric/provider-aware preflight routes, compact
+graph-route parameter metadata, and resolved backend metadata.
 `graph_cluster_nn_capabilities.csv` stores the graph-construction
 `nn_capabilities(runtime = TRUE)` table, including `runtime_reason` and
 `runtime_notes` for runtime-unavailable KNN routes.
@@ -315,6 +317,7 @@ small graphs use more candidates, while large graphs use a narrower
 deterministic grid to reduce repeated clustering passes during target-count
 searches. The raw and
 cycle-summary CSVs flatten the most important diagnostics as
+`target_resolution_mode`, `resolution_candidate_center`,
 `resolution_selected_candidate`, `resolution_candidates`,
 `resolution_min_target_gap`, and
 `resolution_selected_is_min_gap`, making it possible to check whether the
@@ -428,8 +431,13 @@ Rscript benchmark_scripts/benchmark_graph_clustering.R \
 
 `--k_values` must contain one or more positive integers; malformed entries stop
 the graph benchmark before datasets are loaded.
-`--target_clusters` is normalized to either `labels` or `none`, and invalid
-values stop before the benchmark starts. Method, graph-backend, and
+`--target_clusters` is normalized to either `labels` or `none`, and
+`--target_resolution` is normalized to either `auto` or `default`; invalid
+values stop before the benchmark starts. `--target_resolution=auto` is the
+default and passes `resolution = NULL` for Louvain/Leiden rows with a target
+cluster count, so faissR uses the shape-seeded target-count grid.
+`--target_resolution=default` uses the historical numeric `resolution = 1`
+seed. Method, graph-backend, and
 cluster-backend selectors are also validated against the public benchmark
 choices before any dataset is loaded. `--graph_methods` accepts the same public
 NN method labels as `nn()` and `knn_graph()`, while `--metrics` accepts the four
@@ -448,10 +456,12 @@ the selected method set contains random-walking, the benchmark still reserves
 cluster-count target. `n_clusters_requested` records this requested target
 count passed directly to `graph_cluster()`, while `n_communities` records the actual
 community count returned by clustering. The target is a convenience target, not
-a hard guarantee. It is validated as a positive integer no larger than the
-graph vertex count, so malformed label-derived targets fail clearly before
-clustering. CUDA rows fail explicitly when faissR was not built with the
-required CUDA/cuGraph support.
+a hard guarantee. `target_resolution_mode` and `resolution_candidate_center`
+record whether the benchmark used the target-auto shape seed or the default
+numeric seed and what center was used for the deterministic grid. The target is
+validated as a positive integer no larger than the graph vertex count, so
+malformed label-derived targets fail clearly before clustering. CUDA rows fail
+explicitly when faissR was not built with the required CUDA/cuGraph support.
 
 ## NN Metrics File Layout
 
