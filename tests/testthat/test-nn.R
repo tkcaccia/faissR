@@ -62,6 +62,33 @@ test_that("public nearest-neighbour wrappers expose one canonical method and met
   }
 })
 
+test_that("public high-level APIs expose auto/cpu/cuda backend and auto tuning", {
+  backend_choices <- c("auto", "cpu", "cuda")
+  nn_tuning_choices <- c("auto", "cache", "pilot", "fixed", "off", "none")
+  kmeans_tuning_choices <- c("auto", "fixed", "off", "none")
+  wrappers <- list(
+    nn = formals(nn),
+    nn_without_self = formals(nn_without_self),
+    knn = formals(knn),
+    knn_graph = formals(knn_graph),
+    graph_cluster = formals(graph_cluster),
+    fast_kmeans = formals(fast_kmeans)
+  )
+
+  for (name in names(wrappers)) {
+    f <- wrappers[[name]]
+    expect_equal(eval(f$backend), backend_choices, info = name)
+    expect_equal(eval(f$tuning), if (identical(name, "fast_kmeans")) kmeans_tuning_choices else nn_tuning_choices, info = name)
+  }
+
+  predict_formals <- formals(getS3method("predict", "faissR_knn_model"))
+  expect_null(predict_formals$backend)
+  expect_equal(eval(predict_formals$tuning), nn_tuning_choices)
+  expect_equal(eval(formals(graph_cluster)$graph_backend), "auto")
+  expect_equal(eval(formals(knn_graph)$nn_method), eval(formals(nn)$method))
+  expect_equal(eval(formals(graph_cluster)$graph_method), eval(formals(nn)$method))
+})
+
 test_that("nn returns exact euclidean neighbors", {
   x <- matrix(c(
     0, 0,
