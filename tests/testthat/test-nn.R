@@ -748,6 +748,7 @@ test_that("nn_capabilities can report current runtime availability", {
   expect_type(runtime_caps$runtime_available, "logical")
   expect_true(all(!is.na(runtime_caps$runtime_reason)))
   expect_true(all(!is.na(runtime_caps$runtime_notes)))
+  expect_false(any(runtime_caps$runtime_reason == "resolver_error"))
 
   cpu_exact <- runtime_caps[
     runtime_caps$backend == "cpu" &
