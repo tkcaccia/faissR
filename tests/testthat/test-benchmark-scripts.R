@@ -2579,9 +2579,7 @@ test_that("graph benchmark preflights graph method and metric skips", {
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "grid", metric = "euclidean", x = dense[, 1:2]))
 
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nndescent", metric = "inner_product", x = dense))
-  nnd_cuda_ip <- env$graph_build_expected_skip("cuda", graph_method = "nndescent", metric = "inner_product", x = dense)
-  expect_true(nzchar(nnd_cuda_ip$reason))
-  expect_match(nnd_cuda_ip$notes, "cuda_native_nndescent|Native CUDA")
+  expect_null(env$graph_build_expected_skip("cuda", graph_method = "nndescent", metric = "inner_product", x = dense))
 
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(80 * 4), ncol = 4)))
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(120 * 4), ncol = 4)))
