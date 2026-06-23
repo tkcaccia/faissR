@@ -1029,6 +1029,37 @@ test_that("NN metric benchmark accounts for data-shaped method skips", {
   expect_null(env$nn_data_expected_skip(matrix(rnorm(20), ncol = 4), "flat"))
 })
 
+test_that("NN metric benchmark preserves provider-specific CAGRA skip routes", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+  caps <- data.frame(
+    backend = rep("cuda", 2L),
+    method = rep("cagra", 2L),
+    metric = rep("euclidean", 2L),
+    supported = c(TRUE, TRUE),
+    notes = c("FAISS GPU CAGRA", "direct cuVS CAGRA"),
+    resolved_backend = c("faiss_gpu_cagra", "cuda_cuvs_cagra"),
+    runtime_available = c(FALSE, FALSE),
+    runtime_reason = c("missing_faiss_gpu", "missing_cuvs"),
+    runtime_notes = c("FAISS GPU unavailable", "cuVS unavailable"),
+    stringsAsFactors = FALSE
+  )
+
+  faiss_skip <- env$is_expected_skip(caps[1L, , drop = FALSE], "cuda", "cagra", "euclidean")
+  cuvs_skip <- env$is_expected_skip(caps[2L, , drop = FALSE], "cuda", "cagra", "euclidean")
+
+  expect_true(isTRUE(faiss_skip$skip))
+  expect_true(isTRUE(cuvs_skip$skip))
+  expect_equal(faiss_skip$route, "faiss_gpu_cagra")
+  expect_equal(cuvs_skip$route, "cuda_cuvs_cagra")
+  expect_equal(faiss_skip$reason, "missing_faiss_gpu")
+  expect_equal(cuvs_skip$reason, "missing_cuvs")
+  expect_match(faiss_skip$notes, "FAISS GPU unavailable", fixed = TRUE)
+  expect_match(cuvs_skip$notes, "cuVS unavailable", fixed = TRUE)
+})
+
 test_that("NN metric benchmark raw rows record expected-skip reason labels", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
@@ -1048,13 +1079,15 @@ test_that("NN metric benchmark raw rows record expected-skip reason labels", {
     error = "grid requires 2D/3D data",
     expected_skip = TRUE,
     expected_skip_reason = "unsupported_shape",
-    capability_notes = "grid requires 2D/3D data"
+    capability_notes = "grid requires 2D/3D data",
+    preflight_route = "cpu_grid"
   )
 
   expect_true("expected_skip_reason" %in% names(row))
   expect_true("cagra_implementation" %in% names(row))
   expect_true(isTRUE(row$expected_skip))
   expect_equal(row$expected_skip_reason, "unsupported_shape")
+  expect_equal(row$preflight_route, "cpu_grid")
 })
 
 test_that("graph benchmark raw rows record expected-skip reason labels", {
