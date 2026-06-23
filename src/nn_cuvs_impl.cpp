@@ -470,6 +470,24 @@ class IvfPqIndex {
 #endif
 
 #ifdef FAISSR_HAS_CUVS_HNSW
+class HnswAceParams {
+ public:
+  HnswAceParams() {
+    cuvs_check(cuvsHnswAceParamsCreate(&params_), "cuvsHnswAceParamsCreate");
+  }
+  ~HnswAceParams() {
+    if (params_ != nullptr) {
+      cuvsHnswAceParamsDestroy(params_);
+    }
+  }
+  cuvsHnswAceParams_t get() const { return params_; }
+  HnswAceParams(const HnswAceParams&) = delete;
+  HnswAceParams& operator=(const HnswAceParams&) = delete;
+
+ private:
+  cuvsHnswAceParams_t params_ = nullptr;
+};
+
 class HnswIndexParams {
  public:
   HnswIndexParams() {
@@ -1092,55 +1110,36 @@ List cuvs_hnsw_knn_impl(NumericMatrix data,
   }
 
   CuvsResources res;
-  const std::size_t data_bytes = xb.size() * sizeof(float);
-  DeviceBuffer dataset_d(res.get(), data_bytes);
-  cuda_check(
-    cudaMemcpy(dataset_d.get(), xb.data(), data_bytes, cudaMemcpyHostToDevice),
-    "cudaMemcpy(dataset)"
-  );
-
   int64_t dataset_shape[2] = {n_data, n_features};
   DLManagedTensor dataset_tensor = make_tensor(
-    dataset_d.get(), dataset_shape, 2, kDLCUDA, kDLFloat, 32
+    xb.data(), dataset_shape, 2, kDLCPU, kDLFloat, 32
   );
 
-  CagraIndexParams cagra_params;
-  cagra_params.get()->metric = L2Expanded;
-  cagra_params.get()->graph_degree = static_cast<std::size_t>(graph_degree);
-  cagra_params.get()->intermediate_graph_degree =
-    static_cast<std::size_t>(intermediate_graph_degree);
   std::string selected_build_algo = cagra_build_algo;
   std::transform(selected_build_algo.begin(), selected_build_algo.end(), selected_build_algo.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  if (selected_build_algo == "auto" || selected_build_algo == "auto_select") {
-    cagra_params.get()->build_algo = AUTO_SELECT;
-    selected_build_algo = "auto";
-  } else if (selected_build_algo == "ivf_pq" || selected_build_algo == "ivfpq") {
-    cagra_params.get()->build_algo = IVF_PQ;
-    selected_build_algo = "ivf_pq";
-  } else if (selected_build_algo == "nn_descent" || selected_build_algo == "nndescent") {
-    cagra_params.get()->build_algo = NN_DESCENT;
-    cagra_params.get()->nn_descent_niter =
-      static_cast<std::size_t>(env_int("FAISSR_CUVS_CAGRA_NN_DESCENT_NITER", 20, 1));
-    selected_build_algo = "nn_descent";
-  } else if (selected_build_algo == "iterative" || selected_build_algo == "iterative_cagra_search") {
-    cagra_params.get()->build_algo = ITERATIVE_CAGRA_SEARCH;
-    selected_build_algo = "iterative_cagra_search";
+  if (selected_build_algo == "auto" || selected_build_algo == "auto_select" ||
+      selected_build_algo == "ivf_pq" || selected_build_algo == "ivfpq" ||
+      selected_build_algo == "nn_descent" || selected_build_algo == "nndescent" ||
+      selected_build_algo == "iterative" || selected_build_algo == "iterative_cagra_search") {
+    selected_build_algo = "ace";
   } else {
     Rcpp::stop("Unsupported cuVS HNSW CAGRA build algorithm: %s", cagra_build_algo);
   }
 
-  CagraIndex cagra_index;
-  cuvs_check(
-    cuvsCagraBuild(res.get(), cagra_params.get(), &dataset_tensor, cagra_index.get()),
-    "cuvsCagraBuild"
-  );
-
+  HnswAceParams ace_params;
   HnswIndexParams hnsw_params;
+  hnsw_params.get()->hierarchy = GPU;
+  hnsw_params.get()->ef_construction = std::max(ef, intermediate_graph_degree);
+  hnsw_params.get()->num_threads = n_threads;
+  hnsw_params.get()->M =
+    static_cast<std::size_t>(std::max(2, graph_degree / 2));
+  hnsw_params.get()->metric = L2Expanded;
+  hnsw_params.get()->ace_params = ace_params.get();
   HnswIndex hnsw_index;
   cuvs_check(
-    cuvsHnswFromCagra(res.get(), hnsw_params.get(), cagra_index.get(), hnsw_index.get()),
-    "cuvsHnswFromCagra"
+    cuvsHnswBuild(res.get(), hnsw_params.get(), &dataset_tensor, hnsw_index.get()),
+    "cuvsHnswBuild"
   );
 
   const float* query_ptr = same_storage ? xb.data() : xq.data();
@@ -1193,6 +1192,10 @@ List cuvs_hnsw_knn_impl(NumericMatrix data,
   out["requested_ef"] = requested_ef;
   out["requested_num_threads"] = requested_n_threads;
   out["cagra_build_algo"] = selected_build_algo;
+  out["hnsw_build_algo"] = "ace";
+  out["hnsw_hierarchy"] = "gpu";
+  out["hnsw_m"] = static_cast<int>(hnsw_params.get()->M);
+  out["hnsw_ef_construction"] = hnsw_params.get()->ef_construction;
   out["hnsw_parameters_adjusted"] = requested_graph_degree != graph_degree ||
     requested_intermediate_graph_degree != intermediate_graph_degree ||
     requested_ef != ef ||
