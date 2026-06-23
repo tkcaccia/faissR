@@ -763,7 +763,8 @@ test_that("CUDA k-means records direct cuVS provider selection", {
     faiss_gpu_available = function() FALSE,
     cuvs_available = function() TRUE,
     cuda_available = function() TRUE,
-    kmeans_cuvs_cpp = fake_cuvs
+    kmeans_cuvs_cpp = fake_cuvs,
+    .package = "faissR"
   )
 
   out <- faissR:::run_cuda_kmeans(
