@@ -2534,6 +2534,55 @@ test_that("graph benchmark defaults cover requested methods backends and k grid"
   )
 })
 
+test_that("graph benchmark native library setup honors CUDA_HOME", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  vars <- c(
+    "FAISSR_ENV_DIR", "FAISSR_CUDA_LIB_DIR", "CUDA_HOME",
+    "LD_LIBRARY_PATH", "CONDA_PREFIX"
+  )
+  old <- Sys.getenv(vars, unset = NA_character_)
+  on.exit({
+    for (var in vars) {
+      if (is.na(old[[var]])) {
+        Sys.unsetenv(var)
+      } else {
+        do.call(Sys.setenv, structure(list(old[[var]]), names = var))
+      }
+    }
+  }, add = TRUE)
+
+  Sys.setenv(
+    FAISSR_ENV_DIR = "/opt/faissR-runtime",
+    CUDA_HOME = "/opt/cuda-root",
+    LD_LIBRARY_PATH = "/old/lib"
+  )
+  Sys.unsetenv("FAISSR_CUDA_LIB_DIR")
+  env$configure_native_libs()
+  pieces <- strsplit(Sys.getenv("LD_LIBRARY_PATH"), ":", fixed = TRUE)[[1L]]
+  expect_equal(
+    pieces[seq_len(4L)],
+    c(
+      "/opt/faissR-runtime/lib",
+      "/opt/faissR-runtime/targets/x86_64-linux/lib",
+      "/opt/cuda-root/targets/x86_64-linux/lib",
+      "/old/lib"
+    )
+  )
+  expect_equal(Sys.getenv("CONDA_PREFIX"), "/opt/faissR-runtime")
+
+  Sys.setenv(
+    FAISSR_CUDA_LIB_DIR = "/custom/cuda/lib",
+    LD_LIBRARY_PATH = "/old/lib"
+  )
+  Sys.unsetenv("CUDA_HOME")
+  env$configure_native_libs()
+  pieces <- strsplit(Sys.getenv("LD_LIBRARY_PATH"), ":", fixed = TRUE)[[1L]]
+  expect_equal(pieces[[3L]], "/custom/cuda/lib")
+})
+
 test_that("graph benchmark validates method and backend selectors", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),

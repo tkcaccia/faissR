@@ -320,7 +320,12 @@ configure_threads <- function(n_threads) {
 
 configure_native_libs <- function() {
   env_dir <- Sys.getenv("FAISSR_ENV_DIR", unset = "")
-  cuda_lib <- Sys.getenv("FAISSR_CUDA_LIB_DIR", unset = "/usr/local/cuda/targets/x86_64-linux/lib")
+  cuda_home <- Sys.getenv("FAISSR_CUDA_LIB_DIR", Sys.getenv("CUDA_HOME", unset = "/usr/local/cuda"))
+  cuda_lib <- if (nzchar(cuda_home) && !grepl("/lib$", cuda_home)) {
+    file.path(cuda_home, "targets/x86_64-linux/lib")
+  } else {
+    cuda_home
+  }
   pieces <- character()
   if (nzchar(env_dir)) {
     Sys.setenv(CONDA_PREFIX = env_dir)

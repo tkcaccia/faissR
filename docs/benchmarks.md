@@ -99,7 +99,9 @@ flags and backend/method decision reasons when those fields are attached to the
 `nn()` result.
 
 If a non-standard runtime library directory is needed, set `FAISSR_ENV_DIR`
-explicitly before launch. The script no longer treats an unrelated active
+explicitly before launch. The scripts also honor `FAISSR_CUDA_LIB_DIR` and
+`CUDA_HOME` when constructing Linux `LD_LIBRARY_PATH` entries for CUDA/cuVS
+benchmarks. The benchmark launchers no longer treat an unrelated active
 `CONDA_PREFIX` as a FAISS runtime, which avoids accidental library-path
 pollution on local machines. On Linux systems where another `libstdc++` is
 loaded before RAPIDS cuVS, also set `FAISSR_LD_PRELOAD` to the FAISS runtime
