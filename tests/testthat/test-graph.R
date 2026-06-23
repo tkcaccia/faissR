@@ -961,7 +961,7 @@ test_that("graph_cluster targets communities on CUDA Louvain and Leiden when lib
       seed = 11L
     )
 
-    expect_s3_class(cl, "faissR_graph_cluster", info = method)
+    expect_s3_class(cl, "faissR_graph_cluster")
     expect_equal(cl$backend, "cuda", info = method)
     expect_equal(cl$parameters$requested_backend, "cuda", info = method)
     expect_equal(cl$parameters$resolved_backend, "cuda", info = method)
