@@ -166,6 +166,33 @@ test_that("NN metric benchmark isolates high-work CPU exact timeout risks", {
       preflight_cpu_exhaustive_timeout_ops = 5e10
     )
   )
+  expect_true(
+    env$should_isolate_cuda_native_timeout(
+      large_x,
+      backend = "auto",
+      method = "auto",
+      preflight_route = "auto",
+      isolate_native_timeout = TRUE
+    )
+  )
+  expect_true(
+    env$should_isolate_cuda_native_timeout(
+      large_x,
+      backend = "cuda",
+      method = "hnsw",
+      preflight_route = "cuda_cuvs_hnsw",
+      isolate_native_timeout = TRUE
+    )
+  )
+  expect_false(
+    env$should_isolate_cuda_native_timeout(
+      large_x,
+      backend = "cpu",
+      method = "hnsw",
+      preflight_route = "faiss_hnsw",
+      isolate_native_timeout = TRUE
+    )
+  )
 })
 
 test_that("NN metric benchmark uses exported process cleanup for forked timeouts", {

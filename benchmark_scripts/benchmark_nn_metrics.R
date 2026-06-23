@@ -609,10 +609,11 @@ should_isolate_cuda_native_timeout <- function(x, backend, method, preflight_rou
   cuda_route <- isTRUE(grepl("^(cuda|faiss_gpu)", route)) ||
     isTRUE(grepl("cuvs|gpu", route))
   cuda_request <- backend %in% c("auto", "cuda")
+  public_auto_request <- identical(method, "auto") && cuda_request
   graph_or_index_method <- method %in% c(
     "auto", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"
   )
-  cuda_request && cuda_route && graph_or_index_method
+  cuda_request && graph_or_index_method && (cuda_route || public_auto_request)
 }
 
 should_isolate_native_timeout <- function(x, backend, method, preflight_route,
