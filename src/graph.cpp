@@ -159,6 +159,67 @@ std::vector<double> local_sigmas(const NumericMatrix& distances) {
   return sigma;
 }
 
+bool valid_graph_int(const int x) {
+  return x != NA_INTEGER;
+}
+
+bool valid_graph_double(const double x) {
+  return !Rcpp::NumericVector::is_na(x) && std::isfinite(x);
+}
+
+std::vector<double> graph_resolution_exponents_cpp(const int n_vertices) {
+  const bool known =
+    valid_graph_int(n_vertices) && n_vertices >= 1;
+  const double low = known && n_vertices >= 50000 ? -2.0 :
+    (known && n_vertices >= 10000 ? -3.0 : -4.0);
+  const double high = -low;
+  std::vector<double> out;
+  for (double value = low; value <= high + 1e-12; value += 0.5) {
+    out.push_back(value);
+  }
+  return out;
+}
+
+double graph_resolution_center_cpp(const double resolution,
+                                   const int n_clusters,
+                                   const int n_vertices) {
+  const bool resolution_is_auto =
+    !valid_graph_double(resolution) || resolution <= 0.0;
+  const double fallback = resolution_is_auto ? 1.0 : resolution;
+  if (!valid_graph_int(n_clusters) || !valid_graph_int(n_vertices) ||
+      n_clusters < 1 || n_vertices < 1) {
+    return fallback;
+  }
+  const double shape_center =
+    static_cast<double>(n_clusters) / std::sqrt(static_cast<double>(n_vertices));
+  if (!valid_graph_double(shape_center) || shape_center <= 0.0) {
+    return fallback;
+  }
+  if (resolution_is_auto) return shape_center;
+  const double bounded = std::min(std::max(shape_center, resolution / 4.0), resolution * 4.0);
+  return std::sqrt(resolution * bounded);
+}
+
+std::vector<double> unique_sorted_positive(std::vector<double> values) {
+  values.erase(
+    std::remove_if(
+      values.begin(),
+      values.end(),
+      [](const double x) { return !valid_graph_double(x) || x <= 0.0; }
+    ),
+    values.end()
+  );
+  std::sort(values.begin(), values.end());
+  std::vector<double> out;
+  out.reserve(values.size());
+  for (const double x : values) {
+    if (out.empty() || std::abs(out.back() - x) > 1e-12 * std::max(1.0, std::abs(x))) {
+      out.push_back(x);
+    }
+  }
+  return out;
+}
+
 } // namespace
 
 // [[Rcpp::export]]
@@ -287,6 +348,34 @@ List knn_graph_edges_cpp(IntegerMatrix indices,
     Rcpp::Named("weight_type") = weight_type,
     Rcpp::Named("prune") = prune,
     Rcpp::Named("mutual") = mutual
+  );
+}
+
+// [[Rcpp::export]]
+List graph_resolution_candidates_cpp(double resolution,
+                                     int n_clusters,
+                                     int n_vertices) {
+  const double center =
+    graph_resolution_center_cpp(resolution, n_clusters, n_vertices);
+  const std::vector<double> exponents =
+    graph_resolution_exponents_cpp(n_vertices);
+  std::vector<double> candidates;
+  candidates.reserve(exponents.size() + 1U);
+  for (const double exponent : exponents) {
+    const double value = center * std::pow(2.0, exponent);
+    if (valid_graph_double(value) && value > 0.0) candidates.push_back(value);
+  }
+  if (valid_graph_double(resolution) && resolution > 0.0) {
+    candidates.push_back(resolution);
+  } else {
+    candidates.push_back(1.0);
+  }
+  candidates = unique_sorted_positive(candidates);
+  return List::create(
+    Rcpp::Named("center") = center,
+    Rcpp::Named("exponents") = Rcpp::wrap(exponents),
+    Rcpp::Named("candidates") = Rcpp::wrap(candidates),
+    Rcpp::Named("tuning_source") = "cpp"
   );
 }
 

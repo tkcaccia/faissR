@@ -52,6 +52,13 @@ R implementation of the k-means shape policy. Returned k-means metadata also
 records `tuning_source = "cpp"` for both the parameter rule and the backend
 policy.
 
+For `graph_cluster(n_clusters = ...)`, faissR builds the KNN graph once and
+then evaluates a deterministic resolution grid. The candidate center and grid
+width are computed by `graph_resolution_candidates_cpp()`, with wider grids for
+small graphs and narrower grids for large graphs. Target-count results record
+`resolution_selection$tuning_source = "cpp"` so benchmark summaries can verify
+that the no-pilot graph-shape rule came from compiled policy.
+
 - Prefer `method = "flat"`/`"exact"` on CUDA when the data fits and target
   recall is very high. The resolved routes `faiss_gpu_flat_l2` and
   `cuda_cuvs_bruteforce` were the most reliable high-recall CUDA paths

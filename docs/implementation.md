@@ -395,10 +395,13 @@ counts or with an explicit `resolution`. If `n_clusters` is supplied and
 `method` is omitted, faissR uses Louvain as the target-count clustering method;
 passing `n_clusters` to explicit random-walking remains an error. The graph is
 built once, then faissR evaluates a bounded deterministic grid of resolution
-values. Explicit numeric `resolution` values center the grid near the supplied
-value and the no-pilot shape heuristic `n_clusters / sqrt(n_vertices)`. When
-`n_clusters` is supplied and `resolution` is omitted or `NULL`, faissR uses the
-target-count graph-shape seed directly. The
+values. The candidate center and grid are computed by the compiled
+`graph_resolution_candidates_cpp()` helper, which records
+`resolution_selection$tuning_source = "cpp"` in target-count results. Explicit
+numeric `resolution` values center the grid near the supplied value and the
+no-pilot shape heuristic `n_clusters / sqrt(n_vertices)`. When `n_clusters` is
+supplied and `resolution` is omitted or `NULL`, faissR uses the target-count
+graph-shape seed directly. The
 candidate width is shape-aware: small graphs keep the wide `2^-4` to `2^4`
 grid around the center, medium graphs use `2^-3` to `2^3`, and large graphs
 use `2^-2` to `2^2` so target-count searches do not repeat full Louvain/Leiden

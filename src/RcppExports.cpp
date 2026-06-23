@@ -223,6 +223,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// graph_resolution_candidates_cpp
+List graph_resolution_candidates_cpp(double resolution, int n_clusters, int n_vertices);
+RcppExport SEXP _faissR_graph_resolution_candidates_cpp(SEXP resolutionSEXP, SEXP n_clustersSEXP, SEXP n_verticesSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type resolution(resolutionSEXP);
+    Rcpp::traits::input_parameter< int >::type n_clusters(n_clustersSEXP);
+    Rcpp::traits::input_parameter< int >::type n_vertices(n_verticesSEXP);
+    rcpp_result_gen = Rcpp::wrap(graph_resolution_candidates_cpp(resolution, n_clusters, n_vertices));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cugraph_available_cpp
 bool cugraph_available_cpp();
 RcppExport SEXP _faissR_cugraph_available_cpp() {
@@ -1355,6 +1368,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_project_embedding_affine_cpp", (DL_FUNC) &_faissR_project_embedding_affine_cpp, 8},
     {"_faissR_project_embedding_affine_parallel_cpp", (DL_FUNC) &_faissR_project_embedding_affine_parallel_cpp, 9},
     {"_faissR_knn_graph_edges_cpp", (DL_FUNC) &_faissR_knn_graph_edges_cpp, 5},
+    {"_faissR_graph_resolution_candidates_cpp", (DL_FUNC) &_faissR_graph_resolution_candidates_cpp, 3},
     {"_faissR_cugraph_available_cpp", (DL_FUNC) &_faissR_cugraph_available_cpp, 0},
     {"_faissR_graph_cluster_cpp", (DL_FUNC) &_faissR_graph_cluster_cpp, 13},
     {"_faissR_graph_cluster_edges_cpp", (DL_FUNC) &_faissR_graph_cluster_edges_cpp, 9},

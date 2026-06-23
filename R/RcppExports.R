@@ -61,6 +61,10 @@ knn_graph_edges_cpp <- function(indices, distances, weight_type, prune, mutual) 
     .Call(`_faissR_knn_graph_edges_cpp`, indices, distances, weight_type, prune, mutual)
 }
 
+graph_resolution_candidates_cpp <- function(resolution, n_clusters, n_vertices) {
+    .Call(`_faissR_graph_resolution_candidates_cpp`, resolution, n_clusters, n_vertices)
+}
+
 cugraph_available_cpp <- function() {
     .Call(`_faissR_cugraph_available_cpp`)
 }

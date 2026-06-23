@@ -413,6 +413,8 @@ test_that("graph_cluster owns target cluster count", {
     "closest_n_communities_then_highest_modularity"
   )
   expect_true(is.numeric(cl$resolution_selection$candidate_center))
+  expect_equal(cl$resolution_selection$tuning_source, "cpp")
+  expect_equal(cl$resolution_tuning_source, "cpp")
   expect_equal(cl$resolution_selection$n_vertices, g$n_vertices)
   expect_equal(cl$resolution_selection$candidate_center, 3 / sqrt(g$n_vertices))
   expect_true(cl$resolution_selection$candidate_center %in% cl$resolution_search$resolution)
@@ -567,6 +569,12 @@ test_that("target cluster resolution candidates are bounded and deterministic", 
   expect_equal(max(candidates), 16)
   expect_equal(length(candidates), 17L)
   expect_equal(faissR:::graph_resolution_candidates(0.5, NULL), 0.5)
+
+  info <- faissR:::graph_resolution_candidate_info(NA_real_, 3L, 120L)
+  expect_equal(info$tuning_source, "cpp")
+  expect_equal(info$center, 3 / sqrt(120))
+  expect_equal(info$candidates, sort(info$candidates))
+  expect_true(any(abs(info$candidates - 1) < 1e-12))
 
   auto_center <- faissR:::graph_resolution_center(
     resolution = NA_real_,
