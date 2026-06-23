@@ -939,3 +939,49 @@ test_that("graph_cluster reports native CUDA graph backend as unavailable withou
     "libcugraph"
   )
 })
+
+test_that("graph_cluster targets communities on CUDA Louvain and Leiden when libcugraph is available", {
+  skip_if_not(isTRUE(cugraph_available()))
+
+  set.seed(508)
+  x <- rbind(
+    matrix(rnorm(40L * 4L, -3, 0.25), ncol = 4L),
+    matrix(rnorm(40L * 4L, 0, 0.25), ncol = 4L),
+    matrix(rnorm(40L * 4L, 3, 0.25), ncol = 4L)
+  )
+  graph <- knn_graph(x, k = 8L, backend = "cpu", weight = "distance", n_threads = 2L)
+
+  for (method in c("louvain", "leiden")) {
+    cl <- graph_cluster(
+      graph,
+      method = method,
+      backend = "cuda",
+      n_clusters = 3L,
+      n_threads = 2L,
+      seed = 11L
+    )
+
+    expect_s3_class(cl, "faissR_graph_cluster", info = method)
+    expect_equal(cl$backend, "cuda", info = method)
+    expect_equal(cl$parameters$requested_backend, "cuda", info = method)
+    expect_equal(cl$parameters$resolved_backend, "cuda", info = method)
+    expect_equal(cl$target_n_clusters, 3L, info = method)
+    expect_equal(cl$parameters$n_clusters, 3L, info = method)
+    expect_true(is.na(cl$parameters$resolution), info = method)
+    expect_equal(cl$parameters$resolution_source, "target_auto", info = method)
+    expect_equal(cl$parameters$selected_resolution, cl$selected_resolution, info = method)
+    expect_equal(cl$parameters$target_gap, cl$target_gap, info = method)
+    expect_s3_class(cl$resolution_search, "data.frame", info = method)
+    expect_equal(sum(cl$resolution_search$selected), 1L, info = method)
+    expect_equal(
+      cl$resolution_search$target_gap[cl$resolution_search$selected],
+      min(cl$resolution_search$target_gap, na.rm = TRUE),
+      info = method
+    )
+    expect_equal(
+      cl$resolution_selection$criterion,
+      "closest_n_communities_then_highest_modularity",
+      info = method
+    )
+  }
+})
