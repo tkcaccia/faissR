@@ -116,6 +116,56 @@ test_that("NN metric benchmark isolates high-work CPU exact timeout risks", {
       isolate_native_timeout = FALSE
     )
   )
+  expect_true(
+    env$should_preflight_cpu_exhaustive_timeout(
+      large_x,
+      backend = "cpu",
+      method = "flat",
+      preflight_route = "faiss_flat_l2",
+      preflight_cpu_exhaustive_timeout = TRUE,
+      preflight_cpu_exhaustive_timeout_ops = 5e10
+    )
+  )
+  expect_true(
+    env$should_preflight_cpu_exhaustive_timeout(
+      large_x,
+      backend = "auto",
+      method = "exact",
+      preflight_route = "cpu",
+      preflight_cpu_exhaustive_timeout = TRUE,
+      preflight_cpu_exhaustive_timeout_ops = 5e10
+    )
+  )
+  expect_false(
+    env$should_preflight_cpu_exhaustive_timeout(
+      large_x,
+      backend = "cpu",
+      method = "hnsw",
+      preflight_route = "faiss_hnsw",
+      preflight_cpu_exhaustive_timeout = TRUE,
+      preflight_cpu_exhaustive_timeout_ops = 5e10
+    )
+  )
+  expect_false(
+    env$should_preflight_cpu_exhaustive_timeout(
+      small_x,
+      backend = "cpu",
+      method = "flat",
+      preflight_route = "faiss_flat_l2",
+      preflight_cpu_exhaustive_timeout = TRUE,
+      preflight_cpu_exhaustive_timeout_ops = 5e10
+    )
+  )
+  expect_false(
+    env$should_preflight_cpu_exhaustive_timeout(
+      large_x,
+      backend = "cpu",
+      method = "flat",
+      preflight_route = "faiss_flat_l2",
+      preflight_cpu_exhaustive_timeout = FALSE,
+      preflight_cpu_exhaustive_timeout_ops = 5e10
+    )
+  )
 })
 
 test_that("NN metric benchmark uses exported process cleanup for forked timeouts", {
