@@ -118,6 +118,10 @@ default_graph_k_values <- function() {
   c(5L, 10L, 15L, 50L, 100L)
 }
 
+graph_k_values_arg <- function(args) {
+  args$k_values %||% args$k
+}
+
 default_graph_cycles <- function() {
   10L
 }
@@ -1500,7 +1504,7 @@ timeout <- required_positive_int_arg(args$timeout %||% 600L, "timeout")
 cycles <- required_positive_int_arg(args$cycles %||% default_graph_cycles(), "cycles")
 ari_tolerance <- required_nonnegative_numeric_arg(args$ari_tolerance %||% "0.01", "ari_tolerance")
 k_values <- required_positive_int_values(
-  split_arg(args$k_values, paste(default_graph_k_values(), collapse = ",")),
+  split_arg(graph_k_values_arg(args), paste(default_graph_k_values(), collapse = ",")),
   "k_values"
 )
 available_datasets <- c(

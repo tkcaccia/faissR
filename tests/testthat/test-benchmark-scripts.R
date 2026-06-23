@@ -2356,6 +2356,9 @@ test_that("graph benchmark defaults cover requested methods backends and k grid"
     env$default_graph_k_values(),
     c(5L, 10L, 15L, 50L, 100L)
   )
+  expect_equal(env$graph_k_values_arg(list(k = "15")), "15")
+  expect_equal(env$graph_k_values_arg(list(k_values = "5,10", k = "15")), "5,10")
+  expect_null(env$graph_k_values_arg(list()))
   expect_equal(env$default_graph_cycles(), 10L)
   expect_equal(
     env$graph_build_preflight_route(
