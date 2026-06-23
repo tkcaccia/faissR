@@ -2396,6 +2396,7 @@ test_that("native Vamana returns metric-aware CPU self-KNN results", {
     expect_equal(attr(out, "metric"), metric, info = metric)
     expect_equal(approx$backend, "cpu_vamana", info = metric)
     expect_equal(approx$strategy, "native_vamana_candidate_graph", info = metric)
+    expect_equal(approx$protected_seed_neighbors, 6L, info = metric)
     expect_true(all(is.finite(out$distances)), info = metric)
   }
 })
@@ -2421,6 +2422,7 @@ test_that("native CPU NSG returns metric-aware self-KNN results", {
     expect_equal(approx$strategy, "native_cpu_nsg_candidate_graph", info = metric)
     expect_equal(approx$accelerator, "cpu", info = metric)
     expect_equal(approx$graph_k_cap, 512L, info = metric)
+    expect_equal(approx$protected_seed_neighbors, 6L, info = metric)
     expect_match(approx$tuning_rule, "cpu_nsg", info = metric)
     expect_true(all(is.finite(out$distances)), info = metric)
     expect_true(all(out$indices >= 1L & out$indices <= nrow(x)), info = metric)

@@ -4540,9 +4540,15 @@ nsg_pair_score <- function(data, i, j, metric = "euclidean") {
 nsg_prune_candidate_graph <- function(data,
                                       seed_indices,
                                       r,
-                                      metric = "euclidean") {
+                                      metric = "euclidean",
+                                      protect_top = 0L) {
   n <- nrow(seed_indices)
   r <- as.integer(min(max(1L, r), ncol(seed_indices), max(1L, n - 1L)))
+  protect_top <- suppressWarnings(as.integer(protect_top))
+  if (length(protect_top) != 1L || is.na(protect_top) || !is.finite(protect_top)) {
+    protect_top <- 0L
+  }
+  protect_top <- as.integer(max(0L, min(protect_top, r, ncol(seed_indices))))
   out <- matrix(NA_integer_, n, r)
   max_exact_work <- faissr_option("cuda_nsg_prune_max_work", 2e8)
   max_exact_work <- suppressWarnings(as.numeric(max_exact_work))
@@ -4557,9 +4563,15 @@ nsg_prune_candidate_graph <- function(data,
     if (!length(candidates)) {
       candidates <- setdiff(seq_len(n), i)
     }
-    keep <- integer()
+    protected <- if (protect_top > 0L) {
+      head(candidates, protect_top)
+    } else {
+      integer()
+    }
+    keep <- protected
     if (isTRUE(exact_prune)) {
       for (cand in candidates) {
+        if (cand %in% protected) next
         if (length(keep) >= r) break
         di <- nsg_pair_score(data, i, cand, metric = metric)
         occluded <- FALSE
@@ -4581,6 +4593,7 @@ nsg_prune_candidate_graph <- function(data,
     out[i, ] <- keep[seq_len(r)]
   }
   attr(out, "exact_prune") <- isTRUE(exact_prune)
+  attr(out, "protected_top") <- as.integer(protect_top)
   out
 }
 
@@ -4630,9 +4643,15 @@ vamana_robust_prune_candidate_graph <- function(data,
                                                 seed_indices,
                                                 r,
                                                 alpha = 1.2,
-                                                metric = "euclidean") {
+                                                metric = "euclidean",
+                                                protect_top = 0L) {
   n <- nrow(seed_indices)
   r <- as.integer(min(max(1L, r), ncol(seed_indices), max(1L, n - 1L)))
+  protect_top <- suppressWarnings(as.integer(protect_top))
+  if (length(protect_top) != 1L || is.na(protect_top) || !is.finite(protect_top)) {
+    protect_top <- 0L
+  }
+  protect_top <- as.integer(max(0L, min(protect_top, r, ncol(seed_indices))))
   alpha <- as.numeric(alpha)
   if (length(alpha) != 1L || is.na(alpha) || !is.finite(alpha) || alpha < 1) alpha <- 1.2
   out <- matrix(NA_integer_, n, r)
@@ -4647,9 +4666,15 @@ vamana_robust_prune_candidate_graph <- function(data,
     candidates <- unique(as.integer(seed_indices[i, ]))
     candidates <- candidates[!is.na(candidates) & candidates >= 1L & candidates <= n & candidates != i]
     if (!length(candidates)) candidates <- setdiff(seq_len(n), i)
-    keep <- integer()
+    protected <- if (protect_top > 0L) {
+      head(candidates, protect_top)
+    } else {
+      integer()
+    }
+    keep <- protected
     if (isTRUE(exact_prune)) {
       for (cand in candidates) {
+        if (cand %in% protected) next
         if (length(keep) >= r) break
         di <- nsg_pair_score(data, i, cand, metric = metric)
         pruned <- FALSE
@@ -4667,6 +4692,7 @@ vamana_robust_prune_candidate_graph <- function(data,
     out[i, ] <- keep[seq_len(r)]
   }
   attr(out, "exact_prune") <- isTRUE(exact_prune)
+  attr(out, "protected_top") <- as.integer(protect_top)
   out
 }
 
@@ -4711,7 +4737,8 @@ vamana_self_knn <- function(data,
     seed$indices,
     r = r,
     alpha = alpha,
-    metric = metric
+    metric = metric,
+    protect_top = k
   )
   if (isTRUE(use_cuda)) {
     refined <- row_candidate_knn_cuda_cpp(data, graph, as.integer(k), metric)
@@ -4735,6 +4762,7 @@ vamana_self_knn <- function(data,
     candidate_columns = as.integer(ncol(graph)),
     seed_search_l = as.integer(search_l),
     alpha = as.numeric(alpha),
+    protected_seed_neighbors = as.integer(attr(graph, "protected_top", exact = TRUE) %||% 0L),
     exact_robust_prune = isTRUE(attr(graph, "exact_prune", exact = TRUE)),
     cuvs_vamana_note = "cuVS Vamana currently builds/serializes DiskANN-compatible graphs; faissR performs KNN refinement inside the candidate graph."
   )
@@ -4783,7 +4811,13 @@ native_nsg_self_knn <- function(data,
       "native_cpu_exact_seed"
     }
   }
-  graph <- nsg_prune_candidate_graph(data, seed$indices, r = r, metric = metric)
+  graph <- nsg_prune_candidate_graph(
+    data,
+    seed$indices,
+    r = r,
+    metric = metric,
+    protect_top = k
+  )
   if (isTRUE(use_cuda)) {
     refined <- row_candidate_knn_cuda_cpp(
       data,
@@ -4810,6 +4844,7 @@ native_nsg_self_knn <- function(data,
     seed_backend = seed_backend,
     candidate_columns = as.integer(ncol(graph)),
     seed_graph_k = as.integer(graph_k),
+    protected_seed_neighbors = as.integer(attr(graph, "protected_top", exact = TRUE) %||% 0L),
     exact_mrng_prune = isTRUE(attr(graph, "exact_prune", exact = TRUE))
   )
   out
@@ -6811,7 +6846,9 @@ grid_self_knn <- function(data,
 #'   \item `"vamana"`: DiskANN/Vamana-style robust-pruned candidate graph
 #'   implemented in faissR [24]. CPU refines exact top-k within candidate rows
 #'   using native CPU scoring; CUDA refines candidates with faissR's native
-#'   CUDA row-candidate kernel. cuVS Vamana is acknowledged for GPU
+#'   CUDA row-candidate kernel. The first `k` exact seed neighbours are
+#'   protected before robust pruning so pruning cannot discard neighbours
+#'   already found by the seed generator. cuVS Vamana is acknowledged for GPU
 #'   build/serialization, but current cuVS documentation does not expose KNN
 #'   search for this index.
 #'   \item `"nsg"`: Navigating Spreading-out Graph style approximate search
@@ -6819,7 +6856,8 @@ grid_self_knn <- function(data,
 #'   all public metrics to avoid unsafe linked-FAISS graph construction. CUDA
 #'   uses faissR's native NSG-style self-KNN candidate graph for all public
 #'   metrics; cosine/correlation use normalized Euclidean search and raw inner
-#'   product uses shifted dot-product distances.
+#'   product uses shifted dot-product distances. The first `k` exact seed
+#'   neighbours are protected before NSG/MRNG-style pruning.
 #'   \item `"nndescent"`: NN-descent approximate graph construction via
 #'   faissR's native CPU route, direct cuVS on CUDA for Euclidean/L2 plus
 #'   normalized cosine/correlation, or faissR's native CUDA candidate-refinement

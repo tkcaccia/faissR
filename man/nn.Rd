@@ -232,7 +232,9 @@ Method descriptions:
   \item `"vamana"`: DiskANN/Vamana-style robust-pruned candidate graph
   implemented in faissR [24]. CPU refines exact top-k within candidate rows
   using native CPU scoring; CUDA refines candidates with faissR's native
-  CUDA row-candidate kernel. cuVS Vamana is acknowledged for GPU
+  CUDA row-candidate kernel. The first \code{k} exact seed neighbours are
+  protected before robust pruning so pruning cannot discard neighbours
+  already found by the seed generator. cuVS Vamana is acknowledged for GPU
   build/serialization, but current cuVS documentation does not expose KNN
   search for this index.
   \item `"nsg"`: Navigating Spreading-out Graph style approximate search
@@ -240,7 +242,8 @@ Method descriptions:
   all public metrics to avoid unsafe linked-FAISS graph construction. CUDA uses
   faissR's native NSG-style self-KNN candidate graph for all public metrics;
   cosine/correlation use normalized Euclidean search and raw inner product uses
-  shifted dot-product distances.
+  shifted dot-product distances. The first \code{k} exact seed neighbours are
+  protected before NSG/MRNG-style pruning.
   \item `"nndescent"`: NN-descent approximate graph construction via
   faissR's native CPU route, direct cuVS on CUDA for Euclidean/L2 plus
   normalized cosine/correlation, or faissR's native CUDA candidate-refinement

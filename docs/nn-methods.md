@@ -314,6 +314,9 @@ implemented inside faissR [24].
   inside each candidate row with faissR's CPU candidate KNN scorer.
 - CUDA `method = "vamana"` uses the same candidate graph semantics and refines
   candidate rows with faissR's native CUDA row-candidate KNN kernel.
+- The deterministic pruning step protects the first `k` seed neighbours before
+  applying robust pruning, so small-`k` calls do not discard exact seed
+  neighbours already found by the candidate generator.
 - Euclidean, cosine, correlation, and inner product are supported for self-KNN.
   Cosine/correlation use normalized Euclidean search; inner product uses
   shifted dot-product distances to preserve smaller-is-better output.
@@ -338,6 +341,9 @@ nearest-neighbour graph [21].
 - CUDA `method = "nsg"` uses faissR's native CUDA NSG-style self-KNN route. It
   builds a candidate graph, prunes candidates with an NSG/MRNG-style rule, and
   refines rows with the native CUDA row-candidate KNN kernel.
+- The NSG-style pruning step protects the first `k` seed neighbours before
+  MRNG-style pruning. This keeps the route high-recall for small `k` while
+  preserving the same candidate-graph/refinement implementation.
 - CPU and CUDA native NSG routes support Euclidean, cosine, correlation, and
   inner product for self-KNN. Cosine/correlation use normalized Euclidean
   search; inner product uses the package-wide shifted dot-product distance
