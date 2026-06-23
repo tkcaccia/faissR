@@ -516,9 +516,10 @@ accelerated route and errors if unavailable. This makes k-means behavior
 consistent with `nn()`, `knn_graph()`, and `graph_cluster()`.
 The auto `max_iter`/`n_init`/`tol` rule is implemented by
 `kmeans_auto_params_cpp()`, and the CUDA/CPU gate is implemented by
+`kmeans_auto_select_backend_cpp()` using the compiled policy from
 `kmeans_auto_backend_policy_cpp()`. The R layer only normalizes public
-arguments and reads documented option thresholds before calling these compiled
-helpers. The gate is deterministic and recorded in
+arguments, reads documented option thresholds, and passes runtime availability
+flags before calling these compiled helpers. The gate is deterministic and recorded in
 `result$parameters$tuning$backend_policy`, with a `reason` such as
 `"small_cpu_preferred"`, `"few_points_per_center_cpu_preferred"`,
 `"work_at_least_1e8"`, `"input_at_least_256MiB"`,

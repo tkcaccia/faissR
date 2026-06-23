@@ -290,8 +290,9 @@ input bytes, float32 GPU transfer bytes, and `n_per_center`. The CUDA auto gate
 uses `gpu_transfer_nbytes` for the size threshold because FAISS/cuVS consume
 float32 data; `nbytes` remains the R double input footprint for compatibility
 and auditing. The k-means auto parameter rule is computed by
-`kmeans_auto_params_cpp()`, while the CUDA/CPU gate is computed by
-`kmeans_auto_backend_policy_cpp()`; both record `tuning_source = "cpp"` in
+`kmeans_auto_params_cpp()`, while the backend policy and final CUDA/CPU gate are
+computed by `kmeans_auto_backend_policy_cpp()` and
+`kmeans_auto_select_backend_cpp()`; they record `tuning_source = "cpp"` in
 returned metadata. The CUDA auto gate can be adjusted for a benchmarked machine
 with `options(faissR.kmeans_cuda_work_threshold = ...)`,
 `options(faissR.kmeans_cuda_nbytes_threshold = ...)`,

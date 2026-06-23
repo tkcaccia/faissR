@@ -804,6 +804,32 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// kmeans_auto_select_backend_cpp
+List kmeans_auto_select_backend_cpp(std::string requested_backend, int n, int p, int centers, double work_threshold, double nbytes_threshold, int large_n_threshold, int large_p_threshold, double min_n_per_center, bool cuda_available, bool faiss_gpu_available, bool cuvs_available, int effective_max_iter, int effective_n_init, double effective_tol, std::string tuning);
+RcppExport SEXP _faissR_kmeans_auto_select_backend_cpp(SEXP requested_backendSEXP, SEXP nSEXP, SEXP pSEXP, SEXP centersSEXP, SEXP work_thresholdSEXP, SEXP nbytes_thresholdSEXP, SEXP large_n_thresholdSEXP, SEXP large_p_thresholdSEXP, SEXP min_n_per_centerSEXP, SEXP cuda_availableSEXP, SEXP faiss_gpu_availableSEXP, SEXP cuvs_availableSEXP, SEXP effective_max_iterSEXP, SEXP effective_n_initSEXP, SEXP effective_tolSEXP, SEXP tuningSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::string >::type requested_backend(requested_backendSEXP);
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< int >::type p(pSEXP);
+    Rcpp::traits::input_parameter< int >::type centers(centersSEXP);
+    Rcpp::traits::input_parameter< double >::type work_threshold(work_thresholdSEXP);
+    Rcpp::traits::input_parameter< double >::type nbytes_threshold(nbytes_thresholdSEXP);
+    Rcpp::traits::input_parameter< int >::type large_n_threshold(large_n_thresholdSEXP);
+    Rcpp::traits::input_parameter< int >::type large_p_threshold(large_p_thresholdSEXP);
+    Rcpp::traits::input_parameter< double >::type min_n_per_center(min_n_per_centerSEXP);
+    Rcpp::traits::input_parameter< bool >::type cuda_available(cuda_availableSEXP);
+    Rcpp::traits::input_parameter< bool >::type faiss_gpu_available(faiss_gpu_availableSEXP);
+    Rcpp::traits::input_parameter< bool >::type cuvs_available(cuvs_availableSEXP);
+    Rcpp::traits::input_parameter< int >::type effective_max_iter(effective_max_iterSEXP);
+    Rcpp::traits::input_parameter< int >::type effective_n_init(effective_n_initSEXP);
+    Rcpp::traits::input_parameter< double >::type effective_tol(effective_tolSEXP);
+    Rcpp::traits::input_parameter< std::string >::type tuning(tuningSEXP);
+    rcpp_result_gen = Rcpp::wrap(kmeans_auto_select_backend_cpp(requested_backend, n, p, centers, work_threshold, nbytes_threshold, large_n_threshold, large_p_threshold, min_n_per_center, cuda_available, faiss_gpu_available, cuvs_available, effective_max_iter, effective_n_init, effective_tol, tuning));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cuda_available_cpp
 bool cuda_available_cpp();
 RcppExport SEXP _faissR_cuda_available_cpp() {
@@ -1384,6 +1410,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_tune_gpu_nndescent_cpp", (DL_FUNC) &_faissR_nn_tune_gpu_nndescent_cpp, 8},
     {"_faissR_kmeans_auto_params_cpp", (DL_FUNC) &_faissR_kmeans_auto_params_cpp, 4},
     {"_faissR_kmeans_auto_backend_policy_cpp", (DL_FUNC) &_faissR_kmeans_auto_backend_policy_cpp, 8},
+    {"_faissR_kmeans_auto_select_backend_cpp", (DL_FUNC) &_faissR_kmeans_auto_select_backend_cpp, 16},
     {"_faissR_cuda_available_cpp", (DL_FUNC) &_faissR_cuda_available_cpp, 0},
     {"_faissR_cuda_device_info_json_cpp", (DL_FUNC) &_faissR_cuda_device_info_json_cpp, 0},
     {"_faissR_nn_cuda_cpp", (DL_FUNC) &_faissR_nn_cuda_cpp, 4},

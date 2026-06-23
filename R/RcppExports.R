@@ -197,6 +197,10 @@ kmeans_auto_backend_policy_cpp <- function(n, p, centers, work_threshold, nbytes
     .Call(`_faissR_kmeans_auto_backend_policy_cpp`, n, p, centers, work_threshold, nbytes_threshold, large_n_threshold, large_p_threshold, min_n_per_center)
 }
 
+kmeans_auto_select_backend_cpp <- function(requested_backend, n, p, centers, work_threshold, nbytes_threshold, large_n_threshold, large_p_threshold, min_n_per_center, cuda_available, faiss_gpu_available, cuvs_available, effective_max_iter = NA_integer_, effective_n_init = NA_integer_, effective_tol = NA_real_, tuning = "auto") {
+    .Call(`_faissR_kmeans_auto_select_backend_cpp`, requested_backend, n, p, centers, work_threshold, nbytes_threshold, large_n_threshold, large_p_threshold, min_n_per_center, cuda_available, faiss_gpu_available, cuvs_available, effective_max_iter, effective_n_init, effective_tol, tuning)
+}
+
 cuda_available_cpp <- function() {
     .Call(`_faissR_cuda_available_cpp`)
 }

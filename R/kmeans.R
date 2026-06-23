@@ -52,9 +52,9 @@
 #'   `parameters$resolved_backend` record the public backend request and device
 #'   policy result. `parameters$tuning` records the deterministic k-means policy,
 #'   stable `rule` label, shape metadata, and whether `max_iter`, `n_init`, and
-#'   `tol` were auto-selected or supplied explicitly. The auto parameter and
-#'   backend-policy rules are computed by compiled C++ helpers and record
-#'   `tuning_source = "cpp"`.
+#'   `tol` were auto-selected or supplied explicitly. The auto parameter,
+#'   backend-policy, and final auto backend-selection rules are computed by
+#'   compiled C++ helpers and record `tuning_source = "cpp"`.
 #'   `parameters$tuning$rule_detail` records the exact
 #'   `n`/`p`/`centers`/work values used to choose the rule.
 #'   `parameters$tuning$effective` records
@@ -77,7 +77,9 @@
 #'   `parameters$tuning$selection` stores the static no-pilot backend and
 #'   effective-parameter decision used for benchmark auditing, including
 #'   `explicit_backend` and `backend_decision` fields that distinguish an
-#'   explicit `"cpu"`/`"cuda"` request from an automatic shape-policy choice.
+#'   explicit `"cpu"`/`"cuda"` request from an automatic shape-policy choice,
+#'   plus `runtime_decision` and CUDA k-means capability flags from the C++
+#'   selector.
 #'   CUDA runs also record `parameters$cuda_provider_selection` as `"faiss_gpu"`,
 #'   `"direct_cuvs"`, or `"direct_cuvs_after_faiss_gpu_unavailable_or_failed"`;
 #'   `parameters$backend_resolution_note` describes the provider route, and
@@ -144,28 +146,19 @@ fast_kmeans <- function(data,
   auto_params$effective_n_init <- as.integer(n_init)
   auto_params$effective_tol <- as.numeric(tol)
   streaming_batch_size <- normalize_kmeans_streaming_batch_size(streaming_batch_size)
-  auto_params$backend_policy <- kmeans_auto_backend_policy(
-    n = nrow(x),
-    p = ncol(x),
-    centers = centers
-  )
-
-  backend <- resolve_fast_kmeans_backend(
-    backend,
-    n = nrow(x),
-    p = ncol(x),
-    centers = centers
-  )
   auto_params$selection <- kmeans_selection_metadata(
     requested_backend = requested_backend,
-    resolved_backend = backend,
+    resolved_backend = NULL,
     n = nrow(x),
     p = ncol(x),
     centers = centers,
     effective = auto_params$effective,
-    backend_policy = auto_params$backend_policy,
+    backend_policy = NULL,
     tuning = tuning
   )
+  auto_params$backend_policy <- auto_params$selection$backend_policy
+  auto_params$selection$backend_policy <- NULL
+  backend <- auto_params$selection$resolved_backend
 
   if (centers == 1L) {
     return(finish_trivial_one_cluster_kmeans(
@@ -267,16 +260,15 @@ resolve_fast_kmeans_backend <- function(backend,
                                         cuda_available_value = cuda_available(),
                                         faiss_gpu_available_value = faiss_gpu_available(),
                                         cuvs_available_value = cuvs_available()) {
-  backend <- normalize_public_backend_arg(backend)
-  if (identical(backend, "auto")) {
-    if (isTRUE(cuda_available_value) &&
-        (isTRUE(faiss_gpu_available_value) || isTRUE(cuvs_available_value)) &&
-        isTRUE(kmeans_auto_prefers_cuda(n, p, centers))) {
-      return("cuda")
-    }
-    return("cpu")
-  }
-  backend
+  kmeans_auto_backend_selection(
+    requested_backend = backend,
+    n = n,
+    p = p,
+    centers = centers,
+    cuda_available_value = cuda_available_value,
+    faiss_gpu_available_value = faiss_gpu_available_value,
+    cuvs_available_value = cuvs_available_value
+  )$resolved_backend
 }
 
 kmeans_auto_prefers_cuda <- function(n, p, centers) {
@@ -305,59 +297,80 @@ kmeans_selection_metadata <- function(requested_backend,
                                       cuda_available_value = cuda_available(),
                                       faiss_gpu_available_value = faiss_gpu_available(),
                                       cuvs_available_value = cuvs_available()) {
-  effective <- effective %||% list()
-  backend_policy <- backend_policy %||% kmeans_auto_backend_policy(n, p, centers)
-  explicit_backend <- !identical(requested_backend, "auto")
-  backend_decision <- if (isTRUE(explicit_backend)) {
-    paste0("explicit_", requested_backend)
-  } else {
-    backend_policy$reason %||% NA_character_
-  }
-  list(
-    policy = "static_shape_center_backend_selector",
-    slow_tuning = FALSE,
+  kmeans_auto_backend_selection(
     requested_backend = requested_backend,
-    predicted_backend = resolved_backend,
-    resolved_backend = resolved_backend,
-    n = as.integer(n),
-    p = as.integer(p),
-    centers = as.integer(centers),
-    work = as.numeric(backend_policy$work %||% (as.double(n) * as.double(p) * as.double(centers))),
-    nbytes = as.numeric(backend_policy$nbytes %||% (as.double(n) * as.double(p) * 8)),
-    input_nbytes = as.numeric(backend_policy$input_nbytes %||% backend_policy$nbytes %||%
-      (as.double(n) * as.double(p) * 8)),
-    gpu_transfer_nbytes = as.numeric(backend_policy$gpu_transfer_nbytes %||%
-      (as.double(n) * as.double(p) * 4)),
-    n_per_center = as.numeric(backend_policy$n_per_center %||% (as.double(n) / as.double(centers))),
-    backend_policy_reason = backend_policy$reason %||% NA_character_,
-    explicit_backend = isTRUE(explicit_backend),
-    backend_decision = backend_decision,
-    backend_policy_prefer_cuda = isTRUE(backend_policy$prefer_cuda),
-    cuda_available = isTRUE(cuda_available_value),
-    faiss_gpu_available = isTRUE(faiss_gpu_available_value),
-    cuvs_available = isTRUE(cuvs_available_value),
-    effective_max_iter = as.integer(effective$max_iter %||% NA_integer_),
-    effective_n_init = as.integer(effective$n_init %||% NA_integer_),
-    effective_tol = as.numeric(effective$tol %||% NA_real_),
-    tuning = normalize_kmeans_tuning(tuning)
+    n = n,
+    p = p,
+    centers = centers,
+    effective = effective,
+    tuning = tuning,
+    cuda_available_value = cuda_available_value,
+    faiss_gpu_available_value = faiss_gpu_available_value,
+    cuvs_available_value = cuvs_available_value
   )
 }
 
 kmeans_auto_backend_policy <- function(n, p, centers) {
+  kmeans_auto_backend_policy_options(n, p, centers)$policy
+}
+
+kmeans_auto_backend_policy_options <- function(n, p, centers) {
   work_threshold <- kmeans_option_number("kmeans_cuda_work_threshold", 1e8, min_value = 1)
   nbytes_threshold <- kmeans_option_number("kmeans_cuda_nbytes_threshold", 256 * 1024^2, min_value = 1)
   large_n_threshold <- kmeans_option_integer("kmeans_cuda_large_n_threshold", 50000L, min_value = 1L)
   large_p_threshold <- kmeans_option_integer("kmeans_cuda_large_p_threshold", 128L, min_value = 1L)
   min_n_per_center <- kmeans_option_number("kmeans_cuda_min_n_per_center", 20, min_value = 1)
-  kmeans_auto_backend_policy_cpp(
-    kmeans_shape_int(n),
-    kmeans_shape_int(p),
-    kmeans_shape_int(centers),
-    work_threshold,
-    nbytes_threshold,
-    large_n_threshold,
-    large_p_threshold,
-    min_n_per_center
+  list(
+    n = kmeans_shape_int(n),
+    p = kmeans_shape_int(p),
+    centers = kmeans_shape_int(centers),
+    work_threshold = work_threshold,
+    nbytes_threshold = nbytes_threshold,
+    large_n_threshold = large_n_threshold,
+    large_p_threshold = large_p_threshold,
+    min_n_per_center = min_n_per_center,
+    policy = kmeans_auto_backend_policy_cpp(
+      kmeans_shape_int(n),
+      kmeans_shape_int(p),
+      kmeans_shape_int(centers),
+      work_threshold,
+      nbytes_threshold,
+      large_n_threshold,
+      large_p_threshold,
+      min_n_per_center
+    )
+  )
+}
+
+kmeans_auto_backend_selection <- function(requested_backend,
+                                          n,
+                                          p,
+                                          centers,
+                                          effective = NULL,
+                                          tuning = "auto",
+                                          cuda_available_value = cuda_available(),
+                                          faiss_gpu_available_value = faiss_gpu_available(),
+                                          cuvs_available_value = cuvs_available()) {
+  requested_backend <- normalize_public_backend_arg(requested_backend)
+  effective <- effective %||% list()
+  opts <- kmeans_auto_backend_policy_options(n, p, centers)
+  kmeans_auto_select_backend_cpp(
+    requested_backend,
+    opts$n,
+    opts$p,
+    opts$centers,
+    opts$work_threshold,
+    opts$nbytes_threshold,
+    opts$large_n_threshold,
+    opts$large_p_threshold,
+    opts$min_n_per_center,
+    isTRUE(cuda_available_value),
+    isTRUE(faiss_gpu_available_value),
+    isTRUE(cuvs_available_value),
+    as.integer(effective$max_iter %||% NA_integer_),
+    as.integer(effective$n_init %||% NA_integer_),
+    as.numeric(effective$tol %||% NA_real_),
+    normalize_kmeans_tuning(tuning)
   )
 }
 

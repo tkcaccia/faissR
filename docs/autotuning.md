@@ -46,11 +46,12 @@ parameter rules.
 `fast_kmeans()` follows the same compiled-policy contract. Its automatic
 `max_iter`, `n_init`, and `tol` values are selected by
 `kmeans_auto_params_cpp()`, and its `backend = "auto"` CUDA/CPU gate is
-selected by `kmeans_auto_backend_policy_cpp()`. The R layer reads documented
-threshold options and forwards them into C++; it does not maintain a separate
-R implementation of the k-means shape policy. Returned k-means metadata also
-records `tuning_source = "cpp"` for both the parameter rule and the backend
-policy.
+selected by `kmeans_auto_select_backend_cpp()`, using the policy object from
+`kmeans_auto_backend_policy_cpp()`. The R layer reads documented threshold
+options and runtime availability flags, then forwards them into C++; it does
+not maintain a separate R implementation of the k-means shape policy or final
+CPU/CUDA selection. Returned k-means metadata records `tuning_source = "cpp"`
+for the parameter rule, backend policy, and final selection.
 
 For `graph_cluster(n_clusters = ...)`, faissR builds the KNN graph once and
 then evaluates a deterministic resolution grid. The candidate center and grid

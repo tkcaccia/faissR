@@ -74,6 +74,8 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(auto$parameters$tuning$backend_policy$large_p_threshold, 128)
   expect_equal(auto$parameters$tuning$selection$policy, "static_shape_center_backend_selector")
   expect_false(auto$parameters$tuning$selection$slow_tuning)
+  expect_equal(auto$parameters$tuning$selection$tuning_source, "cpp")
+  expect_equal(auto$parameters$tuning$selection$runtime_decision, "explicit_backend_no_auto_fallback")
   expect_equal(auto$parameters$tuning$selection$requested_backend, "cpu")
   expect_equal(auto$parameters$tuning$selection$predicted_backend, "cpu")
   expect_equal(auto$parameters$tuning$selection$resolved_backend, "cpu")
@@ -95,6 +97,7 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_equal(auto_backend$parameters$tuning$selection$requested_backend, "auto")
   expect_equal(auto_backend$parameters$tuning$selection$predicted_backend, auto_backend$parameters$resolved_backend)
   expect_false(auto_backend$parameters$tuning$selection$explicit_backend)
+  expect_equal(auto_backend$parameters$tuning$selection$tuning_source, "cpp")
   expect_equal(
     auto_backend$parameters$tuning$selection$backend_decision,
     auto_backend$parameters$tuning$selection$backend_policy_reason
@@ -537,11 +540,14 @@ test_that("fast_kmeans auto backend is shape-aware", {
     cuvs_available_value = FALSE
   )
   expect_equal(cuda_selection$policy, "static_shape_center_backend_selector")
+  expect_equal(cuda_selection$tuning_source, "cpp")
   expect_equal(cuda_selection$predicted_backend, "cuda")
   expect_equal(cuda_selection$backend_policy_reason, "work_at_least_1e8")
   expect_false(cuda_selection$explicit_backend)
   expect_equal(cuda_selection$backend_decision, "work_at_least_1e8")
   expect_true(cuda_selection$backend_policy_prefer_cuda)
+  expect_true(cuda_selection$cuda_kmeans_route_available)
+  expect_equal(cuda_selection$runtime_decision, "cuda_kmeans_route_available")
   expect_equal(cuda_selection$input_nbytes, work_policy$input_nbytes)
   expect_equal(cuda_selection$gpu_transfer_nbytes, work_policy$gpu_transfer_nbytes)
   expect_true(cuda_selection$cuda_available)
@@ -585,6 +591,24 @@ test_that("fast_kmeans auto backend is shape-aware", {
   unknown_policy <- faissR:::kmeans_auto_backend_policy(n = NULL, p = NULL, centers = NULL)
   expect_true(unknown_policy$prefer_cuda)
   expect_equal(unknown_policy$reason, "unknown_shape")
+
+  no_cuda_selection <- faissR:::kmeans_selection_metadata(
+    requested_backend = "auto",
+    resolved_backend = NULL,
+    n = 70000L,
+    p = 784L,
+    centers = 10L,
+    effective = list(max_iter = 75L, n_init = 1L, tol = 1e-4),
+    backend_policy = NULL,
+    tuning = "auto",
+    cuda_available_value = FALSE,
+    faiss_gpu_available_value = TRUE,
+    cuvs_available_value = TRUE
+  )
+  expect_equal(no_cuda_selection$tuning_source, "cpp")
+  expect_equal(no_cuda_selection$resolved_backend, "cpu")
+  expect_equal(no_cuda_selection$runtime_decision, "cuda_runtime_unavailable")
+  expect_false(no_cuda_selection$cuda_kmeans_route_available)
 
   expect_equal(
     faissR:::resolve_fast_kmeans_backend(

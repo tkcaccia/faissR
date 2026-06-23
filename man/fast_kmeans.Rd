@@ -77,9 +77,9 @@ A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
   `parameters$resolved_backend` record the public backend request and device
   policy result. `parameters$tuning` records the deterministic k-means policy,
   stable `rule` label, shape metadata, and whether `max_iter`, `n_init`, and
-  `tol` were auto-selected or supplied explicitly. The auto parameter and
-  backend-policy rules are computed by compiled C++ helpers and record
-  `tuning_source = "cpp"`.
+  `tol` were auto-selected or supplied explicitly. The auto parameter,
+  backend-policy, and final auto backend-selection rules are computed by
+  compiled C++ helpers and record `tuning_source = "cpp"`.
   `parameters$tuning$rule_detail` records the exact
   `n`/`p`/`centers`/work values used to choose the rule.
   `parameters$tuning$effective` records
@@ -102,7 +102,9 @@ A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
   `parameters$tuning$selection` stores the static no-pilot backend and
   effective-parameter decision used for benchmark auditing, including
   `explicit_backend` and `backend_decision` fields that distinguish an
-  explicit `"cpu"`/`"cuda"` request from an automatic shape-policy choice.
+  explicit `"cpu"`/`"cuda"` request from an automatic shape-policy choice,
+  plus `runtime_decision` and CUDA k-means capability flags from the C++
+  selector.
   CUDA runs also record `parameters$cuda_provider_selection` as `"faiss_gpu"`,
   `"direct_cuvs"`, or `"direct_cuvs_after_faiss_gpu_unavailable_or_failed"`;
   `parameters$backend_resolution_note` describes the provider route, and

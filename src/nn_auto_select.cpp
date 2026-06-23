@@ -1336,3 +1336,89 @@ List kmeans_auto_backend_policy_cpp(int n,
   }
   return base(prefer, reason, work, nbytes, n_per_center);
 }
+
+// [[Rcpp::export]]
+List kmeans_auto_select_backend_cpp(std::string requested_backend,
+                                    int n,
+                                    int p,
+                                    int centers,
+                                    double work_threshold,
+                                    double nbytes_threshold,
+                                    int large_n_threshold,
+                                    int large_p_threshold,
+                                    double min_n_per_center,
+                                    bool cuda_available,
+                                    bool faiss_gpu_available,
+                                    bool cuvs_available,
+                                    int effective_max_iter = NA_INTEGER,
+                                    int effective_n_init = NA_INTEGER,
+                                    double effective_tol = NA_REAL,
+                                    std::string tuning = "auto") {
+  if (!(requested_backend == "auto" ||
+        requested_backend == "cpu" ||
+        requested_backend == "cuda")) {
+    stop("`requested_backend` must be one of \"auto\", \"cpu\", or \"cuda\".");
+  }
+
+  List policy = kmeans_auto_backend_policy_cpp(
+    n, p, centers, work_threshold, nbytes_threshold,
+    large_n_threshold, large_p_threshold, min_n_per_center
+  );
+  const bool prefer_cuda = as<bool>(policy["prefer_cuda"]);
+  const std::string policy_reason = as<std::string>(policy["reason"]);
+  const bool explicit_backend = requested_backend != "auto";
+  const bool cuda_kmeans_route_available =
+    cuda_available && (faiss_gpu_available || cuvs_available);
+
+  std::string resolved_backend = requested_backend;
+  std::string runtime_decision;
+  if (explicit_backend) {
+    runtime_decision = "explicit_backend_no_auto_fallback";
+  } else if (prefer_cuda && cuda_kmeans_route_available) {
+    resolved_backend = "cuda";
+    runtime_decision = "cuda_kmeans_route_available";
+  } else {
+    resolved_backend = "cpu";
+    if (!prefer_cuda) {
+      runtime_decision = "cpu_preferred_by_shape";
+    } else if (!cuda_available) {
+      runtime_decision = "cuda_runtime_unavailable";
+    } else {
+      runtime_decision = "cuda_kmeans_provider_unavailable";
+    }
+  }
+
+  const std::string backend_decision = explicit_backend ?
+    ("explicit_" + requested_backend) : policy_reason;
+
+  return List::create(
+    _["policy"] = "static_shape_center_backend_selector",
+    _["slow_tuning"] = false,
+    _["requested_backend"] = requested_backend,
+    _["predicted_backend"] = resolved_backend,
+    _["resolved_backend"] = resolved_backend,
+    _["n"] = n,
+    _["p"] = p,
+    _["centers"] = centers,
+    _["work"] = policy["work"],
+    _["nbytes"] = policy["nbytes"],
+    _["input_nbytes"] = policy["input_nbytes"],
+    _["gpu_transfer_nbytes"] = policy["gpu_transfer_nbytes"],
+    _["n_per_center"] = policy["n_per_center"],
+    _["backend_policy_reason"] = policy_reason,
+    _["explicit_backend"] = explicit_backend,
+    _["backend_decision"] = backend_decision,
+    _["backend_policy_prefer_cuda"] = prefer_cuda,
+    _["cuda_available"] = cuda_available,
+    _["faiss_gpu_available"] = faiss_gpu_available,
+    _["cuvs_available"] = cuvs_available,
+    _["cuda_kmeans_route_available"] = cuda_kmeans_route_available,
+    _["runtime_decision"] = runtime_decision,
+    _["effective_max_iter"] = valid_int(effective_max_iter) ? effective_max_iter : NA_INTEGER,
+    _["effective_n_init"] = valid_int(effective_n_init) ? effective_n_init : NA_INTEGER,
+    _["effective_tol"] = valid_double(effective_tol) ? effective_tol : NA_REAL,
+    _["tuning"] = tuning,
+    _["tuning_source"] = "cpp",
+    _["backend_policy"] = policy
+  );
+}
