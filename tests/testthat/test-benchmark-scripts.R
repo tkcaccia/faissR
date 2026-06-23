@@ -1967,6 +1967,17 @@ test_that("k-means benchmark mirrors fast_kmeans auto CUDA shape gate", {
   expect_false(few_points$prefer_cuda)
   expect_equal(few_points$reason, "few_points_per_center_cpu_preferred")
   expect_equal(few_points$n_per_center, 5)
+
+  explicit_cuda <- env$kmeans_selection_metadata(
+    backend = "cuda",
+    n = 70000L,
+    p = 784L,
+    centers = 10L
+  )
+  expect_equal(explicit_cuda$resolved_backend, "cuda")
+  expect_equal(explicit_cuda$backend_decision, "explicit_cuda")
+  expect_equal(explicit_cuda$runtime_decision, "explicit_backend_no_auto_fallback")
+  expect_equal(explicit_cuda$tuning_source, "cpp")
 })
 
 test_that("k-means benchmark fallback auto params mirror package metadata", {
@@ -1990,6 +2001,16 @@ test_that("k-means benchmark fallback auto params mirror package metadata", {
     expected <- do.call(faissR:::kmeans_auto_params, shape)
     expect_equal(fallback[names(expected)], expected, info = paste(shape, collapse = ","))
   }
+
+  tiny_selection <- env$kmeans_selection_metadata(
+    backend = "auto",
+    n = 120L,
+    p = 4L,
+    centers = 3L
+  )
+  expect_equal(tiny_selection$resolved_backend, "cpu")
+  expect_equal(tiny_selection$runtime_decision, "cpu_preferred_by_shape")
+  expect_equal(tiny_selection$tuning_source, "cpp")
 })
 
 test_that("k-means benchmark records static selection metadata", {
@@ -2038,6 +2059,9 @@ test_that("k-means benchmark records static selection metadata", {
     selection_cuda_available = FALSE,
     selection_faiss_gpu_available = FALSE,
     selection_cuvs_available = FALSE,
+    selection_cuda_kmeans_route_available = FALSE,
+    selection_runtime_decision = "explicit_backend_no_auto_fallback",
+    selection_tuning_source = "cpp",
     cuda_provider_selection = "direct_cuvs_after_faiss_gpu_unavailable_or_failed",
     faiss_gpu_error = "FAISS GPU k-means unavailable",
     backend_resolution_note = "CUDA k-means used direct cuVS after FAISS GPU failed."
@@ -2048,6 +2072,9 @@ test_that("k-means benchmark records static selection metadata", {
   expect_equal(row$selection_reason, "small_cpu_preferred")
   expect_true(row$selection_explicit_backend)
   expect_equal(row$selection_backend_decision, "explicit_cpu")
+  expect_false(row$selection_cuda_kmeans_route_available)
+  expect_equal(row$selection_runtime_decision, "explicit_backend_no_auto_fallback")
+  expect_equal(row$selection_tuning_source, "cpp")
   expect_equal(row$cuda_provider_selection, "direct_cuvs_after_faiss_gpu_unavailable_or_failed")
   expect_equal(row$faiss_gpu_error, "FAISS GPU k-means unavailable")
   expect_equal(row$backend_resolution_note, "CUDA k-means used direct cuVS after FAISS GPU failed.")
@@ -2068,6 +2095,9 @@ test_that("k-means benchmark records static selection metadata", {
   expect_equal(summary$median_selection_nbytes, 3200)
   expect_equal(summary$median_selection_gpu_transfer_nbytes, 1600)
   expect_equal(summary$median_selection_n_per_center, 33.3)
+  expect_false(summary$selection_cuda_kmeans_route_available)
+  expect_equal(summary$selection_runtime_decision, "explicit_backend_no_auto_fallback")
+  expect_equal(summary$selection_tuning_source, "cpp")
   expect_equal(summary$cuda_provider_selection, "direct_cuvs_after_faiss_gpu_unavailable_or_failed")
   expect_equal(summary$faiss_gpu_error, "FAISS GPU k-means unavailable")
   expect_equal(summary$backend_resolution_note, "CUDA k-means used direct cuVS after FAISS GPU failed.")
@@ -2745,6 +2775,31 @@ test_that("graph benchmark preflights graph method and metric skips", {
     expect_false(identical(cuda_ivfpq_skip$reason, "insufficient_training_rows"))
   }
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "ivfpq", metric = "euclidean", x = matrix(rnorm(700 * 4), ncol = 4)))
+})
+
+test_that("graph benchmark passes cluster method into backend preflight", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  old_get_from_namespace <- env$getFromNamespace
+  env$getFromNamespace <- function(name, ns) {
+    if (identical(name, "graph_cluster_backend_selection")) {
+      return(function(backend, method = "louvain") {
+        list(resolved_backend = paste(backend, method, sep = ":"))
+      })
+    }
+    old_get_from_namespace(name, ns)
+  }
+
+  expect_equal(
+    env$graph_cluster_preflight_route("auto", "random_walking"),
+    "auto:random_walking"
+  )
+  expect_equal(
+    env$graph_cluster_preflight_route("auto", "leiden"),
+    "auto:leiden"
+  )
 })
 
 test_that("graph benchmark preflights resolved route runtime dependencies", {

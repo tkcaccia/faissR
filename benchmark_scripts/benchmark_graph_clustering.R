@@ -1077,7 +1077,14 @@ graph_build_preflight_route <- function(graph_backend,
   tryCatch(as.character(helper(graph_backend))[1L], error = function(e) NA_character_)
 }
 
-graph_cluster_preflight_route <- function(cluster_backend) {
+graph_cluster_preflight_route <- function(cluster_backend, method = "louvain") {
+  helper <- tryCatch(getFromNamespace("graph_cluster_backend_selection", "faissR"), error = function(e) NULL)
+  if (is.function(helper)) {
+    return(tryCatch(
+      as.character(helper(cluster_backend, method = method)$resolved_backend)[1L],
+      error = function(e) NA_character_
+    ))
+  }
   helper <- tryCatch(getFromNamespace("resolve_graph_cluster_backend", "faissR"), error = function(e) NULL)
   if (!is.function(helper)) return(NA_character_)
   tryCatch(as.character(helper(cluster_backend))[1L], error = function(e) NA_character_)
@@ -1368,7 +1375,7 @@ run_cluster_one <- function(data_obj, dataset_name, graph_obj, graph_sec,
     metric = metric,
     graph_cagra_implementation = graph_cagra_implementation
   )
-  cluster_preflight_route <- graph_cluster_preflight_route(cluster_backend)
+  cluster_preflight_route <- graph_cluster_preflight_route(cluster_backend, method)
   n_clusters <- NULL
   n_clusters_source <- NA_character_
   if (!identical(method, "random_walking")) {
@@ -1675,8 +1682,8 @@ for (dataset_name in datasets) {
               for (cluster_backend in cluster_backends) {
                 for (method in methods) {
                   row_id <- row_id + 1L
-                cluster_preflight_route <- graph_cluster_preflight_route(cluster_backend)
-                skip_reason <- graph_cluster_expected_skip(cluster_backend, method)
+                  cluster_preflight_route <- graph_cluster_preflight_route(cluster_backend, method)
+                  skip_reason <- graph_cluster_expected_skip(cluster_backend, method)
                 row_target_clusters <- if (identical(method, "random_walking")) {
                   NULL
                 } else {
@@ -1921,7 +1928,7 @@ materials <- c(
   "`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where graph or clustering backend was `auto` with recommendations from the same requested graph-backend/graph-method/metric/cluster-backend group and reports the recommendation basis, median speed ratio, median ARI gap, modularity gap, method agreement, and resolved-backend agreement. Speed ratios and quality gaps are `NA` when the required timing, ARI, or modularity values are unavailable or invalid.",
   "`graph_cluster_global_recommendations_from_cycles.csv` selects the fastest successful row within the ARI tolerance after pooling requested graph and clustering backends for each dataset/k/graph-method/metric/CAGRA-provider/direct-cuVS-CAGRA-build-algorithm/target-cluster-count combination. This table audits the best observed CPU/CUDA route instead of only the best route inside each requested-backend group.",
   "`graph_cluster_auto_vs_global_recommendation.csv` compares aggregate auto rows with those global recommendations and records requested-backend agreement, resolved-backend agreement, method agreement, speed ratio, ARI gap, and modularity gap. This table is intended for refining graph and clustering auto selectors across CPU/CUDA choices.",
-  "`graph_backend` and `cluster_backend` record the requested public backends. `graph_preflight_route` records the public NN resolver decision for the requested graph backend, method, metric, and CAGRA provider before runtime availability checks; `cluster_preflight_route` records the clustering backend resolver decision. `graph_resolved_backend` and `cluster_resolved_backend` record the resolved device policy from successful result objects. These route columns and `n_threads` are preserved in cycle summaries and auto/recommendation comparisons, so CPU/CUDA rows can be audited without opening the R objects.",
+  "`graph_backend` and `cluster_backend` record the requested public backends. `graph_preflight_route` records the public NN resolver decision for the requested graph backend, method, metric, and CAGRA provider before runtime availability checks; `cluster_preflight_route` records the clustering backend resolver decision for the requested clustering method, so CPU-only random walking and CUDA-capable Louvain/Leiden are auditable separately. `graph_resolved_backend` and `cluster_resolved_backend` record the resolved device policy from successful result objects. These route columns and `n_threads` are preserved in cycle summaries and auto/recommendation comparisons, so CPU/CUDA rows can be audited without opening the R objects.",
   "Unsupported graph-clustering combinations known from the public API, such as CUDA random_walking, are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. If every row in a graph-build block is an expected skip, graph construction is skipped and graph timing/edge columns remain `NA`.",
   "CUDA rows are recorded as expected skips when faissR was not built with the required CUDA/cuGraph support; unexpected CUDA runtime errors remain failed rows. The benchmark does not silently replace explicit CUDA clustering with CPU clustering."
 )
