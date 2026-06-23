@@ -38,8 +38,9 @@ explicit CUDA request with CPU work.
 For explicit public methods under `backend = "auto"`, the selector checks the
 method/metric CUDA route before choosing a device. For example,
 `method = "hnsw"` selects the cuVS HNSW route when RAPIDS cuVS HNSW is
-available for Euclidean, normalized cosine/correlation, or transformed raw
-inner-product search; otherwise it uses the CPU HNSW route.
+available for Euclidean or normalized cosine/correlation search; raw
+inner-product HNSW uses the CPU route unless a future reliable CUDA HNSW/IP
+route is added.
 
 The public request is stored in `attr(result, "requested_backend")` and
 `attr(result, "requested_method")`; the normalized tuning policy is stored in
@@ -57,7 +58,7 @@ with method-specific parameters.
 | `"flat"` | FAISS Flat L2/IP; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP while explicit CUDA calls remain on CUDA. | Exact FAISS exhaustive search [1-2,16]. |
 | `"bruteforce"` | Native exact CPU KNN. | Euclidean prefers direct RAPIDS cuVS brute force; cosine, correlation, and inner product use FAISS GPU Flat when available. | Exhaustive route, useful for FAISS/cuVS comparisons [1-3,16]. |
 | `"grid"` | Native exact 2D/3D grid for Euclidean, cosine, and correlation. | Native CUDA 2D/3D grid for Euclidean, cosine, and correlation. | Low-dimensional spatial or simulated data; cosine/correlation use normalized Euclidean grid search; explicit grid requests error outside two or three columns. |
-| `"hnsw"` | FAISS CPU HNSW for all four public metrics when FAISS is available; RcppHNSW/hnswlib fallback otherwise. | RAPIDS cuVS HNSW for Euclidean/L2, normalized cosine/correlation, and transformed raw inner product. | High-recall graph search. CUDA HNSW is built from a CUDA CAGRA index and searched through the cuVS HNSW wrapper; raw inner product uses a maximum-inner-product-to-L2 extra-dimension transform [3,5,16,22-23]. |
+| `"hnsw"` | FAISS CPU HNSW for all four public metrics when FAISS is available; RcppHNSW/hnswlib fallback otherwise. | RAPIDS cuVS HNSW for Euclidean/L2 and normalized cosine/correlation. | High-recall graph search. CUDA HNSW is built from a CUDA CAGRA index and searched through the cuVS HNSW wrapper; raw inner product is disabled for CUDA HNSW until a reliable native or transformed route is available [3,5,16,22-23]. |
 | `"ivf"` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP with metric-aware default probing. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP with metric-aware deterministic defaults. | Large approximate search with coarse-list probing [1-2,16]. |
 | `"ivfpq"` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP with metric-aware IVF probing. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP with metric-aware IVF probing. | Compressed-memory approximate search; CPU IVFPQ requires at least 624 training rows and auto-selects 4-bit PQ below 9,984 rows [6,16]. |
 | `"vamana"` | Native DiskANN/Vamana-style robust-pruned candidate graph with CPU candidate refinement. | Native DiskANN/Vamana-style robust-pruned candidate graph with CUDA row-candidate refinement. | Distinct pruned directed graph route inspired by DiskANN/Vamana; robust pruning protects the first `k` exact seed neighbours before applying the Vamana rule; cuVS Vamana is acknowledged for GPU build/serialization, but faissR performs KNN candidate refinement because cuVS Vamana search is not exposed yet [3,24]. |
@@ -155,13 +156,14 @@ dot product in each query row at distance `0`.
 The capability table is design-level. Runtime auto-selection can still choose
 CPU when the public CUDA design route needs a missing optional component. For
 example, CUDA cosine and correlation auto routes can use CUDA grid for large
-2D/3D self-KNN. Non-grid CUDA cosine, correlation, and inner-product auto
-routes use FAISS GPU Flat for exact small/query workloads when available, and
-can select FAISS GPU/direct cuVS graph routes for large self-KNN. On a
-cuVS-only runtime, CUDA auto non-Euclidean capability rows are reported as
-runtime-available but shape-dependent: large self-KNN graph searches can use
-cuVS HNSW/CAGRA, while small/query workloads stay on CPU instead of selecting
-an unavailable FAISS GPU Flat index. The same check is applied to explicit
+2D/3D self-KNN. Non-grid CUDA cosine and correlation auto routes use FAISS GPU
+Flat for exact small/query workloads when available, and can select FAISS
+GPU/direct cuVS graph routes for large self-KNN. CUDA inner-product auto uses
+FAISS GPU Flat IP when available or faissR's native CUDA candidate-refinement
+route when native CUDA kernels are available; CAGRA-derived cuVS HNSW/CAGRA
+routes are not used for raw inner product. On a cuVS-only runtime, CUDA auto
+non-Euclidean capability rows are reported as shape-dependent rather than as a
+promise that every metric/method has a CUDA route. The same check is applied to explicit
 methods such as `"flat"`, `"ivf"`, and `"ivfpq"` under `backend = "auto"`.
 FAISS CPU and FAISS GPU availability are checked separately at execution time:
 explicit FAISS GPU Flat, IVF, IVFPQ, and CAGRA routes require a FAISS build

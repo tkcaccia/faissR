@@ -81,11 +81,10 @@ unavailable. CPU `method = "hnsw"` uses FAISS HNSW for all metrics when
 available and RcppHNSW/hnswlib when FAISS is unavailable.
 `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
 FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, native CPU NN-descent raw
-dot-product search, native CUDA NN-descent candidate refinement, and CUDA
-HNSW through a maximum-inner-product-to-L2 transform where available. FAISS GPU
-CAGRA and direct cuVS CAGRA do not currently expose a safe transformed
-raw-inner-product route. Direct cuVS NN-descent also does not expose safe
-raw-inner-product search.
+dot-product search, and native CUDA NN-descent candidate refinement. CUDA
+cuVS HNSW, FAISS GPU CAGRA, and direct cuVS CAGRA do not currently expose a
+safe transformed raw-inner-product route. Direct cuVS NN-descent also does
+not expose safe raw-inner-product search.
 Unsupported backend combinations fail clearly instead of returning neighbours
 computed under a different metric.}
 
@@ -183,9 +182,9 @@ Method descriptions:
   grid for 2D/3D Euclidean/cosine/correlation
   self-KNN, exact FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for
   Euclidean searches when appropriate, FAISS GPU/direct cuVS CAGRA for large
-  cosine, correlation, and inner-product self-KNN, cuVS HNSW for explicit CUDA
-  HNSW requests, and FAISS GPU Flat IP routes for exact small/query
-  non-Euclidean searches when FAISS GPU Flat is available
+  cosine/correlation self-KNN, cuVS HNSW for explicit CUDA HNSW requests, and
+  FAISS GPU Flat IP or native CUDA candidate refinement for inner-product
+  routes when available
   [1-3,5,13-15,22-23]. When `backend = "auto"` is
   combined with an explicit method, faissR first checks whether that exact
   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU
@@ -210,9 +209,9 @@ Method descriptions:
   \item `"hnsw"`: HNSW approximate graph-search index [3,5,16,22-23].
   CPU uses FAISS HNSW when available and RcppHNSW/hnswlib fallback
   otherwise. CUDA uses RAPIDS cuVS HNSW converted from a CUDA CAGRA index
-  for Euclidean plus normalized cosine/correlation; raw inner product uses
-  a maximum-inner-product-to-L2 extra-dimension transform and shifted
-  inner-product distances. Default parameters are selected by a deterministic
+  for Euclidean plus normalized cosine/correlation; raw inner product is
+  disabled for CUDA HNSW until a reliable native or transformed route is
+  available. Default parameters are selected by a deterministic
   shape/k/metric rule without pilot tuning; result approximation metadata
   records the selected `tuning_rule` and shape flags used.
   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
