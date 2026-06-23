@@ -2053,8 +2053,8 @@ cuda_cagra_route_available <- function(faiss_gpu_available_value = faiss_gpu_ava
 #' Public CUDA `method = "cagra"` can resolve to FAISS GPU CAGRA or direct cuVS
 #' CAGRA; `options(faissR.cagra_implementation = "faiss_gpu")` or `"cuvs"`
 #' forces one provider, while `"auto"` keeps the default FAISS-then-cuVS rule.
-#' Availability preflights respect the forced provider for all CAGRA metrics,
-#' and returned approximate NN objects record `cagra_provider` plus
+#' Availability preflights respect the forced provider for supported CAGRA
+#' metrics, and returned approximate NN objects record `cagra_provider` plus
 #' `cagra_provider_option`.
 #'
 #' @param runtime Logical; when `FALSE` (the default), report support by design
@@ -2190,6 +2190,13 @@ nn_cuda_auto_runtime_available <- function(metric,
         "CUDA auto non-Euclidean route is shape-dependent on this runtime:",
         "native CUDA grid may apply to eligible 2D/3D self-search datasets,",
         "while general exact non-Euclidean search still requires FAISS GPU Flat."
+      )
+    } else if (isTRUE(cuda_available_value) && identical(metric, "inner_product")) {
+      paste(
+        "CUDA auto inner-product route is shape-dependent on this runtime:",
+        "large self-KNN graph searches can use faissR's native CUDA",
+        "candidate-refinement route, while exact inner-product search still",
+        "requires FAISS GPU Flat."
       )
     } else {
       "CUDA auto non-Euclidean route requires FAISS GPU Flat, cuVS graph support, or an eligible native CUDA grid route."

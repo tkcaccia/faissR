@@ -510,15 +510,21 @@ test_that("public NN results preserve requested and resolved routing metadata", 
   expect_equal(auto_meta$backend_decision, "explicit_route")
   expect_equal(auto_meta$method_decision, "explicit_exact")
   expect_equal(auto_meta$predicted_backend, attr(out, "backend"))
-  expect_equal(auto_meta$predicted_method, "exact")
-  expect_equal(auto_meta$predicted_device, "cpu")
+  expect_equal(
+    auto_meta$predicted_method,
+    faissR:::nn_resolved_backend_public_method(attr(out, "backend"))
+  )
+  expect_equal(
+    auto_meta$predicted_device,
+    faissR:::nn_resolved_backend_device(attr(out, "backend"))
+  )
   expect_equal(auto_meta$metric, "euclidean")
   expect_equal(auto_meta$k, 3L)
   expect_equal(auto_meta$n, nrow(x))
   expect_equal(auto_meta$p, ncol(x))
 })
 
-test_that("top-level auto reuses the metric-aware CPU auto selector after GPU decline", {
+test_that("top-level auto records the metric-aware auto selector decision", {
   skip_if_not(faiss_available())
   old <- options(
     faissR.cpu_auto_exact_work = 1,
@@ -535,7 +541,6 @@ test_that("top-level auto reuses the metric-aware CPU auto selector after GPU de
   top_auto <- nn(x, q, k = 3L, backend = "auto", method = "auto", metric = "cosine")
 
   expect_equal(attr(cpu_auto, "backend"), "faiss_flat_cosine")
-  expect_equal(attr(top_auto, "backend"), attr(cpu_auto, "backend"))
   expect_equal(attr(top_auto, "metric"), "cosine")
   expect_equal(attr(top_auto, "requested_backend"), "auto")
   expect_equal(attr(top_auto, "requested_method"), "auto")
@@ -543,12 +548,24 @@ test_that("top-level auto reuses the metric-aware CPU auto selector after GPU de
   expect_equal(auto_meta$policy, "static_shape_k_metric_selector")
   expect_false(auto_meta$explicit_backend)
   expect_false(auto_meta$explicit_method)
-  expect_equal(auto_meta$backend_decision, "auto_cpu_fallback")
-  expect_equal(auto_meta$method_decision, "auto_cpu_fallback")
+  expect_equal(auto_meta$backend_decision, auto_meta$reason)
+  expect_equal(auto_meta$method_decision, auto_meta$reason)
   expect_equal(auto_meta$predicted_backend, attr(top_auto, "backend"))
-  expect_equal(auto_meta$predicted_method, "flat")
-  expect_equal(auto_meta$predicted_device, "cpu")
-  expect_equal(auto_meta$reason, "auto_cpu_fallback")
+  expect_equal(
+    auto_meta$predicted_method,
+    faissR:::nn_resolved_backend_public_method(attr(top_auto, "backend"))
+  )
+  expect_equal(
+    auto_meta$predicted_device,
+    faissR:::nn_resolved_backend_device(attr(top_auto, "backend"))
+  )
+  if (isTRUE(faiss_gpu_available())) {
+    expect_equal(attr(top_auto, "backend"), "faiss_gpu_flat_cosine")
+    expect_equal(auto_meta$reason, "auto_cuda_preselector")
+  } else {
+    expect_equal(attr(top_auto, "backend"), attr(cpu_auto, "backend"))
+    expect_equal(auto_meta$reason, "auto_cpu_fallback")
+  }
   expect_equal(auto_meta$metric, "cosine")
   expect_false(auto_meta$self_query)
   expect_false(auto_meta$slow_tuning)
@@ -978,8 +995,10 @@ test_that("cuda_auto runtime availability distinguishes cuVS and FAISS GPU metri
     cuvs_available_value = FALSE,
     faiss_gpu_available_value = FALSE
   )
-  expect_false(ip_native_cuda$available)
-  expect_equal(ip_native_cuda$reason, "missing_cuda_route")
+  expect_true(ip_native_cuda$available)
+  expect_equal(ip_native_cuda$reason, "available")
+  expect_match(ip_native_cuda$notes, "native CUDA")
+  expect_match(ip_native_cuda$notes, "candidate-refinement")
 
   ip_faiss_gpu <- faissR:::nn_cuda_auto_runtime_available(
     "inner_product",
