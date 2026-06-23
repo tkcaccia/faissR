@@ -197,9 +197,43 @@ validate_cagra_build_algo_values <- function(values, arg_name = "cagra_build_alg
   values
 }
 
-cagra_implementation_values_for <- function(backend, method, cagra_implementations) {
+cagra_implementation_values_for <- function(backend, method, cagra_implementations,
+                                            data = NULL, metric = "euclidean",
+                                            k = NULL) {
   method <- canonical_method_key(method)
-  if (method %in% c("auto", "cagra") && backend %in% c("auto", "cuda")) {
+  backend <- canonical_backend_key(backend)
+  if (!backend %in% c("auto", "cuda")) {
+    return(NA_character_)
+  }
+  if (identical(method, "cagra")) {
+    return(cagra_implementations)
+  }
+  if (!identical(method, "auto") || is.null(data) || is.null(k)) {
+    return(NA_character_)
+  }
+
+  auto_selection <- tryCatch({
+    selector <- getFromNamespace("nn_auto_selection_metadata", "faissR")
+    selector(
+      data = data,
+      points = data,
+      points_missing = TRUE,
+      k = k,
+      requested_backend = backend,
+      requested_method = "auto",
+      resolved_backend = resolve_public_route(backend, "auto", metric),
+      metric = metric,
+      tuning = "auto",
+      exclude_self = FALSE
+    )
+  }, error = function(e) NULL)
+  predicted_method <- as.character(auto_selection$predicted_method %||% NA_character_)[[1L]]
+  predicted_backend <- as.character(
+    auto_selection$predicted_backend %||%
+      auto_selection$selected_backend %||%
+      NA_character_
+  )[[1L]]
+  if (identical(predicted_method, "cagra") || grepl("cagra", predicted_backend, fixed = TRUE)) {
     return(cagra_implementations)
   }
   NA_character_
@@ -1949,7 +1983,14 @@ for (dataset_name in datasets) {
         cycle_seed <- seed + (cycle - 1L) * 1000003L
         for (backend in backends) {
           for (method in methods) {
-            for (cagra_implementation in cagra_implementation_values_for(backend, method, cagra_implementations)) {
+            for (cagra_implementation in cagra_implementation_values_for(
+              backend,
+              method,
+              cagra_implementations,
+              data = x,
+              metric = metric,
+              k = k
+            )) {
               for (cagra_build_algo in cagra_build_algo_values_for(cagra_implementation, cagra_build_algos)) {
                 row_id <- row_id + 1L
                 capability_table <- if (!is.na(cagra_implementation)) {
@@ -2129,7 +2170,7 @@ materials <- c(
   "",
   "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities(runtime = TRUE)` and the public backend resolver, then recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
   "`method = \"grid\"` is included in the default public method list but is recorded as an expected skip for datasets outside two or three columns, because it is a native low-dimensional spatial search route.",
-  "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, the requested CAGRA implementation for public `method = \"cagra\"` rows and CUDA-capable `method = \"auto\"` rows that may select CAGRA, the requested direct-cuVS `cagra_build_algo` when `cagra_implementation = \"cuvs\"`, optional child-process isolation fields, and resolved backend fields.",
+  "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, the requested CAGRA implementation for public `method = \"cagra\"` rows and for CUDA-capable `method = \"auto\"` rows only when the shape-aware auto selector predicts a CAGRA route, the requested direct-cuVS `cagra_build_algo` when `cagra_implementation = \"cuvs\"`, optional child-process isolation fields, and resolved backend fields.",
   "When `--isolate_cuda_cagra=true`, CUDA CAGRA rows that request a provider selector are executed in a child R process. The child writes the KNN result back to the parent, which still computes quality against the same reference. The `isolated_process` and `child_status` columns make this auditable. Timings are measured inside the child around `faissR::nn()` so process start-up and result serialization are not counted as method time.",
   "When `--isolate_native_timeout=true` (the default on Unix-like systems), high-work CPU `method = \"exact\"`, `method = \"flat\"`, and `method = \"bruteforce\"` rows are executed in a forked worker process. This gives the benchmark an OS-level timeout for native code paths that may not check R's `setTimeLimit()` while inside C++/FAISS loops, and records timed-out rows with `child_status = \"timeout\"` instead of blocking subsequent rows.",
   "`nn_metric_capabilities.csv` stores the default capability table used for non-CAGRA-provider-specific preflight, including `resolved_backend`, `runtime_available`, `runtime_reason`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. When `--cagra_implementations` contains one or more provider selectors, `nn_metric_cagra_capabilities.csv` stores the matching provider-specific capability tables with a `cagra_implementation` column, so FAISS GPU CAGRA and direct cuVS CAGRA expected skips can be audited separately. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",

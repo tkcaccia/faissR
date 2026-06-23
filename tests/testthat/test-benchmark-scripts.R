@@ -1074,13 +1074,17 @@ test_that("NN metric benchmark accounts for data-shaped method skips", {
     env$cagra_implementation_values_for("cuda", "cagra", c("faiss_gpu", "cuvs")),
     c("faiss_gpu", "cuvs")
   )
-  expect_equal(
-    env$cagra_implementation_values_for("cuda", "auto", c("faiss_gpu", "cuvs")),
-    c("faiss_gpu", "cuvs")
-  )
-  expect_equal(
-    env$cagra_implementation_values_for("auto", "auto", c("faiss_gpu", "cuvs")),
-    c("faiss_gpu", "cuvs")
+  expect_true(is.na(env$cagra_implementation_values_for("cuda", "auto", c("faiss_gpu", "cuvs"))))
+  expect_true(is.na(env$cagra_implementation_values_for("auto", "auto", c("faiss_gpu", "cuvs"))))
+  expect_true(
+    is.na(env$cagra_implementation_values_for(
+      "cuda",
+      "auto",
+      c("faiss_gpu", "cuvs"),
+      data = matrix(0, nrow = 20L, ncol = 4L),
+      metric = "euclidean",
+      k = 5L
+    ))
   )
   expect_true(is.na(env$cagra_implementation_values_for("cpu", "auto", c("faiss_gpu", "cuvs"))))
   expect_true(is.na(env$cagra_implementation_values_for("cpu", "cagra", c("faiss_gpu", "cuvs"))))
@@ -2580,14 +2584,8 @@ test_that("graph benchmark defaults cover requested methods backends and k grid"
     env$cagra_implementation_values_for("cuda", "cagra", c("faiss_gpu", "cuvs")),
     c("faiss_gpu", "cuvs")
   )
-  expect_equal(
-    env$cagra_implementation_values_for("cuda", "auto", c("faiss_gpu", "cuvs")),
-    c("faiss_gpu", "cuvs")
-  )
-  expect_equal(
-    env$cagra_implementation_values_for("auto", "auto", c("faiss_gpu", "cuvs")),
-    c("faiss_gpu", "cuvs")
-  )
+  expect_true(is.na(env$cagra_implementation_values_for("cuda", "auto", c("faiss_gpu", "cuvs"))))
+  expect_true(is.na(env$cagra_implementation_values_for("auto", "auto", c("faiss_gpu", "cuvs"))))
   expect_true(is.na(env$cagra_implementation_values_for("cpu", "auto", c("faiss_gpu", "cuvs"))))
   expect_true(is.na(env$cagra_implementation_values_for("cpu", "cagra", c("faiss_gpu", "cuvs"))))
   expect_error(
