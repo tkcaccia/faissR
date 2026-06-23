@@ -507,8 +507,7 @@ metric matrix. It runs public `nn()` combinations over:
   method labels, not resolved backend labels such as `faiss_hnsw`;
 - CAGRA implementations: `--cagra_implementations=auto` by default, or
   `--cagra_implementations=faiss_gpu,cuvs` to split public `method = "cagra"`
-  rows and CUDA-capable `method = "auto"` rows into FAISS GPU CAGRA and direct
-  RAPIDS cuVS CAGRA provider requests when those routes are selected;
+  rows into FAISS GPU CAGRA and direct RAPIDS cuVS CAGRA provider requests;
 - Direct cuVS CAGRA build algorithms: `--cagra_build_algos=auto` by default,
   or `--cagra_build_algos=auto,ivf_pq,nn_descent,iterative_cagra_search` to
   audit direct cuVS CAGRA graph construction modes separately;
@@ -566,14 +565,13 @@ The result table separates `result_requested_backend`,
 `"cuda"` can be distinguished from concrete FAISS/cuVS implementation labels
 such as `"faiss_gpu_cagra"` or `"cuda_cuvs_cagra"`. The
 `cagra_implementation` column records the requested provider selector for
-public `method = "cagra"` rows and for CUDA-capable `method = "auto"` rows only
-when the shape-aware auto selector predicts a CAGRA route; it is `NA` for rows
-where CAGRA cannot be selected or where auto predicts a non-CAGRA route. This
-keeps the public method namespace small while still allowing benchmark tables
-to compare FAISS GPU CAGRA against direct cuVS CAGRA, including for shape-aware
-auto selection. Row execution uses the per-call `cagra_implementation`
-argument so provider selection remains isolated across cycles, datasets,
-metrics, and `k`.
+public `method = "cagra"` rows. Public `method = "auto"` is benchmarked once
+per backend/metric/k combination and records the provider selected by the
+package in `resolved_backend`, `implementation_backend`, and route metadata.
+This keeps auto-selection audits focused on the public auto policy while
+explicit `method = "cagra"` rows compare FAISS GPU CAGRA against direct cuVS
+CAGRA. Row execution uses the per-call `cagra_implementation` argument so
+provider selection remains isolated across cycles, datasets, metrics, and `k`.
 For stress runs that compare FAISS GPU CAGRA and direct RAPIDS cuVS CAGRA in
 one benchmark matrix, `--isolate_cuda_cagra=true` runs CUDA CAGRA provider rows
 inside child R processes. The parent process still builds the exact reference
