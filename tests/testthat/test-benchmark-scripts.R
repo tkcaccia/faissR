@@ -699,6 +699,41 @@ test_that("NN metric benchmark defaults cover requested metrics and k grid", {
   )
 })
 
+test_that("NN metric benchmark reference policy records exact CPU and cap skips", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+
+  x <- matrix(seq_len(30), nrow = 10L)
+  ref <- env$metric_reference(
+    x,
+    k = 3L,
+    metric = "euclidean",
+    quality_n = 20L,
+    quality_max_ops = 1e6,
+    n_threads = 1L,
+    seed = 1L
+  )
+  expect_equal(ref$mode, "full")
+  expect_null(ref$rows)
+  expect_equal(dim(ref$knn$indices), c(10L, 3L))
+
+  old_cuda <- env$cuda_exact_reference_available
+  env$cuda_exact_reference_available <- function(metric) FALSE
+  on.exit(env$cuda_exact_reference_available <- old_cuda, add = TRUE)
+  expect_null(env$metric_reference(
+    matrix(0, nrow = 20L, ncol = 200L),
+    k = 3L,
+    metric = "euclidean",
+    quality_n = 10L,
+    quality_max_ops = 1,
+    n_threads = 1L,
+    seed = 1L
+  ))
+  expect_equal(env$cuda_reference_ops_limit(1), 100)
+})
+
 test_that("NN metric auto comparison preserves recommendation basis", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),

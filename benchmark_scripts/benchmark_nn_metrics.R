@@ -473,39 +473,93 @@ with_elapsed_limit <- function(expr, timeout) {
   force(expr)
 }
 
+cuda_exact_reference_available <- function(metric) {
+  if (metric %in% c("cosine", "correlation", "inner_product")) {
+    return(isTRUE(faissR::faiss_gpu_available()))
+  }
+  isTRUE(faissR::faiss_gpu_available()) || isTRUE(faissR::cuvs_available())
+}
+
+cuda_reference_ops_limit <- function(quality_max_ops) {
+  value <- suppressWarnings(as.numeric(quality_max_ops))
+  if (length(value) != 1L || !is.finite(value) || value <= 0) return(Inf)
+  max(value, value * 100)
+}
+
+exact_reference_knn <- function(x, k, metric, n_threads, backend) {
+  faissR::nn(
+    x,
+    k = k,
+    backend = backend,
+    method = "exact",
+    metric = metric,
+    n_threads = n_threads
+  )
+}
+
+exact_reference_query_knn <- function(x, rows, k, metric, n_threads, backend) {
+  faissR::nn(
+    x,
+    points = x[rows, , drop = FALSE],
+    k = k,
+    backend = backend,
+    method = "exact",
+    metric = metric,
+    n_threads = n_threads
+  )
+}
+
 metric_reference <- function(x, k, metric, quality_n, quality_max_ops, n_threads, seed) {
   n <- nrow(x)
   p <- ncol(x)
   full_ops <- as.double(n) * as.double(n) * as.double(p)
   if (n <= quality_n && full_ops <= quality_max_ops) {
     return(list(
-      knn = faissR::nn(
-        x,
-        k = k,
-        backend = "cpu",
-        method = "exact",
-        metric = metric,
-        n_threads = n_threads
-      ),
+      knn = exact_reference_knn(x, k, metric, n_threads, backend = "cpu"),
       rows = NULL,
       mode = "full"
     ))
   }
+  cuda_ops_limit <- cuda_reference_ops_limit(quality_max_ops)
+  compact_high_dim <- n <= 5000L && p >= 1024L
+  if (isTRUE(compact_high_dim) && full_ops <= cuda_ops_limit &&
+      cuda_exact_reference_available(metric)) {
+    cuda_ref <- tryCatch(
+      exact_reference_knn(x, k, metric, n_threads, backend = "cuda"),
+      error = function(e) NULL
+    )
+    if (!is.null(cuda_ref)) {
+      return(list(
+        knn = cuda_ref,
+        rows = NULL,
+        mode = "full_cuda_exact"
+      ))
+    }
+  }
   sample_n <- min(as.integer(quality_n), n)
   sample_ops <- as.double(sample_n) * as.double(n) * as.double(p)
-  if (sample_n < 1L || sample_ops > quality_max_ops) return(NULL)
+  if (sample_n < 1L) return(NULL)
   set.seed(seed + as.integer(k) + match(metric, c("euclidean", "cosine", "correlation", "inner_product")))
   rows <- sort(sample.int(n, sample_n))
+  if (sample_ops > quality_max_ops &&
+      sample_ops <= cuda_ops_limit &&
+      n <= 100000L &&
+      cuda_exact_reference_available(metric)) {
+    cuda_ref <- tryCatch(
+      exact_reference_query_knn(x, rows, k, metric, n_threads, backend = "cuda"),
+      error = function(e) NULL
+    )
+    if (!is.null(cuda_ref)) {
+      return(list(
+        knn = cuda_ref,
+        rows = rows,
+        mode = "sample_cuda_exact"
+      ))
+    }
+  }
+  if (sample_ops > quality_max_ops) return(NULL)
   list(
-    knn = faissR::nn(
-      x,
-      points = x[rows, , drop = FALSE],
-      k = k,
-      backend = "cpu",
-      method = "exact",
-      metric = metric,
-      n_threads = n_threads
-    ),
+    knn = exact_reference_query_knn(x, rows, k, metric, n_threads, backend = "cpu"),
     rows = rows,
     mode = "sample"
   )
@@ -1936,7 +1990,7 @@ materials <- c(
   "When `--isolate_cuda_cagra=true`, CUDA CAGRA rows that request a provider selector are executed in a child R process. The child writes the KNN result back to the parent, which still computes quality against the same reference. The `isolated_process` and `child_status` columns make this auditable. Timings are measured inside the child around `faissR::nn()` so process start-up and result serialization are not counted as method time.",
   "`nn_metric_capabilities.csv` stores the default capability table used for non-CAGRA-provider-specific preflight, including `resolved_backend`, `runtime_available`, `runtime_reason`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. When `--cagra_implementations` contains one or more provider selectors, `nn_metric_cagra_capabilities.csv` stores the matching provider-specific capability tables with a `cagra_implementation` column, so FAISS GPU CAGRA and direct cuVS CAGRA expected skips can be audited separately. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
   "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_requested_backend`, `result_requested_method`, and `result_tuning` record the public request stored on successful `nn()` results. `auto_predicted_method`, `auto_predicted_device`, `auto_explicit_backend`, `auto_explicit_method`, `auto_backend_decision`, and `auto_method_decision` record the public method/device class and explicit-vs-auto decision fields predicted by `attr(result, \"auto_selection\")` for auto requests, without parsing internal backend labels. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes and auto-selection metadata, including deterministic FAISS HNSW `tuning_rule`, cuVS HNSW build metadata (`hnsw_build_algo`, `hnsw_hierarchy`, `hnsw_m`, `hnsw_ef_construction`), shape flags, explicit backend/method flags, backend/method decision reasons, predicted method/device, and no-pilot auto-selection reason when present. `tuning_status` records backend tuning status, or the deterministic no-pilot tuning rule for routes such as FAISS CPU HNSW.",
-  "Quality is computed against exact CPU references. Small datasets use a full exact self-KNN reference; larger datasets use a deterministic sample of query rows when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k. The raw table reports recall@k, median recall@k, minimum recall@k, mean relative distance error, and Spearman neighbour-rank correlation on the same exact-reference rows. The NN metric benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs.",
+  "Quality is computed against exact references. Small datasets use a full exact CPU self-KNN reference; larger datasets use a deterministic CPU sample when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. When the CPU operation cap would otherwise suppress recall but an exact CUDA route is available, compact very high-dimensional datasets can use `full_cuda_exact`, and sampled datasets up to the benchmark's guarded size limit can use `sample_cuda_exact`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k. The raw table reports recall@k, median recall@k, minimum recall@k, mean relative distance error, and Spearman neighbour-rank correlation on the same exact-reference rows. The NN metric benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs.",
   "`nn_metric_fastest_at_recall_threshold.csv` records the fastest successful method per dataset/backend/metric/k/cycle whose recall is at least `recall_threshold`.",
   "`nn_metric_auto_vs_fastest.csv` compares `method = \"auto\"` against that fastest high-recall row within the same cycle and records speed ratio, recall gap, whether auto itself was the fastest high-recall method, whether the result-facing backend matches, and whether the concrete implementation backend matches. Speed ratios and recall gaps are reported as `NA` when the required timing or recall values are missing or invalid.",
   "`nn_metric_cycle_summary.csv` aggregates successful rows across cycles by dataset/backend/method/CAGRA-implementation/metric/k and reports success counts, median/min/max elapsed time, recall stability, median mean relative distance error, median/min rank correlation, CPU thread count, preflight route, compact route-parameter metadata, tuning status, and the dominant implementation backend.",

@@ -523,14 +523,18 @@ unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.
 The config includes `available_datasets`, the validated real plus simulated
 dataset names accepted by the `--datasets` selector, which makes partial or
 subset reruns traceable to the full benchmark universe. Unexpected runtime
-errors remain ordinary failed rows. Recall is computed
-against exact CPU references when feasible. Small datasets use a full exact
-self-KNN reference; larger datasets use a deterministic sample of query rows
-when `quality_n * nrow(data) * ncol(data)` fits `--quality_max_ops`. The
-`recall_reference` and `recall_query_n` columns record whether recall used a
-full or sampled exact reference. The same exact-reference subset is also used
-to report `mean_relative_distance_error` and `rank_correlation`, so recall,
-distance quality, and rank agreement are evaluated on identical query rows.
+errors remain ordinary failed rows. Recall is computed against exact
+references when feasible. Small datasets use a full exact CPU self-KNN
+reference; larger datasets use a deterministic CPU sample of query rows when
+`quality_n * nrow(data) * ncol(data)` fits `--quality_max_ops`. When that CPU
+operation cap would otherwise suppress recall but an exact CUDA route is
+available, compact very high-dimensional datasets can use
+`recall_reference = "full_cuda_exact"`, and sampled datasets up to the guarded
+benchmark size limit can use `recall_reference = "sample_cuda_exact"`. The
+`recall_reference` and `recall_query_n` columns record which exact reference
+mode was used. The same exact-reference subset is also used to report
+`mean_relative_distance_error` and `rank_correlation`, so recall, distance
+quality, and rank agreement are evaluated on identical query rows.
 The script also writes
 `nn_metric_fastest_at_recall_threshold.csv`, which records the fastest
 successful method per dataset/backend/metric/k whose recall is at least
