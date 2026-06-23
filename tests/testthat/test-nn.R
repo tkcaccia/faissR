@@ -3941,6 +3941,7 @@ test_that("backend_info reports native availability without crashing", {
   expect_match(info$supported_metrics[info$backend == "cpu"], "correlation")
   expect_match(info$supported_metrics[info$backend == "cpu"], "inner_product")
   expect_match(info$supported_metrics[info$backend == "faiss_gpu_cuvs"], "CAGRA inner_product is disabled")
+  expect_match(info$supported_metrics[info$backend == "cuvs"], "direct brute force and direct IVF/PQ")
   expect_match(info$supported_metrics[info$backend == "cuvs"], "public CUDA NN-descent inner_product uses native CUDA")
 
   cuda_info <- faissR:::cuda_device_info_json_cpp()

@@ -265,8 +265,8 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
     paste0("n=", n),
     paste0("p=", p),
     paste0("centers=", centers),
-    paste0("n_per_center=", formatC(n_per_center, digits = 4, format = "fg")),
-    paste0("work=", format(work, scientific = TRUE)),
+    paste0("n_per_center=", format(n_per_center, digits = 6, trim = TRUE, scientific = FALSE)),
+    paste0("work=", sprintf("%.6e", work)),
     sep = ";"
   )
   if (!identical(tuning, "auto")) {
@@ -284,7 +284,8 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
       few_points_many_centers = isTRUE(few_points_many_centers),
       backend_policy = backend_policy,
       rule = "fixed_defaults",
-      rule_detail = rule_detail
+      rule_detail = rule_detail,
+      tuning_source = "cpp"
     ))
   }
   if (centers == 1L) {
@@ -302,7 +303,8 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
       few_points_many_centers = FALSE,
       backend_policy = backend_policy,
       rule = "single_cluster_exact_mean",
-      rule_detail = rule_detail
+      rule_detail = rule_detail,
+      tuning_source = "cpp"
     ))
   }
   if (centers == n) {
@@ -320,7 +322,8 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
       few_points_many_centers = TRUE,
       backend_policy = backend_policy,
       rule = "singleton_exact_identity",
-      rule_detail = rule_detail
+      rule_detail = rule_detail,
+      tuning_source = "cpp"
     ))
   }
   max_iter <- if (large_n || work >= 5e9) {
@@ -371,7 +374,8 @@ kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
     few_points_many_centers = isTRUE(few_points_many_centers),
     backend_policy = backend_policy,
     rule = rule,
-    rule_detail = rule_detail
+    rule_detail = rule_detail,
+    tuning_source = "cpp"
   )
 }
 

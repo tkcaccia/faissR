@@ -81,7 +81,9 @@ unavailable. CPU `method = "hnsw"` uses FAISS HNSW for all metrics when
 available and RcppHNSW/hnswlib when FAISS is unavailable.
 `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
 FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, native CPU NN-descent raw
-dot-product search, and native CUDA NN-descent candidate refinement.
+dot-product search, direct cuVS brute force through an exact MIPS-to-L2
+transform, direct cuVS IVF/PQ through transformed approximate L2 indexes,
+and native CUDA NN-descent candidate refinement.
 Direct cuVS NN-descent, CUDA cuVS HNSW, FAISS GPU CAGRA, and direct cuVS
 CAGRA do not expose a safe raw-inner-product route in faissR.
 Unsupported backend combinations fail clearly instead of returning neighbours

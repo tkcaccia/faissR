@@ -80,6 +80,9 @@ CUDA NN-descent has two Benchmark #1 rows: `faissR_cuda_cuvs_nndescent` covers
 the direct cuVS Euclidean/normalized-metric route, while
 `faissR_cuda_native_nndescent` covers raw inner-product candidate refinement
 through faissR's native CUDA kernel.
+Direct cuVS brute force and direct cuVS IVF/PQ rows are also benchmarked for
+raw inner product where the route uses faissR's maximum-inner-product-to-L2
+transform before calling the cuVS L2 kernel or index.
 The file `benchmark1_runtime_capabilities.csv` records the faissR Benchmark #1
 method/metric preflight table, including legacy Benchmark #1 method labels,
 equivalent public `nn()` routes where available, execution backends, metric

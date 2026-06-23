@@ -303,6 +303,9 @@ method_metric_applicable <- function(method, metric) {
     "faissR_faiss_gpu_ivf_flat",
     "faissR_faiss_gpu_ivfpq",
     "faissR_faiss_hnsw",
+    "faissR_cuda_cuvs_ivf_flat",
+    "faissR_cuda_cuvs_ivfpq",
+    "faissR_cuda_cuvs_bruteforce",
     "faissR_cpu_vamana",
     "faissR_cuda_vamana",
     "faissR_cpu_nsg",
@@ -399,7 +402,12 @@ method_dataset_applicable <- function(method, dataset) {
 
 method_is_exact <- function(method, metric) {
   if (identical(metric, "inner_product")) {
-    return(method %in% c("faissR_cpu_exact", "faissR_faiss_flat_l2", "faissR_faiss_gpu_flat_l2"))
+    return(method %in% c(
+      "faissR_cpu_exact",
+      "faissR_faiss_flat_l2",
+      "faissR_faiss_gpu_flat_l2",
+      "faissR_cuda_cuvs_bruteforce"
+    ))
   }
   method %in% c(
     "faissR_cpu_exact",
@@ -1627,7 +1635,7 @@ materials <- c(
   "The faissR CUDA/cuVS NN-descent output was saved for every dataset where the method completed successfully.",
   "",
   "faissR methods tested: exact CPU, RcppHNSW wrapper, FAISS Flat, FAISS CPU IVF/IVF-Flat, FAISS CPU IVFPQ, FAISS GPU Flat, FAISS GPU IVF-Flat with NVIDIA cuVS integration, FAISS GPU IVF-PQ with NVIDIA cuVS integration, FAISS HNSW, optional explicit FAISS NSG, native CPU/CUDA NSG candidate graph, native CPU NNDescent, CPU grid on simulated 2D/3D only, native CUDA exact, native CUDA IVF, CUDA grid on simulated 2D/3D only, direct RAPIDS cuVS IVF-Flat, direct RAPIDS cuVS IVF-PQ, direct cuVS brute force, direct cuVS CAGRA, and direct cuVS NN-descent.",
-  "Native CPU NNDescent is benchmarked for Euclidean, cosine, correlation, and raw inner-product metrics. Direct CUDA/cuVS NN-descent is benchmarked for Euclidean, cosine, and correlation; raw inner-product CUDA/cuVS NN-descent is recorded as unsupported.",
+  "Native CPU NNDescent is benchmarked for Euclidean, cosine, correlation, and raw inner-product metrics. Direct CUDA/cuVS brute force and direct CUDA/cuVS IVF/PQ are benchmarked for transformed raw inner product where available. Direct CUDA/cuVS NN-descent is benchmarked for Euclidean, cosine, and correlation; raw inner-product CUDA/cuVS NN-descent is recorded as unsupported.",
   "The Flat rows use the public `method = \"flat\"` route. When `metric = \"inner_product\"` is explicitly requested, faissR dispatches the same public Flat rows to the appropriate FAISS inner-product index internally instead of listing duplicate Flat-IP methods.",
   "For faissR rows, `execution_backend` records the internal backend label used by `nn_compute()`, while `public_backend` and `public_method` record the equivalent public `nn(..., backend = , method = )` route. This separates legacy benchmark labels from the public API.",
   "Successful faissR rows also record `result_backend`, `result_requested_backend`, `result_requested_method`, `result_tuning`, `resolved_backend`, `implementation_backend`, `auto_predicted_method`, `auto_predicted_device`, `auto_explicit_backend`, `auto_explicit_method`, `auto_backend_decision`, `auto_method_decision`, compact `route_parameters`, and `tuning_status`. These fields make deterministic no-pilot tuning choices, explicit backend/method requests, and concrete FAISS/cuVS/native routes explicit in the Benchmark #1 result table.",
