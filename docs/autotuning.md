@@ -45,10 +45,14 @@ implementation routes recorded in benchmark output, not separate public
 - Treat IVFPQ backends as memory-pressure tools, not accuracy-first defaults.
   Product quantization is useful for compression, but it changes recall
   behaviour [6].
-- Treat direct cuVS CAGRA as experimental on high-dimensional raw data unless
-  recall is measured or explicit pilot/cache tuning proves adequate recall. The FAISS GPU CAGRA route
-  (`method = "cagra"`, resolved as `faiss_gpu_cagra` when available) was
-  reliable in the same MNIST test where direct cuVS CAGRA was not [13-15].
+- Treat CUDA CAGRA as two separable decisions: the provider
+  (`faiss_gpu_cagra` through FAISS GPU/cuVS integration, or
+  `cuda_cuvs_cagra` through the direct RAPIDS cuVS C API) and, for direct cuVS
+  only, the graph-build algorithm. The public call remains
+  `method = "cagra"`; provider/build choices are recorded in result metadata.
+  Direct cuVS CAGRA should be benchmarked with measured recall on
+  high-dimensional raw data before being used as an accuracy-first default
+  [3,13-15].
 
 ## Method-Specific Settings
 
@@ -74,21 +78,38 @@ implementation routes recorded in benchmark output, not separate public
 | `nndescent` | `cpu_nndescent` speed/balanced tiers | CPU graph speed tier | Native faissR NN-descent route; useful as an explicit Euclidean, normalized cosine/correlation, or raw inner-product graph-search candidate, but recall was usually lower than HNSW. |
 | `nndescent` | `cuda_cuvs_nndescent` | CUDA graph speed tier | Fast and useful at around 0.99 recall on some datasets; failed on COIL20. |
 | `nndescent` | `cuda_native_nndescent` | CUDA raw inner-product tier | Native CUDA candidate-refinement route used by public `backend = "cuda", method = "nndescent", metric = "inner_product"` because direct cuVS NN-descent does not expose raw IP. |
-| `cagra` | `faiss_gpu_cagra` | CUDA graph high-recall tier | Reliable high-recall CAGRA path through FAISS/cuVS integration [13-15]. |
-| `cagra` | `cuda_cuvs_cagra` | Direct cuVS CAGRA | `tuning = "auto"` uses deterministic defaults; explicit `tuning = "cache"` or `"pilot"` adds a recall guard. Direct cuVS CAGRA had anomalously poor MNIST recall; do not trust without measured recall or pilot success. |
+| `cagra` | `faiss_gpu_cagra` | CUDA graph high-recall tier | FAISS `GpuIndexCagra` path using the FAISS GPU/cuVS integration when the linked FAISS build exposes it. This provider is selected by `cagra_implementation = "faiss_gpu"` and remains the default for most shapes when both providers are available [13-15]. |
+| `cagra` | `cuda_cuvs_cagra` with `ivf_pq` build | Direct cuVS CAGRA default large-shape builder | Direct RAPIDS cuVS CAGRA using the cuVS IVF-PQ graph builder. This can be fast, but high-dimensional compact matrices can request very large temporary workspace, so the auto build rule avoids it for COIL20-like shapes [3]. |
+| `cagra` | `cuda_cuvs_cagra` with `iterative_cagra_search` build | Direct cuVS compact high-dimensional builder | Direct RAPIDS cuVS CAGRA using iterative CAGRA graph construction. This is the default direct-cuVS build for compact high-dimensional self-KNN (`n <= 5000`, `p >= 1024`, `k <= 100`) because it avoids the IVF-PQ workspace spike observed on COIL20 while keeping the method as CAGRA. |
+| `cagra` | `cuda_cuvs_cagra` with `nn_descent` build | Direct cuVS experimental builder | Direct RAPIDS cuVS CAGRA using cuVS NN-descent graph construction. This failed on COIL20 in the current runtime with a CUDA invalid-argument error and should remain an explicit benchmark setting rather than an auto default. |
 | `grid` | `cpu_grid` | Exact 2D/3D spatial path | Best for simulated 2D/3D Euclidean/cosine/correlation data; unavailable by design outside 2D/3D. |
 | `grid` | `cuda_grid` | CUDA 2D/3D spatial path | Correct for 2D/3D, but benchmark speed depends strongly on GPU model and transfer overhead. |
 
-Public calls use `method = "cagra"` for both CUDA CAGRA providers. The route
-is selected by `options(faissR.cagra_implementation = "auto")`, `"faiss_gpu"`,
-or `"cuvs"`. The default `"auto"` is deterministic and shape-aware: compact
-high-dimensional self-KNN uses direct cuVS CAGRA when both providers are
-available, while other shapes keep FAISS GPU CAGRA as the default when it is
-available. Forcing `"cuvs"` is useful for isolated cuVS benchmarks, while
-forcing `"faiss_gpu"` isolates the FAISS GPU/cuVS integration path. Preflight
-availability checks respect this forced provider for supported metrics, and returned
-approximation metadata records `cagra_provider` plus
-`cagra_provider_option`.
+Public calls use `method = "cagra"` for both CUDA CAGRA providers. The provider
+is selected by `cagra_implementation = NULL`, `"auto"`, `"faiss_gpu"`, or
+`"cuvs"`; `NULL` uses `options(faissR.cagra_implementation = "auto")`. The
+default `"auto"` is deterministic and shape-aware: compact high-dimensional
+self-KNN uses direct cuVS CAGRA when both providers are available, while other
+shapes keep FAISS GPU CAGRA as the default when it is available. Forcing
+`"cuvs"` is useful for isolated cuVS benchmarks, while forcing `"faiss_gpu"`
+isolates the FAISS GPU/cuVS integration path. Preflight availability checks
+respect this forced provider for supported metrics, and returned approximation
+metadata records `cagra_provider` plus `cagra_provider_option`.
+
+Direct RAPIDS cuVS CAGRA has a second choice, `cagra_build_algo`. This is not a
+fallback to a different public method; it is the graph-construction algorithm
+inside cuVS CAGRA. `cagra_build_algo = "auto"` currently applies this no-pilot
+rule:
+
+| Direct-cuVS CAGRA shape | Automatic build algorithm | Reason |
+|---|---|---|
+| self-KNN, `n <= 5000`, `p >= 1024`, `k <= 100` | `iterative_cagra_search` | Compact high-dimensional matrices can make the IVF-PQ builder request excessive temporary workspace; the iterative builder was validated on COIL20. |
+| self-KNN with compact-tuning flag from the CAGRA parameter rule | `iterative_cagra_search` | Keeps small compact graph builds on the lower-workspace direct CAGRA path. |
+| non-self queries or other shapes | `ivf_pq` | cuVS IVF-PQ graph construction remains the general direct-cuVS CAGRA builder. |
+
+The explicit `"nn_descent"` builder is available for experiments, but it is not
+selected automatically because the Chiamaka COIL20 diagnostic failed inside the
+cuVS NN-descent CAGRA build with `cudaErrorInvalidValue`.
 
 Approximate routes now attach deterministic no-pilot tuning metadata to
 `attr(result, "approximation")`. IVF, IVFPQ/PQ, NSG, NN-descent, CAGRA, and
@@ -199,6 +220,13 @@ CPU-auto default.
   Default calls now use deterministic no-pilot parameters, so benchmark reports
   must include measured recall. Explicit pilot/cache tuning stops when it cannot
   meet the target recall instead of silently returning a poor result.
+- Direct cuVS CAGRA has provider-internal build modes with different memory and
+  robustness profiles. On Chiamaka, COIL20 (`1440 x 16384`, `k = 50`,
+  Euclidean) completed with FAISS GPU CAGRA, direct cuVS CAGRA `ivf_pq`, and
+  direct cuVS CAGRA `iterative_cagra_search`; the `ivf_pq` builder emitted a
+  temporary workspace warning around 45 GB, while `iterative_cagra_search`
+  completed fastest in that focused diagnostic. The direct cuVS `nn_descent`
+  builder failed with `cudaErrorInvalidValue`, so it is explicit-only.
 - Public CPU NSG now uses the native faissR NSG-style route for all metrics.
   Keep reporting recall before considering it as a broad auto default.
 - cuVS NN-Descent failed on COIL20 with a CUDA invalid-argument error. It should

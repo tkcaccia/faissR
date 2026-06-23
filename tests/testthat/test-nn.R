@@ -3931,6 +3931,23 @@ test_that("cuVS CAGRA reports actual and requested graph parameters", {
   expect_equal(approx$cagra_provider_option, "auto")
 })
 
+test_that("direct cuVS CAGRA auto build rule uses iterative construction for compact high-dimensional self-KNN", {
+  old_options <- options(faissR.cuvs_cagra_build_algo = "auto")
+  on.exit(options(old_options), add = TRUE)
+
+  coil20_like <- matrix(0, nrow = 1440L, ncol = 1024L)
+  params <- faissR:::cuvs_cagra_params(nrow(coil20_like), 50L, p = ncol(coil20_like))
+
+  expect_equal(
+    faissR:::cuvs_cagra_build_algo_for(coil20_like, 50L, self_query = TRUE, params = params),
+    "iterative_cagra_search"
+  )
+  expect_equal(
+    faissR:::cuvs_cagra_build_algo_for(coil20_like, 50L, self_query = FALSE, params = params),
+    "ivf_pq"
+  )
+})
+
 test_that("cuVS HNSW reports metric-aware CUDA results for all public metrics", {
   skip_if_not(cuvs_available())
 
