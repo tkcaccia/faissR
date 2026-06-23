@@ -580,9 +580,10 @@ and computes recall, while the raw table records `isolated_process` and
 `faissR::nn()`, so process launch and result serialization are auditable but
 not counted as NN search time. The NN metric benchmark also enables
 `--isolate_native_timeout=true` by default on Unix-like systems. High-work CPU
-`method = "exact"`, `method = "flat"`, and `method = "bruteforce"` rows then run
-inside forked workers so the benchmark can enforce an OS-level timeout even
-when the underlying C++/FAISS loop does not return control to R's
+rows for exhaustive methods (`exact`, `flat`, and `bruteforce`) and approximate
+graph/index methods (`auto`, `hnsw`, `ivf`, `ivfpq`, `vamana`, `nsg`, and
+`nndescent`) run inside forked workers so the benchmark can enforce an OS-level
+timeout even when the underlying C++/FAISS loop does not return control to R's
 `setTimeLimit()` handler. High-work CUDA/auto rows, including exhaustive
 `exact`/`flat`/`bruteforce` rows and graph/index rows, run inside Rscript child
 processes for the same reason. Timed-out workers are written as

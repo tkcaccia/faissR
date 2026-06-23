@@ -62,7 +62,7 @@ test_that("NN metric benchmark defaults cover full method metric backend and k g
   )
 })
 
-test_that("NN metric benchmark isolates high-work CPU exact timeout risks", {
+test_that("NN metric benchmark isolates high-work CPU native timeout risks", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
     "args <- parse_args()"
@@ -89,9 +89,54 @@ test_that("NN metric benchmark isolates high-work CPU exact timeout risks", {
       isolate_native_timeout = TRUE
     )
   )
-  expect_false(
+  expect_true(
     env$should_isolate_native_timeout(
       large_x,
+      backend = "cpu",
+      method = "hnsw",
+      preflight_route = "faiss_hnsw",
+      isolate_native_timeout = TRUE
+    )
+  )
+  expect_true(
+    env$should_isolate_native_timeout(
+      large_x,
+      backend = "cpu",
+      method = "auto",
+      preflight_route = "cpu_auto",
+      isolate_native_timeout = TRUE
+    )
+  )
+  expect_true(
+    env$should_isolate_native_timeout(
+      large_x,
+      backend = "cpu",
+      method = "ivf",
+      preflight_route = "faiss_ivf",
+      isolate_native_timeout = TRUE
+    )
+  )
+  expect_true(
+    env$should_isolate_native_timeout(
+      large_x,
+      backend = "cpu",
+      method = "nndescent",
+      preflight_route = "cpu_nndescent",
+      isolate_native_timeout = TRUE
+    )
+  )
+  expect_true(
+    env$should_isolate_native_timeout(
+      large_x,
+      backend = "auto",
+      method = "hnsw",
+      preflight_route = "faiss_hnsw",
+      isolate_native_timeout = TRUE
+    )
+  )
+  expect_false(
+    env$should_isolate_native_timeout(
+      small_x,
       backend = "cpu",
       method = "hnsw",
       preflight_route = "faiss_hnsw",
