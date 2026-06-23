@@ -417,6 +417,20 @@ read_peak_rss_gb <- function() {
   kb / 1024^2
 }
 
+safe_file_label <- function(x) {
+  out <- gsub("[^A-Za-z0-9_.-]+", "_", as.character(x))
+  out <- gsub("^_+|_+$", "", out)
+  if (!nzchar(out)) "dataset" else out
+}
+
+should_cache_child_dataset <- function(x, isolate_cuda_cagra, isolate_native_timeout) {
+  if (!isTRUE(isolate_cuda_cagra) && !isTRUE(isolate_native_timeout)) return(FALSE)
+  n <- nrow(x)
+  p <- ncol(x)
+  work <- as.double(n) * as.double(n) * as.double(p)
+  (is.finite(work) && work >= 5e10) || n >= 50000L
+}
+
 coerce_matrix <- function(x) {
   if (inherits(x, "Matrix")) x <- as.matrix(x)
   if (is.data.frame(x)) x <- data.matrix(x)
@@ -802,14 +816,16 @@ run_nn_fork_process <- function(x, backend, method, metric, k, n_threads, seed,
 }
 
 run_nn_child_process <- function(x, backend, method, metric, k, n_threads, seed,
-                                 timeout, cagra_implementation, cagra_build_algo) {
+                                 timeout, cagra_implementation, cagra_build_algo,
+                                 x_child_path = NULL) {
   input <- tempfile("faissR_nn_child_input_", fileext = ".rds")
   output <- tempfile("faissR_nn_child_output_", fileext = ".rds")
   script <- tempfile("faissR_nn_child_", fileext = ".R")
   on.exit(unlink(c(input, output, script), force = TRUE), add = TRUE)
   saveRDS(
     list(
-      x = x,
+      x = if (is.null(x_child_path)) x else NULL,
+      x_child_path = x_child_path %||% NA_character_,
       backend = backend,
       method = method,
       metric = metric,
@@ -856,6 +872,11 @@ run_nn_child_process <- function(x, backend, method, metric, k, n_threads, seed,
     "        faissR.cuvs_cagra_tune_seed = as.integer(cfg$seed + 23L))",
     "set.seed(as.integer(cfg$seed))",
     "suppressPackageStartupMessages(library(faissR))",
+    "x_child_path <- cfg$x_child_path %||% NA_character_",
+    "if (is.null(cfg$x) && !is.na(x_child_path) && nzchar(x_child_path)) {",
+    "  cfg$x <- readRDS(x_child_path)",
+    "}",
+    "if (is.null(cfg$x)) stop(\"child process did not receive a dataset matrix\")",
     "started <- proc.time()[[\"elapsed\"]]",
     "result <- tryCatch({",
     "  out <- with_elapsed_limit({",
@@ -1763,7 +1784,8 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
                     isolate_cuda_cagra = FALSE,
                     isolate_native_timeout = TRUE,
                     preflight_cpu_exhaustive_timeout = FALSE,
-                    preflight_cpu_exhaustive_timeout_ops = 5e10) {
+                    preflight_cpu_exhaustive_timeout_ops = 5e10,
+                    x_child_path = NULL) {
   started <- proc.time()[["elapsed"]]
   old_options <- options(
     faissR.approx_knn_seed = as.integer(seed),
@@ -1843,7 +1865,8 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
           seed = seed,
           timeout = timeout,
           cagra_implementation = cagra_implementation,
-          cagra_build_algo = cagra_build_algo
+          cagra_build_algo = cagra_build_algo,
+          x_child_path = x_child_path
         )
       } else {
         run_nn_fork_process(
@@ -2108,6 +2131,15 @@ for (dataset_name in datasets) {
     next
   }
   x <- loaded$data
+  x_child_path <- NULL
+  if (should_cache_child_dataset(x, isolate_cuda_cagra, isolate_native_timeout)) {
+    x_child_path <- tempfile(
+      paste0("nn_metric_child_", safe_file_label(dataset_name), "_"),
+      tmpdir = out_dir,
+      fileext = ".rds"
+    )
+    saveRDS(x, x_child_path)
+  }
   references <- new.env(parent = emptyenv())
   for (metric in metrics) {
     for (k in k_values) {
@@ -2175,7 +2207,8 @@ for (dataset_name in datasets) {
                     isolate_cuda_cagra = isolate_cuda_cagra,
                     isolate_native_timeout = isolate_native_timeout,
                     preflight_cpu_exhaustive_timeout = preflight_cpu_exhaustive_timeout,
-                    preflight_cpu_exhaustive_timeout_ops = preflight_cpu_exhaustive_timeout_ops
+                    preflight_cpu_exhaustive_timeout_ops = preflight_cpu_exhaustive_timeout_ops,
+                    x_child_path = x_child_path
                   )
                 }
                 results[[row_id]] <- row
@@ -2201,6 +2234,7 @@ for (dataset_name in datasets) {
       }
     }
   }
+  if (!is.null(x_child_path)) unlink(x_child_path, force = TRUE)
   rm(x, loaded, references)
   gc()
 }
@@ -2317,6 +2351,7 @@ materials <- c(
   "`nn_metric_benchmark_config.csv` records the run configuration, the loaded faissR version, package path, namespace path, R library paths, and the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, the requested CAGRA implementation for public `method = \"cagra\"` rows and for CUDA-capable `method = \"auto\"` rows only when the shape-aware auto selector predicts a CAGRA route, the requested direct-cuVS `cagra_build_algo` when `cagra_implementation = \"cuvs\"`, optional child-process isolation fields, and resolved backend fields.",
   "When `--isolate_cuda_cagra=true`, CUDA CAGRA rows that request a provider selector are executed in a child R process. The child writes the KNN result back to the parent, which still computes quality against the same reference. The `isolated_process` and `child_status` columns make this auditable. Timings are measured inside the child around `faissR::nn()` so process start-up and result serialization are not counted as method time.",
   "When `--isolate_native_timeout=true` (the default on Unix-like systems), high-work CPU `method = \"exact\"`, `method = \"flat\"`, and `method = \"bruteforce\"` rows are executed in a forked worker process. High-work CUDA/auto graph or index rows such as `hnsw`, `ivf`, `ivfpq`, `vamana`, `nsg`, `nndescent`, and CUDA-selected `auto` rows are executed in a separate Rscript child process. This gives the benchmark an OS-level timeout for native code paths that may not check R's `setTimeLimit()` while inside C++/FAISS/cuVS loops, and records timed-out rows with `child_status = \"timeout\"` instead of blocking subsequent rows.",
+  "For large datasets that require child-process isolation, the parent writes one temporary per-dataset matrix cache in the output directory and passes that path to each child job. This avoids repeatedly embedding the full matrix in every small child-job configuration file while preserving the same measured method timing inside the child.",
   "When `--preflight_cpu_exhaustive_timeout=true`, high-work CPU exhaustive rows are recorded as `status = \"timeout\"` with `child_status = \"preflight_timeout\"` before launching native code. This opt-in mode is intended for large all-method sweeps after at least one equivalent exhaustive CPU route has demonstrated that the 600-second cap is binding.",
   "`nn_metric_capabilities.csv` stores the default capability table used for non-CAGRA-provider-specific preflight, including `resolved_backend`, `runtime_available`, `runtime_reason`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. When `--cagra_implementations` contains one or more provider selectors, `nn_metric_cagra_capabilities.csv` stores the matching provider-specific capability tables with a `cagra_implementation` column, so FAISS GPU CAGRA and direct cuVS CAGRA expected skips can be audited separately. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
   "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_requested_backend`, `result_requested_method`, and `result_tuning` record the public request stored on successful `nn()` results. `auto_predicted_method`, `auto_predicted_device`, `auto_explicit_backend`, `auto_explicit_method`, `auto_backend_decision`, and `auto_method_decision` record the public method/device class and explicit-vs-auto decision fields predicted by `attr(result, \"auto_selection\")` for auto requests, without parsing internal backend labels. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes and auto-selection metadata, including deterministic FAISS HNSW `tuning_rule`, cuVS HNSW build metadata (`hnsw_build_algo`, `hnsw_hierarchy`, `hnsw_m`, `hnsw_ef_construction`), shape flags, explicit backend/method flags, backend/method decision reasons, predicted method/device, and no-pilot auto-selection reason when present. `tuning_status` records backend tuning status, or the deterministic no-pilot tuning rule for routes such as FAISS CPU HNSW.",
