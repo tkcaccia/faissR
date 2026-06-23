@@ -30,13 +30,15 @@ reused.}
 
 \item{tuning}{Tuning policy used for this prediction call. `"auto"` uses the
 deterministic default for the resolved method; pilot/cache tuning is
-opt-in.}
+opt-in where implemented. FAISS GPU IVF pilot/cache tuning is
+Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware
+defaults.}
 
 \item{cagra_implementation}{CUDA CAGRA provider for this prediction call.
-\code{NULL} reuses the fitted model's setting, then the global option.}
+`NULL` reuses the fitted model's setting, then the global option.}
 
 \item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm for
-this prediction call. \code{NULL} reuses the fitted model's setting, then the
+this prediction call. `NULL` reuses the fitted model's setting, then the
 global option.}
 
 \item{vote}{`"majority"` or `"weighted"` for classification; `"majority"`

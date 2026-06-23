@@ -552,7 +552,7 @@ test_that("GitHub and reference docs describe direct cuVS brute-force metric sco
     prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
     expect_true(
       grepl("direct cuVS brute force", prose, ignore.case = TRUE) &&
-        grepl("Euclidean/L2", prose, fixed = TRUE) &&
+        grepl("maximum-inner-product-to-L2", prose, fixed = TRUE) &&
         grepl("FAISS GPU Flat", prose, fixed = TRUE),
       info = basename(docs_file)
     )

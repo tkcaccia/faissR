@@ -773,9 +773,9 @@ test_that("nn_capabilities documents the public method metric matrix", {
   ]
   expect_match(cuda_bruteforce_l2$implementation, "cuVS brute force")
   expect_match(cuda_bruteforce_l2$notes, "direct cuVS brute force")
-  expect_equal(cuda_bruteforce_cor$implementation, "FAISS GPU Flat")
+  expect_match(cuda_bruteforce_cor$implementation, "cuVS brute force")
   expect_match(cuda_bruteforce_cor$notes, "FAISS GPU Flat")
-  expect_match(cuda_bruteforce_cor$notes, "Euclidean/L2-only")
+  expect_match(cuda_bruteforce_cor$notes, "exact metric transforms")
 
   cuda_auto_cosine <- caps[
     caps$backend == "cuda" & caps$method == "auto" & caps$metric == "cosine",
@@ -1016,7 +1016,7 @@ test_that("cuda_auto runtime availability distinguishes cuVS and FAISS GPU metri
   expect_true(cosine_cuvs_only$available)
   expect_match(cosine_cuvs_only$notes, "shape-dependent")
   expect_match(cosine_cuvs_only$notes, "cuVS graph")
-  expect_match(cosine_cuvs_only$notes, "FAISS GPU Flat")
+  expect_match(cosine_cuvs_only$notes, "transformed cuVS brute force")
 
   correlation_native_cuda <- faissR:::nn_cuda_auto_runtime_available(
     "correlation",
@@ -1057,7 +1057,8 @@ test_that("cuda_auto runtime availability distinguishes cuVS and FAISS GPU metri
   expect_false(ip_cuvs_only$available)
   expect_equal(ip_cuvs_only$reason, "missing_cuda_route")
   expect_match(ip_cuvs_only$notes, "cuVS")
-  expect_match(ip_cuvs_only$notes, "disabled")
+  expect_match(ip_cuvs_only$notes, "does not yet select")
+  expect_match(ip_cuvs_only$notes, "Explicit CUDA exact/brute-force")
 })
 
 test_that("backend auto explicit methods require metric-capable CUDA routes before selecting CUDA", {
@@ -1091,6 +1092,19 @@ test_that("backend auto explicit methods require metric-capable CUDA routes befo
     ),
     "cuda"
   )
+  for (metric in c("cosine", "correlation", "inner_product")) {
+    expect_equal(
+      faissR:::resolve_auto_public_nn_device(
+        "bruteforce",
+        metric,
+        cuda_available_value = FALSE,
+        cuvs_available_value = TRUE,
+        faiss_gpu_available_value = FALSE
+      ),
+      "cuda",
+      info = metric
+    )
+  }
   expect_equal(
     faissR:::resolve_auto_public_nn_device(
       "nndescent",
@@ -1355,10 +1369,17 @@ test_that("non-euclidean metrics use only validated backend paths", {
     internal_nn(x, k = 4L, backend = "cuda_cuvs_ivfpq", metric = "inner_product"),
     "Direct cuVS IVF.*inner-product"
   )
-  expect_error(
-    internal_nn(x, k = 4L, backend = "cuda_cuvs_bruteforce", metric = "correlation"),
-    "Direct cuVS brute-force.*euclidean"
-  )
+  if (isTRUE(cuvs_available())) {
+    cuvs_cor <- internal_nn(x, k = 4L, backend = "cuda_cuvs_bruteforce", metric = "correlation")
+    expect_equal(attr(cuvs_cor, "backend"), "cuda_cuvs_bruteforce")
+    expect_equal(attr(cuvs_cor, "metric"), "correlation")
+    expect_equal(attr(cuvs_cor, "cuvs")$metric, "correlation")
+  } else {
+    expect_error(
+      internal_nn(x, k = 4L, backend = "cuda_cuvs_bruteforce", metric = "correlation"),
+      "cuVS"
+    )
+  }
   if (requireNamespace("RcppHNSW", quietly = TRUE)) {
     hnsw_ip <- internal_nn(x, k = 4L, backend = "hnsw", metric = "inner_product", n_threads = 2L)
     expect_equal(attr(hnsw_ip, "metric"), "inner_product")
@@ -2266,7 +2287,7 @@ test_that("public backend and method resolver maps device plus method", {
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "bruteforce", "correlation"),
-    "faiss_gpu_flat_correlation"
+    if (cuvs_available()) "cuda_cuvs_bruteforce" else "faiss_gpu_flat_correlation"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "ivf", "inner_product"),
@@ -4047,15 +4068,27 @@ test_that("CUDA NN-descent requests use RAPIDS cuVS", {
   expect_gt(recall$recall_at_k, 0.65)
 })
 
-test_that("cuVS brute force reports Euclidean metric metadata", {
+test_that("cuVS brute force reports metric metadata for transformed exact routes", {
   skip_if_not(cuvs_available())
 
+  set.seed(4054)
   x <- matrix(rnorm(80L), nrow = 20L)
-  out <- internal_nn(x, k = 4L, backend = "cuda_cuvs_bruteforce", metric = "euclidean")
 
-  expect_equal(attr(out, "metric"), "euclidean")
-  expect_equal(attr(out, "cuvs")$metric, "euclidean")
-  expect_equal(attr(out, "cuvs")$resolved_backend, "cuda_cuvs_bruteforce")
+  for (metric in c("euclidean", "cosine", "correlation", "inner_product")) {
+    out <- internal_nn(x, k = 4L, backend = "cuda_cuvs_bruteforce", metric = metric)
+    exact <- nn(x, k = 4L, backend = "cpu", method = "exact", metric = metric, n_threads = 2L)
+
+    expect_equal(attr(out, "metric"), metric, info = metric)
+    expect_equal(attr(out, "backend"), "cuda_cuvs_bruteforce", info = metric)
+    expect_equal(attr(out, "cuvs")$metric, metric, info = metric)
+    expect_equal(attr(out, "cuvs")$resolved_backend, "cuda_cuvs_bruteforce", info = metric)
+    if (!identical(metric, "euclidean")) {
+      expect_false(is.na(attr(out, "cuvs")$transform), info = metric)
+      expect_false(is.na(attr(out, "cuvs")$distance_transform), info = metric)
+    }
+    expect_equal(out$indices, exact$indices, info = metric)
+    expect_equal(out$distances, exact$distances, tolerance = 1e-4, info = metric)
+  }
 })
 
 test_that("direct cuVS IVF routes report metric metadata", {

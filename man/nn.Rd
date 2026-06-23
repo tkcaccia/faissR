@@ -81,10 +81,9 @@ unavailable. CPU `method = "hnsw"` uses FAISS HNSW for all metrics when
 available and RcppHNSW/hnswlib when FAISS is unavailable.
 `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
 FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, native CPU NN-descent raw
-dot-product search, and native CUDA NN-descent candidate refinement. CUDA
-cuVS HNSW, FAISS GPU CAGRA, and direct cuVS CAGRA do not currently expose a
-safe transformed raw-inner-product route. Direct cuVS NN-descent also does
-not expose safe raw-inner-product search.
+dot-product search, and native CUDA NN-descent candidate refinement.
+Direct cuVS NN-descent, CUDA cuVS HNSW, FAISS GPU CAGRA, and direct cuVS
+CAGRA do not expose a safe raw-inner-product route in faissR.
 Unsupported backend combinations fail clearly instead of returning neighbours
 computed under a different metric.}
 
@@ -107,20 +106,21 @@ approximation metadata. Advanced tuning and cache knobs use
 
 \item{cagra_implementation}{CUDA CAGRA provider for this call. `NULL` uses
 the global `options(faissR.cagra_implementation = ...)` value. `"auto"`
-uses a deterministic provider rule: compact high-dimensional self-KNN selects
-direct RAPIDS cuVS CAGRA when both providers are available, while FAISS GPU
-CAGRA remains the default for other shapes. `"faiss_gpu"` and `"cuvs"` force
-one provider for benchmarking.
+uses a deterministic provider rule: compact high-dimensional self-KNN
+selects direct RAPIDS cuVS CAGRA when both providers are available, while
+FAISS GPU CAGRA remains the default for other shapes. `"faiss_gpu"` and
+`"cuvs"` force one provider for benchmarking.
 This argument affects only public `backend = "cuda", method = "cagra"`
 requests and CUDA-auto routes that select CAGRA.}
 
 \item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm for
 this call. `NULL` uses `options(faissR.cuvs_cagra_build_algo = "auto")`.
-`"auto"` applies faissR's deterministic shape-aware CAGRA build rule, choosing
-iterative CAGRA construction for compact high-dimensional self-KNN cases and
-IVF-PQ construction otherwise. `"ivf_pq"` requests the IVF-PQ graph builder,
-`"nn_descent"` requests cuVS NN-descent graph construction, and
-`"iterative_cagra_search"` requests cuVS iterative CAGRA graph building.
+`"auto"` applies faissR's deterministic shape-aware CAGRA build rule,
+choosing iterative CAGRA construction for compact high-dimensional
+self-KNN cases and IVF-PQ construction otherwise. `"ivf_pq"` requests the
+IVF-PQ graph builder, `"nn_descent"` requests cuVS NN-descent graph
+construction, and `"iterative_cagra_search"` requests cuVS iterative CAGRA
+graph building.
 This is a CAGRA construction parameter, not a fallback to a different
 public method; successful results record the selected value in
 `attr(result, "approximation")$cagra_build_algo`.}
@@ -183,26 +183,30 @@ Method descriptions:
   depending on data shape, size, and available libraries. CUDA auto uses CUDA
   grid for 2D/3D Euclidean/cosine/correlation
   self-KNN, exact FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for
-  Euclidean searches when appropriate, FAISS GPU/direct cuVS CAGRA for large
-  cosine/correlation self-KNN, cuVS HNSW for explicit CUDA HNSW requests, and
-  FAISS GPU Flat IP or native CUDA candidate refinement for inner-product
-  routes when available
+  Euclidean searches when appropriate, cuVS HNSW for explicit CUDA HNSW
+  requests, FAISS GPU Flat IP routes for exact inner-product searches when
+  FAISS GPU Flat is available, faissR native CUDA candidate refinement for
+  large raw-inner-product self-KNN, and transformed direct cuVS brute force
+  for explicit CUDA exact/brute-force non-Euclidean searches when cuVS is
+  available
   [1-3,5,13-15,22-23]. When `backend = "auto"` is
   combined with an explicit method, faissR first checks whether that exact
   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU
   route when that method/metric is supported on CPU.
   \item `"exact"`: exact nearest-neighbour search. CPU uses faissR's native
   exact route; CUDA uses FAISS GPU Flat when the linked FAISS build reports
-  GPU support. Euclidean CUDA exact search can otherwise use direct cuVS
-  brute force when available; cosine, correlation, and inner product require
-  FAISS GPU Flat metric-aware routes [1-3,16].
+  GPU support. CUDA exact search can otherwise use direct cuVS brute force
+  when available: Euclidean uses cuVS L2 directly, cosine/correlation use
+  normalized Euclidean search, and inner product uses an exact
+  maximum-inner-product-to-L2 transform [1-3,16].
   \item `"flat"`: FAISS Flat exhaustive index. CPU and FAISS GPU support
   L2, IP, and normalized-IP cosine/correlation routes when available
   [1-2,16].
   \item `"bruteforce"`: exhaustive brute-force search. CPU maps to exact
-  CPU search. On CUDA, Euclidean prefers RAPIDS cuVS brute force; cosine,
-  correlation, and inner product use FAISS GPU Flat when available because
-  direct cuVS brute force is Euclidean/L2-only in faissR [1-3,16].
+  CPU search. On CUDA, RAPIDS cuVS brute force is preferred when available;
+  cosine/correlation use normalized Euclidean search and inner product uses
+  an exact maximum-inner-product-to-L2 transform around the cuVS L2 kernel
+  [1-3,16].
   \item `"grid"`: native exact 2D/3D spatial grid search for Euclidean,
   cosine, and correlation self-KNN. Cosine/correlation use normalized
   Euclidean grid search. Explicit grid requests error for
@@ -226,25 +230,23 @@ Method descriptions:
   and normalized-IP cosine/correlation routes on CPU and FAISS GPU [1-2,6,16].
   It reuses the metric-aware IVF probing defaults. IVF and PQ parameter
   selectors record deterministic tuning metadata; PQ fields use
-  `pq_tuning_*` names. CPU IVFPQ requires at least 624 training rows, the
-  minimum needed for FAISS' smallest supported 4-bit product quantizer without
-  undertrained-codebook warnings; for 624-9,983 rows, auto tuning uses 4-bit PQ
-  rather than the 8-bit default.
+  `pq_tuning_*` names. CPU IVFPQ requires at least 624 training rows; for
+  624-9,983 rows, auto tuning uses 4-bit PQ rather than the 8-bit default.
   \item `"vamana"`: DiskANN/Vamana-style robust-pruned candidate graph
   implemented in faissR [24]. CPU refines exact top-k within candidate rows
   using native CPU scoring; CUDA refines candidates with faissR's native
-  CUDA row-candidate kernel. The first \code{k} exact seed neighbours are
+  CUDA row-candidate kernel. The first `k` exact seed neighbours are
   protected before robust pruning so pruning cannot discard neighbours
   already found by the seed generator. cuVS Vamana is acknowledged for GPU
   build/serialization, but current cuVS documentation does not expose KNN
   search for this index.
   \item `"nsg"`: Navigating Spreading-out Graph style approximate search
   [16,21,29]. CPU uses faissR's native NSG-style self-KNN candidate graph for
-  all public metrics to avoid unsafe linked-FAISS graph construction. CUDA uses
-  faissR's native NSG-style self-KNN candidate graph for all public metrics;
-  cosine/correlation use normalized Euclidean search and raw inner product uses
-  shifted dot-product distances. The first \code{k} exact seed neighbours are
-  protected before NSG/MRNG-style pruning.
+  all public metrics to avoid unsafe linked-FAISS graph construction. CUDA
+  uses faissR's native NSG-style self-KNN candidate graph for all public
+  metrics; cosine/correlation use normalized Euclidean search and raw inner
+  product uses shifted dot-product distances. The first `k` exact seed
+  neighbours are protected before NSG/MRNG-style pruning.
   \item `"nndescent"`: NN-descent approximate graph construction via
   faissR's native CPU route, direct cuVS on CUDA for Euclidean/L2 plus
   normalized cosine/correlation, or faissR's native CUDA candidate-refinement

@@ -176,14 +176,6 @@ nn_compute <- function(data,
         "inner-product routes.",
         call. = FALSE
       )
-    } else if (backend %in% c("cuvs_bruteforce", "cuda_cuvs_bruteforce", "cuda_cuvs_exact")) {
-      stop(
-        "Direct cuVS brute-force backends currently support only ",
-        "`metric = \"euclidean\"`. Use public `backend = \"cuda\", ",
-        "method = \"exact\"`, `\"bruteforce\"`, or `\"flat\"` for ",
-        "FAISS GPU metric-aware exact routes.",
-        call. = FALSE
-      )
     } else if (identical(metric, "inner_product") &&
                backend %in% c("cuda_cuvs_hnsw", "cuvs_hnsw")) {
       stop(
@@ -1474,23 +1466,31 @@ nn_compute <- function(data,
   }
 
   if (backend %in% c("cuvs_bruteforce", "cuda_cuvs_bruteforce", "cuda_cuvs_exact")) {
-    if (!identical(metric, "euclidean")) {
-      stop(
-        "Direct cuVS brute-force backends currently support only ",
-        "`metric = \"euclidean\"`.",
-        call. = FALSE
-      )
-    }
     require_cuvs_backend("cuVS brute-force")
+    metric_inputs <- NULL
+    search_data <- data
+    search_points <- points
+    if (metric %in% c("cosine", "correlation")) {
+      metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric)
+      search_data <- metric_inputs$data
+      search_points <- metric_inputs$points
+    } else if (identical(metric, "inner_product")) {
+      metric_inputs <- mips_l2_metric_inputs(data, points, self_query)
+      search_data <- metric_inputs$data
+      search_points <- metric_inputs$points
+    }
     out <- nn_cuvs_bruteforce_cpp(
-      data,
-      points,
+      search_data,
+      search_points,
       as.integer(k),
       isTRUE(exclude_self)
     )
     resolved_backend <- "cuda_cuvs_bruteforce"
     result_backend <- if (requested_backend %in% c("cuda", "gpu")) requested_backend else resolved_backend
     result <- finish_nn_result(out, result_backend, k, self_query, exact = TRUE, metric = metric)
+    if (!is.null(metric_inputs)) {
+      result <- finalize_graph_metric_result(result, metric_inputs)
+    }
     if (!identical(result_backend, resolved_backend)) {
       attr(result, "resolved_backend") <- resolved_backend
     }
@@ -1499,7 +1499,12 @@ nn_compute <- function(data,
       library = "cuvs",
       backend = "cuda",
       resolved_backend = resolved_backend,
-      metric = metric
+      metric = metric,
+      transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
+      distance_transform = if (is.null(metric_inputs)) NA_character_ else (
+        metric_inputs$distance_transform %||%
+          "normalized_euclidean_squared_over_2_to_1_minus_similarity"
+      )
     )
     return(result)
   }
@@ -2251,28 +2256,37 @@ nn_cuda_auto_runtime_available <- function(metric,
     ))
   }
   if (identical(metric, "inner_product")) {
-    ok <- isTRUE(faiss_gpu_available_value) || isTRUE(cuda_available_value)
+    ok <- isTRUE(faiss_gpu_available_value) ||
+      isTRUE(cuda_available_value)
     return(list(
       available = ok,
       reason = if (ok) "available" else "missing_cuda_route",
       notes = if (isTRUE(faiss_gpu_available_value)) {
         "CUDA auto raw-inner-product route is available through FAISS GPU Flat IP."
+      } else if (isTRUE(cuda_available_value) && isTRUE(cuvs_available_value)) {
+        paste(
+          "CUDA auto raw-inner-product route is shape-dependent on this runtime:",
+          "large self-KNN graph searches can use faissR's native CUDA",
+          "candidate-refinement route, while explicit CUDA exact/brute-force",
+          "calls can use transformed cuVS brute force."
+        )
       } else if (isTRUE(cuda_available_value)) {
         paste(
           "CUDA auto raw-inner-product route is shape-dependent on this runtime:",
           "self-KNN graph searches can use faissR's native CUDA",
           "candidate-refinement route, while exact or query inner-product search",
-          "requires FAISS GPU Flat."
+          "requires FAISS GPU Flat or cuVS brute force."
         )
       } else if (isTRUE(cuvs_available_value)) {
         paste(
           "A cuVS runtime was detected, but CUDA auto raw-inner-product search",
-          "needs FAISS GPU Flat IP or faissR's native CUDA self-KNN",
-          "candidate-refinement route. cuVS CAGRA/HNSW raw-inner-product routes",
-          "are disabled in faissR."
+          "does not yet select the transformed cuVS brute-force route.",
+          "Explicit CUDA exact/brute-force calls can use transformed direct",
+          "cuVS brute force; CAGRA/HNSW raw-inner-product graph routes are",
+          "disabled in faissR."
         )
       } else {
-        "CUDA auto raw-inner-product search requires FAISS GPU Flat IP or faissR's native CUDA self-KNN candidate-refinement route."
+        "CUDA auto raw-inner-product search requires FAISS GPU Flat IP, transformed cuVS brute force, or faissR's native CUDA self-KNN candidate-refinement route."
       }
     ))
   }
@@ -2287,8 +2301,8 @@ nn_cuda_auto_runtime_available <- function(metric,
     } else if (isTRUE(cuvs_available_value) && metric %in% c("cosine", "correlation")) {
       paste(
         "CUDA auto non-Euclidean route is shape-dependent on this runtime:",
-        "large self-KNN graph searches can use cuVS graph routes, while",
-        "general exact non-Euclidean search still requires FAISS GPU Flat."
+        "large self-KNN graph searches can use cuVS graph routes, and",
+        "explicit exact/brute-force calls can use transformed cuVS brute force."
       )
     } else if (isTRUE(cuda_available_value) && metric %in% c("cosine", "correlation")) {
       paste(
@@ -2419,8 +2433,8 @@ nn_capability_row <- function(method, backend, metric) {
         implementation <- "FAISS GPU Flat or cuVS brute force"
         notes <- "Euclidean CUDA exact/brute-force search can use FAISS GPU Flat when available, otherwise direct cuVS brute force when cuVS is available."
       } else {
-        implementation <- "FAISS GPU Flat"
-        notes <- "CUDA cosine, correlation, and inner-product exact/brute-force search require FAISS GPU Flat metric-aware routes; direct cuVS brute force is Euclidean/L2-only in faissR."
+        implementation <- "FAISS GPU Flat or transformed cuVS brute force"
+        notes <- "CUDA cosine, correlation, and inner-product exact/brute-force search can use FAISS GPU Flat metric-aware routes or direct cuVS brute force with exact metric transforms."
       }
     }
   } else if (identical(method, "flat")) {
@@ -2654,10 +2668,22 @@ resolve_public_nn_backend <- function(backend,
   } else {
     if (metric %in% c("cosine", "correlation") &&
         method %in% c("exact", "bruteforce", "flat")) {
+      if (identical(method, "bruteforce") && isTRUE(cuvs_available())) {
+        return("cuda_cuvs_bruteforce")
+      }
+      if (identical(method, "exact") && !isTRUE(faiss_gpu_available()) && isTRUE(cuvs_available())) {
+        return("cuda_cuvs_bruteforce")
+      }
       return(if (identical(metric, "correlation")) "faiss_gpu_flat_correlation" else "faiss_gpu_flat_cosine")
     }
     if (identical(metric, "inner_product") &&
         method %in% c("exact", "bruteforce", "flat")) {
+      if (identical(method, "bruteforce") && isTRUE(cuvs_available())) {
+        return("cuda_cuvs_bruteforce")
+      }
+      if (identical(method, "exact") && !isTRUE(faiss_gpu_available()) && isTRUE(cuvs_available())) {
+        return("cuda_cuvs_bruteforce")
+      }
       return("faiss_gpu_flat_ip")
     }
     if (identical(metric, "inner_product") && identical(method, "cagra")) {
@@ -2970,12 +2996,18 @@ public_nn_cuda_route_available <- function(method,
     if (identical(method, "nndescent")) return(isTRUE(cuda_available_value))
     if (identical(method, "cagra")) return(FALSE)
     if (identical(method, "hnsw")) return(FALSE)
-    return(method %in% c("exact", "bruteforce", "flat", "ivf", "ivfpq", "vamana") &&
+    if (method %in% c("exact", "bruteforce")) {
+      return(isTRUE(faiss_gpu_available_value) || isTRUE(cuvs_available_value))
+    }
+    return(method %in% c("flat", "ivf", "ivfpq", "vamana") &&
       isTRUE(faiss_gpu_available_value))
   }
   if (identical(method, "hnsw")) return(isTRUE(cuvs_available_value))
   if (metric %in% c("cosine", "correlation")) {
-    if (method %in% c("exact", "bruteforce", "flat", "ivf", "ivfpq")) {
+    if (method %in% c("exact", "bruteforce")) {
+      return(isTRUE(faiss_gpu_available_value) || isTRUE(cuvs_available_value))
+    }
+    if (method %in% c("flat", "ivf", "ivfpq")) {
       return(isTRUE(faiss_gpu_available_value))
     }
     if (identical(method, "grid")) return(isTRUE(cuda_available_value))
@@ -6333,24 +6365,29 @@ grid_self_knn <- function(data,
 #'   grid for 2D/3D Euclidean/cosine/correlation
 #'   self-KNN, exact FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for
 #'   Euclidean searches when appropriate, cuVS HNSW for explicit CUDA HNSW
-#'   requests, and FAISS GPU Flat IP routes for exact inner-product searches
-#'   when FAISS GPU Flat is available
+#'   requests, FAISS GPU Flat IP routes for exact inner-product searches when
+#'   FAISS GPU Flat is available, faissR native CUDA candidate refinement for
+#'   large raw-inner-product self-KNN, and transformed direct cuVS brute force
+#'   for explicit CUDA exact/brute-force non-Euclidean searches when cuVS is
+#'   available
 #'   [1-3,5,13-15,22-23]. When `backend = "auto"` is
 #'   combined with an explicit method, faissR first checks whether that exact
 #'   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU
 #'   route when that method/metric is supported on CPU.
 #'   \item `"exact"`: exact nearest-neighbour search. CPU uses faissR's native
 #'   exact route; CUDA uses FAISS GPU Flat when the linked FAISS build reports
-#'   GPU support. Euclidean CUDA exact search can otherwise use direct cuVS
-#'   brute force when available; cosine, correlation, and inner product require
-#'   FAISS GPU Flat metric-aware routes [1-3,16].
+#'   GPU support. CUDA exact search can otherwise use direct cuVS brute force
+#'   when available: Euclidean uses cuVS L2 directly, cosine/correlation use
+#'   normalized Euclidean search, and inner product uses an exact
+#'   maximum-inner-product-to-L2 transform [1-3,16].
 #'   \item `"flat"`: FAISS Flat exhaustive index. CPU and FAISS GPU support
 #'   L2, IP, and normalized-IP cosine/correlation routes when available
 #'   [1-2,16].
 #'   \item `"bruteforce"`: exhaustive brute-force search. CPU maps to exact
-#'   CPU search. On CUDA, Euclidean prefers RAPIDS cuVS brute force; cosine,
-#'   correlation, and inner product use FAISS GPU Flat when available because
-#'   direct cuVS brute force is Euclidean/L2-only in faissR [1-3,16].
+#'   CPU search. On CUDA, RAPIDS cuVS brute force is preferred when available;
+#'   cosine/correlation use normalized Euclidean search and inner product uses
+#'   an exact maximum-inner-product-to-L2 transform around the cuVS L2 kernel
+#'   [1-3,16].
 #'   \item `"grid"`: native exact 2D/3D spatial grid search for Euclidean,
 #'   cosine, and correlation self-KNN. Cosine/correlation use normalized
 #'   Euclidean grid search. Explicit grid requests error for

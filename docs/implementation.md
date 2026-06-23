@@ -275,10 +275,10 @@ public method names map to different concrete functions depending on `backend`.
 
 | Method | CPU behavior | CUDA behavior | Notes |
 | --- | --- | --- | --- |
-| `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, cuVS HNSW, FAISS GPU CAGRA selector, or FAISS GPU Flat IP for exact inner-product routes. | Default for general use. |
-| `exact` | Native exact CPU route. | FAISS GPU Flat when available; Euclidean can otherwise use cuVS brute force. | Accuracy-first baseline. |
+| `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, cuVS HNSW, FAISS GPU CAGRA selector, FAISS GPU Flat IP when available, or faissR native CUDA candidate refinement for large raw-inner-product self-KNN. Explicit CUDA exact/brute-force calls can use transformed cuVS brute force. | Default for general use. |
+| `exact` | Native exact CPU route. | FAISS GPU Flat when available; otherwise cuVS brute force can provide exact transformed metric search. | Accuracy-first baseline. |
 | `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP while staying on CUDA for explicit CUDA calls. | Exact FAISS route [1-2,16]. |
-| `bruteforce` | Native exact CPU route. | Euclidean prefers direct cuVS brute force; non-Euclidean metrics use FAISS GPU Flat when available. | Useful for comparing direct cuVS against FAISS GPU Flat [1-3,16]. |
+| `bruteforce` | Native exact CPU route. | Direct cuVS brute force when available, with exact transforms for cosine, correlation, and raw inner product. | Useful for comparing direct cuVS against FAISS GPU Flat [1-3,16]. |
 | `grid` | Native 2D/3D exact spatial grid. | CUDA 2D/3D grid. | Errors outside two or three columns. |
 | `hnsw` | FAISS CPU HNSW. | RAPIDS cuVS HNSW from a CUDA CAGRA index for Euclidean/cosine/correlation. | High-recall graph-search route; CUDA raw inner product is disabled until a reliable native or transformed route is available [3,5,16,22-23]. |
 | `ivf` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | Coarse-list approximate route [1-2,16]. |
@@ -287,6 +287,10 @@ public method names map to different concrete functions depending on `backend`.
 | `nsg` | Native CPU NSG-style self-KNN candidate graph for Euclidean, cosine, correlation, and inner product. | Native CUDA NSG-style self-KNN candidate graph for all public metrics. | Optional graph-search baseline; public CPU NSG avoids unsafe linked-FAISS graph construction by using faissR-owned candidate pruning/refinement. Native CPU/CUDA NSG protect the first `k` seed neighbours before NSG/MRNG-style pruning and use backend-specific auto defaults/options (`faissR.cpu_nsg_*`, `faissR.cuda_nsg_*`) [16,21,29]. |
 | `nndescent` | Native CPU NNDescent for Euclidean/L2, cosine, correlation, and raw inner product. | Direct cuVS NN-descent for Euclidean/L2, cosine, and correlation; faissR native CUDA candidate refinement for raw inner product. | Approximate KNN graph construction; cosine/correlation use normalized Euclidean search, CPU and native CUDA raw inner product use shifted dot-product distances, and FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
 | `cagra` | Unsupported. | FAISS GPU CAGRA or direct cuVS CAGRA; `faissR.cagra_implementation` can force `"faiss_gpu"` or `"cuvs"`, while `"auto"` uses a deterministic shape-aware provider rule. Cosine/correlation use normalized Euclidean graph search. Raw inner product is disabled for both FAISS GPU CAGRA and direct cuVS CAGRA until a reliable transformed route is available. | CUDA-only FAISS/cuVS graph-search method [3,13-16]. |
+
+For direct cuVS brute force, cosine and correlation are transformed to exact
+Euclidean search by row normalization, and raw inner product uses the exact
+maximum-inner-product-to-L2 transform before calling the cuVS L2 kernel.
 
 Unsupported method/backend pairs stop before computation. This makes benchmark
 failures interpretable: a row marked unavailable or unsupported means the

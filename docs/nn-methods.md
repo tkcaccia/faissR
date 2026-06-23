@@ -86,7 +86,7 @@ CUDA and keep CUDA backend metadata.
 | `"auto"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA auto uses shape-aware CUDA grid for large 2D/3D Euclidean/cosine/correlation self-KNN, and FAISS GPU Flat for non-grid cosine/correlation/IP when available. |
 | `"exact"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA cosine/correlation/IP use FAISS GPU Flat variants when available. |
 | `"flat"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS Flat L2/IP plus normalized Flat IP transforms. |
-| `"bruteforce"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA Euclidean can use cuVS brute force; non-Euclidean routes use FAISS GPU Flat. |
+| `"bruteforce"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA uses direct cuVS brute force when available; cosine/correlation use normalized Euclidean search and inner product uses a maximum-inner-product-to-L2 transform around the cuVS L2 kernel. |
 | `"grid"` | euclidean, cosine, correlation | euclidean, cosine, correlation | 2D/3D self-KNN only; cosine/correlation use normalized Euclidean grid search. |
 | `"hnsw"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation | CPU FAISS HNSW is used for all metrics when available; CUDA uses cuVS HNSW converted from CAGRA for Euclidean and normalized cosine/correlation. Raw inner product is disabled for CUDA HNSW until a reliable native or transformed route is available. |
 | `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
@@ -227,10 +227,10 @@ layout, and search are handled by FAISS.
 `method = "bruteforce"` requests exhaustive brute-force search.
 
 - On CPU, it maps to the native exact CPU route.
-- On CUDA, Euclidean/L2 prefers direct RAPIDS cuVS brute force [3].
-- On CUDA, cosine, correlation, and inner product use FAISS GPU Flat when
-  available because the direct cuVS brute-force route is Euclidean/L2-only in
-  faissR [1-3,16].
+- On CUDA, RAPIDS cuVS brute force is preferred when available [3].
+- Cosine and correlation use row transforms followed by exact cuVS L2 search;
+  raw inner product uses the standard maximum-inner-product-to-L2 transform
+  before exact cuVS L2 search [1-3,16].
 
 This method is useful for comparing FAISS GPU Flat with direct cuVS exhaustive
 search. Both are exact-style routes, but implementation details, transfer

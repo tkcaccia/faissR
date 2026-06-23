@@ -62,11 +62,10 @@ high-dimensional jobs use cheaper iteration and tolerance defaults.
 `centers = 1` uses the exact column-mean solution for every backend request
 with `max_iter = 1`, `n_init = 1`, and `tol = 0`, records
 `single_cluster_exact_mean`, and stays on CPU because no iterative
-k-means backend can improve that solution.
-`centers = nrow(data)` uses the exact singleton assignment for every backend
-request and records `singleton_exact_identity`; explicit CUDA requests are
-recorded as resolved by the exact faissR trivial route rather than launching
-GPU work.
+k-means backend can improve that solution. `centers = nrow(data)` uses the
+exact singleton assignment for every backend request and records
+`singleton_exact_identity`; explicit CUDA requests are recorded as
+resolved by the exact faissR trivial route rather than launching GPU work.
 `"fixed"`, `"off"`, and `"none"` use the historical fixed defaults unless
 `max_iter`, `n_init`, or `tol` are explicitly supplied.}
 }
@@ -91,9 +90,10 @@ A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
   benchmark summaries. `parameters$tuning$backend_policy` records the
   deterministic shape rule used by `backend = "auto"` to decide whether CUDA
   has enough estimated work or float32 transfer size to offset transfer
-  overhead. The policy keeps `nbytes` as the ordinary R double input footprint
-  and records `gpu_transfer_nbytes` for the float32 data passed to FAISS/cuVS.
-  The default thresholds can be overridden without adding pilot work by setting
+  overhead. The policy keeps `nbytes` as the ordinary R double input
+  footprint and records `gpu_transfer_nbytes` for the float32 data passed to
+  FAISS/cuVS. The default thresholds can be overridden without adding pilot
+  work by setting
   `options(faissR.kmeans_cuda_work_threshold = ...)`,
   `options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
   `options(faissR.kmeans_cuda_large_n_threshold = ...)`, or
