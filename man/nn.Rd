@@ -106,8 +106,10 @@ defaults. Advanced tuning and cache knobs use
 
 \item{cagra_implementation}{CUDA CAGRA provider for this call. `NULL` uses
 the global `options(faissR.cagra_implementation = ...)` value. `"auto"`
-prefers FAISS GPU CAGRA when available and otherwise direct RAPIDS cuVS
-CAGRA; `"faiss_gpu"` and `"cuvs"` force one provider for benchmarking.
+uses a deterministic provider rule: compact high-dimensional self-KNN selects
+direct RAPIDS cuVS CAGRA when both providers are available, while FAISS GPU
+CAGRA remains the default for other shapes. `"faiss_gpu"` and `"cuvs"` force
+one provider for benchmarking.
 This argument affects only public `backend = "cuda", method = "cagra"`
 requests and CUDA-auto routes that select CAGRA.}
 

@@ -28,9 +28,9 @@
 #'   defaults.
 #' @param cagra_implementation CUDA CAGRA provider passed to \code{\link{nn}()}
 #'   for `method = "cagra"` or CUDA-auto routes that select CAGRA. `NULL` uses
-#'   the global `faissR.cagra_implementation` option; `"auto"` prefers FAISS GPU
-#'   CAGRA then direct cuVS CAGRA, while `"faiss_gpu"` or `"cuvs"` force one
-#'   provider.
+#'   the global `faissR.cagra_implementation` option; `"auto"` uses the same
+#'   deterministic shape-aware provider rule as \code{\link{nn}()}, while
+#'   `"faiss_gpu"` or `"cuvs"` force one provider.
 #' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm passed
 #'   to \code{\link{nn}()} for direct cuVS CAGRA routes. `NULL` uses the global
 #'   `faissR.cuvs_cagra_build_algo` option.

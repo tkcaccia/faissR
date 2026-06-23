@@ -81,10 +81,11 @@ implementation routes recorded in benchmark output, not separate public
 
 Public calls use `method = "cagra"` for both CUDA CAGRA providers. The route
 is selected by `options(faissR.cagra_implementation = "auto")`, `"faiss_gpu"`,
-or `"cuvs"`. The default `"auto"` prefers FAISS GPU CAGRA when available and
-falls back to direct cuVS CAGRA; forcing `"cuvs"` is useful for isolated cuVS
-benchmarks, while forcing `"faiss_gpu"` avoids silently comparing against the
-direct cuVS route on machines where FAISS GPU CAGRA is unavailable. Preflight
+or `"cuvs"`. The default `"auto"` is deterministic and shape-aware: compact
+high-dimensional self-KNN uses direct cuVS CAGRA when both providers are
+available, while other shapes keep FAISS GPU CAGRA as the default when it is
+available. Forcing `"cuvs"` is useful for isolated cuVS benchmarks, while
+forcing `"faiss_gpu"` isolates the FAISS GPU/cuVS integration path. Preflight
 availability checks respect this forced provider for supported metrics, and returned
 approximation metadata records `cagra_provider` plus
 `cagra_provider_option`.

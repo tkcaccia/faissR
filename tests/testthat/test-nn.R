@@ -1940,8 +1940,55 @@ test_that("CUDA CAGRA implementation can be selected by option", {
     ),
     "faiss_gpu_cagra"
   )
+  expect_equal(
+    faissR:::resolve_cuda_cagra_backend(
+      faiss_gpu_available_value = TRUE,
+      cuvs_available_value = TRUE,
+      n = 1440L,
+      p = 16384L,
+      k = 15L,
+      self_query = TRUE
+    ),
+    "cuda_cuvs_cagra"
+  )
+  if (isTRUE(faiss_gpu_available()) && isTRUE(cuvs_available())) {
+    expect_equal(
+      faissR:::resolve_public_nn_backend(
+        "cuda",
+        "cagra",
+        "euclidean",
+        n = 1440L,
+        p = 16384L,
+        k = 15L,
+        self_query = TRUE
+      ),
+      "cuda_cuvs_cagra"
+    )
+  }
+  expect_equal(
+    faissR:::resolve_cuda_cagra_backend(
+      faiss_gpu_available_value = TRUE,
+      cuvs_available_value = TRUE,
+      n = 50000L,
+      p = 1024L,
+      k = 15L,
+      self_query = TRUE
+    ),
+    "faiss_gpu_cagra"
+  )
 
   options(faissR.cagra_implementation = "faiss_gpu")
+  expect_equal(
+    faissR:::resolve_cuda_cagra_backend(
+      faiss_gpu_available_value = TRUE,
+      cuvs_available_value = TRUE,
+      n = 1440L,
+      p = 16384L,
+      k = 15L,
+      self_query = TRUE
+    ),
+    "faiss_gpu_cagra"
+  )
   expect_false(faissR:::public_nn_cuda_route_available(
     "cagra",
     "cosine",

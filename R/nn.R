@@ -2003,13 +2003,38 @@ set_call_cagra_build_algo <- function(value) {
   invisible(TRUE)
 }
 
+cuda_cagra_auto_prefers_cuvs <- function(n = NULL,
+                                         p = NULL,
+                                         k = NULL,
+                                         self_query = NULL) {
+  if (!isTRUE(self_query)) return(FALSE)
+  if (is.null(n) || is.null(p) || is.null(k)) return(FALSE)
+  n <- suppressWarnings(as.numeric(n))
+  p <- suppressWarnings(as.numeric(p))
+  k <- suppressWarnings(as.numeric(k))
+  if (length(n) != 1L || length(p) != 1L || length(k) != 1L) return(FALSE)
+  if (!is.finite(n) || !is.finite(p) || !is.finite(k)) return(FALSE)
+  compact_n <- faiss_option_int("cuda_cagra_cuvs_compact_n", 10000L, min_value = 100L, max_value = 1000000L)
+  high_dim_p <- faiss_option_int("cuda_cagra_cuvs_high_dim_p", 1024L, min_value = 2L, max_value = 100000L)
+  max_k <- faiss_option_int("cuda_cagra_cuvs_compact_max_k", 128L, min_value = 1L, max_value = 10000L)
+  n <= compact_n && p >= high_dim_p && k <= max_k
+}
+
 resolve_cuda_cagra_backend <- function(faiss_gpu_available_value = faiss_gpu_available(),
-                                       cuvs_available_value = cuvs_available()) {
+                                       cuvs_available_value = cuvs_available(),
+                                       n = NULL,
+                                       p = NULL,
+                                       k = NULL,
+                                       self_query = NULL) {
   preference <- cagra_implementation_preference()
   if (identical(preference, "faiss_gpu")) {
     return("faiss_gpu_cagra")
   }
   if (identical(preference, "cuvs")) {
+    return("cuda_cuvs_cagra")
+  }
+  if (isTRUE(faiss_gpu_available_value) && isTRUE(cuvs_available_value) &&
+      isTRUE(cuda_cagra_auto_prefers_cuvs(n = n, p = p, k = k, self_query = self_query))) {
     return("cuda_cuvs_cagra")
   }
   if (isTRUE(faiss_gpu_available_value)) {
@@ -2020,10 +2045,18 @@ resolve_cuda_cagra_backend <- function(faiss_gpu_available_value = faiss_gpu_ava
 }
 
 cuda_cagra_route_available <- function(faiss_gpu_available_value = faiss_gpu_available(),
-                                       cuvs_available_value = cuvs_available()) {
+                                       cuvs_available_value = cuvs_available(),
+                                       n = NULL,
+                                       p = NULL,
+                                       k = NULL,
+                                       self_query = NULL) {
   selected <- resolve_cuda_cagra_backend(
     faiss_gpu_available_value = faiss_gpu_available_value,
-    cuvs_available_value = cuvs_available_value
+    cuvs_available_value = cuvs_available_value,
+    n = n,
+    p = p,
+    k = k,
+    self_query = self_query
   )
   if (identical(selected, "faiss_gpu_cagra")) {
     isTRUE(faiss_gpu_available_value)
@@ -2052,7 +2085,10 @@ cuda_cagra_route_available <- function(faiss_gpu_available_value = faiss_gpu_ava
 #' k values in the current implementation.
 #' Public CUDA `method = "cagra"` can resolve to FAISS GPU CAGRA or direct cuVS
 #' CAGRA; `options(faissR.cagra_implementation = "faiss_gpu")` or `"cuvs"`
-#' forces one provider, while `"auto"` keeps the default FAISS-then-cuVS rule.
+#' forces one provider, while `"auto"` uses a deterministic shape rule: direct
+#' cuVS CAGRA is selected for compact high-dimensional self-KNN, and FAISS GPU
+#' CAGRA remains the default when both providers are available for other
+#' shapes.
 #' Availability preflights respect the forced provider for supported CAGRA
 #' metrics, and returned approximate NN objects record `cagra_provider` plus
 #' `cagra_provider_option`.
@@ -2427,7 +2463,7 @@ nn_capability_row <- function(method, backend, metric) {
     } else if (identical(metric, "inner_product")) {
       "Raw inner-product CAGRA is disabled for both FAISS GPU CAGRA and direct cuVS CAGRA because transformed CAGRA inner-product search is not reliable across k values in the current implementation."
     } else if (identical(backend, "cuda")) {
-      "CUDA-only approximate graph search; faissR.cagra_implementation selects FAISS GPU CAGRA, direct cuVS CAGRA, or the default FAISS-then-cuVS rule."
+      "CUDA-only approximate graph search; faissR.cagra_implementation selects FAISS GPU CAGRA, direct cuVS CAGRA, or a deterministic shape-aware auto provider rule."
     } else {
       "Unsupported CAGRA route."
     }
@@ -2480,7 +2516,13 @@ normalize_nn_tuning <- function(tuning) {
   unname(aliases[[tuning]])
 }
 
-resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
+resolve_public_nn_backend <- function(backend,
+                                      method,
+                                      metric = "euclidean",
+                                      n = NULL,
+                                      p = NULL,
+                                      k = NULL,
+                                      self_query = NULL) {
   backend_label <- normalize_scalar_choice_arg(
     backend,
     arg = "backend",
@@ -2598,7 +2640,12 @@ resolve_public_nn_backend <- function(backend, method, metric = "euclidean") {
       } else {
         "cuda_native_nndescent"
       },
-      cagra = resolve_cuda_cagra_backend(),
+      cagra = resolve_cuda_cagra_backend(
+        n = n,
+        p = p,
+        k = k,
+        self_query = self_query
+      ),
       stop("Unsupported CUDA nearest-neighbour method.", call. = FALSE)
     )
   }
@@ -2854,7 +2901,11 @@ cuda_auto_non_euclidean_backend <- function(metric,
     if (isTRUE(large_self_graph) && isTRUE(cagra_available)) {
       return(resolve_cuda_cagra_backend(
         faiss_gpu_available_value = faiss_gpu_available_value,
-        cuvs_available_value = cuvs_available_value
+        cuvs_available_value = cuvs_available_value,
+        n = n,
+        p = p,
+        k = k,
+        self_query = self_query
       ))
     }
   }
@@ -7037,8 +7088,10 @@ grid_self_knn <- function(data,
 #'   `options(faissR.<name> = ...)`.
 #' @param cagra_implementation CUDA CAGRA provider for this call. `NULL` uses
 #'   the global `options(faissR.cagra_implementation = ...)` value. `"auto"`
-#'   prefers FAISS GPU CAGRA when available and otherwise direct RAPIDS cuVS
-#'   CAGRA; `"faiss_gpu"` and `"cuvs"` force one provider for benchmarking.
+#'   uses a deterministic provider rule: compact high-dimensional self-KNN
+#'   selects direct RAPIDS cuVS CAGRA when both providers are available, while
+#'   FAISS GPU CAGRA remains the default for other shapes. `"faiss_gpu"` and
+#'   `"cuvs"` force one provider for benchmarking.
 #'   This argument affects only public `backend = "cuda", method = "cagra"`
 #'   requests and CUDA-auto routes that select CAGRA.
 #' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm for
@@ -7115,7 +7168,15 @@ nn <- function(data,
   metric <- normalize_nn_metric(metric)
   output <- resolve_nn_output(output, distances)
   validate_public_nn_method_shape(data, method)
-  resolved_backend <- resolve_public_nn_backend(backend, method, metric)
+  resolved_backend <- resolve_public_nn_backend(
+    backend,
+    method,
+    metric,
+    n = nrow(data),
+    p = ncol(data),
+    k = k,
+    self_query = points_missing
+  )
   auto_selection <- nn_auto_selection_metadata(
     data = data,
     points = points,
@@ -7212,7 +7273,15 @@ nn_without_self <- function(data,
   metric <- normalize_nn_metric(metric)
   output <- resolve_nn_output(output, distances)
   validate_public_nn_method_shape(data, method)
-  resolved_backend <- resolve_public_nn_backend(backend, method, metric)
+  resolved_backend <- resolve_public_nn_backend(
+    backend,
+    method,
+    metric,
+    n = nrow(data),
+    p = ncol(data),
+    k = k,
+    self_query = TRUE
+  )
   auto_selection <- nn_auto_selection_metadata(
     data = data,
     points = data,

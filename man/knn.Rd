@@ -39,7 +39,7 @@ canonical metric labels. Correlation is centered cosine similarity, not raw
 inner product. See \code{nn()} for metric/backend support details, including
 metric-aware CPU HNSW routing.}
 \item{tuning}{Tuning policy passed to \code{nn()}. \code{"auto"} uses the deterministic default for the resolved method; \code{"cache"} and \code{"pilot"} opt into pilot tuning where implemented. FAISS GPU IVF pilot/cache tuning is Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware defaults.}
-\item{cagra_implementation}{CUDA CAGRA provider passed to \code{nn()} for \code{method = "cagra"} or CUDA-auto routes that select CAGRA. \code{NULL} uses the global \code{faissR.cagra_implementation} option; \code{"auto"} prefers FAISS GPU CAGRA then direct cuVS CAGRA, while \code{"faiss_gpu"} or \code{"cuvs"} force one provider.}
+\item{cagra_implementation}{CUDA CAGRA provider passed to \code{nn()} for \code{method = "cagra"} or CUDA-auto routes that select CAGRA. \code{NULL} uses the global \code{faissR.cagra_implementation} option; \code{"auto"} uses the same deterministic shape-aware provider rule as \code{nn()}, while \code{"faiss_gpu"} or \code{"cuvs"} force one provider.}
 \item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm passed to \code{nn()} for direct cuVS CAGRA routes. \code{NULL} uses the global \code{faissR.cuvs_cagra_build_algo} option.}
 \item{task}{\code{"auto"}, \code{"classification"}, or \code{"regression"}. \code{"auto"} treats numeric responses as regression and other response types as classification.}
 \item{k}{Default number of neighbours used by \code{predict()} and by immediate predictions when \code{Xtest} is supplied.}

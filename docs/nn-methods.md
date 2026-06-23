@@ -369,12 +369,14 @@ as a default.
 
 ## `"cagra"`
 
-`method = "cagra"` is CUDA-only. faissR prefers FAISS GPU CAGRA when the linked
-FAISS GPU build provides NVIDIA cuVS integration; otherwise it uses direct
-RAPIDS cuVS CAGRA when available [3,13-16]. Use
+`method = "cagra"` is CUDA-only. faissR can use FAISS GPU CAGRA through the
+FAISS/cuVS integration or direct RAPIDS cuVS CAGRA [3,13-16]. Use
 `options(faissR.cagra_implementation = "faiss_gpu")` to force the FAISS GPU
 CAGRA provider, `"cuvs"` to force direct RAPIDS cuVS CAGRA, or `"auto"` to keep
-the default FAISS-then-cuVS rule.
+the deterministic shape-aware provider rule. Under `"auto"`, compact
+high-dimensional self-KNN selects direct cuVS CAGRA when both providers are
+available; other shapes keep FAISS GPU CAGRA as the default when it is
+available.
 
 - `backend = "cpu", method = "cagra"` errors.
 - `backend = "cuda", method = "cagra"` requires CUDA plus FAISS GPU CAGRA or

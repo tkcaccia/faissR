@@ -580,6 +580,7 @@ test_that("GitHub and reference docs describe CAGRA provider selection", {
     expect_true(grepl("faissR.cagra_implementation", prose, fixed = TRUE), info = basename(docs_file))
     expect_true(grepl("faiss_gpu", prose, fixed = TRUE), info = basename(docs_file))
     expect_true(grepl("cuvs", prose, ignore.case = TRUE), info = basename(docs_file))
+    expect_true(grepl("shape", prose, ignore.case = TRUE), info = basename(docs_file))
   }
 })
 

@@ -51,9 +51,11 @@ because linked FAISS graph builders can abort during graph construction. Direct 
 NNDescent does not expose raw inner-product search.
 Public CUDA \code{method = "cagra"} can resolve to FAISS GPU CAGRA or direct
 cuVS CAGRA; \code{options(faissR.cagra_implementation = "faiss_gpu")} or
-\code{"cuvs"} forces one provider, while \code{"auto"} keeps the default
-FAISS-then-cuVS rule. Availability preflights respect the forced provider for
-all CAGRA metrics, and returned approximate NN objects record
+\code{"cuvs"} forces one provider, while \code{"auto"} uses a deterministic
+shape rule: direct cuVS CAGRA is selected for compact high-dimensional
+self-KNN, and FAISS GPU CAGRA remains the default when both providers are
+available for other shapes. Availability preflights respect the forced provider
+for all CAGRA metrics, and returned approximate NN objects record
 \code{cagra_provider} plus \code{cagra_provider_option}.
 
 Use \code{runtime = TRUE} for benchmark preflight checks that must distinguish

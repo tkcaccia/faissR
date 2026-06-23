@@ -30,8 +30,9 @@
 #'   `knn` is not supplied.
 #' @param cagra_implementation CUDA CAGRA provider passed to
 #'   \code{\link{nn_without_self}()} when KNN is computed here. `NULL` uses the
-#'   global option; `"auto"` prefers FAISS GPU CAGRA then direct cuVS CAGRA,
-#'   while `"faiss_gpu"` or `"cuvs"` force one provider.
+#'   global option; `"auto"` uses the same deterministic shape-aware provider
+#'   rule as \code{\link{nn}()}, while `"faiss_gpu"` or `"cuvs"` force one
+#'   provider.
 #' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm passed
 #'   to \code{\link{nn_without_self}()} when KNN is computed here. `NULL` uses
 #'   the global `faissR.cuvs_cagra_build_algo` option. This setting applies to
