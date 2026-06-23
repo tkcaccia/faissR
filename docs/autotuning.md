@@ -36,6 +36,11 @@ implementation routes recorded in benchmark output, not separate public
   recall is very high. The resolved routes `faiss_gpu_flat_l2` and
   `cuda_cuvs_bruteforce` were the most reliable high-recall CUDA paths
   [1-3,13-16].
+- For compact very high-dimensional self-KNN, `method = "auto"` now prefers
+  direct cuVS brute force when cuVS is available, even if FAISS GPU Flat is also
+  available. This deterministic C++ rule was added after COIL20 validation
+  showed `cuda_cuvs_bruteforce` was faster than `faiss_gpu_flat_l2` while
+  keeping exact/high-recall behaviour.
 - Prefer `method = "hnsw"` for CPU approximate self-KNN. In this benchmark its
   FAISS HNSW implementation route gave a better speed/accuracy balance than
   NN-Descent [4-5].
@@ -60,7 +65,7 @@ implementation routes recorded in benchmark output, not separate public
 |---|---|---|---|
 | `exact` / `flat` | `faiss_flat_exact`, `faiss_flat_l2` | CPU exact baseline | Use for exact CPU reference on small/medium data [1-2,16]; avoid as default for large high-dimensional self-search because MNIST/FashionMNIST timed out. |
 | `exact` / `flat` | `faiss_gpu_flat_l2` | CUDA exact/high-recall | Preferred high-recall GPU default when FAISS GPU is available and data fits. |
-| `bruteforce` | `cuda_cuvs_bruteforce` | CUDA exact/high-recall | Preferred exact cuVS path; consistently recall 1 in this benchmark and often fastest. |
+| `bruteforce` | `cuda_cuvs_bruteforce` | CUDA exact/high-recall | Preferred exact cuVS path; consistently recall 1 in this benchmark and often fastest. Also selected by `method = "auto"` for compact very high-dimensional self-KNN when cuVS is available. |
 | `hnsw` | `faiss_hnsw` speed tier | CPU speed tier | M = 24, efConstruction = 120, efSearch = max(80, 4k); used only for lower-dimensional Euclidean `k <= 10` jobs where the benchmark grid showed exact CPU was too conservative but high-recall HNSW was unnecessary [5]. |
 | `hnsw` | `faiss_hnsw` small-k metric tier | CPU metric-aware tier | M = 32, efConstruction = 160, efSearch = max(120, 4k); used for cosine, correlation, and inner-product `k <= 10` jobs so normalized metric searches keep more graph-search breadth without paying the full high-recall cost [5]. |
 | `hnsw` | `faiss_hnsw` balanced tier | CPU default tier | M = 32, efConstruction = 200, efSearch = max(150, 3k); default deterministic shape/metric rule for general CPU HNSW. |

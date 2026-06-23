@@ -125,12 +125,14 @@ arguments and collected runtime capability flags:
   faissR's native CPU NSG-style route for larger non-Euclidean self-KNN, or
   native CPU NN-descent for other large self-KNN cases, instead of exact brute
   force [1-2,5,16,21].
-- CUDA auto uses CUDA grid for large 2D/3D Euclidean/cosine/correlation self-search, exact FAISS
-  GPU Flat or cuVS brute force for small/medium Euclidean searches, FAISS GPU
-  CAGRA for very large Euclidean self-search when available, FAISS GPU Flat IP
-  routes for small or query cosine, correlation, and inner-product searches
-  when FAISS GPU Flat is available, and FAISS GPU/direct cuVS CAGRA for very
-  large non-Euclidean self-KNN [1-3,13-16]. On cuVS-only runtimes,
+- CUDA auto uses CUDA grid for large 2D/3D Euclidean/cosine/correlation
+  self-search, direct cuVS brute force for compact very high-dimensional
+  Euclidean self-KNN when cuVS is available, exact FAISS GPU Flat or cuVS brute
+  force for other small/medium Euclidean searches, FAISS GPU CAGRA for very
+  large Euclidean self-search when available, FAISS GPU Flat IP routes for
+  small or query cosine, correlation, and inner-product searches when FAISS GPU
+  Flat is available, and FAISS GPU/direct cuVS CAGRA for very large
+  non-Euclidean self-KNN [1-3,13-16]. On cuVS-only runtimes,
   `backend = "auto"` can use direct cuVS CAGRA for large non-Euclidean
   self-search and otherwise keeps those metrics on CPU.
 

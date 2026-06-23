@@ -205,6 +205,10 @@ The public `tuning` argument controls method-specific pilot tuning. The default
 `backend = "auto"` is made by the C++ `nn_auto_select_backend_cpp()` selector.
 The R wrapper normalizes arguments, collects runtime capability flags and
 option thresholds, and dispatches to the compiled selector's backend.
+For Euclidean compact very high-dimensional self-KNN, the selector prefers
+`cuda_cuvs_bruteforce` when cuVS is available, because Chiamaka validation on
+COIL20 showed the direct cuVS exact path was faster than FAISS GPU Flat while
+remaining an exact/high-recall route.
 
 Explicit methods map to the selected backend. For example,
 `method = "grid", backend = "cpu"` resolves to the CPU grid implementation,
