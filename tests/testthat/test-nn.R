@@ -4085,18 +4085,30 @@ test_that("CUDA NN-descent requests use RAPIDS cuVS", {
     matrix(rnorm(300, 1.4, 0.35), ncol = 5)
   )
   k <- 8L
-  exact <- nn_without_self(x, k = k, backend = "cpu", n_threads = 4L)
-  refined <- internal_nn_without_self(x, k = k, backend = "cuda_cuvs_nndescent")
-  recall <- faissR:::.knn_recall_summary(refined, exact, k)
 
-  expect_equal(dim(refined$indices), c(nrow(x), k))
-  expect_equal(attr(refined, "backend"), "cuda_cuvs_nndescent")
-  expect_equal(
-    attr(refined, "approximation")$strategy,
-    "rapids_cuvs_nndescent"
-  )
-  expect_false(isTRUE(attr(refined, "exact")))
-  expect_gt(recall$recall_at_k, 0.65)
+  for (metric in c("euclidean", "cosine", "correlation")) {
+    exact <- nn_without_self(x, k = k, backend = "cpu", metric = metric, n_threads = 4L)
+    refined <- internal_nn_without_self(
+      x,
+      k = k,
+      backend = "cuda_cuvs_nndescent",
+      metric = metric
+    )
+    recall <- faissR:::.knn_recall_summary(refined, exact, k)
+    approximation <- attr(refined, "approximation")
+
+    expect_equal(dim(refined$indices), c(nrow(x), k), info = metric)
+    expect_equal(attr(refined, "backend"), "cuda_cuvs_nndescent", info = metric)
+    expect_equal(attr(refined, "metric"), metric, info = metric)
+    expect_equal(approximation$strategy, "rapids_cuvs_nndescent", info = metric)
+    expect_equal(approximation$metric, metric, info = metric)
+    if (metric %in% c("cosine", "correlation")) {
+      expect_false(is.na(approximation$transform), info = metric)
+      expect_match(attr(refined, "metric_transform"), "normalize|center", info = metric)
+    }
+    expect_false(isTRUE(attr(refined, "exact")), info = metric)
+    expect_gt(recall$recall_at_k, 0.65, info = metric)
+  }
 })
 
 test_that("cuVS brute force reports metric metadata for transformed exact routes", {
