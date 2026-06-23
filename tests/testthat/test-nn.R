@@ -89,6 +89,56 @@ test_that("public high-level APIs expose auto/cpu/cuda backend and auto tuning",
   expect_equal(eval(formals(graph_cluster)$graph_method), eval(formals(nn)$method))
 })
 
+test_that("C++ auto selector keeps FashionMNIST-scale metric routes on GPU Flat", {
+  shape_for_metric <- function(metric) {
+    list(
+      n = 70000L,
+      p = 784L,
+      n_points = 70000L,
+      k = 50L,
+      metric = metric,
+      self_query = TRUE,
+      exclude_self = TRUE,
+      work_size = 70000 * 70000 * 784
+    )
+  }
+  select <- function(metric, resolved_backend = "auto", requested_backend = "auto") {
+    faissR:::nn_auto_select_shape_cpp(
+      resolved_backend = resolved_backend,
+      requested_backend = requested_backend,
+      requested_method = "auto",
+      shape = shape_for_metric(metric),
+      cuda_available_value = TRUE,
+      cuvs_available_value = TRUE,
+      faiss_available_value = TRUE,
+      faiss_gpu_available_value = TRUE,
+      rcpphnsw_available_value = TRUE
+    )
+  }
+
+  auto_expected <- c(
+    cosine = "faiss_gpu_flat_cosine",
+    correlation = "faiss_gpu_flat_correlation",
+    inner_product = "faiss_gpu_flat_ip"
+  )
+  for (metric in names(auto_expected)) {
+    auto <- select(metric)
+    cuda <- select(metric, resolved_backend = "cuda_auto", requested_backend = "cuda")
+
+    expect_equal(auto$selected_backend, auto_expected[[metric]], info = metric)
+    expect_equal(auto$predicted_method, "flat", info = metric)
+    expect_equal(auto$predicted_device, "cuda", info = metric)
+    expect_equal(auto$reason, "auto_cuda_preselector", info = metric)
+    expect_false(auto$slow_tuning, info = metric)
+
+    expect_equal(cuda$selected_backend, auto_expected[[metric]], info = metric)
+    expect_equal(cuda$predicted_method, "flat", info = metric)
+    expect_equal(cuda$predicted_device, "cuda", info = metric)
+    expect_equal(cuda$reason, "cuda_auto_shape_selector", info = metric)
+    expect_false(cuda$slow_tuning, info = metric)
+  }
+})
+
 test_that("nn returns exact euclidean neighbors", {
   x <- matrix(c(
     0, 0,
