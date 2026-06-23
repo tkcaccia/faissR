@@ -163,8 +163,7 @@ std::string cuda_non_euclidean_backend(const std::string& metric,
     metric == "cosine" ? "faiss_gpu_flat_cosine" :
     metric == "correlation" ? "faiss_gpu_flat_correlation" :
     "faiss_gpu_flat_ip";
-  const bool cagra_available = metric != "inner_product" &&
-    (faiss_gpu_available || cuvs_available);
+  const bool cagra_available = faiss_gpu_available || cuvs_available;
   const bool large_self_graph = self_query &&
     n >= graph_n && n_points >= graph_n && k >= graph_min_k &&
     finite1(work_size) && work_size >= graph_work;

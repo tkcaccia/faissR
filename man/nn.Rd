@@ -187,11 +187,12 @@ Method descriptions:
   grid for 2D/3D Euclidean/cosine/correlation
   self-KNN, exact FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for
   Euclidean searches when appropriate, cuVS HNSW for explicit CUDA HNSW
-  requests, FAISS GPU Flat IP routes for exact inner-product searches when
-  FAISS GPU Flat is available, faissR native CUDA candidate refinement for
-  large raw-inner-product self-KNN, and transformed direct cuVS brute force
-  for explicit CUDA exact/brute-force non-Euclidean searches when cuVS is
-  available
+  requests, FAISS GPU Flat IP routes for exact small/query inner-product
+  searches when FAISS GPU Flat is available, transformed FAISS GPU/direct
+  cuVS CAGRA for large raw-inner-product self-KNN, faissR native CUDA
+  candidate refinement as the large-self-search fallback, and transformed
+  direct cuVS brute force for explicit CUDA exact/brute-force non-Euclidean
+  searches when cuVS is available
   [1-3,5,13-15,22-23]. When `backend = "auto"` is
   combined with an explicit method, faissR first checks whether that exact
   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU

@@ -801,8 +801,8 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_match(cuda_auto_cor$notes, "cuVS HNSW/CAGRA")
   expect_match(cuda_auto_cor$notes, "shape-dependent")
   expect_match(cuda_auto_ip$notes, "FAISS GPU Flat IP")
+  expect_match(cuda_auto_ip$notes, "CAGRA")
   expect_match(cuda_auto_ip$notes, "native CUDA candidate-refinement")
-  expect_match(cuda_auto_ip$notes, "CAGRA and HNSW")
 })
 
 test_that("nn_capabilities agrees with public CPU/CUDA resolver support", {
@@ -1053,11 +1053,11 @@ test_that("cuda_auto runtime availability distinguishes cuVS and FAISS GPU metri
     cuvs_available_value = TRUE,
     faiss_gpu_available_value = FALSE
   )
-  expect_false(ip_cuvs_only$available)
-  expect_equal(ip_cuvs_only$reason, "missing_cuda_route")
+  expect_true(ip_cuvs_only$available)
+  expect_equal(ip_cuvs_only$reason, "available")
   expect_match(ip_cuvs_only$notes, "cuVS")
-  expect_match(ip_cuvs_only$notes, "does not yet select")
-  expect_match(ip_cuvs_only$notes, "Explicit CUDA exact/brute-force")
+  expect_match(ip_cuvs_only$notes, "large self-KNN")
+  expect_match(ip_cuvs_only$notes, "CAGRA")
 })
 
 test_that("backend auto explicit methods require metric-capable CUDA routes before selecting CUDA", {
@@ -3290,7 +3290,7 @@ test_that("C++ CUDA auto selector has deterministic k and metric policy", {
       metric,
       cosine = "cuda_cuvs_cagra",
       correlation = "cuda_cuvs_cagra",
-      inner_product = "cuda_native_nndescent"
+      inner_product = "cuda_cuvs_cagra"
     )
     expect_equal(
       cpp_cuda_auto_route(
@@ -3312,7 +3312,7 @@ test_that("C++ CUDA auto selector has deterministic k and metric policy", {
       metric,
       cosine = "faiss_gpu_cagra",
       correlation = "faiss_gpu_cagra",
-      inner_product = "faiss_gpu_flat_ip"
+      inner_product = "faiss_gpu_cagra"
     )
     expect_equal(
       cpp_cuda_auto_route(

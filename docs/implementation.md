@@ -281,7 +281,7 @@ public method names map to different concrete functions depending on `backend`.
 
 | Method | CPU behavior | CUDA behavior | Notes |
 | --- | --- | --- | --- |
-| `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, cuVS HNSW, FAISS GPU CAGRA selector, FAISS GPU Flat IP when available, or faissR native CUDA candidate refinement for large raw-inner-product self-KNN. Explicit CUDA exact/brute-force calls can use transformed cuVS brute force. | Default for general use. |
+| `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, cuVS HNSW, FAISS GPU CAGRA selector, FAISS GPU Flat IP for exact small/query raw inner product, transformed FAISS GPU/direct cuVS CAGRA for large raw-inner-product self-KNN, or faissR native CUDA candidate refinement as a large-self-search fallback. Explicit CUDA exact/brute-force calls can use transformed cuVS brute force. | Default for general use. |
 | `exact` | Native exact CPU route. | FAISS GPU Flat when available; otherwise cuVS brute force can provide exact transformed metric search. | Accuracy-first baseline. |
 | `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP while staying on CUDA for explicit CUDA calls. | Exact FAISS route [1-2,16]. |
 | `bruteforce` | Native exact CPU route. | Direct cuVS brute force when available, with exact transforms for cosine, correlation, and raw inner product. | Useful for comparing direct cuVS against FAISS GPU Flat [1-3,16]. |

@@ -54,7 +54,7 @@ with method-specific parameters.
 
 | `method` | CPU route | CUDA route | Main use |
 | --- | --- | --- | --- |
-| `"auto"` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid for Euclidean/cosine/correlation 2D/3D self-KNN; FAISS GPU Flat/cuVS brute force, cuVS HNSW, or FAISS GPU CAGRA where available; raw inner-product auto uses FAISS GPU Flat IP when available or faissR native CUDA candidate refinement for large self-KNN. Explicit CUDA exact/brute-force calls can use transformed cuVS brute force. | Default general-purpose choice. |
+| `"auto"` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid for Euclidean/cosine/correlation 2D/3D self-KNN; FAISS GPU Flat/cuVS brute force, cuVS HNSW, or FAISS GPU CAGRA where available; raw inner-product auto uses FAISS GPU Flat IP for exact small/query search and transformed FAISS GPU/direct cuVS CAGRA for large self-KNN when available, with faissR native CUDA candidate refinement as the large-self-search fallback. Explicit CUDA exact/brute-force calls can use transformed cuVS brute force. | Default general-purpose choice. |
 | `"exact"` | Native exact CPU KNN. | FAISS GPU Flat if available; otherwise direct cuVS brute force for exact metric-aware search when cuVS is available. | Exact/high-recall baseline [1-3,16]. |
 | `"flat"` | FAISS Flat L2/IP; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP while explicit CUDA calls remain on CUDA. | Exact FAISS exhaustive search [1-2,16]. |
 | `"bruteforce"` | Native exact CPU KNN. | Direct RAPIDS cuVS brute force when available; cosine/correlation use normalized Euclidean search and inner product uses a maximum-inner-product-to-L2 transform around the cuVS L2 kernel. | Exhaustive route, useful for FAISS/cuVS comparisons [1-3,16]. |
@@ -160,9 +160,11 @@ example, CUDA cosine and correlation auto routes can use CUDA grid for large
 2D/3D self-KNN. Non-grid CUDA cosine and correlation auto routes use FAISS GPU
 Flat for exact small/query workloads when available, and can select FAISS
 GPU/direct cuVS graph routes for large self-KNN. CUDA inner-product auto uses
-FAISS GPU Flat IP when available or faissR's native CUDA candidate-refinement
-route when native CUDA kernels are available; explicit CUDA CAGRA and HNSW can
-use the MIPS-to-L2 graph-search transform. On a cuVS-only runtime, CUDA auto
+FAISS GPU Flat IP for exact small/query workloads when available, transformed
+FAISS GPU/direct cuVS CAGRA for large self-KNN when available, or faissR's
+native CUDA candidate-refinement route when native CUDA kernels are the
+available large-self-search route. Explicit CUDA HNSW can also use the
+MIPS-to-L2 graph-search transform. On a cuVS-only runtime, CUDA auto
 non-Euclidean capability rows are reported as shape-dependent rather than as a
 promise that every metric/method has a CUDA route. The same check is applied to explicit
 methods such as `"flat"`, `"ivf"`, and `"ivfpq"` under `backend = "auto"`.

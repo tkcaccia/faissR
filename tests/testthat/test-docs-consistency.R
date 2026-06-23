@@ -928,7 +928,8 @@ test_that("backend docs describe shape-dependent CUDA auto non-Euclidean capabil
   }
   prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
   expect_true(grepl("reported as shape-dependent", prose, fixed = TRUE))
-  expect_true(grepl("explicit CUDA CAGRA and HNSW can", prose, fixed = TRUE))
+  expect_true(grepl("transformed FAISS GPU/direct cuVS CAGRA for large self-KNN", prose, fixed = TRUE))
+  expect_true(grepl("Explicit CUDA HNSW can also use", prose, fixed = TRUE))
   expect_true(grepl("MIPS-to-L2 graph-search transform", prose, fixed = TRUE))
 })
 

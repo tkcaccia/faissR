@@ -2219,18 +2219,23 @@ nn_cuda_auto_runtime_available <- function(metric,
   }
   if (identical(metric, "inner_product")) {
     ok <- isTRUE(faiss_gpu_available_value) ||
+      isTRUE(cuvs_available_value) ||
       isTRUE(cuda_available_value)
     return(list(
       available = ok,
       reason = if (ok) "available" else "missing_cuda_route",
       notes = if (isTRUE(faiss_gpu_available_value)) {
-        "CUDA auto raw-inner-product route is available through FAISS GPU Flat IP."
+        paste(
+          "CUDA auto raw-inner-product route is shape-dependent on this runtime:",
+          "exact small/query searches can use FAISS GPU Flat IP, while large",
+          "self-KNN can use transformed FAISS GPU or direct cuVS CAGRA graph search."
+        )
       } else if (isTRUE(cuda_available_value) && isTRUE(cuvs_available_value)) {
         paste(
           "CUDA auto raw-inner-product route is shape-dependent on this runtime:",
-          "large self-KNN graph searches can use faissR's native CUDA",
-          "candidate-refinement route, while explicit CUDA exact/brute-force",
-          "calls can use transformed cuVS brute force."
+          "large self-KNN graph searches can use transformed direct cuVS CAGRA",
+          "or faissR's native CUDA candidate-refinement route, while explicit",
+          "CUDA exact/brute-force calls can use transformed cuVS brute force."
         )
       } else if (isTRUE(cuda_available_value)) {
         paste(
@@ -2241,14 +2246,13 @@ nn_cuda_auto_runtime_available <- function(metric,
         )
       } else if (isTRUE(cuvs_available_value)) {
         paste(
-          "A cuVS runtime was detected, but CUDA auto raw-inner-product search",
-          "does not yet select the transformed cuVS brute-force route.",
-          "Explicit CUDA exact/brute-force calls can use transformed direct",
-          "cuVS brute force, and explicit CUDA CAGRA or HNSW calls can use",
-          "the transformed graph-search route."
+          "CUDA auto raw-inner-product route is shape-dependent on this runtime:",
+          "large self-KNN graph searches can use transformed direct cuVS CAGRA,",
+          "while small/query inner-product search needs FAISS GPU Flat IP or",
+          "an explicit transformed cuVS brute-force route."
         )
       } else {
-        "CUDA auto raw-inner-product search requires FAISS GPU Flat IP, transformed cuVS brute force, or faissR's native CUDA self-KNN candidate-refinement route."
+        "CUDA auto raw-inner-product search requires FAISS GPU Flat IP, transformed cuVS CAGRA/brute force, or faissR's native CUDA self-KNN candidate-refinement route."
       }
     ))
   }
@@ -2381,7 +2385,7 @@ nn_capability_row <- function(method, backend, metric) {
       } else if (metric %in% c("cosine", "correlation")) {
         "CUDA auto can resolve to CUDA grid for large 2D/3D self-search, FAISS GPU Flat normalized-IP search for exact small/query workloads, or cuVS HNSW/CAGRA graph routes for large self-KNN when available; cuVS-only runtimes are shape-dependent and keep small/query workloads on CPU."
       } else {
-        "CUDA auto uses FAISS GPU Flat IP for exact small/query inner-product search when FAISS GPU Flat is available, or faissR's native CUDA candidate-refinement route for large self-KNN when native CUDA kernels are available. Explicit CUDA CAGRA and HNSW can use the transformed raw-inner-product graph route; CUDA auto does not select them yet."
+        "CUDA auto uses FAISS GPU Flat IP for exact small/query inner-product search when FAISS GPU Flat is available, transformed FAISS GPU/direct cuVS CAGRA for large self-KNN graph search when available, or faissR's native CUDA candidate-refinement route when native CUDA kernels are the available large-self-search route."
       }
     }
   } else if (method %in% c("exact", "bruteforce")) {
@@ -6377,11 +6381,12 @@ grid_self_knn <- function(data,
 #'   grid for 2D/3D Euclidean/cosine/correlation
 #'   self-KNN, exact FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for
 #'   Euclidean searches when appropriate, cuVS HNSW for explicit CUDA HNSW
-#'   requests, FAISS GPU Flat IP routes for exact inner-product searches when
-#'   FAISS GPU Flat is available, faissR native CUDA candidate refinement for
-#'   large raw-inner-product self-KNN, and transformed direct cuVS brute force
-#'   for explicit CUDA exact/brute-force non-Euclidean searches when cuVS is
-#'   available
+#'   requests, FAISS GPU Flat IP routes for exact small/query inner-product
+#'   searches when FAISS GPU Flat is available, transformed FAISS GPU/direct
+#'   cuVS CAGRA for large raw-inner-product self-KNN, faissR native CUDA
+#'   candidate refinement as the large-self-search fallback, and transformed
+#'   direct cuVS brute force for explicit CUDA exact/brute-force non-Euclidean
+#'   searches when cuVS is available
 #'   [1-3,5,13-15,22-23]. When `backend = "auto"` is
 #'   combined with an explicit method, faissR first checks whether that exact
 #'   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU
