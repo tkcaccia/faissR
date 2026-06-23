@@ -749,7 +749,7 @@ test_that("CUDA k-means records direct cuVS provider selection", {
   x <- matrix(rnorm(40), ncol = 4)
   fake_cuvs <- function(...) {
     list(
-      cluster = rep.int(1:2, length.out = nrow(x)),
+      cluster = rep(1:2, length.out = nrow(x)),
       centers = matrix(0, nrow = 2, ncol = ncol(x)),
       withinss = c(1, 2),
       tot.withinss = 3,
