@@ -1948,7 +1948,10 @@ test_that("k-means benchmark records static selection metadata", {
     selection_n_per_center = 33.3,
     selection_cuda_available = FALSE,
     selection_faiss_gpu_available = FALSE,
-    selection_cuvs_available = FALSE
+    selection_cuvs_available = FALSE,
+    cuda_provider_selection = "direct_cuvs_after_faiss_gpu_unavailable_or_failed",
+    faiss_gpu_error = "FAISS GPU k-means unavailable",
+    backend_resolution_note = "CUDA k-means used direct cuVS after FAISS GPU failed."
   )
   expect_equal(row$selection_policy, "static_shape_center_backend_selector")
   expect_false(row$selection_slow_tuning)
@@ -1956,6 +1959,9 @@ test_that("k-means benchmark records static selection metadata", {
   expect_equal(row$selection_reason, "small_cpu_preferred")
   expect_true(row$selection_explicit_backend)
   expect_equal(row$selection_backend_decision, "explicit_cpu")
+  expect_equal(row$cuda_provider_selection, "direct_cuvs_after_faiss_gpu_unavailable_or_failed")
+  expect_equal(row$faiss_gpu_error, "FAISS GPU k-means unavailable")
+  expect_equal(row$backend_resolution_note, "CUDA k-means used direct cuVS after FAISS GPU failed.")
   expect_true(row$converged)
   expect_false(row$hit_max_iter)
 
@@ -1973,6 +1979,9 @@ test_that("k-means benchmark records static selection metadata", {
   expect_equal(summary$median_selection_nbytes, 3200)
   expect_equal(summary$median_selection_gpu_transfer_nbytes, 1600)
   expect_equal(summary$median_selection_n_per_center, 33.3)
+  expect_equal(summary$cuda_provider_selection, "direct_cuvs_after_faiss_gpu_unavailable_or_failed")
+  expect_equal(summary$faiss_gpu_error, "FAISS GPU k-means unavailable")
+  expect_equal(summary$backend_resolution_note, "CUDA k-means used direct cuVS after FAISS GPU failed.")
   expect_false(summary$any_hit_max_iter)
   expect_true(summary$all_converged)
 })

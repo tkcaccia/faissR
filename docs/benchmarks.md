@@ -643,7 +643,8 @@ aggregates successful rows across cycles by dataset/method/backend/centers and
 reports success counts, median/min/max elapsed time, ARI stability, withinss
 stability, iteration counts, whether any cycle hit `max_iter`, whether all
 cycles converged before the iteration cap, selected parameter medians,
-deterministic tuning rule/shape metadata, and resolved backend metadata.
+deterministic tuning rule/shape metadata, resolved backend metadata, and CUDA
+provider-selection metadata when CUDA k-means is used.
 `kmeans_best_by_dataset.csv` keeps a compact best successful row per dataset
 after ranking by ARI, elapsed time, and total within-cluster sum of squares for
 backward-compatible summaries. `kmeans_best_by_dataset_centers.csv` keeps the
@@ -665,8 +666,9 @@ be tuned or reported separately without losing the overall recommendation.
 `kmeans_fast_vs_cycle_recommendation.csv` compares aggregate `fast_kmeans()`
 rows with those recommendations and reports median speed ratio, median ARI gap,
 withinss ratio, selected tuning metadata, requested/resolved backend metadata,
-CPU thread count, static no-pilot selection metadata, backend/implementation
-agreement, and the recommendation basis used for the recommended row. Speed
+CPU thread count, static no-pilot selection metadata, CUDA provider-selection
+metadata, backend/implementation agreement, and the recommendation basis used
+for the recommended row. Speed
 ratios, ARI gaps, and withinss ratios are `NA` when the required timing or
 quality values are missing or invalid.
 `kmeans_auto_vs_global_recommendation.csv` compares aggregate
@@ -708,6 +710,11 @@ reason, explicit-backend flag, backend decision label, runtime capability
 flags, work/input-size estimates, and `selection_slow_tuning = FALSE`.
 Benchmark summaries can therefore separate explicit CPU/CUDA requests from
 automatic CPU/CUDA selection without running extra pilot jobs.
+For CUDA k-means rows, the benchmark also records `cuda_provider_selection`,
+`faiss_gpu_error`, and `backend_resolution_note` from `fast_kmeans()`. These
+columns distinguish FAISS GPU k-means from direct cuVS k-means and preserve the
+reason when an unavailable or failed FAISS GPU route is followed by direct cuVS
+inside the CUDA backend.
 For k-means parameter tuning, `tuning_rule` is a categorical no-pilot label
 such as `small_low_work_multistart`, `medium_single_start`, or
 `large_fast_convergence`, while `tuning_rule_detail` stores the exact
