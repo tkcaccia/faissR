@@ -724,6 +724,11 @@ terminate_fork_job <- function(job, grace_sec = 2) {
   invisible(suppressWarnings(parallel::mccollect(job, wait = FALSE)))
 }
 
+is_child_system_timeout <- function(status, exit_status) {
+  exit_status_int <- suppressWarnings(as.integer(exit_status %||% NA_integer_))
+  isTRUE(attr(status, "timeout")) || identical(exit_status_int, 124L)
+}
+
 run_nn_fork_process <- function(x, backend, method, metric, k, n_threads, seed,
                                 timeout, cagra_implementation, cagra_build_algo) {
   if (!identical(.Platform$OS.type, "unix")) {
@@ -905,7 +910,7 @@ run_nn_child_process <- function(x, backend, method, metric, k, n_threads, seed,
     timeout = as.integer(timeout) + 30L
   ))
   exit_status <- attr(status, "status")
-  timed_out <- isTRUE(attr(status, "timeout"))
+  timed_out <- is_child_system_timeout(status, exit_status)
   if (!file.exists(output)) {
     message <- paste(status, collapse = "\n")
     if (!nzchar(message)) message <- "child process did not write an output file"
@@ -920,7 +925,13 @@ run_nn_child_process <- function(x, backend, method, metric, k, n_threads, seed,
     ))
   }
   result <- readRDS(output)
-  result$child_status <- if (identical(result$status, "success")) "ok" else paste0("exit_", exit_status %||% 1L)
+  result$child_status <- if (identical(result$status, "success")) {
+    "ok"
+  } else if (timed_out) {
+    "timeout"
+  } else {
+    paste0("exit_", exit_status %||% 1L)
+  }
   result
 }
 

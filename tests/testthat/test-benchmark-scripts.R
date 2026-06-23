@@ -180,6 +180,17 @@ test_that("NN metric benchmark uses exported process cleanup for forked timeouts
   expect_false(any(grepl("parallel::mckill", readLines(script), fixed = TRUE)))
 })
 
+test_that("NN metric benchmark treats system timeout exit codes as timeouts", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+
+  expect_true(env$is_child_system_timeout(structure(character(), status = 124L), 124L))
+  expect_true(env$is_child_system_timeout(structure(character(), timeout = TRUE), NA_integer_))
+  expect_false(env$is_child_system_timeout(structure(character(), status = 1L), 1L))
+})
+
 test_that("benchmark materials document key row-level and summary outputs", {
   files <- list(
     nn = c(
