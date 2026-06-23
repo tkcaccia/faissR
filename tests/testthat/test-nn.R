@@ -1188,13 +1188,6 @@ test_that("faissR options use the faissR namespace only", {
 })
 
 
-test_that("nn rejects sparse Matrix inputs after sparse method removal", {
-  skip_if_not_installed("Matrix")
-  sx <- Matrix::Matrix(matrix(0, nrow = 4L, ncol = 3L), sparse = TRUE)
-  expect_error(nn(sx, k = 2L), "Sparse Matrix input is no longer supported")
-  expect_error(nn_without_self(sx, k = 2L), "Sparse Matrix input is no longer supported")
-})
-
 test_that("nn returns exact cosine neighbors on CPU", {
   x <- matrix(c(
     1, 0,

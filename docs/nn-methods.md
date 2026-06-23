@@ -322,8 +322,8 @@ nearest-neighbour graph [21].
   for all public metrics so public calls do not enter the unsafe linked-FAISS
   NSG graph builder [16,21,29].
 - CUDA `method = "nsg"` uses faissR's native CUDA NSG-style self-KNN route. It
-  builds a sparse candidate graph, prunes candidates with an NSG/MRNG-style
-  rule, and refines rows with the native CUDA row-candidate KNN kernel.
+  builds a candidate graph, prunes candidates with an NSG/MRNG-style rule, and
+  refines rows with the native CUDA row-candidate KNN kernel.
 - CPU and CUDA native NSG routes support Euclidean, cosine, correlation, and
   inner product for self-KNN. Cosine/correlation use normalized Euclidean
   search; inner product uses the package-wide shifted dot-product distance

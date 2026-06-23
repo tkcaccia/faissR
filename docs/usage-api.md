@@ -40,7 +40,7 @@ nn(data, points = data, k = NULL, backend = "auto",
 
 | Argument | Description |
 | --- | --- |
-| `data` | Numeric matrix, data frame, or optional `float::fl()`/`float32` matrix with reference observations in rows and features in columns. Sparse Matrix input is not supported by the current public NN API. The first float32 input route supports CPU FAISS Flat for Euclidean, cosine, correlation, and inner-product searches without converting the float32 source object to an R double matrix; ordinary R double query inputs can be paired with float32 reference data. |
+| `data` | Numeric matrix, data frame, or optional `float::fl()`/`float32` matrix with reference observations in rows and features in columns. The first float32 input route supports CPU FAISS Flat for Euclidean, cosine, correlation, and inner-product searches without converting the float32 source object to an R double matrix; ordinary R double query inputs can be paired with float32 reference data. |
 | `points` | Optional query matrix/data frame/float32 matrix with the same number of columns as `data`. Defaults to `data` for self-search. Float32 reference/query inputs can be mixed with ordinary R double matrices; the double side is converted once to float32 inside the FAISS adapter. |
 | `k` | Number of neighbours to return. If `NULL`, faissR chooses an automatic neighbourhood size. |
 | `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses a validated CUDA route only when the requested method/metric combination is supported and CUDA/cuVS runtime support is available, and otherwise resolves to CPU. Explicit `"cuda"` fails clearly when CUDA support or the selected CUDA combination is unavailable. |

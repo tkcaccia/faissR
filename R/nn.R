@@ -10,14 +10,6 @@ nn_compute <- function(data,
                        output = "double") {
   requested_backend <- backend
   tuning <- normalize_nn_tuning(tuning)
-  if (is_sparse_matrix_input(data) ||
-      (!isTRUE(points_missing) && is_sparse_matrix_input(points))) {
-    stop(
-      "Sparse Matrix input is no longer supported by faissR::nn(). ",
-      "Pass a dense matrix or data frame.",
-      call. = FALSE
-    )
-  }
   data_float32 <- is_float32_matrix_input(data)
   points_float32 <- if (isTRUE(points_missing)) data_float32 else is_float32_matrix_input(points)
   if (isTRUE(data_float32) || isTRUE(points_float32)) {
@@ -2722,10 +2714,6 @@ nn_resolved_backend_device <- function(backend) {
     return("cuda")
   }
   "cpu"
-}
-
-is_sparse_matrix_input <- function(x) {
-  inherits(x, "sparseMatrix") || inherits(x, "dgCMatrix")
 }
 
 resolve_auto_knn_gpu_backend <- function(backend,

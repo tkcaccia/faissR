@@ -1137,7 +1137,6 @@ benchmark1_route_parameters <- function(out) {
     faiss = attr(out, "faiss", exact = TRUE),
     cuvs = attr(out, "cuvs", exact = TRUE),
     spatial_index = attr(out, "spatial_index", exact = TRUE),
-    sparse = attr(out, "sparse", exact = TRUE),
     auto_selection = attr(out, "auto_selection", exact = TRUE)
   )
   keys <- c(
