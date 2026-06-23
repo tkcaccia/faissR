@@ -571,7 +571,13 @@ inside child R processes. The parent process still builds the exact reference
 and computes recall, while the raw table records `isolated_process` and
 `child_status`. The elapsed method time is measured inside the child around
 `faissR::nn()`, so process launch and result serialization are auditable but
-not counted as NN search time.
+not counted as NN search time. The NN metric benchmark also enables
+`--isolate_native_timeout=true` by default on Unix-like systems. High-work CPU
+`method = "exact"`, `method = "flat"`, and `method = "bruteforce"` rows then run
+inside forked workers so the benchmark can enforce an OS-level timeout even
+when the underlying C++/FAISS loop does not return control to R's
+`setTimeLimit()` handler. Timed-out workers are written as failed rows with
+`child_status = "timeout"` and the benchmark continues to the next row.
 The aggregate file `nn_metric_recommendations_from_cycles.csv` emits one row
 per dataset/backend/metric/k: it chooses the fastest median row above the recall
 threshold when possible, the best-recall row when all measured methods are below

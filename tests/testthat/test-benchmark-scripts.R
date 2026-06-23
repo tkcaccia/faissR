@@ -62,6 +62,62 @@ test_that("NN metric benchmark defaults cover full method metric backend and k g
   )
 })
 
+test_that("NN metric benchmark isolates high-work CPU exact timeout risks", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
+    "args <- parse_args()"
+  )
+
+  large_x <- matrix(0, nrow = 50000L, ncol = 2L)
+  small_x <- matrix(0, nrow = 100L, ncol = 2L)
+
+  expect_true(
+    env$should_isolate_native_timeout(
+      large_x,
+      backend = "cpu",
+      method = "flat",
+      preflight_route = "faiss_flat_l2",
+      isolate_native_timeout = TRUE
+    )
+  )
+  expect_true(
+    env$should_isolate_native_timeout(
+      large_x,
+      backend = "auto",
+      method = "exact",
+      preflight_route = "cpu",
+      isolate_native_timeout = TRUE
+    )
+  )
+  expect_false(
+    env$should_isolate_native_timeout(
+      large_x,
+      backend = "cpu",
+      method = "hnsw",
+      preflight_route = "faiss_hnsw",
+      isolate_native_timeout = TRUE
+    )
+  )
+  expect_false(
+    env$should_isolate_native_timeout(
+      small_x,
+      backend = "cpu",
+      method = "flat",
+      preflight_route = "faiss_flat_l2",
+      isolate_native_timeout = TRUE
+    )
+  )
+  expect_false(
+    env$should_isolate_native_timeout(
+      large_x,
+      backend = "cpu",
+      method = "flat",
+      preflight_route = "faiss_flat_l2",
+      isolate_native_timeout = FALSE
+    )
+  )
+})
+
 test_that("benchmark materials document key row-level and summary outputs", {
   files <- list(
     nn = c(
