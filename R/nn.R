@@ -6920,11 +6920,11 @@ grid_self_knn <- function(data,
 #'   GPU CAGRA when that route is available and otherwise direct cuVS CAGRA;
 #'   set `options(faissR.cagra_implementation = "faiss_gpu")` or `"cuvs"` to
 #'   force one provider for benchmarking. Availability preflights respect this
-#'   forced provider for every metric, and approximation metadata records
+#'   forced provider for supported metrics, and approximation metadata records
 #'   `cagra_provider` plus `cagra_provider_option`. It supports Euclidean/L2,
-#'   cosine/correlation through normalized Euclidean graph search, and raw
-#'   inner product through a maximum-inner-product-to-L2 extra-dimension
-#'   transform [3,13-16].
+#'   and cosine/correlation through normalized Euclidean graph search. Raw
+#'   inner-product CAGRA is disabled for both FAISS GPU CAGRA and direct cuVS
+#'   CAGRA until the transformed route is reliable across k values [3,13-16].
 #' }
 #'
 #' References are numbered as in `docs/references.md` in the GitHub
@@ -7009,9 +7009,9 @@ grid_self_knn <- function(data,
 #'   `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
 #'   FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, native CPU NN-descent raw
 #'   dot-product search, native CUDA NN-descent candidate refinement, and CUDA
-#'   FAISS GPU CAGRA or CUDA HNSW through a maximum-inner-product-to-L2
-#'   transform where available. Direct cuVS NN-descent and direct cuVS CAGRA do
-#'   not expose a safe raw-inner-product route.
+#'   HNSW through a maximum-inner-product-to-L2 transform where available.
+#'   Direct cuVS NN-descent, FAISS GPU CAGRA, and direct cuVS CAGRA do not
+#'   expose a safe raw-inner-product route in faissR.
 #'   Unsupported backend combinations fail clearly instead of returning neighbours
 #'   computed under a different metric.
 #' @param tuning Tuning policy for approximate methods. `"auto"` uses

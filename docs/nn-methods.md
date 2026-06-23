@@ -168,7 +168,8 @@ CUDA `method = "hnsw"` maps to `cuda_cuvs_hnsw` when RAPIDS cuVS HNSW is
 available. This route builds a CUDA CAGRA index, converts it to a cuVS HNSW
 index, and searches through the cuVS HNSW wrapper. faissR exposes it for
 Euclidean/L2, normalized cosine/correlation, and raw inner product through the
-same maximum-inner-product-to-L2 extra-dimension transform used by CUDA CAGRA.
+same maximum-inner-product-to-L2 extra-dimension transform used by validated
+CUDA inner-product graph routes.
 Returned raw inner-product distances follow faissR's smaller-is-better shifted
 distance convention. CUHNSW is acknowledged as related Apache-2.0 CUDA HNSW
 prior software, but faissR does not vendor or copy CUHNSW source [3,22-23].

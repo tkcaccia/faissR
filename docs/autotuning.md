@@ -85,7 +85,7 @@ or `"cuvs"`. The default `"auto"` prefers FAISS GPU CAGRA when available and
 falls back to direct cuVS CAGRA; forcing `"cuvs"` is useful for isolated cuVS
 benchmarks, while forcing `"faiss_gpu"` avoids silently comparing against the
 direct cuVS route on machines where FAISS GPU CAGRA is unavailable. Preflight
-availability checks respect this forced provider for every metric, and returned
+availability checks respect this forced provider for supported metrics, and returned
 approximation metadata records `cagra_provider` plus
 `cagra_provider_option`.
 
@@ -159,8 +159,8 @@ Policy summary:
   Euclidean or non-Euclidean datasets where exact GPU search is fast; FAISS GPU
   CAGRA for very large Euclidean self-KNN when available; and FAISS GPU or
   direct cuVS CAGRA for very large cosine/correlation self-KNN. Raw
-  inner-product CAGRA is limited to FAISS GPU CAGRA; direct cuVS CAGRA inner
-  product is disabled until the transformed route is safe. On cuVS-only
+  inner-product CAGRA is disabled for both FAISS GPU CAGRA and direct cuVS
+  CAGRA until the transformed route is safe across k values. On cuVS-only
   runtimes, `backend = "auto"` can select direct cuVS CAGRA for large
   cosine/correlation self-search; smaller non-grid non-Euclidean searches stay
   on CPU unless FAISS GPU Flat is available.

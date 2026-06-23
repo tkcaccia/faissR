@@ -675,8 +675,8 @@ test_that("nn_capabilities documents the public method metric matrix", {
     ,
     drop = FALSE
   ]
-  expect_true(cagra_ip$supported)
-  expect_match(cagra_ip$notes, "maximum-inner-product-to-L2")
+  expect_false(cagra_ip$supported)
+  expect_match(cagra_ip$notes, "disabled")
   expect_true(all(is.na(caps$implementation[!caps$supported])))
   expect_true(all(caps$supported[caps$method == "ivf"]))
   expect_true(all(caps$supported[caps$method == "ivfpq"]))
