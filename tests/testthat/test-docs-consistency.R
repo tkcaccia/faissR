@@ -910,6 +910,17 @@ test_that("NN methods page describes CUDA HNSW and raw inner-product support", {
   expect_false(grepl("raw inner product remains an expected unsupported combination", prose, fixed = TRUE))
 })
 
+test_that("nn_capabilities manual separates HNSW and CAGRA inner-product routes", {
+  docs_file <- test_path("../../man/nn_capabilities.Rd")
+  if (!file.exists(docs_file)) {
+    skip("nn_capabilities reference documentation is not available in this installed-package test context.")
+  }
+  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
+  expect_true(grepl("CUDA HNSW raw", prose, fixed = TRUE))
+  expect_true(grepl("Public CUDA CAGRA raw-inner-product routes are disabled", prose, fixed = TRUE))
+  expect_false(grepl("CUDA CAGRA/HNSW raw", prose, fixed = TRUE))
+})
+
 test_that("backend docs describe shape-dependent CUDA auto non-Euclidean capability", {
   docs_file <- test_path("../../docs/backend-capabilities.md")
   if (!file.exists(docs_file)) {
