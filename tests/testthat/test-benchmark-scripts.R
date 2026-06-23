@@ -184,6 +184,24 @@ test_that("NN metric benchmark isolates high-work CPU exact timeout risks", {
       isolate_native_timeout = TRUE
     )
   )
+  expect_true(
+    env$should_isolate_cuda_native_timeout(
+      large_x,
+      backend = "auto",
+      method = "exact",
+      preflight_route = "faiss_gpu_flat_l2",
+      isolate_native_timeout = TRUE
+    )
+  )
+  expect_true(
+    env$should_isolate_cuda_native_timeout(
+      large_x,
+      backend = "cuda",
+      method = "bruteforce",
+      preflight_route = "cuda_cuvs_bruteforce",
+      isolate_native_timeout = TRUE
+    )
+  )
   expect_false(
     env$should_isolate_cuda_native_timeout(
       large_x,

@@ -583,8 +583,11 @@ not counted as NN search time. The NN metric benchmark also enables
 `method = "exact"`, `method = "flat"`, and `method = "bruteforce"` rows then run
 inside forked workers so the benchmark can enforce an OS-level timeout even
 when the underlying C++/FAISS loop does not return control to R's
-`setTimeLimit()` handler. Timed-out workers are written as failed rows with
-`child_status = "timeout"` and the benchmark continues to the next row.
+`setTimeLimit()` handler. High-work CUDA/auto rows, including exhaustive
+`exact`/`flat`/`bruteforce` rows and graph/index rows, run inside Rscript child
+processes for the same reason. Timed-out workers are written as
+`status = "timeout"` with `child_status = "timeout"` and the benchmark
+continues to the next row.
 The aggregate file `nn_metric_recommendations_from_cycles.csv` emits one row
 per dataset/backend/metric/k: it chooses the fastest median row above the recall
 threshold when possible, the best-recall row when all measured methods are below
