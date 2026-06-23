@@ -214,9 +214,9 @@ helpers. R still reads user-facing `options(faissR.*)` values, but clipping,
 default choice, requested-vs-effective values, tuning-rule labels, and shape
 flags are produced by the compiled policy layer.
 For Euclidean compact very high-dimensional self-KNN, the selector prefers
-`cuda_cuvs_bruteforce` when cuVS is available, because Chiamaka validation on
-COIL20 showed the direct cuVS exact path was faster than FAISS GPU Flat while
-remaining an exact/high-recall route.
+`cuda_cuvs_bruteforce` when cuVS is available, because focused COIL20
+validation showed the direct cuVS exact path was faster than FAISS GPU Flat
+while remaining an exact/high-recall route.
 
 Explicit methods map to the selected backend. For example,
 `method = "grid", backend = "cpu"` resolves to the CPU grid implementation,

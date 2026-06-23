@@ -596,6 +596,43 @@ test_that("NN auto-selection metadata distinguishes explicit backend and method 
   expect_equal(auto_meta$predicted_backend, attr(cpu_auto_method, "backend"))
 })
 
+test_that("nn_compute consumes the C++ auto route decision for execution", {
+  set.seed(1046)
+  x <- matrix(rnorm(80), ncol = 4)
+  forced_route <- list(
+    error = NA_character_,
+    selected_backend = "cpu",
+    predicted_backend = "cpu"
+  )
+
+  out <- faissR:::nn_compute(
+    data = x,
+    points = x,
+    k = 3L,
+    backend = "cpu_auto",
+    points_missing = TRUE,
+    n_threads = 2L,
+    auto_selection = forced_route
+  )
+
+  expect_equal(attr(out, "backend"), "cpu")
+  expect_equal(attr(out, "resolved_backend"), "cpu")
+  expect_error(
+    faissR:::nn_compute(
+      data = x,
+      points = x,
+      k = 3L,
+      backend = "cuda_auto",
+      points_missing = TRUE,
+      auto_selection = list(
+        error = "compiled route unavailable",
+        selected_backend = "cuda_auto"
+      )
+    ),
+    "compiled route unavailable"
+  )
+})
+
 test_that("resolved backend labels map to stable auto-selection method and device metadata", {
   expect_equal(faissR:::nn_resolved_backend_public_method("faiss_hnsw"), "hnsw")
   expect_equal(faissR:::nn_resolved_backend_public_method("faiss_flat_cosine"), "flat")
@@ -1710,7 +1747,7 @@ test_that("removed CPU approximation backends are not public nn choices", {
   expect_error(nn(x, k = 5L, backend = "cpu_clustered"), "must be one of")
   expect_error(nn(x, k = 5L, backend = "cpu_nndescent"), "must be one of")
   expect_error(nn(x, k = 5L, backend = "cpu_ivf"), "must be one of")
-  expect_error(nn(x, k = 5L, backend = "cpu_annoy"), "must be one of")
+  expect_error(nn(x, k = 5L, backend = "hnsw"), "must be one of")
 })
 
 test_that("CPU approximate selector chooses FAISS HNSW, RcppHNSW, or exact CPU", {

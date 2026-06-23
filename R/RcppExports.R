@@ -113,10 +113,6 @@ ivf_self_knn_cpp <- function(data, k, nlist, nprobe, seed, parallel, cores) {
     .Call(`_faissR_ivf_self_knn_cpp`, data, k, nlist, nprobe, seed, parallel, cores)
 }
 
-annoy_self_knn_cpp <- function(data, k, n_trees, leaf_size, search_k, seed, parallel, cores) {
-    .Call(`_faissR_annoy_self_knn_cpp`, data, k, n_trees, leaf_size, search_k, seed, parallel, cores)
-}
-
 grid2d_self_knn_cpp <- function(data, k, parallel, cores, bins_per_dim) {
     .Call(`_faissR_grid2d_self_knn_cpp`, data, k, parallel, cores, bins_per_dim)
 }

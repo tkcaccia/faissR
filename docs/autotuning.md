@@ -140,8 +140,8 @@ rule:
 | non-self queries or other shapes | `ivf_pq` | cuVS IVF-PQ graph construction remains the general direct-cuVS CAGRA builder. |
 
 The explicit `"nn_descent"` builder is available for experiments, but it is not
-selected automatically because the Chiamaka COIL20 diagnostic failed inside the
-cuVS NN-descent CAGRA build with `cudaErrorInvalidValue`.
+selected automatically because the COIL20 diagnostic failed inside the cuVS
+NN-descent CAGRA build with `cudaErrorInvalidValue`.
 
 Approximate routes now attach deterministic no-pilot tuning metadata to
 `attr(result, "approximation")`. IVF, IVFPQ/PQ, NSG, NN-descent, CAGRA, and
@@ -269,7 +269,7 @@ CPU-auto default.
   must include measured recall. Explicit pilot/cache tuning stops when it cannot
   meet the target recall instead of silently returning a poor result.
 - Direct cuVS CAGRA has provider-internal build modes with different memory and
-  robustness profiles. On Chiamaka, COIL20 (`1440 x 16384`, `k = 50`,
+  robustness profiles. In the focused CUDA diagnostic, COIL20 (`1440 x 16384`, `k = 50`,
   Euclidean) completed with FAISS GPU CAGRA, direct cuVS CAGRA `ivf_pq`, and
   direct cuVS CAGRA `iterative_cagra_search`; the `ivf_pq` builder emitted a
   temporary workspace warning around 45 GB, while `iterative_cagra_search`

@@ -7,7 +7,8 @@ nn_compute <- function(data,
                        n_threads = NULL,
                        metric = "euclidean",
                        tuning = "auto",
-                       output = "double") {
+                       output = "double",
+                       auto_selection = NULL) {
   requested_backend <- backend
   tuning <- normalize_nn_tuning(tuning)
   data_float32 <- is_float32_matrix_input(data)
@@ -271,55 +272,25 @@ nn_compute <- function(data,
     stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
   }
 
-  if (identical(backend, "cpu_auto")) {
-    backend <- select_cpu_auto_backend(
-      self_query = self_query,
-      n = nrow(data),
-      p = ncol(data),
-      n_points = nrow(points),
-      k = k,
-      work_size = work_size,
-      metric = metric
-    )
-  } else if (backend %in% c("cuda_auto", "gpu_auto")) {
-    backend <- select_cuda_auto_backend(
-      self_query = self_query,
-      n = nrow(data),
-      p = ncol(data),
-      n_points = nrow(points),
-      k = k,
-      work_size = work_size,
-      metric = metric
-    )
-  } else {
-    auto_gpu <- resolve_auto_knn_gpu_backend(
+  if (backend %in% c("auto", "cpu_auto", "cuda_auto", "gpu_auto")) {
+    route <- auto_selection %||% nn_auto_selection_for_backend(
       backend = backend,
       self_query = self_query,
-      n_points = nrow(points),
       n = nrow(data),
       p = ncol(data),
+      n_points = nrow(points),
       k = k,
       work_size = work_size,
-      metric = metric
+      metric = metric,
+      exclude_self = isTRUE(exclude_self),
+      tuning = tuning
     )
-    if (!is.na(auto_gpu)) {
-      backend <- auto_gpu
-    } else if (identical(backend, "auto")) {
-      backend <- select_cpu_auto_backend(
-        self_query = self_query,
-        n = nrow(data),
-        p = ncol(data),
-        n_points = nrow(points),
-        k = k,
-        work_size = work_size,
-        metric = metric
-      )
-    } else if (identical(backend, "cpu_approx")) {
-      if (!isTRUE(self_query)) {
-        stop("`backend = \"cpu_approx\"` is only available for self-KNN searches.", call. = FALSE)
-      }
-      backend <- select_cpu_approx_backend(nrow(data), ncol(data), k)
+    backend <- nn_auto_selected_backend(route, backend)
+  } else if (identical(backend, "cpu_approx")) {
+    if (!isTRUE(self_query)) {
+      stop("`backend = \"cpu_approx\"` is only available for self-KNN searches.", call. = FALSE)
     }
+    backend <- select_cpu_approx_backend(nrow(data), ncol(data), k)
   }
 
   gpu_ivf <- resolve_gpu_ivf_backend(
@@ -2623,20 +2594,7 @@ resolve_public_nn_backend <- function(backend,
   method_label <- normalize_nn_method(method)
   metric <- normalize_nn_metric(metric)
   if (!tolower(backend_label) %in% c("auto", "cpu", "cuda")) {
-    removed <- c("cpu_clustered", "clustered", "cpu_nndescent", "nndescent",
-                 "cpu_ivf", "ivf", "cpu_annoy", "annoy")
-    if (tolower(backend_label) %in% removed) {
-      stop("`backend` should be one of \"auto\", \"cpu\", or \"cuda\".", call. = FALSE)
-    }
-    if (!identical(method_label, "auto")) {
-      stop(
-        "Legacy backend labels cannot be combined with `method`. ",
-        "Use `backend = \"auto\"`, \"cpu\", or \"cuda\" with `method`, ",
-        "or omit `method` when using a legacy backend label.",
-        call. = FALSE
-      )
-    }
-    return(backend_label)
+    stop("`backend` should be one of \"auto\", \"cpu\", or \"cuda\".", call. = FALSE)
   }
   requested_device <- tolower(backend_label)
   device <- normalize_public_compute_backend(backend)
@@ -3199,6 +3157,53 @@ nn_auto_select_shape_cpp <- function(resolved_backend,
     }
   }
   out
+}
+
+nn_auto_selection_for_backend <- function(backend,
+                                          self_query,
+                                          n,
+                                          p,
+                                          n_points,
+                                          k,
+                                          work_size,
+                                          metric = "euclidean",
+                                          exclude_self = FALSE,
+                                          tuning = "auto") {
+  requested_backend <- switch(
+    backend,
+    cpu_auto = "cpu",
+    cuda_auto = "cuda",
+    gpu_auto = "cuda",
+    "auto"
+  )
+  nn_auto_select_shape_cpp(
+    resolved_backend = backend,
+    requested_backend = requested_backend,
+    requested_method = "auto",
+    shape = list(
+      n = as.integer(n),
+      p = as.integer(p),
+      n_points = as.integer(n_points),
+      k = as.integer(k),
+      metric = normalize_nn_metric(metric),
+      self_query = isTRUE(self_query),
+      exclude_self = isTRUE(exclude_self),
+      work_size = as.double(work_size)
+    ),
+    tuning = tuning
+  )
+}
+
+nn_auto_selected_backend <- function(route, fallback_backend) {
+  if (is.null(route)) return(fallback_backend)
+  error <- route$error %||% NA_character_
+  error <- as.character(error)[1L]
+  if (!is.na(error) && nzchar(error)) {
+    stop(error, call. = FALSE)
+  }
+  selected <- route$selected_backend %||% route$predicted_backend %||% fallback_backend
+  selected <- as.character(selected)[1L]
+  if (is.na(selected) || !nzchar(selected)) fallback_backend else selected
 }
 
 nn_auto_route_for_shape <- function(shape, resolved_backend) {
@@ -5312,71 +5317,6 @@ clustered_self_knn <- function(data,
   out
 }
 
-annoy_tree_count <- function(n, k) {
-  value <- faissr_option("annoy_n_trees", NULL)
-  if (is.null(value)) {
-    value <- if (n >= 10000L) 50L else 24L
-  }
-  value <- suppressWarnings(as.integer(value))
-  if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- 24L
-  as.integer(max(1L, min(128L, value)))
-}
-
-annoy_leaf_size <- function(k) {
-  value <- faissr_option("annoy_leaf_size", NULL)
-  if (is.null(value)) {
-    value <- max(64L, min(256L, ceiling(2L * k)))
-  }
-  value <- suppressWarnings(as.integer(value))
-  if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- max(64L, 2L * k)
-  as.integer(max(k + 1L, min(1024L, value)))
-}
-
-annoy_search_k <- function(k, n_trees, leaf_size) {
-  value <- faissr_option("annoy_search_k", NULL)
-  if (is.null(value)) {
-    value <- max(n_trees * leaf_size, 50L * k)
-  }
-  value <- suppressWarnings(as.integer(value))
-  if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- n_trees * leaf_size
-  as.integer(max(k, value))
-}
-
-annoy_self_knn <- function(data,
-                           k,
-                           seed = 4L,
-                           n_threads = NULL) {
-  n <- nrow(data)
-  k <- as.integer(k)
-  if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L || k >= n) {
-    stop("`k` must be in [1, nrow(data) - 1].", call. = FALSE)
-  }
-  n_threads <- normalize_nn_threads(n_threads)
-  n_trees <- annoy_tree_count(n, k)
-  leaf_size <- annoy_leaf_size(k)
-  search_k <- annoy_search_k(k, n_trees, leaf_size)
-  out <- annoy_self_knn_cpp(
-    data,
-    as.integer(k),
-    as.integer(n_trees),
-    as.integer(leaf_size),
-    as.integer(search_k),
-    as.integer(seed),
-    TRUE,
-    as.integer(max(1L, min(8L, n_threads)))
-  )
-  attr(out, "approximation") <- list(
-    strategy = "annoy_style_random_projection_forest_native",
-    backend = "cpu_annoy",
-    n_trees = as.integer(out$n_trees),
-    leaf_size = as.integer(out$leaf_size),
-    search_k = as.integer(out$search_k),
-    n_leaves = as.integer(out$n_leaves),
-    seed = as.integer(seed)
-  )
-  out
-}
-
 nn_option_int_or_na <- function(name) {
   value <- faissr_option(name, NULL)
   if (is.null(value)) return(NA_integer_)
@@ -6684,7 +6624,8 @@ nn <- function(data,
     n_threads = n_threads,
     metric = metric,
     tuning = tuning,
-    output = output
+    output = output,
+    auto_selection = auto_selection
   )
   attr(result, "requested_backend") <- backend
   attr(result, "requested_method") <- public_nn_method_label(method)
@@ -6790,7 +6731,8 @@ nn_without_self <- function(data,
     n_threads = n_threads,
     metric = metric,
     tuning = tuning,
-    output = output
+    output = output,
+    auto_selection = auto_selection
   )
   attr(result, "requested_backend") <- backend
   attr(result, "requested_method") <- public_nn_method_label(method)
