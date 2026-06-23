@@ -43,7 +43,8 @@ including metric-aware CPU HNSW routing.}
 \item{tuning}{Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
 deterministic no-pilot default for the resolved method. FAISS IVF/IVFPQ
 routes use metric-aware defaults; optional FAISS GPU IVF pilot/cache tuning
-is Euclidean-only.}
+is Euclidean-only. Deterministic approximate-method defaults are computed by
+C++ `nn_tune_*_cpp()` helpers.}
 
 \item{cagra_implementation}{CUDA CAGRA provider for this call. See
 \code{\link{nn}()}.}

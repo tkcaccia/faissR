@@ -73,7 +73,10 @@ for example `method = "grid"` or `method = "cagra"`. Thus
 With the default `method = "auto"`, faissR chooses the most appropriate method
 for the selected backend. With `tuning = "auto"`, approximate methods use
 deterministic defaults identified for the resolved method; pilot/cache tuning is
-opt-in with `tuning = "cache"` or `tuning = "pilot"`.
+opt-in with `tuning = "cache"` or `tuning = "pilot"`. The route selector and
+deterministic approximate-method tuning rules live in C++; R reads user options
+and passes them to the compiled policy layer, and results report
+`tuning_source = "cpp"` when those rules set method parameters.
 The public nearest-neighbour metrics are `"euclidean"`, `"cosine"`,
 `"correlation"`, and `"inner_product"`. Correlation is centered cosine
 similarity, whereas inner product is the raw dot product; distance choices

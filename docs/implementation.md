@@ -151,8 +151,9 @@ All KNN routes return a `faissR_nn` object with:
   routes, such as `nlist`, `nprobe`, HNSW `M`, CAGRA graph degree, or tuning
   metadata. Approximate selectors record deterministic no-pilot metadata such as
   `tuning_policy`, `tuning_rule`, and shape flags including high-dimensional,
-  large-`n`, small-`k`, large-`k`, and non-Euclidean routing. For IVFPQ/PQ
-  compression settings, PQ-specific fields are prefixed with `pq_`.
+  large-`n`, small-`k`, large-`k`, and non-Euclidean routing. Deterministic
+  approximate-method parameter rules also record `tuning_source = "cpp"`. For
+  IVFPQ/PQ compression settings, PQ-specific fields are prefixed with `pq_`.
 - `attr(result, "auto_selection")`: for requests involving
   `backend = "auto"` or `method = "auto"`, the compiled static shape/k/metric
   decision record. It stores
@@ -205,6 +206,13 @@ The public `tuning` argument controls method-specific pilot tuning. The default
 `backend = "auto"` is made by the C++ `nn_auto_select_backend_cpp()` selector.
 The R wrapper normalizes arguments, collects runtime capability flags and
 option thresholds, and dispatches to the compiled selector's backend.
+The deterministic parameter rules used by `tuning = "auto"` are also C++ owned:
+FAISS IVF, FAISS/PQ, FAISS HNSW, FAISS NSG, FAISS NN-descent, direct cuVS
+IVFPQ, cuVS CAGRA, cuVS HNSW, cuVS NN-descent, native NSG, Vamana, native CUDA
+NN-descent, and RcppHNSW fallback parameters are computed by `nn_tune_*_cpp()`
+helpers. R still reads user-facing `options(faissR.*)` values, but clipping,
+default choice, requested-vs-effective values, tuning-rule labels, and shape
+flags are produced by the compiled policy layer.
 For Euclidean compact very high-dimensional self-KNN, the selector prefers
 `cuda_cuvs_bruteforce` when cuVS is available, because Chiamaka validation on
 COIL20 showed the direct cuVS exact path was faster than FAISS GPU Flat while

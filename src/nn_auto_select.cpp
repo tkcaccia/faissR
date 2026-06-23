@@ -323,6 +323,168 @@ std::string select_cpu(bool self_query,
   return "cpu";
 }
 
+bool valid_int(int x) {
+  return x != NA_INTEGER;
+}
+
+bool valid_double(double x) {
+  return !NumericVector::is_na(x) && std::isfinite(x);
+}
+
+int clamp_int(int value, int min_value, int max_value) {
+  if (max_value < min_value) max_value = min_value;
+  return std::max(min_value, std::min(max_value, value));
+}
+
+int option_int(int value, int fallback, int min_value, int max_value) {
+  if (!valid_int(value)) value = fallback;
+  return clamp_int(value, min_value, max_value);
+}
+
+int requested_int(int value, int fallback) {
+  return valid_int(value) ? value : fallback;
+}
+
+double option_double(double value,
+                     double fallback,
+                     double min_value,
+                     double max_value) {
+  if (!valid_double(value)) value = fallback;
+  value = std::max(min_value, std::min(max_value, value));
+  return value;
+}
+
+int safe_n(int n) {
+  return valid_int(n) ? std::max(1, n) : 1;
+}
+
+int safe_p(int p) {
+  return valid_int(p) ? std::max(1, p) : 1;
+}
+
+int safe_k(int k) {
+  return valid_int(k) ? std::max(1, k) : 1;
+}
+
+int ivf_list_count_cpp(int n, int k) {
+  n = safe_n(n);
+  k = safe_k(k);
+  int count = std::max(16, static_cast<int>(std::ceil(std::sqrt(static_cast<double>(n)))));
+  count = std::min(count, static_cast<int>(std::ceil(n / static_cast<double>(std::max(50, 20 * k)))));
+  return clamp_int(count, 4, std::min(n, 1024));
+}
+
+int ivf_probe_count_cpp(int nlist, int k, const std::string& metric) {
+  nlist = safe_n(nlist);
+  k = safe_k(k);
+  int base = std::max(std::max(16, static_cast<int>(std::ceil(std::sqrt(static_cast<double>(nlist))))),
+                      static_cast<int>(std::ceil(k / 3.0)));
+  if (metric != "euclidean") {
+    base = std::max(std::max(base, static_cast<int>(std::ceil(1.5 * base))),
+                    static_cast<int>(std::ceil(k / 2.0)));
+  }
+  return clamp_int(base, 1, nlist);
+}
+
+int faiss_pq_default_m_cpp(int p) {
+  p = safe_p(p);
+  const int candidates[] = {64, 56, 48, 40, 32, 28, 24, 16, 14, 12, 8, 7, 4, 2, 1};
+  for (int candidate : candidates) {
+    if (candidate <= p && p % candidate == 0) return candidate;
+  }
+  return 1;
+}
+
+List cuvs_cagra_params_core(int n,
+                            int p,
+                            int k,
+                            int graph_degree_option,
+                            int intermediate_graph_degree_option,
+                            int search_width_option,
+                            int itopk_size_option,
+                            bool manual) {
+  n = safe_n(n);
+  p = safe_p(p);
+  k = safe_k(k);
+  const bool small_k = k <= 10;
+  const bool large_k = k >= 100;
+  const bool large_n = n >= 1000000;
+  const bool small_n = n <= 5000;
+  const bool high_dim = p >= 1024;
+  const bool compact_build = small_k && (small_n || high_dim);
+  std::string rule;
+  if (large_n && large_k) {
+    rule = "large_n_large_k_graph_recall";
+  } else if (large_n) {
+    rule = "large_n_graph_recall";
+  } else if (compact_build) {
+    rule = "small_k_compact_cagra_build";
+  } else if (small_k) {
+    rule = "small_k_graph_speed";
+  } else {
+    rule = "balanced_graph_search";
+  }
+
+  const int n_cap = std::max(1, n - 1);
+  const int default_graph_degree = compact_build ? std::max(32, k + 1) : std::max(64, k + 1);
+  const int requested_graph_degree = requested_int(graph_degree_option, default_graph_degree);
+  const int graph_degree = option_int(graph_degree_option, default_graph_degree, k + 1, n_cap);
+  const int default_intermediate = compact_build ?
+    std::max(32, graph_degree * 2) : std::max(128, graph_degree * 2);
+  const int requested_intermediate = requested_int(intermediate_graph_degree_option, default_intermediate);
+  const int intermediate = option_int(
+    intermediate_graph_degree_option,
+    default_intermediate,
+    graph_degree,
+    n_cap
+  );
+  const int requested_search_width = requested_int(search_width_option, 0);
+  const int search_width = option_int(search_width_option, 0, 0, 1024);
+  const int default_itopk = compact_build ?
+    std::max(std::max(32, graph_degree), k) : std::max(64, graph_degree);
+  const int requested_itopk = requested_int(itopk_size_option, default_itopk);
+  const int itopk = option_int(itopk_size_option, default_itopk, k, 4096);
+
+  return List::create(
+    _["graph_degree"] = graph_degree,
+    _["intermediate_graph_degree"] = intermediate,
+    _["search_width"] = search_width,
+    _["itopk_size"] = itopk,
+    _["requested_graph_degree"] = requested_graph_degree,
+    _["requested_intermediate_graph_degree"] = requested_intermediate,
+    _["requested_search_width"] = requested_search_width,
+    _["requested_itopk_size"] = requested_itopk,
+    _["tuning_policy"] = manual ? "manual_options" : "auto_shape_k",
+    _["tuning_rule"] = rule,
+    _["tuning_large_n"] = large_n,
+    _["tuning_small_n"] = small_n,
+    _["tuning_high_dim"] = high_dim,
+    _["tuning_compact_build"] = compact_build,
+    _["tuning_small_k"] = small_k,
+    _["tuning_large_k"] = large_k,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+std::string cagra_build_algo_for_shape_core(int n,
+                                            int p,
+                                            int k,
+                                            bool self_query,
+                                            bool compact,
+                                            const std::string& requested) {
+  if (requested != "auto") return requested;
+  n = safe_n(n);
+  p = safe_p(p);
+  k = safe_k(k);
+  const bool small_n = n <= 5000;
+  const bool high_dim = p >= 1024;
+  const bool moderate_k = k <= 100;
+  if (self_query && moderate_k && (compact || (small_n && high_dim))) {
+    return "iterative_cagra_search";
+  }
+  return "ivf_pq";
+}
+
 } // namespace
 
 // [[Rcpp::export]]
@@ -443,5 +605,500 @@ List nn_auto_select_backend_cpp(std::string resolved_backend,
     _["exclude_self"] = exclude_self,
     _["work_size"] = work_size,
     _["tuning"] = tuning
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_faiss_ivf_cpp(int n,
+                           int k,
+                           std::string metric,
+                           int nlist_option = NA_INTEGER,
+                           int nprobe_option = NA_INTEGER,
+                           bool manual = false) {
+  n = safe_n(n);
+  k = safe_k(k);
+  const bool small_k = k <= 10;
+  const bool large_k = k >= 100;
+  const bool large_n = n >= 1000000;
+  const bool metric_aware = metric != "euclidean";
+  std::string base_rule = large_n ? "large_n_coarse_quantizer" :
+    (large_k ? "large_k_more_probe" : (small_k ? "small_k_speed" : "balanced_shape_k"));
+  std::string rule = (metric_aware && !manual) ? ("metric_" + base_rule) : base_rule;
+
+  const int default_nlist = ivf_list_count_cpp(n, k);
+  const int requested_nlist = requested_int(nlist_option, default_nlist);
+  const int nlist = option_int(nlist_option, default_nlist, 1, n);
+  const int default_nprobe = ivf_probe_count_cpp(nlist, k, metric);
+  const int requested_nprobe = requested_int(nprobe_option, default_nprobe);
+  const int nprobe = option_int(nprobe_option, default_nprobe, 1, nlist);
+
+  return List::create(
+    _["nlist"] = nlist,
+    _["nprobe"] = nprobe,
+    _["requested_nlist"] = requested_nlist,
+    _["requested_nprobe"] = requested_nprobe,
+    _["tuning_policy"] = manual ? "manual_options" : "auto_shape_k",
+    _["tuning_rule"] = rule,
+    _["tuning_metric"] = metric,
+    _["tuning_metric_aware"] = metric_aware,
+    _["tuning_large_n"] = large_n,
+    _["tuning_small_k"] = small_k,
+    _["tuning_large_k"] = large_k,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_faiss_pq_cpp(int p,
+                          int n = NA_INTEGER,
+                          int m_option = NA_INTEGER,
+                          int nbits_option = NA_INTEGER,
+                          bool manual = false,
+                          bool manual_nbits = false) {
+  p = safe_p(p);
+  const bool n_known = valid_int(n);
+  const int min_training = 624;
+  const int min_training_8bit = 9984;
+  const bool high_dim = p >= 256;
+  const bool small_training = n_known && n < min_training;
+  const bool reduced_codebook_training = n_known && n >= min_training && n < min_training_8bit;
+  int m = option_int(m_option, faiss_pq_default_m_cpp(p), 1, p);
+  while (m > 1 && p % m != 0) --m;
+  const int nbits_default = (reduced_codebook_training && !manual_nbits) ? 4 : 8;
+  const int nbits = option_int(nbits_option, nbits_default, 4, 12);
+  std::string rule = small_training ? "small_training_rows_minimum_pq" :
+    ((reduced_codebook_training && !manual_nbits) ? "training_rows_4bit_pq" :
+       (high_dim ? "high_dim_largest_divisor_pq" : "dimension_largest_divisor_pq"));
+
+  return List::create(
+    _["m"] = m,
+    _["nbits"] = nbits,
+    _["tuning_policy"] = manual ? "manual_options" : "auto_dimension",
+    _["tuning_rule"] = rule,
+    _["tuning_high_dim"] = high_dim,
+    _["tuning_small_training"] = small_training,
+    _["tuning_reduced_codebook_training"] = reduced_codebook_training,
+    _["min_training_rows"] = min_training,
+    _["min_training_rows_8bit"] = min_training_8bit,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_cuvs_ivfpq_cpp(int p,
+                            int pq_dim_option = NA_INTEGER,
+                            int pq_bits_option = NA_INTEGER,
+                            bool manual = false) {
+  p = safe_p(p);
+  const bool high_dim = p >= 256;
+  const int requested_pq_dim = requested_int(pq_dim_option, 0);
+  int pq_dim = requested_int(pq_dim_option, 0);
+  if (pq_dim < 0) pq_dim = 0;
+  const int requested_pq_bits = requested_int(pq_bits_option, 8);
+  const int pq_bits = option_int(pq_bits_option, 8, 4, 8);
+  return List::create(
+    _["pq_dim"] = pq_dim,
+    _["pq_bits"] = pq_bits,
+    _["requested_pq_dim"] = requested_pq_dim,
+    _["requested_pq_bits"] = requested_pq_bits,
+    _["tuning_policy"] = manual ? "manual_options" : "auto_shape",
+    _["tuning_rule"] = high_dim ? "high_dim_default_pq" : "dimension_default_pq",
+    _["tuning_high_dim"] = high_dim,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_faiss_hnsw_cpp(int n,
+                            int p,
+                            int k,
+                            std::string metric,
+                            int m_option = NA_INTEGER,
+                            int ef_construction_option = NA_INTEGER,
+                            int ef_search_option = NA_INTEGER,
+                            bool manual = false) {
+  n = valid_int(n) ? n : NA_INTEGER;
+  p = valid_int(p) ? p : NA_INTEGER;
+  k = safe_k(k);
+  const bool high_dim = valid_int(p) && p >= 256;
+  const bool large_n = valid_int(n) && n >= 50000;
+  const bool very_large_high_dim = large_n && high_dim;
+  const bool small_k = k <= 10;
+  const bool large_k = k >= 100;
+  const bool non_euclidean = metric != "euclidean";
+
+  std::string rule;
+  int default_m;
+  int default_ef_construction;
+  int default_ef_search;
+  if (non_euclidean && small_k) {
+    rule = "balanced_small_k_metric";
+    default_m = 32;
+    default_ef_construction = 160;
+    default_ef_search = std::max(120, 4 * k);
+  } else if ((very_large_high_dim && large_k) ||
+             (non_euclidean && (large_k || high_dim))) {
+    rule = "high_recall_shape_metric";
+    default_m = 48;
+    default_ef_construction = 240;
+    default_ef_search = std::max(220, 3 * k);
+  } else if (small_k && !high_dim && !non_euclidean) {
+    rule = "small_k_speed";
+    default_m = 24;
+    default_ef_construction = 120;
+    default_ef_search = std::max(80, 4 * k);
+  } else {
+    rule = "balanced_shape_metric";
+    default_m = 32;
+    default_ef_construction = 200;
+    default_ef_search = std::max(150, 3 * k);
+  }
+
+  const int m = option_int(m_option, default_m, 2, 256);
+  const int ef_construction = option_int(ef_construction_option, default_ef_construction, m, 4096);
+  const int ef_search = option_int(ef_search_option, default_ef_search, k, 4096);
+
+  return List::create(
+    _["m"] = m,
+    _["ef_construction"] = ef_construction,
+    _["ef_search"] = ef_search,
+    _["rule"] = rule,
+    _["policy"] = manual ? "manual_options" : "auto_shape_metric",
+    _["high_dim"] = high_dim,
+    _["large_n"] = large_n,
+    _["small_k"] = small_k,
+    _["large_k"] = large_k,
+    _["non_euclidean"] = non_euclidean,
+    _["requested_m"] = default_m,
+    _["requested_ef_construction"] = default_ef_construction,
+    _["requested_ef_search"] = default_ef_search,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_rcpphnsw_cpp(int k,
+                          int m_option = NA_INTEGER,
+                          int ef_construction_option = NA_INTEGER,
+                          int ef_option = NA_INTEGER) {
+  k = safe_k(k);
+  const int m = option_int(m_option, 16, 2, 256);
+  const int ef_construction = option_int(
+    ef_construction_option,
+    std::max(200, m),
+    m,
+    4096
+  );
+  const int ef = option_int(
+    ef_option,
+    std::max(50, 3 * k),
+    k,
+    4096
+  );
+  return List::create(
+    _["m"] = m,
+    _["ef_construction"] = ef_construction,
+    _["ef"] = ef,
+    _["tuning_policy"] = "auto_k",
+    _["tuning_rule"] = k >= 100 ? "large_k_hnswlib" : (k <= 10 ? "small_k_hnswlib" : "balanced_hnswlib"),
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_faiss_nsg_cpp(int k,
+                           int r_option = NA_INTEGER,
+                           int search_l_option = NA_INTEGER,
+                           int build_type_option = NA_INTEGER,
+                           bool manual = false) {
+  k = safe_k(k);
+  const bool small_k = k <= 10;
+  const bool large_k = k >= 100;
+  const int r = option_int(r_option, 48, 2, 512);
+  const int search_l = option_int(search_l_option, std::max(200, 4 * k), k, 4096);
+  const int build_type = option_int(build_type_option, 1, 0, 1);
+  return List::create(
+    _["r"] = r,
+    _["search_l"] = search_l,
+    _["build_type"] = build_type,
+    _["tuning_policy"] = manual ? "manual_options" : "auto_k",
+    _["tuning_rule"] = large_k ? "large_k_search_l" : (small_k ? "small_k_speed" : "balanced_k"),
+    _["tuning_small_k"] = small_k,
+    _["tuning_large_k"] = large_k,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_faiss_nndescent_cpp(int k,
+                                 int graph_k_option = NA_INTEGER,
+                                 int n_iter_option = NA_INTEGER,
+                                 int search_l_option = NA_INTEGER,
+                                 bool manual = false) {
+  k = safe_k(k);
+  const bool small_k = k <= 10;
+  const bool large_k = k >= 100;
+  const int graph_k = option_int(graph_k_option, std::max(100, 2 * k), k, 1024);
+  const int n_iter = option_int(n_iter_option, 20, 1, 100);
+  const int search_l = option_int(search_l_option, std::max(graph_k, 2 * k), k, 4096);
+  return List::create(
+    _["graph_k"] = graph_k,
+    _["n_iter"] = n_iter,
+    _["search_l"] = search_l,
+    _["tuning_policy"] = manual ? "manual_options" : "auto_k",
+    _["tuning_rule"] = large_k ? "large_k_graph_search" : (small_k ? "small_k_speed" : "balanced_k"),
+    _["tuning_small_k"] = small_k,
+    _["tuning_large_k"] = large_k,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_cpu_nndescent_cpp(int n, int k) {
+  n = safe_n(n);
+  k = safe_k(k);
+  const int n_cap = std::max(1, n - 1);
+  const int pool_size = std::min(
+    n_cap,
+    std::max(k + 15, std::min(160, static_cast<int>(std::ceil(2.5 * k))))
+  );
+  int n_iters = n >= 50000 ? 3 : 4;
+  if (k < 30) ++n_iters;
+  const int max_candidates = std::min(n_cap, std::max(pool_size * 4, k * 12));
+  const int n_random_projections = n >= 50000 ? 8 : 6;
+  return List::create(
+    _["pool_size"] = pool_size,
+    _["n_iters"] = n_iters,
+    _["max_candidates"] = max_candidates,
+    _["n_random_projections"] = n_random_projections,
+    _["tuning_policy"] = "auto_shape_k",
+    _["tuning_rule"] = n >= 50000 ? "large_n_random_projection_seed" : "balanced_random_projection_seed",
+    _["tuning_large_n"] = n >= 50000,
+    _["tuning_small_k"] = k < 30,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_cuvs_cagra_cpp(int n,
+                            int p,
+                            int k,
+                            int graph_degree_option = NA_INTEGER,
+                            int intermediate_graph_degree_option = NA_INTEGER,
+                            int search_width_option = NA_INTEGER,
+                            int itopk_size_option = NA_INTEGER,
+                            bool manual = false) {
+  return cuvs_cagra_params_core(
+    n, p, k, graph_degree_option, intermediate_graph_degree_option,
+    search_width_option, itopk_size_option, manual
+  );
+}
+
+// [[Rcpp::export]]
+std::string nn_tune_cuvs_cagra_build_algo_cpp(int n,
+                                              int p,
+                                              int k,
+                                              bool self_query,
+                                              bool compact,
+                                              std::string requested = "auto") {
+  return cagra_build_algo_for_shape_core(n, p, k, self_query, compact, requested);
+}
+
+// [[Rcpp::export]]
+List nn_tune_cuvs_hnsw_cpp(int n,
+                           int p,
+                           int k,
+                           int n_threads,
+                           std::string build_algo_preference = "auto",
+                           int graph_degree_option = NA_INTEGER,
+                           int intermediate_graph_degree_option = NA_INTEGER,
+                           int search_width_option = NA_INTEGER,
+                           int itopk_size_option = NA_INTEGER,
+                           int ef_option = NA_INTEGER,
+                           bool manual_cagra = false) {
+  List base = cuvs_cagra_params_core(
+    n, p, k, graph_degree_option, intermediate_graph_degree_option,
+    search_width_option, itopk_size_option, manual_cagra
+  );
+  n = safe_n(n);
+  p = safe_p(p);
+  k = safe_k(k);
+  const bool large_k = k >= 100;
+  const bool large_n = n >= 1000000;
+  const bool compact = as<bool>(base["tuning_compact_build"]);
+  const std::string build_algo = cagra_build_algo_for_shape_core(
+    n, p, k, true, compact, build_algo_preference
+  );
+  const int default_ef = large_k ? std::max(240, 3 * k) : std::max(120, 4 * k);
+  const int requested_ef = requested_int(ef_option, default_ef);
+  const int ef = option_int(ef_option, default_ef, k, 4096);
+  const int threads = std::max(1, std::min(64, valid_int(n_threads) ? n_threads : 1));
+
+  return List::create(
+    _["graph_degree"] = as<int>(base["graph_degree"]),
+    _["intermediate_graph_degree"] = as<int>(base["intermediate_graph_degree"]),
+    _["ef"] = ef,
+    _["n_threads"] = threads,
+    _["cagra_build_algo"] = build_algo,
+    _["requested_graph_degree"] = as<int>(base["requested_graph_degree"]),
+    _["requested_intermediate_graph_degree"] = as<int>(base["requested_intermediate_graph_degree"]),
+    _["requested_ef"] = requested_ef,
+    _["requested_n_threads"] = threads,
+    _["tuning_policy"] = as<std::string>(base["tuning_policy"]),
+    _["tuning_rule"] = (large_n && large_k) ? "large_n_large_k_hnsw_from_cagra" :
+      (large_n ? "large_n_hnsw_from_cagra" :
+        (large_k ? "large_k_hnsw_from_cagra" : "balanced_hnsw_from_cagra")),
+    _["tuning_large_n"] = large_n,
+    _["tuning_large_k"] = large_k,
+    _["tuning_small_k"] = as<bool>(base["tuning_small_k"]),
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_cuvs_nndescent_cpp(int n,
+                                int k,
+                                int graph_degree_option = NA_INTEGER,
+                                int intermediate_graph_degree_option = NA_INTEGER,
+                                int max_iterations_option = NA_INTEGER,
+                                bool manual = false) {
+  n = safe_n(n);
+  k = safe_k(k);
+  const bool small_k = k <= 10;
+  const bool large_k = k >= 100;
+  const bool large_n = n >= 1000000;
+  const int n_cap = std::max(1, n - 1);
+  const int graph_degree = option_int(graph_degree_option, k, k, n_cap);
+  const int intermediate = option_int(
+    intermediate_graph_degree_option,
+    std::max(graph_degree * 2, graph_degree),
+    graph_degree,
+    n_cap
+  );
+  const int max_iterations = option_int(max_iterations_option, 20, 1, 200);
+  return List::create(
+    _["graph_degree"] = graph_degree,
+    _["intermediate_graph_degree"] = intermediate,
+    _["max_iterations"] = max_iterations,
+    _["tuning_policy"] = manual ? "manual_options" : "auto_shape_k",
+    _["tuning_rule"] = (large_n || large_k) ? "large_graph_search" :
+      (small_k ? "small_k_speed" : "balanced_graph_search"),
+    _["tuning_large_n"] = large_n,
+    _["tuning_small_k"] = small_k,
+    _["tuning_large_k"] = large_k,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_native_nsg_cpp(int n,
+                            int p,
+                            int k,
+                            std::string metric,
+                            std::string backend,
+                            int r_option = NA_INTEGER,
+                            int graph_k_option = NA_INTEGER) {
+  n = safe_n(n);
+  p = safe_p(p);
+  k = safe_k(k);
+  const bool large_k = k >= 50;
+  const bool high_dim = p >= 128;
+  const bool inner_product = metric == "inner_product";
+  const int default_r = (large_k || high_dim || inner_product) ? 64 : 48;
+  const int graph_k_cap = backend == "cuda" ? 255 : 512;
+  const int requested_r = option_int(r_option, default_r, 2, 256);
+  int r = std::min(std::max(2, requested_r), std::max(1, n - 1));
+  const int default_multiplier = (high_dim || inner_product) ? 3 : 2;
+  const int default_graph_k = std::max(std::max(k, default_multiplier * r), 96);
+  const int requested_graph_k = option_int(graph_k_option, default_graph_k, k, graph_k_cap);
+  int graph_k = std::min(std::min(std::max(k, requested_graph_k), std::max(1, n - 1)), graph_k_cap);
+  if (r > graph_k) r = graph_k;
+  return List::create(
+    _["r"] = r,
+    _["graph_k"] = graph_k,
+    _["requested_r"] = requested_r,
+    _["requested_graph_k"] = requested_graph_k,
+    _["backend"] = backend,
+    _["graph_k_cap"] = graph_k_cap,
+    _["tuning_policy"] = "auto_shape_k_metric",
+    _["tuning_rule"] = inner_product ? ("inner_product_" + backend + "_nsg_candidate_refine") :
+      ((high_dim || large_k) ? ("high_recall_" + backend + "_nsg") : ("balanced_" + backend + "_nsg")),
+    _["tuning_large_k"] = large_k,
+    _["tuning_high_dim"] = high_dim,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_vamana_cpp(int n,
+                        int p,
+                        int k,
+                        std::string metric,
+                        int r_option = NA_INTEGER,
+                        int search_l_option = NA_INTEGER,
+                        double alpha_option = NA_REAL) {
+  n = safe_n(n);
+  p = safe_p(p);
+  k = safe_k(k);
+  const bool large_k = k >= 50;
+  const bool high_dim = p >= 128;
+  const int default_r = (high_dim || large_k) ? 64 : 48;
+  const int requested_r = option_int(r_option, default_r, 2, 256);
+  int r = std::min(std::max(2, requested_r), std::max(1, n - 1));
+  const int default_search_l = std::max(std::max(k, 2 * r), 96);
+  const int requested_search_l = option_int(search_l_option, default_search_l, k, 512);
+  int search_l = std::min(std::min(std::max(k, requested_search_l), std::max(1, n - 1)), 512);
+  if (r > search_l) r = search_l;
+  const double requested_alpha = valid_double(alpha_option) && alpha_option >= 1.0 ? alpha_option : 1.2;
+  const double alpha = std::max(1.0, std::min(2.0, requested_alpha));
+  return List::create(
+    _["r"] = r,
+    _["search_l"] = search_l,
+    _["alpha"] = alpha,
+    _["requested_r"] = requested_r,
+    _["requested_search_l"] = requested_search_l,
+    _["requested_alpha"] = requested_alpha,
+    _["tuning_policy"] = "auto_shape_k_metric",
+    _["tuning_rule"] = metric == "inner_product" ? "inner_product_vamana_candidate_refine" :
+      ((high_dim || large_k) ? "high_recall_vamana" : "balanced_vamana"),
+    _["tuning_large_k"] = large_k,
+    _["tuning_high_dim"] = high_dim,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_gpu_nndescent_cpp(int n,
+                               int k,
+                               std::string backend,
+                               int graph_degree_option = NA_INTEGER,
+                               int n_iters_option = NA_INTEGER,
+                               int sources_option = NA_INTEGER,
+                               int neighbors_option = NA_INTEGER,
+                               double delta_option = NA_REAL) {
+  n = valid_int(n) ? n : NA_INTEGER;
+  k = safe_k(k);
+  int graph_degree_default = (valid_int(n) && n >= 50000 && k <= 30) ? std::max(k, 64) : k;
+  int graph_degree = valid_int(graph_degree_option) ? graph_degree_option : graph_degree_default;
+  if (valid_int(n)) graph_degree = std::min(graph_degree, n - 1);
+  graph_degree = clamp_int(graph_degree, k, 256);
+  const int default_iters = (backend == "cuda" && valid_int(n) && n >= 50000) ? 3 : 1;
+  const int n_iters = option_int(n_iters_option, default_iters, 1, 5);
+  const int default_sources = std::max(3, std::min(graph_degree, 10));
+  const int sources = option_int(sources_option, default_sources, 1, graph_degree);
+  const int default_neighbors = std::max(5, std::min(graph_degree, static_cast<int>(std::ceil(graph_degree / 2.0))));
+  const int neighbors = option_int(neighbors_option, default_neighbors, 1, graph_degree);
+  const double delta = option_double(delta_option, 0.015, 0.0, R_PosInf);
+  return List::create(
+    _["graph_degree"] = graph_degree,
+    _["n_iters"] = n_iters,
+    _["sources"] = sources,
+    _["neighbors"] = neighbors,
+    _["delta"] = delta,
+    _["tuning_policy"] = "auto_shape_k",
+    _["tuning_rule"] = (valid_int(n) && n >= 50000) ? "large_graph_adaptive" : "balanced_adaptive",
+    _["tuning_large_n"] = valid_int(n) && n >= 50000,
+    _["tuning_small_k"] = k <= 10,
+    _["tuning_source"] = "cpp"
   );
 }

@@ -100,7 +100,9 @@ small-`k` metric-aware, balanced, and high-recall tiers; explicit
 use deterministic shape/k/metric-aware `nlist`/`nprobe` defaults; optional
 FAISS GPU IVF `"cache"`/`"pilot"` tuning currently runs only for Euclidean
 IVF, while non-Euclidean IVF routes use deterministic metric-aware
-defaults. Advanced tuning and cache knobs use
+defaults. Deterministic approximate-method defaults are computed by C++
+`nn_tune_*_cpp()` helpers and record `tuning_source = "cpp"` in
+approximation metadata. Advanced tuning and cache knobs use
 `options(faissR.<name> = ...)`.}
 
 \item{cagra_implementation}{CUDA CAGRA provider for this call. `NULL` uses

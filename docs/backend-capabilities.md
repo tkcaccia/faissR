@@ -173,14 +173,20 @@ that reports GPU support, not only a CPU FAISS installation.
 
 Approximate GPU routes use deterministic no-pilot defaults for
 `tuning = "auto"`. FAISS IVF records fixed shape/k/metric-aware
-`nlist`/`nprobe` metadata, and cuVS CAGRA records fixed graph/search metadata. Approximate
+`nlist`/`nprobe` metadata, and cuVS CAGRA records fixed graph/search metadata.
+The route selector and deterministic parameter selectors are compiled C++
+policies: `nn_auto_select_backend_cpp()` chooses the backend route, and
+`nn_tune_*_cpp()` helpers choose HNSW/IVF/PQ/CAGRA/NSG/Vamana/NN-descent
+parameters. R wrappers read user options and pass values into C++, but do not
+maintain a separate tuning implementation. Approximate
 results record relevant parameters in `attr(result, "approximation")`.
 Approximate selectors use deterministic no-pilot parameter rules unless the user
 explicitly enables a pilot/cache policy for routes such as FAISS GPU IVF or cuVS
 CAGRA. IVF, IVFPQ/PQ, NSG, NN-descent, CAGRA, and HNSW record
 `tuning_policy`, `tuning_rule`, and relevant shape flags in approximation
 metadata; IVF also records `tuning_metric`/`tuning_metric_aware`, and PQ
-compression selectors use `pq_tuning_*` field names.
+compression selectors use `pq_tuning_*` field names. Deterministic selectors
+record `tuning_source = "cpp"`.
 
 Exact routes mark `attr(result, "exact") = TRUE`. Approximate routes mark
 `exact = FALSE`, and benchmark code should report recall or explicitly mark

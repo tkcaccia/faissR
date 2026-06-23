@@ -152,6 +152,14 @@ route. The record stores
 forced method request from an automatic shape-policy choice without parsing
 implementation labels or rerunning any tuning logic inside `nn()`.
 
+After the route is selected, deterministic `tuning = "auto"` parameters are
+also computed by compiled C++ helpers. FAISS HNSW, IVF, IVFPQ/PQ, FAISS graph
+indexes, cuVS CAGRA/HNSW/NN-descent/IVFPQ, native NSG, Vamana, native CUDA
+NN-descent, and the RcppHNSW fallback all return parameter metadata with
+`tuning_source = "cpp"`. R options remain the user-facing way to override
+defaults, but clipping, shape/k/metric tier labels, and requested/effective
+values come from the C++ policy layer.
+
 FAISS CPU HNSW adds method-specific no-pilot tuning metadata in
 `attr(result, "approximation")`. The policy records `tuning_rule` plus
 high-dimensional, large-`n`, small-`k`, large-`k`, and non-Euclidean flags, so

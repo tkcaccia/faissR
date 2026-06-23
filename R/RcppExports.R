@@ -129,6 +129,66 @@ nn_auto_select_backend_cpp <- function(resolved_backend, requested_backend, requ
     .Call(`_faissR_nn_auto_select_backend_cpp`, resolved_backend, requested_backend, requested_method, metric, n, p, n_points, k, self_query, exclude_self, cuda_available, cuvs_available, faiss_available, faiss_gpu_available, rcpphnsw_available, cagra_preference, cuda_exact_n, cuda_exact_work, metric_graph_n, metric_graph_min_k, metric_graph_work, cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k, cuvs_bruteforce_work_threshold, cpu_exact_work, cpu_faiss_flat_work, tuning)
 }
 
+nn_tune_faiss_ivf_cpp <- function(n, k, metric, nlist_option = NA_integer_, nprobe_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_faiss_ivf_cpp`, n, k, metric, nlist_option, nprobe_option, manual)
+}
+
+nn_tune_faiss_pq_cpp <- function(p, n = NA_integer_, m_option = NA_integer_, nbits_option = NA_integer_, manual = FALSE, manual_nbits = FALSE) {
+    .Call(`_faissR_nn_tune_faiss_pq_cpp`, p, n, m_option, nbits_option, manual, manual_nbits)
+}
+
+nn_tune_cuvs_ivfpq_cpp <- function(p, pq_dim_option = NA_integer_, pq_bits_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_cuvs_ivfpq_cpp`, p, pq_dim_option, pq_bits_option, manual)
+}
+
+nn_tune_faiss_hnsw_cpp <- function(n, p, k, metric, m_option = NA_integer_, ef_construction_option = NA_integer_, ef_search_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_faiss_hnsw_cpp`, n, p, k, metric, m_option, ef_construction_option, ef_search_option, manual)
+}
+
+nn_tune_rcpphnsw_cpp <- function(k, m_option = NA_integer_, ef_construction_option = NA_integer_, ef_option = NA_integer_) {
+    .Call(`_faissR_nn_tune_rcpphnsw_cpp`, k, m_option, ef_construction_option, ef_option)
+}
+
+nn_tune_faiss_nsg_cpp <- function(k, r_option = NA_integer_, search_l_option = NA_integer_, build_type_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_faiss_nsg_cpp`, k, r_option, search_l_option, build_type_option, manual)
+}
+
+nn_tune_faiss_nndescent_cpp <- function(k, graph_k_option = NA_integer_, n_iter_option = NA_integer_, search_l_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_faiss_nndescent_cpp`, k, graph_k_option, n_iter_option, search_l_option, manual)
+}
+
+nn_tune_cpu_nndescent_cpp <- function(n, k) {
+    .Call(`_faissR_nn_tune_cpu_nndescent_cpp`, n, k)
+}
+
+nn_tune_cuvs_cagra_cpp <- function(n, p, k, graph_degree_option = NA_integer_, intermediate_graph_degree_option = NA_integer_, search_width_option = NA_integer_, itopk_size_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_cuvs_cagra_cpp`, n, p, k, graph_degree_option, intermediate_graph_degree_option, search_width_option, itopk_size_option, manual)
+}
+
+nn_tune_cuvs_cagra_build_algo_cpp <- function(n, p, k, self_query, compact, requested = "auto") {
+    .Call(`_faissR_nn_tune_cuvs_cagra_build_algo_cpp`, n, p, k, self_query, compact, requested)
+}
+
+nn_tune_cuvs_hnsw_cpp <- function(n, p, k, n_threads, build_algo_preference = "auto", graph_degree_option = NA_integer_, intermediate_graph_degree_option = NA_integer_, search_width_option = NA_integer_, itopk_size_option = NA_integer_, ef_option = NA_integer_, manual_cagra = FALSE) {
+    .Call(`_faissR_nn_tune_cuvs_hnsw_cpp`, n, p, k, n_threads, build_algo_preference, graph_degree_option, intermediate_graph_degree_option, search_width_option, itopk_size_option, ef_option, manual_cagra)
+}
+
+nn_tune_cuvs_nndescent_cpp <- function(n, k, graph_degree_option = NA_integer_, intermediate_graph_degree_option = NA_integer_, max_iterations_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_cuvs_nndescent_cpp`, n, k, graph_degree_option, intermediate_graph_degree_option, max_iterations_option, manual)
+}
+
+nn_tune_native_nsg_cpp <- function(n, p, k, metric, backend, r_option = NA_integer_, graph_k_option = NA_integer_) {
+    .Call(`_faissR_nn_tune_native_nsg_cpp`, n, p, k, metric, backend, r_option, graph_k_option)
+}
+
+nn_tune_vamana_cpp <- function(n, p, k, metric, r_option = NA_integer_, search_l_option = NA_integer_, alpha_option = NA_real_) {
+    .Call(`_faissR_nn_tune_vamana_cpp`, n, p, k, metric, r_option, search_l_option, alpha_option)
+}
+
+nn_tune_gpu_nndescent_cpp <- function(n, k, backend, graph_degree_option = NA_integer_, n_iters_option = NA_integer_, sources_option = NA_integer_, neighbors_option = NA_integer_, delta_option = NA_real_) {
+    .Call(`_faissR_nn_tune_gpu_nndescent_cpp`, n, k, backend, graph_degree_option, n_iters_option, sources_option, neighbors_option, delta_option)
+}
+
 cuda_available_cpp <- function() {
     .Call(`_faissR_cuda_available_cpp`)
 }

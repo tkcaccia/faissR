@@ -32,6 +32,17 @@ recommendations. Public calls should use canonical method names such as
 implementation routes recorded in benchmark output, not separate public
 `method` values.
 
+Both parts of the automatic policy are compiled C++ rules. The method/backend
+route is selected by `nn_auto_select_backend_cpp()`, and deterministic
+`tuning = "auto"` parameters are selected by C++ helpers such as
+`nn_tune_faiss_hnsw_cpp()`, `nn_tune_faiss_ivf_cpp()`,
+`nn_tune_cuvs_cagra_cpp()`, `nn_tune_native_nsg_cpp()`, and
+`nn_tune_vamana_cpp()`. The R front end reads `options(faissR.*)`, normalizes
+public arguments, and passes those values into C++; it does not maintain a
+separate R implementation of the shape/k/metric policy. Returned tuning
+metadata includes `tuning_source = "cpp"` for deterministic approximate-method
+parameter rules.
+
 - Prefer `method = "flat"`/`"exact"` on CUDA when the data fits and target
   recall is very high. The resolved routes `faiss_gpu_flat_l2` and
   `cuda_cuvs_bruteforce` were the most reliable high-recall CUDA paths
@@ -122,7 +133,9 @@ HNSW report `tuning_policy`, `tuning_rule`, and shape flags where relevant;
 IVF also records `tuning_metric` and `tuning_metric_aware`, and IVFPQ/PQ
 compression fields use `pq_tuning_*` names. These fields let benchmark tables
 compare parameter tiers by dataset shape, `k`, and metric without running extra
-tuning inside ordinary `nn()` calls.
+tuning inside ordinary `nn()` calls. Deterministic auto-tuned methods report
+`tuning_source = "cpp"` so downstream benchmark code can verify that the rule
+came from the compiled policy layer rather than from an ad hoc R branch.
 
 ## ImageNet Probe
 
@@ -166,6 +179,14 @@ front end supplies normalized arguments, runtime availability flags
 and option thresholds, but the selected backend and auto-selection metadata are
 produced by the compiled selector. The metadata policy string is
 `cpp_static_shape_k_metric_selector`.
+
+The same C++ policy layer now owns the deterministic tuning rules used after a
+route is selected. For example, CPU HNSW tiering, IVF `nlist`/`nprobe`, PQ
+bit-width selection for small training sets, cuVS CAGRA graph degree and build
+widths, cuVS HNSW-from-CAGRA parameters, native NSG/Vamana candidate graph
+sizes, and native CUDA NN-descent iteration widths all return
+`tuning_source = "cpp"`. Pilot/cache tuning, where explicitly requested,
+remains opt-in and separate from `tuning = "auto"`.
 
 Policy summary:
 

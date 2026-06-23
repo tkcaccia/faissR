@@ -2877,6 +2877,7 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   expect_equal(ivf$tuning_policy, "auto_shape_k")
   expect_equal(ivf$tuning_rule, "balanced_shape_k")
   expect_equal(ivf$tuning_metric, "euclidean")
+  expect_equal(ivf$tuning_source, "cpp")
   expect_false(isTRUE(ivf$tuning_metric_aware))
   expect_false(isTRUE(ivf$tuning_small_k))
   expect_false(isTRUE(ivf$tuning_large_k))
@@ -2902,6 +2903,7 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   pq <- faissR:::faiss_pq_params(784L)
   expect_equal(pq$tuning_policy, "auto_dimension")
   expect_equal(pq$tuning_rule, "high_dim_largest_divisor_pq")
+  expect_equal(pq$tuning_source, "cpp")
   expect_true(isTRUE(pq$tuning_high_dim))
   expect_false(isTRUE(pq$tuning_small_training))
 
@@ -2922,21 +2924,50 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
 
   nsg <- faissR:::faiss_nsg_params(100L)
   expect_equal(nsg$tuning_rule, "large_k_search_l")
+  expect_equal(nsg$tuning_source, "cpp")
   expect_true(isTRUE(nsg$tuning_large_k))
 
   nnd <- faissR:::faiss_nndescent_params(5L)
   expect_equal(nnd$tuning_rule, "small_k_speed")
+  expect_equal(nnd$tuning_source, "cpp")
   expect_true(isTRUE(nnd$tuning_small_k))
 
   cagra <- faissR:::cuvs_cagra_params(1000000L, 100L)
   expect_equal(cagra$tuning_policy, "auto_shape_k")
   expect_equal(cagra$tuning_rule, "large_n_large_k_graph_recall")
+  expect_equal(cagra$tuning_source, "cpp")
   expect_true(isTRUE(cagra$tuning_large_n))
   expect_true(isTRUE(cagra$tuning_large_k))
 
   cuvs_nnd <- faissR:::cuvs_nndescent_params(1000000L, 50L)
   expect_equal(cuvs_nnd$tuning_rule, "large_graph_search")
+  expect_equal(cuvs_nnd$tuning_source, "cpp")
   expect_true(isTRUE(cuvs_nnd$tuning_large_n))
+
+  direct_cuvs_pq <- faissR:::cuvs_ivfpq_params(784L)
+  expect_equal(direct_cuvs_pq$tuning_source, "cpp")
+  expect_equal(direct_cuvs_pq$tuning_rule, "high_dim_default_pq")
+
+  fallback_hnsw <- faissR:::rcpphnsw_params(50L)
+  expect_equal(fallback_hnsw$tuning_source, "cpp")
+  expect_equal(fallback_hnsw$tuning_rule, "balanced_hnswlib")
+
+  native_nsg <- faissR:::native_nsg_params(70000L, 784L, 50L, backend = "cpu")
+  expect_equal(native_nsg$tuning_source, "cpp")
+  expect_equal(native_nsg$tuning_rule, "high_recall_cpu_nsg")
+
+  vamana <- faissR:::vamana_params(70000L, 784L, 50L)
+  expect_equal(vamana$tuning_source, "cpp")
+  expect_equal(vamana$tuning_rule, "high_recall_vamana")
+
+  gpu_nnd <- faissR:::gpu_nndescent_params(50L, backend = "cuda", n = 70000L)
+  expect_equal(gpu_nnd$tuning_source, "cpp")
+  expect_equal(gpu_nnd$tuning_rule, "large_graph_adaptive")
+
+  cpu_nnd <- faissR:::nn_tune_cpu_nndescent_cpp(70000L, 50L)
+  expect_equal(cpu_nnd$tuning_source, "cpp")
+  expect_equal(cpu_nnd$tuning_rule, "large_n_random_projection_seed")
+  expect_equal(faissR:::nndescent_pool_size(70000L, 50L), cpu_nnd$pool_size)
 })
 
 test_that("CPU auto selector can fall back to native NNDescent for large self-KNN", {
@@ -3999,6 +4030,8 @@ test_that("direct cuVS CAGRA auto build rule uses iterative construction for com
   params <- faissR:::cuvs_cagra_params(nrow(coil20_like), 50L, p = ncol(coil20_like))
   hnsw_params <- faissR:::cuvs_hnsw_params(nrow(coil20_like), 50L, p = ncol(coil20_like))
 
+  expect_equal(params$tuning_source, "cpp")
+  expect_equal(hnsw_params$tuning_source, "cpp")
   expect_equal(
     faissR:::cuvs_cagra_build_algo_for(coil20_like, 50L, self_query = TRUE, params = params),
     "iterative_cagra_search"

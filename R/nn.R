@@ -929,7 +929,8 @@ nn_compute <- function(data,
       tuning_large_n = isTRUE(params$large_n),
       tuning_small_k = isTRUE(params$small_k),
       tuning_large_k = isTRUE(params$large_k),
-      tuning_non_euclidean = isTRUE(params$non_euclidean)
+      tuning_non_euclidean = isTRUE(params$non_euclidean),
+      tuning_source = params$tuning_source %||% "cpp"
     )
     return(result)
   }
@@ -1064,7 +1065,8 @@ nn_compute <- function(data,
         tuning_policy = params$tuning_policy,
         tuning_rule = params$tuning_rule,
         tuning_large_k = isTRUE(params$tuning_large_k),
-        tuning_high_dim = isTRUE(params$tuning_high_dim)
+        tuning_high_dim = isTRUE(params$tuning_high_dim),
+        tuning_source = params$tuning_source %||% "cpp"
       ),
       approx
     )
@@ -1145,7 +1147,8 @@ nn_compute <- function(data,
         tuning_policy = params$tuning_policy,
         tuning_rule = params$tuning_rule,
         tuning_large_k = isTRUE(params$tuning_large_k),
-        tuning_high_dim = isTRUE(params$tuning_high_dim)
+        tuning_high_dim = isTRUE(params$tuning_high_dim),
+        tuning_source = params$tuning_source %||% "cpp"
       ),
       approx
     )
@@ -2040,16 +2043,14 @@ cuvs_cagra_build_algo_for <- function(data, k, self_query, params = NULL) {
 
 cuvs_cagra_build_algo_for_shape <- function(n, p, k, self_query, params = NULL) {
   requested <- cagra_build_algo_preference()
-  if (!identical(requested, "auto")) return(requested)
-  k <- as.integer(k)
-  compact <- isTRUE(params$tuning_compact_build %||% FALSE)
-  small_n <- length(n) == 1L && !is.na(n) && n <= 5000L
-  high_dim <- length(p) == 1L && !is.na(p) && p >= 1024L
-  moderate_k <- length(k) == 1L && !is.na(k) && k <= 100L
-  if (isTRUE(self_query) && isTRUE(moderate_k) && (isTRUE(compact) || (isTRUE(small_n) && isTRUE(high_dim)))) {
-    return("iterative_cagra_search")
-  }
-  "ivf_pq"
+  nn_tune_cuvs_cagra_build_algo_cpp(
+    as.integer(n),
+    suppressWarnings(as.integer(p)),
+    as.integer(k),
+    isTRUE(self_query),
+    isTRUE(params$tuning_compact_build %||% FALSE),
+    requested
+  )
 }
 
 normalize_cagra_build_algo_arg <- function(value) {
@@ -4024,7 +4025,8 @@ faiss_hnsw_normalized_metric_result <- function(data,
     tuning_large_n = isTRUE(params$large_n),
     tuning_small_k = isTRUE(params$small_k),
     tuning_large_k = isTRUE(params$large_k),
-    tuning_non_euclidean = isTRUE(params$non_euclidean)
+    tuning_non_euclidean = isTRUE(params$non_euclidean),
+    tuning_source = params$tuning_source %||% "cpp"
   )
   result
 }
@@ -4080,7 +4082,7 @@ nn_tuning_metadata <- function(params, prefix = NULL) {
   fields <- c(
     "tuning_policy", "tuning_rule", "tuning_high_dim", "tuning_large_n",
     "tuning_small_k", "tuning_large_k", "tuning_non_euclidean",
-    "tuning_metric", "tuning_metric_aware"
+    "tuning_metric", "tuning_metric_aware", "tuning_source"
   )
   fields <- fields[fields %in% names(params)]
   out <- params[fields]
@@ -4342,52 +4344,37 @@ gpu_nndescent_graph_degree <- function(n, k, backend = "cuda") {
 }
 
 gpu_nndescent_params <- function(k, backend = "cuda", n = NULL) {
-  graph_degree <- gpu_nndescent_graph_degree(n, k, backend = backend)
-  default_iters <- if (identical(backend, "cuda") && !is.null(n) && n >= 50000L) {
-    3L
-  } else {
-    1L
-  }
-  n_iters <- gpu_nndescent_option(backend, "iters", default_iters)
-  sources <- gpu_nndescent_option(backend, "sources", NULL)
-  neighbors <- gpu_nndescent_option(backend, "neighbors", NULL)
-  delta <- gpu_nndescent_option(backend, "delta", 0.015)
-
-  n_iters <- suppressWarnings(as.integer(n_iters))
-  if (length(n_iters) != 1L || is.na(n_iters) || !is.finite(n_iters)) n_iters <- 1L
-  n_iters <- as.integer(max(1L, min(5L, n_iters)))
-
-  if (is.null(sources)) {
-    sources <- max(3L, min(graph_degree, 10L))
-  } else {
-    sources <- suppressWarnings(as.integer(sources))
-    if (length(sources) != 1L || is.na(sources) || !is.finite(sources)) {
-      sources <- max(3L, min(graph_degree, 10L))
+  backend <- match.arg(as.character(backend), c("cuda"))
+  nn_tune_gpu_nndescent_cpp(
+    suppressWarnings(as.integer(n %||% NA_integer_)),
+    as.integer(k),
+    backend,
+    nn_option_int_or_na(c(
+      sprintf("%s_nndescent_graph_degree", backend),
+      "gpu_nndescent_graph_degree"
+    )),
+    nn_option_int_or_na(c(
+      sprintf("%s_nndescent_iters", backend),
+      "gpu_nndescent_iters"
+    )),
+    nn_option_int_or_na(c(
+      sprintf("%s_nndescent_sources", backend),
+      "gpu_nndescent_sources"
+    )),
+    nn_option_int_or_na(c(
+      sprintf("%s_nndescent_neighbors", backend),
+      "gpu_nndescent_neighbors"
+    )),
+    {
+      value <- faissr_option(c(
+        sprintf("%s_nndescent_delta", backend),
+        "gpu_nndescent_delta"
+      ), NULL)
+      if (is.null(value)) 0.015 else nn_option_double_or_na(c(
+        sprintf("%s_nndescent_delta", backend),
+        "gpu_nndescent_delta"
+      ))
     }
-  }
-  sources <- as.integer(max(1L, min(graph_degree, sources)))
-
-  if (is.null(neighbors)) {
-    neighbors <- max(5L, min(graph_degree, ceiling(graph_degree / 2)))
-  } else {
-    neighbors <- suppressWarnings(as.integer(neighbors))
-    if (length(neighbors) != 1L || is.na(neighbors) || !is.finite(neighbors)) {
-      neighbors <- max(5L, min(graph_degree, ceiling(graph_degree / 2)))
-    }
-  }
-  neighbors <- as.integer(max(1L, min(graph_degree, neighbors)))
-
-  delta <- suppressWarnings(as.numeric(delta))
-  if (length(delta) != 1L || is.na(delta) || !is.finite(delta) || delta < 0) {
-    delta <- 0.015
-  }
-
-  list(
-    graph_degree = graph_degree,
-    n_iters = n_iters,
-    sources = sources,
-    neighbors = neighbors,
-    delta = delta
   )
 }
 
@@ -4548,51 +4535,17 @@ gpu_nndescent_self_knn <- function(data,
 }
 
 native_nsg_params <- function(n, p, k, metric = "euclidean", backend = c("cpu", "cuda")) {
-  n <- as.integer(n)
-  p <- as.integer(p)
-  k <- as.integer(k)
   metric <- normalize_nn_metric(metric)
   backend <- match.arg(backend)
-  large_k <- length(k) == 1L && !is.na(k) && k >= 50L
-  high_dim <- length(p) == 1L && !is.na(p) && p >= 128L
-  inner_product <- identical(metric, "inner_product")
-  default_r <- if (isTRUE(large_k) || isTRUE(high_dim) || isTRUE(inner_product)) 64L else 48L
   option_prefix <- if (identical(backend, "cuda")) "cuda_nsg" else "cpu_nsg"
-  graph_k_cap <- if (identical(backend, "cuda")) 255L else 512L
-  requested_r <- native_nsg_option_int(
-    paste0(option_prefix, "_r"),
-    default_r,
-    min_value = 2L,
-    max_value = 256L
-  )
-  r <- min(max(2L, requested_r), max(1L, n - 1L))
-  default_multiplier <- if (isTRUE(high_dim) || isTRUE(inner_product)) 3L else 2L
-  default_graph_k <- max(k, default_multiplier * r, 96L)
-  requested_graph_k <- native_nsg_option_int(
-    paste0(option_prefix, "_graph_k"),
-    default_graph_k,
-    min_value = k,
-    max_value = graph_k_cap
-  )
-  graph_k <- min(max(k, requested_graph_k), max(1L, n - 1L), graph_k_cap)
-  if (r > graph_k) r <- graph_k
-  list(
-    r = as.integer(r),
-    graph_k = as.integer(graph_k),
-    requested_r = as.integer(requested_r),
-    requested_graph_k = as.integer(requested_graph_k),
-    backend = backend,
-    graph_k_cap = as.integer(graph_k_cap),
-    tuning_policy = "auto_shape_k_metric",
-    tuning_rule = if (identical(metric, "inner_product")) {
-      paste0("inner_product_", backend, "_nsg_candidate_refine")
-    } else if (isTRUE(high_dim) || isTRUE(large_k)) {
-      paste0("high_recall_", backend, "_nsg")
-    } else {
-      paste0("balanced_", backend, "_nsg")
-    },
-    tuning_large_k = isTRUE(large_k),
-    tuning_high_dim = isTRUE(high_dim)
+  nn_tune_native_nsg_cpp(
+    as.integer(n),
+    as.integer(p),
+    as.integer(k),
+    metric,
+    backend,
+    nn_option_int_or_na(paste0(option_prefix, "_r")),
+    nn_option_int_or_na(paste0(option_prefix, "_graph_k"))
   )
 }
 
@@ -4671,43 +4624,17 @@ nsg_prune_candidate_graph <- function(data,
 
 vamana_params <- function(n, p, k, metric = "euclidean") {
   metric <- normalize_nn_metric(metric)
-  large_k <- k >= 50L
-  high_dim <- p >= 128L
-  default_r <- if (isTRUE(high_dim) || isTRUE(large_k)) 64L else 48L
-  requested_r <- faiss_option_int("vamana_r", default_r, min_value = 2L, max_value = 256L)
-  r <- min(max(2L, requested_r), max(1L, n - 1L))
-  default_search_l <- max(k, 2L * r, 96L)
-  requested_search_l <- faiss_option_int(
-    "vamana_search_l",
-    default_search_l,
-    min_value = k,
-    max_value = 512L
-  )
-  search_l <- min(max(k, requested_search_l), max(1L, n - 1L), 512L)
-  if (r > search_l) r <- search_l
-  requested_alpha <- suppressWarnings(as.numeric(faissr_option("vamana_alpha", 1.2)))
-  if (length(requested_alpha) != 1L || is.na(requested_alpha) || !is.finite(requested_alpha) ||
-      requested_alpha < 1) {
-    requested_alpha <- 1.2
-  }
-  alpha <- min(max(1, requested_alpha), 2.0)
-  list(
-    r = as.integer(r),
-    search_l = as.integer(search_l),
-    alpha = as.numeric(alpha),
-    requested_r = as.integer(requested_r),
-    requested_search_l = as.integer(requested_search_l),
-    requested_alpha = as.numeric(requested_alpha),
-    tuning_policy = "auto_shape_k_metric",
-    tuning_rule = if (identical(metric, "inner_product")) {
-      "inner_product_vamana_candidate_refine"
-    } else if (isTRUE(high_dim) || isTRUE(large_k)) {
-      "high_recall_vamana"
-    } else {
-      "balanced_vamana"
-    },
-    tuning_large_k = isTRUE(large_k),
-    tuning_high_dim = isTRUE(high_dim)
+  nn_tune_vamana_cpp(
+    as.integer(n),
+    as.integer(p),
+    as.integer(k),
+    metric,
+    nn_option_int_or_na("faiss_vamana_r"),
+    nn_option_int_or_na("faiss_vamana_search_l"),
+    {
+      value <- faissr_option("vamana_alpha", NULL)
+      if (is.null(value)) 1.2 else nn_option_double_or_na("vamana_alpha")
+    }
   )
 }
 
@@ -5115,6 +5042,7 @@ faiss_self_knn <- function(data,
       tuning_small_k = isTRUE(params$small_k),
       tuning_large_k = isTRUE(params$large_k),
       tuning_non_euclidean = isTRUE(params$non_euclidean),
+      tuning_source = params$tuning_source %||% "cpp",
       seed = as.integer(seed)
     )
     return(out)
@@ -5230,24 +5158,11 @@ faiss_self_knn <- function(data,
 }
 
 rcpphnsw_params <- function(k) {
-  m <- faissr_option("hnsw_m", 16L)
-  ef_construction <- faissr_option("hnsw_ef_construction", 200L)
-  ef <- faissr_option("hnsw_ef", max(50L, 3L * as.integer(k)))
-  m <- suppressWarnings(as.integer(m))
-  ef_construction <- suppressWarnings(as.integer(ef_construction))
-  ef <- suppressWarnings(as.integer(ef))
-  if (length(m) != 1L || is.na(m) || !is.finite(m) || m < 2L) m <- 16L
-  if (length(ef_construction) != 1L || is.na(ef_construction) ||
-      !is.finite(ef_construction) || ef_construction < m) {
-    ef_construction <- max(200L, m)
-  }
-  if (length(ef) != 1L || is.na(ef) || !is.finite(ef) || ef < k) {
-    ef <- max(50L, 3L * as.integer(k))
-  }
-  list(
-    m = as.integer(m),
-    ef_construction = as.integer(ef_construction),
-    ef = as.integer(ef)
+  nn_tune_rcpphnsw_cpp(
+    as.integer(k),
+    nn_option_int_or_na("hnsw_m"),
+    nn_option_int_or_na("hnsw_ef_construction"),
+    nn_option_int_or_na("hnsw_ef")
   )
 }
 
@@ -5341,19 +5256,20 @@ rcpphnsw_knn <- function(data,
     m = as.integer(params$m),
     ef_construction = as.integer(params$ef_construction),
     ef = as.integer(params$ef),
-    n_threads = as.integer(n_threads)
+    n_threads = as.integer(n_threads),
+    tuning_policy = params$tuning_policy,
+    tuning_rule = params$tuning_rule,
+    tuning_source = params$tuning_source %||% "cpp"
   )
   out
 }
 
 nndescent_pool_size <- function(n, k) {
-  as.integer(min(n - 1L, max(k + 15L, min(160L, ceiling(2.5 * k)))))
+  as.integer(nn_tune_cpu_nndescent_cpp(as.integer(n), as.integer(k))$pool_size)
 }
 
 nndescent_iterations <- function(n, k) {
-  out <- if (n >= 50000L) 3L else 4L
-  if (k < 30L) out <- out + 1L
-  as.integer(out)
+  as.integer(nn_tune_cpu_nndescent_cpp(as.integer(n), as.integer(k))$n_iters)
 }
 
 nndescent_self_knn <- function(data,
@@ -5392,10 +5308,11 @@ nndescent_self_knn <- function(data,
       metric = metric
     ))
   }
-  pool_size <- nndescent_pool_size(n, k)
-  n_iters <- nndescent_iterations(n, k)
-  max_candidates <- as.integer(min(n - 1L, max(pool_size * 4L, k * 12L)))
-  n_random_projections <- if (n >= 50000L) 8L else 6L
+  tune <- nn_tune_cpu_nndescent_cpp(as.integer(n), as.integer(k))
+  pool_size <- as.integer(tune$pool_size)
+  n_iters <- as.integer(tune$n_iters)
+  max_candidates <- as.integer(tune$max_candidates)
+  n_random_projections <- as.integer(tune$n_random_projections)
   out <- nndescent_self_knn_cpp(
     data,
     as.integer(k),
@@ -5416,7 +5333,12 @@ nndescent_self_knn <- function(data,
     max_candidates = max_candidates,
     n_random_projections = n_random_projections,
     reverse_candidates = "rank_ordered",
-    metric = metric
+    metric = metric,
+    tuning_policy = tune$tuning_policy,
+    tuning_rule = tune$tuning_rule,
+    tuning_large_n = isTRUE(tune$tuning_large_n),
+    tuning_small_k = isTRUE(tune$tuning_small_k),
+    tuning_source = tune$tuning_source %||% "cpp"
   )
   attr(out, "nndescent") <- params
   attr(out, "approximation") <- params
@@ -5564,6 +5486,34 @@ annoy_self_knn <- function(data,
   out
 }
 
+nn_option_int_or_na <- function(name) {
+  value <- faissr_option(name, NULL)
+  if (is.null(value)) return(NA_integer_)
+  value <- suppressWarnings(as.integer(value))
+  if (length(value) != 1L || is.na(value) || !is.finite(value)) {
+    return(NA_integer_)
+  }
+  as.integer(value)
+}
+
+nn_option_double_or_na <- function(name) {
+  value <- faissr_option(name, NULL)
+  if (is.null(value)) return(NA_real_)
+  value <- suppressWarnings(as.numeric(value))
+  if (length(value) != 1L || is.na(value) || !is.finite(value)) {
+    return(NA_real_)
+  }
+  as.numeric(value)
+}
+
+nn_any_options <- function(names) {
+  any(vapply(
+    names,
+    function(name) !is.null(faissr_option(name, NULL)),
+    logical(1)
+  ))
+}
+
 ivf_list_count <- function(n, k) {
   n <- as.integer(n)
   k <- as.integer(k)
@@ -5584,62 +5534,14 @@ ivf_probe_count <- function(nlist, k, metric = "euclidean") {
 }
 
 faiss_ivf_params <- function(n, k, metric = "euclidean") {
-  n <- as.integer(n)
-  k <- as.integer(k)
   metric <- normalize_nn_metric(metric)
-  small_k <- length(k) == 1L && !is.na(k) && k <= 10L
-  large_k <- length(k) == 1L && !is.na(k) && k >= 100L
-  large_n <- length(n) == 1L && !is.na(n) && n >= 1000000L
-  manual <- faiss_ivf_manual_params()
-  metric_aware <- !identical(metric, "euclidean")
-  base_rule <- if (isTRUE(large_n)) {
-    "large_n_coarse_quantizer"
-  } else if (isTRUE(large_k)) {
-    "large_k_more_probe"
-  } else if (isTRUE(small_k)) {
-    "small_k_speed"
-  } else {
-    "balanced_shape_k"
-  }
-  rule <- if (isTRUE(metric_aware) && !isTRUE(manual)) {
-    paste0("metric_", base_rule)
-  } else {
-    base_rule
-  }
-  nlist <- faissr_option(c("faiss_nlist", "ivf_nlist"), NULL)
-  nprobe <- faissr_option(c("faiss_nprobe", "ivf_nprobe"), NULL)
-
-  nlist <- if (is.null(nlist)) ivf_list_count(n, k) else suppressWarnings(as.integer(nlist))
-  requested_nlist <- nlist
-  if (length(nlist) != 1L || is.na(nlist) || !is.finite(nlist)) {
-    nlist <- ivf_list_count(n, k)
-  }
-  if (length(requested_nlist) != 1L || is.na(requested_nlist) || !is.finite(requested_nlist)) {
-    requested_nlist <- nlist
-  }
-  nlist <- max(1L, min(n, nlist))
-
-  nprobe <- if (is.null(nprobe)) ivf_probe_count(nlist, k, metric = metric) else suppressWarnings(as.integer(nprobe))
-  requested_nprobe <- nprobe
-  if (length(nprobe) != 1L || is.na(nprobe) || !is.finite(nprobe)) {
-    nprobe <- ivf_probe_count(nlist, k, metric = metric)
-  }
-  if (length(requested_nprobe) != 1L || is.na(requested_nprobe) || !is.finite(requested_nprobe)) {
-    requested_nprobe <- nprobe
-  }
-  nprobe <- max(1L, min(nlist, nprobe))
-  list(
-    nlist = as.integer(nlist),
-    nprobe = as.integer(nprobe),
-    requested_nlist = as.integer(requested_nlist),
-    requested_nprobe = as.integer(requested_nprobe),
-    tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_shape_k",
-    tuning_rule = rule,
-    tuning_metric = metric,
-    tuning_metric_aware = isTRUE(metric_aware),
-    tuning_large_n = isTRUE(large_n),
-    tuning_small_k = isTRUE(small_k),
-    tuning_large_k = isTRUE(large_k)
+  nn_tune_faiss_ivf_cpp(
+    as.integer(n),
+    as.integer(k),
+    metric,
+    nn_option_int_or_na(c("faiss_nlist", "ivf_nlist")),
+    nn_option_int_or_na(c("faiss_nprobe", "ivf_nprobe")),
+    faiss_ivf_manual_params()
   )
 }
 
@@ -5652,42 +5554,16 @@ faiss_ivf_manual_params <- function() {
 }
 
 cuvs_ivfpq_params <- function(p) {
-  p <- as.integer(p)
-  high_dim <- length(p) == 1L && !is.na(p) && p >= 256L
-  manual <- any(vapply(
-    c("cuvs_ivfpq_pq_dim", "ivfpq_pq_dim", "cuvs_ivfpq_pq_bits", "ivfpq_pq_bits"),
-    function(name) !is.null(faissr_option(name, NULL)),
-    logical(1)
-  ))
-  pq_dim <- faissr_option(c("cuvs_ivfpq_pq_dim", "ivfpq_pq_dim"), 0L)
-  pq_dim <- suppressWarnings(as.integer(pq_dim))
-  requested_pq_dim <- pq_dim
-  if (length(pq_dim) != 1L || is.na(pq_dim) || !is.finite(pq_dim) || pq_dim < 0L) {
-    pq_dim <- 0L
-  }
-  if (length(requested_pq_dim) != 1L || is.na(requested_pq_dim) || !is.finite(requested_pq_dim)) {
-    requested_pq_dim <- pq_dim
-  }
-
-  pq_bits <- faissr_option(c("cuvs_ivfpq_pq_bits", "ivfpq_pq_bits"), 8L)
-  pq_bits <- suppressWarnings(as.integer(pq_bits))
-  requested_pq_bits <- pq_bits
-  if (length(pq_bits) != 1L || is.na(pq_bits) || !is.finite(pq_bits)) {
-    pq_bits <- 8L
-  }
-  if (length(requested_pq_bits) != 1L || is.na(requested_pq_bits) || !is.finite(requested_pq_bits)) {
-    requested_pq_bits <- pq_bits
-  }
-  pq_bits <- as.integer(max(4L, min(8L, pq_bits)))
-
-  list(
-    pq_dim = as.integer(pq_dim),
-    pq_bits = pq_bits,
-    requested_pq_dim = as.integer(requested_pq_dim),
-    requested_pq_bits = as.integer(requested_pq_bits),
-    tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_shape",
-    tuning_rule = if (isTRUE(high_dim)) "high_dim_default_pq" else "dimension_default_pq",
-    tuning_high_dim = isTRUE(high_dim)
+  nn_tune_cuvs_ivfpq_cpp(
+    as.integer(p),
+    nn_option_int_or_na(c("cuvs_ivfpq_pq_dim", "ivfpq_pq_dim")),
+    nn_option_int_or_na(c("cuvs_ivfpq_pq_bits", "ivfpq_pq_bits")),
+    nn_any_options(c(
+      "cuvs_ivfpq_pq_dim",
+      "ivfpq_pq_dim",
+      "cuvs_ivfpq_pq_bits",
+      "ivfpq_pq_bits"
+    ))
   )
 }
 
@@ -6018,93 +5894,29 @@ validate_faiss_cpu_ivfpq_training_size <- function(n) {
 }
 
 faiss_pq_params <- function(p, n = NULL) {
-  p <- as.integer(p)
-  n <- suppressWarnings(as.integer(n %||% NA_integer_))
-  high_dim <- length(p) == 1L && !is.na(p) && p >= 256L
-  small_training <- length(n) == 1L && !is.na(n) && n < faiss_cpu_ivfpq_min_training_rows()
-  reduced_codebook_training <- length(n) == 1L &&
-    !is.na(n) &&
-    n >= faiss_cpu_ivfpq_min_training_rows() &&
-    n < faiss_cpu_ivfpq_8bit_training_rows()
-  manual <- any(vapply(
-    c("faiss_pq_m", "faiss_pq_nbits"),
-    function(name) !is.null(faissr_option(name, NULL)),
-    logical(1)
-  ))
-  manual_nbits <- !is.null(faissr_option("faiss_pq_nbits", NULL))
-  m <- faiss_option_int("pq_m", faiss_pq_default_m(p), min_value = 1L, max_value = p)
-  while (m > 1L && p %% m != 0L) m <- m - 1L
-  nbits_default <- if (isTRUE(reduced_codebook_training) && !isTRUE(manual_nbits)) 4L else 8L
-  nbits <- faiss_option_int("pq_nbits", nbits_default, min_value = 4L, max_value = 12L)
-  list(
-    m = as.integer(m),
-    nbits = as.integer(nbits),
-    tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_dimension",
-    tuning_rule = if (isTRUE(small_training)) {
-      "small_training_rows_minimum_pq"
-    } else if (isTRUE(reduced_codebook_training) && !isTRUE(manual_nbits)) {
-      "training_rows_4bit_pq"
-    } else if (isTRUE(high_dim)) {
-      "high_dim_largest_divisor_pq"
-    } else {
-      "dimension_largest_divisor_pq"
-    },
-    tuning_high_dim = isTRUE(high_dim),
-    tuning_small_training = isTRUE(small_training),
-    tuning_reduced_codebook_training = isTRUE(reduced_codebook_training),
-    min_training_rows = faiss_cpu_ivfpq_min_training_rows(),
-    min_training_rows_8bit = faiss_cpu_ivfpq_8bit_training_rows()
+  nn_tune_faiss_pq_cpp(
+    as.integer(p),
+    suppressWarnings(as.integer(n %||% NA_integer_)),
+    nn_option_int_or_na("faiss_pq_m"),
+    nn_option_int_or_na("faiss_pq_nbits"),
+    nn_any_options(c("faiss_pq_m", "faiss_pq_nbits")),
+    !is.null(faissr_option("faiss_pq_nbits", NULL))
   )
 }
 
 faiss_hnsw_auto_policy <- function(n = NULL, p = NULL, k, metric = "euclidean") {
-  n <- suppressWarnings(as.integer(n %||% NA_integer_))
-  p <- suppressWarnings(as.integer(p %||% NA_integer_))
-  k <- as.integer(k)
-  metric <- normalize_nn_metric(metric)
-  high_dim <- length(p) == 1L && !is.na(p) && p >= 256L
-  large_n <- length(n) == 1L && !is.na(n) && n >= 50000L
-  very_large_high_dim <- isTRUE(large_n) && isTRUE(high_dim)
-  small_k <- length(k) == 1L && !is.na(k) && k <= 10L
-  large_k <- length(k) == 1L && !is.na(k) && k >= 100L
-  non_euclidean <- !identical(metric, "euclidean")
-
-  if (isTRUE(non_euclidean) && isTRUE(small_k)) {
-    rule <- "balanced_small_k_metric"
-    m <- 32L
-    ef_construction <- 160L
-    ef_search <- max(120L, 4L * k)
-  } else if ((isTRUE(very_large_high_dim) && isTRUE(large_k)) ||
-      (isTRUE(non_euclidean) && (isTRUE(large_k) || isTRUE(high_dim)))) {
-    rule <- "high_recall_shape_metric"
-    m <- 48L
-    ef_construction <- 240L
-    ef_search <- max(220L, 3L * k)
-  } else if (isTRUE(small_k) &&
-             !isTRUE(high_dim) &&
-             !isTRUE(non_euclidean)) {
-    rule <- "small_k_speed"
-    m <- 24L
-    ef_construction <- 120L
-    ef_search <- max(80L, 4L * k)
-  } else {
-    rule <- "balanced_shape_metric"
-    m <- 32L
-    ef_construction <- 200L
-    ef_search <- max(150L, 3L * k)
-  }
-
-  list(
-    m = as.integer(m),
-    ef_construction = as.integer(ef_construction),
-    ef_search = as.integer(ef_search),
-    rule = rule,
-    high_dim = isTRUE(high_dim),
-    large_n = isTRUE(large_n),
-    small_k = isTRUE(small_k),
-    large_k = isTRUE(large_k),
-    non_euclidean = isTRUE(non_euclidean)
+  out <- nn_tune_faiss_hnsw_cpp(
+    suppressWarnings(as.integer(n %||% NA_integer_)),
+    suppressWarnings(as.integer(p %||% NA_integer_)),
+    as.integer(k),
+    normalize_nn_metric(metric),
+    NA_integer_,
+    NA_integer_,
+    NA_integer_,
+    FALSE
   )
+  out[c("m", "ef_construction", "ef_search", "rule", "high_dim",
+        "large_n", "small_k", "large_k", "non_euclidean")]
 }
 
 faiss_hnsw_manual_params <- function() {
@@ -6116,82 +5928,39 @@ faiss_hnsw_manual_params <- function() {
 }
 
 faiss_hnsw_params <- function(k, n = NULL, p = NULL, metric = "euclidean") {
-  k <- as.integer(k)
-  auto <- faiss_hnsw_auto_policy(n = n, p = p, k = k, metric = metric)
-  manual <- faiss_hnsw_manual_params()
-  m <- faiss_option_int("hnsw_m", auto$m, min_value = 2L, max_value = 256L)
-  ef_construction <- faiss_option_int(
-    "hnsw_ef_construction",
-    auto$ef_construction,
-    min_value = m,
-    max_value = 4096L
-  )
-  ef_search <- faiss_option_int(
-    "hnsw_ef_search",
-    auto$ef_search,
-    min_value = k,
-    max_value = 4096L
-  )
-  list(
-    m = as.integer(m),
-    ef_construction = as.integer(ef_construction),
-    ef_search = as.integer(ef_search),
-    rule = auto$rule,
-    policy = if (isTRUE(manual)) "manual_options" else "auto_shape_metric",
-    high_dim = auto$high_dim,
-    large_n = auto$large_n,
-    small_k = auto$small_k,
-    large_k = auto$large_k,
-    non_euclidean = auto$non_euclidean,
-    requested_m = as.integer(auto$m),
-    requested_ef_construction = as.integer(auto$ef_construction),
-    requested_ef_search = as.integer(auto$ef_search)
+  nn_tune_faiss_hnsw_cpp(
+    suppressWarnings(as.integer(n %||% NA_integer_)),
+    suppressWarnings(as.integer(p %||% NA_integer_)),
+    as.integer(k),
+    normalize_nn_metric(metric),
+    nn_option_int_or_na("faiss_hnsw_m"),
+    nn_option_int_or_na("faiss_hnsw_ef_construction"),
+    nn_option_int_or_na("faiss_hnsw_ef_search"),
+    faiss_hnsw_manual_params()
   )
 }
 
 faiss_nsg_params <- function(k) {
-  k <- as.integer(k)
-  small_k <- length(k) == 1L && !is.na(k) && k <= 10L
-  large_k <- length(k) == 1L && !is.na(k) && k >= 100L
-  manual <- any(vapply(
-    c("faiss_nsg_r", "faiss_nsg_search_l", "faiss_nsg_build_type"),
-    function(name) !is.null(faissr_option(name, NULL)),
-    logical(1)
-  ))
-  r <- faiss_option_int("nsg_r", 48L, min_value = 2L, max_value = 512L)
-  search_l <- faiss_option_int("nsg_search_l", max(200L, 4L * k), min_value = k, max_value = 4096L)
-  build_type <- faiss_option_int("nsg_build_type", 1L, min_value = 0L, max_value = 1L)
-  list(
-    r = as.integer(r),
-    search_l = as.integer(search_l),
-    build_type = as.integer(build_type),
-    tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_k",
-    tuning_rule = if (isTRUE(large_k)) "large_k_search_l" else if (isTRUE(small_k)) "small_k_speed" else "balanced_k",
-    tuning_small_k = isTRUE(small_k),
-    tuning_large_k = isTRUE(large_k)
+  nn_tune_faiss_nsg_cpp(
+    as.integer(k),
+    nn_option_int_or_na("faiss_nsg_r"),
+    nn_option_int_or_na("faiss_nsg_search_l"),
+    nn_option_int_or_na("faiss_nsg_build_type"),
+    nn_any_options(c("faiss_nsg_r", "faiss_nsg_search_l", "faiss_nsg_build_type"))
   )
 }
 
 faiss_nndescent_params <- function(k) {
-  k <- as.integer(k)
-  small_k <- length(k) == 1L && !is.na(k) && k <= 10L
-  large_k <- length(k) == 1L && !is.na(k) && k >= 100L
-  manual <- any(vapply(
-    c("faiss_nndescent_graph_k", "faiss_nndescent_iter", "faiss_nndescent_search_l"),
-    function(name) !is.null(faissr_option(name, NULL)),
-    logical(1)
-  ))
-  graph_k <- faiss_option_int("nndescent_graph_k", max(100L, 2L * k), min_value = k, max_value = 1024L)
-  n_iter <- faiss_option_int("nndescent_iter", 20L, min_value = 1L, max_value = 100L)
-  search_l <- faiss_option_int("nndescent_search_l", max(graph_k, 2L * k), min_value = k, max_value = 4096L)
-  list(
-    graph_k = as.integer(graph_k),
-    n_iter = as.integer(n_iter),
-    search_l = as.integer(search_l),
-    tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_k",
-    tuning_rule = if (isTRUE(large_k)) "large_k_graph_search" else if (isTRUE(small_k)) "small_k_speed" else "balanced_k",
-    tuning_small_k = isTRUE(small_k),
-    tuning_large_k = isTRUE(large_k)
+  nn_tune_faiss_nndescent_cpp(
+    as.integer(k),
+    nn_option_int_or_na("faiss_nndescent_graph_k"),
+    nn_option_int_or_na("faiss_nndescent_iter"),
+    nn_option_int_or_na("faiss_nndescent_search_l"),
+    nn_any_options(c(
+      "faiss_nndescent_graph_k",
+      "faiss_nndescent_iter",
+      "faiss_nndescent_search_l"
+    ))
   )
 }
 
@@ -6210,140 +5979,31 @@ cuvs_requested_option_int <- function(name, default) {
 }
 
 cuvs_cagra_params <- function(n, k, p = NA_integer_) {
-  n <- as.integer(n)
-  k <- as.integer(k)
-  p <- suppressWarnings(as.integer(p))
-  small_k <- length(k) == 1L && !is.na(k) && k <= 10L
-  large_k <- length(k) == 1L && !is.na(k) && k >= 100L
-  large_n <- length(n) == 1L && !is.na(n) && n >= 1000000L
-  small_n <- length(n) == 1L && !is.na(n) && n <= 5000L
-  high_dim <- length(p) == 1L && !is.na(p) && p >= 1024L
-  compact_build <- isTRUE(small_k) && (isTRUE(small_n) || isTRUE(high_dim))
-  manual <- cuvs_cagra_manual_params()
-  rule <- if (isTRUE(large_n) && isTRUE(large_k)) {
-    "large_n_large_k_graph_recall"
-  } else if (isTRUE(large_n)) {
-    "large_n_graph_recall"
-  } else if (isTRUE(compact_build)) {
-    "small_k_compact_cagra_build"
-  } else if (isTRUE(small_k)) {
-    "small_k_graph_speed"
-  } else {
-    "balanced_graph_search"
-  }
-  default_graph_degree <- if (isTRUE(compact_build)) {
-    max(32L, k + 1L)
-  } else {
-    max(64L, k + 1L)
-  }
-  requested_graph_degree <- cuvs_requested_option_int("graph_degree", default_graph_degree)
-  graph_degree <- cuvs_option_int(
-    "graph_degree",
-    default = default_graph_degree,
-    min_value = k + 1L,
-    max_value = max(1L, n - 1L)
-  )
-  default_intermediate_graph_degree <- if (isTRUE(compact_build)) {
-    max(32L, graph_degree * 2L)
-  } else {
-    max(128L, graph_degree * 2L)
-  }
-  requested_intermediate_graph_degree <- cuvs_requested_option_int(
-    "intermediate_graph_degree",
-    default_intermediate_graph_degree
-  )
-  intermediate_graph_degree <- cuvs_option_int(
-    "intermediate_graph_degree",
-    default = default_intermediate_graph_degree,
-    min_value = graph_degree,
-    max_value = max(1L, n - 1L)
-  )
-  requested_search_width <- cuvs_requested_option_int("search_width", 0L)
-  search_width <- cuvs_option_int(
-    "search_width",
-    default = 0L,
-    min_value = 0L,
-    max_value = 1024L
-  )
-  default_itopk_size <- if (isTRUE(compact_build)) {
-    max(32L, graph_degree, k)
-  } else {
-    max(64L, graph_degree)
-  }
-  requested_itopk_size <- cuvs_requested_option_int("itopk_size", default_itopk_size)
-  itopk_size <- cuvs_option_int(
-    "itopk_size",
-    default = default_itopk_size,
-    min_value = k,
-    max_value = 4096L
-  )
-  list(
-    graph_degree = as.integer(graph_degree),
-    intermediate_graph_degree = as.integer(intermediate_graph_degree),
-    search_width = as.integer(search_width),
-    itopk_size = as.integer(itopk_size),
-    requested_graph_degree = as.integer(requested_graph_degree),
-    requested_intermediate_graph_degree = as.integer(requested_intermediate_graph_degree),
-    requested_search_width = as.integer(requested_search_width),
-    requested_itopk_size = as.integer(requested_itopk_size),
-    tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_shape_k",
-    tuning_rule = rule,
-    tuning_large_n = isTRUE(large_n),
-    tuning_small_n = isTRUE(small_n),
-    tuning_high_dim = isTRUE(high_dim),
-    tuning_compact_build = isTRUE(compact_build),
-    tuning_small_k = isTRUE(small_k),
-    tuning_large_k = isTRUE(large_k)
+  nn_tune_cuvs_cagra_cpp(
+    as.integer(n),
+    suppressWarnings(as.integer(p)),
+    as.integer(k),
+    nn_option_int_or_na("cuvs_graph_degree"),
+    nn_option_int_or_na("cuvs_intermediate_graph_degree"),
+    nn_option_int_or_na("cuvs_search_width"),
+    nn_option_int_or_na("cuvs_itopk_size"),
+    cuvs_cagra_manual_params()
   )
 }
 
 cuvs_hnsw_params <- function(n, k, p = NA_integer_, n_threads = NULL) {
-  base <- cuvs_cagra_params(n, k, p = p)
-  build_algo <- cuvs_cagra_build_algo_for_shape(
-    n = n,
-    p = p,
-    k = k,
-    self_query = TRUE,
-    params = base
-  )
-  k <- as.integer(k)
-  n <- as.integer(n)
-  large_k <- length(k) == 1L && !is.na(k) && k >= 100L
-  large_n <- length(n) == 1L && !is.na(n) && n >= 1000000L
-  requested_ef <- cuvs_requested_option_int(
-    "hnsw_ef",
-    if (isTRUE(large_k)) max(240L, 3L * k) else max(120L, 4L * k)
-  )
-  ef <- cuvs_option_int(
-    "hnsw_ef",
-    default = requested_ef,
-    min_value = k,
-    max_value = 4096L
-  )
-  threads <- normalize_nn_threads(n_threads)
-  list(
-    graph_degree = as.integer(base$graph_degree),
-    intermediate_graph_degree = as.integer(base$intermediate_graph_degree),
-    ef = as.integer(ef),
-    n_threads = as.integer(threads),
-    cagra_build_algo = build_algo,
-    requested_graph_degree = as.integer(base$requested_graph_degree),
-    requested_intermediate_graph_degree = as.integer(base$requested_intermediate_graph_degree),
-    requested_ef = as.integer(requested_ef),
-    requested_n_threads = as.integer(threads),
-    tuning_policy = base$tuning_policy,
-    tuning_rule = if (isTRUE(large_n) && isTRUE(large_k)) {
-      "large_n_large_k_hnsw_from_cagra"
-    } else if (isTRUE(large_n)) {
-      "large_n_hnsw_from_cagra"
-    } else if (isTRUE(large_k)) {
-      "large_k_hnsw_from_cagra"
-    } else {
-      "balanced_hnsw_from_cagra"
-    },
-    tuning_large_n = isTRUE(large_n),
-    tuning_large_k = isTRUE(large_k),
-    tuning_small_k = isTRUE(base$tuning_small_k)
+  nn_tune_cuvs_hnsw_cpp(
+    as.integer(n),
+    suppressWarnings(as.integer(p)),
+    as.integer(k),
+    as.integer(normalize_nn_threads(n_threads)),
+    cagra_build_algo_preference(),
+    nn_option_int_or_na("cuvs_graph_degree"),
+    nn_option_int_or_na("cuvs_intermediate_graph_degree"),
+    nn_option_int_or_na("cuvs_search_width"),
+    nn_option_int_or_na("cuvs_itopk_size"),
+    nn_option_int_or_na("cuvs_hnsw_ef"),
+    cuvs_cagra_manual_params()
   )
 }
 
@@ -6635,47 +6295,17 @@ cuvs_cagra_tune_params <- function(data, k, base_params, tuning = "auto", build_
 }
 
 cuvs_nndescent_params <- function(n, k) {
-  n <- as.integer(n)
-  k <- as.integer(k)
-  small_k <- length(k) == 1L && !is.na(k) && k <= 10L
-  large_k <- length(k) == 1L && !is.na(k) && k >= 100L
-  large_n <- length(n) == 1L && !is.na(n) && n >= 1000000L
-  manual <- any(vapply(
-    c(
+  nn_tune_cuvs_nndescent_cpp(
+    as.integer(n),
+    as.integer(k),
+    nn_option_int_or_na("cuvs_nndescent_graph_degree"),
+    nn_option_int_or_na("cuvs_nndescent_intermediate_graph_degree"),
+    nn_option_int_or_na("cuvs_nndescent_max_iterations"),
+    nn_any_options(c(
       "cuvs_nndescent_graph_degree",
       "cuvs_nndescent_intermediate_graph_degree",
       "cuvs_nndescent_max_iterations"
-    ),
-    function(name) !is.null(faissr_option(name, NULL)),
-    logical(1)
-  ))
-  graph_degree <- cuvs_option_int(
-    "nndescent_graph_degree",
-    default = k,
-    min_value = k,
-    max_value = max(1L, n - 1L)
-  )
-  intermediate_graph_degree <- cuvs_option_int(
-    "nndescent_intermediate_graph_degree",
-    default = max(graph_degree * 2L, graph_degree),
-    min_value = graph_degree,
-    max_value = max(1L, n - 1L)
-  )
-  max_iterations <- cuvs_option_int(
-    "nndescent_max_iterations",
-    default = 20L,
-    min_value = 1L,
-    max_value = 200L
-  )
-  list(
-    graph_degree = as.integer(graph_degree),
-    intermediate_graph_degree = as.integer(intermediate_graph_degree),
-    max_iterations = as.integer(max_iterations),
-    tuning_policy = if (isTRUE(manual)) "manual_options" else "auto_shape_k",
-    tuning_rule = if (isTRUE(large_n) || isTRUE(large_k)) "large_graph_search" else if (isTRUE(small_k)) "small_k_speed" else "balanced_graph_search",
-    tuning_large_n = isTRUE(large_n),
-    tuning_small_k = isTRUE(small_k),
-    tuning_large_k = isTRUE(large_k)
+    ))
   )
 }
 
@@ -7046,7 +6676,9 @@ grid_self_knn <- function(data,
 #'   use deterministic shape/k/metric-aware `nlist`/`nprobe` defaults; optional
 #'   FAISS GPU IVF `"cache"`/`"pilot"` tuning currently runs only for Euclidean
 #'   IVF, while non-Euclidean IVF routes use deterministic metric-aware
-#'   defaults. Advanced tuning and cache knobs use
+#'   defaults. Deterministic approximate-method defaults are computed by C++
+#'   `nn_tune_*_cpp()` helpers and record `tuning_source = "cpp"` in
+#'   approximation metadata. Advanced tuning and cache knobs use
 #'   `options(faissR.<name> = ...)`.
 #' @param cagra_implementation CUDA CAGRA provider for this call. `NULL` uses
 #'   the global `options(faissR.cagra_implementation = ...)` value. `"auto"`
@@ -7195,7 +6827,8 @@ nn <- function(data,
 #' @param tuning Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
 #'   deterministic no-pilot default for the resolved method. FAISS IVF/IVFPQ
 #'   routes use metric-aware defaults; optional FAISS GPU IVF pilot/cache tuning
-#'   is Euclidean-only.
+#'   is Euclidean-only. Deterministic approximate-method defaults are computed
+#'   by C++ `nn_tune_*_cpp()` helpers.
 #' @param cagra_implementation CUDA CAGRA provider for this call. See
 #'   \code{\link{nn}()}.
 #' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm for
