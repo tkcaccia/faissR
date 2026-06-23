@@ -227,6 +227,8 @@ nn_compute <- function(data,
                                "cuvs_ivf_flat", "cuda_cuvs_ivf_flat",
                                "cuvs_ivfpq", "cuda_cuvs_ivfpq",
                                "cuvs_ivf_pq", "cuda_cuvs_ivf_pq",
+                               "cuvs_bruteforce", "cuda_cuvs_bruteforce",
+                               "cuda_cuvs_exact",
                                "cuda_cuvs_nndescent", "cuvs_nndescent",
                                "cuda_native_nndescent",
                                "cuda_cuvs_hnsw", "cuvs_hnsw")) {

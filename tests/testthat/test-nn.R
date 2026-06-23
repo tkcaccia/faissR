@@ -4331,6 +4331,13 @@ test_that("cuVS backend reports unavailable runtime clearly", {
   expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs_ivf_flat"), "cuVS")
   expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs_ivfpq"), "cuVS")
   expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs_bruteforce"), "cuVS")
+  for (metric in c("cosine", "correlation", "inner_product")) {
+    expect_error(
+      internal_nn(x, x, k = 2, backend = "cuda_cuvs_bruteforce", metric = metric),
+      "cuVS",
+      info = metric
+    )
+  }
   expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs_nndescent"), "cuVS")
   expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs_hnsw"), "cuVS")
   expect_error(internal_nn(x, x, k = 2, backend = "cuda_approx"), "cuVS")
