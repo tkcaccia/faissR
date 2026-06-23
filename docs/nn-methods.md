@@ -108,7 +108,9 @@ expected skips, not algorithmic failures.
 ## `"auto"`
 
 `method = "auto"` is the default. It chooses a route from the selected
-`backend` and the data shape:
+`backend` and the data shape. The route decision is made by the compiled C++
+`nn_auto_select_backend_cpp()` selector after the R wrapper has normalized
+arguments and collected runtime capability flags:
 
 - `backend = "auto"` first resolves the device family: CUDA/cuVS only when the
   selected method and metric have a validated CUDA route and CUDA/cuVS runtime
@@ -138,9 +140,11 @@ stored in `attr(result, "requested_backend")`,
 `attr(result, "requested_method")`, and `attr(result, "tuning")` together with
 the resolved backend in `attr(result, "resolved_backend")` and approximation
 parameters. Auto requests also carry `attr(result, "auto_selection")`, a
-static no-pilot record of the shape/k/metric rule that predicted the concrete
-route. The record keeps the internal `predicted_backend` and also exposes
-`predicted_method` plus `predicted_device`. It also records
+compiled no-pilot record of the shape/k/metric rule that predicted the concrete
+route. The record stores
+`policy = "cpp_static_shape_k_metric_selector"`, keeps the internal
+`predicted_backend`, and also exposes `predicted_method` plus
+`predicted_device`. It also records
 `explicit_backend`, `explicit_method`, `backend_decision`, and
 `method_decision`, so benchmark tables can distinguish a forced CPU/CUDA or
 forced method request from an automatic shape-policy choice without parsing

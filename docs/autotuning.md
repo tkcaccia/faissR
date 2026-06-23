@@ -154,7 +154,13 @@ data, converted matrix, and backend-side buffers.
 ## Shape-Aware `backend` Plus `method = "auto"`
 
 A follow-up auto-policy run tested the CPU-only and CUDA-only automatic
-selectors on simulated shapes and benchmark dataset folders.
+selectors on simulated shapes and benchmark dataset folders. The automatic
+route policy is implemented in C++ by `nn_auto_select_backend_cpp()`. The R
+front end supplies normalized arguments, runtime availability flags
+(`faiss_available`, `faiss_gpu_available`, `cuvs_available`, `cuda_available`),
+and option thresholds, but the selected backend and auto-selection metadata are
+produced by the compiled selector. The metadata policy string is
+`cpp_static_shape_k_metric_selector`.
 
 Policy summary:
 

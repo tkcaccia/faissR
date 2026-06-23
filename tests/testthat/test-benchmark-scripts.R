@@ -835,7 +835,7 @@ test_that("NN metric benchmark extracts compact backend route parameters", {
   )
   attr(out, "spatial_index") <- list(strategy = "ignored_grid", bins_per_dim = 32L)
   attr(out, "auto_selection") <- list(
-    policy = "static_shape_k_metric_selector",
+    policy = "cpp_static_shape_k_metric_selector",
     explicit_backend = TRUE,
     explicit_method = FALSE,
     backend_decision = "explicit_cpu",
@@ -3136,7 +3136,7 @@ test_that("graph benchmark extracts compact graph KNN route parameters", {
       tuning_large_k = FALSE
     ),
     nn_auto_selection = list(
-      policy = "static_shape_k_metric_selector",
+      policy = "cpp_static_shape_k_metric_selector",
       explicit_backend = TRUE,
       explicit_method = FALSE,
       backend_decision = "explicit_cpu",
@@ -3157,7 +3157,7 @@ test_that("graph benchmark extracts compact graph KNN route parameters", {
   expect_match(params, "nn_approximation.ef_search=150", fixed = TRUE)
   expect_match(params, "nn_approximation.tuning_rule=balanced_shape_metric", fixed = TRUE)
   expect_match(params, "nn_approximation.tuning_large_k=FALSE", fixed = TRUE)
-  expect_match(params, "nn_auto_selection.policy=static_shape_k_metric_selector", fixed = TRUE)
+  expect_match(params, "nn_auto_selection.policy=cpp_static_shape_k_metric_selector", fixed = TRUE)
   expect_match(params, "nn_auto_selection.explicit_backend=TRUE", fixed = TRUE)
   expect_match(params, "nn_auto_selection.explicit_method=FALSE", fixed = TRUE)
   expect_match(params, "nn_auto_selection.backend_decision=explicit_cpu", fixed = TRUE)

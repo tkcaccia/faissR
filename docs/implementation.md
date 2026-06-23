@@ -154,13 +154,14 @@ All KNN routes return a `faissR_nn` object with:
   large-`n`, small-`k`, large-`k`, and non-Euclidean routing. For IVFPQ/PQ
   compression settings, PQ-specific fields are prefixed with `pq_`.
 - `attr(result, "auto_selection")`: for requests involving
-  `backend = "auto"` or `method = "auto"`, the static shape/k/metric decision
-  record. It stores `policy = "static_shape_k_metric_selector"`, the predicted
-  concrete backend, public method class, device class, the reason for the
-  selection, explicit backend/method flags, backend/method decision reasons,
-  `n`, `p`, query count, `k`, metric, work-size estimate, and `slow_tuning =
-  FALSE`. This is a preflight record only; it does not run a pilot benchmark or
-  build an index.
+  `backend = "auto"` or `method = "auto"`, the compiled static shape/k/metric
+  decision record. It stores
+  `policy = "cpp_static_shape_k_metric_selector"`, the predicted concrete
+  backend, public method class, device class, the reason for the selection,
+  explicit backend/method flags, backend/method decision reasons, `n`, `p`,
+  query count, `k`, metric, work-size estimate, and `slow_tuning = FALSE`.
+  This is a preflight record only; it does not run a pilot benchmark or build
+  an index.
 
 This metadata is intentionally simple because the same result object feeds graph
 construction, clustering, benchmarking, and supervised prediction.
@@ -200,7 +201,10 @@ auto uses the CPU route when that method/metric is supported on CPU.
 The public `tuning` argument controls method-specific pilot tuning. The default
 `tuning = "auto"` uses the recommended tuning policy for the resolved method;
 `"cache"`, `"pilot"`, and `"fixed"` can be selected explicitly, and
-`"off"`/`"none"` disables tuning.
+`"off"`/`"none"` disables tuning. The route choice for `method = "auto"` and
+`backend = "auto"` is made by the C++ `nn_auto_select_backend_cpp()` selector.
+The R wrapper normalizes arguments, collects runtime capability flags and
+option thresholds, and dispatches to the compiled selector's backend.
 
 Explicit methods map to the selected backend. For example,
 `method = "grid", backend = "cpu"` resolves to the CPU grid implementation,

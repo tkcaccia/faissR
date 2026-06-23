@@ -2728,41 +2728,25 @@ resolve_auto_knn_gpu_backend <- function(backend,
                                          cuvs_available_value = cuvs_available(),
                                          faiss_gpu_available_value = faiss_gpu_available()) {
   if (!identical(backend, "auto")) return(NA_character_)
-  metric <- normalize_nn_metric(metric)
-  non_euclidean_auto <- cuda_auto_non_euclidean_backend(
-    metric,
-    requested_device = "auto",
-    self_query = self_query,
-    n = n,
-    p = p,
-    n_points = n_points,
-    k = k,
-    work_size = work_size,
+  route <- nn_auto_select_shape_cpp(
+    resolved_backend = "auto",
+    requested_backend = "auto",
+    requested_method = "auto",
+    shape = list(
+      n = as.integer(n),
+      p = as.integer(p),
+      n_points = as.integer(n_points),
+      k = as.integer(k),
+      metric = normalize_nn_metric(metric),
+      self_query = isTRUE(self_query),
+      exclude_self = FALSE,
+      work_size = as.double(work_size)
+    ),
     cuda_available_value = cuda_available_value,
     cuvs_available_value = cuvs_available_value,
     faiss_gpu_available_value = faiss_gpu_available_value
   )
-  if (!is.na(non_euclidean_auto)) {
-    return(if (identical(non_euclidean_auto, "cpu_auto")) NA_character_ else non_euclidean_auto)
-  }
-  if (!isTRUE(self_query)) return(NA_character_)
-  if (k > 256L) return(NA_character_)
-  if (work_size < 5e8) return(NA_character_)
-  if (!isTRUE(cuda_available_value) && !isTRUE(cuvs_available_value)) {
-    return(NA_character_)
-  }
-  tryCatch(
-    select_cuda_auto_backend(
-      self_query = self_query,
-      n = n,
-      p = p,
-      n_points = n_points,
-      k = k,
-      work_size = work_size,
-      metric = metric
-    ),
-    error = function(e) NA_character_
-  )
+  if (identical(route$reason, "auto_cuda_preselector")) route$selected_backend else NA_character_
 }
 
 select_cuda_auto_backend <- function(self_query,
@@ -2772,60 +2756,25 @@ select_cuda_auto_backend <- function(self_query,
                                      k,
                                      work_size,
                                      metric = "euclidean") {
-  metric <- normalize_nn_metric(metric)
-  if (k > 256L) {
-    stop("CUDA auto backends currently support `k <= 256`.", call. = FALSE)
-  }
-  if (!isTRUE(cuda_available()) && !isTRUE(cuvs_available())) {
-    stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
-  }
-  if (isTRUE(self_query) && p %in% c(2L, 3L) &&
-      metric %in% c("euclidean", "cosine", "correlation") &&
-      isTRUE(cuda_available()) && n >= 10000L) {
-    return("cuda_grid")
-  }
-  non_euclidean_auto <- cuda_auto_non_euclidean_backend(
-    metric,
-    requested_device = "cuda",
-    self_query = self_query,
-    n = n,
-    p = p,
-    n_points = n_points,
-    k = k,
-    work_size = work_size,
-    require_available = TRUE
+  route <- nn_auto_select_shape_cpp(
+    resolved_backend = "cuda_auto",
+    requested_backend = "cuda",
+    requested_method = "auto",
+    shape = list(
+      n = as.integer(n),
+      p = as.integer(p),
+      n_points = as.integer(n_points),
+      k = as.integer(k),
+      metric = normalize_nn_metric(metric),
+      self_query = isTRUE(self_query),
+      exclude_self = FALSE,
+      work_size = as.double(work_size)
+    )
   )
-  if (!is.na(non_euclidean_auto)) return(non_euclidean_auto)
-  if (!isTRUE(self_query)) {
-    if (isTRUE(faiss_gpu_available())) return("faiss_gpu_flat_l2")
-    if (isTRUE(cuvs_available())) return("cuda_cuvs_bruteforce")
-    return("cuda")
+  if (!is.na(route$error)) {
+    stop(route$error, call. = FALSE)
   }
-  exact_n <- faiss_option_int("cuda_auto_exact_n", 100000L, min_value = 1000L, max_value = 10000000L)
-  exact_work <- faissr_option("cuda_auto_exact_work", 5e12)
-  exact_work <- suppressWarnings(as.numeric(exact_work))
-  if (length(exact_work) != 1L || is.na(exact_work) || !is.finite(exact_work)) {
-    exact_work <- 5e12
-  }
-  if (n <= exact_n || work_size <= exact_work || k <= 8L) {
-    if (isTRUE(faiss_gpu_available())) return("faiss_gpu_flat_l2")
-    if (isTRUE(cuvs_available())) return("cuda_cuvs_bruteforce")
-    return("cuda")
-  }
-  if (isTRUE(faiss_gpu_available())) {
-    return("faiss_gpu_cagra")
-  }
-  if (isTRUE(cuvs_available())) {
-    return(select_cuvs_auto_backend(
-      self_query = self_query,
-      n = n,
-      p = p,
-      n_points = n_points,
-      k = k,
-      work_size = work_size
-    ))
-  }
-  "cuda"
+  route$selected_backend
 }
 
 cuda_auto_non_euclidean_backend <- function(metric,
@@ -2925,18 +2874,24 @@ select_cuvs_auto_backend <- function(self_query,
                                      n_points,
                                      k,
                                      work_size) {
-  small_threshold <- faissr_option("cuvs_bruteforce_work_threshold", 5e12)
-  small_threshold <- suppressWarnings(as.numeric(small_threshold))
-  if (length(small_threshold) != 1L || is.na(small_threshold) || !is.finite(small_threshold)) {
-    small_threshold <- 5e12
-  }
-  if (!isTRUE(self_query) || work_size <= small_threshold || k <= 8L || n <= 100000L || n_points <= 5000L) {
-    return("cuda_cuvs_bruteforce")
-  }
-  if (p <= 64L) {
-    return("cuda_cuvs_ivf_flat")
-  }
-  "cuda_cuvs_nndescent"
+  route <- nn_auto_select_shape_cpp(
+    resolved_backend = "cuda_auto",
+    requested_backend = "cuda",
+    requested_method = "auto",
+    shape = list(
+      n = as.integer(n),
+      p = as.integer(p),
+      n_points = as.integer(n_points),
+      k = as.integer(k),
+      metric = "euclidean",
+      self_query = isTRUE(self_query),
+      exclude_self = FALSE,
+      work_size = as.double(work_size)
+    ),
+    faiss_gpu_available_value = FALSE
+  )
+  if (!is.na(route$error)) stop(route$error, call. = FALSE)
+  route$selected_backend
 }
 
 should_use_auto_cpu_approx_self_knn <- function(self_query,
@@ -2997,104 +2952,22 @@ select_cpu_auto_backend <- function(self_query,
                                     k,
                                     work_size,
                                     metric = "euclidean") {
-  metric <- normalize_nn_metric(metric)
-  if (!identical(metric, "euclidean")) {
-    if (metric %in% c("cosine", "correlation") &&
-        isTRUE(self_query) &&
-        should_use_grid2d_self_knn(
-          self_query = TRUE,
-          n = n,
-          p = p,
-          k = k,
-          exclude_self = FALSE,
-          metric = metric
-        )) {
-      return("cpu_grid")
-    }
-    exact_work <- faissr_option("cpu_auto_exact_work", 2e8)
-    exact_work <- suppressWarnings(as.numeric(exact_work))
-    if (length(exact_work) != 1L || is.na(exact_work) || !is.finite(exact_work)) {
-      exact_work <- 2e8
-    }
-    faiss_flat_work <- cpu_auto_faiss_flat_work_threshold()
-    faiss_flat_backend <- cpu_auto_metric_faiss_flat_backend(metric)
-    if (!is.na(faiss_flat_backend) && isTRUE(faiss_available()) &&
-        work_size >= faiss_flat_work &&
-        (!isTRUE(self_query) || k < 10L || n < 5000L)) {
-      return(faiss_flat_backend)
-    }
-    if (!isTRUE(self_query) || work_size <= exact_work || n < 5000L || k < 10L || p < 2L) {
-      return("cpu")
-    }
-    if (isTRUE(faiss_available())) return("faiss_hnsw")
-    if (isTRUE(requireNamespace("RcppHNSW", quietly = TRUE))) return("hnsw")
-    if (should_use_native_nsg_auto_fallback(
-      self_query = self_query,
-      n = n,
-      p = p,
-      k = k,
-      work_size = work_size,
-      metric = metric
-    )) {
-      return("cpu_nsg")
-    }
-    if (should_use_native_nndescent_auto_fallback(
-      self_query = self_query,
-      n = n,
-      p = p,
-      k = k,
-      work_size = work_size
-    )) {
-      return("cpu_nndescent")
-    }
-    if (!is.na(faiss_flat_backend) && isTRUE(faiss_available()) && work_size >= faiss_flat_work) {
-      return(faiss_flat_backend)
-    }
-    return("cpu")
-  }
-  if (isTRUE(self_query) && should_use_grid2d_self_knn(
-    self_query = TRUE,
-    n = n,
-    p = p,
-    k = k,
-    exclude_self = FALSE,
-    metric = "euclidean"
-  )) {
-    return("cpu_grid")
-  }
-  exact_work <- faissr_option("cpu_auto_exact_work", 2e8)
-  exact_work <- suppressWarnings(as.numeric(exact_work))
-  if (length(exact_work) != 1L || is.na(exact_work) || !is.finite(exact_work)) {
-    exact_work <- 2e8
-  }
-  if (work_size <= exact_work || n < 5000L || p < 2L) {
-    return("cpu")
-  }
-  if (isTRUE(self_query) && n >= 1000000L && isTRUE(faiss_available())) {
-    return("faiss_ivf")
-  }
-  if (isTRUE(faiss_available())) return("faiss_hnsw")
-  if (isTRUE(requireNamespace("RcppHNSW", quietly = TRUE))) return("hnsw")
-  if (should_use_native_nsg_auto_fallback(
-    self_query = self_query,
-    n = n,
-    p = p,
-    k = k,
-    work_size = work_size,
-    metric = metric
-  )) {
-    return("cpu_nsg")
-  }
-  if (should_use_native_nndescent_auto_fallback(
-    self_query = self_query,
-    n = n,
-    p = p,
-    k = k,
-    work_size = work_size
-  )) {
-    return("cpu_nndescent")
-  }
-  "cpu"
+  route <- nn_auto_select_shape_cpp(
+    resolved_backend = "cpu_auto",
+    requested_backend = "cpu",
+    requested_method = "auto",
+    shape = list(
+      n = as.integer(n),
+      p = as.integer(p),
+      n_points = as.integer(n_points),
+      k = as.integer(k),
+      metric = normalize_nn_metric(metric),
+      self_query = isTRUE(self_query),
+      exclude_self = FALSE,
+      work_size = as.double(work_size)
+    )
+  )
+  route$selected_backend
 }
 
 cpu_auto_faiss_flat_work_threshold <- function() {
@@ -3297,67 +3170,67 @@ nn_auto_shape <- function(data,
   )
 }
 
-nn_auto_route_for_shape <- function(shape, resolved_backend) {
-  backend <- resolved_backend
-  selected <- backend
-  reason <- "explicit_route"
-  error <- NA_character_
-  if (identical(backend, "auto")) {
-    gpu <- resolve_auto_knn_gpu_backend(
-      backend = "auto",
-      self_query = shape$self_query,
-      n_points = shape$n_points,
-      n = shape$n,
-      p = shape$p,
-      k = shape$k,
-      work_size = shape$work_size,
-      metric = shape$metric
-    )
-    if (!is.na(gpu)) {
-      selected <- gpu
-      reason <- "auto_cuda_preselector"
-    } else {
-      selected <- select_cpu_auto_backend(
-        self_query = shape$self_query,
-        n = shape$n,
-        p = shape$p,
-        n_points = shape$n_points,
-        k = shape$k,
-        work_size = shape$work_size,
-        metric = shape$metric
-      )
-      reason <- "auto_cpu_fallback"
-    }
-  } else if (identical(backend, "cpu_auto")) {
-    selected <- select_cpu_auto_backend(
-      self_query = shape$self_query,
-      n = shape$n,
-      p = shape$p,
-      n_points = shape$n_points,
-      k = shape$k,
-      work_size = shape$work_size,
-      metric = shape$metric
-    )
-    reason <- "cpu_auto_shape_selector"
-  } else if (backend %in% c("cuda_auto", "gpu_auto")) {
-    selected <- tryCatch(
-      select_cuda_auto_backend(
-        self_query = shape$self_query,
-        n = shape$n,
-        p = shape$p,
-        n_points = shape$n_points,
-        k = shape$k,
-        work_size = shape$work_size,
-        metric = shape$metric
-      ),
-      error = function(e) {
-        error <<- conditionMessage(e)
-        backend
-      }
-    )
-    reason <- if (is.na(error)) "cuda_auto_shape_selector" else "cuda_auto_unavailable"
+nn_auto_select_shape_cpp <- function(resolved_backend,
+                                     requested_backend = "auto",
+                                     requested_method = "auto",
+                                     shape,
+                                     tuning = "auto",
+                                     cuda_available_value = cuda_available(),
+                                     cuvs_available_value = cuvs_available(),
+                                     faiss_available_value = faiss_available(),
+                                     faiss_gpu_available_value = faiss_gpu_available(),
+                                     rcpphnsw_available_value = requireNamespace("RcppHNSW", quietly = TRUE)) {
+  numeric_option <- function(name, default) {
+    value <- suppressWarnings(as.numeric(faissr_option(name, default)))
+    if (length(value) != 1L || is.na(value) || !is.finite(value)) default else value
   }
-  list(selected_backend = selected, reason = reason, error = error)
+  out <- nn_auto_select_backend_cpp(
+    resolved_backend = resolved_backend,
+    requested_backend = requested_backend,
+    requested_method = public_nn_method_label(requested_method),
+    metric = normalize_nn_metric(shape$metric),
+    n = as.integer(shape$n),
+    p = as.integer(shape$p),
+    n_points = as.integer(shape$n_points),
+    k = as.integer(shape$k),
+    self_query = isTRUE(shape$self_query),
+    exclude_self = isTRUE(shape$exclude_self),
+    cuda_available = isTRUE(cuda_available_value),
+    cuvs_available = isTRUE(cuvs_available_value),
+    faiss_available = isTRUE(faiss_available_value),
+    faiss_gpu_available = isTRUE(faiss_gpu_available_value),
+    rcpphnsw_available = isTRUE(rcpphnsw_available_value),
+    cagra_preference = cagra_implementation_preference(),
+    cuda_exact_n = faiss_option_int("cuda_auto_exact_n", 100000L, min_value = 1000L, max_value = 10000000L),
+    cuda_exact_work = numeric_option("cuda_auto_exact_work", 5e12),
+    metric_graph_n = faiss_option_int("cuda_auto_metric_graph_n", 100000L, min_value = 1000L, max_value = 10000000L),
+    metric_graph_min_k = faiss_option_int("cuda_auto_metric_graph_min_k", 10L, min_value = 2L, max_value = 256L),
+    metric_graph_work = numeric_option("cuda_auto_metric_graph_work", 5e12),
+    cagra_compact_n = faiss_option_int("cuda_cagra_cuvs_compact_n", 10000L, min_value = 100L, max_value = 1000000L),
+    cagra_high_dim_p = faiss_option_int("cuda_cagra_cuvs_high_dim_p", 1024L, min_value = 2L, max_value = 100000L),
+    cagra_compact_max_k = faiss_option_int("cuda_cagra_cuvs_compact_max_k", 128L, min_value = 1L, max_value = 10000L),
+    cuvs_bruteforce_work_threshold = numeric_option("cuvs_bruteforce_work_threshold", 5e12),
+    cpu_exact_work = numeric_option("cpu_auto_exact_work", 2e8),
+    cpu_faiss_flat_work = cpu_auto_faiss_flat_work_threshold(),
+    tuning = normalize_nn_tuning(tuning)
+  )
+  for (field in c("selected_backend", "predicted_backend", "predicted_method",
+                  "predicted_device", "reason", "error")) {
+    if (is.null(out[[field]]) || !nzchar(as.character(out[[field]])[1L])) {
+      out[[field]] <- NA_character_
+    }
+  }
+  out
+}
+
+nn_auto_route_for_shape <- function(shape, resolved_backend) {
+  route <- nn_auto_select_shape_cpp(
+    resolved_backend = resolved_backend,
+    requested_backend = "auto",
+    requested_method = "auto",
+    shape = shape
+  )
+  list(selected_backend = route$selected_backend, reason = route$reason, error = route$error)
 }
 
 nn_auto_selection_metadata <- function(data,
@@ -3385,42 +3258,12 @@ nn_auto_selection_metadata <- function(data,
     metric = metric,
     exclude_self = exclude_self
   )
-  route <- nn_auto_route_for_shape(shape, resolved_backend)
-  requested_method_label <- public_nn_method_label(requested_method)
-  backend_decision <- if (explicit_backend) {
-    paste0("explicit_", requested_backend)
-  } else {
-    route$reason
-  }
-  method_decision <- if (explicit_method) {
-    paste0("explicit_", requested_method_label)
-  } else {
-    route$reason
-  }
-  list(
-    policy = "static_shape_k_metric_selector",
-    slow_tuning = FALSE,
+  nn_auto_select_shape_cpp(
+    resolved_backend = resolved_backend,
     requested_backend = requested_backend,
-    requested_method = requested_method_label,
-    resolved_public_backend = resolved_backend,
-    explicit_backend = explicit_backend,
-    explicit_method = explicit_method,
-    backend_decision = backend_decision,
-    method_decision = method_decision,
-    predicted_backend = route$selected_backend,
-    predicted_method = nn_resolved_backend_public_method(route$selected_backend),
-    predicted_device = nn_resolved_backend_device(route$selected_backend),
-    reason = route$reason,
-    error = route$error,
-    n = shape$n,
-    p = shape$p,
-    n_points = shape$n_points,
-    k = shape$k,
-    metric = shape$metric,
-    self_query = shape$self_query,
-    exclude_self = shape$exclude_self,
-    work_size = shape$work_size,
-    tuning = normalize_nn_tuning(tuning)
+    requested_method = requested_method,
+    shape = shape,
+    tuning = tuning
   )
 }
 

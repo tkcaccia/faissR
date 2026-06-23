@@ -125,6 +125,10 @@ candidate_knn_cpp <- function(data, points, candidate_indices, k, method, square
     .Call(`_faissR_candidate_knn_cpp`, data, points, candidate_indices, k, method, square, exclude_self, parallel, cores)
 }
 
+nn_auto_select_backend_cpp <- function(resolved_backend, requested_backend, requested_method, metric, n, p, n_points, k, self_query, exclude_self, cuda_available, cuvs_available, faiss_available, faiss_gpu_available, rcpphnsw_available, cagra_preference, cuda_exact_n, cuda_exact_work, metric_graph_n, metric_graph_min_k, metric_graph_work, cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k, cuvs_bruteforce_work_threshold, cpu_exact_work, cpu_faiss_flat_work, tuning) {
+    .Call(`_faissR_nn_auto_select_backend_cpp`, resolved_backend, requested_backend, requested_method, metric, n, p, n_points, k, self_query, exclude_self, cuda_available, cuvs_available, faiss_available, faiss_gpu_available, rcpphnsw_available, cagra_preference, cuda_exact_n, cuda_exact_work, metric_graph_n, metric_graph_min_k, metric_graph_work, cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k, cuvs_bruteforce_work_threshold, cpu_exact_work, cpu_faiss_flat_work, tuning)
+}
+
 cuda_available_cpp <- function() {
     .Call(`_faissR_cuda_available_cpp`)
 }
