@@ -3937,6 +3937,7 @@ test_that("direct cuVS CAGRA auto build rule uses iterative construction for com
 
   coil20_like <- matrix(0, nrow = 1440L, ncol = 1024L)
   params <- faissR:::cuvs_cagra_params(nrow(coil20_like), 50L, p = ncol(coil20_like))
+  hnsw_params <- faissR:::cuvs_hnsw_params(nrow(coil20_like), 50L, p = ncol(coil20_like))
 
   expect_equal(
     faissR:::cuvs_cagra_build_algo_for(coil20_like, 50L, self_query = TRUE, params = params),
@@ -3946,6 +3947,7 @@ test_that("direct cuVS CAGRA auto build rule uses iterative construction for com
     faissR:::cuvs_cagra_build_algo_for(coil20_like, 50L, self_query = FALSE, params = params),
     "ivf_pq"
   )
+  expect_equal(hnsw_params$cagra_build_algo, "iterative_cagra_search")
 })
 
 test_that("cuVS HNSW reports metric-aware CUDA results for all public metrics", {

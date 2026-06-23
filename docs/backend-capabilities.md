@@ -89,7 +89,7 @@ errors because the grid route is geometric Euclidean/cosine/correlation search.
 | RAPIDS cuVS CAGRA | no | yes, if cuVS is built | Direct CUDA graph-search route with deterministic no-pilot defaults; explicit `tuning = "cache"` or `"pilot"` can run recall-guarded pilot tuning. Cosine/correlation use normalized Euclidean search [3]. |
 | RAPIDS cuVS IVF/PQ | no | yes, if cuVS is built | Direct cuVS approximate Euclidean/L2 routes; cosine/correlation use normalized Euclidean search. Raw inner product is not exposed in the direct cuVS IVF/PQ route; use public FAISS GPU `method = "ivf"`/`"ivfpq"` for IVF/IP search [3,6]. |
 | RAPIDS cuVS NN-descent | no | yes, if cuVS is built | CUDA NN-descent route for Euclidean/L2 plus normalized cosine/correlation; public CUDA raw inner-product NN-descent uses faissR's native CUDA candidate-refinement route because direct cuVS NN-descent does not expose raw IP [3-4]. |
-| RAPIDS cuVS HNSW | no | yes, if cuVS is built with HNSW headers | CUDA-built CAGRA index converted to cuVS HNSW, searched through the cuVS HNSW wrapper; supports Euclidean/L2 and normalized cosine/correlation in faissR [3,5,22-23]. |
+| RAPIDS cuVS HNSW | no | yes, if cuVS is built with HNSW headers | CUDA-built CAGRA index converted to cuVS HNSW, searched through the cuVS HNSW wrapper; supports Euclidean/L2 and normalized cosine/correlation in faissR. The internal CAGRA build uses the same shape-aware `cagra_build_algo = "auto"` rule as direct cuVS CAGRA, and compact high-dimensional self-KNN records `iterative_cagra_search` in approximation metadata [3,5,22-23]. |
 
 ## Graph, Clustering, And Model Functions
 

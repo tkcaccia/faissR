@@ -1051,7 +1051,8 @@ List cuvs_hnsw_knn_impl(NumericMatrix data,
                         int graph_degree,
                         int intermediate_graph_degree,
                         int ef,
-                        int n_threads) {
+                        int n_threads,
+                        std::string cagra_build_algo) {
 #ifndef FAISSR_HAS_CUVS_HNSW
   Rcpp::stop(
     "Direct cuVS HNSW is not available in this cuVS installation. "
@@ -1108,6 +1109,26 @@ List cuvs_hnsw_knn_impl(NumericMatrix data,
   cagra_params.get()->graph_degree = static_cast<std::size_t>(graph_degree);
   cagra_params.get()->intermediate_graph_degree =
     static_cast<std::size_t>(intermediate_graph_degree);
+  std::string selected_build_algo = cagra_build_algo;
+  std::transform(selected_build_algo.begin(), selected_build_algo.end(), selected_build_algo.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (selected_build_algo == "auto" || selected_build_algo == "auto_select") {
+    cagra_params.get()->build_algo = AUTO_SELECT;
+    selected_build_algo = "auto";
+  } else if (selected_build_algo == "ivf_pq" || selected_build_algo == "ivfpq") {
+    cagra_params.get()->build_algo = IVF_PQ;
+    selected_build_algo = "ivf_pq";
+  } else if (selected_build_algo == "nn_descent" || selected_build_algo == "nndescent") {
+    cagra_params.get()->build_algo = NN_DESCENT;
+    cagra_params.get()->nn_descent_niter =
+      static_cast<std::size_t>(env_int("FAISSR_CUVS_CAGRA_NN_DESCENT_NITER", 20, 1));
+    selected_build_algo = "nn_descent";
+  } else if (selected_build_algo == "iterative" || selected_build_algo == "iterative_cagra_search") {
+    cagra_params.get()->build_algo = ITERATIVE_CAGRA_SEARCH;
+    selected_build_algo = "iterative_cagra_search";
+  } else {
+    Rcpp::stop("Unsupported cuVS HNSW CAGRA build algorithm: %s", cagra_build_algo);
+  }
 
   CagraIndex cagra_index;
   cuvs_check(
@@ -1171,6 +1192,7 @@ List cuvs_hnsw_knn_impl(NumericMatrix data,
   out["requested_intermediate_graph_degree"] = requested_intermediate_graph_degree;
   out["requested_ef"] = requested_ef;
   out["requested_num_threads"] = requested_n_threads;
+  out["cagra_build_algo"] = selected_build_algo;
   out["hnsw_parameters_adjusted"] = requested_graph_degree != graph_degree ||
     requested_intermediate_graph_degree != intermediate_graph_degree ||
     requested_ef != ef ||

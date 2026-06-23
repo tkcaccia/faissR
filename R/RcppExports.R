@@ -173,8 +173,8 @@ nn_cuvs_nndescent_self_cpp <- function(data, k, graph_degree, intermediate_graph
     .Call(`_faissR_nn_cuvs_nndescent_self_cpp`, data, k, graph_degree, intermediate_graph_degree, max_iterations)
 }
 
-nn_cuvs_hnsw_cpp <- function(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, ef, n_threads) {
-    .Call(`_faissR_nn_cuvs_hnsw_cpp`, data, points, k, exclude_self, graph_degree, intermediate_graph_degree, ef, n_threads)
+nn_cuvs_hnsw_cpp <- function(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, ef, n_threads, cagra_build_algo) {
+    .Call(`_faissR_nn_cuvs_hnsw_cpp`, data, points, k, exclude_self, graph_degree, intermediate_graph_degree, ef, n_threads, cagra_build_algo)
 }
 
 nn_cuvs_ivf_flat_cpp <- function(data, points, k, n_lists, n_probes, exclude_self) {

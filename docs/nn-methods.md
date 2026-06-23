@@ -175,8 +175,14 @@ Euclidean/L2, normalized cosine/correlation, and raw inner product through the
 same maximum-inner-product-to-L2 extra-dimension transform used by validated
 CUDA inner-product graph routes.
 Returned raw inner-product distances follow faissR's smaller-is-better shifted
-distance convention. CUHNSW is acknowledged as related Apache-2.0 CUDA HNSW
-prior software, but faissR does not vendor or copy CUHNSW source [3,22-23].
+distance convention. The internal CAGRA construction uses the same shape-aware
+`cagra_build_algo = "auto"` rule as direct cuVS CAGRA; compact
+high-dimensional self-KNN uses `iterative_cagra_search` to avoid the cuVS
+IVF-PQ graph-build workspace spike seen on COIL20-like data. Successful HNSW
+results record the internal `cagra_build_algo` in
+`attr(result, "approximation")`. CUHNSW is acknowledged as related Apache-2.0
+CUDA HNSW prior software, but faissR does not vendor or copy CUHNSW source
+[3,22-23].
 
 ## `"exact"`
 

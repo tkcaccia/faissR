@@ -32,7 +32,8 @@ List cuvs_hnsw_knn_impl(NumericMatrix data,
                         int graph_degree,
                         int intermediate_graph_degree,
                         int ef,
-                        int n_threads);
+                        int n_threads,
+                        std::string cagra_build_algo);
 List cuvs_ivf_flat_knn_impl(NumericMatrix data,
                             NumericMatrix points,
                             int k,
@@ -119,7 +120,8 @@ List nn_cuvs_hnsw_cpp(NumericMatrix data,
                       int graph_degree,
                       int intermediate_graph_degree,
                       int ef,
-                      int n_threads) {
+                      int n_threads,
+                      std::string cagra_build_algo) {
   return cuvs_hnsw_knn_impl(
     data,
     points,
@@ -128,7 +130,8 @@ List nn_cuvs_hnsw_cpp(NumericMatrix data,
     graph_degree,
     intermediate_graph_degree,
     ef,
-    n_threads
+    n_threads,
+    cagra_build_algo
   );
 }
 

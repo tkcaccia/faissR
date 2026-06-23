@@ -1291,7 +1291,7 @@ nn_compute <- function(data,
       search_data <- metric_inputs$data
       search_points <- metric_inputs$points
     }
-    params <- cuvs_hnsw_params(nrow(search_data), k, n_threads = n_threads)
+    params <- cuvs_hnsw_params(nrow(search_data), k, p = ncol(search_data), n_threads = n_threads)
     out <- nn_cuvs_hnsw_cpp(
       search_data,
       search_points,
@@ -1300,7 +1300,8 @@ nn_compute <- function(data,
       as.integer(params$graph_degree),
       as.integer(params$intermediate_graph_degree),
       as.integer(params$ef),
-      as.integer(params$n_threads)
+      as.integer(params$n_threads),
+      params$cagra_build_algo
     )
     result <- finish_nn_result(out, "cuda_cuvs_hnsw", k, self_query, exact = FALSE, metric = metric)
     if (!is.null(metric_inputs)) {
@@ -1318,6 +1319,7 @@ nn_compute <- function(data,
       intermediate_graph_degree = as.integer(out$intermediate_graph_degree),
       ef = as.integer(out$ef),
       n_threads = as.integer(out$num_threads),
+      cagra_build_algo = out$cagra_build_algo %||% params$cagra_build_algo,
       requested_graph_degree = as.integer(params$requested_graph_degree),
       requested_intermediate_graph_degree = as.integer(params$requested_intermediate_graph_degree),
       requested_ef = as.integer(params$requested_ef),
@@ -1956,10 +1958,18 @@ cagra_build_algo_preference <- function(default = "auto") {
 }
 
 cuvs_cagra_build_algo_for <- function(data, k, self_query, params = NULL) {
+  cuvs_cagra_build_algo_for_shape(
+    n = nrow(data),
+    p = ncol(data),
+    k = k,
+    self_query = self_query,
+    params = params
+  )
+}
+
+cuvs_cagra_build_algo_for_shape <- function(n, p, k, self_query, params = NULL) {
   requested <- cagra_build_algo_preference()
   if (!identical(requested, "auto")) return(requested)
-  n <- nrow(data)
-  p <- ncol(data)
   k <- as.integer(k)
   compact <- isTRUE(params$tuning_compact_build %||% FALSE)
   small_n <- length(n) == 1L && !is.na(n) && n <= 5000L
@@ -6176,8 +6186,15 @@ cuvs_cagra_params <- function(n, k, p = NA_integer_) {
   )
 }
 
-cuvs_hnsw_params <- function(n, k, n_threads = NULL) {
-  base <- cuvs_cagra_params(n, k)
+cuvs_hnsw_params <- function(n, k, p = NA_integer_, n_threads = NULL) {
+  base <- cuvs_cagra_params(n, k, p = p)
+  build_algo <- cuvs_cagra_build_algo_for_shape(
+    n = n,
+    p = p,
+    k = k,
+    self_query = TRUE,
+    params = base
+  )
   k <- as.integer(k)
   n <- as.integer(n)
   large_k <- length(k) == 1L && !is.na(k) && k >= 100L
@@ -6198,6 +6215,7 @@ cuvs_hnsw_params <- function(n, k, n_threads = NULL) {
     intermediate_graph_degree = as.integer(base$intermediate_graph_degree),
     ef = as.integer(ef),
     n_threads = as.integer(threads),
+    cagra_build_algo = build_algo,
     requested_graph_degree = as.integer(base$requested_graph_degree),
     requested_intermediate_graph_degree = as.integer(base$requested_intermediate_graph_degree),
     requested_ef = as.integer(requested_ef),
