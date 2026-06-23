@@ -107,7 +107,8 @@ that the no-pilot graph-shape rule came from compiled policy.
 | `ivfpq` | `faiss_ivfpq` speed/balanced tiers | CPU memory-pressure tier | Low recall on many datasets; use only when memory reduction is the priority. Requires at least 624 training rows for the CPU FAISS route; auto tuning uses 4-bit PQ for 624-9,983 rows and 8-bit PQ above that unless manually overridden [6]. |
 | `ivfpq` | `faiss_gpu_ivfpq` | CUDA memory-pressure tier | Fast but low recall in this benchmark; explicit opt-in only. |
 | `ivfpq` | `cuda_cuvs_ivfpq` | CUDA memory-pressure tier | Direct benchmark route for Euclidean/L2 plus transformed cosine, correlation, and raw inner product. Better than FAISS GPU IVFPQ on some datasets but still not an accuracy-first default. |
-| `nsg` | `cpu_nsg` speed/balanced tiers | CPU graph candidate | Native faissR NSG-style route for all public metrics; avoids linked-FAISS NSG aborts in public calls. |
+| `nsg` | `cpu_nsg` speed/balanced tiers | CPU graph candidate | Native faissR NSG-style route for all public metrics; avoids linked-FAISS NSG aborts in public calls. Large high-dimensional CPU inputs use deterministic HNSW seeding before NSG/MRNG-style pruning so explicit NSG no longer starts with an all-pairs exact seed on MNIST/FashionMNIST-scale matrices. |
+| `vamana` | `cpu_vamana` speed/balanced tiers | CPU graph candidate | Native DiskANN/Vamana-style robust-pruned candidate graph; large high-dimensional CPU inputs use deterministic HNSW seeding before robust pruning, while smaller inputs keep exact seeding. |
 | `nndescent` | `cpu_nndescent` speed/balanced tiers | CPU graph speed tier | Native faissR NN-descent route; useful as an explicit Euclidean, normalized cosine/correlation, or raw inner-product graph-search candidate, but recall was usually lower than HNSW. |
 | `nndescent` | `cuda_cuvs_nndescent` | CUDA graph speed tier | Fast and useful at around 0.99 recall on some datasets; failed on COIL20. |
 | `nndescent` | `cuda_native_nndescent` | CUDA raw inner-product tier | Native CUDA candidate-refinement route used by public `backend = "cuda", method = "nndescent", metric = "inner_product"` because direct cuVS NN-descent does not expose raw IP. |
@@ -277,7 +278,10 @@ CPU-auto default.
   completed fastest in that focused diagnostic. The direct cuVS `nn_descent`
   builder failed with `cudaErrorInvalidValue`, so it is explicit-only.
 - Public CPU NSG now uses the native faissR NSG-style route for all metrics.
-  Keep reporting recall before considering it as a broad auto default.
+  Large high-dimensional CPU NSG/Vamana use deterministic HNSW seeding before
+  method-specific pruning/refinement to avoid all-pairs exact seed timeouts.
+  Keep reporting recall before considering either route as a broad auto
+  default.
 - cuVS NN-Descent failed on COIL20 with a CUDA invalid-argument error. It should
   remain explicit or secondary until more robust guards are added.
 - IVFPQ methods are often fast or memory-efficient, but recall was frequently

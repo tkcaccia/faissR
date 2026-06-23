@@ -91,8 +91,8 @@ CUDA and keep CUDA backend metadata.
 | `"hnsw"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation | CPU FAISS HNSW is used for all metrics when available; CUDA uses cuVS HNSW converted from CAGRA for Euclidean and normalized cosine/correlation. Raw inner product is disabled for CUDA HNSW until a reliable native or transformed route is available. |
 | `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
 | `"ivfpq"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVFPQ supports L2/IP; cosine/correlation use normalized IVFPQ IP. |
-| `"vamana"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native robust-pruned candidate graph inspired by DiskANN/Vamana; CPU/CUDA refine exact top-k within candidate rows. Cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
-| `"nsg"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Public CPU NSG uses faissR's native NSG-style candidate graph for all metrics. CUDA NSG is self-KNN only; cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
+| `"vamana"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native robust-pruned candidate graph inspired by DiskANN/Vamana; CPU/CUDA refine top-k within candidate rows. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning. Cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
+| `"nsg"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Public CPU NSG uses faissR's native NSG-style candidate graph for all metrics. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before NSG/MRNG-style pruning. CUDA NSG is self-KNN only; cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
 | `"nndescent"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native CPU NN-descent supports raw inner-product search; CPU/CUDA cosine and correlation use normalized Euclidean graph search. CUDA raw inner product uses faissR's native CUDA candidate-refinement route because direct cuVS NN-descent does not expose raw inner product. FAISS NNDescent is experimental opt-in because linked FAISS builds can abort during graph construction. |
 | `"cagra"` | unsupported | euclidean, cosine, correlation | CUDA-only FAISS/cuVS graph search; cosine/correlation use normalized Euclidean graph search. Raw inner-product CAGRA is disabled until a reliable transformed route is available. |
 
@@ -325,13 +325,15 @@ training set is large enough unless the user overrides `faissR.faiss_pq_nbits`.
 implemented inside faissR [24].
 
 - CPU `method = "vamana"` builds a candidate graph, applies Vamana-style
-  robust pruning controlled by `alpha`, and refines exact top-k neighbours
-  inside each candidate row with faissR's CPU candidate KNN scorer.
+  robust pruning controlled by `alpha`, and refines top-k neighbours inside
+  each candidate row with faissR's CPU candidate KNN scorer. Large
+  high-dimensional CPU inputs use deterministic HNSW seed neighbours before
+  robust pruning; smaller CPU inputs keep exact seed neighbours.
 - CUDA `method = "vamana"` uses the same candidate graph semantics and refines
   candidate rows with faissR's native CUDA row-candidate KNN kernel.
 - The deterministic pruning step protects the first `k` seed neighbours before
-  applying robust pruning, so small-`k` calls do not discard exact seed
-  neighbours already found by the candidate generator.
+  applying robust pruning, so small-`k` calls do not discard neighbours already
+  found by the candidate generator.
 - Euclidean, cosine, correlation, and inner product are supported for self-KNN.
   Cosine/correlation use normalized Euclidean search; inner product uses
   shifted dot-product distances to preserve smaller-is-better output.
@@ -352,7 +354,9 @@ nearest-neighbour graph [21].
 
 - CPU `method = "nsg"` uses faissR's native NSG-style self-KNN candidate graph
   for all public metrics so public calls do not enter the unsafe linked-FAISS
-  NSG graph builder [16,21,29].
+  NSG graph builder [16,21,29]. Large high-dimensional CPU inputs use
+  deterministic HNSW seed neighbours before NSG/MRNG-style pruning; smaller
+  CPU inputs keep exact seed neighbours.
 - CUDA `method = "nsg"` uses faissR's native CUDA NSG-style self-KNN route. It
   builds a candidate graph, prunes candidates with an NSG/MRNG-style rule, and
   refines rows with the native CUDA row-candidate KNN kernel.
