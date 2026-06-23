@@ -630,6 +630,33 @@ should_isolate_native_timeout <- function(x, backend, method, preflight_route,
   cpu_exact_route || explicit_cpu_exact || auto_cpu_exact
 }
 
+should_preflight_cpu_exhaustive_timeout <- function(x, backend, method,
+                                                    preflight_route,
+                                                    preflight_cpu_exhaustive_timeout,
+                                                    preflight_cpu_exhaustive_timeout_ops) {
+  if (!isTRUE(preflight_cpu_exhaustive_timeout)) return(FALSE)
+  method <- canonical_method_key(method)
+  backend <- canonical_backend_key(backend)
+  route <- as.character(preflight_route %||% NA_character_)[[1L]]
+  n <- nrow(x)
+  p <- ncol(x)
+  work <- as.double(n) * as.double(n) * as.double(p)
+  threshold <- suppressWarnings(as.numeric(preflight_cpu_exhaustive_timeout_ops))
+  if (length(threshold) != 1L || !is.finite(threshold) || threshold <= 0) {
+    threshold <- 5e10
+  }
+  high_work <- (is.finite(work) && work >= threshold) || n >= 50000L
+  if (!isTRUE(high_work)) return(FALSE)
+
+  cpu_exact_route <- identical(route, "cpu") || isTRUE(grepl("^faiss_flat", route))
+  explicit_cpu_exact <- identical(backend, "cpu") &&
+    method %in% c("exact", "flat", "bruteforce")
+  auto_cpu_exact <- identical(backend, "auto") &&
+    method %in% c("exact", "flat", "bruteforce") &&
+    cpu_exact_route
+  cpu_exact_route || explicit_cpu_exact || auto_cpu_exact
+}
+
 fork_job_pid <- function(job) {
   pid <- tryCatch(job$pid, error = function(e) NULL)
   if (is.null(pid)) {
@@ -1713,7 +1740,9 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
                     timeout, reference, seed, cagra_implementation = NA_character_,
                     cagra_build_algo = NA_character_,
                     isolate_cuda_cagra = FALSE,
-                    isolate_native_timeout = TRUE) {
+                    isolate_native_timeout = TRUE,
+                    preflight_cpu_exhaustive_timeout = FALSE,
+                    preflight_cpu_exhaustive_timeout_ops = 5e10) {
   started <- proc.time()[["elapsed"]]
   old_options <- options(
     faissR.approx_knn_seed = as.integer(seed),
@@ -1726,6 +1755,40 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
     as.character(resolve_public_route(backend, method, metric))[1L],
     error = function(e) NA_character_
   )
+  if (should_preflight_cpu_exhaustive_timeout(
+    x = x,
+    backend = backend,
+    method = method,
+    preflight_route = preflight_route,
+    preflight_cpu_exhaustive_timeout = preflight_cpu_exhaustive_timeout,
+    preflight_cpu_exhaustive_timeout_ops = preflight_cpu_exhaustive_timeout_ops
+  )) {
+    work <- as.double(nrow(x)) * as.double(nrow(x)) * as.double(ncol(x))
+    return(result_row(
+      dataset = dataset_name,
+      n = nrow(x),
+      p = ncol(x),
+      backend = backend,
+      method = method,
+      cagra_implementation = cagra_implementation,
+      cagra_build_algo = cagra_build_algo,
+      metric = metric,
+      k = k,
+      cycle = cycle,
+      n_threads = n_threads,
+      status = "timeout",
+      error = sprintf(
+        "preflight skipped high-work CPU exhaustive route (work_size=%.3e, threshold=%.3e)",
+        work,
+        as.numeric(preflight_cpu_exhaustive_timeout_ops)
+      ),
+      elapsed_sec = timeout,
+      peak_rss_gb = NA_real_,
+      isolated_process = FALSE,
+      child_status = "preflight_timeout",
+      preflight_route = preflight_route
+    ))
+  }
   tryCatch({
     isolated_cagra <- should_isolate_cuda_cagra(backend, method, cagra_implementation, isolate_cuda_cagra)
     isolated_native <- !isTRUE(isolated_cagra) &&
@@ -1915,6 +1978,11 @@ quality_max_ops <- required_positive_numeric_arg(args$quality_max_ops %||% "5e9"
 recall_threshold <- required_probability_arg(args$recall_threshold %||% "0.98", "recall_threshold")
 isolate_cuda_cagra <- logical_arg(args$isolate_cuda_cagra, default = FALSE, arg = "isolate_cuda_cagra")
 isolate_native_timeout <- logical_arg(args$isolate_native_timeout, default = TRUE, arg = "isolate_native_timeout")
+preflight_cpu_exhaustive_timeout <- logical_arg(args$preflight_cpu_exhaustive_timeout, default = FALSE, arg = "preflight_cpu_exhaustive_timeout")
+preflight_cpu_exhaustive_timeout_ops <- required_positive_numeric_arg(
+  args$preflight_cpu_exhaustive_timeout_ops %||% "5e10",
+  "preflight_cpu_exhaustive_timeout_ops"
+)
 
 available_datasets <- c(dataset_index(data_root)$dataset, "SimulatedUniform2D", "SimulatedUniform3D")
 datasets <- validate_dataset_values(
@@ -1960,7 +2028,8 @@ for (impl in cagra_implementations) {
 config <- data.frame(
   key = c("data_root", "out_dir", "available_datasets", "datasets", "backends",
           "methods", "cagra_implementations", "cagra_build_algos", "metrics", "k_values", "threads", "timeout", "cycles",
-          "quality_n", "quality_max_ops", "recall_threshold", "isolate_cuda_cagra", "isolate_native_timeout", "seed",
+          "quality_n", "quality_max_ops", "recall_threshold", "isolate_cuda_cagra", "isolate_native_timeout",
+          "preflight_cpu_exhaustive_timeout", "preflight_cpu_exhaustive_timeout_ops", "seed",
           "faissR_version", "faissR_package_path", "faissR_namespace_path", "r_libpaths"),
   value = c(
     data_root, out_dir, paste(available_datasets, collapse = ","),
@@ -1970,7 +2039,8 @@ config <- data.frame(
     paste(metrics, collapse = ","),
     paste(k_values, collapse = ","), n_threads, timeout, cycles, quality_n,
     format(quality_max_ops, scientific = TRUE), recall_threshold, isolate_cuda_cagra,
-    isolate_native_timeout, seed,
+    isolate_native_timeout, preflight_cpu_exhaustive_timeout,
+    format(preflight_cpu_exhaustive_timeout_ops, scientific = TRUE), seed,
     faissR_version, faissR_package_path, faissR_namespace_path, faissR_libpaths
   ),
   stringsAsFactors = FALSE
@@ -2073,7 +2143,9 @@ for (dataset_name in datasets) {
                     reference = references[[ref_key]],
                     seed = cycle_seed,
                     isolate_cuda_cagra = isolate_cuda_cagra,
-                    isolate_native_timeout = isolate_native_timeout
+                    isolate_native_timeout = isolate_native_timeout,
+                    preflight_cpu_exhaustive_timeout = preflight_cpu_exhaustive_timeout,
+                    preflight_cpu_exhaustive_timeout_ops = preflight_cpu_exhaustive_timeout_ops
                   )
                 }
                 results[[row_id]] <- row
@@ -2204,6 +2276,8 @@ materials <- c(
   sprintf("- Fastest-method recall threshold: `%s`", recall_threshold),
   sprintf("- CUDA CAGRA child-process isolation: `%s`", isolate_cuda_cagra),
   sprintf("- Native timeout child-process isolation: `%s`", isolate_native_timeout),
+  sprintf("- Large CPU exhaustive-route preflight timeout: `%s`", preflight_cpu_exhaustive_timeout),
+  sprintf("- Large CPU exhaustive-route preflight work threshold: `%s`", format(preflight_cpu_exhaustive_timeout_ops, scientific = TRUE)),
   sprintf("- faissR version: `%s`", faissR_version),
   sprintf("- faissR package path: `%s`", faissR_package_path),
   sprintf("- R library paths: `%s`", faissR_libpaths),
@@ -2213,6 +2287,7 @@ materials <- c(
   "`nn_metric_benchmark_config.csv` records the run configuration, the loaded faissR version, package path, namespace path, R library paths, and the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, the requested CAGRA implementation for public `method = \"cagra\"` rows and for CUDA-capable `method = \"auto\"` rows only when the shape-aware auto selector predicts a CAGRA route, the requested direct-cuVS `cagra_build_algo` when `cagra_implementation = \"cuvs\"`, optional child-process isolation fields, and resolved backend fields.",
   "When `--isolate_cuda_cagra=true`, CUDA CAGRA rows that request a provider selector are executed in a child R process. The child writes the KNN result back to the parent, which still computes quality against the same reference. The `isolated_process` and `child_status` columns make this auditable. Timings are measured inside the child around `faissR::nn()` so process start-up and result serialization are not counted as method time.",
   "When `--isolate_native_timeout=true` (the default on Unix-like systems), high-work CPU `method = \"exact\"`, `method = \"flat\"`, and `method = \"bruteforce\"` rows are executed in a forked worker process. This gives the benchmark an OS-level timeout for native code paths that may not check R's `setTimeLimit()` while inside C++/FAISS loops, and records timed-out rows with `child_status = \"timeout\"` instead of blocking subsequent rows.",
+  "When `--preflight_cpu_exhaustive_timeout=true`, high-work CPU exhaustive rows are recorded as `status = \"timeout\"` with `child_status = \"preflight_timeout\"` before launching native code. This opt-in mode is intended for large all-method sweeps after at least one equivalent exhaustive CPU route has demonstrated that the 600-second cap is binding.",
   "`nn_metric_capabilities.csv` stores the default capability table used for non-CAGRA-provider-specific preflight, including `resolved_backend`, `runtime_available`, `runtime_reason`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. When `--cagra_implementations` contains one or more provider selectors, `nn_metric_cagra_capabilities.csv` stores the matching provider-specific capability tables with a `cagra_implementation` column, so FAISS GPU CAGRA and direct cuVS CAGRA expected skips can be audited separately. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
   "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_requested_backend`, `result_requested_method`, and `result_tuning` record the public request stored on successful `nn()` results. `auto_predicted_method`, `auto_predicted_device`, `auto_explicit_backend`, `auto_explicit_method`, `auto_backend_decision`, and `auto_method_decision` record the public method/device class and explicit-vs-auto decision fields predicted by `attr(result, \"auto_selection\")` for auto requests, without parsing internal backend labels. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes and auto-selection metadata, including deterministic FAISS HNSW `tuning_rule`, cuVS HNSW build metadata (`hnsw_build_algo`, `hnsw_hierarchy`, `hnsw_m`, `hnsw_ef_construction`), shape flags, explicit backend/method flags, backend/method decision reasons, predicted method/device, and no-pilot auto-selection reason when present. `tuning_status` records backend tuning status, or the deterministic no-pilot tuning rule for routes such as FAISS CPU HNSW.",
   "Quality is computed against exact references. Small datasets use a full exact CPU self-KNN reference; larger datasets use a deterministic CPU sample when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. When the CPU operation cap would otherwise suppress recall but an exact CUDA route is available, compact very high-dimensional datasets can use `full_cuda_exact`, and sampled datasets up to the benchmark's guarded size limit can use `sample_cuda_exact`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k. The raw table reports recall@k, median recall@k, minimum recall@k, mean relative distance error, and Spearman neighbour-rank correlation on the same exact-reference rows. The NN metric benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs.",
