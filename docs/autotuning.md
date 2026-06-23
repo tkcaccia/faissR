@@ -64,9 +64,9 @@ that the no-pilot graph-shape rule came from compiled policy.
   recall is very high. The resolved routes `faiss_gpu_flat_l2` and
   `cuda_cuvs_bruteforce` were the most reliable high-recall CUDA paths
   [1-3,13-16].
-- For compact very high-dimensional self-KNN, `method = "auto"` now prefers
-  direct cuVS brute force when cuVS is available, even if FAISS GPU Flat is also
-  available. This deterministic C++ rule was added after COIL20 validation
+- For exact CUDA self-KNN routes, `method = "auto"` now prefers direct cuVS
+  brute force when cuVS is available, even if FAISS GPU Flat is also available.
+  This deterministic C++ rule was broadened after COIL20 and USPS validation
   showed `cuda_cuvs_bruteforce` was faster than `faiss_gpu_flat_l2` while
   keeping exact/high-recall behaviour.
 - Prefer `method = "hnsw"` for CPU approximate self-KNN. In this benchmark its
@@ -92,8 +92,8 @@ that the no-pilot graph-shape rule came from compiled policy.
 | Public method | Resolved implementation route | Role | Current tuning rule |
 |---|---|---|---|
 | `exact` / `flat` | `faiss_flat_exact`, `faiss_flat_l2` | CPU exact baseline | Use for exact CPU reference on small/medium data [1-2,16]; avoid as default for large high-dimensional self-search because MNIST/FashionMNIST timed out. |
-| `exact` / `flat` | `faiss_gpu_flat_l2` | CUDA exact/high-recall | Preferred high-recall GPU default when FAISS GPU is available and data fits. |
-| `bruteforce` | `cuda_cuvs_bruteforce` | CUDA exact/high-recall | Preferred exact cuVS path; consistently recall 1 in this benchmark and often fastest. Also selected by `method = "auto"` for compact very high-dimensional self-KNN when cuVS is available. |
+| `exact` / `flat` | `faiss_gpu_flat_l2` | CUDA exact/high-recall | Explicit FAISS GPU Flat route when requested and available. |
+| `bruteforce` | `cuda_cuvs_bruteforce` | CUDA exact/high-recall | Preferred exact cuVS path; consistently recall 1 in this benchmark and often fastest. Also selected by CUDA `method = "auto"` for exact self-KNN when cuVS is available. |
 | `hnsw` | `faiss_hnsw` speed tier | CPU speed tier | M = 24, efConstruction = 120, efSearch = max(80, 4k); used only for lower-dimensional Euclidean `k <= 10` jobs where the benchmark grid showed exact CPU was too conservative but high-recall HNSW was unnecessary [5]. |
 | `hnsw` | `faiss_hnsw` small-k metric tier | CPU metric-aware tier | M = 32, efConstruction = 160, efSearch = max(120, 4k); used for cosine, correlation, and inner-product `k <= 10` jobs so normalized metric searches keep more graph-search breadth without paying the full high-recall cost [5]. |
 | `hnsw` | `faiss_hnsw` balanced tier | CPU default tier | M = 32, efConstruction = 200, efSearch = max(150, 3k); default deterministic shape/metric rule for general CPU HNSW. |

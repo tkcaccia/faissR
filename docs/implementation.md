@@ -215,8 +215,8 @@ NN-descent, and RcppHNSW fallback parameters are computed by `nn_tune_*_cpp()`
 helpers. R still reads user-facing `options(faissR.*)` values, but clipping,
 default choice, requested-vs-effective values, tuning-rule labels, and shape
 flags are produced by the compiled policy layer.
-For Euclidean compact very high-dimensional self-KNN, the selector prefers
-`cuda_cuvs_bruteforce` when cuVS is available, because focused COIL20
+For Euclidean exact CUDA self-KNN, the selector prefers
+`cuda_cuvs_bruteforce` when cuVS is available, because COIL20 and USPS
 validation showed the direct cuVS exact path was faster than FAISS GPU Flat
 while remaining an exact/high-recall route.
 
