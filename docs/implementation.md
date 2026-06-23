@@ -230,10 +230,10 @@ deterministic shape-aware provider rule: compact high-dimensional self-KNN uses
 direct cuVS CAGRA when both providers are available, while other shapes keep
 FAISS GPU CAGRA as the default when it is available; `"faiss_gpu"` or `"cuvs"`
 forces one provider for benchmark isolation. Runtime preflight and
-availability checks respect the forced provider for Euclidean, cosine, and
-correlation CAGRA routes; raw inner-product CAGRA is disabled for both
-FAISS GPU CAGRA and direct cuVS CAGRA until a reliable transformed route is
-available. Returned approximate NN objects
+availability checks respect the forced provider for Euclidean, cosine,
+correlation, and inner-product CAGRA routes. Raw inner-product CAGRA uses a
+maximum-inner-product-to-L2 extra-dimension transform before graph search and
+returns faissR's shifted inner-product distances. Returned approximate NN objects
 record `cagra_provider` (`"faiss_gpu"` or `"cuvs"`) and
 `cagra_provider_option` in `attr(result, "approximation")`, so benchmark tables
 can separate provider selection from the public `method = "cagra"` request.
@@ -292,7 +292,7 @@ public method names map to different concrete functions depending on `backend`.
 | `vamana` | Native DiskANN/Vamana-style robust-pruned candidate graph with CPU refinement. | Native DiskANN/Vamana-style robust-pruned candidate graph with CUDA row-candidate refinement. | Distinct pruned directed graph route implemented in faissR; large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning, while smaller CPU inputs keep exact seed neighbours. Robust pruning protects the first `k` seed neighbours before applying the Vamana rule; cuVS Vamana currently provides build/serialization rather than KNN search [3,5,24]. |
 | `nsg` | Native CPU NSG-style self-KNN candidate graph for Euclidean, cosine, correlation, and inner product. | Native CUDA NSG-style self-KNN candidate graph for all public metrics. | Optional graph-search baseline; public CPU NSG avoids unsafe linked-FAISS graph construction by using faissR-owned candidate pruning/refinement. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before NSG/MRNG-style pruning; smaller CPU inputs and CUDA keep exact seed neighbours. Native CPU/CUDA NSG protect the first `k` seed neighbours before pruning and use backend-specific auto defaults/options (`faissR.cpu_nsg_*`, `faissR.cuda_nsg_*`) [5,16,21,29]. |
 | `nndescent` | Native CPU NNDescent for Euclidean/L2, cosine, correlation, and raw inner product. | Direct cuVS NN-descent for Euclidean/L2, cosine, and correlation; faissR native CUDA candidate refinement for raw inner product. | Approximate KNN graph construction; cosine/correlation use normalized Euclidean search, CPU and native CUDA raw inner product use shifted dot-product distances, and FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
-| `cagra` | Unsupported. | FAISS GPU CAGRA or direct cuVS CAGRA; `faissR.cagra_implementation` can force `"faiss_gpu"` or `"cuvs"`, while `"auto"` uses a deterministic shape-aware provider rule. Cosine/correlation use normalized Euclidean graph search. Raw inner product is disabled for both FAISS GPU CAGRA and direct cuVS CAGRA until a reliable transformed route is available. | CUDA-only FAISS/cuVS graph-search method [3,13-16]. |
+| `cagra` | Unsupported. | FAISS GPU CAGRA or direct cuVS CAGRA; `faissR.cagra_implementation` can force `"faiss_gpu"` or `"cuvs"`, while `"auto"` uses a deterministic shape-aware provider rule. Cosine/correlation use normalized Euclidean graph search; raw inner product uses a maximum-inner-product-to-L2 transform. | CUDA-only FAISS/cuVS graph-search method [3,13-16]. |
 
 For direct cuVS brute force, cosine and correlation are transformed to exact
 Euclidean search by row normalization, and raw inner product uses the exact

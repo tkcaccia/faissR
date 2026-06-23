@@ -907,7 +907,7 @@ test_that("NN methods page describes CUDA HNSW and raw inner-product limits", {
   expect_true(grepl("raw inner product is disabled for CUDA HNSW", prose, fixed = TRUE))
   expect_true(grepl("CPU HNSW supports Euclidean, cosine, correlation, and inner product", prose, fixed = TRUE))
   expect_false(grepl("It is CPU-only in faissR", prose, fixed = TRUE))
-  expect_false(grepl("transformed raw inner product", prose, fixed = TRUE))
+  expect_true(grepl("maximum-inner-product-to-L2 transform", prose, fixed = TRUE))
 })
 
 test_that("nn_capabilities manual separates HNSW and CAGRA inner-product routes", {
@@ -916,7 +916,8 @@ test_that("nn_capabilities manual separates HNSW and CAGRA inner-product routes"
     skip("nn_capabilities reference documentation is not available in this installed-package test context.")
   }
   prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
-  expect_true(grepl("Public CUDA HNSW and CAGRA raw-inner-product routes are disabled", prose, fixed = TRUE))
+  expect_true(grepl("Public CUDA CAGRA supports raw inner product", prose, fixed = TRUE))
+  expect_true(grepl("Public CUDA HNSW inner-product remains disabled", prose, fixed = TRUE))
   expect_false(grepl("CUDA CAGRA/HNSW raw", prose, fixed = TRUE))
 })
 
@@ -928,7 +929,8 @@ test_that("backend docs describe shape-dependent CUDA auto non-Euclidean capabil
   prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
   expect_true(grepl("reported as shape-dependent", prose, fixed = TRUE))
   expect_true(grepl("cuVS HNSW/CAGRA", prose, fixed = TRUE))
-  expect_true(grepl("routes are not used for raw inner product", prose, fixed = TRUE))
+  expect_true(grepl("explicit CUDA CAGRA can use the", prose, fixed = TRUE))
+  expect_true(grepl("CAGRA-derived cuVS HNSW is not used", prose, fixed = TRUE))
 })
 
 test_that("benchmark documentation describes canonical metric aliases once", {

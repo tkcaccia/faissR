@@ -733,8 +733,8 @@ test_that("nn_capabilities documents the public method metric matrix", {
     ,
     drop = FALSE
   ]
-  expect_false(cagra_ip$supported)
-  expect_match(cagra_ip$notes, "disabled")
+  expect_true(cagra_ip$supported)
+  expect_match(cagra_ip$notes, "maximum-inner-product-to-L2")
   expect_true(all(is.na(caps$implementation[!caps$supported])))
   expect_true(all(caps$supported[caps$method == "ivf"]))
   expect_true(all(caps$supported[caps$method == "ivfpq"]))
@@ -1984,6 +1984,12 @@ test_that("CUDA CAGRA implementation can be selected by option", {
     faiss_gpu_available_value = TRUE,
     cuvs_available_value = FALSE
   ))
+  expect_true(faissR:::public_nn_cuda_route_available(
+    "cagra",
+    "inner_product",
+    faiss_gpu_available_value = TRUE,
+    cuvs_available_value = FALSE
+  ))
 
   options(faissR.cagra_implementation = "cuvs")
   expect_equal(
@@ -2026,7 +2032,7 @@ test_that("CUDA CAGRA implementation can be selected by option", {
     faiss_gpu_available_value = FALSE,
     cuvs_available_value = TRUE
   ))
-  expect_false(faissR:::public_nn_cuda_route_available(
+  expect_true(faissR:::public_nn_cuda_route_available(
     "cagra",
     "inner_product",
     faiss_gpu_available_value = FALSE,
@@ -2391,9 +2397,9 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "hnsw", "inner_product"),
     "does not currently support"
   )
-  expect_error(
-    faissR:::resolve_public_nn_backend("cuda", "cagra", "inner_product"),
-    "does not currently support"
+  expect_true(
+    faissR:::resolve_public_nn_backend("cuda", "cagra", "inner_product") %in%
+    c("faiss_gpu_cagra", "cuda_cuvs_cagra")
   )
   expect_true(
     faissR:::resolve_public_nn_backend("cuda", "cagra", "cosine") %in%
@@ -3960,8 +3966,9 @@ test_that("backend_info reports native availability without crashing", {
   expect_match(info$supported_metrics[info$backend == "cpu"], "cosine")
   expect_match(info$supported_metrics[info$backend == "cpu"], "correlation")
   expect_match(info$supported_metrics[info$backend == "cpu"], "inner_product")
-  expect_match(info$supported_metrics[info$backend == "faiss_gpu_cuvs"], "CAGRA inner_product is disabled")
+  expect_match(info$supported_metrics[info$backend == "faiss_gpu_cuvs"], "CAGRA inner_product uses")
   expect_match(info$supported_metrics[info$backend == "cuvs"], "direct brute force and direct IVF/PQ")
+  expect_match(info$supported_metrics[info$backend == "cuvs"], "direct CAGRA")
   expect_match(info$supported_metrics[info$backend == "cuvs"], "public CUDA NN-descent inner_product uses native CUDA")
 
   cuda_info <- faissR:::cuda_device_info_json_cpp()
@@ -4183,6 +4190,59 @@ test_that("cuVS CAGRA reports actual and requested graph parameters", {
   expect_equal(approx$accelerator, "cuda")
   expect_equal(approx$cagra_provider, "cuvs")
   expect_equal(approx$cagra_provider_option, "auto")
+})
+
+test_that("CUDA CAGRA supports transformed raw inner product", {
+  providers <- character()
+  if (isTRUE(faiss_gpu_available())) providers <- c(providers, "faiss_gpu_cagra")
+  if (isTRUE(cuvs_available())) providers <- c(providers, "cuda_cuvs_cagra")
+  skip_if_not(length(providers) > 0L, "No CUDA CAGRA provider is available")
+
+  set.seed(841)
+  x <- rbind(
+    matrix(rnorm(40L * 6L, -0.5, 0.7), ncol = 6L),
+    matrix(rnorm(40L * 6L, 0.5, 0.7), ncol = 6L)
+  )
+  k <- 6L
+  exact <- internal_nn_without_self(
+    x,
+    k = k,
+    backend = "cpu",
+    metric = "inner_product",
+    n_threads = 2L
+  )
+
+  old_options <- options(
+    faissR.cuvs_graph_degree = 48L,
+    faissR.cuvs_intermediate_graph_degree = 96L,
+    faissR.cuvs_search_width = 0L,
+    faissR.cuvs_itopk_size = 32L,
+    faissR.cuvs_cagra_build_algo = "ivf_pq"
+  )
+  on.exit(options(old_options), add = TRUE)
+
+  for (backend in providers) {
+    out <- internal_nn_without_self(
+      x,
+      k = k,
+      backend = backend,
+      metric = "inner_product",
+      n_threads = 2L
+    )
+    approx <- attr(out, "approximation")
+    recall <- faissR:::.knn_recall_summary(out, exact, k)
+
+    expect_equal(dim(out$indices), c(nrow(x), k), info = backend)
+    expect_equal(dim(out$distances), c(nrow(x), k), info = backend)
+    expect_equal(attr(out, "backend"), backend, info = backend)
+    expect_equal(attr(out, "metric"), "inner_product", info = backend)
+    expect_equal(attr(out, "metric_transform"), "maximum_inner_product_to_l2_extra_dimension", info = backend)
+    expect_equal(attr(out, "distance_transform"), "mips_l2_to_shifted_inner_product_distance", info = backend)
+    expect_equal(approx$metric_transform, attr(out, "metric_transform"), info = backend)
+    expect_equal(approx$distance_transform, attr(out, "distance_transform"), info = backend)
+    expect_true(all(is.finite(out$distances)), info = backend)
+    expect_true(recall$recall_at_k >= 0.4, info = backend)
+  }
 })
 
 test_that("direct cuVS CAGRA auto build rule uses iterative construction for compact high-dimensional self-KNN", {

@@ -83,9 +83,10 @@ available and RcppHNSW/hnswlib when FAISS is unavailable.
 FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, native CPU NN-descent raw
 dot-product search, direct cuVS brute force through an exact MIPS-to-L2
 transform, direct cuVS IVF/PQ through transformed approximate L2 indexes,
-and native CUDA NN-descent candidate refinement.
-Direct cuVS NN-descent, CUDA cuVS HNSW, FAISS GPU CAGRA, and direct cuVS
-CAGRA do not expose a safe raw-inner-product route in faissR.
+CUDA CAGRA through the same MIPS-to-L2 graph-search transform, and native
+CUDA NN-descent candidate refinement.
+Direct cuVS NN-descent and CUDA cuVS HNSW do not expose a safe
+raw-inner-product route in faissR.
 Unsupported backend combinations fail clearly instead of returning neighbours
 computed under a different metric.}
 
@@ -268,9 +269,10 @@ Method descriptions:
   force one provider for benchmarking. Availability preflights respect this
   forced provider for supported metrics, and approximation metadata records
   `cagra_provider` plus `cagra_provider_option`. It supports Euclidean/L2,
-  and cosine/correlation through normalized Euclidean graph search. Raw
-  inner-product CAGRA is disabled for both FAISS GPU CAGRA and direct cuVS
-  CAGRA until the transformed route is reliable across k values [3,13-16].
+  cosine/correlation through normalized Euclidean graph search, and raw
+  inner product through a maximum-inner-product-to-L2 extra-dimension
+  transform whose returned distances are converted back to faissR's shifted
+  inner-product convention [3,13-16].
 }
 
 References are numbered as in `docs/references.md` in the GitHub
