@@ -88,7 +88,7 @@ CUDA and keep CUDA backend metadata.
 | `"flat"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS Flat L2/IP plus normalized Flat IP transforms. |
 | `"bruteforce"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA uses direct cuVS brute force when available; cosine/correlation use normalized Euclidean search and inner product uses a maximum-inner-product-to-L2 transform around the cuVS L2 kernel. |
 | `"grid"` | euclidean, cosine, correlation | euclidean, cosine, correlation | 2D/3D self-KNN only; cosine/correlation use normalized Euclidean grid search. |
-| `"hnsw"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation | CPU FAISS HNSW is used for all metrics when available; CUDA uses cuVS HNSW converted from CAGRA for Euclidean and normalized cosine/correlation. Raw inner product is disabled for CUDA HNSW until a reliable native or transformed route is available. |
+| `"hnsw"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CPU FAISS HNSW is used for all metrics when available; CUDA uses cuVS HNSW converted from CAGRA for Euclidean, normalized cosine/correlation, and transformed raw inner product. |
 | `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
 | `"ivfpq"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVFPQ supports L2/IP; cosine/correlation use normalized IVFPQ IP. |
 | `"vamana"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native robust-pruned candidate graph inspired by DiskANN/Vamana; CPU/CUDA refine top-k within candidate rows. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning. Cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
@@ -182,9 +182,10 @@ CUDA `method = "hnsw"` maps to `cuda_cuvs_hnsw` when RAPIDS cuVS HNSW is
 available. This route builds a CUDA CAGRA index, converts it to a cuVS HNSW
 base-layer index (`hnsw_hierarchy = "none"`), and searches through the cuVS
 HNSW wrapper. faissR exposes it for Euclidean/L2, normalized
-cosine/correlation. Raw inner product is intentionally disabled for CUDA HNSW
-because the available route is CAGRA-derived and the transformed raw-IP graph
-route can be unsafe. The internal CAGRA construction uses the same shape-aware
+cosine/correlation, and raw inner product through the standard
+maximum-inner-product-to-L2 extra-dimension transform. Returned raw-IP
+distances are converted back to faissR's shifted smaller-is-better
+inner-product convention. The internal CAGRA construction uses the same shape-aware
 `cagra_build_algo = "auto"` rule as direct cuVS CAGRA; compact
 high-dimensional self-KNN uses `iterative_cagra_search` to avoid the cuVS
 IVF-PQ graph-build workspace spike seen on COIL20-like data. Successful HNSW
@@ -259,8 +260,7 @@ route based on Hierarchical Navigable Small World graphs [5,16].
   cuVS HNSW wrapper [3,22].
 - CPU HNSW supports Euclidean, cosine, correlation, and inner product through
   the metric transforms described above. CUDA HNSW supports Euclidean plus
-  normalized cosine/correlation; raw inner product is an expected unsupported
-  combination for that CUDA route.
+  normalized cosine/correlation and transformed raw inner product.
 - HNSW is often a strong default for large high-dimensional CPU self-KNN, while
   CUDA HNSW is useful when the runtime has cuVS HNSW but the user wants the
   explicit HNSW graph route rather than CAGRA.

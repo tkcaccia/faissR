@@ -218,9 +218,9 @@ Method descriptions:
   \item `"hnsw"`: HNSW approximate graph-search index [3,5,16,22-23].
   CPU uses FAISS HNSW when available and RcppHNSW/hnswlib fallback
   otherwise. CUDA uses RAPIDS cuVS HNSW converted from a CUDA CAGRA index
-  for Euclidean plus normalized cosine/correlation; raw inner product is
-  disabled for CUDA HNSW until a reliable native or transformed route is
-  available. Default parameters are selected by a deterministic
+  for Euclidean plus normalized cosine/correlation; raw inner product uses
+  the same maximum-inner-product-to-L2 transform as other cuVS L2 graph
+  routes and returns shifted inner-product distances. Default parameters are selected by a deterministic
   shape/k/metric rule without pilot tuning; result approximation metadata
   records the selected `tuning_rule` and shape flags used.
   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive

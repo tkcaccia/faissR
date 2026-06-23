@@ -716,8 +716,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
     caps$method == "hnsw" & caps$backend == "cpu"
   ]))
   expect_true(all(caps$supported[
-    caps$method == "hnsw" & caps$backend == "cuda" &
-      caps$metric %in% c("euclidean", "cosine", "correlation")
+    caps$method == "hnsw" & caps$backend == "cuda"
   ]))
   hnsw_ip <- caps[
     caps$method == "hnsw" & caps$backend == "cuda" &
@@ -725,8 +724,8 @@ test_that("nn_capabilities documents the public method metric matrix", {
     ,
     drop = FALSE
   ]
-  expect_false(hnsw_ip$supported)
-  expect_match(hnsw_ip$notes, "disabled")
+  expect_true(hnsw_ip$supported)
+  expect_match(hnsw_ip$notes, "maximum-inner-product-to-L2")
   cagra_ip <- caps[
     caps$method == "cagra" & caps$backend == "cuda" &
       caps$metric == "inner_product",
@@ -803,7 +802,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_match(cuda_auto_cor$notes, "shape-dependent")
   expect_match(cuda_auto_ip$notes, "FAISS GPU Flat IP")
   expect_match(cuda_auto_ip$notes, "native CUDA candidate-refinement")
-  expect_match(cuda_auto_ip$notes, "CAGRA-derived")
+  expect_match(cuda_auto_ip$notes, "CAGRA and HNSW")
 })
 
 test_that("nn_capabilities agrees with public CPU/CUDA resolver support", {
@@ -1153,7 +1152,7 @@ test_that("backend auto explicit methods require metric-capable CUDA routes befo
       cuvs_available_value = TRUE,
       faiss_gpu_available_value = TRUE
     ),
-    "cpu"
+    "cuda"
   )
   expect_equal(
     faissR:::resolve_auto_public_nn_device(
@@ -2393,9 +2392,9 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "hnsw", "correlation"),
     "cuda_cuvs_hnsw"
   )
-  expect_error(
+  expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "hnsw", "inner_product"),
-    "does not currently support"
+    "cuda_cuvs_hnsw"
   )
   expect_true(
     faissR:::resolve_public_nn_backend("cuda", "cagra", "inner_product") %in%
@@ -2500,7 +2499,7 @@ test_that("native Vamana returns metric-aware CPU self-KNN results", {
   set.seed(240124)
   x <- matrix(rnorm(90L * 5L), nrow = 90L)
 
-  for (metric in c("euclidean", "cosine", "correlation", "inner_product")) {
+  for (metric in c("euclidean", "cosine", "correlation")) {
     out <- internal_nn_without_self(
       x,
       k = 6L,
@@ -3967,7 +3966,7 @@ test_that("backend_info reports native availability without crashing", {
   expect_match(info$supported_metrics[info$backend == "cpu"], "correlation")
   expect_match(info$supported_metrics[info$backend == "cpu"], "inner_product")
   expect_match(info$supported_metrics[info$backend == "faiss_gpu_cuvs"], "CAGRA inner_product uses")
-  expect_match(info$supported_metrics[info$backend == "cuvs"], "direct brute force and direct IVF/PQ")
+  expect_match(info$supported_metrics[info$backend == "cuvs"], "direct brute force, direct IVF/PQ")
   expect_match(info$supported_metrics[info$backend == "cuvs"], "direct CAGRA")
   expect_match(info$supported_metrics[info$backend == "cuvs"], "public CUDA NN-descent inner_product uses native CUDA")
 
@@ -4093,7 +4092,7 @@ test_that("CUDA NN-descent requests use RAPIDS cuVS", {
   )
   k <- 8L
 
-  for (metric in c("euclidean", "cosine", "correlation")) {
+  for (metric in c("euclidean", "cosine", "correlation", "inner_product")) {
     exact <- nn_without_self(x, k = k, backend = "cpu", metric = metric, n_threads = 4L)
     refined <- internal_nn_without_self(
       x,
@@ -4312,20 +4311,23 @@ test_that("cuVS HNSW reports metric-aware CUDA results for supported metrics", {
         "normalized_euclidean_squared_over_2_to_1_minus_similarity",
         info = metric
       )
+      expect_equal(approx$metric_transform, attr(out, "metric_transform"), info = metric)
+      expect_equal(approx$distance_transform, attr(out, "distance_transform"), info = metric)
+    } else if (identical(metric, "inner_product")) {
+      expect_equal(
+        attr(out, "metric_transform"),
+        "maximum_inner_product_to_l2_extra_dimension",
+        info = metric
+      )
+      expect_equal(
+        attr(out, "distance_transform"),
+        "mips_l2_to_shifted_inner_product_distance",
+        info = metric
+      )
+      expect_equal(approx$metric_transform, attr(out, "metric_transform"), info = metric)
       expect_equal(approx$distance_transform, attr(out, "distance_transform"), info = metric)
     }
   }
-
-  expect_error(
-    internal_nn_without_self(
-      x,
-      k = k,
-      backend = "cuda_cuvs_hnsw",
-      metric = "inner_product",
-      n_threads = 2L
-    ),
-    "disabled for `metric = \"inner_product\"`"
-  )
 })
 
 test_that("CUDA backend reports unavailable runtime clearly", {
