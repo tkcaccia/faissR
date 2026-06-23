@@ -3048,6 +3048,78 @@ test_that("graph benchmark auto comparisons keep target and provider dimensions"
   expect_false("recommended_graph_cagra_implementation" %in% names(comparison))
 })
 
+test_that("graph benchmark recommendations keep direct cuVS CAGRA build algorithms separate", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),
+    "args <- parse_args()"
+  )
+  ok <- data.frame(
+    dataset = rep("A", 4L),
+    n = rep(120L, 4L),
+    p = rep(8L, 4L),
+    cycle = rep(1L, 4L),
+    k = rep(15L, 4L),
+    graph_backend = rep("cuda", 4L),
+    graph_method = rep("cagra", 4L),
+    graph_cagra_implementation = rep("cuvs", 4L),
+    graph_cagra_build_algo = rep(c("ivf_pq", "nn_descent"), each = 2L),
+    graph_resolved_backend = rep("cuda_cuvs_cagra", 4L),
+    graph_preflight_route = rep("cuda_cuvs_cagra", 4L),
+    graph_route_parameters = rep(c("nn_cuvs.cagra_build_algo=ivf_pq", "nn_cuvs.cagra_build_algo=nn_descent"), each = 2L),
+    graph_auto_predicted_backend = rep("cuda_cuvs_cagra", 4L),
+    graph_auto_predicted_method = rep("cagra", 4L),
+    graph_auto_predicted_device = rep("cuda", 4L),
+    graph_auto_explicit_backend = rep(TRUE, 4L),
+    graph_auto_explicit_method = rep(TRUE, 4L),
+    graph_auto_backend_decision = rep("explicit_cuda", 4L),
+    graph_auto_method_decision = rep("explicit_cagra", 4L),
+    metric = rep("euclidean", 4L),
+    cluster_backend = rep("cuda", 4L),
+    cluster_resolved_backend = rep("cuda", 4L),
+    cluster_preflight_route = rep("cuda", 4L),
+    method = rep(c("louvain", "leiden"), 2L),
+    weight = rep("snn", 4L),
+    n_clusters_requested = rep(3L, 4L),
+    n_clusters_source = rep("labels", 4L),
+    n_threads = rep(2L, 4L),
+    status = rep("success", 4L),
+    error = rep(NA_character_, 4L),
+    load_sec = rep(0.1, 4L),
+    graph_sec = c(1, 1, 2, 2),
+    cluster_sec = c(0.5, 0.4, 0.5, 0.4),
+    total_sec = c(1.5, 1.4, 2.5, 2.4),
+    peak_rss_gb = rep(1, 4L),
+    graph_n_vertices = rep(120L, 4L),
+    n_edges = rep(600L, 4L),
+    n_communities = rep(3L, 4L),
+    modularity = rep(0.4, 4L),
+    ari = rep(1, 4L),
+    selected_resolution = rep(0.3, 4L),
+    target_gap = rep(0L, 4L),
+    target_resolution_mode = rep("auto", 4L),
+    resolution_selection = rep("closest_n_communities_then_highest_modularity", 4L),
+    resolution_candidate_center = rep(NA_real_, 4L),
+    resolution_selected_candidate = rep(2L, 4L),
+    resolution_candidates = rep(7L, 4L),
+    resolution_min_target_gap = rep(0L, 4L),
+    resolution_selected_is_min_gap = rep(TRUE, 4L),
+    graph_cached = rep(FALSE, 4L),
+    expected_skip = rep(FALSE, 4L)
+  )
+
+  cycle_summary <- env$summarize_graph_cycles(ok)
+  recommendations <- env$recommend_graph_cluster_methods(cycle_summary, 0.01)
+  global <- env$recommend_graph_cluster_global_methods(cycle_summary, 0.01)
+
+  expect_equal(nrow(cycle_summary), 4L)
+  expect_equal(nrow(recommendations), 2L)
+  expect_equal(nrow(global), 2L)
+  expect_setequal(cycle_summary$graph_cagra_build_algo, c("ivf_pq", "nn_descent"))
+  expect_setequal(recommendations$graph_cagra_build_algo, c("ivf_pq", "nn_descent"))
+  expect_setequal(global$graph_cagra_build_algo, c("ivf_pq", "nn_descent"))
+  expect_equal(recommendations$method, c("leiden", "leiden"))
+})
+
 test_that("graph benchmark extracts compact graph KNN route parameters", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_graph_clustering.R"),

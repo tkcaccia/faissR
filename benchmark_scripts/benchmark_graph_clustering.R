@@ -689,6 +689,7 @@ ensure_graph_selector_columns <- function(x) {
   if (!"graph_method" %in% names(x)) x$graph_method <- "auto"
   if (!"metric" %in% names(x)) x$metric <- "euclidean"
   if (!"graph_cagra_implementation" %in% names(x)) x$graph_cagra_implementation <- NA_character_
+  if (!"graph_cagra_build_algo" %in% names(x)) x$graph_cagra_build_algo <- NA_character_
   if (!"target_gap" %in% names(x)) x$target_gap <- NA_integer_
   if (!"graph_route_parameters" %in% names(x)) x$graph_route_parameters <- NA_character_
   if (!"graph_auto_predicted_backend" %in% names(x)) x$graph_auto_predicted_backend <- NA_character_
@@ -717,7 +718,8 @@ summarize_graph_cycles <- function(ok) {
   ok <- ensure_graph_selector_columns(ok)
   cluster_key <- ifelse(is.na(ok$n_clusters_requested), "NA", as.character(ok$n_clusters_requested))
   cagra_key <- ifelse(is.na(ok$graph_cagra_implementation), "NA", as.character(ok$graph_cagra_implementation))
-  parts <- split(ok, paste(ok$dataset, ok$k, ok$graph_backend, ok$graph_method, ok$metric, cagra_key, ok$cluster_backend, ok$method, ok$weight, cluster_key, sep = "__"))
+  cagra_build_key <- ifelse(is.na(ok$graph_cagra_build_algo), "NA", as.character(ok$graph_cagra_build_algo))
+  parts <- split(ok, paste(ok$dataset, ok$k, ok$graph_backend, ok$graph_method, ok$metric, cagra_key, cagra_build_key, ok$cluster_backend, ok$method, ok$weight, cluster_key, sep = "__"))
   summary <- lapply(parts, function(x) {
     data.frame(
       dataset = x$dataset[[1L]],
@@ -726,6 +728,7 @@ summarize_graph_cycles <- function(ok) {
       graph_method = x$graph_method[[1L]],
       metric = x$metric[[1L]],
       graph_cagra_implementation = dominant_value(x$graph_cagra_implementation),
+      graph_cagra_build_algo = dominant_value(x$graph_cagra_build_algo),
       graph_resolved_backend = dominant_value(x$graph_resolved_backend),
       graph_preflight_route = dominant_value(x$graph_preflight_route),
       graph_route_parameters = dominant_value(x$graph_route_parameters),
@@ -788,12 +791,13 @@ recommend_graph_cluster_methods <- function(cycle_summary, ari_tolerance) {
   cycle_summary <- ensure_graph_selector_columns(cycle_summary)
   cluster_key <- ifelse(is.na(cycle_summary$n_clusters_requested), "NA", as.character(cycle_summary$n_clusters_requested))
   cagra_key <- ifelse(is.na(cycle_summary$graph_cagra_implementation), "NA", as.character(cycle_summary$graph_cagra_implementation))
+  cagra_build_key <- ifelse(is.na(cycle_summary$graph_cagra_build_algo), "NA", as.character(cycle_summary$graph_cagra_build_algo))
   parts <- split(
     cycle_summary,
     paste(
       cycle_summary$dataset, cycle_summary$k,
       cycle_summary$graph_backend, cycle_summary$graph_method,
-      cycle_summary$metric, cagra_key, cycle_summary$cluster_backend,
+      cycle_summary$metric, cagra_key, cagra_build_key, cycle_summary$cluster_backend,
       cluster_key,
       sep = "__"
     )
@@ -820,18 +824,19 @@ recommend_graph_cluster_methods <- function(cycle_summary, ari_tolerance) {
   })
   out <- do.call(rbind, recommendations)
   row.names(out) <- NULL
-  out[order(out$dataset, out$k, out$graph_backend, out$graph_method, out$metric, out$graph_cagra_implementation, out$cluster_backend, out$n_clusters_requested), , drop = FALSE]
+  out[order(out$dataset, out$k, out$graph_backend, out$graph_method, out$metric, out$graph_cagra_implementation, out$graph_cagra_build_algo, out$cluster_backend, out$n_clusters_requested), , drop = FALSE]
 }
 
 recommend_graph_cluster_global_methods <- function(cycle_summary, ari_tolerance) {
   cycle_summary <- ensure_graph_selector_columns(cycle_summary)
   cluster_key <- ifelse(is.na(cycle_summary$n_clusters_requested), "NA", as.character(cycle_summary$n_clusters_requested))
   cagra_key <- ifelse(is.na(cycle_summary$graph_cagra_implementation), "NA", as.character(cycle_summary$graph_cagra_implementation))
+  cagra_build_key <- ifelse(is.na(cycle_summary$graph_cagra_build_algo), "NA", as.character(cycle_summary$graph_cagra_build_algo))
   parts <- split(
     cycle_summary,
     paste(
       cycle_summary$dataset, cycle_summary$k,
-      cycle_summary$graph_method, cycle_summary$metric, cagra_key,
+      cycle_summary$graph_method, cycle_summary$metric, cagra_key, cagra_build_key,
       cluster_key,
       sep = "__"
     )
@@ -861,7 +866,7 @@ recommend_graph_cluster_global_methods <- function(cycle_summary, ari_tolerance)
   })
   out <- do.call(rbind, recommendations)
   row.names(out) <- NULL
-  out[order(out$dataset, out$k, out$graph_method, out$metric, out$graph_cagra_implementation, out$n_clusters_requested), , drop = FALSE]
+  out[order(out$dataset, out$k, out$graph_method, out$metric, out$graph_cagra_implementation, out$graph_cagra_build_algo, out$n_clusters_requested), , drop = FALSE]
 }
 
 compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations) {
@@ -874,7 +879,7 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
     drop = FALSE
   ]
   if (!nrow(auto)) return(data.frame())
-  keys <- c("dataset", "k", "graph_backend", "graph_method", "metric", "graph_cagra_implementation", "cluster_backend", "n_clusters_requested")
+  keys <- c("dataset", "k", "graph_backend", "graph_method", "metric", "graph_cagra_implementation", "graph_cagra_build_algo", "cluster_backend", "n_clusters_requested")
   keep <- c(
     keys, "graph_resolved_backend", "cluster_resolved_backend", "graph_preflight_route",
     "graph_route_parameters", "graph_auto_predicted_backend",
@@ -914,7 +919,7 @@ compare_auto_graph_to_recommendations <- function(cycle_summary, recommendations
     comparison$recommended_median_modularity,
     comparison$auto_median_modularity
   )
-  comparison[order(comparison$dataset, comparison$k, comparison$graph_backend, comparison$graph_method, comparison$metric, comparison$graph_cagra_implementation, comparison$cluster_backend, comparison$n_clusters_requested, comparison$auto_method), , drop = FALSE]
+  comparison[order(comparison$dataset, comparison$k, comparison$graph_backend, comparison$graph_method, comparison$metric, comparison$graph_cagra_implementation, comparison$graph_cagra_build_algo, comparison$cluster_backend, comparison$n_clusters_requested, comparison$auto_method), , drop = FALSE]
 }
 
 compare_auto_graph_to_global_recommendations <- function(cycle_summary, recommendations) {
@@ -927,7 +932,7 @@ compare_auto_graph_to_global_recommendations <- function(cycle_summary, recommen
     drop = FALSE
   ]
   if (!nrow(auto)) return(data.frame())
-  keys <- c("dataset", "k", "graph_method", "metric", "graph_cagra_implementation", "n_clusters_requested")
+  keys <- c("dataset", "k", "graph_method", "metric", "graph_cagra_implementation", "graph_cagra_build_algo", "n_clusters_requested")
   keep <- c(
     keys, "graph_backend", "cluster_backend", "graph_resolved_backend",
     "cluster_resolved_backend", "graph_preflight_route",
@@ -968,7 +973,7 @@ compare_auto_graph_to_global_recommendations <- function(cycle_summary, recommen
     comparison$recommended_median_modularity,
     comparison$auto_median_modularity
   )
-  comparison[order(comparison$dataset, comparison$k, comparison$graph_method, comparison$metric, comparison$graph_cagra_implementation, comparison$n_clusters_requested, comparison$auto_graph_backend, comparison$auto_cluster_backend, comparison$auto_method), , drop = FALSE]
+  comparison[order(comparison$dataset, comparison$k, comparison$graph_method, comparison$metric, comparison$graph_cagra_implementation, comparison$graph_cagra_build_algo, comparison$n_clusters_requested, comparison$auto_graph_backend, comparison$auto_cluster_backend, comparison$auto_method), , drop = FALSE]
 }
 
 safe_positive_ratio <- function(numerator, denominator) {
@@ -1825,7 +1830,7 @@ ok <- results_df[results_df$status == "success", , drop = FALSE]
 if (nrow(ok)) {
   best <- select_graph_best_rows(ok, group_cols = "dataset")
   utils::write.csv(best, file.path(out_dir, "graph_cluster_best_by_dataset.csv"), row.names = FALSE)
-  best_by_target <- select_graph_best_rows(ok, group_cols = c("dataset", "k", "graph_method", "metric", "graph_cagra_implementation", "n_clusters_requested"))
+  best_by_target <- select_graph_best_rows(ok, group_cols = c("dataset", "k", "graph_method", "metric", "graph_cagra_implementation", "graph_cagra_build_algo", "n_clusters_requested"))
   utils::write.csv(
     best_by_target,
     file.path(out_dir, "graph_cluster_best_by_dataset_k_target.csv"),
@@ -1905,11 +1910,11 @@ materials <- c(
   "`target_clusters` is normalized to either `\"labels\"` or `\"none\"`; invalid values stop before the benchmark starts. `target_resolution` is normalized to either `\"auto\"` or `\"default\"`; `\"auto\"` passes `resolution = NULL` whenever a Louvain/Leiden target count is available, while `\"default\"` uses the historical `resolution = 1` seed. When `target_clusters = \"labels\"`, Louvain and Leiden call `graph_cluster(n_clusters = length(unique(labels)))`. Random-walking rows receive no `n_clusters` value because random-walking intentionally has no cluster-count target.",
   "`n_clusters_requested` records the requested target community count for Louvain/Leiden rows. This is a convenience target, not a hard guarantee; the actual community count is stored separately as `n_communities`. `n_clusters_source` records whether that target came from dataset labels or no target, and `target_resolution_mode` records whether the benchmark used the shape-seeded `resolution = NULL` target-auto path or the default numeric resolution seed. When a target is used, faissR evaluates a bounded deterministic resolution grid; `resolution_candidate_center`, `target_gap`, `resolution_selection`, `resolution_selected_candidate`, `resolution_candidates`, `resolution_min_target_gap`, `resolution_selected_is_min_gap`, and the selected resolution summarize the deterministic resolution-search decision.",
   "Each KNN graph is built once per dataset/cycle/k/graph-backend/graph-method/metric/weight combination and reused across clustering methods and clustering backends within that cycle. The graph benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs. `graph_cached` records reuse within a cycle, `graph_sec` is the graph construction time for the shared graph, `cluster_sec` is the clustering-only time, and `total_sec` is `graph_sec + cluster_sec`.",
-  "`graph_cluster_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, modularity, and total time for a compact backwards-compatible summary. `graph_cluster_best_by_dataset_k_target.csv` keeps the best successful row per dataset/k/graph-method/metric/CAGRA-provider/target-cluster-count combination so different neighbourhood sizes, KNN graph routes, CAGRA providers, metrics, and Louvain/Leiden target counts remain auditable.",
-  "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, graph size, community counts, selected resolution, target gap, target-resolution mode, resolution-selection rule, candidate-center, selected-candidate and candidate-count diagnostics, CPU thread count, method/metric/provider-aware preflight routes, compact graph-route parameter metadata, and resolved backend metadata.",
-  "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering method row within `ari_tolerance` of the best median ARI for each dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/target-cluster-count combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median total times are broken by higher median ARI, higher minimum ARI across cycles, and then higher median modularity. When ARI is unavailable it selects the fastest median total-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
+  "`graph_cluster_best_by_dataset.csv` stores the best successful row per dataset after ranking by ARI, modularity, and total time for a compact backwards-compatible summary. `graph_cluster_best_by_dataset_k_target.csv` keeps the best successful row per dataset/k/graph-method/metric/CAGRA-provider/direct-cuVS-CAGRA-build-algorithm/target-cluster-count combination so different neighbourhood sizes, KNN graph routes, CAGRA providers, direct cuVS CAGRA builders, metrics, and Louvain/Leiden target counts remain auditable.",
+  "`graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by dataset/k/graph-backend/graph-method/metric/CAGRA-provider/direct-cuVS-CAGRA-build-algorithm/cluster-backend/method/weight and reports success counts, median/min/max graph, clustering, and total time, ARI stability, modularity stability, graph size, community counts, selected resolution, target gap, target-resolution mode, resolution-selection rule, candidate-center, selected-candidate and candidate-count diagnostics, CPU thread count, method/metric/provider/build-algorithm-aware preflight routes, compact graph-route parameter metadata, and resolved backend metadata.",
+  "`graph_cluster_recommendations_from_cycles.csv` selects the fastest graph/clustering method row within `ari_tolerance` of the best median ARI for each dataset/k/graph-backend/graph-method/metric/CAGRA-provider/direct-cuVS-CAGRA-build-algorithm/cluster-backend/target-cluster-count combination and marks `recommendation_basis = \"fastest_within_ari_tolerance\"`; tied median total times are broken by higher median ARI, higher minimum ARI across cycles, and then higher median modularity. When ARI is unavailable it selects the fastest median total-time row and marks `recommendation_basis = \"speed_only_no_ari\"`.",
   "`graph_cluster_auto_vs_cycle_recommendation.csv` compares aggregate rows where graph or clustering backend was `auto` with recommendations from the same requested graph-backend/graph-method/metric/cluster-backend group and reports the recommendation basis, median speed ratio, median ARI gap, modularity gap, method agreement, and resolved-backend agreement. Speed ratios and quality gaps are `NA` when the required timing, ARI, or modularity values are unavailable or invalid.",
-  "`graph_cluster_global_recommendations_from_cycles.csv` selects the fastest successful row within the ARI tolerance after pooling requested graph and clustering backends for each dataset/k/graph-method/metric/CAGRA-provider/target-cluster-count combination. This table audits the best observed CPU/CUDA route instead of only the best route inside each requested-backend group.",
+  "`graph_cluster_global_recommendations_from_cycles.csv` selects the fastest successful row within the ARI tolerance after pooling requested graph and clustering backends for each dataset/k/graph-method/metric/CAGRA-provider/direct-cuVS-CAGRA-build-algorithm/target-cluster-count combination. This table audits the best observed CPU/CUDA route instead of only the best route inside each requested-backend group.",
   "`graph_cluster_auto_vs_global_recommendation.csv` compares aggregate auto rows with those global recommendations and records requested-backend agreement, resolved-backend agreement, method agreement, speed ratio, ARI gap, and modularity gap. This table is intended for refining graph and clustering auto selectors across CPU/CUDA choices.",
   "`graph_backend` and `cluster_backend` record the requested public backends. `graph_preflight_route` records the public NN resolver decision for the requested graph backend, method, metric, and CAGRA provider before runtime availability checks; `cluster_preflight_route` records the clustering backend resolver decision. `graph_resolved_backend` and `cluster_resolved_backend` record the resolved device policy from successful result objects. These route columns and `n_threads` are preserved in cycle summaries and auto/recommendation comparisons, so CPU/CUDA rows can be audited without opening the R objects.",
   "Unsupported graph-clustering combinations known from the public API, such as CUDA random_walking, are recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`. If every row in a graph-build block is an expected skip, graph construction is skipped and graph timing/edge columns remain `NA`.",

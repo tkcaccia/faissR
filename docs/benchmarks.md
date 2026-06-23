@@ -307,7 +307,7 @@ The config includes `available_datasets`, the validated real plus simulated
 dataset names accepted by the `--datasets` selector, so subset runs remain
 auditable.
 `graph_cluster_cycle_summary.csv` aggregates successful rows across cycles by
-dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/
+dataset/k/graph-backend/graph-method/metric/CAGRA-provider/direct-cuVS-CAGRA-build-algorithm/cluster-backend/
 clustering-method/weight/target-cluster-count and reports success counts, median/min/max graph,
 clustering, and total time, ARI stability, modularity stability, graph size,
 community counts, selected resolution, target gap, target-resolution mode,
@@ -340,14 +340,14 @@ the R object.
 `graph_cluster_best_by_dataset.csv` keeps a compact best successful row per
 dataset after ranking by ARI, modularity, and total time for backward-compatible
 summaries. `graph_cluster_best_by_dataset_k_target.csv` keeps the same
-best-row ranking per dataset/k/graph-method/metric/CAGRA-provider/
+best-row ranking per dataset/k/graph-method/metric/CAGRA-provider/direct-cuVS-CAGRA-build-algorithm/
 target-cluster-count combination, which is the safer table for comparing
-neighbourhood sizes, KNN graph routes, CAGRA providers, metrics, and
-Louvain/Leiden target counts.
+neighbourhood sizes, KNN graph routes, CAGRA providers, direct cuVS CAGRA
+builders, metrics, and Louvain/Leiden target counts.
 `graph_cluster_recommendations_from_cycles.csv` selects the fastest successful
 graph/clustering method row within `ari_tolerance` of the best median ARI for
 each dataset/k/graph-backend/graph-method/metric/CAGRA-provider/cluster-backend/
-target-cluster-count combination;
+direct-cuVS-CAGRA-build-algorithm/target-cluster-count combination;
 when ARI is available and median total times tie, higher median ARI, higher
 minimum ARI across cycles, and then higher median modularity break the tie.
 `--ari_tolerance` must be a
@@ -368,7 +368,7 @@ invalid.
 `graph_cluster_global_recommendations_from_cycles.csv` pools requested
 graph/clustering backends before selecting the fastest row within the ARI
 tolerance for each dataset/k/graph-method/metric/CAGRA-provider/
-target-cluster-count combination. `graph_cluster_auto_vs_global_recommendation.csv` compares auto
+direct-cuVS-CAGRA-build-algorithm/target-cluster-count combination. `graph_cluster_auto_vs_global_recommendation.csv` compares auto
 rows with those pooled recommendations, including requested-backend agreement,
 resolved-backend agreement, method agreement, speed ratio, ARI gap, and
 modularity gap. These global tables are the main audit for whether graph and
