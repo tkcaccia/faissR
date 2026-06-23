@@ -175,8 +175,9 @@ std::string cuda_non_euclidean_backend(const std::string& metric,
     );
   }
   if (faiss_gpu_available) return flat_backend;
-  if (metric == "inner_product" && cuda_available) return "cuda_native_nndescent";
-  if (metric == "inner_product" && cuvs_available) return "cuda_cuvs_hnsw";
+  if (metric == "inner_product" && cuda_available && self_query) {
+    return "cuda_native_nndescent";
+  }
   if (requested_device == "auto") return "cpu_auto";
   return "__cuda_non_euclidean_unavailable__";
 }

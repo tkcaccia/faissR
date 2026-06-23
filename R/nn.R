@@ -2279,6 +2279,32 @@ nn_cuda_auto_runtime_available <- function(metric,
       }
     ))
   }
+  if (identical(metric, "inner_product")) {
+    ok <- isTRUE(faiss_gpu_available_value) || isTRUE(cuda_available_value)
+    return(list(
+      available = ok,
+      reason = if (ok) "available" else "missing_cuda_route",
+      notes = if (isTRUE(faiss_gpu_available_value)) {
+        "CUDA auto raw-inner-product route is available through FAISS GPU Flat IP."
+      } else if (isTRUE(cuda_available_value)) {
+        paste(
+          "CUDA auto raw-inner-product route is shape-dependent on this runtime:",
+          "self-KNN graph searches can use faissR's native CUDA",
+          "candidate-refinement route, while exact or query inner-product search",
+          "requires FAISS GPU Flat."
+        )
+      } else if (isTRUE(cuvs_available_value)) {
+        paste(
+          "A cuVS runtime was detected, but CUDA auto raw-inner-product search",
+          "needs FAISS GPU Flat IP or faissR's native CUDA self-KNN",
+          "candidate-refinement route. cuVS CAGRA/HNSW raw-inner-product routes",
+          "are disabled in faissR."
+        )
+      } else {
+        "CUDA auto raw-inner-product search requires FAISS GPU Flat IP or faissR's native CUDA self-KNN candidate-refinement route."
+      }
+    ))
+  }
   ok <- isTRUE(faiss_gpu_available_value) ||
     isTRUE(cuvs_available_value) ||
     isTRUE(cuda_available_value)
@@ -2298,13 +2324,6 @@ nn_cuda_auto_runtime_available <- function(metric,
         "CUDA auto non-Euclidean route is shape-dependent on this runtime:",
         "native CUDA grid may apply to eligible 2D/3D self-search datasets,",
         "while general exact non-Euclidean search still requires FAISS GPU Flat."
-      )
-    } else if (isTRUE(cuda_available_value) && identical(metric, "inner_product")) {
-      paste(
-        "CUDA auto inner-product route is shape-dependent on this runtime:",
-        "large self-KNN graph searches can use faissR's native CUDA",
-        "candidate-refinement route, while exact inner-product search still",
-        "requires FAISS GPU Flat."
       )
     } else {
       "CUDA auto non-Euclidean route requires FAISS GPU Flat, cuVS graph support, or an eligible native CUDA grid route."
@@ -2939,16 +2958,21 @@ cuda_auto_non_euclidean_backend <- function(metric,
   if (isTRUE(faiss_gpu_available_value)) {
     return(flat_backend)
   }
-  if (identical(metric, "inner_product") && isTRUE(cuda_available_value)) {
+  if (identical(metric, "inner_product") &&
+      isTRUE(cuda_available_value) &&
+      isTRUE(shape_known) &&
+      isTRUE(self_query)) {
     return("cuda_native_nndescent")
   }
   if (identical(requested_device, "auto")) return("cpu_auto")
   if (isTRUE(require_available)) {
     stop(
       "CUDA auto for non-Euclidean metrics requires FAISS GPU Flat support ",
-      "for exact routes or CAGRA/cuVS support for large self-KNN graph routes. ",
+      "for exact routes, CAGRA/cuVS support for large cosine/correlation ",
+      "self-KNN graph routes, or native CUDA support for raw-inner-product ",
+      "self-KNN candidate refinement. ",
       "Use `backend = \"auto\"` to fall back to CPU, or rebuild faissR with ",
-      "FAISS GPU/cuVS support.",
+      "FAISS GPU/CUDA support.",
       call. = FALSE
     )
   }
@@ -2960,7 +2984,9 @@ select_cuvs_auto_backend <- function(self_query,
                                      p,
                                      n_points,
                                      k,
-                                     work_size) {
+                                     work_size,
+                                     cuda_available_value = cuda_available(),
+                                     cuvs_available_value = cuvs_available()) {
   route <- nn_auto_select_shape_cpp(
     resolved_backend = "cuda_auto",
     requested_backend = "cuda",
@@ -2975,6 +3001,8 @@ select_cuvs_auto_backend <- function(self_query,
       exclude_self = FALSE,
       work_size = as.double(work_size)
     ),
+    cuda_available_value = cuda_available_value,
+    cuvs_available_value = cuvs_available_value,
     faiss_gpu_available_value = FALSE
   )
   if (!is.na(route$error)) stop(route$error, call. = FALSE)

@@ -1010,6 +1010,17 @@ test_that("cuda_auto runtime availability distinguishes cuVS and FAISS GPU metri
   )
   expect_true(ip_faiss_gpu$available)
   expect_match(ip_faiss_gpu$notes, "FAISS GPU Flat")
+
+  ip_cuvs_only <- faissR:::nn_cuda_auto_runtime_available(
+    "inner_product",
+    cuda_available_value = FALSE,
+    cuvs_available_value = TRUE,
+    faiss_gpu_available_value = FALSE
+  )
+  expect_false(ip_cuvs_only$available)
+  expect_equal(ip_cuvs_only$reason, "missing_cuda_route")
+  expect_match(ip_cuvs_only$notes, "cuVS")
+  expect_match(ip_cuvs_only$notes, "disabled")
 })
 
 test_that("backend auto explicit methods require metric-capable CUDA routes before selecting CUDA", {
@@ -1091,7 +1102,7 @@ test_that("backend auto explicit methods require metric-capable CUDA routes befo
       cuvs_available_value = TRUE,
       faiss_gpu_available_value = TRUE
     ),
-    "cuda"
+    "cpu"
   )
   expect_equal(
     faissR:::resolve_auto_public_nn_device(
@@ -1156,7 +1167,7 @@ test_that("nn_capabilities exposes auto backend as CPU/CUDA support union", {
 
 test_that("faissR options use the faissR namespace only", {
   old <- options(
-    faissR.cpu_auto_exact_work = NULL,
+    faissR.cpu_auto_exact_work = 3e9,
     faissR.faiss_nlist = NULL
   )
   on.exit(options(old), add = TRUE)
@@ -3231,6 +3242,24 @@ test_that("CUDA auto selector has deterministic k and metric policy", {
     )
   }
 
+  expect_error(
+    faissR:::cuda_auto_non_euclidean_backend(
+      "inner_product",
+      requested_device = "cuda",
+      self_query = FALSE,
+      n = 200000L,
+      p = 64L,
+      n_points = 1000L,
+      k = 50L,
+      work_size = as.double(200000L) * 1000 * 64,
+      cuda_available_value = TRUE,
+      cuvs_available_value = TRUE,
+      faiss_gpu_available_value = FALSE,
+      require_available = TRUE
+    ),
+    "raw-inner-product self-KNN"
+  )
+
   n <- 500000L
   p <- 32L
   work_size <- as.double(n) * as.double(n) * as.double(p)
@@ -3242,7 +3271,9 @@ test_that("CUDA auto selector has deterministic k and metric policy", {
       p = p,
       n_points = n,
       k = k,
-      work_size = work_size
+      work_size = work_size,
+      cuda_available_value = TRUE,
+      cuvs_available_value = TRUE
     )
   }, character(1L))
   expect_equal(cuvs_routes[[1L]], "cuda_cuvs_bruteforce")
@@ -3254,7 +3285,9 @@ test_that("CUDA auto selector has deterministic k and metric policy", {
     p = 256L,
     n_points = n,
     k = 50L,
-    work_size = as.double(n) * as.double(n) * 256
+    work_size = as.double(n) * as.double(n) * 256,
+    cuda_available_value = TRUE,
+    cuvs_available_value = TRUE
   )
   expect_equal(high_dim_route, "cuda_cuvs_nndescent")
 })
