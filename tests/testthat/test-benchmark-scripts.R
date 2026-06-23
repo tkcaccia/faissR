@@ -41,6 +41,9 @@ test_that("NN metric benchmark defaults cover full method metric backend and k g
     )
   )
   expect_equal(env$default_nn_k_values(), c(5L, 10L, 15L, 50L, 100L))
+  expect_equal(env$nn_k_values_arg(list(k = "15")), "15")
+  expect_equal(env$nn_k_values_arg(list(k_values = "5,10", k = "15")), "5,10")
+  expect_null(env$nn_k_values_arg(list()))
   expect_equal(env$default_nn_cycles(), 10L)
   expect_equal(
     env$validate_metric_values(c("l2", "pearson", "ip", "dot-product")),

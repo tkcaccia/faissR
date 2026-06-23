@@ -275,6 +275,10 @@ default_nn_k_values <- function() {
   c(5L, 10L, 15L, 50L, 100L)
 }
 
+nn_k_values_arg <- function(args) {
+  args$k_values %||% args$k
+}
+
 as_int_vec_arg <- function(x, default) {
   value <- suppressWarnings(as.integer(x %||% default))
   value <- value[!is.na(value) & value > 0L]
@@ -1643,7 +1647,7 @@ cagra_build_algos <- validate_cagra_build_algo_values(
   split_arg(args$cagra_build_algos, paste(default_cagra_build_algo_values(), collapse = ","))
 )
 k_values <- required_positive_int_values(
-  split_arg(args$k_values, paste(default_nn_k_values(), collapse = ",")),
+  split_arg(nn_k_values_arg(args), paste(default_nn_k_values(), collapse = ",")),
   "k_values"
 )
 
