@@ -39,6 +39,10 @@
 27. Venkatasubba K, Khan S, Singh S, Simhadri HV, Vedurada J. BANG: Billion-Scale Approximate Nearest Neighbour Search Using a Single GPU. IEEE Trans Big Data 2025.
 28. Gui Y, Li Z, Li Q, et al. PilotANN: Memory-Bounded GPU Acceleration for Vector Search. arXiv:2503.21206.
 29. Fu C, Xiang C, Wang C, Cai D. NSG: Navigating Spreading-out Graph for Approximate Nearest Neighbor Search [software, MIT]. Available from: https://github.com/ZJULearning/nsg.
+30. FAISS Project. Installing Faiss. Available from: https://github.com/facebookresearch/faiss/blob/main/INSTALL.md.
+31. NVIDIA. CUDA Installation Guide for Linux. Available from: https://docs.nvidia.com/cuda/cuda-installation-guide-linux/.
+32. NVIDIA. CUDA Installation Guide for Microsoft Windows. Available from: https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/.
+33. RAPIDS Development Team. RAPIDS Installation Guide. Available from: https://docs.rapids.ai/install/.
 
 ## Software Acknowledgements
 
