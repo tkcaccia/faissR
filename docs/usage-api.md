@@ -303,6 +303,11 @@ helps benchmark cycles identify fast settings that may be under-iterating.
 `parameters$resolved_backend` records the public device policy after resolving
 `"auto"`, and `backend` records the implementation
 that actually ran, such as `"faiss"`, `"cpu"`, `"cuda_faiss"`, or `"cuda_cuvs"`.
+CUDA runs also record `parameters$cuda_provider_selection` as `"faiss_gpu"`,
+`"direct_cuvs"`, or `"direct_cuvs_after_faiss_gpu_unavailable_or_failed"`;
+`parameters$backend_resolution_note` describes the provider route, and
+`parameters$faiss_gpu_error` is present when direct cuVS was used after a FAISS
+GPU route was unavailable or failed.
 
 ## `knn()`
 

@@ -791,3 +791,45 @@ test_that("CUDA k-means records direct cuVS provider selection", {
   expect_equal(out$parameters$requested_backend, "cuda")
   expect_equal(out$parameters$resolved_backend, "cuda")
 })
+
+test_that("CUDA k-means records FAISS GPU provider selection", {
+  x <- matrix(rnorm(40), ncol = 4)
+  fake_faiss_gpu <- function(...) {
+    list(
+      cluster = rep(1:2, length.out = nrow(x)),
+      centers = matrix(0, nrow = 2, ncol = ncol(x)),
+      withinss = c(1, 2),
+      tot.withinss = 3,
+      size = c(5L, 5L),
+      iter = 1L,
+      parameters = list(max_iter = 2L, n_init = 1L, tol = 1e-4)
+    )
+  }
+
+  testthat::local_mocked_bindings(
+    faiss_gpu_available = function() TRUE,
+    run_faiss_gpu_kmeans = fake_faiss_gpu,
+    .package = "faissR"
+  )
+
+  out <- faissR:::run_cuda_kmeans(
+    x = x,
+    centers = 2L,
+    max_iter = 2L,
+    n_init = 1L,
+    tol = 1e-4,
+    seed = 1L,
+    streaming_batch_size = 0L,
+    init = "kmeans++",
+    tuning_metadata = list(effective = list(max_iter = 2L, n_init = 1L, tol = 1e-4)),
+    requested_backend = "cuda",
+    resolved_backend = "cuda"
+  )
+
+  expect_equal(out$backend, "cuda_faiss")
+  expect_equal(out$parameters$cuda_provider_selection, "faiss_gpu")
+  expect_match(out$parameters$backend_resolution_note, "FAISS GPU k-means", fixed = TRUE)
+  expect_null(out$parameters$faiss_gpu_error)
+  expect_equal(out$parameters$requested_backend, "cuda")
+  expect_equal(out$parameters$resolved_backend, "cuda")
+})

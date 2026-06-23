@@ -73,6 +73,11 @@
 #'   effective-parameter decision used for benchmark auditing, including
 #'   `explicit_backend` and `backend_decision` fields that distinguish an
 #'   explicit `"cpu"`/`"cuda"` request from an automatic shape-policy choice.
+#'   CUDA runs also record `parameters$cuda_provider_selection` as `"faiss_gpu"`,
+#'   `"direct_cuvs"`, or `"direct_cuvs_after_faiss_gpu_unavailable_or_failed"`;
+#'   `parameters$backend_resolution_note` describes the provider route, and
+#'   `parameters$faiss_gpu_error` is present when direct cuVS was used after a
+#'   FAISS GPU route was unavailable or failed.
 #'   `hit_max_iter`
 #'   records whether the run reached the effective iteration cap, and
 #'   `converged` is the corresponding conservative convergence flag used by
@@ -477,14 +482,17 @@ run_cuda_kmeans <- function(x,
       }
     )
     if (!is.null(out)) {
-      return(finish_fast_kmeans(
+      out <- finish_fast_kmeans(
         out,
         backend = "cuda_faiss",
         init = init,
         tuning_metadata = tuning_metadata,
         requested_backend = requested_backend,
         resolved_backend = resolved_backend
-      ))
+      )
+      out$parameters$cuda_provider_selection <- "faiss_gpu"
+      out$parameters$backend_resolution_note <- "FAISS GPU k-means was used within the requested CUDA backend."
+      return(out)
     }
   }
 
