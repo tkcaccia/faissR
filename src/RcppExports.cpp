@@ -576,16 +576,17 @@ BEGIN_RCPP
 END_RCPP
 }
 // nn_tune_cuvs_ivfpq_cpp
-List nn_tune_cuvs_ivfpq_cpp(int p, int pq_dim_option, int pq_bits_option, bool manual);
-RcppExport SEXP _faissR_nn_tune_cuvs_ivfpq_cpp(SEXP pSEXP, SEXP pq_dim_optionSEXP, SEXP pq_bits_optionSEXP, SEXP manualSEXP) {
+List nn_tune_cuvs_ivfpq_cpp(int p, int n, int pq_dim_option, int pq_bits_option, bool manual);
+RcppExport SEXP _faissR_nn_tune_cuvs_ivfpq_cpp(SEXP pSEXP, SEXP nSEXP, SEXP pq_dim_optionSEXP, SEXP pq_bits_optionSEXP, SEXP manualSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< int >::type p(pSEXP);
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
     Rcpp::traits::input_parameter< int >::type pq_dim_option(pq_dim_optionSEXP);
     Rcpp::traits::input_parameter< int >::type pq_bits_option(pq_bits_optionSEXP);
     Rcpp::traits::input_parameter< bool >::type manual(manualSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_tune_cuvs_ivfpq_cpp(p, pq_dim_option, pq_bits_option, manual));
+    rcpp_result_gen = Rcpp::wrap(nn_tune_cuvs_ivfpq_cpp(p, n, pq_dim_option, pq_bits_option, manual));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1410,7 +1411,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_auto_select_backend_cpp", (DL_FUNC) &_faissR_nn_auto_select_backend_cpp, 28},
     {"_faissR_nn_tune_faiss_ivf_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_ivf_cpp, 6},
     {"_faissR_nn_tune_faiss_pq_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_pq_cpp, 6},
-    {"_faissR_nn_tune_cuvs_ivfpq_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_ivfpq_cpp, 4},
+    {"_faissR_nn_tune_cuvs_ivfpq_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_ivfpq_cpp, 5},
     {"_faissR_nn_tune_faiss_hnsw_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_hnsw_cpp, 8},
     {"_faissR_nn_tune_rcpphnsw_cpp", (DL_FUNC) &_faissR_nn_tune_rcpphnsw_cpp, 4},
     {"_faissR_nn_tune_faiss_nsg_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_nsg_cpp, 5},

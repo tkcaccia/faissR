@@ -306,18 +306,23 @@ cuVS L2 index.
 
 IVFPQ is a memory-pressure method. It can be fast and memory-efficient, but
 recall can drop substantially. Treat it as explicit opt-in when memory matters,
-including for the direct diagnostic backend `cuda_cuvs_ivfpq`, which applies
-the same transformed cosine/correlation and raw-inner-product conventions as
-direct cuVS IVF-Flat before building the cuVS L2/PQ index.
-not as the default accuracy-first method.
+not as the default accuracy-first method. The direct diagnostic backend
+`cuda_cuvs_ivfpq` applies the same transformed cosine/correlation and
+raw-inner-product conventions as direct cuVS IVF-Flat before building the cuVS
+L2/PQ index.
 
 CPU IVFPQ requires at least 624 training rows. This deterministic guard avoids
 FAISS training runs where even the smallest supported 4-bit product quantizer
 has too few training examples per codeword; smaller datasets should use
 `method = "ivf"`, `"hnsw"`, or `"flat"` instead.
-For 624-9,983 rows, auto tuning requests 4-bit PQ so the codebook size remains
-compatible with FAISS' recommended training density; 8-bit PQ is used once the
-training set is large enough unless the user overrides `faissR.faiss_pq_nbits`.
+For 624-9,983 rows, CPU FAISS auto tuning requests 4-bit PQ so the codebook
+size remains compatible with FAISS' recommended training density; 8-bit PQ is
+used once the training set is large enough unless the user overrides
+`faissR.faiss_pq_nbits`. Direct cuVS IVF-PQ follows the same small-training
+principle and requests 4-bit PQ below 9,984 rows unless
+`faissR.cuvs_ivfpq_pq_bits` or `faissR.ivfpq_pq_bits` is set. FAISS GPU IVFPQ
+is an explicit 8-bit route because FAISS' GPU IVFPQ implementation requires
+8-bit product-quantizer codes.
 
 ## `"vamana"`
 

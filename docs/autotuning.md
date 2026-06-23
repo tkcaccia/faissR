@@ -106,7 +106,7 @@ that the no-pilot graph-shape rule came from compiled policy.
 | `ivf` | `cuda_cuvs_ivf_flat` | CUDA cuVS IVF-Flat | Direct benchmark route for Euclidean/L2 plus transformed cosine, correlation, and raw inner product. Fast on low-dimensional flow/simulated data at about 0.99-0.999 recall; not high-recall default. |
 | `ivfpq` | `faiss_ivfpq` speed/balanced tiers | CPU memory-pressure tier | Low recall on many datasets; use only when memory reduction is the priority. Requires at least 624 training rows for the CPU FAISS route; auto tuning uses 4-bit PQ for 624-9,983 rows and 8-bit PQ above that unless manually overridden [6]. |
 | `ivfpq` | `faiss_gpu_ivfpq` | CUDA memory-pressure tier | Fast but low recall in this benchmark; explicit opt-in only. |
-| `ivfpq` | `cuda_cuvs_ivfpq` | CUDA memory-pressure tier | Direct benchmark route for Euclidean/L2 plus transformed cosine, correlation, and raw inner product. Better than FAISS GPU IVFPQ on some datasets but still not an accuracy-first default. |
+| `ivfpq` | `cuda_cuvs_ivfpq` | CUDA memory-pressure tier | Direct benchmark route for Euclidean/L2 plus transformed cosine, correlation, and raw inner product. It uses the same deterministic small-training rule as CPU PQ: below 9,984 training rows, auto tuning requests 4-bit PQ unless the user manually sets `cuvs_ivfpq_pq_bits`/`ivfpq_pq_bits`. Better than FAISS GPU IVFPQ on some datasets but still not an accuracy-first default. |
 | `nsg` | `cpu_nsg` speed/balanced tiers | CPU graph candidate | Native faissR NSG-style route for all public metrics; avoids linked-FAISS NSG aborts in public calls. Large high-dimensional CPU inputs use deterministic HNSW seeding before NSG/MRNG-style pruning so explicit NSG no longer starts with an all-pairs exact seed on MNIST/FashionMNIST-scale matrices. |
 | `vamana` | `cpu_vamana` speed/balanced tiers | CPU graph candidate | Native DiskANN/Vamana-style robust-pruned candidate graph; large high-dimensional CPU inputs use deterministic HNSW seeding before robust pruning, while smaller inputs keep exact seeding. |
 | `nndescent` | `cpu_nndescent` speed/balanced tiers | CPU graph speed tier | Native faissR NN-descent route; useful as an explicit Euclidean, normalized cosine/correlation, or raw inner-product graph-search candidate, but recall was usually lower than HNSW. |
@@ -286,8 +286,11 @@ CPU-auto default.
   remain explicit or secondary until more robust guards are added.
 - IVFPQ methods are often fast or memory-efficient, but recall was frequently
   poor. They should be documented as compressed-memory methods; CPU IVFPQ rows
-  below 624 training rows are expected skips, and CPU IVFPQ auto tuning uses
-  4-bit PQ for 624-9,983 rows to avoid undertrained 8-bit codebooks.
+  below 624 training rows are expected skips, and CPU/direct-cuVS IVFPQ auto
+  tuning uses 4-bit PQ for small training sets to avoid undertrained 8-bit
+  codebooks where the backend supports 4-bit PQ. FAISS GPU IVFPQ remains an
+  explicit 8-bit GPU route because FAISS' GPU IVFPQ implementation requires
+  8-bit codes.
 
 ## Reproducibility
 

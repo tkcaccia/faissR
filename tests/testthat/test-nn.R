@@ -2973,6 +2973,10 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
     faissR.faiss_nndescent_graph_k = NULL,
     faissR.faiss_nndescent_iter = NULL,
     faissR.faiss_nndescent_search_l = NULL,
+    faissR.cuvs_ivfpq_pq_dim = NULL,
+    faissR.ivfpq_pq_dim = NULL,
+    faissR.cuvs_ivfpq_pq_bits = NULL,
+    faissR.ivfpq_pq_bits = NULL,
     faissR.cuvs_graph_degree = NULL,
     faissR.cuvs_intermediate_graph_degree = NULL,
     faissR.cuvs_search_width = NULL,
@@ -3026,6 +3030,16 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   expect_equal(reduced_codebook_pq$tuning_rule, "training_rows_4bit_pq")
   expect_true(isTRUE(reduced_codebook_pq$tuning_reduced_codebook_training))
   expect_equal(reduced_codebook_pq$min_training_rows_8bit, 9984L)
+  cuvs_small_training_pq <- faissR:::cuvs_ivfpq_params(1024L, n = 1440L)
+  expect_equal(cuvs_small_training_pq$pq_bits, 4L)
+  expect_equal(cuvs_small_training_pq$tuning_rule, "training_rows_4bit_pq")
+  expect_true(isTRUE(cuvs_small_training_pq$tuning_reduced_codebook_training))
+  expect_equal(cuvs_small_training_pq$min_training_rows_8bit, 9984L)
+  options(faissR.cuvs_ivfpq_pq_bits = 8L)
+  cuvs_manual_pq <- faissR:::cuvs_ivfpq_params(1024L, n = 1440L)
+  expect_equal(cuvs_manual_pq$pq_bits, 8L)
+  expect_equal(cuvs_manual_pq$tuning_policy, "manual_options")
+  expect_equal(cuvs_manual_pq$tuning_rule, "high_dim_default_pq")
   expect_error(
     faissR:::validate_faiss_cpu_ivfpq_training_size(120L),
     "at least 624 training rows"

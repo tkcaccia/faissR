@@ -688,24 +688,34 @@ List nn_tune_faiss_pq_cpp(int p,
 
 // [[Rcpp::export]]
 List nn_tune_cuvs_ivfpq_cpp(int p,
+                            int n = NA_INTEGER,
                             int pq_dim_option = NA_INTEGER,
                             int pq_bits_option = NA_INTEGER,
                             bool manual = false) {
   p = safe_p(p);
+  const bool n_known = valid_int(n);
+  const int min_training_8bit = 9984;
   const bool high_dim = p >= 256;
+  const bool manual_bits = valid_int(pq_bits_option);
+  const bool reduced_codebook_training = n_known && n < min_training_8bit;
   const int requested_pq_dim = requested_int(pq_dim_option, 0);
   int pq_dim = requested_int(pq_dim_option, 0);
   if (pq_dim < 0) pq_dim = 0;
-  const int requested_pq_bits = requested_int(pq_bits_option, 8);
-  const int pq_bits = option_int(pq_bits_option, 8, 4, 8);
+  const int pq_bits_default = (reduced_codebook_training && !manual_bits) ? 4 : 8;
+  const int requested_pq_bits = requested_int(pq_bits_option, pq_bits_default);
+  const int pq_bits = option_int(pq_bits_option, pq_bits_default, 4, 8);
+  std::string rule = (reduced_codebook_training && !manual_bits) ? "training_rows_4bit_pq" :
+    (high_dim ? "high_dim_default_pq" : "dimension_default_pq");
   return List::create(
     _["pq_dim"] = pq_dim,
     _["pq_bits"] = pq_bits,
     _["requested_pq_dim"] = requested_pq_dim,
     _["requested_pq_bits"] = requested_pq_bits,
     _["tuning_policy"] = manual ? "manual_options" : "auto_shape",
-    _["tuning_rule"] = high_dim ? "high_dim_default_pq" : "dimension_default_pq",
+    _["tuning_rule"] = rule,
     _["tuning_high_dim"] = high_dim,
+    _["tuning_reduced_codebook_training"] = reduced_codebook_training,
+    _["min_training_rows_8bit"] = min_training_8bit,
     _["tuning_source"] = "cpp"
   );
 }

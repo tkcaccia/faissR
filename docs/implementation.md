@@ -259,8 +259,12 @@ IVF probe defaults are conservative enough to avoid misleading speed-only
 results. IVFPQ is treated as an explicit memory-pressure backend because product
 quantization can reduce recall substantially [6]. CPU IVFPQ requires at least
 624 training rows so FAISS does not train underpopulated 4-bit
-product-quantizer codebooks; for 624-9,983 rows, auto tuning requests 4-bit PQ
-instead of the 8-bit default for the same training-density reason.
+product-quantizer codebooks; for 624-9,983 rows, CPU auto tuning requests 4-bit
+PQ instead of the 8-bit default for the same training-density reason. Direct
+cuVS IVF-PQ uses the same deterministic small-training rule below 9,984 rows
+unless the user explicitly sets cuVS PQ bits. FAISS GPU IVFPQ remains an
+explicit 8-bit route because FAISS' GPU IVFPQ implementation requires 8-bit
+product-quantizer codes.
 FAISS HNSW uses no pilot tuning in the user call. Its default parameters are a
 static shape/k/metric policy: a speed tier for lower-dimensional Euclidean
 `k <= 10`, a balanced small-`k` tier for non-Euclidean metrics, a balanced tier

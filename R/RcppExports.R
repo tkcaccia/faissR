@@ -141,8 +141,8 @@ nn_tune_faiss_pq_cpp <- function(p, n = NA_integer_, m_option = NA_integer_, nbi
     .Call(`_faissR_nn_tune_faiss_pq_cpp`, p, n, m_option, nbits_option, manual, manual_nbits)
 }
 
-nn_tune_cuvs_ivfpq_cpp <- function(p, pq_dim_option = NA_integer_, pq_bits_option = NA_integer_, manual = FALSE) {
-    .Call(`_faissR_nn_tune_cuvs_ivfpq_cpp`, p, pq_dim_option, pq_bits_option, manual)
+nn_tune_cuvs_ivfpq_cpp <- function(p, n = NA_integer_, pq_dim_option = NA_integer_, pq_bits_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_cuvs_ivfpq_cpp`, p, n, pq_dim_option, pq_bits_option, manual)
 }
 
 nn_tune_faiss_hnsw_cpp <- function(n, p, k, metric, m_option = NA_integer_, ef_construction_option = NA_integer_, ef_search_option = NA_integer_, manual = FALSE) {

@@ -1435,7 +1435,7 @@ nn_compute <- function(data,
       search_points <- metric_inputs$points
     }
     params <- faiss_ivf_params(nrow(data), k, metric = metric)
-    pq <- cuvs_ivfpq_params(ncol(search_data))
+    pq <- cuvs_ivfpq_params(ncol(search_data), n = nrow(search_data))
     out <- nn_cuvs_ivf_pq_cpp(
       search_data,
       search_points,
@@ -5498,9 +5498,10 @@ faiss_ivf_manual_params <- function() {
   ))
 }
 
-cuvs_ivfpq_params <- function(p) {
+cuvs_ivfpq_params <- function(p, n = NULL) {
   nn_tune_cuvs_ivfpq_cpp(
     as.integer(p),
+    suppressWarnings(as.integer(n %||% NA_integer_)),
     nn_option_int_or_na(c("cuvs_ivfpq_pq_dim", "ivfpq_pq_dim")),
     nn_option_int_or_na(c("cuvs_ivfpq_pq_bits", "ivfpq_pq_bits")),
     nn_any_options(c(
@@ -6494,7 +6495,10 @@ grid_self_knn <- function(data,
 #'   It reuses the metric-aware IVF probing defaults. IVF and PQ parameter
 #'   selectors record deterministic tuning metadata; PQ fields use
 #'   `pq_tuning_*` names. CPU IVFPQ requires at least 624 training rows; for
-#'   624-9,983 rows, auto tuning uses 4-bit PQ rather than the 8-bit default.
+#'   624-9,983 rows, CPU auto tuning uses 4-bit PQ rather than the 8-bit
+#'   default. Direct cuVS IVF-PQ applies the same 4-bit small-training rule
+#'   below 9,984 rows unless cuVS PQ bits are manually set; FAISS GPU IVFPQ is
+#'   an explicit 8-bit route.
 #'   \item `"vamana"`: DiskANN/Vamana-style robust-pruned candidate graph
 #'   implemented in faissR [24]. CPU refines top-k within candidate rows
 #'   using native CPU scoring; CUDA refines candidates with faissR's native
