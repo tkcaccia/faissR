@@ -132,7 +132,10 @@ community count is used, \code{target_n_clusters},
 \code{selected_resolution}, \code{target_gap}, \code{resolution_selection},
 and \code{resolution_search} record the requested target, selected resolution,
 final community-count gap, deterministic selection rule, and full resolution
-search table. The deterministic candidate center and bounded grid are computed
+search table. The validated request is also stored as
+\code{parameters$n_clusters_requested} for benchmark summaries and as
+\code{parameters$n_clusters} for backward compatibility. The deterministic
+candidate center and bounded grid are computed
 by the compiled \code{graph_resolution_candidates_cpp()} helper and record
 \code{resolution_selection$tuning_source = "cpp"}. \code{parameters$resolution}
 is \code{NA} for target-auto searches where \code{n_clusters} is supplied and

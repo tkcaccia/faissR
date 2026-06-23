@@ -425,10 +425,12 @@ passes more than needed. It keeps the result whose number of communities is
 closest to `m`, breaking ties by modularity. The selected resolution, candidate
 center, and search table are returned in the result metadata as
 `selected_resolution`, `resolution_selection`, and `resolution_search`, with the
-requested target stored as `target_n_clusters`. `parameters$resolution_source`
+requested target stored as `target_n_clusters`. The validated target is also
+stored in `parameters$n_clusters_requested` for benchmark tables and
+`parameters$n_clusters` for backward compatibility. `parameters$resolution_source`
 records whether the grid seed came from the default, a user value, or
-omitted/`NULL` target-auto mode; in target-auto mode
-`parameters$resolution` is `NA` and the actual automatic center is stored in
+omitted/`NULL` target-auto mode; in target-auto mode `parameters$resolution` is
+`NA` and the actual automatic center is stored in
 `resolution_selection$candidate_center`.
 The selected row is marked in `resolution_search$selected`; `target_gap`
 records the final absolute difference from the requested community count, and

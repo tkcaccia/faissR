@@ -341,7 +341,9 @@ graph_cluster_backend_selection <- function(backend,
 #'   `target_n_clusters`, `selected_resolution`, `target_gap`,
 #'   `resolution_selection`, and `resolution_search` record the requested
 #'   target, selected resolution, final community-count gap, deterministic
-#'   selection rule, and full resolution search table. The deterministic
+#'   selection rule, and full resolution search table. The validated request is
+#'   also stored as `parameters$n_clusters_requested` for benchmark summaries
+#'   and as `parameters$n_clusters` for backward compatibility. The deterministic
 #'   candidate center and bounded grid are computed by the compiled
 #'   `graph_resolution_candidates_cpp()` helper and record
 #'   `resolution_selection$tuning_source = "cpp"`. `parameters$resolution` is
@@ -486,6 +488,7 @@ graph_cluster <- function(graph,
         resolution = resolution,
         resolution_source = resolution_source,
         n_clusters = graph_n_clusters,
+        n_clusters_requested = graph_n_clusters,
         selected_resolution = ans$selected_resolution %||% resolution,
         target_gap = ans$target_gap %||% NA_integer_,
         resolution_selection = ans$resolution_selection %||% NULL,
@@ -604,6 +607,7 @@ graph_cluster <- function(graph,
     resolution = resolution,
     resolution_source = resolution_source,
     n_clusters = n_clusters,
+    n_clusters_requested = n_clusters,
     selected_resolution = ans$selected_resolution %||% resolution,
     target_gap = ans$target_gap %||% NA_integer_,
     resolution_selection = ans$resolution_selection %||% NULL,

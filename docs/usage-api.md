@@ -232,10 +232,12 @@ When a target community count is used,
 `target_n_clusters`, `selected_resolution`, `target_gap`,
 `resolution_selection`, and `resolution_search` record the requested target,
 selected resolution, final community-count gap, deterministic selection rule,
-candidate center, and full resolution search table. The candidate center and
+candidate center, and full resolution search table. The validated target is
+also stored in `parameters$n_clusters_requested` for benchmark summaries and
+`parameters$n_clusters` for backward compatibility. The candidate center and
 grid come from the compiled `graph_resolution_candidates_cpp()` helper and
-record `resolution_selection$tuning_source = "cpp"`. `parameters$resolution`
-is `NA` for target-auto searches where `n_clusters` is supplied and
+record `resolution_selection$tuning_source = "cpp"`. `parameters$resolution` is
+`NA` for target-auto searches where `n_clusters` is supplied and
 `resolution` is omitted or `NULL`; the actual automatic center is stored in
 `resolution_selection$candidate_center`.
 `parameters$resolution_source` is `"default"`, `"user"`, or `"target_auto"`
