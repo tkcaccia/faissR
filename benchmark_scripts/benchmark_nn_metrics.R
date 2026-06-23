@@ -630,6 +630,38 @@ should_isolate_native_timeout <- function(x, backend, method, preflight_route,
   cpu_exact_route || explicit_cpu_exact || auto_cpu_exact
 }
 
+fork_job_pid <- function(job) {
+  pid <- tryCatch(job$pid, error = function(e) NULL)
+  if (is.null(pid)) {
+    pid <- tryCatch(unclass(job)$pid, error = function(e) NULL)
+  }
+  pid <- suppressWarnings(as.integer(pid))
+  pid <- pid[is.finite(pid) & pid > 0L]
+  if (length(pid)) pid[[1L]] else NA_integer_
+}
+
+terminate_fork_job <- function(job, grace_sec = 2) {
+  pid <- fork_job_pid(job)
+  if (is.na(pid)) {
+    return(invisible(suppressWarnings(parallel::mccollect(job, wait = FALSE))))
+  }
+
+  suppressWarnings(tools::pskill(pid, signal = tools::SIGTERM))
+  deadline <- Sys.time() + max(0, as.numeric(grace_sec))
+  repeat {
+    collected <- suppressWarnings(parallel::mccollect(job, wait = FALSE))
+    if (!is.null(collected) && length(collected)) return(invisible(collected))
+    alive <- isTRUE(suppressWarnings(tools::pskill(pid, signal = 0)))
+    if (!alive || Sys.time() >= deadline) break
+    Sys.sleep(0.1)
+  }
+
+  if (isTRUE(suppressWarnings(tools::pskill(pid, signal = 0)))) {
+    suppressWarnings(tools::pskill(pid, signal = tools::SIGKILL))
+  }
+  invisible(suppressWarnings(parallel::mccollect(job, wait = FALSE)))
+}
+
 run_nn_fork_process <- function(x, backend, method, metric, k, n_threads, seed,
                                 timeout, cagra_implementation, cagra_build_algo) {
   if (!identical(.Platform$OS.type, "unix")) {
@@ -707,10 +739,9 @@ run_nn_fork_process <- function(x, backend, method, metric, k, n_threads, seed,
       return(result)
     }
     if (Sys.time() >= deadline) {
-      suppressWarnings(parallel::mckill(job))
-      suppressWarnings(parallel::mccollect(job, wait = FALSE))
+      terminate_fork_job(job)
       return(list(
-        status = "failed",
+        status = "timeout",
         out = NULL,
         error = sprintf("forked child process timed out after %s seconds", timeout),
         elapsed_sec = timeout,
@@ -1748,7 +1779,7 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
           k = k,
           cycle = cycle,
           n_threads = n_threads,
-          status = "failed",
+          status = if (identical(child$status, "timeout")) "timeout" else "failed",
           error = child$error %||% "isolated child process failed",
           elapsed_sec = child$elapsed_sec %||% (proc.time()[["elapsed"]] - started),
           peak_rss_gb = child$peak_rss_gb %||% read_peak_rss_gb(),

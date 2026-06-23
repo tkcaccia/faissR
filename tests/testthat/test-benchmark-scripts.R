@@ -118,6 +118,18 @@ test_that("NN metric benchmark isolates high-work CPU exact timeout risks", {
   )
 })
 
+test_that("NN metric benchmark uses exported process cleanup for forked timeouts", {
+  script <- test_path("../../benchmark_scripts/benchmark_nn_metrics.R")
+  env <- source_benchmark_helpers(script, "args <- parse_args()")
+
+  expect_equal(
+    env$fork_job_pid(structure(list(pid = 12345L), class = "parallelJob")),
+    12345L
+  )
+  expect_true(is.function(env$terminate_fork_job))
+  expect_false(any(grepl("parallel::mckill", readLines(script), fixed = TRUE)))
+})
+
 test_that("benchmark materials document key row-level and summary outputs", {
   files <- list(
     nn = c(
