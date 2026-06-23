@@ -971,7 +971,7 @@ test_that("graph_cluster targets communities on CUDA Louvain and Leiden when lib
     expect_equal(cl$parameters$resolution_source, "target_auto", info = method)
     expect_equal(cl$parameters$selected_resolution, cl$selected_resolution, info = method)
     expect_equal(cl$parameters$target_gap, cl$target_gap, info = method)
-    expect_s3_class(cl$resolution_search, "data.frame", info = method)
+    expect_s3_class(cl$resolution_search, "data.frame")
     expect_equal(sum(cl$resolution_search$selected), 1L, info = method)
     expect_equal(
       cl$resolution_search$target_gap[cl$resolution_search$selected],
