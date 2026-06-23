@@ -18,6 +18,9 @@ source_benchmark_helpers <- function(path, stop_marker) {
   env <- new.env(parent = globalenv())
   conn <- textConnection(lines[seq_len(stop_at)])
   on.exit(close(conn), add = TRUE)
+  old_wd <- getwd()
+  setwd(dirname(path))
+  on.exit(setwd(old_wd), add = TRUE)
   source(conn, local = env)
   env
 }
