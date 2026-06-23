@@ -215,10 +215,14 @@ NN-descent, and RcppHNSW fallback parameters are computed by `nn_tune_*_cpp()`
 helpers. R still reads user-facing `options(faissR.*)` values, but clipping,
 default choice, requested-vs-effective values, tuning-rule labels, and shape
 flags are produced by the compiled policy layer.
-For Euclidean exact CUDA self-KNN, the selector prefers
-`cuda_cuvs_bruteforce` when cuVS is available, because COIL20 and USPS
+For Euclidean exact CUDA self-KNN, the selector distinguishes compact
+high-dimensional data from larger image-scale matrices. Compact shapes such as
+COIL20 and USPS use `cuda_cuvs_bruteforce` when cuVS is available, because
 validation showed the direct cuVS exact path was faster than FAISS GPU Flat
-while remaining an exact/high-recall route.
+while remaining an exact/high-recall route. Larger shapes such as FashionMNIST
+keep `faiss_gpu_flat_l2` as the automatic exact route when FAISS GPU is
+available; `cuda_cuvs_bruteforce` remains available as an explicit method and
+as the fallback exact CUDA route when FAISS GPU Flat is unavailable.
 
 Explicit methods map to the selected backend. For example,
 `method = "grid", backend = "cpu"` resolves to the CPU grid implementation,

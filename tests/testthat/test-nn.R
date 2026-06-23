@@ -3242,7 +3242,7 @@ test_that("C++ auto selector prefers cuVS brute force for compact very-wide self
   expect_equal(route$reason, "auto_cuda_preselector")
 })
 
-test_that("C++ auto selector prefers cuVS brute force for exact CUDA self-KNN", {
+test_that("C++ auto selector prefers cuVS brute force for compact exact CUDA self-KNN", {
   route <- faissR:::nn_auto_select_shape_cpp(
     resolved_backend = "auto",
     requested_backend = "auto",
@@ -3264,6 +3264,31 @@ test_that("C++ auto selector prefers cuVS brute force for exact CUDA self-KNN", 
   )
   expect_equal(route$selected_backend, "cuda_cuvs_bruteforce")
   expect_equal(route$predicted_method, "bruteforce")
+  expect_equal(route$reason, "auto_cuda_preselector")
+})
+
+test_that("C++ auto selector keeps FAISS GPU Flat for larger exact CUDA self-KNN", {
+  route <- faissR:::nn_auto_select_shape_cpp(
+    resolved_backend = "auto",
+    requested_backend = "auto",
+    requested_method = "auto",
+    shape = list(
+      n = 60000L,
+      p = 784L,
+      n_points = 60000L,
+      k = 50L,
+      metric = "euclidean",
+      self_query = TRUE,
+      exclude_self = TRUE
+    ),
+    cuda_available_value = TRUE,
+    cuvs_available_value = TRUE,
+    faiss_available_value = TRUE,
+    faiss_gpu_available_value = TRUE,
+    rcpphnsw_available_value = TRUE
+  )
+  expect_equal(route$selected_backend, "faiss_gpu_flat_l2")
+  expect_equal(route$predicted_method, "flat")
   expect_equal(route$reason, "auto_cuda_preselector")
 })
 
