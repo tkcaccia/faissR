@@ -2429,6 +2429,33 @@ test_that("native CPU NSG returns metric-aware self-KNN results", {
   }
 })
 
+test_that("native Vamana and NSG preserve include-self semantics", {
+  set.seed(2401251)
+  x <- matrix(rnorm(80L * 6L), nrow = 80L)
+
+  for (backend in c("cpu_vamana", "cpu_nsg")) {
+    out <- internal_nn(
+      x,
+      points = x,
+      k = 5L,
+      backend = backend,
+      metric = "euclidean",
+      n_threads = 2L
+    )
+    no_self <- internal_nn_without_self(
+      x,
+      k = 4L,
+      backend = backend,
+      metric = "euclidean",
+      n_threads = 2L
+    )
+
+    expect_equal(out$indices[, 1L], seq_len(nrow(x)), info = backend)
+    expect_equal(out$distances[, 1L], rep(0, nrow(x)), tolerance = 1e-12, info = backend)
+    expect_equal(out$indices[, -1L, drop = FALSE], no_self$indices, info = backend)
+  }
+})
+
 test_that("public CPU NSG uses native route for euclidean instead of unsafe FAISS NSG", {
   set.seed(240126)
   x <- matrix(rnorm(120L * 8L), nrow = 120L)

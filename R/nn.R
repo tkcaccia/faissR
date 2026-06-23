@@ -999,19 +999,38 @@ nn_compute <- function(data,
     params <- native_nsg_params(
       nrow(search_data),
       ncol(search_data),
-      k,
+      if (isTRUE(exclude_self)) k else max(1L, k - 1L),
       metric = metric,
       backend = if (isTRUE(use_cuda)) "cuda" else "cpu"
     )
-    out <- native_nsg_self_knn(
-      search_data,
-      k = k,
-      r = params$r,
-      graph_k = params$graph_k,
-      metric = refine_metric,
-      use_cuda = use_cuda,
-      n_threads = n_threads
-    )
+    nonself_k <- if (isTRUE(exclude_self)) k else max(0L, k - 1L)
+    if (nonself_k < 1L) {
+      out <- list(
+        indices = matrix(seq_len(nrow(search_data)), nrow(search_data), 1L),
+        distances = matrix(0, nrow(search_data), 1L)
+      )
+      attr(out, "approximation") <- list(
+        seed_backend = "trivial_self",
+        candidate_columns = 0L,
+        seed_graph_k = 0L,
+        protected_seed_neighbors = 0L,
+        exact_mrng_prune = TRUE
+      )
+    } else {
+      out <- native_nsg_self_knn(
+        search_data,
+        k = nonself_k,
+        r = params$r,
+        graph_k = params$graph_k,
+        metric = refine_metric,
+        use_cuda = use_cuda,
+        n_threads = n_threads
+      )
+      if (!isTRUE(exclude_self)) {
+        out$indices <- cbind(seq_len(nrow(search_data)), out$indices)
+        out$distances <- cbind(rep(0, nrow(search_data)), out$distances)
+      }
+    }
     result <- finish_nn_result(out, backend, k, self_query, exact = FALSE, metric = metric)
     if (!is.null(metric_inputs)) {
       result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
@@ -1057,17 +1076,43 @@ nn_compute <- function(data,
       search_data <- metric_inputs$data
       refine_metric <- "euclidean"
     }
-    params <- vamana_params(nrow(search_data), ncol(search_data), k, metric = metric)
-    out <- vamana_self_knn(
-      search_data,
-      k = k,
-      r = params$r,
-      search_l = params$search_l,
-      alpha = params$alpha,
-      metric = refine_metric,
-      use_cuda = use_cuda,
-      n_threads = n_threads
+    nonself_k <- if (isTRUE(exclude_self)) k else max(0L, k - 1L)
+    params <- vamana_params(
+      nrow(search_data),
+      ncol(search_data),
+      if (nonself_k < 1L) 1L else nonself_k,
+      metric = metric
     )
+    if (nonself_k < 1L) {
+      out <- list(
+        indices = matrix(seq_len(nrow(search_data)), nrow(search_data), 1L),
+        distances = matrix(0, nrow(search_data), 1L)
+      )
+      attr(out, "approximation") <- list(
+        seed_backend = "trivial_self",
+        candidate_columns = 0L,
+        seed_search_l = 0L,
+        alpha = as.numeric(params$alpha),
+        protected_seed_neighbors = 0L,
+        exact_robust_prune = TRUE,
+        cuvs_vamana_note = "cuVS Vamana currently builds/serializes DiskANN-compatible graphs; faissR performs KNN refinement inside the candidate graph."
+      )
+    } else {
+      out <- vamana_self_knn(
+        search_data,
+        k = nonself_k,
+        r = params$r,
+        search_l = params$search_l,
+        alpha = params$alpha,
+        metric = refine_metric,
+        use_cuda = use_cuda,
+        n_threads = n_threads
+      )
+      if (!isTRUE(exclude_self)) {
+        out$indices <- cbind(seq_len(nrow(search_data)), out$indices)
+        out$distances <- cbind(rep(0, nrow(search_data)), out$distances)
+      }
+    }
     result <- finish_nn_result(out, backend, k, self_query, exact = FALSE, metric = metric)
     if (!is.null(metric_inputs)) {
       result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
