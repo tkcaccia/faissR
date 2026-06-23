@@ -744,3 +744,49 @@ test_that("fast_kmeans CUDA requests never silently use CPU", {
     expect_false(identical(out$backend, "faiss"))
   }
 })
+
+test_that("CUDA k-means records direct cuVS provider selection", {
+  x <- matrix(rnorm(40), ncol = 4)
+  fake_cuvs <- function(...) {
+    list(
+      cluster = rep.int(1:2, length.out = nrow(x)),
+      centers = matrix(0, nrow = 2, ncol = ncol(x)),
+      withinss = c(1, 2),
+      tot.withinss = 3,
+      size = c(5L, 5L),
+      iter = 1L,
+      parameters = list(max_iter = 2L, n_init = 1L, tol = 1e-4)
+    )
+  }
+
+  testthat::local_mocked_bindings(
+    faiss_gpu_available = function() FALSE,
+    cuvs_available = function() TRUE,
+    cuda_available = function() TRUE,
+    kmeans_cuvs_cpp = fake_cuvs
+  )
+
+  out <- faissR:::run_cuda_kmeans(
+    x = x,
+    centers = 2L,
+    max_iter = 2L,
+    n_init = 1L,
+    tol = 1e-4,
+    seed = 1L,
+    streaming_batch_size = 0L,
+    init = "kmeans++",
+    tuning_metadata = list(effective = list(max_iter = 2L, n_init = 1L, tol = 1e-4)),
+    requested_backend = "cuda",
+    resolved_backend = "cuda"
+  )
+
+  expect_equal(out$backend, "cuda_cuvs")
+  expect_equal(
+    out$parameters$cuda_provider_selection,
+    "direct_cuvs_after_faiss_gpu_unavailable_or_failed"
+  )
+  expect_match(out$parameters$faiss_gpu_error, "FAISS GPU support is unavailable", fixed = TRUE)
+  expect_match(out$parameters$backend_resolution_note, "Direct cuVS k-means", fixed = TRUE)
+  expect_equal(out$parameters$requested_backend, "cuda")
+  expect_equal(out$parameters$resolved_backend, "cuda")
+})

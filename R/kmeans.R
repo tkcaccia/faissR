@@ -489,6 +489,9 @@ run_cuda_kmeans <- function(x,
   }
 
   if (allow_cuvs_fallback && isTRUE(cuvs_available()) && isTRUE(cuda_available())) {
+    if (is.null(faiss_error) && !isTRUE(faiss_gpu_available())) {
+      faiss_error <- "FAISS GPU k-means was not attempted because FAISS GPU support is unavailable"
+    }
     out <- kmeans_cuvs_cpp(
       x,
       as.integer(centers),
@@ -498,14 +501,28 @@ run_cuda_kmeans <- function(x,
       as.integer(streaming_batch_size),
       identical(init, "kmeans++")
     )
-    return(finish_fast_kmeans(
+    out <- finish_fast_kmeans(
       out,
       backend = "cuda_cuvs",
       init = init,
       tuning_metadata = tuning_metadata,
       requested_backend = requested_backend,
       resolved_backend = resolved_backend
-    ))
+    )
+    out$parameters$cuda_provider_selection <- if (is.null(faiss_error)) {
+      "direct_cuvs"
+    } else {
+      "direct_cuvs_after_faiss_gpu_unavailable_or_failed"
+    }
+    if (!is.null(faiss_error)) {
+      out$parameters$faiss_gpu_error <- faiss_error
+      out$parameters$backend_resolution_note <- paste(
+        "Direct cuVS k-means was used within the requested CUDA backend.",
+        "FAISS GPU status:",
+        faiss_error
+      )
+    }
+    return(out)
   }
 
   cuvs_note <- if (isTRUE(cuvs_available()) && isTRUE(cuda_available())) {
