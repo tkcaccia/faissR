@@ -69,6 +69,10 @@ cugraph_available_cpp <- function() {
     .Call(`_faissR_cugraph_available_cpp`)
 }
 
+graph_cluster_auto_backend_cpp <- function(requested_backend, method, cuda_available, cugraph_available) {
+    .Call(`_faissR_graph_cluster_auto_backend_cpp`, requested_backend, method, cuda_available, cugraph_available)
+}
+
 graph_cluster_cpp <- function(indices, distances, method, backend, weight_type, prune, mutual, n_threads, n_runs, resolution, n_iterations, steps, seed) {
     .Call(`_faissR_graph_cluster_cpp`, indices, distances, method, backend, weight_type, prune, mutual, n_threads, n_runs, resolution, n_iterations, steps, seed)
 }

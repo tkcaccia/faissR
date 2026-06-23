@@ -392,7 +392,13 @@ OpenMP is available. CUDA Louvain and Leiden require RAPIDS libcugraph and never
 fall back to CPU for an explicit CUDA request. CUDA random-walking remains
 unavailable until a dedicated CUDA implementation is added; with
 `backend = "auto"`, random-walking stays on the CPU even when libcugraph is
-available.
+available. The public clustering backend gate is compiled:
+`graph_cluster_auto_backend_cpp()` selects CPU or CUDA from the requested
+backend, method, CUDA runtime flag, and libcugraph availability flag. Results
+record this decision in `parameters$backend_selection` with
+`tuning_source = "cpp"` and a `runtime_decision` such as
+`"cuda_cugraph_route_available"`, `"random_walking_cpu_only"`,
+`"cugraph_unavailable"`, or `"cuda_runtime_unavailable"`.
 
 `graph_cluster(n_clusters = m)` provides a target-community-count convenience
 for Louvain and Leiden. The target belongs to `graph_cluster()`, not

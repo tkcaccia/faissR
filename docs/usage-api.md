@@ -187,7 +187,7 @@ graph_cluster(graph, method = "random_walking", backend = "auto",
 | --- | --- |
 | `graph` | A `faissR_graph`, a KNN object returned by `nn()`, a numeric matrix/data frame, or an embedding object with `layout`. |
 | `method` | Clustering algorithm: `"random_walking"`, `"louvain"`, or `"leiden"`. |
-| `backend` | `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA when libcugraph is available for Louvain/Leiden and CPU otherwise; auto keeps `"random_walking"` on CPU. `"cuda"` uses RAPIDS libcugraph Louvain/Leiden when compiled and available [9-12]. CUDA random-walking is not enabled yet. |
+| `backend` | `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA when libcugraph is available for Louvain/Leiden and CPU otherwise; auto keeps `"random_walking"` on CPU. The auto backend decision is made by compiled `graph_cluster_auto_backend_cpp()` and recorded in `parameters$backend_selection`. `"cuda"` uses RAPIDS libcugraph Louvain/Leiden when compiled and available [9-12]. CUDA random-walking is not enabled yet. |
 | `k` | Number of neighbours when `graph` is raw data or an embedding rather than a graph/KNN object. |
 | `graph_backend` | Backend passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
 | `graph_method` | Nearest-neighbour method passed to `nn_without_self()` when faissR needs to build the KNN graph internally. |
@@ -213,6 +213,9 @@ parameters, backend metadata, and source acknowledgements. `backend` records
 the clustering implementation that actually ran, while
 `parameters$requested_backend` and `parameters$resolved_backend` record the
 public backend request and the device policy after resolving `"auto"`.
+`parameters$backend_selection` records the compiled backend selector metadata,
+including `runtime_decision`, CUDA/libcugraph availability flags, and
+`tuning_source = "cpp"`.
 When `graph_cluster()` builds the graph internally or receives a `faissR_graph`,
 `parameters$graph_backend`, `parameters$graph_requested_backend`, and
 `parameters$graph_resolved_backend` separate the concrete KNN implementation

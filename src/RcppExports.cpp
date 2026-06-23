@@ -246,6 +246,20 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// graph_cluster_auto_backend_cpp
+List graph_cluster_auto_backend_cpp(std::string requested_backend, std::string method, bool cuda_available, bool cugraph_available);
+RcppExport SEXP _faissR_graph_cluster_auto_backend_cpp(SEXP requested_backendSEXP, SEXP methodSEXP, SEXP cuda_availableSEXP, SEXP cugraph_availableSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::string >::type requested_backend(requested_backendSEXP);
+    Rcpp::traits::input_parameter< std::string >::type method(methodSEXP);
+    Rcpp::traits::input_parameter< bool >::type cuda_available(cuda_availableSEXP);
+    Rcpp::traits::input_parameter< bool >::type cugraph_available(cugraph_availableSEXP);
+    rcpp_result_gen = Rcpp::wrap(graph_cluster_auto_backend_cpp(requested_backend, method, cuda_available, cugraph_available));
+    return rcpp_result_gen;
+END_RCPP
+}
 // graph_cluster_cpp
 List graph_cluster_cpp(IntegerMatrix indices, NumericMatrix distances, std::string method, std::string backend, std::string weight_type, double prune, bool mutual, int n_threads, int n_runs, double resolution, int n_iterations, int steps, int seed);
 RcppExport SEXP _faissR_graph_cluster_cpp(SEXP indicesSEXP, SEXP distancesSEXP, SEXP methodSEXP, SEXP backendSEXP, SEXP weight_typeSEXP, SEXP pruneSEXP, SEXP mutualSEXP, SEXP n_threadsSEXP, SEXP n_runsSEXP, SEXP resolutionSEXP, SEXP n_iterationsSEXP, SEXP stepsSEXP, SEXP seedSEXP) {
@@ -1378,6 +1392,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_knn_graph_edges_cpp", (DL_FUNC) &_faissR_knn_graph_edges_cpp, 5},
     {"_faissR_graph_resolution_candidates_cpp", (DL_FUNC) &_faissR_graph_resolution_candidates_cpp, 3},
     {"_faissR_cugraph_available_cpp", (DL_FUNC) &_faissR_cugraph_available_cpp, 0},
+    {"_faissR_graph_cluster_auto_backend_cpp", (DL_FUNC) &_faissR_graph_cluster_auto_backend_cpp, 4},
     {"_faissR_graph_cluster_cpp", (DL_FUNC) &_faissR_graph_cluster_cpp, 13},
     {"_faissR_graph_cluster_edges_cpp", (DL_FUNC) &_faissR_graph_cluster_edges_cpp, 9},
     {"_faissR_nn_cpp", (DL_FUNC) &_faissR_nn_cpp, 10},

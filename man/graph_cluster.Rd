@@ -38,7 +38,10 @@ graph_cluster(
 libcugraph is available for Louvain/Leiden and CPU otherwise; auto keeps
 \code{"random_walking"} on CPU. \code{"cpu"} uses native faissR C++/OpenMP code.
 \code{"cuda"} uses native RAPIDS libcugraph for Louvain and Leiden when
-libcugraph was detected at build time; random-walking is CPU-only.}
+libcugraph was detected at build time; random-walking is CPU-only. The
+\code{"auto"} backend decision is made by the compiled
+\code{graph_cluster_auto_backend_cpp()} selector and recorded in
+\code{parameters$backend_selection}.}
 \item{k}{Number of neighbours when \code{graph} is not already a KNN object.}
 \item{graph_backend}{Backend passed to \code{nn_without_self()} for neighbour search.}
 \item{graph_method}{Nearest-neighbour method passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding.}
@@ -108,7 +111,10 @@ backend, graph edge list, parameters, and source acknowledgements.
 \code{backend} records the clustering implementation that actually ran, while
 \code{parameters$requested_backend} and \code{parameters$resolved_backend}
 record the public backend request and the device policy after resolving
-\code{"auto"}. When \code{graph_cluster()} builds a graph internally or
+\code{"auto"}. \code{parameters$backend_selection} records the compiled
+backend selector metadata, including \code{runtime_decision},
+CUDA/libcugraph availability flags, and \code{tuning_source = "cpp"}. When
+\code{graph_cluster()} builds a graph internally or
 receives a \code{faissR_graph},
 \code{parameters$graph_backend}, \code{parameters$graph_requested_backend},
 and \code{parameters$graph_resolved_backend} record the concrete KNN

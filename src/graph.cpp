@@ -394,6 +394,61 @@ bool cugraph_available_cpp() {
   return false;
 #endif
 }
+
+// [[Rcpp::export]]
+List graph_cluster_auto_backend_cpp(std::string requested_backend,
+                                    std::string method,
+                                    bool cuda_available,
+                                    bool cugraph_available) {
+  if (!(requested_backend == "auto" ||
+        requested_backend == "cpu" ||
+        requested_backend == "cuda")) {
+    Rcpp::stop("`requested_backend` must be one of \"auto\", \"cpu\", or \"cuda\".");
+  }
+  if (!(method == "random_walking" ||
+        method == "louvain" ||
+        method == "leiden")) {
+    Rcpp::stop("`method` must be one of \"random_walking\", \"louvain\", or \"leiden\".");
+  }
+
+  const bool explicit_backend = requested_backend != "auto";
+  const bool cuda_cluster_route_available =
+    cuda_available && cugraph_available && method != "random_walking";
+  std::string resolved_backend = requested_backend;
+  std::string runtime_decision;
+  if (explicit_backend) {
+    runtime_decision = "explicit_backend_no_auto_fallback";
+  } else if (method == "random_walking") {
+    resolved_backend = "cpu";
+    runtime_decision = "random_walking_cpu_only";
+  } else if (cuda_cluster_route_available) {
+    resolved_backend = "cuda";
+    runtime_decision = "cuda_cugraph_route_available";
+  } else {
+    resolved_backend = "cpu";
+    runtime_decision = cuda_available ?
+      "cugraph_unavailable" : "cuda_runtime_unavailable";
+  }
+
+  const std::string backend_decision = explicit_backend ?
+    ("explicit_" + requested_backend) : runtime_decision;
+
+  return List::create(
+    Rcpp::Named("policy") = "cpp_graph_cluster_backend_selector",
+    Rcpp::Named("slow_tuning") = false,
+    Rcpp::Named("requested_backend") = requested_backend,
+    Rcpp::Named("resolved_backend") = resolved_backend,
+    Rcpp::Named("predicted_backend") = resolved_backend,
+    Rcpp::Named("method") = method,
+    Rcpp::Named("explicit_backend") = explicit_backend,
+    Rcpp::Named("backend_decision") = backend_decision,
+    Rcpp::Named("cuda_available") = cuda_available,
+    Rcpp::Named("cugraph_available") = cugraph_available,
+    Rcpp::Named("cuda_cluster_route_available") = cuda_cluster_route_available,
+    Rcpp::Named("runtime_decision") = runtime_decision,
+    Rcpp::Named("tuning_source") = "cpp"
+  );
+}
 #ifdef _OPENMP
 #include <omp.h>
 #endif

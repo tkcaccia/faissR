@@ -210,6 +210,13 @@ resolve_knn_graph_backend <- function(backend) {
 }
 
 resolve_graph_cluster_backend <- function(backend) {
+  graph_cluster_backend_selection(backend)$resolved_backend
+}
+
+graph_cluster_backend_selection <- function(backend,
+                                            method = "louvain",
+                                            cuda_available_value = cuda_available(),
+                                            cugraph_available_value = cugraph_available()) {
   backend <- normalize_scalar_choice_arg(
     backend,
     arg = "backend",
@@ -221,11 +228,13 @@ resolve_graph_cluster_backend <- function(backend) {
   if (!backend %in% c("auto", "cpu", "cuda")) {
     stop("`backend` must be one of \"auto\", \"cpu\", or \"cuda\".", call. = FALSE)
   }
-  if (identical(backend, "auto")) {
-    if (isTRUE(cuda_available()) && isTRUE(cugraph_available())) return("cuda")
-    return("cpu")
-  }
-  backend
+  method <- if (is.null(method)) "louvain" else normalize_graph_cluster_method(method)
+  graph_cluster_auto_backend_cpp(
+    backend,
+    method,
+    isTRUE(cuda_available_value),
+    isTRUE(cugraph_available_value)
+  )
 }
 
 #' Cluster a nearest-neighbour graph without igraph
@@ -250,7 +259,9 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   libcugraph is available for Louvain/Leiden and CPU otherwise; auto keeps
 #'   `"random_walking"` on CPU. `"cpu"` uses native C++/OpenMP. `"cuda"` uses
 #'   native RAPIDS libcugraph for Louvain and Leiden when libcugraph was
-#'   detected at build time; random-walking is CPU-only.
+#'   detected at build time; random-walking is CPU-only. The `"auto"` backend
+#'   decision is made by the compiled `graph_cluster_auto_backend_cpp()`
+#'   selector and recorded in `parameters$backend_selection`.
 #' @param k Number of neighbours when `graph` is not already a KNN object.
 #' @param graph_backend Backend passed to \code{\link{nn_without_self}()} for
 #'   neighbour search when `graph` is a matrix or embedding.
@@ -312,6 +323,9 @@ resolve_graph_cluster_backend <- function(backend) {
 #'   `backend` records the clustering implementation that actually ran, while
 #'   `parameters$requested_backend` and `parameters$resolved_backend` record the
 #'   public backend request and the device policy after resolving `"auto"`.
+#'   `parameters$backend_selection` records the compiled backend selector
+#'   metadata, including `runtime_decision`, CUDA/libcugraph availability flags,
+#'   and `tuning_source = "cpp"`.
 #'   When `graph_cluster()` builds or receives a `faissR_graph`,
 #'   `parameters$graph_backend`, `parameters$graph_requested_backend`, and
 #'   `parameters$graph_resolved_backend` record the concrete KNN implementation,
@@ -389,7 +403,8 @@ graph_cluster <- function(graph,
   }
   method <- normalize_graph_cluster_method(method)
   requested_backend <- normalize_public_backend_arg(backend)
-  backend <- resolve_graph_cluster_backend(requested_backend)
+  backend_selection <- graph_cluster_backend_selection(requested_backend, method = method)
+  backend <- backend_selection$resolved_backend
   graph_method <- public_nn_method_label(normalize_nn_method(graph_method))
   metric <- normalize_nn_metric(metric)
   tuning <- normalize_nn_tuning(tuning)
@@ -476,6 +491,7 @@ graph_cluster <- function(graph,
         resolution_selection = ans$resolution_selection %||% NULL,
         requested_backend = requested_backend,
         resolved_backend = backend,
+        backend_selection = backend_selection,
         n_vertices = as.integer(graph$n_vertices),
         n_edges = as.integer(graph$n_edges),
         objective_function = objective_function,
@@ -593,6 +609,7 @@ graph_cluster <- function(graph,
     resolution_selection = ans$resolution_selection %||% NULL,
     requested_backend = requested_backend,
     resolved_backend = backend,
+    backend_selection = backend_selection,
     n_vertices = as.integer(graph_edges$n_vertices),
     n_edges = as.integer(graph_edges$n_edges),
     objective_function = objective_function,

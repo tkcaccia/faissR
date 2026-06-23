@@ -368,6 +368,34 @@ test_that("graph construction rejects implementation backend labels", {
   expect_equal(faissR:::resolve_graph_cluster_backend("cpu"), "cpu")
   expect_equal(faissR:::resolve_graph_cluster_backend("cuda"), "cuda")
   expect_true(faissR:::resolve_graph_cluster_backend("auto") %in% c("cpu", "cuda"))
+  cuda_auto <- faissR:::graph_cluster_backend_selection(
+    "auto",
+    method = "louvain",
+    cuda_available_value = TRUE,
+    cugraph_available_value = TRUE
+  )
+  expect_equal(cuda_auto$policy, "cpp_graph_cluster_backend_selector")
+  expect_equal(cuda_auto$tuning_source, "cpp")
+  expect_equal(cuda_auto$resolved_backend, "cuda")
+  expect_equal(cuda_auto$runtime_decision, "cuda_cugraph_route_available")
+  expect_true(cuda_auto$cuda_cluster_route_available)
+  no_cugraph <- faissR:::graph_cluster_backend_selection(
+    "auto",
+    method = "leiden",
+    cuda_available_value = TRUE,
+    cugraph_available_value = FALSE
+  )
+  expect_equal(no_cugraph$resolved_backend, "cpu")
+  expect_equal(no_cugraph$runtime_decision, "cugraph_unavailable")
+  walk_auto <- faissR:::graph_cluster_backend_selection(
+    "auto",
+    method = "random_walking",
+    cuda_available_value = TRUE,
+    cugraph_available_value = TRUE
+  )
+  expect_equal(walk_auto$resolved_backend, "cpu")
+  expect_equal(walk_auto$runtime_decision, "random_walking_cpu_only")
+  expect_false(walk_auto$cuda_cluster_route_available)
   expect_error(
     faissR:::resolve_graph_cluster_backend("cugraph"),
     "must be one of"
@@ -840,6 +868,9 @@ test_that("graph_cluster keeps random-walking on CPU", {
   expect_equal(auto$method, "random_walking")
   expect_equal(auto$parameters$requested_backend, "auto")
   expect_equal(auto$parameters$resolved_backend, "cpu")
+  expect_equal(auto$parameters$backend_selection$policy, "cpp_graph_cluster_backend_selector")
+  expect_equal(auto$parameters$backend_selection$tuning_source, "cpp")
+  expect_equal(auto$parameters$backend_selection$runtime_decision, "random_walking_cpu_only")
 
   expect_error(
     graph_cluster(g, method = "random_walking", backend = "cuda", n_threads = 2L),
