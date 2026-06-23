@@ -287,6 +287,10 @@ should be measured for new datasets when it is used for scientific conclusions.
 IVF partitions the vector space into coarse cells and searches a subset of
 cells. It is approximate unless `nprobe` approaches the number of lists. It is
 useful for large datasets where exhaustive search is too expensive.
+The direct diagnostic backend `cuda_cuvs_ivf_flat` uses RAPIDS cuVS IVF-Flat:
+cosine/correlation are normalized before L2 search, and raw inner product uses
+the maximum-inner-product-to-L2 extra-dimension transform before building the
+cuVS L2 index.
 
 ## `"ivfpq"`
 
@@ -302,6 +306,9 @@ useful for large datasets where exhaustive search is too expensive.
 
 IVFPQ is a memory-pressure method. It can be fast and memory-efficient, but
 recall can drop substantially. Treat it as explicit opt-in when memory matters,
+including for the direct diagnostic backend `cuda_cuvs_ivfpq`, which applies
+the same transformed cosine/correlation and raw-inner-product conventions as
+direct cuVS IVF-Flat before building the cuVS L2/PQ index.
 not as the default accuracy-first method.
 
 CPU IVFPQ requires at least 624 training rows. This deterministic guard avoids

@@ -1361,14 +1361,24 @@ test_that("non-euclidean metrics use only validated backend paths", {
     internal_nn(x, k = 4L, backend = "cuda_cuvs_nndescent", metric = "inner_product"),
     "inner_product"
   )
-  expect_error(
-    internal_nn(x, k = 4L, backend = "cuda_cuvs_ivf_flat", metric = "inner_product"),
-    "Direct cuVS IVF.*inner-product"
-  )
-  expect_error(
-    internal_nn(x, k = 4L, backend = "cuda_cuvs_ivfpq", metric = "inner_product"),
-    "Direct cuVS IVF.*inner-product"
-  )
+  for (backend in c("cuda_cuvs_ivf_flat", "cuda_cuvs_ivfpq")) {
+    if (isTRUE(cuvs_available())) {
+      cuvs_ip <- internal_nn(x, k = 4L, backend = backend, metric = "inner_product")
+      expect_equal(attr(cuvs_ip, "backend"), backend, info = backend)
+      expect_equal(attr(cuvs_ip, "metric"), "inner_product", info = backend)
+      expect_equal(
+        attr(cuvs_ip, "approximation")$distance_transform,
+        "mips_l2_to_shifted_inner_product_distance",
+        info = backend
+      )
+    } else {
+      expect_error(
+        internal_nn(x, k = 4L, backend = backend, metric = "inner_product"),
+        "cuVS",
+        info = backend
+      )
+    }
+  }
   if (isTRUE(cuvs_available())) {
     cuvs_cor <- internal_nn(x, k = 4L, backend = "cuda_cuvs_bruteforce", metric = "correlation")
     expect_equal(attr(cuvs_cor, "backend"), "cuda_cuvs_bruteforce")
@@ -4096,17 +4106,19 @@ test_that("direct cuVS IVF routes report metric metadata", {
 
   x <- matrix(rnorm(160L), nrow = 40L)
   for (backend in c("cuda_cuvs_ivf_flat", "cuda_cuvs_ivfpq")) {
-    out <- internal_nn(x, k = 4L, backend = backend, metric = "euclidean")
+    for (metric in c("euclidean", "cosine", "correlation", "inner_product")) {
+      out <- internal_nn(x, k = 4L, backend = backend, metric = metric)
+      approx <- attr(out, "approximation")
 
-    expect_equal(attr(out, "metric"), "euclidean", info = backend)
-    expect_equal(attr(out, "approximation")$metric, "euclidean", info = backend)
-    expect_equal(attr(out, "approximation")$library, "cuvs", info = backend)
-
-    expect_error(
-      internal_nn(x, k = 4L, backend = backend, metric = "cosine"),
-      "validated metric-specific exact backend",
-      info = backend
-    )
+      expect_equal(attr(out, "metric"), metric, info = paste(backend, metric))
+      expect_equal(attr(out, "backend"), backend, info = paste(backend, metric))
+      expect_equal(approx$metric, metric, info = paste(backend, metric))
+      expect_equal(approx$library, "cuvs", info = paste(backend, metric))
+      if (!identical(metric, "euclidean")) {
+        expect_false(is.na(approx$metric_transform), info = paste(backend, metric))
+        expect_false(is.na(approx$distance_transform), info = paste(backend, metric))
+      }
+    }
   }
 })
 

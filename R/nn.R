@@ -164,20 +164,7 @@ nn_compute <- function(data,
   metric <- normalize_nn_metric(metric)
   if (!identical(metric, "euclidean")) {
     if (identical(metric, "inner_product") &&
-        backend %in% c("cuvs_ivf", "cuda_cuvs_ivf",
-                       "cuvs_ivf_flat", "cuda_cuvs_ivf_flat",
-                       "cuvs_ivfpq", "cuda_cuvs_ivfpq",
-                       "cuvs_ivf_pq", "cuda_cuvs_ivf_pq")) {
-      stop(
-        "Direct cuVS IVF backends currently support only ",
-        "`metric = \"euclidean\"`, `\"cosine\"`, and `\"correlation\"`. ",
-        "Use public `backend = \"cuda\", ",
-        "method = \"ivf\"` or `\"ivfpq\"` for FAISS GPU metric-aware IVF ",
-        "inner-product routes.",
-        call. = FALSE
-      )
-    } else if (identical(metric, "inner_product") &&
-               backend %in% c("cuda_cuvs_hnsw", "cuvs_hnsw")) {
+        backend %in% c("cuda_cuvs_hnsw", "cuvs_hnsw")) {
       stop(
         "CUDA cuVS HNSW is disabled for `metric = \"inner_product\"` because ",
         "the current cuVS HNSW route is built from a CAGRA L2 graph, and the ",
@@ -236,6 +223,10 @@ nn_compute <- function(data,
                                "faiss_gpu_ivfpq", "cuda_faiss_ivfpq",
                                "faiss_gpu_cagra", "cuda_faiss_cagra",
                                "cuda_cuvs_cagra", "cuda_cagra", "gpu_cagra",
+                               "cuvs_ivf", "cuda_cuvs_ivf",
+                               "cuvs_ivf_flat", "cuda_cuvs_ivf_flat",
+                               "cuvs_ivfpq", "cuda_cuvs_ivfpq",
+                               "cuvs_ivf_pq", "cuda_cuvs_ivf_pq",
                                "cuda_cuvs_nndescent", "cuvs_nndescent",
                                "cuda_native_nndescent",
                                "cuda_cuvs_hnsw", "cuvs_hnsw")) {
@@ -1377,6 +1368,10 @@ nn_compute <- function(data,
       metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric)
       search_data <- metric_inputs$data
       search_points <- metric_inputs$points
+    } else if (identical(metric, "inner_product")) {
+      metric_inputs <- mips_l2_metric_inputs(data, points, self_query)
+      search_data <- metric_inputs$data
+      search_points <- metric_inputs$points
     }
     params <- faiss_ivf_params(nrow(data), k, metric = metric)
     out <- nn_cuvs_ivf_flat_cpp(
@@ -1389,7 +1384,7 @@ nn_compute <- function(data,
     )
     result <- finish_nn_result(out, "cuda_cuvs_ivf_flat", k, self_query, exact = FALSE, metric = metric)
     if (!is.null(metric_inputs)) {
-      result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
+      result <- finalize_graph_metric_result(result, metric_inputs)
     }
     attr(result, "approximation") <- list(
       strategy = "rapids_cuvs_ivf_flat",
@@ -1398,6 +1393,11 @@ nn_compute <- function(data,
       accelerator = "cuda",
       metric = metric,
       transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
+      metric_transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
+      distance_transform = if (is.null(metric_inputs)) NA_character_ else (
+        metric_inputs$distance_transform %||%
+          "normalized_euclidean_squared_over_2_to_1_minus_similarity"
+      ),
       default_candidate = FALSE,
       nlist = as.integer(out$n_lists),
       nprobe = as.integer(out$n_probes),
@@ -1420,6 +1420,10 @@ nn_compute <- function(data,
       metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric)
       search_data <- metric_inputs$data
       search_points <- metric_inputs$points
+    } else if (identical(metric, "inner_product")) {
+      metric_inputs <- mips_l2_metric_inputs(data, points, self_query)
+      search_data <- metric_inputs$data
+      search_points <- metric_inputs$points
     }
     params <- faiss_ivf_params(nrow(data), k, metric = metric)
     pq <- cuvs_ivfpq_params(ncol(search_data))
@@ -1435,7 +1439,7 @@ nn_compute <- function(data,
     )
     result <- finish_nn_result(out, "cuda_cuvs_ivfpq", k, self_query, exact = FALSE, metric = metric)
     if (!is.null(metric_inputs)) {
-      result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
+      result <- finalize_graph_metric_result(result, metric_inputs)
     }
     attr(result, "approximation") <- list(
       strategy = "rapids_cuvs_ivf_pq",
@@ -1444,6 +1448,11 @@ nn_compute <- function(data,
       accelerator = "cuda",
       metric = metric,
       transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
+      metric_transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
+      distance_transform = if (is.null(metric_inputs)) NA_character_ else (
+        metric_inputs$distance_transform %||%
+          "normalized_euclidean_squared_over_2_to_1_minus_similarity"
+      ),
       role = "explicit_memory_pressure_backend",
       default_candidate = FALSE,
       nlist = as.integer(out$n_lists),

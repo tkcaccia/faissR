@@ -111,9 +111,11 @@ distance `0` and a zero-normalized row versus a nonzero row as distance `1`.
 CPU FAISS Flat uses the exact CPU scorer for those rows to preserve
 deterministic small-`k` tie handling; explicit CUDA routes remain on CUDA and
 apply the normalized-distance repair without relabelling the backend.
-Direct cuVS IVF/PQ, CAGRA, and NN-Descent use normalized Euclidean search for
-cosine/correlation and keep raw inner product disabled because the direct cuVS
-routes used by faissR are L2-based.
+Direct cuVS IVF/PQ use normalized Euclidean search for cosine/correlation and
+the standard maximum-inner-product-to-L2 extra-dimension transform for raw inner
+product before building the L2 index. Direct cuVS CAGRA and NN-Descent use
+normalized Euclidean search for cosine/correlation; their raw inner-product
+routes remain disabled because the cuVS graph APIs used by faissR are L2-based.
 Graph-style routes that implement cosine/correlation through normalized
 Euclidean search convert returned neighbour distances back to `1 - similarity`
 with the stable formula
