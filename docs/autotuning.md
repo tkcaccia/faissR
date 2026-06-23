@@ -43,6 +43,15 @@ separate R implementation of the shape/k/metric policy. Returned tuning
 metadata includes `tuning_source = "cpp"` for deterministic approximate-method
 parameter rules.
 
+`fast_kmeans()` follows the same compiled-policy contract. Its automatic
+`max_iter`, `n_init`, and `tol` values are selected by
+`kmeans_auto_params_cpp()`, and its `backend = "auto"` CUDA/CPU gate is
+selected by `kmeans_auto_backend_policy_cpp()`. The R layer reads documented
+threshold options and forwards them into C++; it does not maintain a separate
+R implementation of the k-means shape policy. Returned k-means metadata also
+records `tuning_source = "cpp"` for both the parameter rule and the backend
+policy.
+
 - Prefer `method = "flat"`/`"exact"` on CUDA when the data fits and target
   recall is very high. The resolved routes `faiss_gpu_flat_l2` and
   `cuda_cuvs_bruteforce` were the most reliable high-recall CUDA paths

@@ -308,6 +308,7 @@ test_that("fast_kmeans auto tuning is shape and center-count aware for benchmark
   expect_equal(mnist10$n_init, 1L)
   expect_equal(mnist10$tol, 1e-4)
   expect_equal(mnist10$rule, "medium_single_start")
+  expect_equal(mnist10$tuning_source, "cpp")
   expect_true(isTRUE(mnist10$high_dim))
   expect_false(isTRUE(mnist10$large_n))
   expect_false(isTRUE(mnist10$many_centers))
@@ -334,6 +335,7 @@ test_that("fast_kmeans auto tuning is shape and center-count aware for benchmark
   )
   expect_true(byte_policy$prefer_cuda)
   expect_equal(byte_policy$reason, "large_high_dimensional_input")
+  expect_equal(byte_policy$tuning_source, "cpp")
   expect_equal(byte_policy$nbytes_threshold, 256 * 1024^2)
   expect_true(byte_policy$nbytes >= byte_policy$nbytes_threshold)
   expect_true(byte_policy$gpu_transfer_nbytes < byte_policy$nbytes_threshold)
@@ -467,6 +469,7 @@ test_that("fast_kmeans auto backend is shape-aware", {
   small_policy <- faissR:::kmeans_auto_backend_policy(n = 120L, p = 4L, centers = 3L)
   expect_false(small_policy$prefer_cuda)
   expect_equal(small_policy$reason, "small_cpu_preferred")
+  expect_equal(small_policy$tuning_source, "cpp")
   expect_equal(small_policy$work, 1440)
   expect_equal(small_policy$nbytes, 3840)
   expect_equal(small_policy$input_nbytes, 3840)
@@ -518,6 +521,7 @@ test_that("fast_kmeans auto backend is shape-aware", {
   work_policy <- faissR:::kmeans_auto_backend_policy(n = 70000L, p = 784L, centers = 10L)
   expect_true(work_policy$prefer_cuda)
   expect_equal(work_policy$reason, "work_at_least_1e8")
+  expect_equal(work_policy$tuning_source, "cpp")
 
   cuda_selection <- faissR:::kmeans_selection_metadata(
     requested_backend = "auto",

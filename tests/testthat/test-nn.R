@@ -1721,13 +1721,16 @@ test_that("CPU approximate selector chooses FAISS HNSW, RcppHNSW, or exact CPU",
   } else if (requireNamespace("RcppHNSW", quietly = TRUE)) {
     expect_equal(selected, "hnsw")
   }
-  expect_true(faissR:::should_use_auto_cpu_approx_self_knn(
-    self_query = TRUE,
-    n = 12000L,
-    p = 30L,
-    k = 30L,
-    work_size = 12000 * 12000 * 30
-  ))
+  expect_true(
+    faissR:::select_cpu_auto_backend(
+      self_query = TRUE,
+      n = 12000L,
+      p = 30L,
+      n_points = 12000L,
+      k = 30L,
+      work_size = 12000 * 12000 * 30
+    ) %in% c("faiss_hnsw", "hnsw", "cpu_nsg", "cpu_nndescent", "cpu")
+  )
 })
 
 test_that("auto GPU preselector does not require CUDA when only CPU FAISS is available", {
@@ -1767,49 +1770,73 @@ test_that("auto GPU preselector does not require CUDA when only CPU FAISS is ava
   )
 })
 
-test_that("non-Euclidean CUDA auto requires FAISS GPU Flat support", {
-  expect_equal(
-    faissR:::cuda_auto_non_euclidean_backend(
-      "cosine",
-      requested_device = "auto",
-      faiss_gpu_available_value = FALSE
+cpp_cuda_auto_route <- function(metric,
+                                requested_backend = "cuda",
+                                self_query = FALSE,
+                                n = 200000L,
+                                p = 64L,
+                                n_points = 1000L,
+                                k = 50L,
+                                work_size = as.double(n) * as.double(n_points) * as.double(p),
+                                cuda_available_value = TRUE,
+                                cuvs_available_value = FALSE,
+                                faiss_gpu_available_value = TRUE) {
+  faissR:::nn_auto_select_shape_cpp(
+    resolved_backend = if (identical(requested_backend, "auto")) "auto" else "cuda_auto",
+    requested_backend = requested_backend,
+    requested_method = "auto",
+    shape = list(
+      n = as.integer(n),
+      p = as.integer(p),
+      n_points = as.integer(n_points),
+      k = as.integer(k),
+      metric = metric,
+      self_query = isTRUE(self_query),
+      exclude_self = FALSE,
+      work_size = as.double(work_size)
     ),
-    "cpu_auto"
+    cuda_available_value = cuda_available_value,
+    cuvs_available_value = cuvs_available_value,
+    faiss_available_value = TRUE,
+    faiss_gpu_available_value = faiss_gpu_available_value,
+    rcpphnsw_available_value = TRUE
+  )
+}
+
+test_that("non-Euclidean CUDA auto is selected by the C++ route policy", {
+  expect_equal(
+    cpp_cuda_auto_route(
+      "cosine",
+      requested_backend = "auto",
+      n = 1000L,
+      p = 64L,
+      n_points = 1000L,
+      work_size = as.double(1000L) * as.double(1000L) * 64,
+      faiss_gpu_available_value = FALSE
+    )$reason,
+    "auto_cpu_fallback"
   )
   expect_equal(
-    faissR:::cuda_auto_non_euclidean_backend(
+    cpp_cuda_auto_route(
       "correlation",
-      requested_device = "cuda",
       faiss_gpu_available_value = TRUE
-    ),
+    )$selected_backend,
     "faiss_gpu_flat_correlation"
   )
   expect_equal(
-    faissR:::cuda_auto_non_euclidean_backend(
+    cpp_cuda_auto_route(
       "inner_product",
-      requested_device = "cuda",
       faiss_gpu_available_value = TRUE
-    ),
+    )$selected_backend,
     "faiss_gpu_flat_ip"
   )
-  expect_error(
-    faissR:::cuda_auto_non_euclidean_backend(
-      "cosine",
-      requested_device = "cuda",
-      faiss_gpu_available_value = FALSE,
-      require_available = TRUE
-    ),
-    "FAISS GPU Flat"
+  route <- cpp_cuda_auto_route(
+    "cosine",
+    faiss_gpu_available_value = FALSE,
+    cuvs_available_value = FALSE
   )
-  expect_equal(
-    faissR:::cuda_auto_non_euclidean_backend(
-      "cosine",
-      requested_device = "cuda",
-      faiss_gpu_available_value = FALSE,
-      require_available = FALSE
-    ),
-    "faiss_gpu_flat_cosine"
-  )
+  expect_equal(route$reason, "cuda_auto_unavailable")
+  expect_match(route$error, "FAISS GPU Flat")
 })
 
 test_that("explicit FAISS GPU NN backends require FAISS GPU availability", {
@@ -2981,28 +3008,29 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   expect_equal(faissR:::nndescent_pool_size(70000L, 50L), cpu_nnd$pool_size)
 })
 
-test_that("CPU auto selector can fall back to native NNDescent for large self-KNN", {
-  expect_true(faissR:::should_use_native_nndescent_auto_fallback(
-    self_query = TRUE,
-    n = 70000L,
-    p = 784L,
-    k = 50L,
-    work_size = as.double(70000L) * as.double(70000L) * as.double(784L)
-  ))
-  expect_false(faissR:::should_use_native_nndescent_auto_fallback(
-    self_query = FALSE,
-    n = 70000L,
-    p = 784L,
-    k = 50L,
-    work_size = as.double(70000L) * as.double(70000L) * as.double(784L)
-  ))
-  expect_false(faissR:::should_use_native_nndescent_auto_fallback(
-    self_query = TRUE,
-    n = 70000L,
-    p = 784L,
-    k = 5L,
-    work_size = as.double(70000L) * as.double(70000L) * as.double(784L)
-  ))
+test_that("CPU auto selector native fallback is decided by C++ route policy", {
+  route <- function(self_query, k) {
+    faissR:::nn_auto_select_shape_cpp(
+      resolved_backend = "cpu_auto",
+      requested_backend = "cpu",
+      requested_method = "auto",
+      shape = list(
+        n = 70000L,
+        p = 784L,
+        n_points = 70000L,
+        k = as.integer(k),
+        metric = "euclidean",
+        self_query = isTRUE(self_query),
+        exclude_self = FALSE,
+        work_size = as.double(70000L) * as.double(70000L) * as.double(784L)
+      ),
+      faiss_available_value = FALSE,
+      rcpphnsw_available_value = FALSE
+    )
+  }
+  expect_equal(route(TRUE, 50L)$selected_backend, "cpu_nndescent")
+  expect_equal(route(FALSE, 50L)$selected_backend, "cpu")
+  expect_equal(route(TRUE, 5L)$selected_backend, "cpu")
 })
 
 test_that("CPU auto selector canonicalizes metric aliases", {
@@ -3121,51 +3149,47 @@ test_that("C++ auto selector prefers cuVS brute force for compact very-wide self
   expect_equal(route$reason, "auto_cuda_preselector")
 })
 
-test_that("CUDA auto selector has deterministic k and metric policy", {
+test_that("C++ CUDA auto selector has deterministic k and metric policy", {
   expect_equal(
-    faissR:::cuda_auto_non_euclidean_backend(
+    cpp_cuda_auto_route(
       "cosine",
-      requested_device = "cuda",
-      faiss_gpu_available_value = TRUE,
-      require_available = FALSE
-    ),
+      faiss_gpu_available_value = TRUE
+    )$selected_backend,
     "faiss_gpu_flat_cosine"
   )
   expect_equal(
-    faissR:::cuda_auto_non_euclidean_backend(
+    cpp_cuda_auto_route(
       "correlation",
-      requested_device = "cuda",
-      faiss_gpu_available_value = TRUE,
-      require_available = FALSE
-    ),
+      faiss_gpu_available_value = TRUE
+    )$selected_backend,
     "faiss_gpu_flat_correlation"
   )
   expect_equal(
-    faissR:::cuda_auto_non_euclidean_backend(
+    cpp_cuda_auto_route(
       "inner_product",
-      requested_device = "cuda",
-      faiss_gpu_available_value = TRUE,
-      require_available = FALSE
-    ),
+      faiss_gpu_available_value = TRUE
+    )$selected_backend,
     "faiss_gpu_flat_ip"
   )
   expect_equal(
-    faissR:::cuda_auto_non_euclidean_backend(
+    cpp_cuda_auto_route(
       "cosine",
-      requested_device = "auto",
+      requested_backend = "auto",
+      n = 1000L,
+      p = 64L,
+      n_points = 1000L,
+      work_size = as.double(1000L) * as.double(1000L) * 64,
       faiss_gpu_available_value = FALSE
-    ),
-    "cpu_auto"
+    )$reason,
+    "auto_cpu_fallback"
   )
-  expect_error(
-    faissR:::cuda_auto_non_euclidean_backend(
-      "cosine",
-      requested_device = "cuda",
-      faiss_gpu_available_value = FALSE,
-      require_available = TRUE
-    ),
-    "FAISS GPU Flat"
+  route <- cpp_cuda_auto_route(
+    "cosine",
+    faiss_gpu_available_value = FALSE,
+    cuvs_available_value = FALSE
   )
+  expect_equal(route$reason, "cuda_auto_unavailable")
+  expect_match(route$error, "FAISS GPU Flat")
 
   large_metric_work <- as.double(300000L) * as.double(300000L) * 64
   for (metric in c("cosine", "correlation", "inner_product")) {
@@ -3176,9 +3200,8 @@ test_that("CUDA auto selector has deterministic k and metric policy", {
       inner_product = "cuda_native_nndescent"
     )
     expect_equal(
-      faissR:::cuda_auto_non_euclidean_backend(
+      cpp_cuda_auto_route(
         metric,
-        requested_device = "cuda",
         self_query = TRUE,
         n = 300000L,
         p = 64L,
@@ -3187,9 +3210,8 @@ test_that("CUDA auto selector has deterministic k and metric policy", {
         work_size = large_metric_work,
         cuda_available_value = TRUE,
         cuvs_available_value = TRUE,
-        faiss_gpu_available_value = FALSE,
-        require_available = TRUE
-      ),
+        faiss_gpu_available_value = FALSE
+      )$selected_backend,
       expected_cuvs_large,
       info = metric
     )
@@ -3200,9 +3222,8 @@ test_that("CUDA auto selector has deterministic k and metric policy", {
       inner_product = "faiss_gpu_flat_ip"
     )
     expect_equal(
-      faissR:::cuda_auto_non_euclidean_backend(
+      cpp_cuda_auto_route(
         metric,
-        requested_device = "cuda",
         self_query = TRUE,
         n = 300000L,
         p = 64L,
@@ -3211,16 +3232,14 @@ test_that("CUDA auto selector has deterministic k and metric policy", {
         work_size = large_metric_work,
         cuda_available_value = TRUE,
         cuvs_available_value = FALSE,
-        faiss_gpu_available_value = TRUE,
-        require_available = TRUE
-      ),
+        faiss_gpu_available_value = TRUE
+      )$selected_backend,
       expected_faiss_large,
       info = metric
     )
     expect_equal(
-      faissR:::cuda_auto_non_euclidean_backend(
+      cpp_cuda_auto_route(
         metric,
-        requested_device = "cuda",
         self_query = FALSE,
         n = 200000L,
         p = 64L,
@@ -3229,9 +3248,8 @@ test_that("CUDA auto selector has deterministic k and metric policy", {
         work_size = as.double(200000L) * 1000 * 64,
         cuda_available_value = TRUE,
         cuvs_available_value = TRUE,
-        faiss_gpu_available_value = TRUE,
-        require_available = TRUE
-      ),
+        faiss_gpu_available_value = TRUE
+      )$selected_backend,
       switch(
         metric,
         cosine = "faiss_gpu_flat_cosine",
@@ -3242,23 +3260,20 @@ test_that("CUDA auto selector has deterministic k and metric policy", {
     )
   }
 
-  expect_error(
-    faissR:::cuda_auto_non_euclidean_backend(
-      "inner_product",
-      requested_device = "cuda",
-      self_query = FALSE,
-      n = 200000L,
-      p = 64L,
-      n_points = 1000L,
-      k = 50L,
-      work_size = as.double(200000L) * 1000 * 64,
-      cuda_available_value = TRUE,
-      cuvs_available_value = TRUE,
-      faiss_gpu_available_value = FALSE,
-      require_available = TRUE
-    ),
-    "raw-inner-product self-KNN"
+  route <- cpp_cuda_auto_route(
+    "inner_product",
+    self_query = FALSE,
+    n = 200000L,
+    p = 64L,
+    n_points = 1000L,
+    k = 50L,
+    work_size = as.double(200000L) * 1000 * 64,
+    cuda_available_value = TRUE,
+    cuvs_available_value = TRUE,
+    faiss_gpu_available_value = FALSE
   )
+  expect_equal(route$reason, "cuda_auto_unavailable")
+  expect_match(route$error, "FAISS GPU Flat")
 
   n <- 500000L
   p <- 32L

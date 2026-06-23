@@ -189,6 +189,14 @@ nn_tune_gpu_nndescent_cpp <- function(n, k, backend, graph_degree_option = NA_in
     .Call(`_faissR_nn_tune_gpu_nndescent_cpp`, n, k, backend, graph_degree_option, n_iters_option, sources_option, neighbors_option, delta_option)
 }
 
+kmeans_auto_params_cpp <- function(n, p, centers, tuning) {
+    .Call(`_faissR_kmeans_auto_params_cpp`, n, p, centers, tuning)
+}
+
+kmeans_auto_backend_policy_cpp <- function(n, p, centers, work_threshold, nbytes_threshold, large_n_threshold, large_p_threshold, min_n_per_center) {
+    .Call(`_faissR_kmeans_auto_backend_policy_cpp`, n, p, centers, work_threshold, nbytes_threshold, large_n_threshold, large_p_threshold, min_n_per_center)
+}
+
 cuda_available_cpp <- function() {
     .Call(`_faissR_cuda_available_cpp`)
 }

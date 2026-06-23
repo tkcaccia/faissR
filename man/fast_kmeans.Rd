@@ -30,13 +30,16 @@ work to offset GPU launch and host/device copy overhead; otherwise it
 resolves to CPU.}
 
 \item{max_iter}{Maximum number of Lloyd iterations, or `"auto"` for a
-deterministic shape-aware default.}
+deterministic shape-aware default computed by the compiled C++ tuning
+helper.}
 
 \item{n_init}{Number of random restarts where supported, or `"auto"` for a
-deterministic shape-aware default.}
+deterministic shape-aware default computed by the compiled C++ tuning
+helper.}
 
 \item{tol}{Single non-negative finite relative convergence tolerance where
-supported, or `"auto"` for a deterministic shape-aware default.}
+supported, or `"auto"` for a deterministic shape-aware default computed by
+the compiled C++ tuning helper.}
 
 \item{seed}{Random seed for CPU/statistics and FAISS paths. The current
 direct cuVS C API path does not expose an explicit seed in the stable
@@ -50,7 +53,7 @@ cuVS choose its default.}
 \item{init}{Initialization method, `"kmeans++"` or `"random"` where
 supported.}
 
-\item{tuning}{Tuning policy. `"auto"` uses deterministic defaults based on
+\item{tuning}{Tuning policy. `"auto"` uses deterministic C++ rules based on
 `nrow(data)`, `ncol(data)`, and `centers` without running pilot searches.
 Small many-cluster jobs can use extra restarts when `n / centers` remains
 large enough, and cheap many-cluster jobs with few observations per center
@@ -75,7 +78,9 @@ A list with `cluster`, `centers`, `withinss`, `tot.withinss`,
   `parameters$resolved_backend` record the public backend request and device
   policy result. `parameters$tuning` records the deterministic k-means policy,
   stable `rule` label, shape metadata, and whether `max_iter`, `n_init`, and
-  `tol` were auto-selected or supplied explicitly.
+  `tol` were auto-selected or supplied explicitly. The auto parameter and
+  backend-policy rules are computed by compiled C++ helpers and record
+  `tuning_source = "cpp"`.
   `parameters$tuning$rule_detail` records the exact
   `n`/`p`/`centers`/work values used to choose the rule.
   `parameters$tuning$effective` records

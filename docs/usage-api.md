@@ -260,14 +260,14 @@ fast_kmeans(data, centers, backend = "auto",
 | `data` | Numeric matrix with observations in rows. |
 | `centers` | Number of clusters. Must be between 1 and `nrow(data)`. |
 | `backend` | `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA only when CUDA plus FAISS GPU k-means or direct cuVS k-means is compiled and available and the shape rule estimates enough work to offset GPU launch and copy overhead; otherwise it resolves to CPU [7-8]. |
-| `max_iter` | Maximum number of Lloyd iterations, or `"auto"` for a deterministic shape-aware default. |
-| `n_init` | Number of random restarts where the selected backend supports it, or `"auto"` for a deterministic shape-aware default. |
-| `tol` | Non-negative convergence tolerance where supported, or `"auto"` for a deterministic shape-aware default. |
+| `max_iter` | Maximum number of Lloyd iterations, or `"auto"` for a deterministic shape-aware default computed by the compiled C++ tuning helper. |
+| `n_init` | Number of random restarts where the selected backend supports it, or `"auto"` for a deterministic shape-aware default computed by the compiled C++ tuning helper. |
+| `tol` | Non-negative convergence tolerance where supported, or `"auto"` for a deterministic shape-aware default computed by the compiled C++ tuning helper. |
 | `seed` | Random seed for CPU/statistics and FAISS paths. The direct cuVS C API path currently does not expose an explicit seed in the stable params structure, so repeated cuVS runs should be interpreted as backend-controlled initialization. |
 | `n_threads` | CPU worker threads for FAISS/statistics paths. |
 | `streaming_batch_size` | cuVS host-data streaming batch size. Use `0` to let cuVS choose its default. |
 | `init` | Initialization method: `"kmeans++"` or `"random"` where supported. |
-| `tuning` | `"auto"` uses deterministic rules based on `nrow(data)`, `ncol(data)`, `centers`, and `n / centers`; small many-cluster jobs can use extra restarts without pilot runs, while large/high-dimensional jobs use cheaper defaults. `centers = 1` uses the exact column-mean solution for every backend request and records `single_cluster_exact_mean`; `centers = nrow(data)` uses the exact singleton assignment for every backend request and records `singleton_exact_identity`. Explicit CUDA requests for these exact cases return the trivial result and do not launch GPU work. `"fixed"`, `"off"`, and `"none"` keep the historical defaults unless explicit parameter values are supplied. |
+| `tuning` | `"auto"` uses deterministic C++ rules based on `nrow(data)`, `ncol(data)`, `centers`, and `n / centers`; small many-cluster jobs can use extra restarts without pilot runs, while large/high-dimensional jobs use cheaper defaults. `centers = 1` uses the exact column-mean solution for every backend request and records `single_cluster_exact_mean`; `centers = nrow(data)` uses the exact singleton assignment for every backend request and records `singleton_exact_identity`. Explicit CUDA requests for these exact cases return the trivial result and do not launch GPU work. `"fixed"`, `"off"`, and `"none"` keep the historical defaults unless explicit parameter values are supplied. |
 
 Returns cluster labels, centers, within-cluster sums of squares, cluster sizes,
 iteration count, `converged`, `hit_max_iter`, backend, and parameters,
@@ -287,7 +287,10 @@ shape decision, including `prefer_cuda`, `reason`, estimated work, ordinary R
 input bytes, float32 GPU transfer bytes, and `n_per_center`. The CUDA auto gate
 uses `gpu_transfer_nbytes` for the size threshold because FAISS/cuVS consume
 float32 data; `nbytes` remains the R double input footprint for compatibility
-and auditing. The CUDA auto gate can be adjusted for a benchmarked machine
+and auditing. The k-means auto parameter rule is computed by
+`kmeans_auto_params_cpp()`, while the CUDA/CPU gate is computed by
+`kmeans_auto_backend_policy_cpp()`; both record `tuning_source = "cpp"` in
+returned metadata. The CUDA auto gate can be adjusted for a benchmarked machine
 with `options(faissR.kmeans_cuda_work_threshold = ...)`,
 `options(faissR.kmeans_cuda_nbytes_threshold = ...)`,
 `options(faissR.kmeans_cuda_large_n_threshold = ...)`, and

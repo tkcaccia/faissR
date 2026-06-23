@@ -1,6 +1,7 @@
 #include <Rcpp.h>
 #include <algorithm>
 #include <cmath>
+#include <sstream>
 #include <string>
 
 using namespace Rcpp;
@@ -1102,4 +1103,236 @@ List nn_tune_gpu_nndescent_cpp(int n,
     _["tuning_small_k"] = k <= 10,
     _["tuning_source"] = "cpp"
   );
+}
+
+std::string kmeans_rule_detail_cpp(int n,
+                                   int p,
+                                   int centers,
+                                   double n_per_center,
+                                   double work) {
+  std::ostringstream out;
+  out << "n=" << n
+      << ";p=" << p
+      << ";centers=" << centers
+      << ";n_per_center=" << n_per_center
+      << ";work=" << std::scientific << work;
+  return out.str();
+}
+
+std::string kmeans_auto_rule_label_cpp(int n,
+                                       int centers,
+                                       bool large_n,
+                                       bool high_dim,
+                                       bool many_centers,
+                                       bool small_many_centers,
+                                       bool few_points_many_centers,
+                                       double work) {
+  if (centers == 1) return "single_cluster_exact_mean";
+  if (centers == n) return "singleton_exact_identity";
+  if (large_n || work >= 5e9) return "large_fast_convergence";
+  if (small_many_centers) return "small_many_centers_multistart";
+  if (few_points_many_centers) return "few_points_many_centers_multistart";
+  if (n <= 50000 && centers <= 20 && work <= 2e8) {
+    return "small_low_work_multistart";
+  }
+  if (n <= 100000 && centers <= 50 && work <= 5e8) {
+    return "medium_multistart";
+  }
+  if (high_dim || many_centers || work >= 5e8) return "medium_single_start";
+  return "small_single_start";
+}
+
+// [[Rcpp::export]]
+List kmeans_auto_params_cpp(int n,
+                            int p,
+                            int centers,
+                            std::string tuning) {
+  n = safe_n(n);
+  p = safe_p(p);
+  centers = safe_k(centers);
+  const double work = static_cast<double>(n) *
+    static_cast<double>(p) * static_cast<double>(centers);
+  const bool high_dim = p >= 256;
+  const bool large_n = n >= 100000;
+  const bool many_centers = centers >= 100;
+  const double n_per_center = static_cast<double>(n) / static_cast<double>(centers);
+  const bool small_many_centers = many_centers && n <= 50000 &&
+    work <= 2e8 && n_per_center >= 20.0;
+  const bool few_points_many_centers = many_centers && n <= 50000 &&
+    work <= 2e8 && n_per_center < 20.0;
+  const std::string rule_detail = kmeans_rule_detail_cpp(
+    n, p, centers, n_per_center, work
+  );
+
+  if (tuning != "auto") {
+    return List::create(
+      _["policy"] = tuning,
+      _["max_iter"] = 100,
+      _["n_init"] = 1,
+      _["tol"] = 1e-4,
+      _["work"] = work,
+      _["n_per_center"] = n_per_center,
+      _["high_dim"] = high_dim,
+      _["large_n"] = large_n,
+      _["many_centers"] = many_centers,
+      _["small_many_centers"] = small_many_centers,
+      _["few_points_many_centers"] = few_points_many_centers,
+      _["rule"] = "fixed_defaults",
+      _["rule_detail"] = rule_detail,
+      _["tuning_source"] = "cpp"
+    );
+  }
+
+  if (centers == 1) {
+    return List::create(
+      _["policy"] = "auto",
+      _["max_iter"] = 1,
+      _["n_init"] = 1,
+      _["tol"] = 0.0,
+      _["work"] = work,
+      _["n_per_center"] = n_per_center,
+      _["high_dim"] = high_dim,
+      _["large_n"] = large_n,
+      _["many_centers"] = false,
+      _["small_many_centers"] = false,
+      _["few_points_many_centers"] = false,
+      _["rule"] = "single_cluster_exact_mean",
+      _["rule_detail"] = rule_detail,
+      _["tuning_source"] = "cpp"
+    );
+  }
+
+  if (centers == n) {
+    return List::create(
+      _["policy"] = "auto",
+      _["max_iter"] = 1,
+      _["n_init"] = 1,
+      _["tol"] = 0.0,
+      _["work"] = work,
+      _["n_per_center"] = n_per_center,
+      _["high_dim"] = high_dim,
+      _["large_n"] = large_n,
+      _["many_centers"] = true,
+      _["small_many_centers"] = false,
+      _["few_points_many_centers"] = true,
+      _["rule"] = "singleton_exact_identity",
+      _["rule_detail"] = rule_detail,
+      _["tuning_source"] = "cpp"
+    );
+  }
+
+  int max_iter = 100;
+  if (large_n || work >= 5e9) {
+    max_iter = 50;
+  } else if (high_dim ||
+             (many_centers && !small_many_centers && !few_points_many_centers) ||
+             work >= 5e8) {
+    max_iter = 75;
+  }
+
+  int n_init = 1;
+  if (n <= 50000 && centers <= 20 && work <= 2e8) {
+    n_init = 5;
+  } else if (small_many_centers || few_points_many_centers) {
+    n_init = 3;
+  } else if (n <= 100000 && centers <= 50 && work <= 5e8) {
+    n_init = 3;
+  }
+
+  const double tol = (large_n || work >= 5e9) ? 1e-3 : 1e-4;
+  const std::string rule = kmeans_auto_rule_label_cpp(
+    n, centers, large_n, high_dim, many_centers,
+    small_many_centers, few_points_many_centers, work
+  );
+
+  return List::create(
+    _["policy"] = "auto",
+    _["max_iter"] = max_iter,
+    _["n_init"] = n_init,
+    _["tol"] = tol,
+    _["work"] = work,
+    _["n_per_center"] = n_per_center,
+    _["high_dim"] = high_dim,
+    _["large_n"] = large_n,
+    _["many_centers"] = many_centers,
+    _["small_many_centers"] = small_many_centers,
+    _["few_points_many_centers"] = few_points_many_centers,
+    _["rule"] = rule,
+    _["rule_detail"] = rule_detail,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List kmeans_auto_backend_policy_cpp(int n,
+                                    int p,
+                                    int centers,
+                                    double work_threshold,
+                                    double nbytes_threshold,
+                                    int large_n_threshold,
+                                    int large_p_threshold,
+                                    double min_n_per_center) {
+  if (!valid_double(work_threshold) || work_threshold < 1.0) work_threshold = 1e8;
+  if (!valid_double(nbytes_threshold) || nbytes_threshold < 1.0) {
+    nbytes_threshold = 256.0 * 1024.0 * 1024.0;
+  }
+  if (!valid_int(large_n_threshold) || large_n_threshold < 1) large_n_threshold = 50000;
+  if (!valid_int(large_p_threshold) || large_p_threshold < 1) large_p_threshold = 128;
+  if (!valid_double(min_n_per_center) || min_n_per_center < 1.0) min_n_per_center = 20.0;
+
+  auto base = [&](bool prefer_cuda, const std::string& reason,
+                  double work, double nbytes, double n_per_center) {
+    const double gpu_transfer_nbytes = valid_double(nbytes) ? nbytes / 2.0 : NA_REAL;
+    return List::create(
+      _["prefer_cuda"] = prefer_cuda,
+      _["reason"] = reason,
+      _["work"] = work,
+      _["nbytes"] = nbytes,
+      _["input_nbytes"] = nbytes,
+      _["gpu_transfer_nbytes"] = gpu_transfer_nbytes,
+      _["n_per_center"] = n_per_center,
+      _["work_threshold"] = work_threshold,
+      _["nbytes_threshold"] = nbytes_threshold,
+      _["large_n_threshold"] = large_n_threshold,
+      _["large_p_threshold"] = large_p_threshold,
+      _["min_n_per_center"] = min_n_per_center,
+      _["tuning_source"] = "cpp"
+    );
+  };
+
+  if (!valid_int(n) || !valid_int(p) || !valid_int(centers)) {
+    return base(true, "unknown_shape", NA_REAL, NA_REAL, NA_REAL);
+  }
+  n = safe_n(n);
+  p = safe_p(p);
+  centers = safe_k(centers);
+  const double work = static_cast<double>(n) *
+    static_cast<double>(p) * static_cast<double>(centers);
+  const double nbytes = static_cast<double>(n) * static_cast<double>(p) * 8.0;
+  const double n_per_center = static_cast<double>(n) / static_cast<double>(centers);
+
+  if (centers == 1) {
+    return base(false, "single_cluster_exact_mean", work, nbytes, n_per_center);
+  }
+  if (centers == n) {
+    return base(false, "singleton_exact_identity", work, nbytes, n_per_center);
+  }
+  if (n_per_center < min_n_per_center && (nbytes / 2.0) < nbytes_threshold) {
+    return base(false, "few_points_per_center_cpu_preferred", work, nbytes, n_per_center);
+  }
+
+  bool prefer = work >= work_threshold ||
+    (nbytes / 2.0) >= nbytes_threshold ||
+    (n >= large_n_threshold && p >= large_p_threshold);
+  std::string reason;
+  if (work >= work_threshold) {
+    reason = "work_at_least_1e8";
+  } else if ((nbytes / 2.0) >= nbytes_threshold) {
+    reason = "input_at_least_256MiB";
+  } else if (n >= large_n_threshold && p >= large_p_threshold) {
+    reason = "large_high_dimensional_input";
+  } else {
+    reason = "small_cpu_preferred";
+  }
+  return base(prefer, reason, work, nbytes, n_per_center);
 }

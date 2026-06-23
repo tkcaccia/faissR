@@ -14,11 +14,14 @@
 #'   work to offset GPU launch and host/device copy overhead; otherwise it
 #'   resolves to CPU.
 #' @param max_iter Maximum number of Lloyd iterations, or `"auto"` for a
-#'   deterministic shape-aware default.
+#'   deterministic shape-aware default computed by the compiled C++ tuning
+#'   helper.
 #' @param n_init Number of random restarts where supported, or `"auto"` for a
-#'   deterministic shape-aware default.
+#'   deterministic shape-aware default computed by the compiled C++ tuning
+#'   helper.
 #' @param tol Single non-negative finite relative convergence tolerance where
-#'   supported, or `"auto"` for a deterministic shape-aware default.
+#'   supported, or `"auto"` for a deterministic shape-aware default computed by
+#'   the compiled C++ tuning helper.
 #' @param seed Random seed for CPU/statistics and FAISS paths. The current
 #'   direct cuVS C API path does not expose an explicit seed in the stable
 #'   params structure.
@@ -27,7 +30,7 @@
 #'   cuVS choose its default.
 #' @param init Initialization method, `"kmeans++"` or `"random"` where
 #'   supported.
-#' @param tuning Tuning policy. `"auto"` uses deterministic defaults based on
+#' @param tuning Tuning policy. `"auto"` uses deterministic C++ rules based on
 #'   `nrow(data)`, `ncol(data)`, and `centers` without running pilot searches.
 #'   Small many-cluster jobs can use extra restarts when `n / centers` remains
 #'   large enough, and cheap many-cluster jobs with few observations per center
@@ -49,7 +52,9 @@
 #'   `parameters$resolved_backend` record the public backend request and device
 #'   policy result. `parameters$tuning` records the deterministic k-means policy,
 #'   stable `rule` label, shape metadata, and whether `max_iter`, `n_init`, and
-#'   `tol` were auto-selected or supplied explicitly.
+#'   `tol` were auto-selected or supplied explicitly. The auto parameter and
+#'   backend-policy rules are computed by compiled C++ helpers and record
+#'   `tuning_source = "cpp"`.
 #'   `parameters$tuning$rule_detail` records the exact
 #'   `n`/`p`/`centers`/work values used to choose the rule.
 #'   `parameters$tuning$effective` records
@@ -278,6 +283,17 @@ kmeans_auto_prefers_cuda <- function(n, p, centers) {
   isTRUE(kmeans_auto_backend_policy(n, p, centers)$prefer_cuda)
 }
 
+kmeans_shape_int <- function(x) {
+  if (is.null(x)) {
+    return(NA_integer_)
+  }
+  x <- suppressWarnings(as.integer(x[1L]))
+  if (length(x) != 1L || is.na(x)) {
+    return(NA_integer_)
+  }
+  x
+}
+
 kmeans_selection_metadata <- function(requested_backend,
                                       resolved_backend,
                                       n,
@@ -333,121 +349,15 @@ kmeans_auto_backend_policy <- function(n, p, centers) {
   large_n_threshold <- kmeans_option_integer("kmeans_cuda_large_n_threshold", 50000L, min_value = 1L)
   large_p_threshold <- kmeans_option_integer("kmeans_cuda_large_p_threshold", 128L, min_value = 1L)
   min_n_per_center <- kmeans_option_number("kmeans_cuda_min_n_per_center", 20, min_value = 1)
-  if (is.null(n) || is.null(p) || is.null(centers)) {
-    return(list(
-      prefer_cuda = TRUE,
-      reason = "unknown_shape",
-      work = NA_real_,
-      nbytes = NA_real_,
-      input_nbytes = NA_real_,
-      gpu_transfer_nbytes = NA_real_,
-      n_per_center = NA_real_,
-      work_threshold = work_threshold,
-      nbytes_threshold = nbytes_threshold,
-      large_n_threshold = large_n_threshold,
-      large_p_threshold = large_p_threshold,
-      min_n_per_center = min_n_per_center
-    ))
-  }
-  n <- suppressWarnings(as.double(n))
-  p <- suppressWarnings(as.double(p))
-  centers <- suppressWarnings(as.double(centers))
-  if (length(n) != 1L || length(p) != 1L || length(centers) != 1L ||
-      !is.finite(n) || !is.finite(p) || !is.finite(centers) ||
-      n <= 0 || p <= 0 || centers <= 0) {
-    return(list(
-      prefer_cuda = TRUE,
-      reason = "invalid_shape_assume_cuda_capable",
-      work = NA_real_,
-      nbytes = NA_real_,
-      input_nbytes = NA_real_,
-      gpu_transfer_nbytes = NA_real_,
-      n_per_center = NA_real_,
-      work_threshold = work_threshold,
-      nbytes_threshold = nbytes_threshold,
-      large_n_threshold = large_n_threshold,
-      large_p_threshold = large_p_threshold,
-      min_n_per_center = min_n_per_center
-    ))
-  }
-  work <- n * p * centers
-  nbytes <- n * p * 8
-  input_nbytes <- nbytes
-  gpu_transfer_nbytes <- n * p * 4
-  n_per_center <- n / centers
-  if (centers == 1) {
-    return(list(
-      prefer_cuda = FALSE,
-      reason = "single_cluster_exact_mean",
-      work = as.numeric(work),
-      nbytes = as.numeric(nbytes),
-      input_nbytes = as.numeric(input_nbytes),
-      gpu_transfer_nbytes = as.numeric(gpu_transfer_nbytes),
-      n_per_center = as.numeric(n_per_center),
-      work_threshold = work_threshold,
-      nbytes_threshold = nbytes_threshold,
-      large_n_threshold = large_n_threshold,
-      large_p_threshold = large_p_threshold,
-      min_n_per_center = min_n_per_center
-    ))
-  }
-  if (centers == n) {
-    return(list(
-      prefer_cuda = FALSE,
-      reason = "singleton_exact_identity",
-      work = as.numeric(work),
-      nbytes = as.numeric(nbytes),
-      input_nbytes = as.numeric(input_nbytes),
-      gpu_transfer_nbytes = as.numeric(gpu_transfer_nbytes),
-      n_per_center = as.numeric(n_per_center),
-      work_threshold = work_threshold,
-      nbytes_threshold = nbytes_threshold,
-      large_n_threshold = large_n_threshold,
-      large_p_threshold = large_p_threshold,
-      min_n_per_center = min_n_per_center
-    ))
-  }
-  if (n_per_center < min_n_per_center && gpu_transfer_nbytes < nbytes_threshold) {
-    return(list(
-      prefer_cuda = FALSE,
-      reason = "few_points_per_center_cpu_preferred",
-      work = as.numeric(work),
-      nbytes = as.numeric(nbytes),
-      input_nbytes = as.numeric(input_nbytes),
-      gpu_transfer_nbytes = as.numeric(gpu_transfer_nbytes),
-      n_per_center = as.numeric(n_per_center),
-      work_threshold = work_threshold,
-      nbytes_threshold = nbytes_threshold,
-      large_n_threshold = large_n_threshold,
-      large_p_threshold = large_p_threshold,
-      min_n_per_center = min_n_per_center
-    ))
-  }
-  prefer <- work >= work_threshold ||
-    gpu_transfer_nbytes >= nbytes_threshold ||
-    (n >= large_n_threshold && p >= large_p_threshold)
-  reason <- if (work >= work_threshold) {
-    "work_at_least_1e8"
-  } else if (gpu_transfer_nbytes >= nbytes_threshold) {
-    "input_at_least_256MiB"
-  } else if (n >= large_n_threshold && p >= large_p_threshold) {
-    "large_high_dimensional_input"
-  } else {
-    "small_cpu_preferred"
-  }
-  list(
-    prefer_cuda = isTRUE(prefer),
-    reason = reason,
-    work = as.numeric(work),
-    nbytes = as.numeric(nbytes),
-    input_nbytes = as.numeric(input_nbytes),
-    gpu_transfer_nbytes = as.numeric(gpu_transfer_nbytes),
-    n_per_center = as.numeric(n_per_center),
-    work_threshold = work_threshold,
-    nbytes_threshold = nbytes_threshold,
-    large_n_threshold = large_n_threshold,
-    large_p_threshold = large_p_threshold,
-    min_n_per_center = min_n_per_center
+  kmeans_auto_backend_policy_cpp(
+    kmeans_shape_int(n),
+    kmeans_shape_int(p),
+    kmeans_shape_int(centers),
+    work_threshold,
+    nbytes_threshold,
+    large_n_threshold,
+    large_p_threshold,
+    min_n_per_center
   )
 }
 
@@ -788,146 +698,13 @@ normalize_kmeans_init <- function(init) {
   init
 }
 
-kmeans_rule_detail <- function(n, p, centers, n_per_center, work) {
-  paste(
-    paste0("n=", n),
-    paste0("p=", p),
-    paste0("centers=", centers),
-    paste0("n_per_center=", formatC(n_per_center, digits = 4, format = "fg")),
-    paste0("work=", format(work, scientific = TRUE)),
-    sep = ";"
-  )
-}
-
-kmeans_auto_rule_label <- function(centers,
-                                   large_n,
-                                   high_dim,
-                                   many_centers,
-                                   small_many_centers,
-                                   few_points_many_centers,
-                                   work,
-                                   n,
-                                   n_per_center) {
-  if (centers == 1L) return("single_cluster_exact_mean")
-  if (centers == n) return("singleton_exact_identity")
-  if (isTRUE(large_n) || work >= 5e9) return("large_fast_convergence")
-  if (isTRUE(small_many_centers)) return("small_many_centers_multistart")
-  if (isTRUE(few_points_many_centers)) return("few_points_many_centers_multistart")
-  if (n <= 50000L && centers <= 20L && work <= 2e8) return("small_low_work_multistart")
-  if (n <= 100000L && centers <= 50L && work <= 5e8) return("medium_multistart")
-  if (isTRUE(high_dim) || isTRUE(many_centers) || work >= 5e8) return("medium_single_start")
-  "small_single_start"
-}
-
 kmeans_auto_params <- function(n, p, centers, tuning = "auto") {
   tuning <- normalize_kmeans_tuning(tuning)
-  work <- as.double(n) * as.double(p) * as.double(centers)
-  high_dim <- p >= 256L
-  large_n <- n >= 100000L
-  many_centers <- centers >= 100L
-  n_per_center <- as.double(n) / as.double(centers)
-  small_many_centers <- many_centers && n <= 50000L && work <= 2e8 && n_per_center >= 20
-  few_points_many_centers <- many_centers && n <= 50000L && work <= 2e8 && n_per_center < 20
-  rule_detail <- kmeans_rule_detail(n, p, centers, n_per_center, work)
-  if (!identical(tuning, "auto")) {
-    return(list(
-      policy = tuning,
-      max_iter = 100L,
-      n_init = 1L,
-      tol = 1e-4,
-      work = as.numeric(work),
-      n_per_center = as.numeric(n_per_center),
-      high_dim = isTRUE(high_dim),
-      large_n = isTRUE(large_n),
-      many_centers = isTRUE(many_centers),
-      small_many_centers = isTRUE(small_many_centers),
-      few_points_many_centers = isTRUE(few_points_many_centers),
-      rule = "fixed_defaults",
-      rule_detail = rule_detail
-    ))
-  }
-  if (centers == 1L) {
-    return(list(
-      policy = "auto",
-      max_iter = 1L,
-      n_init = 1L,
-      tol = 0,
-      work = as.numeric(work),
-      n_per_center = as.numeric(n_per_center),
-      high_dim = isTRUE(high_dim),
-      large_n = isTRUE(large_n),
-      many_centers = FALSE,
-      small_many_centers = FALSE,
-      few_points_many_centers = FALSE,
-      rule = "single_cluster_exact_mean",
-      rule_detail = rule_detail
-    ))
-  }
-  if (centers == n) {
-    return(list(
-      policy = "auto",
-      max_iter = 1L,
-      n_init = 1L,
-      tol = 0,
-      work = as.numeric(work),
-      n_per_center = as.numeric(n_per_center),
-      high_dim = isTRUE(high_dim),
-      large_n = isTRUE(large_n),
-      many_centers = TRUE,
-      small_many_centers = FALSE,
-      few_points_many_centers = TRUE,
-      rule = "singleton_exact_identity",
-      rule_detail = rule_detail
-    ))
-  }
-  max_iter <- if (large_n || work >= 5e9) {
-    50L
-  } else if (high_dim || (many_centers && !small_many_centers && !few_points_many_centers) || work >= 5e8) {
-    75L
-  } else {
-    100L
-  }
-  n_init <- if (n <= 50000L && centers <= 20L && work <= 2e8) {
-    5L
-  } else if (small_many_centers) {
-    3L
-  } else if (few_points_many_centers) {
-    3L
-  } else if (n <= 100000L && centers <= 50L && work <= 5e8) {
-    3L
-  } else {
-    1L
-  }
-  tol <- if (large_n || work >= 5e9) {
-    1e-3
-  } else {
-    1e-4
-  }
-  rule <- kmeans_auto_rule_label(
-    centers = centers,
-    large_n = large_n,
-    high_dim = high_dim,
-    many_centers = many_centers,
-    small_many_centers = small_many_centers,
-    few_points_many_centers = few_points_many_centers,
-    work = work,
-    n = n,
-    n_per_center = n_per_center
-  )
-  list(
-    policy = "auto",
-    max_iter = as.integer(max_iter),
-    n_init = as.integer(n_init),
-    tol = as.numeric(tol),
-    work = as.numeric(work),
-    n_per_center = as.numeric(n_per_center),
-    high_dim = isTRUE(high_dim),
-    large_n = isTRUE(large_n),
-    many_centers = isTRUE(many_centers),
-    small_many_centers = isTRUE(small_many_centers),
-    few_points_many_centers = isTRUE(few_points_many_centers),
-    rule = rule,
-    rule_detail = rule_detail
+  kmeans_auto_params_cpp(
+    kmeans_shape_int(n),
+    kmeans_shape_int(p),
+    kmeans_shape_int(centers),
+    tuning
   )
 }
 
