@@ -170,19 +170,21 @@ RcppHNSW/hnswlib for the HNSW route.
 
 CUDA `method = "hnsw"` maps to `cuda_cuvs_hnsw` when RAPIDS cuVS HNSW is
 available. This route builds a CUDA CAGRA index, converts it to a cuVS HNSW
-index, and searches through the cuVS HNSW wrapper. faissR exposes it for
-Euclidean/L2, normalized cosine/correlation, and raw inner product through the
-same maximum-inner-product-to-L2 extra-dimension transform used by validated
-CUDA inner-product graph routes.
+base-layer index (`hnsw_hierarchy = "none"`), and searches through the cuVS
+HNSW wrapper. faissR exposes it for Euclidean/L2, normalized
+cosine/correlation, and raw inner product through the same
+maximum-inner-product-to-L2 extra-dimension transform used by validated CUDA
+inner-product graph routes.
 Returned raw inner-product distances follow faissR's smaller-is-better shifted
 distance convention. The internal CAGRA construction uses the same shape-aware
 `cagra_build_algo = "auto"` rule as direct cuVS CAGRA; compact
 high-dimensional self-KNN uses `iterative_cagra_search` to avoid the cuVS
 IVF-PQ graph-build workspace spike seen on COIL20-like data. Successful HNSW
 results record the internal `cagra_build_algo` in
-`attr(result, "approximation")`. CUHNSW is acknowledged as related Apache-2.0
-CUDA HNSW prior software, but faissR does not vendor or copy CUHNSW source
-[3,22-23].
+`attr(result, "approximation")` together with `hnsw_build_algo`,
+`hnsw_hierarchy`, `hnsw_m`, and `hnsw_ef_construction`. CUHNSW is acknowledged
+as related Apache-2.0 CUDA HNSW prior software, but faissR does not vendor or
+copy CUHNSW source [3,22-23].
 
 ## `"exact"`
 
