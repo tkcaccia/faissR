@@ -1936,6 +1936,10 @@ k_values <- required_positive_int_values(
 )
 
 suppressPackageStartupMessages(library(faissR))
+faissR_package_path <- system.file(package = "faissR")
+faissR_namespace_path <- getNamespaceInfo("faissR", "path")
+faissR_version <- as.character(utils::packageVersion("faissR"))
+faissR_libpaths <- paste(.libPaths(), collapse = ":")
 capabilities <- faissR::nn_capabilities(runtime = TRUE)
 cagra_capabilities <- list()
 for (impl in cagra_implementations) {
@@ -1956,7 +1960,8 @@ for (impl in cagra_implementations) {
 config <- data.frame(
   key = c("data_root", "out_dir", "available_datasets", "datasets", "backends",
           "methods", "cagra_implementations", "cagra_build_algos", "metrics", "k_values", "threads", "timeout", "cycles",
-          "quality_n", "quality_max_ops", "recall_threshold", "isolate_cuda_cagra", "isolate_native_timeout", "seed"),
+          "quality_n", "quality_max_ops", "recall_threshold", "isolate_cuda_cagra", "isolate_native_timeout", "seed",
+          "faissR_version", "faissR_package_path", "faissR_namespace_path", "r_libpaths"),
   value = c(
     data_root, out_dir, paste(available_datasets, collapse = ","),
     paste(datasets, collapse = ","), paste(backends, collapse = ","),
@@ -1965,7 +1970,8 @@ config <- data.frame(
     paste(metrics, collapse = ","),
     paste(k_values, collapse = ","), n_threads, timeout, cycles, quality_n,
     format(quality_max_ops, scientific = TRUE), recall_threshold, isolate_cuda_cagra,
-    isolate_native_timeout, seed
+    isolate_native_timeout, seed,
+    faissR_version, faissR_package_path, faissR_namespace_path, faissR_libpaths
   ),
   stringsAsFactors = FALSE
 )
@@ -2198,10 +2204,13 @@ materials <- c(
   sprintf("- Fastest-method recall threshold: `%s`", recall_threshold),
   sprintf("- CUDA CAGRA child-process isolation: `%s`", isolate_cuda_cagra),
   sprintf("- Native timeout child-process isolation: `%s`", isolate_native_timeout),
+  sprintf("- faissR version: `%s`", faissR_version),
+  sprintf("- faissR package path: `%s`", faissR_package_path),
+  sprintf("- R library paths: `%s`", faissR_libpaths),
   "",
   "Unsupported method/backend/metric combinations are preflighted with `faissR::nn_capabilities(runtime = TRUE)` and the public backend resolver, then recorded as `status = \"expected_skip\"` with `expected_skip = TRUE`.",
   "`method = \"grid\"` is included in the default public method list but is recorded as an expected skip for datasets outside two or three columns, because it is a native low-dimensional spatial search route.",
-  "`nn_metric_benchmark_config.csv` records the run configuration, including the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, the requested CAGRA implementation for public `method = \"cagra\"` rows and for CUDA-capable `method = \"auto\"` rows only when the shape-aware auto selector predicts a CAGRA route, the requested direct-cuVS `cagra_build_algo` when `cagra_implementation = \"cuvs\"`, optional child-process isolation fields, and resolved backend fields.",
+  "`nn_metric_benchmark_config.csv` records the run configuration, the loaded faissR version, package path, namespace path, R library paths, and the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, the requested CAGRA implementation for public `method = \"cagra\"` rows and for CUDA-capable `method = \"auto\"` rows only when the shape-aware auto selector predicts a CAGRA route, the requested direct-cuVS `cagra_build_algo` when `cagra_implementation = \"cuvs\"`, optional child-process isolation fields, and resolved backend fields.",
   "When `--isolate_cuda_cagra=true`, CUDA CAGRA rows that request a provider selector are executed in a child R process. The child writes the KNN result back to the parent, which still computes quality against the same reference. The `isolated_process` and `child_status` columns make this auditable. Timings are measured inside the child around `faissR::nn()` so process start-up and result serialization are not counted as method time.",
   "When `--isolate_native_timeout=true` (the default on Unix-like systems), high-work CPU `method = \"exact\"`, `method = \"flat\"`, and `method = \"bruteforce\"` rows are executed in a forked worker process. This gives the benchmark an OS-level timeout for native code paths that may not check R's `setTimeLimit()` while inside C++/FAISS loops, and records timed-out rows with `child_status = \"timeout\"` instead of blocking subsequent rows.",
   "`nn_metric_capabilities.csv` stores the default capability table used for non-CAGRA-provider-specific preflight, including `resolved_backend`, `runtime_available`, `runtime_reason`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. When `--cagra_implementations` contains one or more provider selectors, `nn_metric_cagra_capabilities.csv` stores the matching provider-specific capability tables with a `cagra_implementation` column, so FAISS GPU CAGRA and direct cuVS CAGRA expected skips can be audited separately. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",

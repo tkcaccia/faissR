@@ -194,6 +194,11 @@ test_that("benchmark materials document key row-level and summary outputs", {
       expect_true(grepl(file, docs, fixed = TRUE), info = docs_file)
     }
   }
+
+  nn_script <- paste(readLines(scripts[["nn"]], warn = FALSE), collapse = "\n")
+  expect_true(grepl("faissR_package_path", nn_script, fixed = TRUE))
+  expect_true(grepl("faissR_namespace_path", nn_script, fixed = TRUE))
+  expect_true(grepl("r_libpaths", nn_script, fixed = TRUE))
 })
 
 test_that("benchmark scripts parse before long-running execution", {

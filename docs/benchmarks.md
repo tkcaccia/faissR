@@ -178,6 +178,10 @@ stop before the benchmark starts instead of silently changing recommendation
 rules. `--threads`, `--timeout`, `--quality_n`, and `--quality_max_ops` are
 also validated before datasets are loaded. `--cycles` must be positive when
 supplied and otherwise defaults to 10.
+`nn_metric_benchmark_config.csv` records the loaded faissR version, package
+path, namespace path, and R library paths in addition to the benchmark
+arguments, so reruns can verify that timings came from the intended source
+install rather than an older user-library copy.
 `nn_metric_cycle_summary.csv` aggregates successful rows across cycles by
 dataset/backend/method/metric/k and reports success counts, median/min/max
 elapsed time, recall stability, mean relative distance error, neighbour-rank
