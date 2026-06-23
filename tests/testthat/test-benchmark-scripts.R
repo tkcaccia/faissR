@@ -167,6 +167,56 @@ test_that("NN metric benchmark isolates high-work CPU exact timeout risks", {
     )
   )
   expect_true(
+    env$should_preflight_cuda_exhaustive_timeout(
+      large_x,
+      backend = "auto",
+      method = "exact",
+      preflight_route = "faiss_gpu_flat_l2",
+      preflight_cuda_exhaustive_timeout = TRUE,
+      preflight_cuda_exhaustive_timeout_ops = 5e10
+    )
+  )
+  expect_true(
+    env$should_preflight_cuda_exhaustive_timeout(
+      large_x,
+      backend = "cuda",
+      method = "bruteforce",
+      preflight_route = "cuda_cuvs_bruteforce",
+      preflight_cuda_exhaustive_timeout = TRUE,
+      preflight_cuda_exhaustive_timeout_ops = 5e10
+    )
+  )
+  expect_false(
+    env$should_preflight_cuda_exhaustive_timeout(
+      large_x,
+      backend = "cuda",
+      method = "hnsw",
+      preflight_route = "cuda_cuvs_hnsw",
+      preflight_cuda_exhaustive_timeout = TRUE,
+      preflight_cuda_exhaustive_timeout_ops = 5e10
+    )
+  )
+  expect_false(
+    env$should_preflight_cuda_exhaustive_timeout(
+      small_x,
+      backend = "cuda",
+      method = "flat",
+      preflight_route = "faiss_gpu_flat_l2",
+      preflight_cuda_exhaustive_timeout = TRUE,
+      preflight_cuda_exhaustive_timeout_ops = 5e10
+    )
+  )
+  expect_false(
+    env$should_preflight_cuda_exhaustive_timeout(
+      large_x,
+      backend = "cuda",
+      method = "flat",
+      preflight_route = "faiss_gpu_flat_l2",
+      preflight_cuda_exhaustive_timeout = FALSE,
+      preflight_cuda_exhaustive_timeout_ops = 5e10
+    )
+  )
+  expect_true(
     env$should_isolate_cuda_native_timeout(
       large_x,
       backend = "auto",

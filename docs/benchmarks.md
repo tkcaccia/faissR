@@ -587,7 +587,11 @@ when the underlying C++/FAISS loop does not return control to R's
 `exact`/`flat`/`bruteforce` rows and graph/index rows, run inside Rscript child
 processes for the same reason. Timed-out workers are written as
 `status = "timeout"` with `child_status = "timeout"` and the benchmark
-continues to the next row.
+continues to the next row. For very large all-method sweeps,
+`--preflight_cuda_exhaustive_timeout=true` can record high-work CUDA
+`exact`/`flat`/`bruteforce` rows as `status = "timeout"` with
+`child_status = "preflight_timeout"` before launching native code, matching the
+CPU exhaustive preflight behavior for all-pairs routes known to exceed the cap.
 The aggregate file `nn_metric_recommendations_from_cycles.csv` emits one row
 per dataset/backend/metric/k: it chooses the fastest median row above the recall
 threshold when possible, the best-recall row when all measured methods are below

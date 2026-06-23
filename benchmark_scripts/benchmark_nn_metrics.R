@@ -666,6 +666,33 @@ should_preflight_cpu_exhaustive_timeout <- function(x, backend, method,
   cpu_exact_route || explicit_cpu_exact || auto_cpu_exact
 }
 
+should_preflight_cuda_exhaustive_timeout <- function(x, backend, method,
+                                                     preflight_route,
+                                                     preflight_cuda_exhaustive_timeout,
+                                                     preflight_cuda_exhaustive_timeout_ops) {
+  if (!isTRUE(preflight_cuda_exhaustive_timeout)) return(FALSE)
+  method <- canonical_method_key(method)
+  backend <- canonical_backend_key(backend)
+  route <- as.character(preflight_route %||% NA_character_)[[1L]]
+  n <- nrow(x)
+  p <- ncol(x)
+  work <- as.double(n) * as.double(n) * as.double(p)
+  threshold <- suppressWarnings(as.numeric(preflight_cuda_exhaustive_timeout_ops))
+  if (length(threshold) != 1L || !is.finite(threshold) || threshold <= 0) {
+    threshold <- 5e10
+  }
+  high_work <- (is.finite(work) && work >= threshold) || n >= 50000L
+  if (!isTRUE(high_work)) return(FALSE)
+
+  cuda_exact_route <- isTRUE(grepl("^(faiss_gpu_flat|cuda_faiss_flat|cuda_cuvs_bruteforce)", route))
+  explicit_cuda_exact <- identical(backend, "cuda") &&
+    method %in% c("exact", "flat", "bruteforce")
+  auto_cuda_exact <- identical(backend, "auto") &&
+    method %in% c("exact", "flat", "bruteforce") &&
+    cuda_exact_route
+  cuda_exact_route || explicit_cuda_exact || auto_cuda_exact
+}
+
 fork_job_pid <- function(job) {
   pid <- tryCatch(job$pid, error = function(e) NULL)
   if (is.null(pid)) {
@@ -1770,6 +1797,8 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
                     isolate_native_timeout = TRUE,
                     preflight_cpu_exhaustive_timeout = FALSE,
                     preflight_cpu_exhaustive_timeout_ops = 5e10,
+                    preflight_cuda_exhaustive_timeout = FALSE,
+                    preflight_cuda_exhaustive_timeout_ops = 5e10,
                     x_child_path = NULL) {
   started <- proc.time()[["elapsed"]]
   old_options <- options(
@@ -1809,6 +1838,40 @@ run_one <- function(x, dataset_name, backend, method, metric, k, cycle, n_thread
         "preflight skipped high-work CPU exhaustive route (work_size=%.3e, threshold=%.3e)",
         work,
         as.numeric(preflight_cpu_exhaustive_timeout_ops)
+      ),
+      elapsed_sec = timeout,
+      peak_rss_gb = NA_real_,
+      isolated_process = FALSE,
+      child_status = "preflight_timeout",
+      preflight_route = preflight_route
+    ))
+  }
+  if (should_preflight_cuda_exhaustive_timeout(
+    x = x,
+    backend = backend,
+    method = method,
+    preflight_route = preflight_route,
+    preflight_cuda_exhaustive_timeout = preflight_cuda_exhaustive_timeout,
+    preflight_cuda_exhaustive_timeout_ops = preflight_cuda_exhaustive_timeout_ops
+  )) {
+    work <- as.double(nrow(x)) * as.double(nrow(x)) * as.double(ncol(x))
+    return(result_row(
+      dataset = dataset_name,
+      n = nrow(x),
+      p = ncol(x),
+      backend = backend,
+      method = method,
+      cagra_implementation = cagra_implementation,
+      cagra_build_algo = cagra_build_algo,
+      metric = metric,
+      k = k,
+      cycle = cycle,
+      n_threads = n_threads,
+      status = "timeout",
+      error = sprintf(
+        "preflight skipped high-work CUDA exhaustive route (work_size=%.3e, threshold=%.3e)",
+        work,
+        as.numeric(preflight_cuda_exhaustive_timeout_ops)
       ),
       elapsed_sec = timeout,
       peak_rss_gb = NA_real_,
@@ -2021,6 +2084,15 @@ preflight_cpu_exhaustive_timeout_ops <- required_positive_numeric_arg(
   args$preflight_cpu_exhaustive_timeout_ops %||% "5e10",
   "preflight_cpu_exhaustive_timeout_ops"
 )
+preflight_cuda_exhaustive_timeout <- logical_arg(
+  args$preflight_cuda_exhaustive_timeout,
+  default = FALSE,
+  arg = "preflight_cuda_exhaustive_timeout"
+)
+preflight_cuda_exhaustive_timeout_ops <- required_positive_numeric_arg(
+  args$preflight_cuda_exhaustive_timeout_ops %||% "5e10",
+  "preflight_cuda_exhaustive_timeout_ops"
+)
 
 available_datasets <- c(dataset_index(data_root)$dataset, "SimulatedUniform2D", "SimulatedUniform3D")
 datasets <- validate_dataset_values(
@@ -2067,7 +2139,8 @@ config <- data.frame(
   key = c("data_root", "out_dir", "available_datasets", "datasets", "backends",
           "methods", "cagra_implementations", "cagra_build_algos", "metrics", "k_values", "threads", "timeout", "cycles",
           "quality_n", "quality_max_ops", "recall_threshold", "isolate_cuda_cagra", "isolate_native_timeout",
-          "preflight_cpu_exhaustive_timeout", "preflight_cpu_exhaustive_timeout_ops", "seed",
+          "preflight_cpu_exhaustive_timeout", "preflight_cpu_exhaustive_timeout_ops",
+          "preflight_cuda_exhaustive_timeout", "preflight_cuda_exhaustive_timeout_ops", "seed",
           "faissR_version", "faissR_package_path", "faissR_namespace_path", "r_libpaths"),
   value = c(
     data_root, out_dir, paste(available_datasets, collapse = ","),
@@ -2078,7 +2151,9 @@ config <- data.frame(
     paste(k_values, collapse = ","), n_threads, timeout, cycles, quality_n,
     format(quality_max_ops, scientific = TRUE), recall_threshold, isolate_cuda_cagra,
     isolate_native_timeout, preflight_cpu_exhaustive_timeout,
-    format(preflight_cpu_exhaustive_timeout_ops, scientific = TRUE), seed,
+    format(preflight_cpu_exhaustive_timeout_ops, scientific = TRUE),
+    preflight_cuda_exhaustive_timeout,
+    format(preflight_cuda_exhaustive_timeout_ops, scientific = TRUE), seed,
     faissR_version, faissR_package_path, faissR_namespace_path, faissR_libpaths
   ),
   stringsAsFactors = FALSE
@@ -2193,6 +2268,8 @@ for (dataset_name in datasets) {
                     isolate_native_timeout = isolate_native_timeout,
                     preflight_cpu_exhaustive_timeout = preflight_cpu_exhaustive_timeout,
                     preflight_cpu_exhaustive_timeout_ops = preflight_cpu_exhaustive_timeout_ops,
+                    preflight_cuda_exhaustive_timeout = preflight_cuda_exhaustive_timeout,
+                    preflight_cuda_exhaustive_timeout_ops = preflight_cuda_exhaustive_timeout_ops,
                     x_child_path = x_child_path
                   )
                 }
@@ -2327,6 +2404,8 @@ materials <- c(
   sprintf("- Native timeout child-process isolation: `%s`", isolate_native_timeout),
   sprintf("- Large CPU exhaustive-route preflight timeout: `%s`", preflight_cpu_exhaustive_timeout),
   sprintf("- Large CPU exhaustive-route preflight work threshold: `%s`", format(preflight_cpu_exhaustive_timeout_ops, scientific = TRUE)),
+  sprintf("- Large CUDA exhaustive-route preflight timeout: `%s`", preflight_cuda_exhaustive_timeout),
+  sprintf("- Large CUDA exhaustive-route preflight work threshold: `%s`", format(preflight_cuda_exhaustive_timeout_ops, scientific = TRUE)),
   sprintf("- faissR version: `%s`", faissR_version),
   sprintf("- faissR package path: `%s`", faissR_package_path),
   sprintf("- R library paths: `%s`", faissR_libpaths),
@@ -2338,6 +2417,7 @@ materials <- c(
   "When `--isolate_native_timeout=true` (the default on Unix-like systems), high-work CPU `method = \"exact\"`, `method = \"flat\"`, and `method = \"bruteforce\"` rows are executed in a forked worker process. High-work CUDA/auto rows, including exhaustive `exact`/`flat`/`bruteforce` rows and graph/index rows such as `hnsw`, `ivf`, `ivfpq`, `vamana`, `nsg`, `nndescent`, `cagra`, and CUDA-selected `auto` rows, are executed in a separate Rscript child process. This gives the benchmark an OS-level timeout for native code paths that may not check R's `setTimeLimit()` while inside C++/FAISS/cuVS loops, and records timed-out rows with `child_status = \"timeout\"` instead of blocking subsequent rows.",
   "For large datasets that require child-process isolation, the parent writes one temporary per-dataset matrix cache in the output directory and passes that path to each child job. This avoids repeatedly embedding the full matrix in every small child-job configuration file while preserving the same measured method timing inside the child.",
   "When `--preflight_cpu_exhaustive_timeout=true`, high-work CPU exhaustive rows are recorded as `status = \"timeout\"` with `child_status = \"preflight_timeout\"` before launching native code. This opt-in mode is intended for large all-method sweeps after at least one equivalent exhaustive CPU route has demonstrated that the 600-second cap is binding.",
+  "When `--preflight_cuda_exhaustive_timeout=true`, high-work CUDA exhaustive rows (`exact`, `flat`, and `bruteforce`) are recorded as `status = \"timeout\"` with `child_status = \"preflight_timeout\"` before launching native code. This opt-in mode is intended for very large self-KNN datasets where all-pairs GPU exhaustive search is known to exceed the benchmark cap.",
   "`nn_metric_capabilities.csv` stores the default capability table used for non-CAGRA-provider-specific preflight, including `resolved_backend`, `runtime_available`, `runtime_reason`, and `runtime_notes` columns from `faissR::nn_capabilities(runtime = TRUE)`. When `--cagra_implementations` contains one or more provider selectors, `nn_metric_cagra_capabilities.csv` stores the matching provider-specific capability tables with a `cagra_implementation` column, so FAISS GPU CAGRA and direct cuVS CAGRA expected skips can be audited separately. Runtime expected skips also record when a resolved route requires unavailable FAISS, FAISS GPU, CUDA, or RAPIDS cuVS support.",
   "`preflight_route` records the route selected by the public backend resolver before runtime availability checks. `result_requested_backend`, `result_requested_method`, and `result_tuning` record the public request stored on successful `nn()` results. `auto_predicted_method`, `auto_predicted_device`, `auto_explicit_backend`, `auto_explicit_method`, `auto_backend_decision`, and `auto_method_decision` record the public method/device class and explicit-vs-auto decision fields predicted by `attr(result, \"auto_selection\")` for auto requests, without parsing internal backend labels. `result_backend`, `resolved_backend`, and `implementation_backend` separate the result-facing backend label from the concrete FAISS/cuVS/native implementation label. `route_parameters` stores compact key/value metadata from FAISS/cuVS/native approximation attributes and auto-selection metadata, including deterministic FAISS HNSW `tuning_rule`, cuVS HNSW build metadata (`hnsw_build_algo`, `hnsw_hierarchy`, `hnsw_m`, `hnsw_ef_construction`), shape flags, explicit backend/method flags, backend/method decision reasons, predicted method/device, and no-pilot auto-selection reason when present. `tuning_status` records backend tuning status, or the deterministic no-pilot tuning rule for routes such as FAISS CPU HNSW.",
   "Quality is computed against exact references. Small datasets use a full exact CPU self-KNN reference; larger datasets use a deterministic CPU sample when `quality_n * nrow(data) * ncol(data)` is within `quality_max_ops`. When the CPU operation cap would otherwise suppress recall but an exact CUDA route is available, compact very high-dimensional datasets can use `full_cuda_exact`, and sampled datasets up to the benchmark's guarded size limit can use `sample_cuda_exact`. The `recall_reference` and `recall_query_n` columns record which reference mode was used. The same reference is reused across cycles for the same dataset/metric/k. The raw table reports recall@k, median recall@k, minimum recall@k, mean relative distance error, and Spearman neighbour-rank correlation on the same exact-reference rows. The NN metric benchmark defaults to 10 repeated cycles; `--cycles` can override this for smoke tests or longer stability runs.",
