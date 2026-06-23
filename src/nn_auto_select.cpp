@@ -247,6 +247,10 @@ std::string select_cuda(bool self_query,
     if (cuvs_available) return "cuda_cuvs_bruteforce";
     return "cuda";
   }
+  const bool compact_high_dim_self =
+    cuvs_available && n == n_points && n <= cagra_compact_n &&
+    p >= cagra_high_dim_p && k <= cagra_compact_max_k;
+  if (compact_high_dim_self) return "cuda_cuvs_bruteforce";
   if (n <= cuda_exact_n || work_size <= cuda_exact_work || k <= 8) {
     if (faiss_gpu_available) return "faiss_gpu_flat_l2";
     if (cuvs_available) return "cuda_cuvs_bruteforce";

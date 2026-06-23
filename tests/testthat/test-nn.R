@@ -3019,6 +3019,31 @@ test_that("CUDA auto selector is shape-aware", {
   if (faiss_gpu_available()) expect_equal(large, "faiss_gpu_cagra")
 })
 
+test_that("C++ auto selector prefers cuVS brute force for compact very-wide self-KNN", {
+  route <- faissR:::nn_auto_select_shape_cpp(
+    resolved_backend = "auto",
+    requested_backend = "auto",
+    requested_method = "auto",
+    shape = list(
+      n = 1440L,
+      p = 16384L,
+      n_points = 1440L,
+      k = 50L,
+      metric = "euclidean",
+      self_query = TRUE,
+      exclude_self = TRUE
+    ),
+    cuda_available_value = TRUE,
+    cuvs_available_value = TRUE,
+    faiss_available_value = TRUE,
+    faiss_gpu_available_value = TRUE,
+    rcpphnsw_available_value = TRUE
+  )
+  expect_equal(route$selected_backend, "cuda_cuvs_bruteforce")
+  expect_equal(route$predicted_method, "bruteforce")
+  expect_equal(route$reason, "auto_cuda_preselector")
+})
+
 test_that("CUDA auto selector has deterministic k and metric policy", {
   expect_equal(
     faissR:::cuda_auto_non_euclidean_backend(
