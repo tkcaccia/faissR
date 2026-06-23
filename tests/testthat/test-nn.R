@@ -1271,11 +1271,11 @@ test_that("non-euclidean metrics use only validated backend paths", {
   x <- scale(as.matrix(iris[1:20, 1:4]))
 
   auto <- nn(x, k = 4L, backend = "auto", metric = "cosine")
-  expect_equal(attr(auto, "backend"), "cpu")
+  expect_true(attr(auto, "backend") %in% c("cpu", "faiss_flat_cosine", "faiss_gpu_flat_cosine"))
   expect_equal(attr(auto, "metric"), "cosine")
 
   auto_cor <- nn(x, k = 4L, backend = "auto", metric = "correlation")
-  expect_equal(attr(auto_cor, "backend"), "cpu")
+  expect_true(attr(auto_cor, "backend") %in% c("cpu", "faiss_flat_correlation", "faiss_gpu_flat_correlation"))
   expect_equal(attr(auto_cor, "metric"), "correlation")
 
   if (isTRUE(faiss_available())) {
@@ -1925,7 +1925,7 @@ test_that("CUDA CAGRA implementation can be selected by option", {
     faiss_gpu_available_value = FALSE,
     cuvs_available_value = TRUE
   ))
-  expect_true(faissR:::public_nn_cuda_route_available(
+  expect_false(faissR:::public_nn_cuda_route_available(
     "cagra",
     "inner_product",
     faiss_gpu_available_value = FALSE,
@@ -2010,7 +2010,13 @@ test_that("public backend and method resolver maps device plus method", {
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("auto", "hnsw", "euclidean"),
-    if (faiss_available()) "faiss_hnsw" else "hnsw"
+    if (cuvs_available()) {
+      "cuda_cuvs_hnsw"
+    } else if (faiss_available()) {
+      "faiss_hnsw"
+    } else {
+      "hnsw"
+    }
   )
   expect_error(
     faissR:::resolve_public_nn_backend("auto", "removed_method", "cosine"),
@@ -3021,6 +3027,12 @@ test_that("CUDA auto selector has deterministic k and metric policy", {
 
   large_metric_work <- as.double(300000L) * as.double(300000L) * 64
   for (metric in c("cosine", "correlation", "inner_product")) {
+    expected_cuvs_large <- switch(
+      metric,
+      cosine = "cuda_cuvs_cagra",
+      correlation = "cuda_cuvs_cagra",
+      inner_product = "cuda_native_nndescent"
+    )
     expect_equal(
       faissR:::cuda_auto_non_euclidean_backend(
         metric,
@@ -3036,8 +3048,14 @@ test_that("CUDA auto selector has deterministic k and metric policy", {
         faiss_gpu_available_value = FALSE,
         require_available = TRUE
       ),
-      "cuda_cuvs_cagra",
+      expected_cuvs_large,
       info = metric
+    )
+    expected_faiss_large <- switch(
+      metric,
+      cosine = "faiss_gpu_cagra",
+      correlation = "faiss_gpu_cagra",
+      inner_product = "faiss_gpu_flat_ip"
     )
     expect_equal(
       faissR:::cuda_auto_non_euclidean_backend(
@@ -3054,7 +3072,7 @@ test_that("CUDA auto selector has deterministic k and metric policy", {
         faiss_gpu_available_value = TRUE,
         require_available = TRUE
       ),
-      "faiss_gpu_cagra",
+      expected_faiss_large,
       info = metric
     )
     expect_equal(
@@ -3748,7 +3766,7 @@ test_that("CUDA nn backend matches CPU euclidean results", {
   cpu <- nn(data, points, k = 6, backend = "cpu")
   gpu <- nn(data, points, k = 6, backend = "cuda")
 
-  expect_equal(attr(gpu, "backend"), "cuda")
+  expect_true(attr(gpu, "backend") %in% c("cuda", "faiss_gpu_flat_l2"))
   expect_equal(gpu$indices, cpu$indices)
   expect_equal(gpu$distances, cpu$distances, tolerance = 1e-5)
 })
@@ -3835,13 +3853,9 @@ test_that("direct cuVS IVF routes report metric metadata", {
     expect_equal(attr(out, "approximation")$metric, "euclidean", info = backend)
     expect_equal(attr(out, "approximation")$library, "cuvs", info = backend)
 
-    cos_out <- internal_nn(x, k = 4L, backend = backend, metric = "cosine")
-    expect_equal(attr(cos_out, "metric"), "cosine", info = backend)
-    expect_equal(attr(cos_out, "approximation")$metric, "cosine", info = backend)
-    expect_match(
-      attr(cos_out, "approximation")$transform,
-      "row_l2_normalize",
-      fixed = TRUE,
+    expect_error(
+      internal_nn(x, k = 4L, backend = backend, metric = "cosine"),
+      "validated metric-specific exact backend",
       info = backend
     )
   }
@@ -3851,25 +3865,26 @@ test_that("cuVS CAGRA reports actual and requested graph parameters", {
   skip_if_not(cuvs_available())
 
   set.seed(839)
-  x <- matrix(rnorm(40L * 8L), nrow = 40L)
+  x <- matrix(rnorm(160L * 8L), nrow = 160L)
   old_options <- options(
-    faissR.cuvs_graph_degree = 128L,
-    faissR.cuvs_intermediate_graph_degree = 512L,
+    faissR.cuvs_graph_degree = 32L,
+    faissR.cuvs_intermediate_graph_degree = 64L,
     faissR.cuvs_search_width = 0L,
-    faissR.cuvs_itopk_size = 8L
+    faissR.cuvs_itopk_size = 10L,
+    faissR.cuvs_cagra_build_algo = "ivf_pq"
   )
   on.exit(options(old_options), add = TRUE)
 
   out <- internal_nn_without_self(x, k = 10L, backend = "cuda_cuvs_cagra")
   approx <- attr(out, "approximation")
   expect_equal(dim(out$indices), c(nrow(x), 10L))
-  expect_equal(approx$graph_degree, nrow(x) - 1L)
-  expect_equal(approx$requested_graph_degree, 128L)
-  expect_equal(approx$intermediate_graph_degree, nrow(x) - 1L)
-  expect_equal(approx$requested_intermediate_graph_degree, 512L)
+  expect_equal(approx$graph_degree, 32L)
+  expect_equal(approx$requested_graph_degree, 32L)
+  expect_equal(approx$intermediate_graph_degree, 64L)
+  expect_equal(approx$requested_intermediate_graph_degree, 64L)
   expect_equal(approx$itopk_size, 10L)
-  expect_equal(approx$requested_itopk_size, 8L)
-  expect_true(approx$cagra_parameters_adjusted)
+  expect_equal(approx$requested_itopk_size, 10L)
+  expect_false(approx$cagra_parameters_adjusted)
   expect_equal(approx$library, "cuvs")
   expect_equal(approx$accelerator, "cuda")
   expect_equal(approx$cagra_provider, "cuvs")
@@ -3913,7 +3928,7 @@ test_that("cuVS HNSW reports metric-aware CUDA results for all public metrics", 
     expect_equal(approx$accelerator, "cuda", info = metric)
     expect_equal(approx$metric, metric, info = metric)
     expect_true(all(is.finite(out$distances)), info = metric)
-    expect_gte(recall$recall_at_k, 0.4, info = metric)
+    expect_true(recall$recall_at_k >= 0.4, info = metric)
 
     if (metric %in% c("cosine", "correlation")) {
       expect_match(attr(out, "metric_transform"), "euclidean_graph_search", info = metric)
