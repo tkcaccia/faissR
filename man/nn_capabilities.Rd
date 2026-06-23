@@ -48,8 +48,9 @@ CAGRA raw-inner-product routes are disabled because the available cuVS HNSW
 route is CAGRA-derived and the transformed graph route is not reliable across
 k values in the current implementation. Public CPU NSG uses faissR's native
 NSG-style route for all metrics because linked FAISS graph builders can abort
-during graph construction. Direct cuVS NNDescent does not expose raw
-inner-product search.
+during graph construction; large high-dimensional CPU inputs use deterministic
+FAISS HNSW seeding before NSG/MRNG-style pruning. Direct cuVS NNDescent does
+not expose raw inner-product search.
 Public CUDA \code{method = "cagra"} can resolve to FAISS GPU CAGRA or direct
 cuVS CAGRA; \code{options(faissR.cagra_implementation = "faiss_gpu")} or
 \code{"cuvs"} forces one provider, while \code{"auto"} uses a deterministic

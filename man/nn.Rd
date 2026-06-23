@@ -235,20 +235,23 @@ Method descriptions:
   `pq_tuning_*` names. CPU IVFPQ requires at least 624 training rows; for
   624-9,983 rows, auto tuning uses 4-bit PQ rather than the 8-bit default.
   \item `"vamana"`: DiskANN/Vamana-style robust-pruned candidate graph
-  implemented in faissR [24]. CPU refines exact top-k within candidate rows
+  implemented in faissR [24]. CPU refines top-k within candidate rows
   using native CPU scoring; CUDA refines candidates with faissR's native
-  CUDA row-candidate kernel. The first `k` exact seed neighbours are
-  protected before robust pruning so pruning cannot discard neighbours
-  already found by the seed generator. cuVS Vamana is acknowledged for GPU
-  build/serialization, but current cuVS documentation does not expose KNN
-  search for this index.
+  CUDA row-candidate kernel. Large high-dimensional CPU inputs use a
+  deterministic FAISS HNSW seed before robust pruning; smaller inputs keep
+  the exact seed. The first `k` seed neighbours are protected before robust
+  pruning so pruning cannot discard neighbours already found by the seed
+  generator. cuVS Vamana is acknowledged for GPU build/serialization, but
+  current cuVS documentation does not expose KNN search for this index.
   \item `"nsg"`: Navigating Spreading-out Graph style approximate search
   [16,21,29]. CPU uses faissR's native NSG-style self-KNN candidate graph for
   all public metrics to avoid unsafe linked-FAISS graph construction. CUDA
   uses faissR's native NSG-style self-KNN candidate graph for all public
   metrics; cosine/correlation use normalized Euclidean search and raw inner
-  product uses shifted dot-product distances. The first `k` exact seed
-  neighbours are protected before NSG/MRNG-style pruning.
+  product uses shifted dot-product distances. Large high-dimensional CPU
+  inputs use a deterministic FAISS HNSW seed before NSG/MRNG-style pruning;
+  smaller inputs keep the exact seed. The first `k` seed neighbours are
+  protected before NSG/MRNG-style pruning.
   \item `"nndescent"`: NN-descent approximate graph construction via
   faissR's native CPU route, direct cuVS on CUDA for Euclidean/L2 plus
   normalized cosine/correlation, or faissR's native CUDA candidate-refinement

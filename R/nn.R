@@ -990,7 +990,8 @@ nn_compute <- function(data,
         graph_k = params$graph_k,
         metric = refine_metric,
         use_cuda = use_cuda,
-        n_threads = n_threads
+        n_threads = n_threads,
+        seed_backend = params$seed_backend %||% "exact"
       )
       if (!isTRUE(exclude_self)) {
         out$indices <- cbind(seq_len(nrow(search_data)), out$indices)
@@ -1013,6 +1014,8 @@ nn_compute <- function(data,
         graph_k = as.integer(params$graph_k),
         requested_r = as.integer(params$requested_r),
         requested_graph_k = as.integer(params$requested_graph_k),
+        requested_seed_backend = params$seed_backend %||% NA_character_,
+        seed_k = as.integer(params$seed_k %||% params$graph_k),
         graph_k_cap = as.integer(params$graph_k_cap),
         nsg_parameters_adjusted = !identical(as.integer(params$r), as.integer(params$requested_r)) ||
           !identical(as.integer(params$graph_k), as.integer(params$requested_graph_k)),
@@ -1048,7 +1051,8 @@ nn_compute <- function(data,
       nrow(search_data),
       ncol(search_data),
       if (nonself_k < 1L) 1L else nonself_k,
-      metric = metric
+      metric = metric,
+      backend = if (isTRUE(use_cuda)) "cuda" else "cpu"
     )
     if (nonself_k < 1L) {
       out <- list(
@@ -1073,7 +1077,8 @@ nn_compute <- function(data,
         alpha = params$alpha,
         metric = refine_metric,
         use_cuda = use_cuda,
-        n_threads = n_threads
+        n_threads = n_threads,
+        seed_backend = params$seed_backend %||% "exact"
       )
       if (!isTRUE(exclude_self)) {
         out$indices <- cbind(seq_len(nrow(search_data)), out$indices)
@@ -1098,6 +1103,8 @@ nn_compute <- function(data,
         requested_r = as.integer(params$requested_r),
         requested_search_l = as.integer(params$requested_search_l),
         requested_alpha = as.numeric(params$requested_alpha),
+        requested_seed_backend = params$seed_backend %||% NA_character_,
+        seed_k = as.integer(params$seed_k %||% params$search_l),
         tuning_policy = params$tuning_policy,
         tuning_rule = params$tuning_rule,
         tuning_large_k = isTRUE(params$tuning_large_k),
@@ -2499,7 +2506,7 @@ nn_capability_row <- function(method, backend, metric) {
       "native CUDA NSG candidate graph"
     }
     notes <- if (identical(backend, "cpu")) {
-      "Public CPU NSG uses faissR's native NSG-style candidate graph for all metrics to avoid unsafe linked-FAISS graph construction."
+      "Public CPU NSG uses faissR's native NSG-style candidate graph for all metrics to avoid unsafe linked-FAISS graph construction; large high-dimensional CPU inputs use a deterministic FAISS HNSW seed before NSG/MRNG-style pruning."
     } else if (supported) {
       "CUDA NSG builds an NSG-style candidate graph and refines candidates with the native CUDA row-candidate kernel; cosine/correlation use normalized Euclidean search and raw inner product uses shifted dot-product distances."
     } else {
@@ -2514,7 +2521,7 @@ nn_capability_row <- function(method, backend, metric) {
       "native Vamana candidate graph with CUDA refinement"
     }
     notes <- if (identical(backend, "cpu")) {
-      "Builds a DiskANN/Vamana-style robust-pruned candidate graph and refines exact top-k within candidate rows on CPU; cosine/correlation use normalized Euclidean search and raw inner product uses shifted dot-product distances."
+      "Builds a DiskANN/Vamana-style robust-pruned candidate graph and refines top-k within candidate rows on CPU; large high-dimensional CPU inputs use a deterministic FAISS HNSW seed before robust pruning. Cosine/correlation use normalized Euclidean search and raw inner product uses shifted dot-product distances."
     } else {
       "Builds a Vamana-style candidate graph and refines candidate rows with the native CUDA row-candidate kernel; cuVS Vamana currently builds/serializes DiskANN-compatible indexes but does not expose KNN search."
     }
@@ -4499,6 +4506,38 @@ nsg_pair_score <- function(data, i, j, metric = "euclidean") {
   sqrt(sum((xi - xj)^2))
 }
 
+candidate_graph_hnsw_seed_knn <- function(data,
+                                          k,
+                                          metric = "euclidean",
+                                          n_threads = NULL) {
+  metric <- normalize_nn_metric(metric)
+  if (isTRUE(faiss_available())) {
+    out <- faiss_self_knn(
+      data,
+      k = k,
+      backend = "faiss_hnsw",
+      metric = metric,
+      n_threads = n_threads
+    )
+    attr(out, "seed_backend") <- "faiss_hnsw"
+    return(out)
+  }
+  if (requireNamespace("RcppHNSW", quietly = TRUE)) {
+    out <- rcpphnsw_knn(
+      data,
+      data,
+      k = k,
+      self_query = TRUE,
+      exclude_self = TRUE,
+      metric = metric,
+      n_threads = n_threads
+    )
+    attr(out, "seed_backend") <- "rcpphnsw"
+    return(out)
+  }
+  NULL
+}
+
 nsg_prune_candidate_graph <- function(data,
                                       seed_indices,
                                       r,
@@ -4559,9 +4598,10 @@ nsg_prune_candidate_graph <- function(data,
   out
 }
 
-vamana_params <- function(n, p, k, metric = "euclidean") {
+vamana_params <- function(n, p, k, metric = "euclidean", backend = c("cpu", "cuda")) {
   metric <- normalize_nn_metric(metric)
-  nn_tune_vamana_cpp(
+  backend <- match.arg(backend)
+  out <- nn_tune_vamana_cpp(
     as.integer(n),
     as.integer(p),
     as.integer(k),
@@ -4573,6 +4613,11 @@ vamana_params <- function(n, p, k, metric = "euclidean") {
       if (is.null(value)) 1.2 else nn_option_double_or_na("vamana_alpha")
     }
   )
+  out$backend <- backend
+  if (identical(backend, "cuda")) {
+    out$seed_backend <- if (identical(metric, "euclidean")) "cuda_exact" else "exact"
+  }
+  out
 }
 
 vamana_robust_prune_candidate_graph <- function(data,
@@ -4639,7 +4684,8 @@ vamana_self_knn <- function(data,
                             alpha = 1.2,
                             metric = "euclidean",
                             use_cuda = FALSE,
-                            n_threads = NULL) {
+                            n_threads = NULL,
+                            seed_backend = "exact") {
   metric <- normalize_nn_metric(metric)
   if (!metric %in% c("euclidean", "inner_product")) {
     stop("Vamana candidate refinement supports Euclidean or inner-product scoring.", call. = FALSE)
@@ -4649,7 +4695,19 @@ vamana_self_knn <- function(data,
   }
   search_l <- as.integer(min(max(k, search_l), nrow(data) - 1L))
   r <- as.integer(min(max(k, r), search_l))
-  if (isTRUE(use_cuda) && identical(metric, "euclidean")) {
+  ann_seed <- NULL
+  if (!isTRUE(use_cuda) && identical(seed_backend, "faiss_hnsw")) {
+    ann_seed <- candidate_graph_hnsw_seed_knn(
+      data,
+      k = search_l,
+      metric = metric,
+      n_threads = n_threads
+    )
+  }
+  if (!is.null(ann_seed)) {
+    seed <- ann_seed
+    seed_backend <- paste0("native_", attr(ann_seed, "seed_backend", exact = TRUE), "_seed")
+  } else if (isTRUE(use_cuda) && identical(metric, "euclidean")) {
     raw <- nn_cuda_cpp(data, data, as.integer(min(search_l + 1L, nrow(data))), FALSE)
     seed <- drop_self_knn_result(raw, search_l)
     seed_backend <- "native_cuda_exact_seed"
@@ -4711,7 +4769,8 @@ native_nsg_self_knn <- function(data,
                                 graph_k,
                                 metric = "euclidean",
                                 use_cuda = FALSE,
-                                n_threads = NULL) {
+                                n_threads = NULL,
+                                seed_backend = "exact") {
   metric <- normalize_nn_metric(metric)
   if (!metric %in% c("euclidean", "inner_product")) {
     stop("Native NSG candidate refinement supports Euclidean or inner-product scoring.", call. = FALSE)
@@ -4722,7 +4781,19 @@ native_nsg_self_knn <- function(data,
   graph_k_cap <- if (isTRUE(use_cuda)) 255L else 512L
   graph_k <- as.integer(min(max(k, graph_k), nrow(data) - 1L, graph_k_cap))
   r <- as.integer(min(max(k, r), graph_k))
-  if (isTRUE(use_cuda) && identical(metric, "euclidean")) {
+  ann_seed <- NULL
+  if (!isTRUE(use_cuda) && identical(seed_backend, "faiss_hnsw")) {
+    ann_seed <- candidate_graph_hnsw_seed_knn(
+      data,
+      k = graph_k,
+      metric = metric,
+      n_threads = n_threads
+    )
+  }
+  if (!is.null(ann_seed)) {
+    seed <- ann_seed
+    seed_backend <- paste0("native_", attr(ann_seed, "seed_backend", exact = TRUE), "_seed")
+  } else if (isTRUE(use_cuda) && identical(metric, "euclidean")) {
     raw <- nn_cuda_cpp(data, data, as.integer(graph_k + 1L), FALSE)
     seed <- drop_self_knn_result(raw, graph_k)
     seed_backend <- "native_cuda_exact_seed"
@@ -6423,20 +6494,23 @@ grid_self_knn <- function(data,
 #'   `pq_tuning_*` names. CPU IVFPQ requires at least 624 training rows; for
 #'   624-9,983 rows, auto tuning uses 4-bit PQ rather than the 8-bit default.
 #'   \item `"vamana"`: DiskANN/Vamana-style robust-pruned candidate graph
-#'   implemented in faissR [24]. CPU refines exact top-k within candidate rows
+#'   implemented in faissR [24]. CPU refines top-k within candidate rows
 #'   using native CPU scoring; CUDA refines candidates with faissR's native
-#'   CUDA row-candidate kernel. The first `k` exact seed neighbours are
-#'   protected before robust pruning so pruning cannot discard neighbours
-#'   already found by the seed generator. cuVS Vamana is acknowledged for GPU
-#'   build/serialization, but current cuVS documentation does not expose KNN
-#'   search for this index.
+#'   CUDA row-candidate kernel. Large high-dimensional CPU inputs use a
+#'   deterministic FAISS HNSW seed before robust pruning; smaller inputs keep
+#'   the exact seed. The first `k` seed neighbours are protected before robust
+#'   pruning so pruning cannot discard neighbours already found by the seed
+#'   generator. cuVS Vamana is acknowledged for GPU build/serialization, but
+#'   current cuVS documentation does not expose KNN search for this index.
 #'   \item `"nsg"`: Navigating Spreading-out Graph style approximate search
 #'   [16,21,29]. CPU uses faissR's native NSG-style self-KNN candidate graph for
 #'   all public metrics to avoid unsafe linked-FAISS graph construction. CUDA
 #'   uses faissR's native NSG-style self-KNN candidate graph for all public
 #'   metrics; cosine/correlation use normalized Euclidean search and raw inner
-#'   product uses shifted dot-product distances. The first `k` exact seed
-#'   neighbours are protected before NSG/MRNG-style pruning.
+#'   product uses shifted dot-product distances. Large high-dimensional CPU
+#'   inputs use a deterministic FAISS HNSW seed before NSG/MRNG-style pruning;
+#'   smaller inputs keep the exact seed. The first `k` seed neighbours are
+#'   protected before NSG/MRNG-style pruning.
 #'   \item `"nndescent"`: NN-descent approximate graph construction via
 #'   faissR's native CPU route, direct cuVS on CUDA for Euclidean/L2 plus
 #'   normalized cosine/correlation, or faissR's native CUDA candidate-refinement

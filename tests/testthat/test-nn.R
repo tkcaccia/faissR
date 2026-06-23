@@ -2619,6 +2619,10 @@ test_that("native NSG tuning is backend-specific", {
   expect_equal(cuda$graph_k_cap, 255L)
   expect_match(cpu$tuning_rule, "cpu_nsg")
   expect_match(cuda$tuning_rule, "cuda_nsg")
+  expect_equal(cpu$seed_backend, "faiss_hnsw")
+  expect_equal(cpu$seed_k, cpu$graph_k)
+  expect_equal(cuda$seed_backend, "exact")
+  expect_equal(cuda$seed_k, cuda$graph_k)
 
   options(
     faissR.cpu_nsg_graph_k = 400L,
@@ -3061,10 +3065,12 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   native_nsg <- faissR:::native_nsg_params(70000L, 784L, 50L, backend = "cpu")
   expect_equal(native_nsg$tuning_source, "cpp")
   expect_equal(native_nsg$tuning_rule, "high_recall_cpu_nsg")
+  expect_equal(native_nsg$seed_backend, "faiss_hnsw")
 
   vamana <- faissR:::vamana_params(70000L, 784L, 50L)
   expect_equal(vamana$tuning_source, "cpp")
   expect_equal(vamana$tuning_rule, "high_recall_vamana")
+  expect_equal(vamana$seed_backend, "faiss_hnsw")
 
   gpu_nnd <- faissR:::gpu_nndescent_params(50L, backend = "cuda", n = 70000L)
   expect_equal(gpu_nnd$tuning_source, "cpp")

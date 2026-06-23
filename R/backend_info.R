@@ -49,7 +49,7 @@ backend_info <- function() {
     ),
     supported_metrics = c(
       "euclidean, cosine, correlation, inner_product; method-specific exclusions in nn_capabilities()",
-      "euclidean, cosine, correlation, inner_product for Flat/IVF/IVFPQ/HNSW; public NSG uses the native CPU route for all metrics, while explicit FAISS NSG is Euclidean-only",
+      "euclidean, cosine, correlation, inner_product for Flat/IVF/IVFPQ/HNSW; public NSG uses the native CPU route for all metrics, with deterministic FAISS HNSW seeding on large high-dimensional CPU inputs, while explicit FAISS NSG is Euclidean-only",
       "euclidean, cosine, correlation, inner_product for IVF/IVFPQ; CAGRA supports euclidean, cosine, and correlation; CAGRA inner_product is disabled until a reliable transformed route is available",
       "euclidean, cosine, correlation, inner_product for direct brute force and direct IVF/PQ using exact metric transforms where needed; euclidean plus normalized cosine/correlation for direct cuVS NN-descent and cuVS HNSW; HNSW and CAGRA inner_product are disabled for CAGRA-derived CUDA graph routes; public CUDA NN-descent inner_product uses native CUDA candidate refinement",
       "euclidean, cosine, correlation, inner_product where the selected CUDA method supports the metric",

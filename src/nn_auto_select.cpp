@@ -1005,13 +1005,17 @@ List nn_tune_native_nsg_cpp(int n,
   k = safe_k(k);
   const bool large_k = k >= 50;
   const bool high_dim = p >= 128;
+  const bool large_n = n >= 50000;
   const bool inner_product = metric == "inner_product";
-  const int default_r = (large_k || high_dim || inner_product) ? 64 : 48;
+  const bool ann_seed = backend == "cpu" && large_n && high_dim;
+  const int default_r = ann_seed && !large_k ? 32 : ((large_k || high_dim || inner_product) ? 64 : 48);
   const int graph_k_cap = backend == "cuda" ? 255 : 512;
   const int requested_r = option_int(r_option, default_r, 2, 256);
   int r = std::min(std::max(2, requested_r), std::max(1, n - 1));
   const int default_multiplier = (high_dim || inner_product) ? 3 : 2;
-  const int default_graph_k = std::max(std::max(k, default_multiplier * r), 96);
+  const int default_graph_k = ann_seed ?
+    std::max(std::max(k, 2 * r), large_k ? 96 : 64) :
+    std::max(std::max(k, default_multiplier * r), 96);
   const int requested_graph_k = option_int(graph_k_option, default_graph_k, k, graph_k_cap);
   int graph_k = std::min(std::min(std::max(k, requested_graph_k), std::max(1, n - 1)), graph_k_cap);
   if (r > graph_k) r = graph_k;
@@ -1022,6 +1026,8 @@ List nn_tune_native_nsg_cpp(int n,
     _["requested_graph_k"] = requested_graph_k,
     _["backend"] = backend,
     _["graph_k_cap"] = graph_k_cap,
+    _["seed_backend"] = ann_seed ? "faiss_hnsw" : "exact",
+    _["seed_k"] = graph_k,
     _["tuning_policy"] = "auto_shape_k_metric",
     _["tuning_rule"] = inner_product ? ("inner_product_" + backend + "_nsg_candidate_refine") :
       ((high_dim || large_k) ? ("high_recall_" + backend + "_nsg") : ("balanced_" + backend + "_nsg")),
@@ -1044,10 +1050,14 @@ List nn_tune_vamana_cpp(int n,
   k = safe_k(k);
   const bool large_k = k >= 50;
   const bool high_dim = p >= 128;
-  const int default_r = (high_dim || large_k) ? 64 : 48;
+  const bool large_n = n >= 50000;
+  const bool ann_seed = large_n && high_dim;
+  const int default_r = ann_seed && !large_k ? 32 : ((high_dim || large_k) ? 64 : 48);
   const int requested_r = option_int(r_option, default_r, 2, 256);
   int r = std::min(std::max(2, requested_r), std::max(1, n - 1));
-  const int default_search_l = std::max(std::max(k, 2 * r), 96);
+  const int default_search_l = ann_seed ?
+    std::max(std::max(k, 2 * r), large_k ? 96 : 64) :
+    std::max(std::max(k, 2 * r), 96);
   const int requested_search_l = option_int(search_l_option, default_search_l, k, 512);
   int search_l = std::min(std::min(std::max(k, requested_search_l), std::max(1, n - 1)), 512);
   if (r > search_l) r = search_l;
@@ -1060,6 +1070,8 @@ List nn_tune_vamana_cpp(int n,
     _["requested_r"] = requested_r,
     _["requested_search_l"] = requested_search_l,
     _["requested_alpha"] = requested_alpha,
+    _["seed_backend"] = ann_seed ? "faiss_hnsw" : "exact",
+    _["seed_k"] = search_l,
     _["tuning_policy"] = "auto_shape_k_metric",
     _["tuning_rule"] = metric == "inner_product" ? "inner_product_vamana_candidate_refine" :
       ((high_dim || large_k) ? "high_recall_vamana" : "balanced_vamana"),
