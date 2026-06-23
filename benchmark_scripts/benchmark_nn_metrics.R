@@ -1448,6 +1448,30 @@ nn_data_expected_skip <- function(x, method, metric = "euclidean", backend = "cp
       ))
     }
   }
+  if (backend %in% c("auto", "cuda") && identical(method, "nndescent") &&
+      !identical(metric, "inner_product")) {
+    n <- nrow(x)
+    p <- ncol(x)
+    compact_very_wide <- length(n) == 1L && length(p) == 1L &&
+      !is.na(n) && !is.na(p) && n <= 5000L && p >= 12000L
+    if (isTRUE(compact_very_wide)) {
+      return(list(
+        skip = TRUE,
+        route = "cuda_cuvs_nndescent",
+        reason = "runtime_unavailable_shape",
+        notes = sprintf(
+          paste(
+            "The RAPIDS cuVS NN-descent C API returned cudaErrorInvalidValue",
+            "for compact very-wide matrices during validation. This dataset",
+            "has %d rows and %d columns, so CUDA NN-descent is recorded as an",
+            "expected skip instead of a benchmark failure."
+          ),
+          n,
+          p
+        )
+      ))
+    }
+  }
   NULL
 }
 

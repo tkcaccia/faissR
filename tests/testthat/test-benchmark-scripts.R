@@ -1026,6 +1026,12 @@ test_that("NN metric benchmark accounts for data-shaped method skips", {
   expect_match(ivfpq_skip$notes, "at least 624 training rows")
   expect_null(env$nn_data_expected_skip(matrix(rnorm(120 * 4), ncol = 4), "ivfpq", backend = "cuda"))
   expect_null(env$nn_data_expected_skip(matrix(rnorm(700 * 4), ncol = 4), "ivfpq", backend = "cpu"))
+  wide <- matrix(0, nrow = 10L, ncol = 12000L)
+  nnd_skip <- env$nn_data_expected_skip(wide, "nndescent", backend = "cuda")
+  expect_equal(nnd_skip$reason, "runtime_unavailable_shape")
+  expect_equal(nnd_skip$route, "cuda_cuvs_nndescent")
+  expect_match(nnd_skip$notes, "compact very-wide")
+  expect_null(env$nn_data_expected_skip(matrix(rnorm(10L * 11999L), nrow = 10L), "nndescent", backend = "cuda"))
   expect_null(env$nn_data_expected_skip(matrix(rnorm(20), ncol = 4), "flat"))
 })
 
