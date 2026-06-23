@@ -890,10 +890,10 @@ run_nn_child_process <- function(x, backend, method, metric, k, n_threads, seed,
     if (!nzchar(message)) message <- "child process did not write an output file"
     if (timed_out) message <- paste("child process timed out", message, sep = ": ")
     return(list(
-      status = "failed",
+      status = if (timed_out) "timeout" else "failed",
       out = NULL,
       error = message,
-      elapsed_sec = NA_real_,
+      elapsed_sec = if (timed_out) suppressWarnings(as.numeric(timeout)) else NA_real_,
       peak_rss_gb = NA_real_,
       child_status = if (timed_out) "timeout" else paste0("exit_", exit_status %||% 1L)
     ))
