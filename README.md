@@ -138,8 +138,8 @@ See [Installation](docs/installation.md) for CRAN/source-build details.
   `cuda_cuvs_cagra`, `cuda_cuvs_hnsw`, `cuda_cuvs_nndescent`,
   `cuda_cuvs_bruteforce`, `cuda_cuvs_ivf_flat`, and `cuda_cuvs_ivfpq`.
   The HNSW route uses RAPIDS cuVS HNSW conversion from a CUDA-built CAGRA
-  index and is documented as a cuVS wrapper route, not vendored CUDA code
-  [3,22-23].
+  index, defaults to a 0.99 recall target for speed, and is documented as a
+  cuVS wrapper route, not vendored CUDA code [3,22-23].
 
 Use `backend_info()` and the attributes returned by `nn()` to confirm which
 route and parameters a result used.

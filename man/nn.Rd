@@ -102,7 +102,9 @@ small-`k` metric-aware, balanced, and high-recall tiers; explicit
 use deterministic shape/k/metric-aware `nlist`/`nprobe` defaults; optional
 FAISS GPU IVF `"cache"`/`"pilot"` tuning currently runs only for Euclidean
 IVF, while non-Euclidean IVF routes use deterministic metric-aware
-defaults. Deterministic approximate-method defaults are computed by C++
+defaults. CUDA cuVS HNSW uses a deterministic 0.99 recall target by default
+and can be tightened with `options(faissR.cuvs_hnsw_ef = ...)`.
+Deterministic approximate-method defaults are computed by C++
 `nn_tune_*_cpp()` helpers and record `tuning_source = "cpp"` in
 approximation metadata. Advanced tuning and cache knobs use
 `options(faissR.<name> = ...)`.}
@@ -122,7 +124,8 @@ For direct cuVS CAGRA, `"auto"` applies faissR's deterministic shape-aware
 CAGRA build rule, choosing iterative CAGRA construction for compact
 high-dimensional self-KNN cases and IVF-PQ construction otherwise. For
 cuVS HNSW, `"auto"` uses iterative CAGRA construction because the HNSW
-conversion needs a high-quality seed graph. `"ivf_pq"` requests the IVF-PQ
+conversion needs a high-quality seed graph; HNSW search effort itself
+defaults to a 0.99 recall target for speed. `"ivf_pq"` requests the IVF-PQ
 graph builder, `"nn_descent"` requests cuVS NN-descent graph construction,
 and `"iterative_cagra_search"` requests cuVS iterative CAGRA graph building.
 This is a CAGRA construction parameter, not a fallback to a different
@@ -223,9 +226,10 @@ Method descriptions:
   otherwise. CUDA uses RAPIDS cuVS HNSW converted from a CUDA CAGRA index
   for Euclidean plus normalized cosine/correlation; raw inner product uses
   the same maximum-inner-product-to-L2 transform as other cuVS L2 graph
-  routes and returns shifted inner-product distances. Default parameters are selected by a deterministic
-  shape/k/metric rule without pilot tuning; result approximation metadata
-  records the selected `tuning_rule` and shape flags used.
+routes and returns shifted inner-product distances. Default parameters are selected by a deterministic
+shape/k/metric rule without pilot tuning; CUDA HNSW defaults to a 0.99 recall
+target for speed. Result approximation metadata records the selected
+`tuning_rule`, `target_recall`, and shape flags used.
   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records

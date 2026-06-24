@@ -147,10 +147,12 @@ graph and then converts it to a cuVS HNSW index. For `method = "hnsw"` with
 `backend = "cuda"`, automatic tuning therefore uses
 `iterative_cagra_search` as the CAGRA seed builder even on larger shapes. On
 MNIST70k (`70000 x 784`, `k = 50`) the IVF-PQ seed builder was fast but produced
-near-zero sampled recall for HNSW, while `iterative_cagra_search` restored
-sampled recall to 1.0 at roughly 29 seconds on Chiamaka. Users can still request
-`cagra_build_algo = "ivf_pq"` explicitly for experiments, but it is not the
-quality-preserving HNSW default.
+near-zero sampled recall for HNSW, while `iterative_cagra_search` restored high
+sampled recall. The default search effort now targets about 0.99 recall
+(`ef = max(50, k)`) to improve speed. Users can raise
+`options(faissR.cuvs_hnsw_ef = ...)` for stricter recall, or request
+`cagra_build_algo = "ivf_pq"` explicitly for experiments, but IVF-PQ is not the
+automatic HNSW seed builder.
 
 The explicit `"nn_descent"` builder is available for experiments, but it is not
 selected automatically because the COIL20 diagnostic failed inside the cuVS
@@ -284,7 +286,8 @@ CPU-auto default.
 - cuVS HNSW should not inherit the direct-CAGRA IVF-PQ auto builder blindly.
   The HNSW conversion depends on a high-quality seed graph; MNIST70k diagnostics
   selected `iterative_cagra_search` as the default HNSW seed builder after IVF-PQ
-  returned near-zero recall.
+  returned near-zero recall. CUDA HNSW search effort defaults to a 0.99 recall
+  target for speed and records `target_recall = 0.99` in approximation metadata.
 - Direct cuVS CAGRA has provider-internal build modes with different memory and
   robustness profiles. In the focused CUDA diagnostic, COIL20 (`1440 x 16384`, `k = 50`,
   Euclidean) completed with FAISS GPU CAGRA, direct cuVS CAGRA `ivf_pq`, and

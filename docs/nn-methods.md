@@ -188,12 +188,14 @@ distances are converted back to faissR's shifted smaller-is-better
 inner-product convention. Automatic cuVS HNSW uses
 `iterative_cagra_search` for the internal CAGRA seed graph because the HNSW
 conversion needs high seed-graph recall; explicit `cagra_build_algo = "ivf_pq"`
-remains available for experiments but is not the HNSW default. Successful HNSW
-results record the internal `cagra_build_algo` in
+remains available for experiments but is not the HNSW default. The default CUDA
+HNSW search effort targets about 0.99 recall for speed (`ef = max(50, k)`), and
+users can raise `options(faissR.cuvs_hnsw_ef = ...)` when stricter recall is
+needed. Successful HNSW results record the internal `cagra_build_algo` in
 `attr(result, "approximation")` together with `hnsw_build_algo`,
-`hnsw_hierarchy`, `hnsw_m`, and `hnsw_ef_construction`. CUHNSW is acknowledged
-as related Apache-2.0 CUDA HNSW prior software, but faissR does not vendor or
-copy CUHNSW source [3,22-23].
+`hnsw_hierarchy`, `hnsw_m`, `hnsw_ef_construction`, and `target_recall`. CUHNSW
+is acknowledged as related Apache-2.0 CUDA HNSW prior software, but faissR does
+not vendor or copy CUHNSW source [3,22-23].
 
 ## `"exact"`
 
@@ -265,7 +267,8 @@ route based on Hierarchical Navigable Small World graphs [5,16].
   CUDA HNSW is useful when the runtime has cuVS HNSW but the user wants the
   explicit HNSW graph route rather than CAGRA.
 - Tuning parameters include the graph degree `M`, construction effort, and
-  search effort.
+  search effort. CUDA HNSW defaults to a 0.99 recall target for speed; increase
+  `faissR.cuvs_hnsw_ef` to trade speed for stricter recall.
 
 HNSW is approximate. It can give excellent recall/speed trade-offs, but recall
 should be measured for new datasets when it is used for scientific conclusions.

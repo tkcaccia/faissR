@@ -952,7 +952,10 @@ List nn_tune_cuvs_hnsw_cpp(int n,
   const int hnsw_intermediate_graph_degree = manual_cagra ?
     base_intermediate_graph_degree :
     std::max(hnsw_graph_degree, 2 * hnsw_graph_degree);
-  const int default_ef = large_k ? std::max(180, 2 * k) : std::max(100, 2 * k);
+  // Target about 0.99 recall by default. The CAGRA seed graph remains
+  // high-quality; lowering HNSW ef trims search time without changing the
+  // public algorithm. Users can raise faissR.cuvs_hnsw_ef for stricter recall.
+  const int default_ef = std::max(50, k);
   const int requested_ef = requested_int(ef_option, default_ef);
   const int ef = option_int(ef_option, default_ef, k, 4096);
   const int threads = std::max(1, std::min(64, valid_int(n_threads) ? n_threads : 1));
@@ -968,10 +971,11 @@ List nn_tune_cuvs_hnsw_cpp(int n,
     _["requested_ef"] = requested_ef,
     _["requested_n_threads"] = threads,
     _["tuning_policy"] = as<std::string>(base["tuning_policy"]),
-    _["tuning_rule"] = auto_build_algo ? "quality_hnsw_from_iterative_cagra" :
-      ((large_n && large_k) ? "large_n_large_k_hnsw_from_cagra" :
-        (large_n ? "large_n_hnsw_from_cagra" :
-          (large_k ? "large_k_hnsw_from_cagra" : "balanced_hnsw_from_cagra"))),
+    _["tuning_rule"] = auto_build_algo ? "recall99_hnsw_from_iterative_cagra" :
+      ((large_n && large_k) ? "recall99_large_n_large_k_hnsw_from_cagra" :
+        (large_n ? "recall99_large_n_hnsw_from_cagra" :
+          (large_k ? "recall99_large_k_hnsw_from_cagra" : "recall99_balanced_hnsw_from_cagra"))),
+    _["target_recall"] = 0.99,
     _["tuning_large_n"] = large_n,
     _["tuning_large_k"] = large_k,
     _["tuning_small_k"] = as<bool>(base["tuning_small_k"]),
