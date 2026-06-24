@@ -31,7 +31,7 @@ if [ "$use_cuda" = "1" ] && [ -z "$cuda_home" ]; then
   exit 1
 fi
 
-cppflags=""
+cppflags="-Ivendor"
 libs="-pthread"
 
 faiss_home=${FAISS_HOME:-}
@@ -253,5 +253,5 @@ fi
     echo "NVCC = $nvcc"
     printf "%s" "$cuda_rule"
   fi
-  echo "OBJECTS = RcppExports.o embedding_utils.o graph.o $cugraph_objects nn.o nn_auto_select.o nn_fortran.o $faiss_objects $cuvs_objects nn_cuda_bridge.o $cuda_objects"
+    echo "OBJECTS = RcppExports.o embedding_utils.o graph.o $cugraph_objects nn.o nn_auto_select.o nn_usearch.o nn_fortran.o $faiss_objects $cuvs_objects nn_cuda_bridge.o $cuda_objects"
 } > src/Makevars

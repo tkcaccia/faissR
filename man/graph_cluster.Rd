@@ -12,7 +12,7 @@ graph_cluster(
   k = 50L,
   graph_backend = "auto",
   graph_method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf",
-    "ivfpq", "vamana", "nsg", "nndescent", "cagra"),
+    "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   target_recall = 0.99,
@@ -45,7 +45,7 @@ libcugraph was detected at build time; random-walking is CPU-only. The
 \code{parameters$backend_selection}.}
 \item{k}{Number of neighbours when \code{graph} is not already a KNN object.}
 \item{graph_backend}{Backend passed to \code{nn_without_self()} for neighbour search.}
-\item{graph_method}{Nearest-neighbour method passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding.}
+\item{graph_method}{Nearest-neighbour method passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding. \code{"usearch"} selects the CPU-only USEARCH dense HNSW route for Euclidean/L2 graph construction.}
 \item{metric}{Distance metric passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding. Aliases such as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as canonical metric labels. Correlation is centered cosine similarity, not raw inner product. Inner-product graph construction ranks neighbours by larger raw dot product while reusing faissR's shifted smaller-is-better distance convention from \code{nn()}.}
 \item{tuning}{Tuning policy passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding.}
 \item{target_recall}{HNSW speed/recall tier passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding. Use \code{0.9}, \code{0.95}, or \code{0.99}.}

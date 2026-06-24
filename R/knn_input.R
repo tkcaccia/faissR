@@ -222,6 +222,12 @@ is_float32_matrix_input <- function(x) {
 
 float32_matrix_dims <- function(x, arg_name = "data") {
   d <- dim(x)
+  if ((is.null(d) || length(d) != 2L) && isS4(x)) {
+    payload <- tryCatch(methods::slot(x, "Data"), error = function(e) NULL)
+    if (!is.null(payload)) {
+      d <- dim(payload)
+    }
+  }
   if (is.null(d) || length(d) != 2L) {
     stop("`", arg_name, "` must be a two-dimensional float::fl()/float32 matrix.", call. = FALSE)
   }

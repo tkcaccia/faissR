@@ -43,6 +43,7 @@
 31. NVIDIA. CUDA Installation Guide for Linux. Available from: https://docs.nvidia.com/cuda/cuda-installation-guide-linux/.
 32. NVIDIA. CUDA Installation Guide for Microsoft Windows. Available from: https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/.
 33. RAPIDS Development Team. RAPIDS Installation Guide. Available from: https://docs.rapids.ai/install/.
+34. Unum Cloud/Nomic AI. USearch: compact single-header vector search engine [software, Apache-2.0]. Available from: https://github.com/unum-cloud/usearch and https://github.com/nomic-ai/usearch.
 
 ## Software Acknowledgements
 

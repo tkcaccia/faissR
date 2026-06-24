@@ -35,8 +35,9 @@ route was attempted, not that the package silently ran a CPU fallback.
 5. Expensive KNN work should be reusable by graph, clustering, embedding, and
    supervised prediction functions.
 6. Benchmark-only quality helpers are kept out of the public API.
-7. External libraries are linked as system dependencies and are not vendored
-   into the package.
+7. External compiled libraries are linked as system dependencies. The only
+   vendored third-party source is the header-only USEARCH route for
+   `method = "usearch"`, which remains under its upstream Apache-2.0 license.
 8. Distance semantics are explicit: algorithm choice belongs in `method`, while
    Euclidean/cosine/correlation/inner-product choices belong in `metric`.
 9. Approximate routes should expose enough metadata to make speed/quality
@@ -63,6 +64,8 @@ Compiled backends are reached through Rcpp/C++ bridge files:
 - FAISS CPU/GPU routines are isolated behind the FAISS bridge and use FAISS
   indexes such as Flat, IVF, IVFPQ, HNSW, NSG, NNDescent, and GPU CAGRA where
   the linked FAISS build exposes them [1-2,5-6,13-16].
+- USEARCH dense HNSW is isolated behind its own CPU bridge and compiled from
+  bundled Apache-2.0 header-only USEARCH source for `method = "usearch"` [5,34].
 - Direct RAPIDS cuVS routines are isolated behind the cuVS bridge and are
   optional at build time [3].
 - CUDA-native helper kernels, such as the low-dimensional grid and candidate
@@ -70,8 +73,10 @@ Compiled backends are reached through Rcpp/C++ bridge files:
 - RAPIDS libcugraph is used only for optional CUDA Louvain/Leiden graph
   clustering [12].
 
-The package does not vendor FAISS, cuVS, or cuGraph. Those projects remain
-system dependencies with their own release cadence and licenses.
+The package does not vendor FAISS, cuVS, cuGraph, CUDA, or cuDNN. Those
+projects remain system dependencies with their own release cadence and
+licenses. The package vendors only the USEARCH header-only source needed by the
+CPU-only `method = "usearch"` route.
 
 ## `nn()`
 
@@ -86,6 +91,9 @@ Supported CPU routes include:
 - native exact dense CPU search;
 - FAISS CPU Flat, IVF-Flat, IVF-PQ, HNSW, NSG, and NN-Descent when present in
   the linked FAISS build [1-6,16];
+- USEARCH dense HNSW for CPU-only Euclidean/L2 approximate search, compiled
+  from bundled header-only source and benchmarked separately from FAISS HNSW
+  [5,34];
 - RcppHNSW as an optional CRAN-friendly fallback;
 - exact 2D/3D grid routes for low-dimensional Euclidean, cosine, and
   correlation self-KNN.

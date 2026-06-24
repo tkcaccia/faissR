@@ -609,6 +609,24 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nn_tune_usearch_cpp
+List nn_tune_usearch_cpp(int n, int p, int k, double target_recall, int connectivity_option, int expansion_add_option, int expansion_search_option, bool manual);
+RcppExport SEXP _faissR_nn_tune_usearch_cpp(SEXP nSEXP, SEXP pSEXP, SEXP kSEXP, SEXP target_recallSEXP, SEXP connectivity_optionSEXP, SEXP expansion_add_optionSEXP, SEXP expansion_search_optionSEXP, SEXP manualSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< int >::type p(pSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< double >::type target_recall(target_recallSEXP);
+    Rcpp::traits::input_parameter< int >::type connectivity_option(connectivity_optionSEXP);
+    Rcpp::traits::input_parameter< int >::type expansion_add_option(expansion_add_optionSEXP);
+    Rcpp::traits::input_parameter< int >::type expansion_search_option(expansion_search_optionSEXP);
+    Rcpp::traits::input_parameter< bool >::type manual(manualSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_tune_usearch_cpp(n, p, k, target_recall, connectivity_option, expansion_add_option, expansion_search_option, manual));
+    return rcpp_result_gen;
+END_RCPP
+}
 // nn_tune_rcpphnsw_cpp
 List nn_tune_rcpphnsw_cpp(int k, int m_option, int ef_construction_option, int ef_option);
 RcppExport SEXP _faissR_nn_tune_rcpphnsw_cpp(SEXP kSEXP, SEXP m_optionSEXP, SEXP ef_construction_optionSEXP, SEXP ef_optionSEXP) {
@@ -1658,6 +1676,35 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// usearch_available_cpp
+bool usearch_available_cpp();
+RcppExport SEXP _faissR_usearch_available_cpp() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(usearch_available_cpp());
+    return rcpp_result_gen;
+END_RCPP
+}
+// nn_usearch_float32_cpp
+List nn_usearch_float32_cpp(SEXP data, SEXP points, int k, int connectivity, int expansion_add, int expansion_search, bool exclude_self, int n_threads, std::string distance_storage);
+RcppExport SEXP _faissR_nn_usearch_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP connectivitySEXP, SEXP expansion_addSEXP, SEXP expansion_searchSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP, SEXP distance_storageSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type connectivity(connectivitySEXP);
+    Rcpp::traits::input_parameter< int >::type expansion_add(expansion_addSEXP);
+    Rcpp::traits::input_parameter< int >::type expansion_search(expansion_searchSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_usearch_float32_cpp(data, points, k, connectivity, expansion_add, expansion_search, exclude_self, n_threads, distance_storage));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_faissR_standardize_cpu_cpp", (DL_FUNC) &_faissR_standardize_cpu_cpp, 1},
@@ -1697,6 +1744,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_tune_faiss_pq_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_pq_cpp, 6},
     {"_faissR_nn_tune_cuvs_ivfpq_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_ivfpq_cpp, 5},
     {"_faissR_nn_tune_faiss_hnsw_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_hnsw_cpp, 9},
+    {"_faissR_nn_tune_usearch_cpp", (DL_FUNC) &_faissR_nn_tune_usearch_cpp, 8},
     {"_faissR_nn_tune_rcpphnsw_cpp", (DL_FUNC) &_faissR_nn_tune_rcpphnsw_cpp, 4},
     {"_faissR_nn_tune_faiss_nsg_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_nsg_cpp, 5},
     {"_faissR_nn_tune_faiss_nndescent_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_nndescent_cpp, 5},
@@ -1760,6 +1808,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_faiss_gpu_cagra_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_cagra_float32_cpp, 9},
     {"_faissR_kmeans_faiss_cpp", (DL_FUNC) &_faissR_kmeans_faiss_cpp, 8},
     {"_faissR_kmeans_faiss_gpu_cpp", (DL_FUNC) &_faissR_kmeans_faiss_gpu_cpp, 7},
+    {"_faissR_usearch_available_cpp", (DL_FUNC) &_faissR_usearch_available_cpp, 0},
+    {"_faissR_nn_usearch_float32_cpp", (DL_FUNC) &_faissR_nn_usearch_float32_cpp, 9},
     {NULL, NULL, 0}
 };
 

@@ -149,6 +149,10 @@ nn_tune_faiss_hnsw_cpp <- function(n, p, k, metric, target_recall = 0.99, m_opti
     .Call(`_faissR_nn_tune_faiss_hnsw_cpp`, n, p, k, metric, target_recall, m_option, ef_construction_option, ef_search_option, manual)
 }
 
+nn_tune_usearch_cpp <- function(n, p, k, target_recall = 0.99, connectivity_option = NA_integer_, expansion_add_option = NA_integer_, expansion_search_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_usearch_cpp`, n, p, k, target_recall, connectivity_option, expansion_add_option, expansion_search_option, manual)
+}
+
 nn_tune_rcpphnsw_cpp <- function(k, m_option = NA_integer_, ef_construction_option = NA_integer_, ef_option = NA_integer_) {
     .Call(`_faissR_nn_tune_rcpphnsw_cpp`, k, m_option, ef_construction_option, ef_option)
 }
@@ -399,5 +403,13 @@ kmeans_faiss_cpp <- function(data, centers, max_iter, nredo, tol, seed, n_thread
 
 kmeans_faiss_gpu_cpp <- function(data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus) {
     .Call(`_faissR_kmeans_faiss_gpu_cpp`, data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus)
+}
+
+usearch_available_cpp <- function() {
+    .Call(`_faissR_usearch_available_cpp`)
+}
+
+nn_usearch_float32_cpp <- function(data, points, k, connectivity, expansion_add, expansion_search, exclude_self, n_threads, distance_storage) {
+    .Call(`_faissR_nn_usearch_float32_cpp`, data, points, k, connectivity, expansion_add, expansion_search, exclude_self, n_threads, distance_storage)
 }
 

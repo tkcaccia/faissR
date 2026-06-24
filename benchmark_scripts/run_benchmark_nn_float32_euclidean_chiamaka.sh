@@ -26,7 +26,7 @@ Rscript benchmark_scripts/benchmark_nn_float32_euclidean.R \
   --manifest="$MANIFEST" \
   --out_dir="$OUT_DIR" \
   --backends=cpu,cuda \
-  --methods=exact,flat,bruteforce,grid,hnsw,ivf,ivfpq,vamana,nsg,nndescent,cagra \
+  --methods=exact,flat,bruteforce,grid,hnsw,ivf,ivfpq,vamana,nsg,nndescent,usearch,cagra \
   --k=50 \
   --threads=4 \
   --timeout=600 \

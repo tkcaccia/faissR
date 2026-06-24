@@ -18,7 +18,7 @@
 - `backend = "cuda"` forces CUDA execution and errors if no compatible CUDA
   backend is available.
 - `method` selects one canonical lowercase public algorithm family, for example
-  `"auto"`, `"flat"`, `"hnsw"`, `"ivf"`, `"cagra"`, or `"grid"`.
+  `"auto"`, `"flat"`, `"hnsw"`, `"usearch"`, `"ivf"`, `"cagra"`, or `"grid"`.
   Resolved implementation labels such as `faiss_hnsw` or `cuda_cuvs_cagra`
   are backend metadata, not additional public method names.
 
@@ -60,6 +60,7 @@ with method-specific parameters.
 | `"bruteforce"` | Native exact CPU KNN. | Direct RAPIDS cuVS brute force when available; cosine/correlation use normalized Euclidean search and inner product uses a maximum-inner-product-to-L2 transform around the cuVS L2 kernel. | Exhaustive route, useful for FAISS/cuVS comparisons [1-3,16]. |
 | `"grid"` | Native exact 2D/3D grid for Euclidean, cosine, and correlation. | Native CUDA 2D/3D grid for Euclidean, cosine, and correlation. | Low-dimensional spatial or simulated data; cosine/correlation use normalized Euclidean grid search; explicit grid requests error outside two or three columns. |
 | `"hnsw"` | FAISS CPU HNSW for all four public metrics when FAISS is available; RcppHNSW/hnswlib fallback otherwise. | RAPIDS cuVS HNSW for Euclidean/L2, normalized cosine/correlation, and transformed raw inner product. | Graph search. CUDA HNSW is built from a CUDA CAGRA index and searched through the cuVS HNSW wrapper. Automatic CPU and CUDA HNSW use compiled shape/k tiers selected by `target_recall = 0.9`, `0.95`, or `0.99` and record the requested target plus the selected tier in approximation metadata. Large high-dimensional CUDA shapes use smaller graph degrees than low-dimensional flow-style shapes; 5M-row-class low-dimensional CUDA HNSW uses a runtime guard for `k > 15` because wider high-recall graphs exceeded the 600-second benchmark budget on Chiamaka. Users can override graph degree, intermediate degree, and `ef` when stricter recall is needed. Raw inner product uses a maximum-inner-product-to-L2 extra-dimension transform and returns shifted inner-product distances [3,5,16,22-23]. |
+| `"usearch"` | USEARCH dense HNSW for Euclidean/L2, compiled from bundled header-only source. | Unsupported. | CPU-only approximate route. It is independent of FAISS HNSW and does not require a USEARCH runtime library; CUDA requests fail clearly rather than falling back [5,34]. |
 | `"ivf"` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP with metric-aware default probing. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP with metric-aware deterministic defaults. | Large approximate search with coarse-list probing [1-2,16]. |
 | `"ivfpq"` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP with metric-aware IVF probing. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP with metric-aware IVF probing. | Compressed-memory approximate search; CPU IVFPQ requires at least 624 training rows and auto-selects 4-bit PQ below 9,984 rows [6,16]. |
 | `"vamana"` | Native DiskANN/Vamana-style robust-pruned candidate graph with CPU candidate refinement. | Native DiskANN/Vamana-style robust-pruned candidate graph with CUDA row-candidate refinement. | Distinct pruned directed graph route inspired by DiskANN/Vamana; large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning, while smaller CPU inputs keep exact seed neighbours. Robust pruning protects the first `k` seed neighbours before applying the Vamana rule; cuVS Vamana is acknowledged for GPU build/serialization, but faissR performs KNN candidate refinement because cuVS Vamana search is not exposed yet [3,5,24]. |
@@ -82,6 +83,7 @@ errors because the grid route is geometric Euclidean/cosine/correlation search.
 | FAISS IVF-Flat | yes | yes, if FAISS GPU is built | Inverted-file approximate L2/IP search; cosine/correlation use normalized IP [1-2,16]. |
 | FAISS IVF-PQ | yes | yes, if FAISS GPU is built | Product-quantized approximate L2/IP search; cosine/correlation use normalized IP [6,16]. |
 | FAISS HNSW | yes, if exposed by FAISS | no | Approximate CPU graph-search index with L2/IP and normalized-IP metric transforms [5,16]. |
+| USEARCH dense HNSW | yes | no | Header-only CPU HNSW route for Euclidean/L2, bundled under Apache-2.0 and compiled with faissR's MIT adapter [5,34]. |
 | FAISS NSG | yes, if exposed by FAISS | no | Optional internal CPU graph-search index for Euclidean/L2 only; public CPU NSG requests use faissR's native NSG-style route instead [16,21,29]. |
 | Native Vamana | yes | optional CUDA refinement | DiskANN/Vamana-style robust-pruned candidate graph with candidate refinement; large high-dimensional CPU inputs use deterministic HNSW seeding before robust pruning, and CUDA route refines rows with the native CUDA candidate kernel [5,24]. |
 | Native CUDA NSG | no | yes, if native CUDA is built | NSG-style self-KNN candidate graph with CUDA candidate refinement for all public metrics; cosine/correlation use row transforms and raw inner product uses the CUDA row-candidate kernel [21]. |
@@ -201,6 +203,7 @@ quality as exact-assumed only when the route is exact by construction.
 - CUDA/cuVS/cuGraph support is optional and enabled only when matching headers
   and libraries are available.
 - Explicit CUDA requests fail clearly on CPU-only builds.
-- The package does not vendor FAISS, cuVS, cuGraph, or CUDA. See
+- The package does not vendor FAISS, cuVS, cuGraph, or CUDA. It vendors only
+  USEARCH header-only source for `method = "usearch"` under Apache-2.0. See
   [Installation](installation.md) for build variables and
   [References](references.md) for software acknowledgements.

@@ -10,7 +10,7 @@ knn_graph(
   k = 50L,
   backend = c("auto", "cpu", "cuda"),
   nn_method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
-    "vamana", "nsg", "nndescent", "cagra"),
+    "vamana", "nsg", "nndescent", "usearch", "cagra"),
   method = NULL,
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
@@ -28,7 +28,7 @@ knn_graph(
 \item{knn}{Optional precomputed KNN object returned by \code{nn()}. If supplied, \code{data} is ignored for neighbour search.}
 \item{k}{Number of non-self neighbours used in the graph.}
 \item{backend}{Device backend passed to \code{nn_without_self()} when \code{knn} is not supplied: \code{"auto"}, \code{"cpu"}, or \code{"cuda"}.}
-\item{nn_method}{Nearest-neighbour method passed to \code{nn_without_self()} when \code{knn} is not supplied. The default \code{"auto"} uses the shape-aware selector for the chosen backend.}
+\item{nn_method}{Nearest-neighbour method passed to \code{nn_without_self()} when \code{knn} is not supplied. The default \code{"auto"} uses the shape-aware selector for the chosen backend. \code{"usearch"} selects the CPU-only USEARCH dense HNSW route for Euclidean/L2 graph KNN.}
 \item{method}{Alias for \code{nn_method}, matching the public method argument used by \code{nn()} and \code{knn()}. If both \code{method} and \code{nn_method} are supplied they must resolve to the same public nearest-neighbour method label.}
 \item{metric}{Distance metric passed to \code{nn_without_self()} when \code{knn} is not supplied. Aliases such as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as canonical metric labels. Correlation is centered cosine similarity, not raw inner product. Inner-product graph construction ranks neighbours by larger raw dot product while reusing faissR's shifted smaller-is-better distance convention from \code{nn()}.}
 \item{tuning}{Tuning policy passed to \code{nn_without_self()} when \code{knn} is not supplied.}

@@ -532,7 +532,7 @@ main <- function() {
   manifest <- manifest[match(datasets, manifest$dataset), , drop = FALSE]
   methods <- split_arg(
     args$methods,
-    "exact,flat,bruteforce,grid,hnsw,ivf,ivfpq,vamana,nsg,nndescent,cagra"
+    "exact,flat,bruteforce,grid,hnsw,ivf,ivfpq,vamana,nsg,nndescent,usearch,cagra"
   )
   methods <- setdiff(unique(methods), "auto")
   backends <- split_arg(args$backends, "cpu,cuda")

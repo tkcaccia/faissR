@@ -41,7 +41,7 @@ internal_nn_without_self <- function(data,
 test_that("public nearest-neighbour wrappers expose one canonical method and metric set", {
   canonical_methods <- c(
     "auto", "exact", "flat", "bruteforce", "grid",
-    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra"
   )
   canonical_metrics <- c("euclidean", "cosine", "correlation", "inner_product")
   wrappers <- list(
@@ -313,7 +313,7 @@ test_that("float32 FAISS Flat input accepts mixed double and float32 query matri
   expect_equal(float_query$backend_used, "faiss_flat_l2")
 })
 
-test_that("float32 input can run non-Flat methods through compatibility conversion", {
+test_that("float32 input can run non-Flat methods through direct adapters", {
   skip_if_not_installed("float")
   skip_if_not(faiss_available(), "FAISS is required for this float32 compatibility test")
 
@@ -333,10 +333,10 @@ test_that("float32 input can run non-Flat methods through compatibility conversi
   expect_equal(out$indices, ref$indices)
   expect_equal(out$distances, ref$distances, tolerance = 1e-6)
   expect_equal(out$input_type, "float32")
-  expect_equal(out$input_layout, "float32_compatibility_to_r_double")
+  expect_equal(out$input_layout, "float32_column_major_payload_to_row_major")
   expect_true(out$input_owns_data)
-  expect_true(out$float32_compatibility_conversion)
-  expect_true(attr(out, "float32_compatibility_conversion"))
+  expect_false(out$float32_compatibility_conversion)
+  expect_false(attr(out, "float32_compatibility_conversion"))
   expect_equal(out$backend_used, "faiss_hnsw")
 })
 
@@ -771,7 +771,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
   caps <- nn_capabilities()
   methods <- c(
     "auto", "exact", "flat", "bruteforce", "grid",
-    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra"
   )
   metrics <- c("euclidean", "cosine", "correlation", "inner_product")
 
@@ -794,6 +794,16 @@ test_that("nn_capabilities documents the public method metric matrix", {
   ]))
   expect_true(all(caps$supported[
     caps$method == "hnsw" & caps$backend == "cuda"
+  ]))
+  expect_true(caps$supported[
+    caps$method == "usearch" & caps$backend == "cpu" & caps$metric == "euclidean"
+  ])
+  expect_true(caps$supported[
+    caps$method == "usearch" & caps$backend == "auto" & caps$metric == "euclidean"
+  ])
+  expect_true(all(!caps$supported[
+    caps$method == "usearch" &
+      (caps$backend == "cuda" | caps$metric != "euclidean")
   ]))
   hnsw_ip <- caps[
     caps$method == "hnsw" & caps$backend == "cuda" &
@@ -2263,6 +2273,22 @@ test_that("public backend and method resolver maps device plus method", {
   expect_equal(
     faissR:::resolve_public_nn_backend("auto", "nsg", "euclidean"),
     if (cuda_available()) "cuda_nsg" else "cpu_nsg"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("auto", "usearch", "euclidean"),
+    "usearch"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "usearch", "euclidean"),
+    "usearch"
+  )
+  expect_error(
+    faissR:::resolve_public_nn_backend("cuda", "usearch", "euclidean"),
+    "CPU-only"
+  )
+  expect_error(
+    faissR:::resolve_public_nn_backend("cpu", "usearch", "cosine"),
+    "supports only"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "grid", "euclidean"),

@@ -10,7 +10,7 @@ nn(
   k = NULL,
   backend = c("auto", "cpu", "cuda"),
   method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
-    "vamana", "nsg", "nndescent", "cagra"),
+    "vamana", "nsg", "nndescent", "usearch", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   target_recall = 0.99,
@@ -24,14 +24,14 @@ nn(
 \arguments{
 \item{data}{Numeric matrix/data frame or optional `float::fl()`/`float32`
 object of reference observations in rows. FAISS CPU/GPU and RAPIDS cuVS
-nearest-neighbour routes use direct float-pointer input adapters. Native routes
-without a direct float32 adapter fail clearly instead of silently converting
-benchmark input back to R double.}
+nearest-neighbour routes use direct float-pointer adapters for float32
+inputs. Native routes without a direct float32 adapter fail clearly instead
+of silently converting benchmark input back to R double.}
 
 \item{points}{Numeric matrix/data frame or optional `float::fl()`/`float32`
 query object with observations in rows. Defaults to `data`. A float32
-query can be paired with an ordinary R double
-reference matrix on the CPU FAISS Flat float32 route.}
+query can be paired with an ordinary R double reference matrix on direct
+FAISS/cuVS float32 routes.}
 
 \item{k}{Number of neighbors to return. `NULL` chooses the package's
 automatic neighborhood size and includes the self-neighbor when `points`
@@ -46,11 +46,14 @@ support or the selected CUDA combination is unavailable.}
 \item{method}{Algorithm selector. `"auto"` chooses a shape-aware default for
 the selected backend. Other values include `"exact"`, `"flat"`,
 `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`,
-`"ivfpq"`, `"vamana"`, `"nsg"`, `"nndescent"`, and `"cagra"`. Use these canonical
+`"ivfpq"`, `"vamana"`, `"nsg"`, `"nndescent"`, `"usearch"`, and
+`"cagra"`. Use these canonical
 lowercase method labels; resolved implementation labels such as
-`"faiss_hnsw"` are not public `method` values. Unsupported
+`"faiss_hnsw"` or `"cuda_cuvs_cagra"` are not public `method` values. Unsupported
 backend/method combinations fail clearly; for example,
-`method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only.}
+`method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only,
+and `method = "usearch", backend = "cuda"` errors because USEARCH is
+CPU-only.}
 
 \item{metric}{Distance metric. The intentionally small public set is
 `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`;
@@ -107,7 +110,8 @@ IVF, while non-Euclidean IVF routes use deterministic metric-aware
 defaults. FAISS CPU HNSW and CUDA cuVS HNSW use deterministic shape/k
 tiers for the selected `target_recall` value. The default is the 0.99
 tier where feasible; `target_recall = 0.95` and `0.9` select faster,
-lower-recall HNSW tiers. Manual `options(faissR.cuvs_graph_degree = ...,
+lower-recall HNSW tiers. Manual
+`options(faissR.cuvs_graph_degree = ...,
 faissR.cuvs_intermediate_graph_degree = ..., faissR.cuvs_hnsw_ef = ...)`.
 Deterministic approximate-method defaults are computed by C++
 `nn_tune_*_cpp()` helpers and record `tuning_source = "cpp"` in
@@ -151,13 +155,14 @@ returns the default R numeric distance matrix. `"float"` returns
 `float` package. When either `data` or `points` is a `float::fl()` matrix,
 FAISS Flat/IVF/IVFPQ/HNSW/NSG/NNDescent, FAISS GPU Flat/IVF/IVFPQ/CAGRA,
 and RAPIDS cuVS brute-force/CAGRA/HNSW/IVF/IVFPQ/NN-descent routes consume
-float32 input directly through C++ adapters. Methods without a direct float32
-adapter now error instead of silently converting benchmark input back to R
-double. Ordinary R double inputs with a CPU FAISS Flat-style or HNSW request
-and `output = "float"` also use a float-pointer FAISS route. On direct
-FAISS float routes, float distance output is constructed directly from FAISS
-float results instead of first materializing an R double distance matrix,
-except for zero-row cosine/correlation correction.}
+float32 input directly through C++ adapters. Methods without a direct
+float32 adapter now error instead of silently converting the benchmark
+input back to R double. Ordinary R double inputs with a CPU FAISS
+Flat-style or HNSW request and `output = "float"` also use a float-pointer
+FAISS route. On direct FAISS float routes, float distance output is
+constructed directly from FAISS float results instead of first materializing
+an R double distance matrix, except for zero-row cosine/correlation
+correction.}
 
 \item{distances}{Optional alias for `output`, kept for callers that prefer
 `distances = "double"` or `distances = "float"` to describe the returned
@@ -237,15 +242,23 @@ Method descriptions:
   otherwise. CUDA uses RAPIDS cuVS HNSW converted from a CUDA CAGRA index
   for Euclidean plus normalized cosine/correlation; raw inner product uses
   the same maximum-inner-product-to-L2 transform as other cuVS L2 graph
-routes and returns shifted inner-product distances. Default parameters are selected by compiled
-deterministic shape/k/metric rules without pilot tuning; CPU FAISS HNSW has
-separate large low-dimensional and large high-dimensional Euclidean tiers, and
-CUDA cuVS HNSW has separate high-dimensional and low-dimensional graph/search
-tiers. Both backends expose `target_recall = 0.9`, `0.95`, or `0.99`; the 0.99
-CUDA tier keeps a runtime guard for 5M-row-class low-dimensional `k > 15`
-workloads where a strict 0.99 target is not feasible within the benchmark
-timeout. Result approximation metadata records the selected `tuning_rule`,
-`target_recall`, `requested_target_recall`, and shape flags used.
+  routes and returns shifted inner-product distances. Default parameters are
+  selected by compiled deterministic shape/k/metric rules without pilot
+  tuning. CPU FAISS HNSW has separate large low-dimensional and large
+  high-dimensional Euclidean tiers; CUDA cuVS HNSW has separate
+  high-dimensional and low-dimensional graph/search tiers. Both backends
+  expose `target_recall = 0.9`, `0.95`, or `0.99`; the 0.99 CUDA tier keeps
+  a runtime guard for 5M-row-class low-dimensional `k > 15` workloads where
+  a strict 0.99 target is not feasible within the benchmark timeout. Result
+  approximation metadata records the selected `tuning_rule`,
+  `target_recall`, `requested_target_recall`, and shape flags used.
+  \item `"usearch"`: CPU-only USEARCH dense HNSW route for Euclidean/L2
+  search [5,34]. It is compiled from bundled Apache-2.0 header-only
+  USEARCH source, consumes float32 vectors internally, and records
+  `connectivity`, `expansion_add`, `expansion_search`, and C++ tuning
+  metadata in `attr(result, "approximation")`. It is intentionally separate
+  from `method = "hnsw"` so benchmark rows can distinguish FAISS HNSW,
+  RcppHNSW fallback, cuVS HNSW, and USEARCH HNSW-family behaviour.
   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records

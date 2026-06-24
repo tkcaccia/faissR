@@ -31,6 +31,9 @@ headers and libraries discovered by `configure`.
 
 - `nn()` for native CPU references, FAISS CPU indexes, FAISS GPU indexes, and
   optional direct RAPIDS cuVS/CUDA indexes [1-6,13-16,22-23].
+- `method = "usearch"` for a CPU-only Euclidean/L2 dense HNSW route compiled
+  from bundled header-only USEARCH source; no separate USEARCH runtime library
+  is required [5,34].
 - Optional float32 KNN data flow: `nn()` and `nn_without_self()` accept
   `float::fl()` matrices. FAISS CPU/GPU and RAPIDS cuVS NN routes consume
   float32 input through direct C++ adapters, and unsupported native routes now
@@ -166,4 +169,6 @@ cl$selected_resolution
 
 `faissR` is released under the MIT license. External libraries such as FAISS,
 RAPIDS cuVS, and RAPIDS cuGraph are linked as system dependencies and are not
-vendored into the R package [1-3,12-16].
+vendored into the R package [1-3,12-16]. The optional `method = "usearch"`
+CPU route is compiled from bundled header-only USEARCH source, which remains
+under its upstream Apache-2.0 license [34].

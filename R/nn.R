@@ -493,7 +493,8 @@ nn_compute <- function(data,
       "cuvs_ivf_flat", "cuda_cuvs_ivf_flat",
       "cuvs_ivfpq", "cuda_cuvs_ivfpq",
       "cuvs_ivf_pq", "cuda_cuvs_ivf_pq",
-      "cuda_cuvs_nndescent", "cuvs_nndescent"
+      "cuda_cuvs_nndescent", "cuvs_nndescent",
+      "usearch"
     )
     if (!isTRUE(direct_float32_backend)) {
       stop(
@@ -626,6 +627,50 @@ nn_compute <- function(data,
       if (!is.null(params)) {
         result <- append_nn_tuning_metadata(result, params)
       }
+      return(finish_float32_direct_result(result, out))
+    }
+    if (identical(backend, "usearch")) {
+      if (!identical(metric, "euclidean")) {
+        stop("float32 USEARCH input currently supports `metric = \"euclidean\"`.", call. = FALSE)
+      }
+      if (!isTRUE(usearch_available_cpp())) {
+        stop("USEARCH backend is not available in this build.", call. = FALSE)
+      }
+      params <- usearch_params(
+        data_dim[[1L]],
+        data_dim[[2L]],
+        k,
+        target_recall = target_recall
+      )
+      out <- nn_usearch_float32_cpp(
+        data,
+        points,
+        as.integer(k),
+        as.integer(params$connectivity),
+        as.integer(params$expansion_add),
+        as.integer(params$expansion_search),
+        isTRUE(exclude_self),
+        as.integer(n_threads),
+        output
+      )
+      result <- finish_nn_result(out, "usearch", k, self_query, exact = FALSE, metric = metric)
+      attr(result, "approximation") <- list(
+        strategy = "usearch_index_dense_hnsw",
+        backend = "usearch",
+        library = "usearch",
+        metric = metric,
+        input_type = "float32",
+        connectivity = as.integer(out$connectivity),
+        expansion_add = as.integer(out$expansion_add),
+        expansion_search = as.integer(out$expansion_search),
+        requested_connectivity = as.integer(params$requested_connectivity),
+        requested_expansion_add = as.integer(params$requested_expansion_add),
+        requested_expansion_search = as.integer(params$requested_expansion_search),
+        usearch_parameters_adjusted = !identical(as.integer(params$requested_connectivity), as.integer(out$connectivity)) ||
+          !identical(as.integer(params$requested_expansion_add), as.integer(out$expansion_add)) ||
+          !identical(as.integer(params$requested_expansion_search), as.integer(out$expansion_search))
+      )
+      result <- append_nn_tuning_metadata(result, params)
       return(finish_float32_direct_result(result, out))
     }
     if (identical(backend, "faiss_hnsw")) {
@@ -1004,6 +1049,51 @@ nn_compute <- function(data,
       metric = metric,
       input_type = "float32"
     )
+    return(result)
+  }
+
+  if (identical(backend, "usearch")) {
+    if (!identical(metric, "euclidean")) {
+      stop("USEARCH currently supports `metric = \"euclidean\"`.", call. = FALSE)
+    }
+    if (!isTRUE(usearch_available_cpp())) {
+      stop("USEARCH backend is not available in this build.", call. = FALSE)
+    }
+    params <- usearch_params(
+      nrow(data),
+      ncol(data),
+      k,
+      target_recall = target_recall
+    )
+    out <- nn_usearch_float32_cpp(
+      data,
+      points,
+      as.integer(k),
+      as.integer(params$connectivity),
+      as.integer(params$expansion_add),
+      as.integer(params$expansion_search),
+      isTRUE(exclude_self),
+      as.integer(n_threads),
+      output
+    )
+    result <- finish_nn_result(out, "usearch", k, self_query, exact = FALSE, metric = metric)
+    attr(result, "approximation") <- list(
+      strategy = "usearch_index_dense_hnsw",
+      backend = "usearch",
+      library = "usearch",
+      metric = metric,
+      input_type = "float32",
+      connectivity = as.integer(out$connectivity),
+      expansion_add = as.integer(out$expansion_add),
+      expansion_search = as.integer(out$expansion_search),
+      requested_connectivity = as.integer(params$requested_connectivity),
+      requested_expansion_add = as.integer(params$requested_expansion_add),
+      requested_expansion_search = as.integer(params$requested_expansion_search),
+      usearch_parameters_adjusted = !identical(as.integer(params$requested_connectivity), as.integer(out$connectivity)) ||
+        !identical(as.integer(params$requested_expansion_add), as.integer(out$expansion_add)) ||
+        !identical(as.integer(params$requested_expansion_search), as.integer(out$expansion_search))
+    )
+    result <- append_nn_tuning_metadata(result, params)
     return(result)
   }
 
@@ -2521,7 +2611,7 @@ normalize_nn_method <- function(method) {
     stop(
       "`method` must be one of \"auto\", \"exact\", \"flat\", \"bruteforce\", ",
       "\"grid\", \"hnsw\", \"ivf\", \"ivfpq\", \"vamana\", ",
-      "\"nsg\", \"nndescent\", or \"cagra\".",
+      "\"nsg\", \"nndescent\", \"usearch\", or \"cagra\".",
       " Use these canonical lowercase method labels; internal backend route ",
       "labels such as \"faiss_hnsw\" are not public `method` values.",
       call. = FALSE
@@ -2551,7 +2641,7 @@ nn_metric_labels <- function() {
 nn_method_labels <- function() {
   c(
     "auto", "exact", "flat", "bruteforce", "grid",
-    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra"
   )
 }
 
@@ -2986,6 +3076,14 @@ nn_resolved_backend_available <- function(backend) {
       notes = if (ok) "RcppHNSW fallback is available." else "RcppHNSW fallback is not installed."
     ))
   }
+  if (identical(backend, "usearch")) {
+    ok <- isTRUE(usearch_available_cpp())
+    return(list(
+      available = ok,
+      reason = if (ok) "available" else "missing_usearch",
+      notes = if (ok) "Vendored USEARCH CPU route is available." else "USEARCH route is not available in this build."
+    ))
+  }
   if (startsWith(backend, "faiss_gpu")) {
     ok <- isTRUE(faiss_gpu_available())
     return(list(
@@ -3117,6 +3215,17 @@ nn_capability_row <- function(method, backend, metric) {
       "Uses RAPIDS cuVS HNSW converted from a CUDA CAGRA index; cosine/correlation use normalized Euclidean search."
     } else {
       "Unsupported CUDA HNSW metric."
+    }
+  } else if (identical(method, "usearch")) {
+    supported <- backend %in% c("auto", "cpu") && euclidean
+    exact <- if (supported) FALSE else NA
+    implementation <- if (supported) "USEARCH dense HNSW" else NA_character_
+    notes <- if (backend %in% c("auto", "cpu") && euclidean) {
+      "Uses the vendored USEARCH header-only dense HNSW implementation for Euclidean/L2 search."
+    } else if (identical(backend, "cuda")) {
+      "USEARCH is exposed as a CPU-only method in faissR; select method = \"hnsw\" for CUDA cuVS HNSW."
+    } else {
+      "USEARCH currently exposes Euclidean/L2 search only."
     }
   } else if (method %in% c("ivf", "ivfpq")) {
     supported <- all_metrics
@@ -3279,6 +3388,9 @@ resolve_public_nn_backend <- function(backend,
   requested_device <- tolower(backend_label)
   device <- normalize_public_compute_backend(backend)
   method <- method_label
+  if (identical(method, "usearch") && !identical(metric, "euclidean")) {
+    stop("`method = \"usearch\"` currently supports only `metric = \"euclidean\"`.", call. = FALSE)
+  }
   if (identical(requested_device, "auto") && !identical(method, "auto")) {
     device <- resolve_auto_public_nn_device(method, metric)
   }
@@ -3292,7 +3404,7 @@ resolve_public_nn_backend <- function(backend,
     return("cpu_auto")
   }
   if (!metric %in% c("euclidean", "inner_product") && identical(device, "cuda") &&
-      !method %in% c("exact", "bruteforce", "flat", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra")) {
+      !method %in% c("exact", "bruteforce", "flat", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra")) {
     if (identical(requested_device, "auto")) {
       device <- "cpu"
     } else {
@@ -3328,6 +3440,7 @@ resolve_public_nn_backend <- function(backend,
       vamana = "cpu_vamana",
       nsg = "cpu_nsg",
       nndescent = "cpu_nndescent",
+      usearch = "usearch",
       cagra = stop("`method = \"cagra\"` is only available with `backend = \"cuda\"`.", call. = FALSE),
       stop("Unsupported CPU nearest-neighbour method.", call. = FALSE)
     )
@@ -3371,6 +3484,7 @@ resolve_public_nn_backend <- function(backend,
       } else {
         "cuda_native_nndescent"
       },
+      usearch = stop("`method = \"usearch\"` is CPU-only; use `backend = \"cpu\"` or `backend = \"auto\"`.", call. = FALSE),
       cagra = resolve_cuda_cagra_backend(
         n = n,
         p = p,
@@ -3395,6 +3509,7 @@ public_nn_method_label <- function(method) {
     vamana = "vamana",
     nsg = "nsg",
     nndescent = "nndescent",
+    usearch = "usearch",
     cagra = "cagra"
   )
   labels[[method]] %||% method
@@ -3420,6 +3535,7 @@ nn_resolved_backend_public_method <- function(backend) {
                      "cuda_grid3d")) return("grid")
   if (backend %in% c("hnsw", "rcpphnsw", "cpu_hnsw", "faiss_hnsw",
                      "cuda_cuvs_hnsw", "cuvs_hnsw")) return("hnsw")
+  if (identical(backend, "usearch")) return("usearch")
   if (backend %in% c("faiss_ivf", "cpu_faiss_index_ivf", "faiss_ivf_flat",
                      "faiss_gpu_ivf", "faiss_gpu_ivf_flat",
                      "cuda_faiss_ivf_flat", "cuvs_ivf",
@@ -3616,6 +3732,7 @@ public_nn_cpu_route_supported <- function(method, metric) {
     vamana = all_metrics,
     nsg = all_metrics,
     nndescent = all_metrics,
+    usearch = identical(metric, "euclidean"),
     cagra = FALSE,
     FALSE
   )
@@ -3636,6 +3753,7 @@ public_nn_cuda_route_available <- function(method,
       faiss_gpu_available_value = faiss_gpu_available_value
     )$available))
   }
+  if (identical(method, "usearch")) return(FALSE)
   if (identical(method, "nsg")) return(isTRUE(cuda_available_value))
   if (identical(method, "vamana")) return(isTRUE(cuda_available_value))
   if (identical(metric, "inner_product")) {
@@ -6535,6 +6653,28 @@ faiss_hnsw_params <- function(k, n = NULL, p = NULL, metric = "euclidean", targe
   )
 }
 
+usearch_manual_params <- function() {
+  any(vapply(
+    c("usearch_connectivity", "usearch_expansion_add", "usearch_expansion_search"),
+    function(name) !is.null(faissr_option(name, NULL)),
+    logical(1)
+  ))
+}
+
+usearch_params <- function(n, p, k, target_recall = 0.99) {
+  target_recall <- normalize_hnsw_target_recall(target_recall)
+  nn_tune_usearch_cpp(
+    suppressWarnings(as.integer(n %||% NA_integer_)),
+    suppressWarnings(as.integer(p %||% NA_integer_)),
+    as.integer(k),
+    as.numeric(target_recall),
+    nn_option_int_or_na("usearch_connectivity"),
+    nn_option_int_or_na("usearch_expansion_add"),
+    nn_option_int_or_na("usearch_expansion_search"),
+    usearch_manual_params()
+  )
+}
+
 faiss_nsg_params <- function(k) {
   nn_tune_faiss_nsg_cpp(
     as.integer(k),
@@ -7143,6 +7283,13 @@ grid_self_knn <- function(data,
 #'   a strict 0.99 target is not feasible within the benchmark timeout. Result
 #'   approximation metadata records the selected `tuning_rule`,
 #'   `target_recall`, `requested_target_recall`, and shape flags used.
+#'   \item `"usearch"`: CPU-only USEARCH dense HNSW route for Euclidean/L2
+#'   search [5,34]. It is compiled from bundled Apache-2.0 header-only
+#'   USEARCH source, consumes float32 vectors internally, and records
+#'   `connectivity`, `expansion_add`, `expansion_search`, and C++ tuning
+#'   metadata in `attr(result, "approximation")`. It is intentionally separate
+#'   from `method = "hnsw"` so benchmark rows can distinguish FAISS HNSW,
+#'   RcppHNSW fallback, cuVS HNSW, and USEARCH HNSW-family behaviour.
 #'   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
 #'   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
 #'   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records
@@ -7241,11 +7388,14 @@ grid_self_knn <- function(data,
 #' @param method Algorithm selector. `"auto"` chooses a shape-aware default for
 #'   the selected backend. Other values include `"exact"`, `"flat"`,
 #'   `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`,
-#'   `"ivfpq"`, `"vamana"`, `"nsg"`, `"nndescent"`, and `"cagra"`. Use these canonical
+#'   `"ivfpq"`, `"vamana"`, `"nsg"`, `"nndescent"`, `"usearch"`, and
+#'   `"cagra"`. Use these canonical
 #'   lowercase method labels; resolved implementation labels such as
-#'   `"faiss_hnsw"` are not public `method` values. Unsupported
+#'   `"faiss_hnsw"` or `"cuda_cuvs_cagra"` are not public `method` values. Unsupported
 #'   backend/method combinations fail clearly; for example,
-#'   `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only.
+#'   `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only,
+#'   and `method = "usearch", backend = "cuda"` errors because USEARCH is
+#'   CPU-only.
 #' @param metric Distance metric. The intentionally small public set is
 #'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`;
 #'   aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and
@@ -7381,7 +7531,7 @@ nn <- function(data,
                points = data,
                k = NULL,
                backend = c("auto", "cpu", "cuda"),
-               method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"),
+               method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra"),
                metric = c("euclidean", "cosine", "correlation", "inner_product"),
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                target_recall = 0.99,
@@ -7495,7 +7645,7 @@ nn <- function(data,
 nn_without_self <- function(data,
                             k,
                             backend = c("auto", "cpu", "cuda"),
-                            method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"),
+                            method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra"),
                             metric = c("euclidean", "cosine", "correlation", "inner_product"),
                             tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                             target_recall = 0.99,

@@ -13,6 +13,7 @@
 backend_info <- function() {
   cuda_knn <- backend_flag(cuda_available)
   faiss_knn <- backend_flag(faiss_available)
+  usearch_knn <- backend_flag(usearch_available_cpp)
   cuvs_knn <- backend_flag(cuvs_available)
   cugraph_graph <- backend_flag(cugraph_available)
   cuda <- cuda_summary()
@@ -20,12 +21,13 @@ backend_info <- function() {
   cuvs <- cuvs_summary()
 
   data.frame(
-    backend = c("cpu", "faiss", "faiss_gpu_cuvs", "cuvs", "cuda", "cugraph"),
-    available = c(TRUE, faiss_knn, faiss$gpu && cuda_knn, cuvs_knn, cuda_knn, cugraph_graph && cuda_knn),
-    knn_available = c(TRUE, faiss_knn, faiss$gpu && cuda_knn, cuvs_knn, cuda_knn, FALSE),
+    backend = c("cpu", "faiss", "usearch", "faiss_gpu_cuvs", "cuvs", "cuda", "cugraph"),
+    available = c(TRUE, faiss_knn, usearch_knn, faiss$gpu && cuda_knn, cuvs_knn, cuda_knn, cugraph_graph && cuda_knn),
+    knn_available = c(TRUE, faiss_knn, usearch_knn, faiss$gpu && cuda_knn, cuvs_knn, cuda_knn, FALSE),
     public_call = c(
       "backend = \"cpu\"",
       "backend = \"cpu\" or \"cuda\", method = \"flat\"/\"ivf\"/\"ivfpq\"/\"hnsw\"/\"cagra\" as supported",
+      "backend = \"cpu\", method = \"usearch\"",
       "backend = \"cuda\", method = \"ivf\"/\"ivfpq\"/\"cagra\"",
       "backend = \"cuda\", method = \"bruteforce\"/\"nndescent\"/\"hnsw\"/\"cagra\"",
       "backend = \"cuda\"",
@@ -34,14 +36,16 @@ backend_info <- function() {
     public_backends = c(
       "cpu",
       "cpu, cuda",
+      "cpu",
       "cuda",
       "cuda",
       "cuda",
       "cuda"
     ),
     supported_methods = c(
-      "auto, exact, flat, bruteforce, grid, hnsw, ivf, ivfpq, vamana, nsg, nndescent",
+      "auto, exact, flat, bruteforce, grid, hnsw, ivf, ivfpq, vamana, nsg, nndescent, usearch",
       "flat, ivf, ivfpq, hnsw, nsg; GPU flat/ivf/ivfpq/cagra when FAISS GPU is available",
+      "usearch",
       "ivf, ivfpq, cagra",
       "bruteforce, nndescent, hnsw, cagra",
       "grid, flat, bruteforce, hnsw, ivf, ivfpq, vamana, nsg, nndescent, cagra where compiled",
@@ -50,6 +54,7 @@ backend_info <- function() {
     supported_metrics = c(
       "euclidean, cosine, correlation, inner_product; method-specific exclusions in nn_capabilities()",
       "euclidean, cosine, correlation, inner_product for Flat/IVF/IVFPQ/HNSW; public NSG uses the native CPU route for all metrics, with deterministic FAISS HNSW seeding on large high-dimensional CPU inputs, while explicit FAISS NSG is Euclidean-only",
+      "euclidean for USEARCH dense HNSW",
       "euclidean, cosine, correlation, inner_product for IVF/IVFPQ and CAGRA; CAGRA inner_product uses a maximum-inner-product-to-L2 transform",
       "euclidean, cosine, correlation, inner_product for direct brute force, direct IVF/PQ, direct CAGRA, and cuVS HNSW using metric transforms where needed; euclidean plus normalized cosine/correlation for direct cuVS NN-descent; public CUDA NN-descent inner_product uses native CUDA candidate refinement",
       "euclidean, cosine, correlation, inner_product where the selected CUDA method supports the metric",
@@ -58,6 +63,7 @@ backend_info <- function() {
     resolved_route = c(
       "implementation label: cpu",
       "implementation labels include faiss_flat_l2, faiss_ivf, faiss_hnsw, and faiss_gpu_*",
+      "implementation label: usearch",
       "implementation labels include faiss_gpu_ivf_flat, faiss_gpu_ivfpq, and faiss_gpu_cagra",
       "implementation labels include cuda_cuvs_bruteforce, cuda_cuvs_nndescent, cuda_cuvs_hnsw, and cuda_cuvs_cagra",
       "implementation labels include cuda_grid, cuda_vamana, cuda_nsg, and cuda_nndescent; exact CUDA may report cuda",
@@ -66,6 +72,7 @@ backend_info <- function() {
     device = c(
       cpu_summary(),
       faiss$device,
+      cpu_summary(),
       cuda$device,
       cuvs$device,
       cuda$device,
@@ -74,6 +81,7 @@ backend_info <- function() {
     runtime = c(
       R.version$platform,
       faiss$runtime,
+      "vendored USEARCH header-only C++ implementation",
       if (isTRUE(faiss$gpu)) {
         combine_nonempty(faiss$runtime, "FAISS GPU IVF and CAGRA indexes backed by NVIDIA cuVS when FAISS is built with cuVS")
       } else {
@@ -90,6 +98,7 @@ backend_info <- function() {
       } else {
         "Real FAISS C++ KNN is unavailable; FAISS-backed method requests will fail."
       },
+      "USEARCH dense HNSW is compiled from bundled Apache-2.0 header-only source and does not require an additional runtime library.",
       if (faiss$gpu && cuda_knn) {
         "FAISS GPU IVF-Flat, IVF-PQ, and CAGRA use FAISS GPU indexes with NVIDIA cuVS integration when the linked FAISS library provides it; result backends report GpuIndexIVFFlat_cuVS, GpuIndexIVFPQ_cuVS, or GpuIndexCagra_cuVS."
       } else {

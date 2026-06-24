@@ -900,6 +900,102 @@ List nn_tune_faiss_hnsw_cpp(int n,
 }
 
 // [[Rcpp::export]]
+List nn_tune_usearch_cpp(int n,
+                         int p,
+                         int k,
+                         double target_recall = 0.99,
+                         int connectivity_option = NA_INTEGER,
+                         int expansion_add_option = NA_INTEGER,
+                         int expansion_search_option = NA_INTEGER,
+                         bool manual = false) {
+  n = valid_int(n) ? n : NA_INTEGER;
+  p = valid_int(p) ? p : NA_INTEGER;
+  k = safe_k(k);
+  target_recall = hnsw_target_recall_cpp(target_recall);
+  const bool low_dim = valid_int(p) && p <= 64;
+  const bool high_dim = valid_int(p) && p >= 256;
+  const bool large_n = valid_int(n) && n >= 50000;
+  const bool small_k = k <= 15;
+  const bool large_k = k >= 100;
+
+  std::string rule;
+  int default_connectivity = 16;
+  int default_expansion_add = 128;
+  int default_expansion_search = 64;
+  if (large_n && low_dim) {
+    if (target_recall <= 0.90 && small_k) {
+      rule = "recall90_large_low_dim_small_k";
+      default_connectivity = 8;
+      default_expansion_add = 64;
+      default_expansion_search = std::max(k, 24);
+    } else if (target_recall <= 0.95) {
+      rule = "recall95_large_low_dim";
+      default_connectivity = 12;
+      default_expansion_add = 96;
+      default_expansion_search = std::max(k, 48);
+    } else {
+      rule = "recall99_large_low_dim";
+      default_connectivity = 16;
+      default_expansion_add = 128;
+      default_expansion_search = std::max(k, 80);
+    }
+  } else if (large_n && high_dim) {
+    if (target_recall <= 0.90 && small_k) {
+      rule = "recall90_large_high_dim_small_k";
+      default_connectivity = 12;
+      default_expansion_add = 64;
+      default_expansion_search = std::max(k, 64);
+    } else if (target_recall <= 0.95) {
+      rule = "recall95_large_high_dim";
+      default_connectivity = 12;
+      default_expansion_add = 64;
+      default_expansion_search = std::max(k, 64);
+    } else {
+      rule = "recall99_large_high_dim";
+      default_connectivity = 16;
+      default_expansion_add = 128;
+      default_expansion_search = std::max(k, 80);
+    }
+  } else if (high_dim) {
+    rule = "balanced_high_dim";
+    default_connectivity = 16;
+    default_expansion_add = 128;
+    default_expansion_search = std::max(k, target_recall <= 0.95 ? 64 : 96);
+  } else {
+    rule = "balanced_shape";
+    default_connectivity = 16;
+    default_expansion_add = 128;
+    default_expansion_search = std::max(k, 64);
+  }
+
+  const int n_cap = valid_int(n) ? std::max(2, n - 1) : std::numeric_limits<int>::max();
+  const int requested_connectivity = requested_int(connectivity_option, default_connectivity);
+  const int requested_expansion_add = requested_int(expansion_add_option, default_expansion_add);
+  const int requested_expansion_search = requested_int(expansion_search_option, default_expansion_search);
+  const int connectivity = clamp_int(requested_connectivity, 2, std::min(n_cap, 256));
+  const int expansion_add = clamp_int(requested_expansion_add, connectivity, 4096);
+  const int expansion_search = clamp_int(requested_expansion_search, k, 4096);
+
+  return List::create(
+    _["connectivity"] = connectivity,
+    _["expansion_add"] = expansion_add,
+    _["expansion_search"] = expansion_search,
+    _["rule"] = rule,
+    _["policy"] = manual ? "manual_options" : "auto_shape_metric",
+    _["high_dim"] = high_dim,
+    _["low_dim"] = low_dim,
+    _["large_n"] = large_n,
+    _["small_k"] = small_k,
+    _["large_k"] = large_k,
+    _["requested_connectivity"] = default_connectivity,
+    _["requested_expansion_add"] = default_expansion_add,
+    _["requested_expansion_search"] = default_expansion_search,
+    _["target_recall"] = target_recall,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
 List nn_tune_rcpphnsw_cpp(int k,
                           int m_option = NA_INTEGER,
                           int ef_construction_option = NA_INTEGER,

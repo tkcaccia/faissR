@@ -76,7 +76,7 @@ default_nn_metric_values <- function() {
 default_nn_method_values <- function() {
   c(
     "auto", "exact", "flat", "bruteforce", "grid",
-    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra"
   )
 }
 
@@ -612,7 +612,7 @@ should_isolate_cuda_native_timeout <- function(x, backend, method, preflight_rou
   public_auto_request <- identical(method, "auto") && cuda_request
   cuda_native_timeout_method <- method %in% c(
     "auto", "exact", "flat", "bruteforce", "hnsw", "ivf", "ivfpq",
-    "vamana", "nsg", "nndescent", "cagra"
+    "vamana", "nsg", "nndescent", "usearch", "cagra"
   )
   cuda_request && cuda_native_timeout_method && (cuda_route || public_auto_request)
 }
@@ -641,7 +641,7 @@ should_isolate_native_timeout <- function(x, backend, method, preflight_route,
   auto_cpu_exact <- identical(backend, "auto") &&
     method %in% c("exact", "flat", "bruteforce") &&
     cpu_exact_route
-  cpu_approx_methods <- c("auto", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent")
+  cpu_approx_methods <- c("auto", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch")
   explicit_cpu_approx <- identical(backend, "cpu") &&
     method %in% cpu_approx_methods
   auto_cpu_approx <- identical(backend, "auto") &&

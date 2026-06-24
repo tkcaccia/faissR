@@ -52,6 +52,7 @@ The `runtime_reason` labels are machine-readable, for example `available`,
 | `"bruteforce"` | yes | native CPU exact | cuVS brute force | cuVS [3] |
 | `"grid"` | yes | native 2D/3D grid | native CUDA 2D/3D grid | native faissR implementation |
 | `"hnsw"` | approximate | FAISS HNSW for all metrics when FAISS is available; RcppHNSW/hnswlib fallback | cuVS HNSW for Euclidean and normalized cosine/correlation | HNSW/cuVS [3,5,16,22-23] |
+| `"usearch"` | approximate | USEARCH dense HNSW for Euclidean/L2 | unsupported | USEARCH/HNSW [5,34] |
 | `"ivf"` | approximate | FAISS IVF-Flat | FAISS GPU IVF-Flat | FAISS IVF [1-2,16] |
 | `"ivfpq"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
 | `"vamana"` | approximate | native Vamana candidate graph | native Vamana candidate graph with CUDA refinement | DiskANN/Vamana [3,24] |
@@ -89,6 +90,7 @@ CUDA and keep CUDA backend metadata.
 | `"bruteforce"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA uses direct cuVS brute force when available; cosine/correlation use normalized Euclidean search and inner product uses a maximum-inner-product-to-L2 transform around the cuVS L2 kernel. |
 | `"grid"` | euclidean, cosine, correlation | euclidean, cosine, correlation | 2D/3D self-KNN only; cosine/correlation use normalized Euclidean grid search. |
 | `"hnsw"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CPU FAISS HNSW is used for all metrics when available; CUDA uses cuVS HNSW converted from CAGRA for Euclidean, normalized cosine/correlation, and transformed raw inner product. |
+| `"usearch"` | euclidean | unsupported | CPU-only USEARCH dense HNSW route. The implementation is compiled from bundled Apache-2.0 header-only USEARCH source and currently exposes Euclidean/L2 only. |
 | `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
 | `"ivfpq"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVFPQ supports L2/IP; cosine/correlation use normalized IVFPQ IP. |
 | `"vamana"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native robust-pruned candidate graph inspired by DiskANN/Vamana; CPU/CUDA refine top-k within candidate rows. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning. Cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
@@ -202,6 +204,29 @@ when stricter recall is needed. Successful HNSW results record the internal
 `hnsw_hierarchy`, `hnsw_m`, `hnsw_ef_construction`, and `target_recall`. CUHNSW
 is acknowledged as related Apache-2.0 CUDA HNSW prior software, but faissR does
 not vendor or copy CUHNSW source [3,22-23].
+
+## `"usearch"`
+
+`method = "usearch"` requests the USEARCH dense HNSW implementation [34]. It is
+a separate CPU route from `method = "hnsw"`: `method = "hnsw"` uses FAISS HNSW
+when FAISS is available, while `method = "usearch"` builds a USEARCH
+`index_dense_t` index from bundled Apache-2.0 header-only USEARCH source.
+
+- `backend = "cpu"` maps to the internal `usearch` backend.
+- `backend = "auto"` with `method = "usearch"` resolves to CPU, even on
+  CUDA-capable machines.
+- `backend = "cuda"` with `method = "usearch"` errors; use
+  `backend = "cuda", method = "hnsw"` for cuVS HNSW.
+- The initial implementation exposes Euclidean/L2 search only.
+
+USEARCH consumes float32 vectors internally. Ordinary R double matrices are
+converted once to row-major float32; `float::fl()` inputs use their float32
+payload directly when row-compatible or with one layout conversion otherwise.
+Successful results record `connectivity`, `expansion_add`, and
+`expansion_search` in `attr(result, "approximation")`. With
+`tuning = "auto"`, USEARCH parameters are selected in compiled C++ from matrix
+shape, `k`, and `target_recall`; large high-dimensional 0.99-recall jobs use
+connectivity 16, expansion-add 128, and expansion-search `max(k, 80)`.
 
 ## `"exact"`
 
