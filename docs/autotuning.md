@@ -196,6 +196,17 @@ recall tiers. The summarizer writes:
   These recommendation rows are used to decide whether the C++ defaults should
   move to a wider or narrower HNSW setting.
 
+If a long run is interrupted, resume only the missing combinations with:
+
+```bash
+OUT_DIR=/path/to/faissR_HNSW_TARGET_RECALL_FLOAT32_YYYYMMDD_HHMMSS \
+  benchmark_scripts/resume_benchmark_hnsw_target_recall_chiamaka.sh
+```
+
+The resume launcher re-runs the summarizer, reads
+`hnsw_target_recall_missing_rows.csv`, evaluates only those combinations, and
+then requires the final completeness audit to pass.
+
 The explicit `"nn_descent"` builder is available for experiments, but it is not
 selected automatically because the COIL20 diagnostic failed inside the cuVS
 NN-descent CAGRA build with `cudaErrorInvalidValue`.

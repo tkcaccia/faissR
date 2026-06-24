@@ -26,9 +26,18 @@ split_arg <- function(value, default = character()) {
 read_config <- function(out_dir) {
   path <- file.path(out_dir, "hnsw_target_recall_config.csv")
   if (!file.exists(path)) return(list())
-  cfg <- read.csv(path, stringsAsFactors = FALSE)
-  if (!all(c("key", "value") %in% names(cfg))) return(list())
-  stats::setNames(as.list(cfg$value), cfg$key)
+  lines <- readLines(path, warn = FALSE)
+  if (length(lines) < 2L) return(list())
+  lines <- lines[-1L]
+  comma <- regexpr(",", lines, fixed = TRUE)
+  lines <- lines[comma > 0L]
+  comma <- comma[comma > 0L]
+  keys <- substr(lines, 1L, comma - 1L)
+  values <- substr(lines, comma + 1L, nchar(lines))
+  quoted <- startsWith(values, "\"") & endsWith(values, "\"")
+  values[quoted] <- substr(values[quoted], 2L, nchar(values[quoted]) - 1L)
+  values <- gsub("\"\"", "\"", values, fixed = TRUE)
+  stats::setNames(as.list(values), keys)
 }
 
 target_key <- function(x) {

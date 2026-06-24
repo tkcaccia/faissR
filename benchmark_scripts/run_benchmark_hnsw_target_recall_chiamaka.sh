@@ -32,20 +32,31 @@ export LD_PRELOAD="$ENV_DIR/lib/libstdc++.so.6${LD_PRELOAD:+:$LD_PRELOAD}"
 mkdir -p "$OUT_DIR"
 cd "$REPO_DIR"
 
+csv_quote() {
+  local value="${1//\"/\"\"}"
+  printf '"%s"' "$value"
+}
+
+write_config_row() {
+  printf '%s,' "$1"
+  csv_quote "$2"
+  printf '\n'
+}
+
 {
   printf 'key,value\n'
-  printf 'manifest,%s\n' "$MANIFEST"
-  printf 'out_dir,%s\n' "$OUT_DIR"
-  printf 'datasets,%s\n' "$DATASETS"
-  printf 'backends,%s\n' "$BACKENDS"
-  printf 'method,hnsw\n'
-  printf 'metric,euclidean\n'
-  printf 'k_values,%s\n' "$K_VALUES"
-  printf 'target_recalls,%s\n' "$TARGET_RECALLS"
-  printf 'threads,%s\n' "$THREADS"
-  printf 'timeout,%s\n' "$TIMEOUT"
-  printf 'quality_n,%s\n' "$QUALITY_N"
-  printf 'output,%s\n' "$OUTPUT"
+  write_config_row manifest "$MANIFEST"
+  write_config_row out_dir "$OUT_DIR"
+  write_config_row datasets "$DATASETS"
+  write_config_row backends "$BACKENDS"
+  write_config_row method hnsw
+  write_config_row metric euclidean
+  write_config_row k_values "$K_VALUES"
+  write_config_row target_recalls "$TARGET_RECALLS"
+  write_config_row threads "$THREADS"
+  write_config_row timeout "$TIMEOUT"
+  write_config_row quality_n "$QUALITY_N"
+  write_config_row output "$OUTPUT"
 } > "$OUT_DIR/hnsw_target_recall_config.csv"
 
 IFS=',' read -r -a k_values <<< "$K_VALUES"
