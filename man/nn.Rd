@@ -22,12 +22,11 @@ nn(
 }
 \arguments{
 \item{data}{Numeric matrix/data frame or optional `float::fl()`/`float32`
-object of reference observations in rows. Float32 inputs use the direct
-CPU FAISS Flat float32 route for public
-`method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` CPU requests
-that resolve to FAISS Flat. Other resolved routes accept float32 inputs
-through a one-time compatibility conversion to an ordinary R numeric matrix
-and record `float32_compatibility_conversion = TRUE`.}
+object of reference observations in rows. Float32 inputs use direct
+float-pointer routes for CPU FAISS Flat, CPU FAISS HNSW, and CUDA cuVS HNSW
+requests. Other resolved routes accept float32 inputs through a one-time
+compatibility conversion to an ordinary R numeric matrix and record
+`float32_compatibility_conversion = TRUE`.}
 
 \item{points}{Numeric matrix/data frame or optional `float::fl()`/`float32`
 query object with observations in rows. Defaults to `data`. A float32
@@ -120,12 +119,13 @@ requests and CUDA-auto routes that select CAGRA.}
 
 \item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm for
 this call. `NULL` uses `options(faissR.cuvs_cagra_build_algo = "auto")`.
-`"auto"` applies faissR's deterministic shape-aware CAGRA build rule,
-choosing iterative CAGRA construction for compact high-dimensional
-self-KNN cases and IVF-PQ construction otherwise. `"ivf_pq"` requests the
-IVF-PQ graph builder, `"nn_descent"` requests cuVS NN-descent graph
-construction, and `"iterative_cagra_search"` requests cuVS iterative CAGRA
-graph building.
+For direct cuVS CAGRA, `"auto"` applies faissR's deterministic shape-aware
+CAGRA build rule, choosing iterative CAGRA construction for compact
+high-dimensional self-KNN cases and IVF-PQ construction otherwise. For
+cuVS HNSW, `"auto"` uses iterative CAGRA construction because the HNSW
+conversion needs a high-quality seed graph. `"ivf_pq"` requests the IVF-PQ
+graph builder, `"nn_descent"` requests cuVS NN-descent graph construction,
+and `"iterative_cagra_search"` requests cuVS iterative CAGRA graph building.
 This is a CAGRA construction parameter, not a fallback to a different
 public method; successful results record the selected value in
 `attr(result, "approximation")$cagra_build_algo`.}
@@ -136,17 +136,17 @@ returns the default R numeric distance matrix. `"float"` returns
 `distance_type = "float32"` plus
 `attr(result, "distance_type") = "float32"`; this requires the optional
 `float` package. When either `data` or `points` is a `float::fl()` matrix,
-a CPU FAISS Flat-style request uses the direct float-pointer FAISS route.
-Other resolved routes accept float32 inputs through a one-time
-compatibility conversion to R numeric and record
-`float32_compatibility_conversion = TRUE`; this keeps float32 dataset
-files usable across all public methods while deeper backend-specific
-float-pointer routes are added incrementally. Ordinary R double inputs
-with a CPU FAISS Flat-style request and `output = "float"` also use the
-float-pointer FAISS route. On that direct route, float distance output is
-constructed directly from FAISS float results instead of first
-materializing an R double distance matrix, except for zero-row
-cosine/correlation correction.}
+CPU FAISS Flat, CPU FAISS HNSW, and CUDA cuVS HNSW can use direct
+float-pointer input routes. Other resolved routes accept float32 inputs through
+a one-time compatibility conversion to R numeric and record
+`float32_compatibility_conversion = TRUE`; this keeps float32 dataset files
+usable across all public methods while deeper backend-specific float-pointer
+routes are added incrementally. Ordinary R double inputs with a CPU FAISS
+Flat-style or HNSW request and `output = "float"` also use a float-pointer
+FAISS route. cuVS HNSW can also consume float32 input directly. On direct
+FAISS float routes, float distance output is constructed directly from FAISS
+float results instead of first materializing an R double distance matrix,
+except for zero-row cosine/correlation correction.}
 
 \item{distances}{Optional alias for `output`, kept for callers that prefer
 `distances = "double"` or `distances = "float"` to describe the returned

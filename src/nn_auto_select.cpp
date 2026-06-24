@@ -942,9 +942,10 @@ List nn_tune_cuvs_hnsw_cpp(int n,
   const bool large_k = k >= 100;
   const bool large_n = n >= 1000000;
   const bool compact = as<bool>(base["tuning_compact_build"]);
-  const std::string build_algo = cagra_build_algo_for_shape_core(
-    n, p, k, true, compact, build_algo_preference
-  );
+  const bool auto_build_algo = build_algo_preference == "auto";
+  const std::string build_algo = auto_build_algo ?
+    "iterative_cagra_search" :
+    cagra_build_algo_for_shape_core(n, p, k, true, compact, build_algo_preference);
   const int default_ef = large_k ? std::max(240, 3 * k) : std::max(120, 4 * k);
   const int requested_ef = requested_int(ef_option, default_ef);
   const int ef = option_int(ef_option, default_ef, k, 4096);
@@ -961,9 +962,10 @@ List nn_tune_cuvs_hnsw_cpp(int n,
     _["requested_ef"] = requested_ef,
     _["requested_n_threads"] = threads,
     _["tuning_policy"] = as<std::string>(base["tuning_policy"]),
-    _["tuning_rule"] = (large_n && large_k) ? "large_n_large_k_hnsw_from_cagra" :
-      (large_n ? "large_n_hnsw_from_cagra" :
-        (large_k ? "large_k_hnsw_from_cagra" : "balanced_hnsw_from_cagra")),
+    _["tuning_rule"] = auto_build_algo ? "quality_hnsw_from_iterative_cagra" :
+      ((large_n && large_k) ? "large_n_large_k_hnsw_from_cagra" :
+        (large_n ? "large_n_hnsw_from_cagra" :
+          (large_k ? "large_k_hnsw_from_cagra" : "balanced_hnsw_from_cagra"))),
     _["tuning_large_n"] = large_n,
     _["tuning_large_k"] = large_k,
     _["tuning_small_k"] = as<bool>(base["tuning_small_k"]),

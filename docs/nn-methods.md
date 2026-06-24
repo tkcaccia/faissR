@@ -185,10 +185,10 @@ HNSW wrapper. faissR exposes it for Euclidean/L2, normalized
 cosine/correlation, and raw inner product through the standard
 maximum-inner-product-to-L2 extra-dimension transform. Returned raw-IP
 distances are converted back to faissR's shifted smaller-is-better
-inner-product convention. The internal CAGRA construction uses the same shape-aware
-`cagra_build_algo = "auto"` rule as direct cuVS CAGRA; compact
-high-dimensional self-KNN uses `iterative_cagra_search` to avoid the cuVS
-IVF-PQ graph-build workspace spike seen on COIL20-like data. Successful HNSW
+inner-product convention. Automatic cuVS HNSW uses
+`iterative_cagra_search` for the internal CAGRA seed graph because the HNSW
+conversion needs high seed-graph recall; explicit `cagra_build_algo = "ivf_pq"`
+remains available for experiments but is not the HNSW default. Successful HNSW
 results record the internal `cagra_build_algo` in
 `attr(result, "approximation")` together with `hnsw_build_algo`,
 `hnsw_hierarchy`, `hnsw_m`, and `hnsw_ef_construction`. CUHNSW is acknowledged

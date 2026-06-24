@@ -630,13 +630,14 @@ matrices in `nn()` and `nn_without_self()` for the CPU FAISS Flat route across
 the four public metrics: Euclidean, cosine, correlation, and inner product.
 Cosine and correlation are normalized in the float32 row-major buffer before
 FAISS `IndexFlatIP` search, with the same zero-row semantics as the
-double-precision routes. Float objects are read from their float32 payload and
-copied only once into FAISS's row-major `float*` layout, avoiding the previous
-float32-to-R-double-to-float32 path. Ordinary R double matrices still work and
-are converted once to float32 internally. When an ordinary R double input uses
-a CPU FAISS Flat-style request with `output = "float"`, it also enters this
-float-pointer route so FAISS does not produce an intermediate R double distance
-matrix.
+double-precision routes. CPU FAISS HNSW and CUDA cuVS HNSW also accept the same
+float32 matrix adapter, so those HNSW routes avoid the previous
+float32-to-R-double-to-float32 path. Float objects are read from their float32
+payload and copied only once into each backend's row-major `float*` layout.
+Ordinary R double matrices still work and are converted once to float32
+internally. When an ordinary R double input uses a CPU FAISS Flat-style or HNSW
+request with `output = "float"`, it also enters a float-pointer route so FAISS
+does not produce an intermediate R double distance matrix.
 
 Other resolved CPU, FAISS GPU, CUDA, and cuVS routes can also receive
 `float::fl()` inputs. Until each of those backends has its own float-pointer
@@ -650,7 +651,8 @@ The float32 adapter records the route it used in the returned KNN object.
 `input_layout` distinguishes ordinary R double conversion, float32 payload
 transpose, mixed reference/query adapters, direct row-compatible float32
 payloads used for one-row or one-column `float::fl()` matrices, and
-compatibility conversion to R numeric for non-Flat backends. `input_owns_data`
+compatibility conversion to R numeric for routes that do not yet have a direct
+float adapter. `input_owns_data`
 records whether FAISS consumed an owned adapter buffer. For cosine and
 correlation, direct float32 payloads still make one owned copy before
 normalization because those transforms are applied in-place before FAISS search.
