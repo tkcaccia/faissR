@@ -12,6 +12,7 @@ nn_without_self(
     "vamana", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+  target_recall = 0.99,
   cagra_implementation = NULL,
   cagra_build_algo = NULL,
   output = c("double", "float"),
@@ -45,6 +46,9 @@ deterministic no-pilot default for the resolved method. FAISS IVF/IVFPQ
 routes use metric-aware defaults; optional FAISS GPU IVF pilot/cache tuning
 is Euclidean-only. Deterministic approximate-method defaults are computed
 by C++ `nn_tune_*_cpp()` helpers.}
+
+\item{target_recall}{HNSW speed/recall tier passed to \code{\link{nn}()}.
+Use `0.9`, `0.95`, or `0.99`. Non-HNSW methods ignore this value.}
 
 \item{cagra_implementation}{CUDA CAGRA provider for this call. See
 \code{\link{nn}()}.}

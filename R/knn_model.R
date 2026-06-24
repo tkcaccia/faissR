@@ -26,6 +26,10 @@
 #'   opt-in where implemented. FAISS GPU IVF pilot/cache tuning is
 #'   Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware
 #'   defaults.
+#' @param target_recall HNSW speed/recall tier passed to \code{\link{nn}()}.
+#'   Use `0.9`, `0.95`, or `0.99`. Lower targets use faster FAISS CPU HNSW and
+#'   CUDA cuVS HNSW graph/search defaults; non-HNSW methods ignore this value
+#'   but keep it in metadata for reproducibility.
 #' @param cagra_implementation CUDA CAGRA provider passed to \code{\link{nn}()}
 #'   for `method = "cagra"` or CUDA-auto routes that select CAGRA. `NULL` uses
 #'   the global `faissR.cagra_implementation` option; `"auto"` uses the same
@@ -67,6 +71,7 @@ knn <- function(Xtrain,
                 method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"),
                 metric = c("euclidean", "cosine", "correlation", "inner_product"),
                 tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+                target_recall = 0.99,
                 cagra_implementation = NULL,
                 cagra_build_algo = NULL,
                 task = c("auto", "classification", "regression"),
@@ -80,6 +85,7 @@ knn <- function(Xtrain,
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
   tuning <- normalize_nn_tuning(tuning)
+  target_recall <- normalize_hnsw_target_recall(target_recall)
   model <- knn_model_fit(
     Xtrain = Xtrain,
     Ytrain = Ytrain,
@@ -87,6 +93,7 @@ knn <- function(Xtrain,
     method = method,
     metric = metric,
     tuning = tuning,
+    target_recall = target_recall,
     cagra_implementation = cagra_implementation,
     cagra_build_algo = cagra_build_algo,
     task = task,
@@ -102,6 +109,7 @@ knn <- function(Xtrain,
     k = k,
     backend = backend,
     tuning = tuning,
+    target_recall = target_recall,
     cagra_implementation = cagra_implementation,
     cagra_build_algo = cagra_build_algo,
     vote = vote,
@@ -116,6 +124,7 @@ knn_model_fit <- function(Xtrain,
                           method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"),
                           metric = c("euclidean", "cosine", "correlation", "inner_product"),
                           tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+                          target_recall = 0.99,
                           cagra_implementation = NULL,
                           cagra_build_algo = NULL,
                           task = c("auto", "classification", "regression"),
@@ -125,6 +134,7 @@ knn_model_fit <- function(Xtrain,
   method <- normalize_nn_method(method)
   tuning <- normalize_nn_tuning(tuning)
   metric <- normalize_nn_metric(metric)
+  target_recall <- normalize_hnsw_target_recall(target_recall)
   cagra_implementation <- normalize_cagra_implementation_arg(cagra_implementation)
   cagra_build_algo <- normalize_cagra_build_algo_arg(cagra_build_algo)
   task <- normalize_knn_task(task)
@@ -169,6 +179,7 @@ knn_model_fit <- function(Xtrain,
       backend = as.character(backend)[1L],
       method = method,
       tuning = tuning,
+      target_recall = target_recall,
       cagra_implementation = cagra_implementation,
       cagra_build_algo = cagra_build_algo,
       metric = metric,
@@ -192,6 +203,9 @@ knn_model_fit <- function(Xtrain,
 #'   opt-in where implemented. FAISS GPU IVF pilot/cache tuning is
 #'   Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware
 #'   defaults.
+#' @param target_recall Optional HNSW speed/recall tier for this prediction
+#'   call. `NULL` reuses the fitted model's value; otherwise use `0.9`,
+#'   `0.95`, or `0.99`.
 #' @param cagra_implementation CUDA CAGRA provider for this prediction call.
 #'   `NULL` reuses the fitted model's setting, then the global option.
 #' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm for
@@ -212,6 +226,7 @@ predict.faissR_knn_model <- function(object,
                                       k = NULL,
                                       backend = c("auto", "cpu", "cuda"),
                                       tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+                                      target_recall = NULL,
                                       cagra_implementation = NULL,
                                       cagra_build_algo = NULL,
                                       vote = c("majority", "weighted"),
@@ -219,6 +234,10 @@ predict.faissR_knn_model <- function(object,
                                       ...) {
   backend <- normalize_public_backend_arg(backend)
   tuning <- normalize_nn_tuning(tuning)
+  if (is.null(target_recall)) {
+    target_recall <- object$target_recall %||% 0.99
+  }
+  target_recall <- normalize_hnsw_target_recall(target_recall)
   if (is.null(cagra_implementation)) {
     cagra_implementation <- object$cagra_implementation %||% NULL
   }
@@ -241,6 +260,7 @@ predict.faissR_knn_model <- function(object,
     method = object$method %||% "auto",
     metric = object$metric,
     tuning = tuning,
+    target_recall = target_recall,
     cagra_implementation = cagra_implementation,
     cagra_build_algo = cagra_build_algo,
     n_threads = object$n_threads
@@ -260,6 +280,7 @@ predict.faissR_knn_model <- function(object,
       backend,
       object$method %||% "auto",
       tuning,
+      target_recall,
       cagra_implementation,
       cagra_build_algo
     )
@@ -275,6 +296,7 @@ predict.faissR_knn_model <- function(object,
       backend,
       object$method %||% "auto",
       tuning,
+      target_recall,
       cagra_implementation,
       cagra_build_algo
     ))
@@ -295,12 +317,14 @@ predict.faissR_knn_model <- function(object,
     backend,
     object$method %||% "auto",
     tuning,
+    target_recall,
     cagra_implementation,
     cagra_build_algo
   )
 }
 
 attach_knn_prediction_metadata <- function(out, neighbours, k, backend, method, tuning,
+                                           target_recall = attr(neighbours, "target_recall") %||% NA_real_,
                                            cagra_implementation = NULL,
                                            cagra_build_algo = NULL) {
   distance_type <- neighbours$distance_type %||% NA_character_
@@ -317,6 +341,7 @@ attach_knn_prediction_metadata <- function(out, neighbours, k, backend, method, 
     requested_backend = attr(neighbours, "requested_backend") %||% backend,
     requested_method = attr(neighbours, "requested_method") %||% public_nn_method_label(normalize_nn_method(method)),
     tuning = attr(neighbours, "tuning") %||% tuning,
+    target_recall = attr(neighbours, "target_recall") %||% target_recall,
     cagra_implementation = cagra_implementation %||% NA_character_,
     cagra_build_algo = cagra_build_algo %||% NA_character_,
     backend = attr(neighbours, "backend") %||% NA_character_,

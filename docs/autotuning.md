@@ -95,8 +95,8 @@ that the no-pilot graph-shape rule came from compiled policy.
 | `exact` / `flat` | `faiss_flat_exact`, `faiss_flat_l2` | CPU exact baseline | Use for exact CPU reference on small/medium data [1-2,16]; avoid as default for large high-dimensional self-search because MNIST/FashionMNIST timed out. |
 | `exact` / `flat` | `faiss_gpu_flat_l2` | CUDA exact/high-recall | Explicit FAISS GPU Flat route when requested and available. |
 | `bruteforce` | `cuda_cuvs_bruteforce` | CUDA exact/high-recall | Preferred explicit cuVS exact path; consistently recall 1 in this benchmark and often fastest on compact high-dimensional self-KNN. Also selected by CUDA `method = "auto"` for compact exact self-KNN when cuVS is available, and used as the fallback exact CUDA route when FAISS GPU Flat is unavailable. |
-| `hnsw` | `faiss_hnsw` large low-dimensional Euclidean tiers | CPU recall-0.99 speed tiers | For `n >= 50000`, `p <= 64`: small `k <= 15` uses M = 12, efConstruction = 60, efSearch = max(k, 30); `k <= 50` uses M = 16, efConstruction = 80, efSearch = max(k, 75); larger `k` uses M = 16, efConstruction = 80, efSearch = max(k, 100). These tiers were selected from flow cytometry-scale float32 probes to cut runtime while keeping sampled recall near 0.99 [5]. |
-| `hnsw` | `faiss_hnsw` large high-dimensional Euclidean tiers | CPU recall-0.99 speed tiers | For `n >= 50000`, `p >= 256`: small `k <= 15` uses M = 12, efConstruction = 60, efSearch = max(k, 40); `k <= 50` uses M = 16, efConstruction = 80, efSearch = max(k, 75); larger `k` uses M = 24, efConstruction = 120, efSearch = max(k, 150). These tiers were selected from MNIST70k float32 probes [5]. |
+| `hnsw` | `faiss_hnsw` large low-dimensional Euclidean tiers | CPU target-recall speed tiers | For `n >= 50000`, `p <= 64`, `target_recall` selects separate 0.90, 0.95, or 0.99 M/ef tiers. The 0.99 defaults keep the prior high-recall flow-cytometry settings; the lower targets reduce graph/search effort for speed and record the selected rule in approximation metadata [5]. |
+| `hnsw` | `faiss_hnsw` large high-dimensional Euclidean tiers | CPU target-recall speed tiers | For `n >= 50000`, `p >= 256`, `target_recall` selects separate 0.90, 0.95, or 0.99 M/ef tiers. The 0.90 small-k tier was tightened from the first MNIST/Fashion smoke run to `M = 8`, `efConstruction = 30`, and `efSearch = max(k, 15)`, which kept sampled recall above 0.90 while avoiding the slower 0.95 tier [5]. |
 | `hnsw` | `faiss_hnsw` small-k metric tier | CPU metric-aware tier | M = 32, efConstruction = 160, efSearch = max(120, 4k); used for cosine, correlation, and inner-product `k <= 10` jobs so normalized metric searches keep more graph-search breadth without paying the full high-recall cost [5]. |
 | `hnsw` | `faiss_hnsw` balanced tier | CPU default tier | M = 32, efConstruction = 200, efSearch = max(150, 3k); default deterministic shape/metric rule for general CPU HNSW. |
 | `hnsw` | `faiss_hnsw` high-recall tier | CPU high-recall tier | M = 48, efConstruction = 240, efSearch = max(220, 3k); used for large-k high-dimensional searches and high-dimensional non-Euclidean searches where normalized IP/correlation routes need extra graph-search breadth. |
@@ -149,19 +149,32 @@ graph and then converts it to a cuVS HNSW index. For `method = "hnsw"` with
 `iterative_cagra_search` as the CAGRA seed builder even on larger shapes. On
 MNIST70k (`70000 x 784`, `k = 50`) the IVF-PQ seed builder was fast but produced
 near-zero sampled recall for HNSW, while `iterative_cagra_search` restored high
-sampled recall. The default graph/search effort now targets about 0.99 recall
-to improve speed through compiled shape tiers. Large high-dimensional data
-(`n >= 50000`, `p >= 256`) uses graph degree 12/24/24 for small/mid/large `k`
-with `ef` 40/50/100. Medium low-dimensional data (`50000 <= n < 500000`,
-`p <= 64`) uses graph degree 96, intermediate degree 192, and `ef` 250 or 300.
-Very large low-dimensional data keeps graph degree 48 for `k <= 15`; for
-5M-row-class inputs with larger `k`, faissR applies a runtime guard rather than
-the graph-64/96 high-recall tier because FlowRepository k = 50 timed out at
-600 seconds on Chiamaka with both graph 64/intermediate 128/ef 200 and graph
-96/intermediate 192/ef 250. Users can raise
+sampled recall. The graph/search effort now comes from the requested
+`target_recall` tier: 0.90 is the fastest, 0.95 is the middle tier, and 0.99 is
+the default high-recall tier where feasible. Large high-dimensional data
+(`n >= 50000`, `p >= 256`) uses progressively wider graph/search settings as
+the target rises. Medium low-dimensional data (`50000 <= n < 500000`,
+`p <= 64`) uses narrower graph degrees for 0.90/0.95 and the prior graph-96
+tier for 0.99. Very large low-dimensional data keeps graph degree 48 for
+`k <= 15`; for 5M-row-class inputs with larger `k`, faissR applies a runtime
+guard for the 0.99 target rather than the graph-64/96 high-recall tier because
+FlowRepository k = 50 timed out at 600 seconds on Chiamaka with both graph
+64/intermediate 128/ef 200 and graph 96/intermediate 192/ef 250. Users can raise
 `options(faissR.cuvs_graph_degree = ..., faissR.cuvs_intermediate_graph_degree = ..., faissR.cuvs_hnsw_ef = ...)`
 for stricter recall, or request `cagra_build_algo = "ivf_pq"` explicitly for
 experiments, but IVF-PQ is not the automatic HNSW seed builder.
+
+The all-dataset HNSW target-recall validation is run with:
+
+```bash
+benchmark_scripts/run_benchmark_hnsw_target_recall_chiamaka.sh
+```
+
+It uses the float32 manifest, explicit `backend = "cpu"` and `"cuda"`,
+`method = "hnsw"`, Euclidean distance, `k = 10, 15, 50, 100`,
+`target_recall = 0.9, 0.95, 0.99`, 4 CPU threads, and a 600-second timeout per
+row. Result rows record the requested target, actual target, HNSW parameters,
+sampled recall, speed, and CPU/CUDA backend separately.
 
 The explicit `"nn_descent"` builder is available for experiments, but it is not
 selected automatically because the COIL20 diagnostic failed inside the cuVS
@@ -295,9 +308,9 @@ CPU-auto default.
 - cuVS HNSW should not inherit the direct-CAGRA IVF-PQ auto builder blindly.
   The HNSW conversion depends on a high-quality seed graph; MNIST70k diagnostics
   selected `iterative_cagra_search` as the default HNSW seed builder after IVF-PQ
-  returned near-zero recall. CUDA HNSW graph/search effort defaults to a 0.99
-  recall target for speed and records `target_recall = 0.99` in approximation
-  metadata.
+  returned near-zero recall. CUDA HNSW graph/search effort is selected by
+  `target_recall = 0.9`, `0.95`, or `0.99` and records both requested and
+  selected target metadata.
 - Direct cuVS CAGRA has provider-internal build modes with different memory and
   robustness profiles. In the focused CUDA diagnostic, COIL20 (`1440 x 16384`, `k = 50`,
   Euclidean) completed with FAISS GPU CAGRA, direct cuVS CAGRA `ivf_pq`, and

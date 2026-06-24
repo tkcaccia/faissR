@@ -13,6 +13,7 @@ knn(
     "vamana", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+  target_recall = 0.99,
   cagra_implementation = NULL,
   cagra_build_algo = NULL,
   task = c("auto", "classification", "regression"),
@@ -39,6 +40,7 @@ canonical metric labels. Correlation is centered cosine similarity, not raw
 inner product. See \code{nn()} for metric/backend support details, including
 metric-aware CPU HNSW routing.}
 \item{tuning}{Tuning policy passed to \code{nn()}. \code{"auto"} uses the deterministic default for the resolved method; \code{"cache"} and \code{"pilot"} opt into pilot tuning where implemented. FAISS GPU IVF pilot/cache tuning is Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware defaults.}
+\item{target_recall}{HNSW speed/recall tier passed to \code{nn()}. Use \code{0.9}, \code{0.95}, or \code{0.99}. Lower targets use faster FAISS CPU HNSW and CUDA cuVS HNSW defaults; non-HNSW methods ignore this value but keep it in metadata for reproducibility.}
 \item{cagra_implementation}{CUDA CAGRA provider passed to \code{nn()} for \code{method = "cagra"} or CUDA-auto routes that select CAGRA. \code{NULL} uses the global \code{faissR.cagra_implementation} option; \code{"auto"} uses the same deterministic shape-aware provider rule as \code{nn()}, while \code{"faiss_gpu"} or \code{"cuvs"} force one provider.}
 \item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm passed to \code{nn()} for direct cuVS CAGRA routes. \code{NULL} uses the global \code{faissR.cuvs_cagra_build_algo} option.}
 \item{task}{\code{"auto"}, \code{"classification"}, or \code{"regression"}. \code{"auto"} treats numeric responses as regression and other response types as classification.}
@@ -49,7 +51,7 @@ metric-aware CPU HNSW routing.}
 \item{...}{Reserved for future options.}
 }
 \value{
-If \code{Xtest} is not supplied, a fitted \code{faissR_knn_model} object that stores the training data, response, task, backend, method, metric, tuning, \code{k}, and CPU thread settings used by later \code{\link{predict}()} calls. If \code{Xtest} is supplied, a factor for classification, a numeric vector for regression, or a numeric class-probability matrix when \code{type = "prob"}; prediction outputs carry \code{attr(result, "faissR_nn")} route metadata, approximation parameters, and auto-selection metadata from the underlying \code{\link{nn}()} call.
+If \code{Xtest} is not supplied, a fitted \code{faissR_knn_model} object that stores the training data, response, task, backend, method, metric, tuning, \code{target_recall}, \code{k}, and CPU thread settings used by later \code{\link{predict}()} calls. If \code{Xtest} is supplied, a factor for classification, a numeric vector for regression, or a numeric class-probability matrix when \code{type = "prob"}; prediction outputs carry \code{attr(result, "faissR_nn")} route metadata, approximation parameters, and auto-selection metadata from the underlying \code{\link{nn}()} call.
 }
 \description{
 \code{knn()} is the high-level supervised kNN API. With \code{Xtrain} and \code{Ytrain} only, it returns a reusable model. With \code{Xtest}, it immediately predicts the query rows by fitting the model and calling \code{predict()} internally. The low-level nearest-neighbour search API remains \code{nn()}.

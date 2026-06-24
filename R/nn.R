@@ -19,10 +19,12 @@ nn_compute <- function(data,
                        n_threads = NULL,
                        metric = "euclidean",
                        tuning = "auto",
+                       target_recall = 0.99,
                        output = "double",
                        auto_selection = NULL) {
   requested_backend <- backend
   tuning <- normalize_nn_tuning(tuning)
+  target_recall <- normalize_hnsw_target_recall(target_recall)
   data_float32 <- is_float32_matrix_input(data)
   points_float32 <- if (isTRUE(points_missing)) data_float32 else is_float32_matrix_input(points)
   if (isTRUE(data_float32) || isTRUE(points_float32)) {
@@ -644,7 +646,8 @@ nn_compute <- function(data,
         k,
         n = data_dim[[1L]],
         p = data_dim[[2L]],
-        metric = metric
+        metric = metric,
+        target_recall = target_recall
       )
       out <- nn_faiss_hnsw_float32_cpp(
         data,
@@ -675,6 +678,8 @@ nn_compute <- function(data,
         hnsw_parameters_adjusted = isTRUE(out$hnsw_parameters_adjusted),
         tuning_policy = params$policy,
         tuning_rule = params$rule,
+        target_recall = as.numeric(params$target_recall %||% target_recall),
+        tuning_low_dim = isTRUE(params$low_dim),
         tuning_high_dim = isTRUE(params$high_dim),
         tuning_large_n = isTRUE(params$large_n),
         tuning_small_k = isTRUE(params$small_k),
@@ -696,7 +701,8 @@ nn_compute <- function(data,
         data_dim[[1L]],
         k,
         p = data_dim[[2L]],
-        n_threads = n_threads
+        n_threads = n_threads,
+        target_recall = target_recall
       )
       out <- nn_cuvs_hnsw_float32_cpp(
         data,
@@ -1492,14 +1498,16 @@ nn_compute <- function(data,
         self_query = self_query,
         exclude_self = isTRUE(exclude_self),
         metric = metric,
-        n_threads = n_threads
+        n_threads = n_threads,
+        target_recall = target_recall
       ))
     }
     params <- faiss_hnsw_params(
       k,
       n = nrow(data),
       p = ncol(data),
-      metric = metric
+      metric = metric,
+      target_recall = target_recall
     )
     out <- nn_faiss_hnsw_cpp(
       data,
@@ -1528,6 +1536,8 @@ nn_compute <- function(data,
       hnsw_parameters_adjusted = isTRUE(out$hnsw_parameters_adjusted),
       tuning_policy = params$policy,
       tuning_rule = params$rule,
+      target_recall = as.numeric(params$target_recall %||% target_recall),
+      tuning_low_dim = isTRUE(params$low_dim),
       tuning_high_dim = isTRUE(params$high_dim),
       tuning_large_n = isTRUE(params$large_n),
       tuning_small_k = isTRUE(params$small_k),
@@ -1949,7 +1959,13 @@ nn_compute <- function(data,
       search_data <- metric_inputs$data
       search_points <- metric_inputs$points
     }
-    params <- cuvs_hnsw_params(nrow(search_data), k, p = ncol(search_data), n_threads = n_threads)
+    params <- cuvs_hnsw_params(
+      nrow(search_data),
+      k,
+      p = ncol(search_data),
+      n_threads = n_threads,
+      target_recall = target_recall
+    )
     out <- nn_cuvs_hnsw_cpp(
       search_data,
       search_points,
@@ -3224,6 +3240,22 @@ normalize_nn_tuning <- function(tuning) {
     )
   }
   unname(aliases[[tuning]])
+}
+
+normalize_hnsw_target_recall <- function(target_recall) {
+  if (is.null(target_recall)) {
+    target_recall <- faissr_option("hnsw_target_recall", 0.99)
+  }
+  value <- suppressWarnings(as.numeric(target_recall))
+  if (length(value) != 1L || is.na(value) || !is.finite(value)) {
+    stop("`target_recall` must be one of 0.9, 0.95, or 0.99.", call. = FALSE)
+  }
+  allowed <- c(0.90, 0.95, 0.99)
+  match <- which(abs(value - allowed) < 1e-8)
+  if (!length(match)) {
+    stop("`target_recall` must be one of 0.9, 0.95, or 0.99.", call. = FALSE)
+  }
+  allowed[[match[[1L]]]]
 }
 
 resolve_public_nn_backend <- function(backend,
@@ -4507,13 +4539,16 @@ faiss_hnsw_normalized_metric_result <- function(data,
                                                 self_query,
                                                 exclude_self,
                                                 metric,
-                                                n_threads = NULL) {
+                                                n_threads = NULL,
+                                                target_recall = 0.99) {
   metric <- normalize_nn_metric(metric)
+  target_recall <- normalize_hnsw_target_recall(target_recall)
   params <- faiss_hnsw_params(
     k,
     n = nrow(data),
     p = ncol(data),
-    metric = metric
+    metric = metric,
+    target_recall = target_recall
   )
   data_metric <- if (identical(metric, "correlation")) {
     row_center_l2_normalize(data)
@@ -4568,6 +4603,8 @@ faiss_hnsw_normalized_metric_result <- function(data,
     hnsw_parameters_adjusted = isTRUE(out$hnsw_parameters_adjusted),
     tuning_policy = params$policy,
     tuning_rule = params$rule,
+    target_recall = as.numeric(params$target_recall %||% target_recall),
+    tuning_low_dim = isTRUE(params$low_dim),
     tuning_high_dim = isTRUE(params$high_dim),
     tuning_large_n = isTRUE(params$large_n),
     tuning_small_k = isTRUE(params$small_k),
@@ -4630,7 +4667,8 @@ nn_tuning_metadata <- function(params, prefix = NULL) {
     "tuning_policy", "tuning_rule", "tuning_low_dim", "tuning_high_dim",
     "tuning_medium_n", "tuning_huge_low_dim", "tuning_runtime_guard",
     "tuning_large_n", "tuning_small_k", "tuning_large_k", "tuning_non_euclidean",
-    "tuning_metric", "tuning_metric_aware", "target_recall", "tuning_source"
+    "tuning_metric", "tuning_metric_aware", "target_recall",
+    "requested_target_recall", "tuning_source"
   )
   fields <- fields[fields %in% names(params)]
   out <- params[fields]
@@ -5569,6 +5607,7 @@ faiss_self_knn <- function(data,
                            exact = FALSE,
                            seed = 4L,
                            metric = "euclidean",
+                           target_recall = 0.99,
                            n_threads = NULL) {
   n <- nrow(data)
   k <- as.integer(k)
@@ -5585,6 +5624,7 @@ faiss_self_knn <- function(data,
   }
   n_threads <- normalize_nn_threads(n_threads)
   metric <- normalize_nn_metric(metric)
+  target_recall <- normalize_hnsw_target_recall(target_recall)
   if (isTRUE(exact) || identical(backend, "faiss_flat") ||
       identical(backend, "cpu_nndescent_faiss_flat")) {
     out <- if (identical(metric, "inner_product")) {
@@ -5620,7 +5660,8 @@ faiss_self_knn <- function(data,
       k,
       n = nrow(data),
       p = ncol(data),
-      metric = metric
+      metric = metric,
+      target_recall = target_recall
     )
     out <- nn_faiss_hnsw_cpp(
       data,
@@ -5649,6 +5690,8 @@ faiss_self_knn <- function(data,
       hnsw_parameters_adjusted = isTRUE(out$hnsw_parameters_adjusted),
       tuning_policy = params$policy,
       tuning_rule = params$rule,
+      target_recall = as.numeric(params$target_recall %||% target_recall),
+      tuning_low_dim = isTRUE(params$low_dim),
       tuning_high_dim = isTRUE(params$high_dim),
       tuning_large_n = isTRUE(params$large_n),
       tuning_small_k = isTRUE(params$small_k),
@@ -6452,19 +6495,21 @@ faiss_pq_params <- function(p, n = NULL) {
   )
 }
 
-faiss_hnsw_auto_policy <- function(n = NULL, p = NULL, k, metric = "euclidean") {
+faiss_hnsw_auto_policy <- function(n = NULL, p = NULL, k, metric = "euclidean", target_recall = 0.99) {
+  target_recall <- normalize_hnsw_target_recall(target_recall)
   out <- nn_tune_faiss_hnsw_cpp(
     suppressWarnings(as.integer(n %||% NA_integer_)),
     suppressWarnings(as.integer(p %||% NA_integer_)),
     as.integer(k),
     normalize_nn_metric(metric),
+    as.numeric(target_recall),
     NA_integer_,
     NA_integer_,
     NA_integer_,
     FALSE
   )
   out[c("m", "ef_construction", "ef_search", "rule", "high_dim",
-        "large_n", "small_k", "large_k", "non_euclidean")]
+        "large_n", "small_k", "large_k", "non_euclidean", "target_recall")]
 }
 
 faiss_hnsw_manual_params <- function() {
@@ -6475,12 +6520,14 @@ faiss_hnsw_manual_params <- function() {
   ))
 }
 
-faiss_hnsw_params <- function(k, n = NULL, p = NULL, metric = "euclidean") {
+faiss_hnsw_params <- function(k, n = NULL, p = NULL, metric = "euclidean", target_recall = 0.99) {
+  target_recall <- normalize_hnsw_target_recall(target_recall)
   nn_tune_faiss_hnsw_cpp(
     suppressWarnings(as.integer(n %||% NA_integer_)),
     suppressWarnings(as.integer(p %||% NA_integer_)),
     as.integer(k),
     normalize_nn_metric(metric),
+    as.numeric(target_recall),
     nn_option_int_or_na("faiss_hnsw_m"),
     nn_option_int_or_na("faiss_hnsw_ef_construction"),
     nn_option_int_or_na("faiss_hnsw_ef_search"),
@@ -6539,13 +6586,15 @@ cuvs_cagra_params <- function(n, k, p = NA_integer_) {
   )
 }
 
-cuvs_hnsw_params <- function(n, k, p = NA_integer_, n_threads = NULL) {
+cuvs_hnsw_params <- function(n, k, p = NA_integer_, n_threads = NULL, target_recall = 0.99) {
+  target_recall <- normalize_hnsw_target_recall(target_recall)
   nn_tune_cuvs_hnsw_cpp(
     as.integer(n),
     suppressWarnings(as.integer(p)),
     as.integer(k),
     as.integer(normalize_nn_threads(n_threads)),
     cagra_build_algo_preference(),
+    as.numeric(target_recall),
     nn_option_int_or_na("cuvs_graph_degree"),
     nn_option_int_or_na("cuvs_intermediate_graph_degree"),
     nn_option_int_or_na("cuvs_search_width"),
@@ -7087,11 +7136,13 @@ grid_self_knn <- function(data,
 #'   routes and returns shifted inner-product distances. Default parameters are
 #'   selected by compiled deterministic shape/k/metric rules without pilot
 #'   tuning. CPU FAISS HNSW has separate large low-dimensional and large
-#'   high-dimensional Euclidean tiers; CUDA cuVS HNSW targets about 0.99 recall
-#'   where feasible, with separate high-dimensional and low-dimensional
-#'   graph/search tiers plus a runtime guard for 5M-row-class low-dimensional
-#'   `k > 15` workloads. Result approximation metadata records the selected
-#'   `tuning_rule`, `target_recall`, and shape flags used.
+#'   high-dimensional Euclidean tiers; CUDA cuVS HNSW has separate
+#'   high-dimensional and low-dimensional graph/search tiers. Both backends
+#'   expose `target_recall = 0.9`, `0.95`, or `0.99`; the 0.99 CUDA tier keeps
+#'   a runtime guard for 5M-row-class low-dimensional `k > 15` workloads where
+#'   a strict 0.99 target is not feasible within the benchmark timeout. Result
+#'   approximation metadata records the selected `tuning_rule`,
+#'   `target_recall`, `requested_target_recall`, and shape flags used.
 #'   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
 #'   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
 #'   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records
@@ -7246,14 +7297,20 @@ grid_self_knn <- function(data,
 #'   use deterministic shape/k/metric-aware `nlist`/`nprobe` defaults; optional
 #'   FAISS GPU IVF `"cache"`/`"pilot"` tuning currently runs only for Euclidean
 #'   IVF, while non-Euclidean IVF routes use deterministic metric-aware
-#'   defaults. CUDA cuVS HNSW uses deterministic shape/k tiers with a 0.99
-#'   recall target where feasible and can be tightened with
+#'   defaults. FAISS CPU HNSW and CUDA cuVS HNSW use deterministic shape/k
+#'   tiers for the selected `target_recall` value. The default is the 0.99
+#'   tier where feasible; `target_recall = 0.95` and `0.9` select faster,
+#'   lower-recall HNSW tiers. Manual
 #'   `options(faissR.cuvs_graph_degree = ...,
 #'   faissR.cuvs_intermediate_graph_degree = ..., faissR.cuvs_hnsw_ef = ...)`.
 #'   Deterministic approximate-method defaults are computed by C++
 #'   `nn_tune_*_cpp()` helpers and record `tuning_source = "cpp"` in
 #'   approximation metadata. Advanced tuning and cache knobs use
 #'   `options(faissR.<name> = ...)`.
+#' @param target_recall HNSW speed/recall tier. Use `0.9`, `0.95`, or `0.99`.
+#'   The value is consumed by FAISS CPU HNSW and CUDA cuVS HNSW C++ selectors
+#'   when `tuning = "auto"` and recorded in result metadata. Lower values trade
+#'   recall for speed; non-HNSW methods ignore the value.
 #' @param cagra_implementation CUDA CAGRA provider for this call. `NULL` uses
 #'   the global `options(faissR.cagra_implementation = ...)` value. `"auto"`
 #'   uses a deterministic provider rule: compact high-dimensional self-KNN
@@ -7269,7 +7326,7 @@ grid_self_knn <- function(data,
 #'   high-dimensional self-KNN cases and IVF-PQ construction otherwise. For
 #'   cuVS HNSW, `"auto"` uses iterative CAGRA construction because the HNSW
 #'   conversion needs a high-quality seed graph; HNSW graph/search effort itself
-#'   defaults to compiled shape/k tiers with a 0.99 recall target where feasible.
+#'   defaults to the compiled shape/k tier for the selected `target_recall`.
 #'   `"ivf_pq"` requests the IVF-PQ graph builder, `"nn_descent"` requests cuVS
 #'   NN-descent graph construction, and `"iterative_cagra_search"` requests cuVS
 #'   iterative CAGRA graph building.
@@ -7327,6 +7384,7 @@ nn <- function(data,
                method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"),
                metric = c("euclidean", "cosine", "correlation", "inner_product"),
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+               target_recall = 0.99,
                cagra_implementation = NULL,
                cagra_build_algo = NULL,
                output = c("double", "float"),
@@ -7338,6 +7396,7 @@ nn <- function(data,
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
   tuning <- normalize_nn_tuning(tuning)
+  target_recall <- normalize_hnsw_target_recall(target_recall)
   metric <- normalize_nn_metric(metric)
   output <- resolve_nn_output(output, distances)
   validate_public_nn_method_shape(data, method)
@@ -7372,12 +7431,14 @@ nn <- function(data,
     n_threads = n_threads,
     metric = metric,
     tuning = tuning,
+    target_recall = target_recall,
     output = output,
     auto_selection = auto_selection
   )
   attr(result, "requested_backend") <- backend
   attr(result, "requested_method") <- public_nn_method_label(method)
   attr(result, "tuning") <- tuning
+  attr(result, "target_recall") <- target_recall
   if (!is.null(auto_selection)) attr(result, "auto_selection") <- auto_selection
   finalize_nn_output(result, output)
 }
@@ -7409,6 +7470,8 @@ nn <- function(data,
 #'   routes use metric-aware defaults; optional FAISS GPU IVF pilot/cache tuning
 #'   is Euclidean-only. Deterministic approximate-method defaults are computed
 #'   by C++ `nn_tune_*_cpp()` helpers.
+#' @param target_recall HNSW speed/recall tier passed to \code{\link{nn}()}.
+#'   Use `0.9`, `0.95`, or `0.99`. Non-HNSW methods ignore this value.
 #' @param cagra_implementation CUDA CAGRA provider for this call. See
 #'   \code{\link{nn}()}.
 #' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm for
@@ -7435,6 +7498,7 @@ nn_without_self <- function(data,
                             method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"),
                             metric = c("euclidean", "cosine", "correlation", "inner_product"),
                             tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+                            target_recall = 0.99,
                             cagra_implementation = NULL,
                             cagra_build_algo = NULL,
                             output = c("double", "float"),
@@ -7445,6 +7509,7 @@ nn_without_self <- function(data,
   backend <- normalize_public_backend_arg(backend)
   method <- normalize_nn_method(method)
   tuning <- normalize_nn_tuning(tuning)
+  target_recall <- normalize_hnsw_target_recall(target_recall)
   metric <- normalize_nn_metric(metric)
   output <- resolve_nn_output(output, distances)
   validate_public_nn_method_shape(data, method)
@@ -7479,12 +7544,14 @@ nn_without_self <- function(data,
     n_threads = n_threads,
     metric = metric,
     tuning = tuning,
+    target_recall = target_recall,
     output = output,
     auto_selection = auto_selection
   )
   attr(result, "requested_backend") <- backend
   attr(result, "requested_method") <- public_nn_method_label(method)
   attr(result, "tuning") <- tuning
+  attr(result, "target_recall") <- target_recall
   if (!is.null(auto_selection)) attr(result, "auto_selection") <- auto_selection
   finalize_nn_output(result, output)
 }

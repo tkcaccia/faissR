@@ -372,6 +372,13 @@ int safe_k(int k) {
   return valid_int(k) ? std::max(1, k) : 1;
 }
 
+double hnsw_target_recall_cpp(double target_recall) {
+  if (!valid_double(target_recall)) return 0.99;
+  if (target_recall <= 0.925) return 0.90;
+  if (target_recall <= 0.975) return 0.95;
+  return 0.99;
+}
+
 int ivf_list_count_cpp(int n, int k) {
   n = safe_n(n);
   k = safe_k(k);
@@ -729,6 +736,7 @@ List nn_tune_faiss_hnsw_cpp(int n,
                             int p,
                             int k,
                             std::string metric,
+                            double target_recall = 0.99,
                             int m_option = NA_INTEGER,
                             int ef_construction_option = NA_INTEGER,
                             int ef_search_option = NA_INTEGER,
@@ -736,6 +744,7 @@ List nn_tune_faiss_hnsw_cpp(int n,
   n = valid_int(n) ? n : NA_INTEGER;
   p = valid_int(p) ? p : NA_INTEGER;
   k = safe_k(k);
+  target_recall = hnsw_target_recall_cpp(target_recall);
   const bool euclidean = metric == "euclidean";
   const bool low_dim = valid_int(p) && p <= 64;
   const bool high_dim = valid_int(p) && p >= 256;
@@ -750,7 +759,37 @@ List nn_tune_faiss_hnsw_cpp(int n,
   int default_ef_construction;
   int default_ef_search;
   if (euclidean && large_n && low_dim) {
-    if (small_k) {
+    if (target_recall <= 0.90 && small_k) {
+      rule = "recall90_large_low_dim_small_k";
+      default_m = 6;
+      default_ef_construction = 30;
+      default_ef_search = std::max(k, 15);
+    } else if (target_recall <= 0.90 && k <= 50) {
+      rule = "recall90_large_low_dim_mid_k";
+      default_m = 8;
+      default_ef_construction = 40;
+      default_ef_search = std::max(k, 35);
+    } else if (target_recall <= 0.90) {
+      rule = "recall90_large_low_dim_large_k";
+      default_m = 12;
+      default_ef_construction = 60;
+      default_ef_search = std::max(k, 75);
+    } else if (target_recall <= 0.95 && small_k) {
+      rule = "recall95_large_low_dim_small_k";
+      default_m = 8;
+      default_ef_construction = 40;
+      default_ef_search = std::max(k, 20);
+    } else if (target_recall <= 0.95 && k <= 50) {
+      rule = "recall95_large_low_dim_mid_k";
+      default_m = 12;
+      default_ef_construction = 60;
+      default_ef_search = std::max(k, 50);
+    } else if (target_recall <= 0.95) {
+      rule = "recall95_large_low_dim_large_k";
+      default_m = 12;
+      default_ef_construction = 60;
+      default_ef_search = std::max(k, 100);
+    } else if (small_k) {
       rule = "recall99_large_low_dim_small_k";
       default_m = 12;
       default_ef_construction = 60;
@@ -767,7 +806,37 @@ List nn_tune_faiss_hnsw_cpp(int n,
       default_ef_search = std::max(k, 100);
     }
   } else if (euclidean && very_large_high_dim) {
-    if (small_k) {
+    if (target_recall <= 0.90 && small_k) {
+      rule = "recall90_large_high_dim_small_k";
+      default_m = 8;
+      default_ef_construction = 30;
+      default_ef_search = std::max(k, 15);
+    } else if (target_recall <= 0.90 && k <= 50) {
+      rule = "recall90_large_high_dim_mid_k";
+      default_m = 8;
+      default_ef_construction = 40;
+      default_ef_search = std::max(k, 35);
+    } else if (target_recall <= 0.90) {
+      rule = "recall90_large_high_dim_large_k";
+      default_m = 12;
+      default_ef_construction = 60;
+      default_ef_search = std::max(k, 75);
+    } else if (target_recall <= 0.95 && small_k) {
+      rule = "recall95_large_high_dim_small_k";
+      default_m = 8;
+      default_ef_construction = 40;
+      default_ef_search = std::max(k, 25);
+    } else if (target_recall <= 0.95 && k <= 50) {
+      rule = "recall95_large_high_dim_mid_k";
+      default_m = 12;
+      default_ef_construction = 60;
+      default_ef_search = std::max(k, 50);
+    } else if (target_recall <= 0.95) {
+      rule = "recall95_large_high_dim_large_k";
+      default_m = 16;
+      default_ef_construction = 80;
+      default_ef_search = std::max(k, 100);
+    } else if (small_k) {
       rule = "recall99_large_high_dim_small_k";
       default_m = 12;
       default_ef_construction = 60;
@@ -825,6 +894,7 @@ List nn_tune_faiss_hnsw_cpp(int n,
     _["requested_m"] = default_m,
     _["requested_ef_construction"] = default_ef_construction,
     _["requested_ef_search"] = default_ef_search,
+    _["target_recall"] = target_recall,
     _["tuning_source"] = "cpp"
   );
 }
@@ -963,6 +1033,7 @@ List nn_tune_cuvs_hnsw_cpp(int n,
                            int k,
                            int n_threads,
                            std::string build_algo_preference = "auto",
+                           double target_recall_option = 0.99,
                            int graph_degree_option = NA_INTEGER,
                            int intermediate_graph_degree_option = NA_INTEGER,
                            int search_width_option = NA_INTEGER,
@@ -976,6 +1047,7 @@ List nn_tune_cuvs_hnsw_cpp(int n,
   n = safe_n(n);
   p = safe_p(p);
   k = safe_k(k);
+  const double requested_target_recall = hnsw_target_recall_cpp(target_recall_option);
   const bool low_dim = p <= 64;
   const bool high_dim = p >= 256;
   const bool medium_n = n >= 50000 && n < 500000;
@@ -994,30 +1066,120 @@ List nn_tune_cuvs_hnsw_cpp(int n,
   double target_recall = 0.99;
   std::string hnsw_rule;
   if (low_dim && n >= 50000) {
-    if (medium_n) {
+    if (medium_n && requested_target_recall <= 0.90) {
+      if (k <= 50) {
+        recall99_graph_degree = 24;
+        default_ef = 75;
+        hnsw_rule = "recall90_medium_low_dim_small_mid_k_hnsw_from_cagra";
+      } else {
+        recall99_graph_degree = 48;
+        default_ef = 150;
+        hnsw_rule = "recall90_medium_low_dim_large_k_hnsw_from_cagra";
+      }
+      target_recall = requested_target_recall;
+    } else if (medium_n && requested_target_recall <= 0.95) {
+      if (k <= 50) {
+        recall99_graph_degree = 48;
+        default_ef = 150;
+        hnsw_rule = "recall95_medium_low_dim_small_mid_k_hnsw_from_cagra";
+      } else {
+        recall99_graph_degree = 64;
+        default_ef = 200;
+        hnsw_rule = "recall95_medium_low_dim_large_k_hnsw_from_cagra";
+      }
+      target_recall = requested_target_recall;
+    } else if (medium_n) {
       recall99_graph_degree = 96;
       default_ef = large_k ? 300 : 250;
       hnsw_rule = "recall99_medium_low_dim_hnsw_from_cagra";
+      target_recall = requested_target_recall;
+    } else if (huge_low_dim && k > 15 && requested_target_recall <= 0.90) {
+      recall99_graph_degree = 24;
+      default_ef = std::max(50, k);
+      target_recall = requested_target_recall;
+      hnsw_rule = "recall90_huge_low_dim_runtime_guard_hnsw_from_cagra";
+    } else if (huge_low_dim && k > 15 && requested_target_recall <= 0.95) {
+      recall99_graph_degree = 24;
+      default_ef = std::max(100, k);
+      target_recall = requested_target_recall;
+      hnsw_rule = "recall95_huge_low_dim_runtime_guard_hnsw_from_cagra";
     } else if (huge_low_dim && k > 15) {
       recall99_graph_degree = 24;
       default_ef = std::max(100, k);
       target_recall = NA_REAL;
       hnsw_rule = "runtime_guard_huge_low_dim_hnsw_from_cagra";
+    } else if (requested_target_recall <= 0.90 && k <= 15) {
+      recall99_graph_degree = 24;
+      default_ef = 75;
+      hnsw_rule = "recall90_large_low_dim_small_k_hnsw_from_cagra";
+      target_recall = requested_target_recall;
+    } else if (requested_target_recall <= 0.90 && k <= 50) {
+      recall99_graph_degree = 24;
+      default_ef = 150;
+      hnsw_rule = "recall90_large_low_dim_mid_k_hnsw_from_cagra";
+      target_recall = requested_target_recall;
+    } else if (requested_target_recall <= 0.90) {
+      recall99_graph_degree = 48;
+      default_ef = 100;
+      hnsw_rule = "recall90_large_low_dim_large_k_hnsw_from_cagra";
+      target_recall = requested_target_recall;
+    } else if (requested_target_recall <= 0.95 && k <= 15) {
+      recall99_graph_degree = 32;
+      default_ef = 100;
+      hnsw_rule = "recall95_large_low_dim_small_k_hnsw_from_cagra";
+      target_recall = requested_target_recall;
+    } else if (requested_target_recall <= 0.95 && k <= 50) {
+      recall99_graph_degree = 48;
+      default_ef = 150;
+      hnsw_rule = "recall95_large_low_dim_mid_k_hnsw_from_cagra";
+      target_recall = requested_target_recall;
+    } else if (requested_target_recall <= 0.95) {
+      recall99_graph_degree = 48;
+      default_ef = 200;
+      hnsw_rule = "recall95_large_low_dim_large_k_hnsw_from_cagra";
+      target_recall = requested_target_recall;
     } else if (k <= 15) {
       recall99_graph_degree = 48;
       default_ef = 150;
       hnsw_rule = "recall99_large_low_dim_small_k_hnsw_from_cagra";
+      target_recall = requested_target_recall;
     } else if (k <= 50) {
       recall99_graph_degree = 96;
       default_ef = 250;
       hnsw_rule = "recall99_large_low_dim_mid_k_hnsw_from_cagra";
+      target_recall = requested_target_recall;
     } else {
       recall99_graph_degree = 96;
       default_ef = 300;
       hnsw_rule = "recall99_large_low_dim_large_k_hnsw_from_cagra";
+      target_recall = requested_target_recall;
     }
   } else if (high_dim && n >= 50000) {
-    if (k <= 15) {
+    if (requested_target_recall <= 0.90 && k <= 15) {
+      recall99_graph_degree = 8;
+      default_ef = 20;
+      hnsw_rule = "recall90_large_high_dim_small_k_hnsw_from_cagra";
+    } else if (requested_target_recall <= 0.90 && k <= 50) {
+      recall99_graph_degree = 12;
+      default_ef = 50;
+      hnsw_rule = "recall90_large_high_dim_mid_k_hnsw_from_cagra";
+    } else if (requested_target_recall <= 0.90) {
+      recall99_graph_degree = 16;
+      default_ef = 75;
+      hnsw_rule = "recall90_large_high_dim_large_k_hnsw_from_cagra";
+    } else if (requested_target_recall <= 0.95 && k <= 15) {
+      recall99_graph_degree = 8;
+      default_ef = 30;
+      hnsw_rule = "recall95_large_high_dim_small_k_hnsw_from_cagra";
+    } else if (requested_target_recall <= 0.95 && k <= 50) {
+      recall99_graph_degree = 16;
+      default_ef = 60;
+      hnsw_rule = "recall95_large_high_dim_mid_k_hnsw_from_cagra";
+    } else if (requested_target_recall <= 0.95) {
+      recall99_graph_degree = 16;
+      default_ef = 100;
+      hnsw_rule = "recall95_large_high_dim_large_k_hnsw_from_cagra";
+    } else if (k <= 15) {
       recall99_graph_degree = 12;
       default_ef = 40;
       hnsw_rule = "recall99_large_high_dim_small_k_hnsw_from_cagra";
@@ -1030,11 +1192,13 @@ List nn_tune_cuvs_hnsw_cpp(int n,
       default_ef = 100;
       hnsw_rule = "recall99_large_high_dim_large_k_hnsw_from_cagra";
     }
+    target_recall = requested_target_recall;
   } else {
     recall99_graph_degree = large_k ?
       std::max(48, static_cast<int>(std::ceil(k / 2.0))) :
       (k <= 10 ? std::max(16, k + 1) : 24);
     default_ef = std::max(50, k);
+    target_recall = requested_target_recall;
     hnsw_rule = (large_n && large_k) ? "recall99_large_n_large_k_hnsw_from_cagra" :
       (large_n ? "recall99_large_n_hnsw_from_cagra" :
         (large_k ? "recall99_large_k_hnsw_from_cagra" : "recall99_balanced_hnsw_from_cagra"));
@@ -1057,9 +1221,9 @@ List nn_tune_cuvs_hnsw_cpp(int n,
     hnsw_graph_degree,
     n_cap
   );
-  // Target about 0.99 recall by default. The CAGRA seed graph remains
-  // high-quality; lowering HNSW ef trims search time without changing the
-  // public algorithm. Users can raise faissR.cuvs_hnsw_ef for stricter recall.
+  // The CAGRA seed graph remains high-quality; lower target-recall tiers trim
+  // HNSW graph/search effort without changing the public algorithm. Users can
+  // override faissR.cuvs_hnsw_ef for stricter recall when needed.
   const int requested_ef = requested_int(ef_option, default_ef);
   const int ef = option_int(ef_option, default_ef, k, 4096);
   const int threads = std::max(1, std::min(64, valid_int(n_threads) ? n_threads : 1));
@@ -1074,6 +1238,7 @@ List nn_tune_cuvs_hnsw_cpp(int n,
     _["requested_intermediate_graph_degree"] = requested_intermediate_graph_degree,
     _["requested_ef"] = requested_ef,
     _["requested_n_threads"] = threads,
+    _["requested_target_recall"] = requested_target_recall,
     _["tuning_policy"] = as<std::string>(base["tuning_policy"]),
     _["tuning_rule"] = auto_build_algo ? hnsw_rule : (hnsw_rule + "_manual_build_algo"),
     _["target_recall"] = target_recall,

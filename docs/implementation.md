@@ -270,12 +270,14 @@ unless the user explicitly sets cuVS PQ bits. FAISS GPU IVFPQ remains an
 explicit 8-bit route because FAISS' GPU IVFPQ implementation requires 8-bit
 product-quantizer codes.
 FAISS HNSW uses no pilot tuning in the user call. Its default parameters are a
-static shape/k/metric policy implemented in C++: large low-dimensional
-Euclidean matrices (`n >= 50000`, `p <= 64`) use lighter M/ef tiers selected
-from float32 flow cytometry probes; large high-dimensional Euclidean matrices
-(`n >= 50000`, `p >= 256`) use separate MNIST70k-derived tiers; non-Euclidean
-metrics keep broader metric-aware tiers; and other shapes keep the balanced
-general HNSW defaults.
+static shape/k/metric policy implemented in C++ and selected by
+`target_recall`. The public options are `target_recall = 0.9`, `0.95`, and
+`0.99`; lower targets reduce HNSW graph/search effort for speed. Large
+low-dimensional Euclidean matrices (`n >= 50000`, `p <= 64`) use flow
+cytometry-derived tiers; large high-dimensional Euclidean matrices
+(`n >= 50000`, `p >= 256`) use MNIST/FashionMNIST-derived tiers;
+non-Euclidean metrics keep broader metric-aware tiers; and other shapes keep
+the balanced general HNSW defaults.
 
 ### Method Families
 
@@ -292,7 +294,7 @@ public method names map to different concrete functions depending on `backend`.
 | `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP while staying on CUDA for explicit CUDA calls. | Exact FAISS route [1-2,16]. |
 | `bruteforce` | Native exact CPU route. | Direct cuVS brute force when available, with exact transforms for cosine, correlation, and raw inner product. | Useful for comparing direct cuVS against FAISS GPU Flat [1-3,16]. |
 | `grid` | Native 2D/3D exact spatial grid. | CUDA 2D/3D grid. | Errors outside two or three columns. |
-| `hnsw` | FAISS CPU HNSW. | RAPIDS cuVS HNSW from a CUDA CAGRA index for Euclidean/cosine/correlation and transformed raw inner product. | Graph-search route; automatic CPU and CUDA HNSW use compiled shape/k tiers that target about 0.99 recall for speed, with a runtime guard for 5M-row-class low-dimensional CUDA `k > 15` workloads where wider high-recall graphs exceeded the benchmark timeout. CUDA raw inner product uses the maximum-inner-product-to-L2 transform and shifted returned distances [3,5,16,22-23]. |
+| `hnsw` | FAISS CPU HNSW. | RAPIDS cuVS HNSW from a CUDA CAGRA index for Euclidean/cosine/correlation and transformed raw inner product. | Graph-search route; automatic CPU and CUDA HNSW use compiled shape/k tiers selected by `target_recall = 0.9`, `0.95`, or `0.99`, with a runtime guard for 5M-row-class low-dimensional CUDA `k > 15` workloads where wider high-recall graphs exceeded the benchmark timeout. CUDA raw inner product uses the maximum-inner-product-to-L2 transform and shifted returned distances [3,5,16,22-23]. |
 | `ivf` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | Coarse-list approximate route [1-2,16]. |
 | `ivfpq` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | Compressed approximate route [6,16]. |
 | `vamana` | Native DiskANN/Vamana-style robust-pruned candidate graph with CPU refinement. | Native DiskANN/Vamana-style robust-pruned candidate graph with CUDA row-candidate refinement. | Distinct pruned directed graph route implemented in faissR; large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning, while smaller CPU inputs keep exact seed neighbours. Robust pruning protects the first `k` seed neighbours before applying the Vamana rule; cuVS Vamana currently provides build/serialization rather than KNN search [3,5,24]. |
@@ -640,9 +642,9 @@ Ordinary R double matrices still work and are converted once to float32
 internally. When an ordinary R double input uses a CPU FAISS Flat-style or HNSW
 request with `output = "float"`, it also enters a float-pointer route so FAISS
 does not produce an intermediate R double distance matrix. CUDA HNSW auto-tuning
-uses this direct float32 path with a default 0.99 recall target; raise
+uses this direct float32 path with the selected `target_recall` tier; raise
 `faissR.cuvs_graph_degree`, `faissR.cuvs_intermediate_graph_degree`, or
-`faissR.cuvs_hnsw_ef` for stricter recall.
+`faissR.cuvs_hnsw_ef` for stricter recall beyond the defaults.
 
 FAISS CPU/GPU and RAPIDS cuVS nearest-neighbour routes can also receive
 `float::fl()` inputs through direct C++ adapters. Native routes that still expose

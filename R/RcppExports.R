@@ -145,8 +145,8 @@ nn_tune_cuvs_ivfpq_cpp <- function(p, n = NA_integer_, pq_dim_option = NA_intege
     .Call(`_faissR_nn_tune_cuvs_ivfpq_cpp`, p, n, pq_dim_option, pq_bits_option, manual)
 }
 
-nn_tune_faiss_hnsw_cpp <- function(n, p, k, metric, m_option = NA_integer_, ef_construction_option = NA_integer_, ef_search_option = NA_integer_, manual = FALSE) {
-    .Call(`_faissR_nn_tune_faiss_hnsw_cpp`, n, p, k, metric, m_option, ef_construction_option, ef_search_option, manual)
+nn_tune_faiss_hnsw_cpp <- function(n, p, k, metric, target_recall = 0.99, m_option = NA_integer_, ef_construction_option = NA_integer_, ef_search_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_faiss_hnsw_cpp`, n, p, k, metric, target_recall, m_option, ef_construction_option, ef_search_option, manual)
 }
 
 nn_tune_rcpphnsw_cpp <- function(k, m_option = NA_integer_, ef_construction_option = NA_integer_, ef_option = NA_integer_) {
@@ -173,8 +173,8 @@ nn_tune_cuvs_cagra_build_algo_cpp <- function(n, p, k, self_query, compact, requ
     .Call(`_faissR_nn_tune_cuvs_cagra_build_algo_cpp`, n, p, k, self_query, compact, requested)
 }
 
-nn_tune_cuvs_hnsw_cpp <- function(n, p, k, n_threads, build_algo_preference = "auto", graph_degree_option = NA_integer_, intermediate_graph_degree_option = NA_integer_, search_width_option = NA_integer_, itopk_size_option = NA_integer_, ef_option = NA_integer_, manual_cagra = FALSE) {
-    .Call(`_faissR_nn_tune_cuvs_hnsw_cpp`, n, p, k, n_threads, build_algo_preference, graph_degree_option, intermediate_graph_degree_option, search_width_option, itopk_size_option, ef_option, manual_cagra)
+nn_tune_cuvs_hnsw_cpp <- function(n, p, k, n_threads, build_algo_preference = "auto", target_recall_option = 0.99, graph_degree_option = NA_integer_, intermediate_graph_degree_option = NA_integer_, search_width_option = NA_integer_, itopk_size_option = NA_integer_, ef_option = NA_integer_, manual_cagra = FALSE) {
+    .Call(`_faissR_nn_tune_cuvs_hnsw_cpp`, n, p, k, n_threads, build_algo_preference, target_recall_option, graph_degree_option, intermediate_graph_degree_option, search_width_option, itopk_size_option, ef_option, manual_cagra)
 }
 
 nn_tune_cuvs_nndescent_cpp <- function(n, k, graph_degree_option = NA_integer_, intermediate_graph_degree_option = NA_integer_, max_iterations_option = NA_integer_, manual = FALSE) {

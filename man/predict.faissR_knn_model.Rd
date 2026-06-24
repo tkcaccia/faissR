@@ -10,6 +10,7 @@
   k = NULL,
   backend = c("auto", "cpu", "cuda"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+  target_recall = NULL,
   cagra_implementation = NULL,
   cagra_build_algo = NULL,
   vote = c("majority", "weighted"),
@@ -33,6 +34,10 @@ deterministic default for the resolved method; pilot/cache tuning is
 opt-in where implemented. FAISS GPU IVF pilot/cache tuning is
 Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware
 defaults.}
+
+\item{target_recall}{Optional HNSW speed/recall tier for this prediction
+call. `NULL` reuses the fitted model's value; otherwise use `0.9`,
+`0.95`, or `0.99`.}
 
 \item{cagra_implementation}{CUDA CAGRA provider for this prediction call.
 `NULL` reuses the fitted model's setting, then the global option.}

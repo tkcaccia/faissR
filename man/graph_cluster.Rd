@@ -15,6 +15,7 @@ graph_cluster(
     "ivfpq", "vamana", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+  target_recall = 0.99,
   cagra_implementation = NULL,
   cagra_build_algo = NULL,
   weight = c("auto", "snn", "adaptive", "distance", "binary"),
@@ -47,6 +48,7 @@ libcugraph was detected at build time; random-walking is CPU-only. The
 \item{graph_method}{Nearest-neighbour method passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding.}
 \item{metric}{Distance metric passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding. Aliases such as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as canonical metric labels. Correlation is centered cosine similarity, not raw inner product. Inner-product graph construction ranks neighbours by larger raw dot product while reusing faissR's shifted smaller-is-better distance convention from \code{nn()}.}
 \item{tuning}{Tuning policy passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding.}
+\item{target_recall}{HNSW speed/recall tier passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding. Use \code{0.9}, \code{0.95}, or \code{0.99}.}
 \item{cagra_implementation}{CUDA CAGRA provider passed to \code{nn_without_self()} when graph KNN is computed here. \code{NULL} uses the global option; \code{"auto"}, \code{"faiss_gpu"}, or \code{"cuvs"} select the CAGRA provider for CUDA \code{graph_method = "cagra"} and CUDA-auto CAGRA routes.}
 \item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm passed to \code{nn_without_self()} when graph KNN is computed here. \code{NULL} uses the global \code{faissR.cuvs_cagra_build_algo} option. This is a CAGRA construction parameter, not a fallback to a different public NN method.}
 \item{weight}{KNN graph weighting used when a graph must be built.}
@@ -127,7 +129,8 @@ metadata from the KNN route that built the graph.
 \code{parameters$nn_approximation}, \code{parameters$nn_faiss},
 \code{parameters$nn_cuvs}, \code{parameters$nn_spatial_index}, and
 \code{parameters$nn_auto_selection}
-preserve compact KNN route metadata when the graph is built internally. When a target
+preserve compact KNN route metadata when the graph is built internally,
+including \code{parameters$nn_target_recall} for HNSW-backed graph builds. When a target
 community count is used, \code{target_n_clusters},
 \code{selected_resolution}, \code{target_gap}, \code{resolution_selection},
 and \code{resolution_search} record the requested target, selected resolution,

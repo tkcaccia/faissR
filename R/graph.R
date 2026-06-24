@@ -28,6 +28,10 @@
 #'   \code{\link{nn}()}.
 #' @param tuning Tuning policy passed to \code{\link{nn_without_self}()} when
 #'   `knn` is not supplied.
+#' @param target_recall HNSW speed/recall tier passed to
+#'   \code{\link{nn_without_self}()} when KNN is computed here. Use `0.9`,
+#'   `0.95`, or `0.99`; non-HNSW methods ignore this value but retain it in
+#'   graph metadata.
 #' @param cagra_implementation CUDA CAGRA provider passed to
 #'   \code{\link{nn_without_self}()} when KNN is computed here. `NULL` uses the
 #'   global option; `"auto"` uses the same deterministic shape-aware provider
@@ -70,6 +74,7 @@ knn_graph <- function(data,
                       method = NULL,
                       metric = c("euclidean", "cosine", "correlation", "inner_product"),
                       tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+                      target_recall = 0.99,
                       cagra_implementation = NULL,
                       cagra_build_algo = NULL,
                       weight = c("auto", "snn", "adaptive", "distance", "binary"),
@@ -90,6 +95,7 @@ knn_graph <- function(data,
   }
   metric <- normalize_nn_metric(metric)
   tuning <- normalize_nn_tuning(tuning)
+  target_recall <- normalize_hnsw_target_recall(target_recall)
   cagra_implementation <- normalize_cagra_implementation_arg(cagra_implementation)
   cagra_build_algo <- normalize_cagra_build_algo_arg(cagra_build_algo)
   weight <- normalize_graph_weight(weight)
@@ -126,6 +132,7 @@ knn_graph <- function(data,
         method = nn_method,
         metric = metric,
         tuning = tuning,
+        target_recall = target_recall,
         cagra_implementation = cagra_implementation,
         cagra_build_algo = cagra_build_algo,
         n_threads = n_threads
@@ -141,6 +148,7 @@ knn_graph <- function(data,
         method = nn_method,
         metric = metric,
         tuning = tuning,
+        target_recall = target_recall,
         cagra_implementation = cagra_implementation,
         cagra_build_algo = cagra_build_algo,
         n_threads = n_threads
@@ -180,6 +188,7 @@ knn_graph <- function(data,
     nn_method = nn_method,
     metric = attr(knn, "metric") %||% metric,
     tuning = tuning,
+    target_recall = attr(knn, "target_recall") %||% target_recall,
     nn_requested_backend = attr(knn, "requested_backend") %||% requested_graph_backend,
     nn_requested_method = attr(knn, "requested_method") %||% nn_method,
     nn_tuning = attr(knn, "tuning") %||% tuning,
@@ -276,6 +285,9 @@ graph_cluster_backend_selection <- function(backend,
 #'   convention from \code{\link{nn}()}.
 #' @param tuning Tuning policy passed to \code{\link{nn_without_self}()} when
 #'   `graph` is a matrix or embedding.
+#' @param target_recall HNSW speed/recall tier passed to
+#'   \code{\link{nn_without_self}()} when `graph` is a matrix or embedding.
+#'   Use `0.9`, `0.95`, or `0.99`.
 #' @param cagra_implementation CUDA CAGRA provider passed to
 #'   \code{\link{nn_without_self}()} when graph KNN is computed here. `NULL`
 #'   uses the global option; `"auto"`, `"faiss_gpu"`, or `"cuvs"` select the
@@ -385,6 +397,7 @@ graph_cluster <- function(graph,
                           graph_method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"),
                           metric = c("euclidean", "cosine", "correlation", "inner_product"),
                           tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+                          target_recall = 0.99,
                           cagra_implementation = NULL,
                           cagra_build_algo = NULL,
                           weight = c("auto", "snn", "adaptive", "distance", "binary"),
@@ -410,6 +423,7 @@ graph_cluster <- function(graph,
   graph_method <- public_nn_method_label(normalize_nn_method(graph_method))
   metric <- normalize_nn_metric(metric)
   tuning <- normalize_nn_tuning(tuning)
+  target_recall <- normalize_hnsw_target_recall(target_recall)
   cagra_implementation <- normalize_cagra_implementation_arg(cagra_implementation)
   cagra_build_algo <- normalize_cagra_build_algo_arg(cagra_build_algo)
   if (identical(method, "random_walking") && identical(backend, "cuda")) {
@@ -526,6 +540,7 @@ graph_cluster <- function(graph,
       method = graph_method,
       metric = metric,
       tuning = tuning,
+      target_recall = target_recall,
       cagra_implementation = cagra_implementation,
       cagra_build_algo = cagra_build_algo,
       n_threads = n_threads
@@ -541,6 +556,7 @@ graph_cluster <- function(graph,
       method = graph_method,
       metric = metric,
       tuning = tuning,
+      target_recall = target_recall,
       cagra_implementation = cagra_implementation,
       cagra_build_algo = cagra_build_algo,
       n_threads = n_threads
@@ -590,6 +606,7 @@ graph_cluster <- function(graph,
     nn_requested_backend = attr(knn, "requested_backend") %||% graph_requested_backend,
     nn_requested_method = attr(knn, "requested_method") %||% graph_method,
     nn_tuning = attr(knn, "tuning") %||% tuning,
+    nn_target_recall = attr(knn, "target_recall") %||% target_recall,
     nn_cagra_implementation = cagra_implementation %||% NA_character_,
     nn_cagra_build_algo = cagra_build_algo %||% NA_character_,
     nn_approximation = attr(knn, "approximation") %||% NULL,

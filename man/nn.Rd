@@ -13,6 +13,7 @@ nn(
     "vamana", "nsg", "nndescent", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+  target_recall = 0.99,
   cagra_implementation = NULL,
   cagra_build_algo = NULL,
   output = c("double", "float"),
@@ -103,13 +104,20 @@ high-recall tiers; explicit
 use deterministic shape/k/metric-aware `nlist`/`nprobe` defaults; optional
 FAISS GPU IVF `"cache"`/`"pilot"` tuning currently runs only for Euclidean
 IVF, while non-Euclidean IVF routes use deterministic metric-aware
-defaults. CUDA cuVS HNSW uses deterministic shape/k tiers with a 0.99 recall
-target where feasible and can be tightened with `options(faissR.cuvs_graph_degree = ...,
+defaults. FAISS CPU HNSW and CUDA cuVS HNSW use deterministic shape/k
+tiers for the selected `target_recall` value. The default is the 0.99
+tier where feasible; `target_recall = 0.95` and `0.9` select faster,
+lower-recall HNSW tiers. Manual `options(faissR.cuvs_graph_degree = ...,
 faissR.cuvs_intermediate_graph_degree = ..., faissR.cuvs_hnsw_ef = ...)`.
 Deterministic approximate-method defaults are computed by C++
 `nn_tune_*_cpp()` helpers and record `tuning_source = "cpp"` in
 approximation metadata. Advanced tuning and cache knobs use
 `options(faissR.<name> = ...)`.}
+
+\item{target_recall}{HNSW speed/recall tier. Use `0.9`, `0.95`, or `0.99`.
+The value is consumed by FAISS CPU HNSW and CUDA cuVS HNSW C++ selectors
+when `tuning = "auto"` and recorded in result metadata. Lower values trade
+recall for speed; non-HNSW methods ignore the value.}
 
 \item{cagra_implementation}{CUDA CAGRA provider for this call. `NULL` uses
 the global `options(faissR.cagra_implementation = ...)` value. `"auto"`
@@ -127,7 +135,7 @@ CAGRA build rule, choosing iterative CAGRA construction for compact
 high-dimensional self-KNN cases and IVF-PQ construction otherwise. For
 cuVS HNSW, `"auto"` uses iterative CAGRA construction because the HNSW
 conversion needs a high-quality seed graph; HNSW graph/search effort itself
-defaults to compiled shape/k tiers with a 0.99 recall target where feasible.
+defaults to the compiled shape/k tier for the selected `target_recall`.
 `"ivf_pq"` requests the IVF-PQ graph builder, `"nn_descent"` requests cuVS
 NN-descent graph construction, and `"iterative_cagra_search"` requests cuVS
 iterative CAGRA graph building.
@@ -232,10 +240,12 @@ Method descriptions:
 routes and returns shifted inner-product distances. Default parameters are selected by compiled
 deterministic shape/k/metric rules without pilot tuning; CPU FAISS HNSW has
 separate large low-dimensional and large high-dimensional Euclidean tiers, and
-CUDA cuVS HNSW targets about 0.99 recall where feasible, with separate
-high-dimensional and low-dimensional graph/search tiers plus a runtime guard for
-5M-row-class low-dimensional `k > 15` workloads. Result approximation metadata records the selected
-`tuning_rule`, `target_recall`, and shape flags used.
+CUDA cuVS HNSW has separate high-dimensional and low-dimensional graph/search
+tiers. Both backends expose `target_recall = 0.9`, `0.95`, or `0.99`; the 0.99
+CUDA tier keeps a runtime guard for 5M-row-class low-dimensional `k > 15`
+workloads where a strict 0.99 target is not feasible within the benchmark
+timeout. Result approximation metadata records the selected `tuning_rule`,
+`target_recall`, `requested_target_recall`, and shape flags used.
   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records

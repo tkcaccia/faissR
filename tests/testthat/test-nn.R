@@ -2988,18 +2988,45 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
   expect_equal(speed$ef_construction, 120L)
   expect_equal(speed$ef_search, 80L)
 
-  balanced <- faissR:::faiss_hnsw_params(
+  recall99_high_dim <- faissR:::faiss_hnsw_params(
     k = 50L,
     n = 70000L,
     p = 784L,
     metric = "euclidean"
   )
-  expect_equal(balanced$rule, "balanced_shape_metric")
-  expect_equal(balanced$m, 32L)
-  expect_equal(balanced$ef_construction, 200L)
-  expect_equal(balanced$ef_search, 150L)
-  expect_true(isTRUE(balanced$high_dim))
-  expect_true(isTRUE(balanced$large_n))
+  expect_equal(recall99_high_dim$rule, "recall99_large_high_dim_mid_k")
+  expect_equal(recall99_high_dim$m, 16L)
+  expect_equal(recall99_high_dim$ef_construction, 80L)
+  expect_equal(recall99_high_dim$ef_search, 75L)
+  expect_equal(recall99_high_dim$target_recall, 0.99)
+  expect_true(isTRUE(recall99_high_dim$high_dim))
+  expect_true(isTRUE(recall99_high_dim$large_n))
+
+  recall90_high_dim <- faissR:::faiss_hnsw_params(
+    k = 10L,
+    n = 70000L,
+    p = 784L,
+    metric = "euclidean",
+    target_recall = 0.9
+  )
+  expect_equal(recall90_high_dim$rule, "recall90_large_high_dim_small_k")
+  expect_equal(recall90_high_dim$m, 8L)
+  expect_equal(recall90_high_dim$ef_construction, 30L)
+  expect_equal(recall90_high_dim$ef_search, 15L)
+  expect_equal(recall90_high_dim$target_recall, 0.9)
+
+  recall95_high_dim <- faissR:::faiss_hnsw_params(
+    k = 50L,
+    n = 70000L,
+    p = 784L,
+    metric = "euclidean",
+    target_recall = 0.95
+  )
+  expect_equal(recall95_high_dim$rule, "recall95_large_high_dim_mid_k")
+  expect_equal(recall95_high_dim$m, 12L)
+  expect_equal(recall95_high_dim$ef_construction, 60L)
+  expect_equal(recall95_high_dim$ef_search, 50L)
+  expect_equal(recall95_high_dim$target_recall, 0.95)
 
   small_k_metric <- faissR:::faiss_hnsw_params(
     k = 5L,
@@ -3038,7 +3065,7 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
   )
   expect_equal(manual$policy, "manual_options")
   expect_equal(manual$m, 40L)
-  expect_equal(manual$rule, "balanced_shape_metric")
+  expect_equal(manual$rule, "recall99_large_high_dim_mid_k")
 })
 
 test_that("approximate NN parameter selectors expose deterministic tuning metadata", {
@@ -4378,9 +4405,21 @@ test_that("direct cuVS CAGRA auto build rule uses iterative construction for com
   coil20_like <- matrix(0, nrow = 1440L, ncol = 1024L)
   params <- faissR:::cuvs_cagra_params(nrow(coil20_like), 50L, p = ncol(coil20_like))
   hnsw_params <- faissR:::cuvs_hnsw_params(nrow(coil20_like), 50L, p = ncol(coil20_like))
+  mnist_hnsw90 <- faissR:::cuvs_hnsw_params(70000L, 50L, p = 784L, target_recall = 0.9)
+  mnist_hnsw95 <- faissR:::cuvs_hnsw_params(70000L, 50L, p = 784L, target_recall = 0.95)
+  mnist_hnsw99 <- faissR:::cuvs_hnsw_params(70000L, 50L, p = 784L, target_recall = 0.99)
 
   expect_equal(params$tuning_source, "cpp")
   expect_equal(hnsw_params$tuning_source, "cpp")
+  expect_equal(mnist_hnsw90$tuning_rule, "recall90_large_high_dim_mid_k_hnsw_from_cagra")
+  expect_equal(mnist_hnsw90$graph_degree, 12L)
+  expect_equal(mnist_hnsw90$target_recall, 0.9)
+  expect_equal(mnist_hnsw95$tuning_rule, "recall95_large_high_dim_mid_k_hnsw_from_cagra")
+  expect_equal(mnist_hnsw95$graph_degree, 16L)
+  expect_equal(mnist_hnsw95$target_recall, 0.95)
+  expect_equal(mnist_hnsw99$tuning_rule, "recall99_large_high_dim_mid_k_hnsw_from_cagra")
+  expect_equal(mnist_hnsw99$graph_degree, 24L)
+  expect_equal(mnist_hnsw99$target_recall, 0.99)
   expect_equal(
     faissR:::cuvs_cagra_build_algo_for(coil20_like, 50L, self_query = TRUE, params = params),
     "iterative_cagra_search"

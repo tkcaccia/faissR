@@ -206,6 +206,8 @@ empty_result_row <- function(config) {
     method = config$method %||% NA_character_,
     metric = config$metric,
     k = as.integer(config$k),
+    target_recall_requested = as.numeric(config$target_recall %||% NA_real_),
+    target_recall_actual = NA_real_,
     n_threads = as.integer(config$n_threads),
     output = config$output,
     status = NA_character_,
@@ -228,6 +230,18 @@ empty_result_row <- function(config) {
     input_type = NA_character_,
     input_layout = NA_character_,
     float32_compatibility_conversion = NA,
+    tuning_rule = NA_character_,
+    hnsw_m = NA_integer_,
+    hnsw_ef_construction = NA_integer_,
+    hnsw_ef_search = NA_integer_,
+    hnsw_graph_degree = NA_integer_,
+    hnsw_intermediate_graph_degree = NA_integer_,
+    hnsw_ef = NA_integer_,
+    tuning_low_dim = NA,
+    tuning_high_dim = NA,
+    tuning_medium_n = NA,
+    tuning_huge_low_dim = NA,
+    tuning_runtime_guard = NA,
     error = NA_character_,
     stringsAsFactors = FALSE
   )
@@ -278,6 +292,7 @@ run_method_child <- function(config) {
     backend = config$backend,
     method = config$method,
     metric = config$metric,
+    target_recall = config$target_recall,
     output = config$output,
     n_threads = config$n_threads
   )
@@ -301,6 +316,20 @@ run_method_child <- function(config) {
   row$float32_compatibility_conversion <- safe_bool(
     attr(out, "float32_compatibility_conversion") %||% out$float32_compatibility_conversion
   )
+  approx <- attr(out, "approximation") %||% list()
+  row$target_recall_actual <- suppressWarnings(as.numeric(approx$target_recall %||% attr(out, "target_recall") %||% config$target_recall))
+  row$tuning_rule <- safe_first(approx$tuning_rule)
+  row$hnsw_m <- suppressWarnings(as.integer(approx$m %||% NA_integer_))
+  row$hnsw_ef_construction <- suppressWarnings(as.integer(approx$ef_construction %||% NA_integer_))
+  row$hnsw_ef_search <- suppressWarnings(as.integer(approx$ef_search %||% NA_integer_))
+  row$hnsw_graph_degree <- suppressWarnings(as.integer(approx$graph_degree %||% NA_integer_))
+  row$hnsw_intermediate_graph_degree <- suppressWarnings(as.integer(approx$intermediate_graph_degree %||% NA_integer_))
+  row$hnsw_ef <- suppressWarnings(as.integer(approx$ef %||% NA_integer_))
+  row$tuning_low_dim <- safe_bool(approx$tuning_low_dim)
+  row$tuning_high_dim <- safe_bool(approx$tuning_high_dim)
+  row$tuning_medium_n <- safe_bool(approx$tuning_medium_n)
+  row$tuning_huge_low_dim <- safe_bool(approx$tuning_huge_low_dim)
+  row$tuning_runtime_guard <- safe_bool(approx$tuning_runtime_guard)
   saveRDS(row, config$output_path)
 }
 
@@ -423,7 +452,7 @@ write_summary_files <- function(results_path, out_dir) {
   x <- read.csv(results_path, stringsAsFactors = FALSE)
   ok <- x[x$status == "success", , drop = FALSE]
   if (!nrow(ok)) return(invisible(NULL))
-  key <- c("dataset", "backend", "method", "metric", "k")
+  key <- c("dataset", "backend", "method", "metric", "k", "target_recall_requested")
   parts <- split(ok, interaction(ok[key], drop = TRUE, lex.order = TRUE))
   summary <- do.call(rbind, lapply(parts, function(part) {
     data.frame(
@@ -432,6 +461,8 @@ write_summary_files <- function(results_path, out_dir) {
       method = part$method[[1L]],
       metric = part$metric[[1L]],
       k = part$k[[1L]],
+      target_recall_requested = part$target_recall_requested[[1L]],
+      target_recall_actual = part$target_recall_actual[[1L]],
       n = part$n[[1L]],
       p = part$p[[1L]],
       status = "success",
@@ -447,13 +478,25 @@ write_summary_files <- function(results_path, out_dir) {
       input_type = part$input_type[[1L]],
       input_layout = part$input_layout[[1L]],
       float32_compatibility_conversion = part$float32_compatibility_conversion[[1L]],
+      tuning_rule = part$tuning_rule[[1L]],
+      hnsw_m = part$hnsw_m[[1L]],
+      hnsw_ef_construction = part$hnsw_ef_construction[[1L]],
+      hnsw_ef_search = part$hnsw_ef_search[[1L]],
+      hnsw_graph_degree = part$hnsw_graph_degree[[1L]],
+      hnsw_intermediate_graph_degree = part$hnsw_intermediate_graph_degree[[1L]],
+      hnsw_ef = part$hnsw_ef[[1L]],
+      tuning_low_dim = part$tuning_low_dim[[1L]],
+      tuning_high_dim = part$tuning_high_dim[[1L]],
+      tuning_medium_n = part$tuning_medium_n[[1L]],
+      tuning_huge_low_dim = part$tuning_huge_low_dim[[1L]],
+      tuning_runtime_guard = part$tuning_runtime_guard[[1L]],
       stringsAsFactors = FALSE
     )
   }))
   row.names(summary) <- NULL
   write.csv(summary, file.path(out_dir, "float32_nn_benchmark_summary.csv"), row.names = FALSE)
 
-  best <- do.call(rbind, lapply(split(ok, paste(ok$dataset, ok$backend, sep = "\r")), function(part) {
+  best <- do.call(rbind, lapply(split(ok, paste(ok$dataset, ok$backend, ok$target_recall_requested, sep = "\r")), function(part) {
     has_recall <- is.finite(part$recall_at_k)
     candidates <- if (any(has_recall)) {
       part[has_recall, , drop = FALSE]
@@ -506,13 +549,18 @@ main <- function() {
   output <- args$output %||% "float"
   if (!output %in% c("float", "double")) stop("`output` must be `float` or `double`.", call. = FALSE)
   metric <- "euclidean"
+  target_recall <- suppressWarnings(as.numeric(args$target_recall %||% 0.99))
+  if (length(target_recall) != 1L || is.na(target_recall) || !is.finite(target_recall) ||
+      !any(abs(target_recall - c(0.90, 0.95, 0.99)) < 1e-8)) {
+    stop("`target_recall` must be one of 0.9, 0.95, or 0.99.", call. = FALSE)
+  }
 
   write.csv(
     data.frame(
       key = c("manifest", "out_dir", "datasets", "methods", "backends", "metric", "k",
-              "threads", "timeout", "quality_n", "seed", "output"),
+              "target_recall", "threads", "timeout", "quality_n", "seed", "output"),
       value = c(manifest_path, out_dir, paste(datasets, collapse = ","), paste(methods, collapse = ","),
-                paste(backends, collapse = ","), metric, k, n_threads, timeout, quality_n, seed, output),
+                paste(backends, collapse = ","), metric, k, target_recall, n_threads, timeout, quality_n, seed, output),
       stringsAsFactors = FALSE
     ),
     config_path,
@@ -562,6 +610,7 @@ main <- function() {
           method = method,
           metric = metric,
           k = k,
+          target_recall = target_recall,
           n_threads = n_threads,
           output = output
         )
