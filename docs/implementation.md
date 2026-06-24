@@ -290,7 +290,7 @@ public method names map to different concrete functions depending on `backend`.
 | `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP while staying on CUDA for explicit CUDA calls. | Exact FAISS route [1-2,16]. |
 | `bruteforce` | Native exact CPU route. | Direct cuVS brute force when available, with exact transforms for cosine, correlation, and raw inner product. | Useful for comparing direct cuVS against FAISS GPU Flat [1-3,16]. |
 | `grid` | Native 2D/3D exact spatial grid. | CUDA 2D/3D grid. | Errors outside two or three columns. |
-| `hnsw` | FAISS CPU HNSW. | RAPIDS cuVS HNSW from a CUDA CAGRA index for Euclidean/cosine/correlation and transformed raw inner product. | Graph-search route; automatic CUDA HNSW targets about 0.99 recall for speed, while CUDA raw inner product uses the maximum-inner-product-to-L2 transform and shifted returned distances [3,5,16,22-23]. |
+| `hnsw` | FAISS CPU HNSW. | RAPIDS cuVS HNSW from a CUDA CAGRA index for Euclidean/cosine/correlation and transformed raw inner product. | Graph-search route; automatic CUDA HNSW targets about 0.99 recall for speed using lower graph/search effort, while CUDA raw inner product uses the maximum-inner-product-to-L2 transform and shifted returned distances [3,5,16,22-23]. |
 | `ivf` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | Coarse-list approximate route [1-2,16]. |
 | `ivfpq` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | Compressed approximate route [6,16]. |
 | `vamana` | Native DiskANN/Vamana-style robust-pruned candidate graph with CPU refinement. | Native DiskANN/Vamana-style robust-pruned candidate graph with CUDA row-candidate refinement. | Distinct pruned directed graph route implemented in faissR; large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning, while smaller CPU inputs keep exact seed neighbours. Robust pruning protects the first `k` seed neighbours before applying the Vamana rule; cuVS Vamana currently provides build/serialization rather than KNN search [3,5,24]. |
@@ -639,6 +639,7 @@ internally. When an ordinary R double input uses a CPU FAISS Flat-style or HNSW
 request with `output = "float"`, it also enters a float-pointer route so FAISS
 does not produce an intermediate R double distance matrix. CUDA HNSW auto-tuning
 uses this direct float32 path with a default 0.99 recall target; raise
+`faissR.cuvs_graph_degree`, `faissR.cuvs_intermediate_graph_degree`, or
 `faissR.cuvs_hnsw_ef` for stricter recall.
 
 FAISS CPU/GPU and RAPIDS cuVS nearest-neighbour routes can also receive

@@ -946,12 +946,27 @@ List nn_tune_cuvs_hnsw_cpp(int n,
   const std::string build_algo = auto_build_algo ?
     "iterative_cagra_search" :
     cagra_build_algo_for_shape_core(n, p, k, true, compact, build_algo_preference);
-  const int base_graph_degree = as<int>(base["graph_degree"]);
-  const int base_intermediate_graph_degree = as<int>(base["intermediate_graph_degree"]);
-  const int hnsw_graph_degree = manual_cagra ? base_graph_degree : std::max(2, k);
-  const int hnsw_intermediate_graph_degree = manual_cagra ?
-    base_intermediate_graph_degree :
+  const int n_cap = std::max(1, n - 1);
+  const int recall99_graph_degree = large_k ?
+    std::max(48, static_cast<int>(std::ceil(k / 2.0))) :
+    (k <= 10 ? std::max(16, k + 1) : 24);
+  const int requested_graph_degree = requested_int(graph_degree_option, recall99_graph_degree);
+  const int hnsw_graph_degree = option_int(
+    graph_degree_option,
+    recall99_graph_degree,
+    2,
+    n_cap
+  );
+  const int default_intermediate_graph_degree =
     std::max(hnsw_graph_degree, 2 * hnsw_graph_degree);
+  const int requested_intermediate_graph_degree =
+    requested_int(intermediate_graph_degree_option, default_intermediate_graph_degree);
+  const int hnsw_intermediate_graph_degree = option_int(
+    intermediate_graph_degree_option,
+    default_intermediate_graph_degree,
+    hnsw_graph_degree,
+    n_cap
+  );
   // Target about 0.99 recall by default. The CAGRA seed graph remains
   // high-quality; lowering HNSW ef trims search time without changing the
   // public algorithm. Users can raise faissR.cuvs_hnsw_ef for stricter recall.
@@ -966,8 +981,8 @@ List nn_tune_cuvs_hnsw_cpp(int n,
     _["ef"] = ef,
     _["n_threads"] = threads,
     _["cagra_build_algo"] = build_algo,
-    _["requested_graph_degree"] = hnsw_graph_degree,
-    _["requested_intermediate_graph_degree"] = hnsw_intermediate_graph_degree,
+    _["requested_graph_degree"] = requested_graph_degree,
+    _["requested_intermediate_graph_degree"] = requested_intermediate_graph_degree,
     _["requested_ef"] = requested_ef,
     _["requested_n_threads"] = threads,
     _["tuning_policy"] = as<std::string>(base["tuning_policy"]),

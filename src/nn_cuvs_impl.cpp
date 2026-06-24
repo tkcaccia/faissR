@@ -1580,11 +1580,11 @@ List cuvs_hnsw_knn_from_row_major(const float* xb,
   const int requested_ef = ef;
   const int requested_n_threads = n_threads;
 
-  graph_degree = std::max(search_k, graph_degree);
+  graph_degree = std::max(2, graph_degree);
   graph_degree = std::min(graph_degree, std::max(1, n_data - 1));
   intermediate_graph_degree = std::max(
     intermediate_graph_degree,
-    std::max(graph_degree, graph_degree * 2)
+    graph_degree
   );
   intermediate_graph_degree = std::min(
     intermediate_graph_degree,

@@ -7085,9 +7085,9 @@ grid_self_knn <- function(data,
 #'   the same maximum-inner-product-to-L2 transform as other cuVS L2 graph
 #'   routes and returns shifted inner-product distances. Default parameters are
 #'   selected by a deterministic shape/k/metric rule without pilot tuning; CUDA
-#'   HNSW defaults to a 0.99 recall target for speed. Result approximation
-#'   metadata records the selected `tuning_rule`, `target_recall`, and shape
-#'   flags used.
+#'   HNSW defaults to a 0.99 recall target for speed using lower graph/search
+#'   effort. Result approximation metadata records the selected `tuning_rule`,
+#'   `target_recall`, and shape flags used.
 #'   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
 #'   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
 #'   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records
@@ -7242,7 +7242,8 @@ grid_self_knn <- function(data,
 #'   FAISS GPU IVF `"cache"`/`"pilot"` tuning currently runs only for Euclidean
 #'   IVF, while non-Euclidean IVF routes use deterministic metric-aware
 #'   defaults. CUDA cuVS HNSW uses a deterministic 0.99 recall target by default
-#'   and can be tightened with `options(faissR.cuvs_hnsw_ef = ...)`.
+#'   and can be tightened with `options(faissR.cuvs_graph_degree = ...,
+#'   faissR.cuvs_intermediate_graph_degree = ..., faissR.cuvs_hnsw_ef = ...)`.
 #'   Deterministic approximate-method defaults are computed by C++
 #'   `nn_tune_*_cpp()` helpers and record `tuning_source = "cpp"` in
 #'   approximation metadata. Advanced tuning and cache knobs use
@@ -7261,7 +7262,7 @@ grid_self_knn <- function(data,
 #'   CAGRA build rule, choosing iterative CAGRA construction for compact
 #'   high-dimensional self-KNN cases and IVF-PQ construction otherwise. For
 #'   cuVS HNSW, `"auto"` uses iterative CAGRA construction because the HNSW
-#'   conversion needs a high-quality seed graph; HNSW search effort itself
+#'   conversion needs a high-quality seed graph; HNSW graph/search effort itself
 #'   defaults to a 0.99 recall target for speed. `"ivf_pq"` requests the IVF-PQ
 #'   graph builder, `"nn_descent"` requests cuVS NN-descent graph construction,
 #'   and `"iterative_cagra_search"` requests cuVS iterative CAGRA graph building.
