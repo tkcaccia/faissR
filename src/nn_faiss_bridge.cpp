@@ -71,6 +71,17 @@ List faiss_hnsw_knn_impl(NumericMatrix data,
                          std::string distance_output,
                          bool exclude_self,
                          int n_threads);
+List faiss_hnsw_float32_knn_impl(SEXP data,
+                                 SEXP points,
+                                 int k,
+                                 int m,
+                                 int ef_construction,
+                                 int ef_search,
+                                 std::string metric,
+                                 std::string distance_output,
+                                 bool exclude_self,
+                                 int n_threads,
+                                 std::string distance_storage);
 List faiss_nsg_knn_impl(NumericMatrix data,
                         NumericMatrix points,
                         int k,
@@ -390,6 +401,24 @@ List nn_faiss_hnsw_cpp(NumericMatrix data,
   return faiss_hnsw_knn_impl(
     data, points, k, m, ef_construction, ef_search, metric, distance_output,
     exclude_self, n_threads
+  );
+}
+
+// [[Rcpp::export]]
+List nn_faiss_hnsw_float32_cpp(SEXP data,
+                               SEXP points,
+                               int k,
+                               int m,
+                               int ef_construction,
+                               int ef_search,
+                               std::string metric,
+                               std::string distance_output,
+                               bool exclude_self,
+                               int n_threads,
+                               std::string distance_storage) {
+  return faiss_hnsw_float32_knn_impl(
+    data, points, k, m, ef_construction, ef_search, metric, distance_output,
+    exclude_self, n_threads, distance_storage
   );
 }
 

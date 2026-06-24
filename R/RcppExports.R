@@ -253,6 +253,10 @@ nn_cuvs_hnsw_cpp <- function(data, points, k, exclude_self, graph_degree, interm
     .Call(`_faissR_nn_cuvs_hnsw_cpp`, data, points, k, exclude_self, graph_degree, intermediate_graph_degree, ef, n_threads, cagra_build_algo)
 }
 
+nn_cuvs_hnsw_float32_cpp <- function(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, ef, n_threads, cagra_build_algo) {
+    .Call(`_faissR_nn_cuvs_hnsw_float32_cpp`, data, points, k, exclude_self, graph_degree, intermediate_graph_degree, ef, n_threads, cagra_build_algo)
+}
+
 nn_cuvs_ivf_flat_cpp <- function(data, points, k, n_lists, n_probes, exclude_self) {
     .Call(`_faissR_nn_cuvs_ivf_flat_cpp`, data, points, k, n_lists, n_probes, exclude_self)
 }
@@ -311,6 +315,10 @@ nn_faiss_ivfpq_cpp <- function(data, points, k, nlist, nprobe, pq_m, pq_nbits, m
 
 nn_faiss_hnsw_cpp <- function(data, points, k, m, ef_construction, ef_search, metric, distance_output, exclude_self, n_threads) {
     .Call(`_faissR_nn_faiss_hnsw_cpp`, data, points, k, m, ef_construction, ef_search, metric, distance_output, exclude_self, n_threads)
+}
+
+nn_faiss_hnsw_float32_cpp <- function(data, points, k, m, ef_construction, ef_search, metric, distance_output, exclude_self, n_threads, distance_storage) {
+    .Call(`_faissR_nn_faiss_hnsw_float32_cpp`, data, points, k, m, ef_construction, ef_search, metric, distance_output, exclude_self, n_threads, distance_storage)
 }
 
 nn_faiss_nsg_cpp <- function(data, points, k, r, search_l, build_type, metric, distance_output, exclude_self, n_threads) {

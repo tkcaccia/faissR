@@ -69,6 +69,22 @@ List cuvs_hnsw_knn_impl(NumericMatrix,
   );
 }
 
+List cuvs_hnsw_float32_knn_impl(SEXP,
+                                SEXP,
+                                int,
+                                bool,
+                                int,
+                                int,
+                                int,
+                                int,
+                                std::string) {
+  Rcpp::stop(
+    "cuVS HNSW backend is not available. Reinstall faissR with RAPIDS "
+    "cuVS visible to configure, for example FAISSR_USE_CUVS=1 and "
+    "CUVS_HOME=/path/to/cuvs."
+  );
+}
+
 List cuvs_ivf_flat_knn_impl(NumericMatrix,
                             NumericMatrix,
                             int,

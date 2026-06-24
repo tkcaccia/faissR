@@ -34,6 +34,15 @@ List cuvs_hnsw_knn_impl(NumericMatrix data,
                         int ef,
                         int n_threads,
                         std::string cagra_build_algo);
+List cuvs_hnsw_float32_knn_impl(SEXP data,
+                                SEXP points,
+                                int k,
+                                bool exclude_self,
+                                int graph_degree,
+                                int intermediate_graph_degree,
+                                int ef,
+                                int n_threads,
+                                std::string cagra_build_algo);
 List cuvs_ivf_flat_knn_impl(NumericMatrix data,
                             NumericMatrix points,
                             int k,
@@ -123,6 +132,29 @@ List nn_cuvs_hnsw_cpp(NumericMatrix data,
                       int n_threads,
                       std::string cagra_build_algo) {
   return cuvs_hnsw_knn_impl(
+    data,
+    points,
+    k,
+    exclude_self,
+    graph_degree,
+    intermediate_graph_degree,
+    ef,
+    n_threads,
+    cagra_build_algo
+  );
+}
+
+// [[Rcpp::export]]
+List nn_cuvs_hnsw_float32_cpp(SEXP data,
+                              SEXP points,
+                              int k,
+                              bool exclude_self,
+                              int graph_degree,
+                              int intermediate_graph_degree,
+                              int ef,
+                              int n_threads,
+                              std::string cagra_build_algo) {
+  return cuvs_hnsw_float32_knn_impl(
     data,
     points,
     k,

@@ -70,7 +70,8 @@ nn_compute <- function(data,
     direct_float32_backend <- backend %in% c(
       "faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat",
       "faiss_flat_l2", "faiss_flat_ip",
-      "faiss_flat_cosine", "faiss_flat_correlation"
+      "faiss_flat_cosine", "faiss_flat_correlation",
+      "faiss_hnsw", "cuda_cuvs_hnsw", "cuvs_hnsw"
     )
     if (!isTRUE(direct_float32_backend)) {
       converted_data <- if (isTRUE(data_float32)) {
@@ -114,6 +115,124 @@ nn_compute <- function(data,
       attr(result, "input_layout") <- result$input_layout
       attr(result, "input_owns_data") <- TRUE
       attr(result, "float32_compatibility_conversion") <- TRUE
+      return(result)
+    }
+    if (identical(backend, "faiss_hnsw")) {
+      if (!metric %in% c("euclidean", "inner_product")) {
+        stop(
+          "float32 FAISS HNSW input currently supports `metric = \"euclidean\"` ",
+          "or `\"inner_product\"`.",
+          call. = FALSE
+        )
+      }
+      if (!isTRUE(faiss_available())) {
+        stop(
+          "float32 FAISS HNSW input requires faissR to be built with FAISS.",
+          call. = FALSE
+        )
+      }
+      params <- faiss_hnsw_params(
+        k,
+        n = data_dim[[1L]],
+        p = data_dim[[2L]],
+        metric = metric
+      )
+      out <- nn_faiss_hnsw_float32_cpp(
+        data,
+        points,
+        as.integer(k),
+        as.integer(params$m),
+        as.integer(params$ef_construction),
+        as.integer(params$ef_search),
+        faiss_metric_search_arg(metric),
+        faiss_metric_distance_output_arg(metric),
+        isTRUE(exclude_self),
+        as.integer(n_threads),
+        output
+      )
+      result <- finish_nn_result(out, "faiss_hnsw", k, self_query, exact = FALSE, metric = metric)
+      attr(result, "approximation") <- list(
+        strategy = "faiss_IndexHNSWFlat",
+        backend = "faiss_hnsw",
+        library = "faiss",
+        metric = metric,
+        input_type = "float32",
+        m = as.integer(out$m),
+        ef_construction = as.integer(out$ef_construction),
+        ef_search = as.integer(out$ef_search),
+        requested_m = as.integer(out$requested_m),
+        requested_ef_construction = as.integer(out$requested_ef_construction),
+        requested_ef_search = as.integer(out$requested_ef_search),
+        hnsw_parameters_adjusted = isTRUE(out$hnsw_parameters_adjusted),
+        tuning_policy = params$policy,
+        tuning_rule = params$rule,
+        tuning_high_dim = isTRUE(params$high_dim),
+        tuning_large_n = isTRUE(params$large_n),
+        tuning_small_k = isTRUE(params$small_k),
+        tuning_large_k = isTRUE(params$large_k),
+        tuning_non_euclidean = isTRUE(params$non_euclidean),
+        tuning_source = params$tuning_source %||% "cpp"
+      )
+      attr(result, "input_type") <- out$input_type %||% "float32"
+      attr(result, "input_layout") <- out$input_layout %||% NA_character_
+      attr(result, "input_owns_data") <- isTRUE(out$input_owns_data)
+      attr(result, "float32_compatibility_conversion") <- FALSE
+      return(result)
+    }
+    if (backend %in% c("cuda_cuvs_hnsw", "cuvs_hnsw")) {
+      if (!identical(metric, "euclidean")) {
+        stop(
+          "float32 cuVS HNSW input currently supports `metric = \"euclidean\"`.",
+          call. = FALSE
+        )
+      }
+      require_cuvs_backend("cuVS HNSW")
+      params <- cuvs_hnsw_params(
+        data_dim[[1L]],
+        k,
+        p = data_dim[[2L]],
+        n_threads = n_threads
+      )
+      out <- nn_cuvs_hnsw_float32_cpp(
+        data,
+        points,
+        as.integer(k),
+        isTRUE(exclude_self),
+        as.integer(params$graph_degree),
+        as.integer(params$intermediate_graph_degree),
+        as.integer(params$ef),
+        as.integer(params$n_threads),
+        params$cagra_build_algo
+      )
+      result <- finish_nn_result(out, "cuda_cuvs_hnsw", k, self_query, exact = FALSE, metric = metric)
+      attr(result, "approximation") <- list(
+        strategy = "rapids_cuvs_hnsw_from_cagra",
+        backend = "cuda_cuvs_hnsw",
+        library = "cuvs",
+        accelerator = "cuda",
+        metric = metric,
+        input_type = "float32",
+        graph_degree = as.integer(out$graph_degree),
+        intermediate_graph_degree = as.integer(out$intermediate_graph_degree),
+        ef = as.integer(out$ef),
+        n_threads = as.integer(out$num_threads),
+        cagra_build_algo = out$cagra_build_algo %||% params$cagra_build_algo,
+        hnsw_build_algo = out$hnsw_build_algo %||% "from_cagra",
+        hnsw_hierarchy = out$hnsw_hierarchy %||% "none",
+        hnsw_m = as.integer(out$hnsw_m %||% NA_integer_),
+        hnsw_ef_construction = as.integer(out$hnsw_ef_construction %||% NA_integer_),
+        requested_graph_degree = as.integer(params$requested_graph_degree),
+        requested_intermediate_graph_degree = as.integer(params$requested_intermediate_graph_degree),
+        requested_ef = as.integer(params$requested_ef),
+        requested_n_threads = as.integer(params$requested_n_threads),
+        hnsw_parameters_adjusted = isTRUE(out$hnsw_parameters_adjusted),
+        note = "cuVS HNSW is built from a CUDA CAGRA index and searched through the cuVS HNSW wrapper."
+      )
+      result <- append_nn_tuning_metadata(result, params)
+      attr(result, "input_type") <- out$input_type %||% "float32"
+      attr(result, "input_layout") <- out$input_layout %||% NA_character_
+      attr(result, "input_owns_data") <- isTRUE(out$input_owns_data)
+      attr(result, "float32_compatibility_conversion") <- FALSE
       return(result)
     }
     if (!metric %in% c("euclidean", "cosine", "correlation", "inner_product")) {

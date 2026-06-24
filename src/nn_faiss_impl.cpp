@@ -626,6 +626,82 @@ List search_faiss_index(faiss::Index& index,
   );
 }
 
+List search_faiss_index_float32(faiss::Index& index,
+                                SEXP data,
+                                SEXP points,
+                                int k,
+                                bool exclude_self,
+                                int n_threads,
+                                const std::string& index_type,
+                                bool exact,
+                                DistanceOutput distance_output,
+                                const std::string& distance_storage,
+                                int nlist = NA_INTEGER,
+                                int nprobe = NA_INTEGER,
+                                int graph_degree = NA_INTEGER,
+                                int search_width = NA_INTEGER,
+                                bool use_ivf_search_params = false) {
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  const bool same_storage = same_float32_object(data, points);
+  MatrixViewF32 xq = same_storage ? MatrixViewF32() :
+    make_float32_matrix_view(points, "points");
+  if (!same_storage && xq.ncol != xb.ncol) {
+    Rcpp::stop("data and points must have the same number of columns");
+  }
+  if (k < 1 || k > xb.nrow) {
+    Rcpp::stop("k must be in [1, nrow(data)]");
+  }
+  if (exclude_self && !same_storage) {
+    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  }
+  const int n_points = same_storage ? xb.nrow : xq.nrow;
+  const int search_k = exclude_self ? std::min(xb.nrow, k + 1) : k;
+  const float* query_ptr = same_storage ? xb.data : xq.data;
+  const bool self_query = exclude_self || same_storage;
+  const bool wants_float_distances = distance_storage == "float" ||
+    distance_storage == "float32";
+  if (!wants_float_distances && distance_storage != "double") {
+    Rcpp::stop("`distance_storage` must be \"double\" or \"float\"");
+  }
+
+  OmpThreadScope threads(n_threads);
+  std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
+  std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
+
+  try {
+    if (!index.is_trained) {
+      index.train(xb.nrow, xb.data);
+    }
+    index.add(xb.nrow, xb.data);
+    if (use_ivf_search_params && nprobe != NA_INTEGER) {
+      faiss::SearchParametersIVF params;
+      params.nprobe = static_cast<std::size_t>(std::max(1, nprobe));
+      index.search(
+        n_points, query_ptr, search_k, distances.data(), labels.data(), &params
+      );
+    } else {
+      index.search(n_points, query_ptr, search_k, distances.data(), labels.data());
+    }
+  } catch (const std::exception& e) {
+    Rcpp::stop("FAISS %s float32 search failed: %s", index_type.c_str(), e.what());
+  }
+
+  List out = format_faiss_result(
+    labels, distances, n_points, search_k, k, self_query, exclude_self,
+    index_type, exact, distance_output, n_threads, nlist, nprobe,
+    graph_degree, search_width, wants_float_distances
+  );
+  out["input_type"] = "float32";
+  out["input_layout"] = same_storage ?
+    xb.layout :
+    ("data=" + xb.layout + ";points=" + xq.layout);
+  out["input_owns_data"] = same_storage ?
+    xb.owns_data :
+    (xb.owns_data || xq.owns_data);
+  out["float32_compatibility_conversion"] = false;
+  return out;
+}
+
 void sort_knn_result_rows(IntegerMatrix& indices, NumericMatrix& dists) {
   const int n_points = indices.nrow();
   const int k = indices.ncol();
@@ -1118,6 +1194,52 @@ List faiss_hnsw_knn_impl(NumericMatrix data,
   List out = search_faiss_index(
     index, data, points, k, exclude_self, n_threads,
     "IndexHNSWFlat", false, output,
+    NA_INTEGER, NA_INTEGER, m, ef_search
+  );
+  out["m"] = m;
+  out["ef_construction"] = ef_construction;
+  out["ef_search"] = ef_search;
+  out["requested_m"] = requested_m;
+  out["requested_ef_construction"] = requested_ef_construction;
+  out["requested_ef_search"] = requested_ef_search;
+  out["hnsw_parameters_adjusted"] = requested_m != m ||
+    requested_ef_construction != ef_construction || requested_ef_search != ef_search;
+  return out;
+}
+
+List faiss_hnsw_float32_knn_impl(SEXP data,
+                                 SEXP points,
+                                 int k,
+                                 int m,
+                                 int ef_construction,
+                                 int ef_search,
+                                 std::string metric,
+                                 std::string distance_output,
+                                 bool exclude_self,
+                                 int n_threads,
+                                 std::string distance_storage) {
+  Rcpp::IntegerVector dims = matrix_dims_from_object(data, "data");
+  const int n_data = dims[0];
+  const int n_features = dims[1];
+  const int requested_m = m;
+  const int requested_ef_construction = ef_construction;
+  const int requested_ef_search = ef_search;
+  m = clamp_positive(m, 32, n_data);
+  ef_construction = std::max(ef_construction, m);
+  ef_search = std::max(ef_search, k);
+  faiss::MetricType faiss_metric = faiss::METRIC_L2;
+  if (metric == "inner_product") {
+    faiss_metric = faiss::METRIC_INNER_PRODUCT;
+  } else if (metric != "euclidean") {
+    Rcpp::stop("FAISS HNSW float32 supports metric = 'euclidean' or 'inner_product'");
+  }
+  const DistanceOutput output = parse_distance_output(distance_output, "HNSW");
+  faiss::IndexHNSWFlat index(n_features, m, faiss_metric);
+  index.hnsw.efConstruction = ef_construction;
+  index.hnsw.efSearch = ef_search;
+  List out = search_faiss_index_float32(
+    index, data, points, k, exclude_self, n_threads,
+    "IndexHNSWFlat", false, output, distance_storage,
     NA_INTEGER, NA_INTEGER, m, ef_search
   );
   out["m"] = m;

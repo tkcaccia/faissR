@@ -112,6 +112,169 @@ void copy_row_major_float(const NumericMatrix& src, std::vector<float>& dest) {
   }
 }
 
+struct MatrixViewF32 {
+  const float* data = nullptr;
+  int nrow = 0;
+  int ncol = 0;
+  bool row_major = true;
+  bool owns_data = false;
+  std::string layout = "unknown";
+  std::vector<float> buffer;
+};
+
+Rcpp::IntegerVector matrix_dims_from_object(SEXP x, const char* name) {
+  SEXP dim = Rf_getAttrib(x, R_DimSymbol);
+  if (Rf_isNull(dim) && Rf_isS4(x)) {
+    SEXP data_slot = R_do_slot(x, Rf_install("Data"));
+    dim = Rf_getAttrib(data_slot, R_DimSymbol);
+  }
+  if (Rf_isNull(dim) || Rf_length(dim) != 2) {
+    Rcpp::stop("%s must be a two-dimensional numeric or float32 matrix", name);
+  }
+  Rcpp::IntegerVector dims(dim);
+  if (dims[0] < 1 || dims[1] < 1) {
+    Rcpp::stop("%s must have at least one row and one column", name);
+  }
+  if (dims[0] > std::numeric_limits<int>::max() ||
+      dims[1] > std::numeric_limits<int>::max()) {
+    Rcpp::stop("%s dimensions exceed cuVS int limits", name);
+  }
+  return dims;
+}
+
+const float* float32_slot_ptr(SEXP slot, const int expected_length, const char* name) {
+  if (TYPEOF(slot) == INTSXP) {
+    if (Rf_length(slot) != expected_length) {
+      Rcpp::stop("%s float32 payload length does not match its dimensions", name);
+    }
+    return reinterpret_cast<const float*>(INTEGER(slot));
+  }
+  if (TYPEOF(slot) == RAWSXP) {
+    const R_xlen_t expected_bytes = static_cast<R_xlen_t>(expected_length) *
+      static_cast<R_xlen_t>(sizeof(float));
+    if (Rf_xlength(slot) != expected_bytes) {
+      Rcpp::stop("%s float32 raw payload length does not match its dimensions", name);
+    }
+    return reinterpret_cast<const float*>(RAW(slot));
+  }
+  return nullptr;
+}
+
+bool finite_float32_payload(const float* ptr, const int length) {
+  bool finite = true;
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) reduction(&& : finite)
+#endif
+  for (int i = 0; i < length; ++i) {
+    if (!std::isfinite(ptr[i])) finite = false;
+  }
+  return finite;
+}
+
+MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
+  Rcpp::IntegerVector dims = matrix_dims_from_object(x, name);
+  MatrixViewF32 view;
+  view.nrow = dims[0];
+  view.ncol = dims[1];
+  const int expected_length = view.nrow * view.ncol;
+
+  bool finite = true;
+  if (TYPEOF(x) == REALSXP) {
+    view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
+    view.owns_data = true;
+    view.row_major = true;
+    view.layout = "r_double_column_major_to_row_major_float32";
+    if (Rf_length(x) != expected_length) {
+      Rcpp::stop("%s payload length does not match its dimensions", name);
+    }
+    const double* col_major_double = REAL(x);
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) reduction(&& : finite)
+#endif
+    for (int r = 0; r < view.nrow; ++r) {
+      for (int c = 0; c < view.ncol; ++c) {
+        const double value = col_major_double[r + view.nrow * c];
+        if (!std::isfinite(value)) {
+          finite = false;
+          continue;
+        }
+        view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
+          static_cast<float>(value);
+      }
+    }
+  } else if (Rf_isS4(x)) {
+    SEXP slot = R_do_slot(x, Rf_install("Data"));
+    const float* col_major = float32_slot_ptr(slot, expected_length, name);
+    if (col_major != nullptr) {
+      finite = finite_float32_payload(col_major, expected_length);
+      if (view.nrow == 1 || view.ncol == 1) {
+        view.data = col_major;
+        view.owns_data = false;
+        view.row_major = true;
+        view.layout = "float32_payload_direct_row_compatible";
+      } else {
+        view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
+        view.owns_data = true;
+        view.row_major = true;
+        view.layout = "float32_column_major_payload_to_row_major";
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+        for (int r = 0; r < view.nrow; ++r) {
+          for (int c = 0; c < view.ncol; ++c) {
+            view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
+              col_major[r + view.nrow * c];
+          }
+        }
+      }
+    } else if (TYPEOF(slot) == REALSXP) {
+      view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
+      view.owns_data = true;
+      view.row_major = true;
+      view.layout = "s4_double_column_major_to_row_major_float32";
+      const double* col_major_double = REAL(slot);
+      if (Rf_length(slot) != expected_length) {
+        Rcpp::stop("%s payload length does not match its dimensions", name);
+      }
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) reduction(&& : finite)
+#endif
+      for (int r = 0; r < view.nrow; ++r) {
+        for (int c = 0; c < view.ncol; ++c) {
+          const double value = col_major_double[r + view.nrow * c];
+          if (!std::isfinite(value)) {
+            finite = false;
+            continue;
+          }
+          view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
+            static_cast<float>(value);
+        }
+      }
+    } else {
+      Rcpp::stop(
+        "%s must be a float::fl()/float32 object with an integer or raw @Data payload",
+        name
+      );
+    }
+  } else {
+    Rcpp::stop(
+      "%s must be an ordinary R double matrix or a float::fl()/float32 object",
+      name
+    );
+  }
+  if (!finite) {
+    Rcpp::stop("cuVS float32 input requires finite values");
+  }
+  if (view.data == nullptr) {
+    view.data = view.buffer.data();
+  }
+  return view;
+}
+
+bool same_float32_object(SEXP data, SEXP points) {
+  return data == points;
+}
+
 bool same_matrix_storage(const NumericMatrix& data,
                          const NumericMatrix& points) {
   return data.nrow() == points.nrow() &&
@@ -1044,27 +1207,26 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
   return out;
 }
 
-List cuvs_hnsw_knn_impl(NumericMatrix data,
-                        NumericMatrix points,
-                        int k,
-                        bool exclude_self,
-                        int graph_degree,
-                        int intermediate_graph_degree,
-                        int ef,
-                        int n_threads,
-                        std::string cagra_build_algo) {
+List cuvs_hnsw_knn_from_row_major(const float* xb,
+                                  const float* xq,
+                                  const bool same_storage,
+                                  const int n_data,
+                                  const int n_points,
+                                  const int n_features,
+                                  const int k,
+                                  const bool exclude_self,
+                                  int graph_degree,
+                                  int intermediate_graph_degree,
+                                  int ef,
+                                  int n_threads,
+                                  std::string cagra_build_algo) {
 #ifndef FAISSR_HAS_CUVS_HNSW
   Rcpp::stop(
     "Direct cuVS HNSW is not available in this cuVS installation. "
     "Reinstall cuVS with cuvs/neighbors/hnsw.h."
   );
 #else
-  validate_inputs(data, points, k, exclude_self);
-  const bool same_storage = same_matrix_storage(data, points);
   const bool self_query = exclude_self || same_storage;
-  const int n_data = data.nrow();
-  const int n_points = points.nrow();
-  const int n_features = data.ncol();
   const int search_k = exclude_self ? std::min(n_data, k + 1) : k;
   const int requested_graph_degree = graph_degree;
   const int requested_intermediate_graph_degree = intermediate_graph_degree;
@@ -1084,18 +1246,16 @@ List cuvs_hnsw_knn_impl(NumericMatrix data,
   ef = std::max(search_k, ef);
   n_threads = std::max(1, n_threads);
 
-  std::vector<float> xb;
-  std::vector<float> xq;
-  copy_row_major_float(data, xb);
-  if (!same_storage) {
-    copy_row_major_float(points, xq);
+  if (xb == nullptr || (!same_storage && xq == nullptr)) {
+    Rcpp::stop("cuVS HNSW received a null float32 input pointer");
   }
 
   CuvsResources res;
-  const std::size_t data_bytes = xb.size() * sizeof(float);
+  const std::size_t data_bytes =
+    static_cast<std::size_t>(n_data) * n_features * sizeof(float);
   DeviceBuffer dataset_d(res.get(), data_bytes);
   cuda_check(
-    cudaMemcpy(dataset_d.get(), xb.data(), data_bytes, cudaMemcpyHostToDevice),
+    cudaMemcpy(dataset_d.get(), xb, data_bytes, cudaMemcpyHostToDevice),
     "cudaMemcpy(dataset)"
   );
 
@@ -1149,7 +1309,7 @@ List cuvs_hnsw_knn_impl(NumericMatrix data,
     "cuvsHnswFromCagra"
   );
 
-  const float* query_ptr = same_storage ? xb.data() : xq.data();
+  const float* query_ptr = same_storage ? xb : xq;
   int64_t query_shape[2] = {n_points, n_features};
   int64_t output_shape[2] = {n_points, search_k};
   std::vector<uint64_t> labels(static_cast<std::size_t>(n_points) * search_k);
@@ -1207,6 +1367,101 @@ List cuvs_hnsw_knn_impl(NumericMatrix data,
     requested_intermediate_graph_degree != intermediate_graph_degree ||
     requested_ef != ef ||
     requested_n_threads != n_threads;
+  return out;
+#endif
+}
+
+List cuvs_hnsw_knn_impl(NumericMatrix data,
+                        NumericMatrix points,
+                        int k,
+                        bool exclude_self,
+                        int graph_degree,
+                        int intermediate_graph_degree,
+                        int ef,
+                        int n_threads,
+                        std::string cagra_build_algo) {
+  validate_inputs(data, points, k, exclude_self);
+  const bool same_storage = same_matrix_storage(data, points);
+  const int n_data = data.nrow();
+  const int n_points = points.nrow();
+  const int n_features = data.ncol();
+
+  std::vector<float> xb;
+  std::vector<float> xq;
+  copy_row_major_float(data, xb);
+  if (!same_storage) {
+    copy_row_major_float(points, xq);
+  }
+
+  return cuvs_hnsw_knn_from_row_major(
+    xb.data(),
+    same_storage ? nullptr : xq.data(),
+    same_storage,
+    n_data,
+    n_points,
+    n_features,
+    k,
+    exclude_self,
+    graph_degree,
+    intermediate_graph_degree,
+    ef,
+    n_threads,
+    cagra_build_algo
+  );
+}
+
+List cuvs_hnsw_float32_knn_impl(SEXP data,
+                                SEXP points,
+                                int k,
+                                bool exclude_self,
+                                int graph_degree,
+                                int intermediate_graph_degree,
+                                int ef,
+                                int n_threads,
+                                std::string cagra_build_algo) {
+#ifndef FAISSR_HAS_CUVS_HNSW
+  Rcpp::stop(
+    "Direct cuVS HNSW is not available in this cuVS installation. "
+    "Reinstall cuVS with cuvs/neighbors/hnsw.h."
+  );
+#else
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  const bool same_storage = same_float32_object(data, points);
+  MatrixViewF32 xq = same_storage ? MatrixViewF32() :
+    make_float32_matrix_view(points, "points");
+  if (!same_storage && xq.ncol != xb.ncol) {
+    Rcpp::stop("data and points must have the same number of columns");
+  }
+  if (k < 1 || k > xb.nrow) {
+    Rcpp::stop("k must be in [1, nrow(data)]");
+  }
+  if (exclude_self && !same_storage) {
+    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  }
+
+  List out = cuvs_hnsw_knn_from_row_major(
+    xb.data,
+    same_storage ? nullptr : xq.data,
+    same_storage,
+    xb.nrow,
+    same_storage ? xb.nrow : xq.nrow,
+    xb.ncol,
+    k,
+    exclude_self,
+    graph_degree,
+    intermediate_graph_degree,
+    ef,
+    n_threads,
+    cagra_build_algo
+  );
+  out["input_type"] = "float32";
+  out["input_layout"] = same_storage ?
+    xb.layout :
+    ("data=" + xb.layout + ";points=" + xq.layout);
+  out["input_owns_data"] = same_storage ?
+    xb.owns_data :
+    (xb.owns_data || xq.owns_data);
+  out["float32_compatibility_conversion"] = false;
   return out;
 #endif
 }
