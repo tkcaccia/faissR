@@ -232,6 +232,25 @@ float32_matrix_dims <- function(x, arg_name = "data") {
   d
 }
 
+float32_to_numeric_matrix <- function(x, arg_name = "data") {
+  if (!is_float32_matrix_input(x)) {
+    x <- as.matrix(x)
+    storage.mode(x) <- "double"
+    return(x)
+  }
+  if (!requireNamespace("float", quietly = TRUE)) {
+    stop(
+      "`", arg_name, "` is a float32 object but the optional float package ",
+      "is not installed.",
+      call. = FALSE
+    )
+  }
+  out <- float::dbl(x)
+  out <- as.matrix(out)
+  storage.mode(out) <- "double"
+  out
+}
+
 as_float_distances <- function(x) {
   if (!requireNamespace("float", quietly = TRUE)) {
     stop(

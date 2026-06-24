@@ -22,10 +22,12 @@ nn(
 }
 \arguments{
 \item{data}{Numeric matrix/data frame or optional `float::fl()`/`float32`
-object of reference observations in rows. Float32 inputs use the CPU FAISS
-Flat float32 route for public
-`method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests and
-can be paired with ordinary R double query matrices.}
+object of reference observations in rows. Float32 inputs use the direct
+CPU FAISS Flat float32 route for public
+`method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` CPU requests
+that resolve to FAISS Flat. Other resolved routes accept float32 inputs
+through a one-time compatibility conversion to an ordinary R numeric matrix
+and record `float32_compatibility_conversion = TRUE`.}
 
 \item{points}{Numeric matrix/data frame or optional `float::fl()`/`float32`
 query object with observations in rows. Defaults to `data`. A float32
@@ -134,12 +136,15 @@ returns the default R numeric distance matrix. `"float"` returns
 `distance_type = "float32"` plus
 `attr(result, "distance_type") = "float32"`; this requires the optional
 `float` package. When either `data` or `points` is a `float::fl()` matrix,
-the current float32 input route uses CPU FAISS Flat for public
-`method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests, with
-ordinary R double inputs converted once to float32 internally. Ordinary R
-double inputs with a CPU FAISS Flat-style request and `output = "float"`
-also use this float-pointer FAISS route. On that route, float distance
-output is constructed directly from FAISS float results instead of first
+a CPU FAISS Flat-style request uses the direct float-pointer FAISS route.
+Other resolved routes accept float32 inputs through a one-time
+compatibility conversion to R numeric and record
+`float32_compatibility_conversion = TRUE`; this keeps float32 dataset
+files usable across all public methods while deeper backend-specific
+float-pointer routes are added incrementally. Ordinary R double inputs
+with a CPU FAISS Flat-style request and `output = "float"` also use the
+float-pointer FAISS route. On that direct route, float distance output is
+constructed directly from FAISS float results instead of first
 materializing an R double distance matrix, except for zero-row
 cosine/correlation correction.}
 

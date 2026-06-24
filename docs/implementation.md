@@ -625,25 +625,34 @@ buffers. For moderate datasets this overhead is small relative to KNN search;
 for very large datasets it can dominate memory use.
 
 The core FAISS KNN implementation is being moved toward float-pointer entry
-points. The first public slice accepts optional `float::fl()`/`float32` matrices
-in `nn()` and `nn_without_self()` for the CPU FAISS Flat route across the four
-public metrics: Euclidean, cosine, correlation, and inner product. Cosine and
-correlation are normalized in the float32 row-major buffer before FAISS
-`IndexFlatIP` search, with the same zero-row semantics as the double-precision
-routes. Float objects are read from their float32 payload and copied only once
-into FAISS's row-major `float*` layout, avoiding the previous
+points. The first direct public slice accepts optional `float::fl()`/`float32`
+matrices in `nn()` and `nn_without_self()` for the CPU FAISS Flat route across
+the four public metrics: Euclidean, cosine, correlation, and inner product.
+Cosine and correlation are normalized in the float32 row-major buffer before
+FAISS `IndexFlatIP` search, with the same zero-row semantics as the
+double-precision routes. Float objects are read from their float32 payload and
+copied only once into FAISS's row-major `float*` layout, avoiding the previous
 float32-to-R-double-to-float32 path. Ordinary R double matrices still work and
 are converted once to float32 internally. When an ordinary R double input uses
 a CPU FAISS Flat-style request with `output = "float"`, it also enters this
 float-pointer route so FAISS does not produce an intermediate R double distance
 matrix.
 
+Other resolved CPU, FAISS GPU, CUDA, and cuVS routes can also receive
+`float::fl()` inputs. Until each of those backends has its own float-pointer
+adapter, faissR performs a one-time compatibility conversion to an ordinary R
+numeric matrix before entering the existing route and records
+`float32_compatibility_conversion = TRUE`. This keeps on-disk float32 benchmark
+datasets usable across all public methods while making the remaining conversion
+cost auditable in result metadata.
+
 The float32 adapter records the route it used in the returned KNN object.
 `input_layout` distinguishes ordinary R double conversion, float32 payload
-transpose, mixed reference/query adapters, and the direct row-compatible
-float32 payload route used for one-row or one-column `float::fl()` matrices.
-`input_owns_data` records whether FAISS consumed an owned adapter buffer. For
-cosine and correlation, direct float32 payloads still make one owned copy before
+transpose, mixed reference/query adapters, direct row-compatible float32
+payloads used for one-row or one-column `float::fl()` matrices, and
+compatibility conversion to R numeric for non-Flat backends. `input_owns_data`
+records whether FAISS consumed an owned adapter buffer. For cosine and
+correlation, direct float32 payloads still make one owned copy before
 normalization because those transforms are applied in-place before FAISS search.
 
 Distance output remains an ordinary R numeric matrix by default. Calling

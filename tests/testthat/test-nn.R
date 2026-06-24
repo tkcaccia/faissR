@@ -313,6 +313,33 @@ test_that("float32 FAISS Flat input accepts mixed double and float32 query matri
   expect_equal(float_query$backend_used, "faiss_flat_l2")
 })
 
+test_that("float32 input can run non-Flat methods through compatibility conversion", {
+  skip_if_not_installed("float")
+  skip_if_not(faiss_available(), "FAISS is required for this float32 compatibility test")
+
+  x <- matrix(c(
+    0, 0,
+    1, 0,
+    0, 1,
+    2, 2,
+    3, 3,
+    4, 4
+  ), ncol = 2, byrow = TRUE)
+  xf <- float::fl(x)
+
+  ref <- nn_without_self(x, k = 2L, backend = "cpu", method = "hnsw", n_threads = 2L)
+  out <- nn_without_self(xf, k = 2L, backend = "cpu", method = "hnsw", n_threads = 2L)
+
+  expect_equal(out$indices, ref$indices)
+  expect_equal(out$distances, ref$distances, tolerance = 1e-6)
+  expect_equal(out$input_type, "float32")
+  expect_equal(out$input_layout, "float32_compatibility_to_r_double")
+  expect_true(out$input_owns_data)
+  expect_true(out$float32_compatibility_conversion)
+  expect_true(attr(out, "float32_compatibility_conversion"))
+  expect_equal(out$backend_used, "faiss_hnsw")
+})
+
 test_that("row-compatible float32 inputs can use the direct payload route", {
   skip_if_not_installed("float")
   skip_if_not(faiss_available(), "FAISS is required for float32 input")

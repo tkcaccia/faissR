@@ -55,7 +55,8 @@ this call. See \code{\link{nn}()}.}
 \item{output}{Distance storage type: `"double"` for the default R numeric
 matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
 optional `float` package is installed. `float::fl()` input matrices use
-the same CPU FAISS Flat float32 route described in \code{\link{nn}()}.}
+the same direct FAISS Flat and compatibility routes described in
+\code{\link{nn}()}.}
 
 \item{distances}{Optional alias for `output`.}
 

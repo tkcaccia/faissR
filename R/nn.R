@@ -67,16 +67,54 @@ nn_compute <- function(data,
         "faiss_flat_l2"
       )
     }
-    if (!backend %in% c("faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat",
-                        "faiss_flat_l2", "faiss_flat_ip",
-                        "faiss_flat_cosine", "faiss_flat_correlation")) {
-      stop(
-        "float32 input currently supports CPU FAISS Flat routes only. ",
-        "Use `backend = \"cpu\"` with `method = \"auto\"`, `\"exact\"`, ",
-        "`\"bruteforce\"`, or `\"flat\"`, or pass an ordinary R numeric ",
-        "matrix for other methods.",
-        call. = FALSE
+    direct_float32_backend <- backend %in% c(
+      "faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat",
+      "faiss_flat_l2", "faiss_flat_ip",
+      "faiss_flat_cosine", "faiss_flat_correlation"
+    )
+    if (!isTRUE(direct_float32_backend)) {
+      converted_data <- if (isTRUE(data_float32)) {
+        float32_to_numeric_matrix(data, "data")
+      } else {
+        data
+      }
+      converted_points <- if (isTRUE(points_missing)) {
+        converted_data
+      } else if (isTRUE(points_float32)) {
+        float32_to_numeric_matrix(points, "points")
+      } else {
+        points
+      }
+      result <- nn_compute(
+        converted_data,
+        converted_points,
+        k,
+        backend,
+        points_missing,
+        exclude_self = exclude_self,
+        n_threads = n_threads,
+        metric = metric,
+        tuning = tuning,
+        output = output,
+        auto_selection = auto_selection
       )
+      result$input_type <- "float32"
+      result$input_layout <- if (isTRUE(points_missing)) {
+        "float32_compatibility_to_r_double"
+      } else {
+        paste(
+          if (isTRUE(data_float32)) "data=float32_compatibility_to_r_double" else "data=r_double",
+          if (isTRUE(points_float32)) "points=float32_compatibility_to_r_double" else "points=r_double",
+          sep = ";"
+        )
+      }
+      result$input_owns_data <- TRUE
+      result$float32_compatibility_conversion <- TRUE
+      attr(result, "input_type") <- "float32"
+      attr(result, "input_layout") <- result$input_layout
+      attr(result, "input_owns_data") <- TRUE
+      attr(result, "float32_compatibility_conversion") <- TRUE
+      return(result)
     }
     if (!metric %in% c("euclidean", "cosine", "correlation", "inner_product")) {
       stop(
@@ -6497,10 +6535,12 @@ grid_self_knn <- function(data,
 #' cuVS, including IVF and CAGRA integration.
 #'
 #' @param data Numeric matrix/data frame or optional `float::fl()`/`float32`
-#'   object of reference observations in rows. Float32 inputs use the CPU FAISS
-#'   Flat float32 route for public
-#'   `method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests and
-#'   can be paired with ordinary R double query matrices.
+#'   object of reference observations in rows. Float32 inputs use the direct
+#'   CPU FAISS Flat float32 route for public
+#'   `method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` CPU requests
+#'   that resolve to FAISS Flat. Other resolved routes accept float32 inputs
+#'   through a one-time compatibility conversion to an ordinary R numeric matrix
+#'   and record `float32_compatibility_conversion = TRUE`.
 #' @param points Numeric matrix/data frame or optional `float::fl()`/`float32`
 #'   query object with observations in rows. Defaults to `data`. A float32
 #'   query can be paired with an ordinary R double
@@ -6600,12 +6640,15 @@ grid_self_knn <- function(data,
 #'   `distance_type = "float32"` plus
 #'   `attr(result, "distance_type") = "float32"`; this requires the optional
 #'   `float` package. When either `data` or `points` is a `float::fl()` matrix,
-#'   the current float32 input route uses CPU FAISS Flat for public
-#'   `method = "auto"`, `"exact"`, `"bruteforce"`, or `"flat"` requests, with
-#'   ordinary R double inputs converted once to float32 internally. Ordinary R
-#'   double inputs with a CPU FAISS Flat-style request and `output = "float"`
-#'   also use this float-pointer FAISS route. On that route, float distance
-#'   output is constructed directly from FAISS float results instead of first
+#'   a CPU FAISS Flat-style request uses the direct float-pointer FAISS route.
+#'   Other resolved routes accept float32 inputs through a one-time
+#'   compatibility conversion to R numeric and record
+#'   `float32_compatibility_conversion = TRUE`; this keeps float32 dataset
+#'   files usable across all public methods while deeper backend-specific
+#'   float-pointer routes are added incrementally. Ordinary R double inputs
+#'   with a CPU FAISS Flat-style request and `output = "float"` also use the
+#'   float-pointer FAISS route. On that direct route, float distance output is
+#'   constructed directly from FAISS float results instead of first
 #'   materializing an R double distance matrix, except for zero-row
 #'   cosine/correlation correction.
 #' @param distances Optional alias for `output`, kept for callers that prefer
@@ -6732,7 +6775,8 @@ nn <- function(data,
 #' @param output Distance storage type: `"double"` for the default R numeric
 #'   matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
 #'   optional `float` package is installed. `float::fl()` input matrices use
-#'   the same CPU FAISS Flat float32 route described in \code{\link{nn}()}.
+#'   the same direct FAISS Flat and compatibility routes described in
+#'   \code{\link{nn}()}.
 #' @param distances Optional alias for `output`.
 #' @param n_threads Number of CPU worker threads used by CPU backends.
 #' @return A `faissR_nn` object with `indices`, `distances`, and stable
