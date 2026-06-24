@@ -71,6 +71,7 @@ for k in "${k_values[@]}"; do
 done
 
 Rscript benchmark_scripts/summarize_hnsw_target_recall.R \
-  --out_dir="$OUT_DIR" 2>&1 | tee -a "$OUT_DIR/hnsw_target_recall.log"
+  --out_dir="$OUT_DIR" \
+  --require_complete=TRUE 2>&1 | tee -a "$OUT_DIR/hnsw_target_recall.log"
 
 printf 'DONE: %s\n' "$OUT_DIR" | tee -a "$OUT_DIR/hnsw_target_recall.log"

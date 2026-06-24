@@ -16,6 +16,36 @@ parse_args <- function(args = commandArgs(trailingOnly = TRUE)) {
   out
 }
 
+split_arg <- function(value, default = character()) {
+  if (is.null(value) || length(value) == 0L || is.na(value[[1L]]) || !nzchar(value[[1L]])) {
+    return(default)
+  }
+  trimws(strsplit(value[[1L]], ",", fixed = TRUE)[[1L]])
+}
+
+read_config <- function(out_dir) {
+  path <- file.path(out_dir, "hnsw_target_recall_config.csv")
+  if (!file.exists(path)) return(list())
+  cfg <- read.csv(path, stringsAsFactors = FALSE)
+  if (!all(c("key", "value") %in% names(cfg))) return(list())
+  stats::setNames(as.list(cfg$value), cfg$key)
+}
+
+target_key <- function(x) {
+  sprintf("%.2f", suppressWarnings(as.numeric(x)))
+}
+
+expected_values <- function(args, config, arg_name, config_name, observed, numeric = FALSE) {
+  value <- args[[arg_name]] %||% config[[config_name]]
+  out <- split_arg(value, unique(as.character(observed)))
+  out <- out[nzchar(out)]
+  if (numeric) {
+    out <- suppressWarnings(as.numeric(out))
+    out <- out[is.finite(out)]
+  }
+  unique(out)
+}
+
 shape_group <- function(n, p) {
   out <- rep("other", length(n))
   out[n < 50000L] <- "small_n"
@@ -83,6 +113,62 @@ select_recommendation_rows <- function(x) {
   out
 }
 
+completeness_audit <- function(x, datasets, backends, k_values, target_recalls) {
+  expected <- expand.grid(
+    dataset = datasets,
+    backend = backends,
+    k = as.integer(k_values),
+    target_key = target_key(target_recalls),
+    stringsAsFactors = FALSE
+  )
+  expected$target_recall_requested <- as.numeric(expected$target_key)
+
+  actual <- x
+  actual$target_key <- target_key(actual$target_recall_requested)
+  keys <- c("dataset", "backend", "k", "target_key")
+  observed <- aggregate(rep(1L, nrow(actual)), actual[keys], length)
+  names(observed)[ncol(observed)] <- "observed_rows"
+  success <- aggregate(actual$status == "success", actual[keys], sum, na.rm = TRUE)
+  names(success)[ncol(success)] <- "success_rows"
+  meets <- aggregate(actual$meets_target, actual[keys], sum, na.rm = TRUE)
+  names(meets)[ncol(meets)] <- "meets_target_rows"
+  timeout <- aggregate(actual$status == "timeout", actual[keys], sum, na.rm = TRUE)
+  names(timeout)[ncol(timeout)] <- "timeout_rows"
+  failed <- aggregate(actual$status == "failed", actual[keys], sum, na.rm = TRUE)
+  names(failed)[ncol(failed)] <- "failed_rows"
+
+  audit <- Reduce(
+    function(left, right) merge(left, right, by = keys, all.x = TRUE, sort = FALSE),
+    list(expected, observed, success, meets, timeout, failed)
+  )
+  for (col in c("observed_rows", "success_rows", "meets_target_rows", "timeout_rows", "failed_rows")) {
+    audit[[col]][is.na(audit[[col]])] <- 0L
+    audit[[col]] <- as.integer(audit[[col]])
+  }
+  audit$missing <- audit$observed_rows == 0L
+  audit$duplicate <- audit$observed_rows > 1L
+  audit$target_met <- audit$meets_target_rows > 0L
+  audit$completion_status <- ifelse(
+    audit$missing, "missing",
+    ifelse(audit$target_met, "complete_meets_target",
+      ifelse(audit$success_rows > 0L, "complete_below_target", "complete_failed")
+    )
+  )
+  audit <- audit[order(audit$dataset, audit$backend, audit$k, audit$target_recall_requested), , drop = FALSE]
+  missing <- audit[audit$missing, c("dataset", "backend", "k", "target_recall_requested"), drop = FALSE]
+  summary <- data.frame(
+    expected_rows = nrow(audit),
+    observed_combinations = sum(!audit$missing),
+    missing_combinations = sum(audit$missing),
+    duplicate_combinations = sum(audit$duplicate),
+    target_met_combinations = sum(audit$target_met),
+    below_target_combinations = sum(!audit$missing & audit$success_rows > 0L & !audit$target_met),
+    failed_or_timeout_combinations = sum(!audit$missing & audit$success_rows == 0L),
+    stringsAsFactors = FALSE
+  )
+  list(audit = audit, missing = missing, summary = summary)
+}
+
 md_table <- function(x, cols = names(x), digits = 4L, max_rows = 30L) {
   if (!nrow(x)) return("_No rows._")
   cols <- intersect(cols, names(x))
@@ -101,7 +187,7 @@ md_table <- function(x, cols = names(x), digits = 4L, max_rows = 30L) {
   paste(c(header, sep, body), collapse = "\n")
 }
 
-write_report <- function(out_dir, x, backend_summary, shape_summary, below_target, recs) {
+write_report <- function(out_dir, x, completeness, backend_summary, shape_summary, below_target, recs) {
   report_path <- file.path(out_dir, "hnsw_target_recall_report.md")
   lines <- c(
     "# HNSW Target-Recall Benchmark Summary",
@@ -115,6 +201,24 @@ write_report <- function(out_dir, x, backend_summary, shape_summary, below_targe
     "- Input: float32 dataset manifest rows.",
     "- Quality: sampled recall against exact KNN reference rows.",
     "- Timeout: 600 seconds per row unless the launcher was overridden.",
+    "",
+    "## Completeness Audit",
+    "",
+    md_table(
+      completeness$summary,
+      cols = c("expected_rows", "observed_combinations", "missing_combinations",
+               "duplicate_combinations", "target_met_combinations",
+               "below_target_combinations", "failed_or_timeout_combinations"),
+      max_rows = 20L
+    ),
+    "",
+    "### Missing Required Rows",
+    "",
+    md_table(
+      completeness$missing,
+      cols = c("dataset", "backend", "k", "target_recall_requested"),
+      max_rows = 80L
+    ),
     "",
     "## Backend Summary",
     "",
@@ -201,6 +305,22 @@ main <- function() {
     ),
     names(x)
   ), drop = FALSE]
+  config <- read_config(out_dir)
+  datasets <- expected_values(args, config, "datasets", "datasets", x$dataset)
+  backends <- expected_values(args, config, "backends", "backends", x$backend)
+  k_values <- expected_values(args, config, "k_values", "k_values", x$k, numeric = TRUE)
+  if (!length(k_values)) k_values <- expected_values(args, config, "k", "k_values", x$k, numeric = TRUE)
+  target_recalls <- expected_values(
+    args, config, "target_recalls", "target_recalls", x$target_recall_requested,
+    numeric = TRUE
+  )
+  if (!length(target_recalls)) {
+    target_recalls <- expected_values(
+      args, config, "target_recall", "target_recalls", x$target_recall_requested,
+      numeric = TRUE
+    )
+  }
+  completeness <- completeness_audit(x, datasets, backends, k_values, target_recalls)
   backend_summary <- summarise_groups(x, c("backend", "target_recall_requested", "k"))
   shape_summary <- summarise_groups(x, c("shape_group", "backend", "target_recall_requested", "k"))
   below_target <- x[x$status == "success" & !x$meets_target, , drop = FALSE]
@@ -214,14 +334,25 @@ main <- function() {
   recs <- recs[order(recs$dataset, recs$backend, recs$k, recs$target_recall_requested), , drop = FALSE]
 
   write.csv(row_summary, file.path(out_dir, "hnsw_target_recall_rows.csv"), row.names = FALSE)
+  write.csv(completeness$audit, file.path(out_dir, "hnsw_target_recall_completeness.csv"), row.names = FALSE)
+  write.csv(completeness$missing, file.path(out_dir, "hnsw_target_recall_missing_rows.csv"), row.names = FALSE)
   write.csv(backend_summary, file.path(out_dir, "hnsw_target_recall_backend_summary.csv"), row.names = FALSE)
   write.csv(shape_summary, file.path(out_dir, "hnsw_target_recall_shape_summary.csv"), row.names = FALSE)
   write.csv(below_target, file.path(out_dir, "hnsw_target_recall_below_target.csv"), row.names = FALSE)
   write.csv(recs, file.path(out_dir, "hnsw_target_recall_recommendations.csv"), row.names = FALSE)
-  report_path <- write_report(out_dir, x, backend_summary, shape_summary, below_target, recs)
+  report_path <- write_report(out_dir, x, completeness, backend_summary, shape_summary, below_target, recs)
 
   cat("Wrote HNSW target-recall summaries to ", out_dir, "\n", sep = "")
   cat("Report: ", report_path, "\n", sep = "")
+  require_complete <- tolower(args$require_complete %||% "FALSE") %in% c("true", "t", "1", "yes", "y")
+  if (require_complete && nrow(completeness$missing)) {
+    stop(
+      "Missing required benchmark rows: ",
+      nrow(completeness$missing),
+      ". See hnsw_target_recall_missing_rows.csv.",
+      call. = FALSE
+    )
+  }
 }
 
 main()

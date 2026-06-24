@@ -176,6 +176,26 @@ It uses the float32 manifest, explicit `backend = "cpu"` and `"cuda"`,
 row. Result rows record the requested target, actual target, HNSW parameters,
 sampled recall, speed, and CPU/CUDA backend separately.
 
+The run is accepted only when the full matrix is present: every requested
+dataset, both explicit backends, all four `k` values, and all three target
+recall tiers. The summarizer writes:
+
+- `hnsw_target_recall_completeness.csv`: one expected row per
+  dataset/backend/`k`/target combination, with missing, duplicate, target-met,
+  below-target, and failed/timeout status.
+- `hnsw_target_recall_missing_rows.csv`: combinations that were not produced by
+  the benchmark. A finished launcher calls the summarizer with
+  `--require_complete=TRUE`, so an interrupted or partial sweep is not reported
+  as complete.
+- `hnsw_target_recall_below_target.csv`: successful rows whose sampled recall
+  did not meet the requested tier. These rows are the primary input for
+  tightening the C++ shape/`k` policy.
+- `hnsw_target_recall_recommendations.csv`: for each
+  dataset/backend/`k`/target combination, the fastest successful row that met
+  the target, or the highest-recall successful row when the current tier missed.
+  These recommendation rows are used to decide whether the C++ defaults should
+  move to a wider or narrower HNSW setting.
+
 The explicit `"nn_descent"` builder is available for experiments, but it is not
 selected automatically because the COIL20 diagnostic failed inside the cuVS
 NN-descent CAGRA build with `cudaErrorInvalidValue`.
