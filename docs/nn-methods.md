@@ -189,8 +189,12 @@ inner-product convention. Automatic cuVS HNSW uses
 `iterative_cagra_search` for the internal CAGRA seed graph because the HNSW
 conversion needs high seed-graph recall; explicit `cagra_build_algo = "ivf_pq"`
 remains available for experiments but is not the HNSW default. The default CUDA
-HNSW graph/search effort targets about 0.99 recall for speed; for `k = 50` this
-uses graph degree 24, intermediate degree 48, and `ef = max(50, k)`. Users can
+HNSW graph/search effort targets about 0.99 recall for speed with compiled
+shape/k tiers: large high-dimensional matrices use smaller graph degrees, while
+low-dimensional flow-style matrices use wider CAGRA seed graphs before HNSW
+conversion. For 5M-row-class low-dimensional inputs with `k > 15`, faissR uses
+a runtime-guard tier because wider high-recall CAGRA seed graphs exceeded the
+600-second benchmark budget on Chiamaka. Users can
 raise `options(faissR.cuvs_graph_degree = ..., faissR.cuvs_intermediate_graph_degree = ..., faissR.cuvs_hnsw_ef = ...)`
 when stricter recall is needed. Successful HNSW results record the internal
 `cagra_build_algo` in
@@ -269,8 +273,9 @@ route based on Hierarchical Navigable Small World graphs [5,16].
   CUDA HNSW is useful when the runtime has cuVS HNSW but the user wants the
   explicit HNSW graph route rather than CAGRA.
 - Tuning parameters include CAGRA graph degree, intermediate graph degree, HNSW
-  `M`, construction effort, and search effort. CUDA HNSW defaults to a 0.99
-  recall target for speed; increase `faissR.cuvs_graph_degree`,
+  `M`, construction effort, and search effort. CPU FAISS HNSW and CUDA cuVS
+  HNSW both use compiled shape/k tiers by default. CUDA HNSW targets about
+  0.99 recall for speed; increase `faissR.cuvs_graph_degree`,
   `faissR.cuvs_intermediate_graph_degree`, or `faissR.cuvs_hnsw_ef` to trade
   speed for stricter recall.
 

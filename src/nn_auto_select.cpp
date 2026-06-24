@@ -736,18 +736,54 @@ List nn_tune_faiss_hnsw_cpp(int n,
   n = valid_int(n) ? n : NA_INTEGER;
   p = valid_int(p) ? p : NA_INTEGER;
   k = safe_k(k);
+  const bool euclidean = metric == "euclidean";
+  const bool low_dim = valid_int(p) && p <= 64;
   const bool high_dim = valid_int(p) && p >= 256;
   const bool large_n = valid_int(n) && n >= 50000;
   const bool very_large_high_dim = large_n && high_dim;
-  const bool small_k = k <= 10;
+  const bool small_k = k <= 15;
   const bool large_k = k >= 100;
-  const bool non_euclidean = metric != "euclidean";
+  const bool non_euclidean = !euclidean;
 
   std::string rule;
   int default_m;
   int default_ef_construction;
   int default_ef_search;
-  if (non_euclidean && small_k) {
+  if (euclidean && large_n && low_dim) {
+    if (small_k) {
+      rule = "recall99_large_low_dim_small_k";
+      default_m = 12;
+      default_ef_construction = 60;
+      default_ef_search = std::max(k, 30);
+    } else if (k <= 50) {
+      rule = "recall99_large_low_dim_mid_k";
+      default_m = 16;
+      default_ef_construction = 80;
+      default_ef_search = std::max(k, 75);
+    } else {
+      rule = "recall99_large_low_dim_large_k";
+      default_m = 16;
+      default_ef_construction = 80;
+      default_ef_search = std::max(k, 100);
+    }
+  } else if (euclidean && very_large_high_dim) {
+    if (small_k) {
+      rule = "recall99_large_high_dim_small_k";
+      default_m = 12;
+      default_ef_construction = 60;
+      default_ef_search = std::max(k, 40);
+    } else if (k <= 50) {
+      rule = "recall99_large_high_dim_mid_k";
+      default_m = 16;
+      default_ef_construction = 80;
+      default_ef_search = std::max(k, 75);
+    } else {
+      rule = "recall99_large_high_dim_large_k";
+      default_m = 24;
+      default_ef_construction = 120;
+      default_ef_search = std::max(k, 150);
+    }
+  } else if (non_euclidean && small_k) {
     rule = "balanced_small_k_metric";
     default_m = 32;
     default_ef_construction = 160;
@@ -781,6 +817,7 @@ List nn_tune_faiss_hnsw_cpp(int n,
     _["rule"] = rule,
     _["policy"] = manual ? "manual_options" : "auto_shape_metric",
     _["high_dim"] = high_dim,
+    _["low_dim"] = low_dim,
     _["large_n"] = large_n,
     _["small_k"] = small_k,
     _["large_k"] = large_k,
@@ -939,6 +976,10 @@ List nn_tune_cuvs_hnsw_cpp(int n,
   n = safe_n(n);
   p = safe_p(p);
   k = safe_k(k);
+  const bool low_dim = p <= 64;
+  const bool high_dim = p >= 256;
+  const bool medium_n = n >= 50000 && n < 500000;
+  const bool huge_low_dim = low_dim && n >= 5000000;
   const bool large_k = k >= 100;
   const bool large_n = n >= 1000000;
   const bool compact = as<bool>(base["tuning_compact_build"]);
@@ -947,9 +988,58 @@ List nn_tune_cuvs_hnsw_cpp(int n,
     "iterative_cagra_search" :
     cagra_build_algo_for_shape_core(n, p, k, true, compact, build_algo_preference);
   const int n_cap = std::max(1, n - 1);
-  const int recall99_graph_degree = large_k ?
-    std::max(48, static_cast<int>(std::ceil(k / 2.0))) :
-    (k <= 10 ? std::max(16, k + 1) : 24);
+
+  int recall99_graph_degree;
+  int default_ef;
+  double target_recall = 0.99;
+  std::string hnsw_rule;
+  if (low_dim && n >= 50000) {
+    if (medium_n) {
+      recall99_graph_degree = 96;
+      default_ef = large_k ? 300 : 250;
+      hnsw_rule = "recall99_medium_low_dim_hnsw_from_cagra";
+    } else if (huge_low_dim && k > 15) {
+      recall99_graph_degree = 24;
+      default_ef = std::max(100, k);
+      target_recall = NA_REAL;
+      hnsw_rule = "runtime_guard_huge_low_dim_hnsw_from_cagra";
+    } else if (k <= 15) {
+      recall99_graph_degree = 48;
+      default_ef = 150;
+      hnsw_rule = "recall99_large_low_dim_small_k_hnsw_from_cagra";
+    } else if (k <= 50) {
+      recall99_graph_degree = 96;
+      default_ef = 250;
+      hnsw_rule = "recall99_large_low_dim_mid_k_hnsw_from_cagra";
+    } else {
+      recall99_graph_degree = 96;
+      default_ef = 300;
+      hnsw_rule = "recall99_large_low_dim_large_k_hnsw_from_cagra";
+    }
+  } else if (high_dim && n >= 50000) {
+    if (k <= 15) {
+      recall99_graph_degree = 12;
+      default_ef = 40;
+      hnsw_rule = "recall99_large_high_dim_small_k_hnsw_from_cagra";
+    } else if (k <= 50) {
+      recall99_graph_degree = 24;
+      default_ef = 50;
+      hnsw_rule = "recall99_large_high_dim_mid_k_hnsw_from_cagra";
+    } else {
+      recall99_graph_degree = 24;
+      default_ef = 100;
+      hnsw_rule = "recall99_large_high_dim_large_k_hnsw_from_cagra";
+    }
+  } else {
+    recall99_graph_degree = large_k ?
+      std::max(48, static_cast<int>(std::ceil(k / 2.0))) :
+      (k <= 10 ? std::max(16, k + 1) : 24);
+    default_ef = std::max(50, k);
+    hnsw_rule = (large_n && large_k) ? "recall99_large_n_large_k_hnsw_from_cagra" :
+      (large_n ? "recall99_large_n_hnsw_from_cagra" :
+        (large_k ? "recall99_large_k_hnsw_from_cagra" : "recall99_balanced_hnsw_from_cagra"));
+  }
+
   const int requested_graph_degree = requested_int(graph_degree_option, recall99_graph_degree);
   const int hnsw_graph_degree = option_int(
     graph_degree_option,
@@ -970,7 +1060,6 @@ List nn_tune_cuvs_hnsw_cpp(int n,
   // Target about 0.99 recall by default. The CAGRA seed graph remains
   // high-quality; lowering HNSW ef trims search time without changing the
   // public algorithm. Users can raise faissR.cuvs_hnsw_ef for stricter recall.
-  const int default_ef = std::max(50, k);
   const int requested_ef = requested_int(ef_option, default_ef);
   const int ef = option_int(ef_option, default_ef, k, 4096);
   const int threads = std::max(1, std::min(64, valid_int(n_threads) ? n_threads : 1));
@@ -986,11 +1075,13 @@ List nn_tune_cuvs_hnsw_cpp(int n,
     _["requested_ef"] = requested_ef,
     _["requested_n_threads"] = threads,
     _["tuning_policy"] = as<std::string>(base["tuning_policy"]),
-    _["tuning_rule"] = auto_build_algo ? "recall99_hnsw_from_iterative_cagra" :
-      ((large_n && large_k) ? "recall99_large_n_large_k_hnsw_from_cagra" :
-        (large_n ? "recall99_large_n_hnsw_from_cagra" :
-          (large_k ? "recall99_large_k_hnsw_from_cagra" : "recall99_balanced_hnsw_from_cagra"))),
-    _["target_recall"] = 0.99,
+    _["tuning_rule"] = auto_build_algo ? hnsw_rule : (hnsw_rule + "_manual_build_algo"),
+    _["target_recall"] = target_recall,
+    _["tuning_low_dim"] = low_dim,
+    _["tuning_high_dim"] = high_dim,
+    _["tuning_medium_n"] = medium_n,
+    _["tuning_huge_low_dim"] = huge_low_dim,
+    _["tuning_runtime_guard"] = huge_low_dim && k > 15,
     _["tuning_large_n"] = large_n,
     _["tuning_large_k"] = large_k,
     _["tuning_small_k"] = as<bool>(base["tuning_small_k"]),

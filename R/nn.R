@@ -4627,8 +4627,9 @@ sort_knn_rows_by_distance_index <- function(result) {
 nn_tuning_metadata <- function(params, prefix = NULL) {
   if (!is.list(params)) return(list())
   fields <- c(
-    "tuning_policy", "tuning_rule", "tuning_high_dim", "tuning_large_n",
-    "tuning_small_k", "tuning_large_k", "tuning_non_euclidean",
+    "tuning_policy", "tuning_rule", "tuning_low_dim", "tuning_high_dim",
+    "tuning_medium_n", "tuning_huge_low_dim", "tuning_runtime_guard",
+    "tuning_large_n", "tuning_small_k", "tuning_large_k", "tuning_non_euclidean",
     "tuning_metric", "tuning_metric_aware", "target_recall", "tuning_source"
   )
   fields <- fields[fields %in% names(params)]
@@ -7084,10 +7085,13 @@ grid_self_knn <- function(data,
 #'   for Euclidean plus normalized cosine/correlation; raw inner product uses
 #'   the same maximum-inner-product-to-L2 transform as other cuVS L2 graph
 #'   routes and returns shifted inner-product distances. Default parameters are
-#'   selected by a deterministic shape/k/metric rule without pilot tuning; CUDA
-#'   HNSW defaults to a 0.99 recall target for speed using lower graph/search
-#'   effort. Result approximation metadata records the selected `tuning_rule`,
-#'   `target_recall`, and shape flags used.
+#'   selected by compiled deterministic shape/k/metric rules without pilot
+#'   tuning. CPU FAISS HNSW has separate large low-dimensional and large
+#'   high-dimensional Euclidean tiers; CUDA cuVS HNSW targets about 0.99 recall
+#'   where feasible, with separate high-dimensional and low-dimensional
+#'   graph/search tiers plus a runtime guard for 5M-row-class low-dimensional
+#'   `k > 15` workloads. Result approximation metadata records the selected
+#'   `tuning_rule`, `target_recall`, and shape flags used.
 #'   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
 #'   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
 #'   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records
@@ -7235,14 +7239,16 @@ grid_self_knn <- function(data,
 #'   persisting, `"fixed"` uses fixed defaults with tuning metadata, and
 #'   `"off"`/`"none"` disables tuning.
 #'   FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
-#'   `k`, and `metric`, including separate small-`k` Euclidean,
-#'   small-`k` metric-aware, balanced, and high-recall tiers; explicit
+#'   `k`, and `metric`, including separate large low-dimensional Euclidean,
+#'   large high-dimensional Euclidean, small-`k` metric-aware, balanced, and
+#'   high-recall tiers; explicit
 #'   `faissR.faiss_hnsw_*` options override those defaults. FAISS IVF/IVFPQ
 #'   use deterministic shape/k/metric-aware `nlist`/`nprobe` defaults; optional
 #'   FAISS GPU IVF `"cache"`/`"pilot"` tuning currently runs only for Euclidean
 #'   IVF, while non-Euclidean IVF routes use deterministic metric-aware
-#'   defaults. CUDA cuVS HNSW uses a deterministic 0.99 recall target by default
-#'   and can be tightened with `options(faissR.cuvs_graph_degree = ...,
+#'   defaults. CUDA cuVS HNSW uses deterministic shape/k tiers with a 0.99
+#'   recall target where feasible and can be tightened with
+#'   `options(faissR.cuvs_graph_degree = ...,
 #'   faissR.cuvs_intermediate_graph_degree = ..., faissR.cuvs_hnsw_ef = ...)`.
 #'   Deterministic approximate-method defaults are computed by C++
 #'   `nn_tune_*_cpp()` helpers and record `tuning_source = "cpp"` in
@@ -7263,9 +7269,10 @@ grid_self_knn <- function(data,
 #'   high-dimensional self-KNN cases and IVF-PQ construction otherwise. For
 #'   cuVS HNSW, `"auto"` uses iterative CAGRA construction because the HNSW
 #'   conversion needs a high-quality seed graph; HNSW graph/search effort itself
-#'   defaults to a 0.99 recall target for speed. `"ivf_pq"` requests the IVF-PQ
-#'   graph builder, `"nn_descent"` requests cuVS NN-descent graph construction,
-#'   and `"iterative_cagra_search"` requests cuVS iterative CAGRA graph building.
+#'   defaults to compiled shape/k tiers with a 0.99 recall target where feasible.
+#'   `"ivf_pq"` requests the IVF-PQ graph builder, `"nn_descent"` requests cuVS
+#'   NN-descent graph construction, and `"iterative_cagra_search"` requests cuVS
+#'   iterative CAGRA graph building.
 #'   This is a CAGRA construction parameter, not a fallback to a different
 #'   public method; successful results record the selected value in
 #'   `attr(result, "approximation")$cagra_build_algo`.

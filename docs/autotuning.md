@@ -95,7 +95,8 @@ that the no-pilot graph-shape rule came from compiled policy.
 | `exact` / `flat` | `faiss_flat_exact`, `faiss_flat_l2` | CPU exact baseline | Use for exact CPU reference on small/medium data [1-2,16]; avoid as default for large high-dimensional self-search because MNIST/FashionMNIST timed out. |
 | `exact` / `flat` | `faiss_gpu_flat_l2` | CUDA exact/high-recall | Explicit FAISS GPU Flat route when requested and available. |
 | `bruteforce` | `cuda_cuvs_bruteforce` | CUDA exact/high-recall | Preferred explicit cuVS exact path; consistently recall 1 in this benchmark and often fastest on compact high-dimensional self-KNN. Also selected by CUDA `method = "auto"` for compact exact self-KNN when cuVS is available, and used as the fallback exact CUDA route when FAISS GPU Flat is unavailable. |
-| `hnsw` | `faiss_hnsw` speed tier | CPU speed tier | M = 24, efConstruction = 120, efSearch = max(80, 4k); used only for lower-dimensional Euclidean `k <= 10` jobs where the benchmark grid showed exact CPU was too conservative but high-recall HNSW was unnecessary [5]. |
+| `hnsw` | `faiss_hnsw` large low-dimensional Euclidean tiers | CPU recall-0.99 speed tiers | For `n >= 50000`, `p <= 64`: small `k <= 15` uses M = 12, efConstruction = 60, efSearch = max(k, 30); `k <= 50` uses M = 16, efConstruction = 80, efSearch = max(k, 75); larger `k` uses M = 16, efConstruction = 80, efSearch = max(k, 100). These tiers were selected from flow cytometry-scale float32 probes to cut runtime while keeping sampled recall near 0.99 [5]. |
+| `hnsw` | `faiss_hnsw` large high-dimensional Euclidean tiers | CPU recall-0.99 speed tiers | For `n >= 50000`, `p >= 256`: small `k <= 15` uses M = 12, efConstruction = 60, efSearch = max(k, 40); `k <= 50` uses M = 16, efConstruction = 80, efSearch = max(k, 75); larger `k` uses M = 24, efConstruction = 120, efSearch = max(k, 150). These tiers were selected from MNIST70k float32 probes [5]. |
 | `hnsw` | `faiss_hnsw` small-k metric tier | CPU metric-aware tier | M = 32, efConstruction = 160, efSearch = max(120, 4k); used for cosine, correlation, and inner-product `k <= 10` jobs so normalized metric searches keep more graph-search breadth without paying the full high-recall cost [5]. |
 | `hnsw` | `faiss_hnsw` balanced tier | CPU default tier | M = 32, efConstruction = 200, efSearch = max(150, 3k); default deterministic shape/metric rule for general CPU HNSW. |
 | `hnsw` | `faiss_hnsw` high-recall tier | CPU high-recall tier | M = 48, efConstruction = 240, efSearch = max(220, 3k); used for large-k high-dimensional searches and high-dimensional non-Euclidean searches where normalized IP/correlation routes need extra graph-search breadth. |
@@ -149,8 +150,15 @@ graph and then converts it to a cuVS HNSW index. For `method = "hnsw"` with
 MNIST70k (`70000 x 784`, `k = 50`) the IVF-PQ seed builder was fast but produced
 near-zero sampled recall for HNSW, while `iterative_cagra_search` restored high
 sampled recall. The default graph/search effort now targets about 0.99 recall
-to improve speed. For `k = 50`, the default uses a graph degree of 24,
-intermediate degree of 48, and `ef = max(50, k)`. Users can raise
+to improve speed through compiled shape tiers. Large high-dimensional data
+(`n >= 50000`, `p >= 256`) uses graph degree 12/24/24 for small/mid/large `k`
+with `ef` 40/50/100. Medium low-dimensional data (`50000 <= n < 500000`,
+`p <= 64`) uses graph degree 96, intermediate degree 192, and `ef` 250 or 300.
+Very large low-dimensional data keeps graph degree 48 for `k <= 15`; for
+5M-row-class inputs with larger `k`, faissR applies a runtime guard rather than
+the graph-64/96 high-recall tier because FlowRepository k = 50 timed out at
+600 seconds on Chiamaka with both graph 64/intermediate 128/ef 200 and graph
+96/intermediate 192/ef 250. Users can raise
 `options(faissR.cuvs_graph_degree = ..., faissR.cuvs_intermediate_graph_degree = ..., faissR.cuvs_hnsw_ef = ...)`
 for stricter recall, or request `cagra_build_algo = "ivf_pq"` explicitly for
 experiments, but IVF-PQ is not the automatic HNSW seed builder.
