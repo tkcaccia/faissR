@@ -639,20 +639,18 @@ internally. When an ordinary R double input uses a CPU FAISS Flat-style or HNSW
 request with `output = "float"`, it also enters a float-pointer route so FAISS
 does not produce an intermediate R double distance matrix.
 
-Other resolved CPU, FAISS GPU, CUDA, and cuVS routes can also receive
-`float::fl()` inputs. Until each of those backends has its own float-pointer
-adapter, faissR performs a one-time compatibility conversion to an ordinary R
-numeric matrix before entering the existing route and records
-`float32_compatibility_conversion = TRUE`. This keeps on-disk float32 benchmark
-datasets usable across all public methods while making the remaining conversion
-cost auditable in result metadata.
+FAISS CPU/GPU and RAPIDS cuVS nearest-neighbour routes can also receive
+`float::fl()` inputs through direct C++ adapters. Native routes that still expose
+only `NumericMatrix` inputs now error for float32 inputs instead of silently
+converting benchmark data back to R double. This keeps benchmark timings honest:
+rows with `float32_compatibility_conversion = FALSE` used the float32 adapter,
+and unsupported native float32 routes must be implemented separately before they
+can be included in a float32-only benchmark.
 
 The float32 adapter records the route it used in the returned KNN object.
 `input_layout` distinguishes ordinary R double conversion, float32 payload
 transpose, mixed reference/query adapters, direct row-compatible float32
-payloads used for one-row or one-column `float::fl()` matrices, and
-compatibility conversion to R numeric for routes that do not yet have a direct
-float adapter. `input_owns_data`
+payloads used for one-row or one-column `float::fl()` matrices. `input_owns_data`
 records whether FAISS consumed an owned adapter buffer. For cosine and
 correlation, direct float32 payloads still make one owned copy before
 normalization because those transforms are applied in-place before FAISS search.

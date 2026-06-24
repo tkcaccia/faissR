@@ -25,6 +25,17 @@ List cuvs_bruteforce_knn_impl(NumericMatrix,
   );
 }
 
+List cuvs_bruteforce_float32_knn_impl(SEXP,
+                                      SEXP,
+                                      int,
+                                      bool) {
+  Rcpp::stop(
+    "cuVS float32 brute-force backend is not available. Reinstall faissR "
+    "with RAPIDS cuVS visible to configure, for example FAISSR_USE_CUVS=1 "
+    "and CUVS_HOME=/path/to/cuvs."
+  );
+}
+
 List cuvs_cagra_knn_impl(NumericMatrix,
                          NumericMatrix,
                          int,
@@ -41,6 +52,22 @@ List cuvs_cagra_knn_impl(NumericMatrix,
   );
 }
 
+List cuvs_cagra_float32_knn_impl(SEXP,
+                                 SEXP,
+                                 int,
+                                 bool,
+                                 int,
+                                 int,
+                                 int,
+                                 int,
+                                 std::string) {
+  Rcpp::stop(
+    "cuVS float32 CAGRA backend is not available. Reinstall faissR with "
+    "RAPIDS cuVS visible to configure, for example FAISSR_USE_CUVS=1 and "
+    "CUVS_HOME=/path/to/cuvs."
+  );
+}
+
 List cuvs_nndescent_self_knn_impl(NumericMatrix,
                                   int,
                                   int,
@@ -49,6 +76,18 @@ List cuvs_nndescent_self_knn_impl(NumericMatrix,
   Rcpp::stop(
     "cuVS NN-descent backend is not available. Reinstall faissR with "
     "RAPIDS cuVS visible to configure, for example FAISSR_USE_CUVS=1 "
+    "and CUVS_HOME=/path/to/cuvs."
+  );
+}
+
+List cuvs_nndescent_self_float32_knn_impl(SEXP,
+                                          int,
+                                          int,
+                                          int,
+                                          int) {
+  Rcpp::stop(
+    "cuVS float32 NN-descent backend is not available. Reinstall faissR "
+    "with RAPIDS cuVS visible to configure, for example FAISSR_USE_CUVS=1 "
     "and CUVS_HOME=/path/to/cuvs."
   );
 }
@@ -98,6 +137,19 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix,
   );
 }
 
+List cuvs_ivf_flat_float32_knn_impl(SEXP,
+                                    SEXP,
+                                    int,
+                                    int,
+                                    int,
+                                    bool) {
+  Rcpp::stop(
+    "Direct cuVS float32 IVF-Flat backend is not available. Reinstall "
+    "faissR with RAPIDS cuVS visible to configure, for example "
+    "FAISSR_USE_CUVS=1 and CUVS_HOME=/path/to/cuvs."
+  );
+}
+
 List cuvs_ivf_pq_knn_impl(NumericMatrix,
                           NumericMatrix,
                           int,
@@ -109,6 +161,22 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix,
   Rcpp::stop(
     "Direct cuVS IVF-PQ backend is not available. Reinstall faissR with "
     "RAPIDS cuVS visible to configure, for example FAISSR_USE_CUVS=1 "
+    "and CUVS_HOME=/path/to/cuvs. IVF-PQ is explicit-only and intended for "
+    "GPU memory pressure."
+  );
+}
+
+List cuvs_ivf_pq_float32_knn_impl(SEXP,
+                                  SEXP,
+                                  int,
+                                  int,
+                                  int,
+                                  int,
+                                  int,
+                                  bool) {
+  Rcpp::stop(
+    "Direct cuVS float32 IVF-PQ backend is not available. Reinstall faissR "
+    "with RAPIDS cuVS visible to configure, for example FAISSR_USE_CUVS=1 "
     "and CUVS_HOME=/path/to/cuvs. IVF-PQ is explicit-only and intended for "
     "GPU memory pressure."
   );

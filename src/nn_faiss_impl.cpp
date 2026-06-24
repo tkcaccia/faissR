@@ -1022,6 +1022,50 @@ List faiss_gpu_flat_knn_impl(NumericMatrix data,
 #endif
 }
 
+List faiss_gpu_flat_float32_knn_impl(SEXP data,
+                                     SEXP points,
+                                     int k,
+                                     bool exclude_self,
+                                     std::string metric,
+                                     std::string distance_output,
+                                     std::string distance_storage) {
+#ifdef FAISSR_HAS_FAISS_GPU
+  Rcpp::IntegerVector dims = matrix_dims_from_object(data, "data");
+  const int n_features = dims[1];
+  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::GpuIndexFlatConfig config;
+  config.device = 0;
+  const DistanceOutput output = parse_distance_output(distance_output, "GPU Flat");
+  if (metric == "inner_product") {
+    faiss::gpu::GpuIndexFlatIP index(&resources, n_features, config);
+    return search_faiss_index_float32(
+      index, data, points, k, exclude_self, 1,
+      "GpuIndexFlatIP", true, output, distance_storage
+    );
+  }
+  if (metric == "euclidean") {
+    faiss::gpu::GpuIndexFlatL2 index(&resources, n_features, config);
+    return search_faiss_index_float32(
+      index, data, points, k, exclude_self, 1,
+      "GpuIndexFlatL2", true, output, distance_storage
+    );
+  }
+  Rcpp::stop("FAISS GPU Flat float32 supports metric = 'euclidean' or 'inner_product'");
+#else
+  (void)data;
+  (void)points;
+  (void)k;
+  (void)exclude_self;
+  (void)metric;
+  (void)distance_output;
+  (void)distance_storage;
+  Rcpp::stop(
+    "FAISS GPU Flat backend is not available in this build. "
+    "Install FAISS GPU/cuVS headers and rebuild faissR with FAISS_HOME set."
+  );
+#endif
+}
+
 List faiss_gpu_flat_ip_knn_impl(NumericMatrix data,
                                 NumericMatrix points,
                                 int k,
@@ -1110,6 +1154,45 @@ List faiss_ivf_knn_impl(NumericMatrix data,
   );
 }
 
+List faiss_ivf_float32_knn_impl(SEXP data,
+                                SEXP points,
+                                int k,
+                                int nlist,
+                                int nprobe,
+                                std::string metric,
+                                std::string distance_output,
+                                bool exclude_self,
+                                int n_threads,
+                                std::string distance_storage) {
+  Rcpp::IntegerVector dims = matrix_dims_from_object(data, "data");
+  const int n_data = dims[0];
+  const int n_features = dims[1];
+  nlist = std::max(1, std::min(nlist, n_data));
+  nprobe = std::max(1, std::min(nprobe, nlist));
+  faiss::MetricType faiss_metric = faiss::METRIC_L2;
+  std::unique_ptr<faiss::Index> quantizer;
+  if (metric == "inner_product") {
+    faiss_metric = faiss::METRIC_INNER_PRODUCT;
+    quantizer.reset(new faiss::IndexFlatIP(n_features));
+  } else if (metric == "euclidean") {
+    quantizer.reset(new faiss::IndexFlatL2(n_features));
+  } else {
+    Rcpp::stop("FAISS IVF float32 supports metric = 'euclidean' or 'inner_product'");
+  }
+  const DistanceOutput output = parse_distance_output(distance_output, "IVF");
+  faiss::IndexIVFFlat index(quantizer.get(), n_features, nlist, faiss_metric);
+  index.nprobe = nprobe;
+  return search_faiss_index_float32(
+    index, data, points, k, exclude_self, n_threads,
+    metric == "inner_product" ? "IndexIVFFlatIP" : "IndexIVFFlat",
+    false,
+    output,
+    distance_storage,
+    nlist,
+    nprobe
+  );
+}
+
 List faiss_ivfpq_knn_impl(NumericMatrix data,
                           NumericMatrix points,
                           int k,
@@ -1153,6 +1236,63 @@ List faiss_ivfpq_knn_impl(NumericMatrix data,
     metric == "inner_product" ? "IndexIVFPQIP" : "IndexIVFPQ",
     false,
     output,
+    nlist,
+    nprobe
+  );
+  out["pq_m"] = pq_m;
+  out["pq_nbits"] = pq_nbits;
+  out["requested_pq_m"] = requested_pq_m;
+  out["requested_pq_nbits"] = requested_pq_nbits;
+  out["pq_parameters_adjusted"] = requested_pq_m != pq_m || requested_pq_nbits != pq_nbits;
+  return out;
+}
+
+List faiss_ivfpq_float32_knn_impl(SEXP data,
+                                  SEXP points,
+                                  int k,
+                                  int nlist,
+                                  int nprobe,
+                                  int pq_m,
+                                  int pq_nbits,
+                                  std::string metric,
+                                  std::string distance_output,
+                                  bool exclude_self,
+                                  int n_threads,
+                                  std::string distance_storage) {
+  Rcpp::IntegerVector dims = matrix_dims_from_object(data, "data");
+  const int n_data = dims[0];
+  const int n_features = dims[1];
+  const int requested_pq_m = pq_m;
+  const int requested_pq_nbits = pq_nbits;
+  nlist = std::max(1, std::min(nlist, n_data));
+  nprobe = std::max(1, std::min(nprobe, nlist));
+  pq_m = clamp_positive(pq_m, 8, n_features);
+  while (pq_m > 1 && (n_features % pq_m) != 0) --pq_m;
+  pq_nbits = std::max(4, std::min(pq_nbits, 12));
+  while (pq_nbits > 4 && (1 << pq_nbits) > n_data) {
+    --pq_nbits;
+  }
+  faiss::MetricType faiss_metric = faiss::METRIC_L2;
+  std::unique_ptr<faiss::Index> quantizer;
+  if (metric == "inner_product") {
+    faiss_metric = faiss::METRIC_INNER_PRODUCT;
+    quantizer.reset(new faiss::IndexFlatIP(n_features));
+  } else if (metric == "euclidean") {
+    quantizer.reset(new faiss::IndexFlatL2(n_features));
+  } else {
+    Rcpp::stop("FAISS IVFPQ float32 supports metric = 'euclidean' or 'inner_product'");
+  }
+  const DistanceOutput output = parse_distance_output(distance_output, "IVFPQ");
+  faiss::IndexIVFPQ index(
+    quantizer.get(), n_features, nlist, pq_m, pq_nbits, faiss_metric
+  );
+  index.nprobe = nprobe;
+  List out = search_faiss_index_float32(
+    index, data, points, k, exclude_self, n_threads,
+    metric == "inner_product" ? "IndexIVFPQIP" : "IndexIVFPQ",
+    false,
+    output,
+    distance_storage,
     nlist,
     nprobe
   );
@@ -1302,6 +1442,58 @@ List faiss_nsg_knn_impl(NumericMatrix data,
   return out;
 }
 
+List faiss_nsg_float32_knn_impl(SEXP data,
+                                SEXP points,
+                                int k,
+                                int r,
+                                int search_l,
+                                int build_type,
+                                std::string metric,
+                                std::string distance_output,
+                                bool exclude_self,
+                                int n_threads,
+                                std::string distance_storage) {
+  Rcpp::IntegerVector dims = matrix_dims_from_object(data, "data");
+  const int n_data = dims[0];
+  const int n_features = dims[1];
+  if (n_data <= 100) {
+    Rcpp::stop("FAISS NSG requires more than 100 training rows in this FAISS build.");
+  }
+  const int requested_r = r;
+  const int requested_search_l = search_l;
+  const int requested_build_type = build_type;
+  r = clamp_positive(r, 32, n_data);
+  search_l = std::max(search_l, k);
+  build_type = build_type == 1 ? 1 : 0;
+  if (metric != "euclidean") {
+    Rcpp::stop("FAISS NSG float32 is currently validated only for metric = 'euclidean'");
+  }
+  const DistanceOutput output = parse_distance_output(distance_output, "NSG");
+  faiss::IndexNSGFlat index(n_features, r, faiss::METRIC_L2);
+  index.nsg.search_L = search_l;
+  index.build_type = static_cast<char>(build_type);
+  const int gk = std::max(64, std::max(2 * k, 2 * r));
+  index.GK = gk;
+  List out = search_faiss_index_float32(
+    index, data, points, k, exclude_self, n_threads,
+    "IndexNSGFlat",
+    false,
+    output,
+    distance_storage,
+    NA_INTEGER, NA_INTEGER, r, search_l
+  );
+  out["r"] = r;
+  out["search_l"] = search_l;
+  out["build_type"] = build_type;
+  out["gk"] = gk;
+  out["requested_r"] = requested_r;
+  out["requested_search_l"] = requested_search_l;
+  out["requested_build_type"] = requested_build_type;
+  out["nsg_parameters_adjusted"] = requested_r != r ||
+    requested_search_l != search_l || requested_build_type != build_type;
+  return out;
+}
+
 List faiss_nndescent_knn_impl(NumericMatrix data,
                               NumericMatrix points,
                               int k,
@@ -1335,6 +1527,55 @@ List faiss_nndescent_knn_impl(NumericMatrix data,
     "IndexNNDescentFlat",
     false,
     output,
+    NA_INTEGER, NA_INTEGER, graph_k, search_l
+  );
+  out["graph_k"] = graph_k;
+  out["n_iter"] = n_iter;
+  out["search_l"] = search_l;
+  out["requested_graph_k"] = requested_graph_k;
+  out["requested_n_iter"] = requested_n_iter;
+  out["requested_search_l"] = requested_search_l;
+  out["nndescent_parameters_adjusted"] = requested_graph_k != graph_k ||
+    requested_n_iter != n_iter || requested_search_l != search_l;
+  return out;
+}
+
+List faiss_nndescent_float32_knn_impl(SEXP data,
+                                      SEXP points,
+                                      int k,
+                                      int graph_k,
+                                      int n_iter,
+                                      int search_l,
+                                      std::string metric,
+                                      std::string distance_output,
+                                      bool exclude_self,
+                                      int n_threads,
+                                      std::string distance_storage) {
+  Rcpp::IntegerVector dims = matrix_dims_from_object(data, "data");
+  const int n_data = dims[0];
+  const int n_features = dims[1];
+  if (n_data <= 100) {
+    Rcpp::stop("FAISS NN-Descent requires more than 100 training rows in this FAISS build.");
+  }
+  const int requested_graph_k = graph_k;
+  const int requested_n_iter = n_iter;
+  const int requested_search_l = search_l;
+  graph_k = std::max(graph_k, k);
+  n_iter = std::max(1, n_iter);
+  search_l = std::max(search_l, k);
+  if (metric != "euclidean") {
+    Rcpp::stop("FAISS NNDescent float32 is currently validated only for metric = 'euclidean'");
+  }
+  const DistanceOutput output = parse_distance_output(distance_output, "NNDescent");
+  faiss::IndexNNDescentFlat index(n_features, graph_k, faiss::METRIC_L2);
+  index.nndescent.iter = n_iter;
+  index.nndescent.search_L = search_l;
+  List out = search_faiss_index_float32(
+    index, data, points, k, exclude_self, n_threads,
+    "IndexNNDescentFlat",
+    false,
+    output,
+    distance_storage,
     NA_INTEGER, NA_INTEGER, graph_k, search_l
   );
   out["graph_k"] = graph_k;
@@ -1394,6 +1635,63 @@ List faiss_gpu_ivf_flat_knn_impl(NumericMatrix data,
   (void)metric;
   (void)distance_output;
   (void)exclude_self;
+  Rcpp::stop(
+    "FAISS GPU IVF Flat backend is not available in this build. "
+    "Install FAISS GPU/cuVS headers and rebuild faissR with FAISS_HOME set."
+  );
+#endif
+}
+
+List faiss_gpu_ivf_flat_float32_knn_impl(SEXP data,
+                                         SEXP points,
+                                         int k,
+                                         int nlist,
+                                         int nprobe,
+                                         std::string metric,
+                                         std::string distance_output,
+                                         bool exclude_self,
+                                         std::string distance_storage) {
+#ifdef FAISSR_HAS_FAISS_GPU
+  Rcpp::IntegerVector dims = matrix_dims_from_object(data, "data");
+  const int n_data = dims[0];
+  const int n_features = dims[1];
+  nlist = std::max(1, std::min(nlist, n_data));
+  nprobe = std::max(1, std::min(nprobe, nlist));
+  faiss::MetricType faiss_metric = faiss::METRIC_L2;
+  if (metric == "inner_product") {
+    faiss_metric = faiss::METRIC_INNER_PRODUCT;
+  } else if (metric != "euclidean") {
+    Rcpp::stop("FAISS GPU IVF Flat float32 supports metric = 'euclidean' or 'inner_product'");
+  }
+  const DistanceOutput output = parse_distance_output(distance_output, "GPU IVF Flat");
+  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::GpuIndexIVFFlatConfig config;
+  config.device = 0;
+  faiss::gpu::GpuIndexIVFFlat index(
+    &resources,
+    n_features,
+    nlist,
+    faiss_metric,
+    config
+  );
+  return search_faiss_index_float32(
+    index, data, points, k, exclude_self, 1,
+    metric == "inner_product" ? "GpuIndexIVFFlatIP_cuVS" : "GpuIndexIVFFlat_cuVS",
+    false,
+    output,
+    distance_storage,
+    nlist, nprobe, NA_INTEGER, NA_INTEGER, true
+  );
+#else
+  (void)data;
+  (void)points;
+  (void)k;
+  (void)nlist;
+  (void)nprobe;
+  (void)metric;
+  (void)distance_output;
+  (void)exclude_self;
+  (void)distance_storage;
   Rcpp::stop(
     "FAISS GPU IVF Flat backend is not available in this build. "
     "Install FAISS GPU/cuVS headers and rebuild faissR with FAISS_HOME set."
@@ -1477,6 +1775,92 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
   (void)metric;
   (void)distance_output;
   (void)exclude_self;
+  Rcpp::stop(
+    "FAISS GPU IVF-PQ backend is not available in this build. "
+    "Install FAISS GPU/cuVS headers and rebuild faissR with FAISS_HOME set."
+  );
+#endif
+}
+
+List faiss_gpu_ivfpq_float32_knn_impl(SEXP data,
+                                      SEXP points,
+                                      int k,
+                                      int nlist,
+                                      int nprobe,
+                                      int pq_m,
+                                      int pq_nbits,
+                                      std::string metric,
+                                      std::string distance_output,
+                                      bool exclude_self,
+                                      std::string distance_storage) {
+#ifdef FAISSR_HAS_FAISS_GPU
+  Rcpp::IntegerVector dims = matrix_dims_from_object(data, "data");
+  const int n_data = dims[0];
+  const int n_features = dims[1];
+  const int requested_pq_m = pq_m;
+  const int requested_pq_nbits = pq_nbits;
+  nlist = std::max(1, std::min(nlist, n_data));
+  nprobe = std::max(1, std::min(nprobe, nlist));
+  faiss::MetricType faiss_metric = faiss::METRIC_L2;
+  if (metric == "inner_product") {
+    faiss_metric = faiss::METRIC_INNER_PRODUCT;
+  } else if (metric != "euclidean") {
+    Rcpp::stop("FAISS GPU IVFPQ float32 supports metric = 'euclidean' or 'inner_product'");
+  }
+  const DistanceOutput output = parse_distance_output(distance_output, "GPU IVFPQ");
+  pq_m = clamp_positive(pq_m, 8, n_features);
+  while (pq_m > 1 && (n_features % pq_m) != 0) --pq_m;
+  if (n_data < 256) {
+    Rcpp::stop(
+      "FAISS GPU IVFPQ requires at least 256 training rows because "
+      "GpuIndexIVFPQ supports 8-bit PQ codes only."
+    );
+  }
+  pq_nbits = 8;
+  const int max_full_precision_lut_entries = 49152 / (static_cast<int>(sizeof(float)) * (1 << pq_nbits));
+  while (pq_m > 1 && pq_m > max_full_precision_lut_entries) --pq_m;
+  while (pq_m > 1 && ((n_features % pq_m) != 0 || !faiss_gpu_supported_pq_code_size(pq_m))) {
+    --pq_m;
+  }
+  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::GpuIndexIVFPQConfig config;
+  config.device = 0;
+  config.useFloat16LookupTables = false;
+  faiss::gpu::GpuIndexIVFPQ index(
+    &resources,
+    n_features,
+    nlist,
+    pq_m,
+    pq_nbits,
+    faiss_metric,
+    config
+  );
+  List out = search_faiss_index_float32(
+    index, data, points, k, exclude_self, 1,
+    metric == "inner_product" ? "GpuIndexIVFPQIP_cuVS" : "GpuIndexIVFPQ_cuVS",
+    false,
+    output,
+    distance_storage,
+    nlist, nprobe, NA_INTEGER, NA_INTEGER, true
+  );
+  out["pq_m"] = pq_m;
+  out["pq_nbits"] = pq_nbits;
+  out["requested_pq_m"] = requested_pq_m;
+  out["requested_pq_nbits"] = requested_pq_nbits;
+  out["pq_parameters_adjusted"] = requested_pq_m != pq_m || requested_pq_nbits != pq_nbits;
+  return out;
+#else
+  (void)data;
+  (void)points;
+  (void)k;
+  (void)nlist;
+  (void)nprobe;
+  (void)pq_m;
+  (void)pq_nbits;
+  (void)metric;
+  (void)distance_output;
+  (void)exclude_self;
+  (void)distance_storage;
   Rcpp::stop(
     "FAISS GPU IVF-PQ backend is not available in this build. "
     "Install FAISS GPU/cuVS headers and rebuild faissR with FAISS_HOME set."
@@ -1580,6 +1964,130 @@ List faiss_gpu_cagra_knn_impl(NumericMatrix data,
   (void)search_width;
   (void)itopk_size;
   (void)exclude_self;
+  Rcpp::stop(
+    "FAISS GPU CAGRA backend is not available in this build. "
+    "Install FAISS GPU/cuVS headers with faiss/gpu/GpuIndexCagra.h and rebuild faissR."
+  );
+#endif
+}
+
+List faiss_gpu_cagra_float32_knn_impl(SEXP data,
+                                      SEXP points,
+                                      int k,
+                                      int graph_degree,
+                                      int intermediate_graph_degree,
+                                      int search_width,
+                                      int itopk_size,
+                                      bool exclude_self,
+                                      std::string distance_storage) {
+#ifdef FAISSR_HAS_FAISS_GPU_CAGRA
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  const bool same_storage = same_float32_object(data, points);
+  MatrixViewF32 xq = same_storage ? MatrixViewF32() :
+    make_float32_matrix_view(points, "points");
+  if (!same_storage && xq.ncol != xb.ncol) {
+    Rcpp::stop("data and points must have the same number of columns");
+  }
+  if (k < 1 || k > xb.nrow) {
+    Rcpp::stop("k must be in [1, nrow(data)]");
+  }
+  if (exclude_self && !same_storage) {
+    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  }
+  const bool self_query = exclude_self || same_storage;
+  const int n_data = xb.nrow;
+  const int n_points = same_storage ? xb.nrow : xq.nrow;
+  const int n_features = xb.ncol;
+  const int search_k = exclude_self ? std::min(n_data, k + 1) : k;
+  const int requested_graph_degree = graph_degree;
+  const int requested_intermediate_graph_degree = intermediate_graph_degree;
+  const int requested_search_width = search_width;
+  const int requested_itopk_size = itopk_size;
+
+  graph_degree = clamp_positive(graph_degree, std::max(64, k + 1), n_data - 1);
+  intermediate_graph_degree = clamp_positive(
+    intermediate_graph_degree,
+    std::max(128, graph_degree * 2),
+    n_data - 1
+  );
+  intermediate_graph_degree = std::max(intermediate_graph_degree, graph_degree);
+  itopk_size = clamp_positive(itopk_size, std::max(64, graph_degree), 4096);
+  itopk_size = std::max(itopk_size, search_k);
+  search_width = std::max(1, search_width);
+
+  const float* query_ptr = same_storage ? xb.data : xq.data;
+  const bool wants_float_distances = distance_storage == "float" ||
+    distance_storage == "float32";
+  if (!wants_float_distances && distance_storage != "double") {
+    Rcpp::stop("`distance_storage` must be \"double\" or \"float\"");
+  }
+
+  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::GpuIndexCagraConfig config;
+  config.device = 0;
+  config.graph_degree = static_cast<std::size_t>(graph_degree);
+  config.intermediate_graph_degree = static_cast<std::size_t>(intermediate_graph_degree);
+  config.store_dataset = true;
+  faiss::gpu::GpuIndexCagra index(
+    &resources,
+    n_features,
+    faiss::METRIC_L2,
+    config
+  );
+
+  std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
+  std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
+  try {
+    index.train(n_data, xb.data);
+    faiss::gpu::SearchParametersCagra params;
+    params.itopk_size = static_cast<std::size_t>(itopk_size);
+    params.search_width = static_cast<std::size_t>(search_width);
+    index.search(
+      n_points,
+      query_ptr,
+      search_k,
+      distances.data(),
+      labels.data(),
+      &params
+    );
+  } catch (const std::exception& e) {
+    Rcpp::stop("FAISS GpuIndexCagra float32 search failed: %s", e.what());
+  }
+
+  List out = format_faiss_result(
+    labels, distances, n_points, search_k, k, self_query, exclude_self,
+    "GpuIndexCagra_cuVS", false, DistanceOutput::L2Squared,
+    1, NA_INTEGER, NA_INTEGER, graph_degree, search_width,
+    wants_float_distances
+  );
+  out["intermediate_graph_degree"] = intermediate_graph_degree;
+  out["itopk_size"] = itopk_size;
+  out["requested_graph_degree"] = requested_graph_degree;
+  out["requested_intermediate_graph_degree"] = requested_intermediate_graph_degree;
+  out["requested_search_width"] = requested_search_width;
+  out["requested_itopk_size"] = requested_itopk_size;
+  out["cagra_parameters_adjusted"] = requested_graph_degree != graph_degree ||
+    requested_intermediate_graph_degree != intermediate_graph_degree ||
+    requested_search_width != search_width || requested_itopk_size != itopk_size;
+  out["input_type"] = "float32";
+  out["input_layout"] = same_storage ?
+    xb.layout :
+    ("data=" + xb.layout + ";points=" + xq.layout);
+  out["input_owns_data"] = same_storage ?
+    xb.owns_data :
+    (xb.owns_data || xq.owns_data);
+  out["float32_compatibility_conversion"] = false;
+  return out;
+#else
+  (void)data;
+  (void)points;
+  (void)k;
+  (void)graph_degree;
+  (void)intermediate_graph_degree;
+  (void)search_width;
+  (void)itopk_size;
+  (void)exclude_self;
+  (void)distance_storage;
   Rcpp::stop(
     "FAISS GPU CAGRA backend is not available in this build. "
     "Install FAISS GPU/cuVS headers with faiss/gpu/GpuIndexCagra.h and rebuild faissR."

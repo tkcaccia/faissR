@@ -275,6 +275,20 @@ bool same_float32_object(SEXP data, SEXP points) {
   return data == points;
 }
 
+void annotate_float32_input(List& out,
+                            const MatrixViewF32& xb,
+                            const MatrixViewF32& xq,
+                            const bool same_storage) {
+  out["input_type"] = "float32";
+  out["input_layout"] = same_storage ?
+    xb.layout :
+    ("data=" + xb.layout + ";points=" + xq.layout);
+  out["input_owns_data"] = same_storage ?
+    xb.owns_data :
+    (xb.owns_data || xq.owns_data);
+  out["float32_compatibility_conversion"] = false;
+}
+
 bool same_matrix_storage(const NumericMatrix& data,
                          const NumericMatrix& points) {
   return data.nrow() == points.nrow() &&
@@ -988,6 +1002,120 @@ List cuvs_bruteforce_knn_impl(NumericMatrix data,
   );
 }
 
+List cuvs_bruteforce_float32_knn_impl(SEXP data,
+                                      SEXP points,
+                                      int k,
+                                      bool exclude_self) {
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  const bool same_storage = same_float32_object(data, points);
+  MatrixViewF32 xq = same_storage ? MatrixViewF32() :
+    make_float32_matrix_view(points, "points");
+  if (!same_storage && xq.ncol != xb.ncol) {
+    Rcpp::stop("data and points must have the same number of columns");
+  }
+  if (k < 1 || k > xb.nrow) {
+    Rcpp::stop("k must be in [1, nrow(data)]");
+  }
+  if (exclude_self && !same_storage) {
+    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  }
+  const bool self_query = exclude_self || same_storage;
+  const int n_data = xb.nrow;
+  const int n_points = same_storage ? xb.nrow : xq.nrow;
+  const int n_features = xb.ncol;
+  const int search_k = exclude_self ? std::min(n_data, k + 1) : k;
+
+  CuvsResources res;
+  const std::size_t data_bytes =
+    static_cast<std::size_t>(n_data) * n_features * sizeof(float);
+  DeviceBuffer dataset_d(res.get(), data_bytes);
+  cuda_check(
+    cudaMemcpy(dataset_d.get(), xb.data, data_bytes, cudaMemcpyHostToDevice),
+    "cudaMemcpy(dataset)"
+  );
+
+  DeviceBuffer query_d;
+  void* query_ptr = dataset_d.get();
+  if (!same_storage) {
+    const std::size_t query_bytes =
+      static_cast<std::size_t>(n_points) * n_features * sizeof(float);
+    query_d.reset(res.get(), query_bytes);
+    cuda_check(
+      cudaMemcpy(query_d.get(), xq.data, query_bytes, cudaMemcpyHostToDevice),
+      "cudaMemcpy(queries)"
+    );
+    query_ptr = query_d.get();
+  }
+
+  DeviceBuffer neighbors_d(
+    res.get(),
+    static_cast<std::size_t>(n_points) * search_k * sizeof(int64_t)
+  );
+  DeviceBuffer distances_d(
+    res.get(),
+    static_cast<std::size_t>(n_points) * search_k * sizeof(float)
+  );
+
+  int64_t dataset_shape[2] = {n_data, n_features};
+  int64_t query_shape[2] = {n_points, n_features};
+  int64_t output_shape[2] = {n_points, search_k};
+  DLManagedTensor dataset_tensor = make_tensor(
+    dataset_d.get(), dataset_shape, 2, kDLCUDA, kDLFloat, 32
+  );
+  DLManagedTensor query_tensor = make_tensor(
+    query_ptr, query_shape, 2, kDLCUDA, kDLFloat, 32
+  );
+  DLManagedTensor neighbors_tensor = make_tensor(
+    neighbors_d.get(), output_shape, 2, kDLCUDA, kDLInt, 64
+  );
+  DLManagedTensor distances_tensor = make_tensor(
+    distances_d.get(), output_shape, 2, kDLCUDA, kDLFloat, 32
+  );
+
+  BruteForceIndex index;
+  cuvs_check(
+    cuvsBruteForceBuild(res.get(), &dataset_tensor, L2Expanded, 0.0f, index.get()),
+    "cuvsBruteForceBuild"
+  );
+  cuvs_check(
+    cuvsBruteForceSearch(
+      res.get(),
+      index.get(),
+      &query_tensor,
+      &neighbors_tensor,
+      &distances_tensor,
+      no_filter()
+    ),
+    "cuvsBruteForceSearch"
+  );
+  cuda_sync("cudaDeviceSynchronize");
+
+  std::vector<int64_t> labels(static_cast<std::size_t>(n_points) * search_k);
+  std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
+  cuda_check(
+    cudaMemcpy(labels.data(), neighbors_d.get(), labels.size() * sizeof(int64_t), cudaMemcpyDeviceToHost),
+    "cudaMemcpy(neighbors)"
+  );
+  cuda_check(
+    cudaMemcpy(distances.data(), distances_d.get(), distances.size() * sizeof(float), cudaMemcpyDeviceToHost),
+    "cudaMemcpy(distances)"
+  );
+
+  List out = format_int64_result(
+    labels,
+    distances,
+    n_points,
+    search_k,
+    k,
+    self_query,
+    exclude_self,
+    "cuVS_BruteForce",
+    true
+  );
+  annotate_float32_input(out, xb, xq, same_storage);
+  return out;
+}
+
 List cuvs_cagra_knn_impl(NumericMatrix data,
                          NumericMatrix points,
                          int k,
@@ -1197,6 +1325,225 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
     requested_intermediate_graph_degree != intermediate_graph_degree ||
     requested_search_width != search_width || requested_itopk_size != itopk_size;
   out["search_batch_size"] = batch_size;
+  index.reset();
+  cuda_sync("cuvsCagraIndexDestroy synchronize");
+  neighbors_d.reset(res.get(), 0);
+  distances_d.reset(res.get(), 0);
+  query_d.reset(res.get(), 0);
+  dataset_d.reset(res.get(), 0);
+  cuda_sync("cuVS CAGRA device buffers release synchronize");
+  return out;
+}
+
+List cuvs_cagra_float32_knn_impl(SEXP data,
+                                 SEXP points,
+                                 int k,
+                                 bool exclude_self,
+                                 int graph_degree,
+                                 int intermediate_graph_degree,
+                                 int search_width,
+                                 int itopk_size,
+                                 std::string build_algo) {
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  const bool same_storage = same_float32_object(data, points);
+  MatrixViewF32 xq = same_storage ? MatrixViewF32() :
+    make_float32_matrix_view(points, "points");
+  if (!same_storage && xq.ncol != xb.ncol) {
+    Rcpp::stop("data and points must have the same number of columns");
+  }
+  if (k < 1 || k > xb.nrow) {
+    Rcpp::stop("k must be in [1, nrow(data)]");
+  }
+  if (exclude_self && !same_storage) {
+    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  }
+  const bool self_query = exclude_self || same_storage;
+  const int n_data = xb.nrow;
+  const int n_points = same_storage ? xb.nrow : xq.nrow;
+  const int n_features = xb.ncol;
+  const int search_k = exclude_self ? std::min(n_data, k + 1) : k;
+  const int requested_graph_degree = graph_degree;
+  const int requested_intermediate_graph_degree = intermediate_graph_degree;
+  const int requested_search_width = search_width;
+  const int requested_itopk_size = itopk_size;
+
+  graph_degree = std::max(search_k, graph_degree);
+  graph_degree = std::min(graph_degree, std::max(1, n_data - 1));
+  intermediate_graph_degree = std::max(
+    intermediate_graph_degree,
+    std::max(graph_degree, graph_degree * 2)
+  );
+  intermediate_graph_degree = std::min(
+    intermediate_graph_degree,
+    std::max(1, n_data - 1)
+  );
+
+  CuvsResources res;
+  const std::size_t data_bytes =
+    static_cast<std::size_t>(n_data) * n_features * sizeof(float);
+  DeviceBuffer dataset_d(res.get(), data_bytes);
+  cuda_check(
+    cudaMemcpy(dataset_d.get(), xb.data, data_bytes, cudaMemcpyHostToDevice),
+    "cudaMemcpy(dataset)"
+  );
+
+  DeviceBuffer query_d;
+  void* query_ptr = dataset_d.get();
+  if (!same_storage) {
+    const std::size_t query_bytes =
+      static_cast<std::size_t>(n_points) * n_features * sizeof(float);
+    query_d.reset(res.get(), query_bytes);
+    cuda_check(
+      cudaMemcpy(query_d.get(), xq.data, query_bytes, cudaMemcpyHostToDevice),
+      "cudaMemcpy(queries)"
+    );
+    query_ptr = query_d.get();
+  }
+
+  int64_t dataset_shape[2] = {n_data, n_features};
+  DLManagedTensor dataset_tensor = make_tensor(
+    dataset_d.get(), dataset_shape, 2, kDLCUDA, kDLFloat, 32
+  );
+
+  CagraIndexParams index_params;
+  index_params.get()->metric = L2Expanded;
+  index_params.get()->graph_degree = static_cast<std::size_t>(graph_degree);
+  index_params.get()->intermediate_graph_degree =
+    static_cast<std::size_t>(intermediate_graph_degree);
+  std::string selected_build_algo = build_algo;
+  std::transform(selected_build_algo.begin(), selected_build_algo.end(), selected_build_algo.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (selected_build_algo == "auto" || selected_build_algo == "auto_select") {
+    index_params.get()->build_algo = AUTO_SELECT;
+    selected_build_algo = "auto";
+  } else if (selected_build_algo == "ivf_pq" || selected_build_algo == "ivfpq") {
+    index_params.get()->build_algo = IVF_PQ;
+    selected_build_algo = "ivf_pq";
+  } else if (selected_build_algo == "nn_descent" || selected_build_algo == "nndescent") {
+    index_params.get()->build_algo = NN_DESCENT;
+    index_params.get()->nn_descent_niter =
+      static_cast<std::size_t>(env_int("FAISSR_CUVS_CAGRA_NN_DESCENT_NITER", 20, 1));
+    selected_build_algo = "nn_descent";
+  } else if (selected_build_algo == "iterative" || selected_build_algo == "iterative_cagra_search") {
+    index_params.get()->build_algo = ITERATIVE_CAGRA_SEARCH;
+    selected_build_algo = "iterative_cagra_search";
+  } else {
+    Rcpp::stop("Unsupported cuVS CAGRA build algorithm: %s", build_algo);
+  }
+
+  CagraIndex index;
+  cuvs_check(
+    cuvsCagraBuild(res.get(), index_params.get(), &dataset_tensor, index.get()),
+    "cuvsCagraBuild"
+  );
+  cuda_sync("cuvsCagraBuild synchronize");
+
+  CagraSearchParams search_params;
+  if (itopk_size > 0) {
+    search_params.get()->itopk_size = static_cast<std::size_t>(itopk_size);
+  }
+  if (search_width > 0) {
+    search_params.get()->search_width = static_cast<std::size_t>(search_width);
+  }
+
+  const int batch_size = std::min(
+    n_points,
+    env_int("FAISSR_CUVS_CAGRA_BATCH_SIZE", 8192, 1)
+  );
+  DeviceBuffer neighbors_d(
+    res.get(),
+    static_cast<std::size_t>(batch_size) * search_k * sizeof(int64_t)
+  );
+  DeviceBuffer distances_d(
+    res.get(),
+    static_cast<std::size_t>(batch_size) * search_k * sizeof(float)
+  );
+
+  std::vector<int64_t> labels(static_cast<std::size_t>(n_points) * search_k);
+  std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
+
+  for (int offset = 0; offset < n_points; offset += batch_size) {
+    const int current_batch = std::min(batch_size, n_points - offset);
+    int64_t query_shape[2] = {current_batch, n_features};
+    int64_t output_shape[2] = {current_batch, search_k};
+    char* batch_query_ptr = static_cast<char*>(query_ptr) +
+      static_cast<std::size_t>(offset) * n_features * sizeof(float);
+    DLManagedTensor query_tensor = make_tensor(
+      batch_query_ptr, query_shape, 2, kDLCUDA, kDLFloat, 32
+    );
+    DLManagedTensor neighbors_tensor = make_tensor(
+      neighbors_d.get(), output_shape, 2, kDLCUDA, kDLInt, 64
+    );
+    DLManagedTensor distances_tensor = make_tensor(
+      distances_d.get(), output_shape, 2, kDLCUDA, kDLFloat, 32
+    );
+
+    cuvs_check(
+      cuvsCagraSearch(
+        res.get(),
+        search_params.get(),
+        index.get(),
+        &query_tensor,
+        &neighbors_tensor,
+        &distances_tensor,
+        no_filter()
+      ),
+      "cuvsCagraSearch"
+    );
+    cuda_sync("cudaDeviceSynchronize");
+
+    const std::size_t batch_values =
+      static_cast<std::size_t>(current_batch) * search_k;
+    const std::size_t out_offset =
+      static_cast<std::size_t>(offset) * search_k;
+    cuda_check(
+      cudaMemcpy(
+        labels.data() + out_offset,
+        neighbors_d.get(),
+        batch_values * sizeof(int64_t),
+        cudaMemcpyDeviceToHost
+      ),
+      "cudaMemcpy(neighbors)"
+    );
+    cuda_check(
+      cudaMemcpy(
+        distances.data() + out_offset,
+        distances_d.get(),
+        batch_values * sizeof(float),
+        cudaMemcpyDeviceToHost
+      ),
+      "cudaMemcpy(distances)"
+    );
+    cuda_sync("cuvsCagraSearch copy synchronize");
+  }
+
+  List out = format_int64_result(
+    labels,
+    distances,
+    n_points,
+    search_k,
+    k,
+    self_query,
+    exclude_self,
+    "cuVS_CAGRA",
+    false
+  );
+  out["graph_degree"] = graph_degree;
+  out["intermediate_graph_degree"] = intermediate_graph_degree;
+  out["search_width"] = search_width;
+  out["itopk_size"] = itopk_size;
+  out["build_algo"] = selected_build_algo;
+  out["nn_descent_niter"] = selected_build_algo == "nn_descent" ?
+    static_cast<int>(index_params.get()->nn_descent_niter) : NA_INTEGER;
+  out["requested_graph_degree"] = requested_graph_degree;
+  out["requested_intermediate_graph_degree"] = requested_intermediate_graph_degree;
+  out["requested_search_width"] = requested_search_width;
+  out["requested_itopk_size"] = requested_itopk_size;
+  out["cagra_parameters_adjusted"] = requested_graph_degree != graph_degree ||
+    requested_intermediate_graph_degree != intermediate_graph_degree ||
+    requested_search_width != search_width || requested_itopk_size != itopk_size;
+  out["search_batch_size"] = batch_size;
+  annotate_float32_input(out, xb, xq, same_storage);
   index.reset();
   cuda_sync("cuvsCagraIndexDestroy synchronize");
   neighbors_d.reset(res.get(), 0);
@@ -1653,6 +2000,191 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix data,
 #endif
 }
 
+List cuvs_ivf_flat_float32_knn_impl(SEXP data,
+                                    SEXP points,
+                                    int k,
+                                    int n_lists,
+                                    int n_probes,
+                                    bool exclude_self) {
+#ifndef FAISSR_HAS_CUVS_IVF_FLAT
+  Rcpp::stop(
+    "Direct cuVS IVF-Flat is not available in this cuVS installation. "
+    "Use `backend = \"faiss_gpu_ivf_flat\"` or reinstall cuVS with "
+    "cuvs/neighbors/ivf_flat.h."
+  );
+#else
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  const bool same_storage = same_float32_object(data, points);
+  MatrixViewF32 xq = same_storage ? MatrixViewF32() :
+    make_float32_matrix_view(points, "points");
+  if (!same_storage && xq.ncol != xb.ncol) {
+    Rcpp::stop("data and points must have the same number of columns");
+  }
+  if (k < 1 || k > xb.nrow) {
+    Rcpp::stop("k must be in [1, nrow(data)]");
+  }
+  if (exclude_self && !same_storage) {
+    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  }
+  const bool self_query = exclude_self || same_storage;
+  const int n_data = xb.nrow;
+  const int n_points = same_storage ? xb.nrow : xq.nrow;
+  const int n_features = xb.ncol;
+  const int search_k = exclude_self ? std::min(n_data, k + 1) : k;
+  n_lists = std::max(1, std::min(n_lists, n_data));
+  n_probes = std::max(1, std::min(n_probes, n_lists));
+
+  CuvsResources res;
+  const std::size_t data_bytes =
+    static_cast<std::size_t>(n_data) * n_features * sizeof(float);
+  DeviceBuffer dataset_d(res.get(), data_bytes);
+  cuvs_debug("ivf_flat_float32: copy dataset to device");
+  cuda_check(
+    cudaMemcpy(dataset_d.get(), xb.data, data_bytes, cudaMemcpyHostToDevice),
+    "cudaMemcpy(dataset)"
+  );
+
+  DeviceBuffer query_d;
+  void* query_ptr = dataset_d.get();
+  if (!same_storage) {
+    const std::size_t query_bytes =
+      static_cast<std::size_t>(n_points) * n_features * sizeof(float);
+    query_d.reset(res.get(), query_bytes);
+    cuda_check(
+      cudaMemcpy(query_d.get(), xq.data, query_bytes, cudaMemcpyHostToDevice),
+      "cudaMemcpy(queries)"
+    );
+    query_ptr = query_d.get();
+  }
+
+  int64_t dataset_shape[2] = {n_data, n_features};
+  DLManagedTensor dataset_tensor = make_tensor(
+    dataset_d.get(), dataset_shape, 2, kDLCUDA, kDLFloat, 32
+  );
+
+  IvfFlatIndexParams index_params;
+  index_params.get()->metric = L2Expanded;
+  index_params.get()->add_data_on_build = true;
+  index_params.get()->n_lists = static_cast<uint32_t>(n_lists);
+  const bool small_high_dim = n_data <= 5000 && n_features >= 4096;
+  const int default_kmeans_iters = small_high_dim ? 1 : 20;
+  const int kmeans_iters = env_int(
+    "FAISSR_CUVS_IVF_FLAT_KMEANS_N_ITERS",
+    default_kmeans_iters,
+    1
+  );
+  const int train_percent = env_int(
+    "FAISSR_CUVS_IVF_FLAT_TRAIN_PERCENT",
+    100,
+    1
+  );
+  index_params.get()->kmeans_n_iters = static_cast<uint32_t>(kmeans_iters);
+  index_params.get()->kmeans_trainset_fraction = std::min(100, train_percent) / 100.0;
+  index_params.get()->adaptive_centers = false;
+  index_params.get()->conservative_memory_allocation = true;
+
+  IvfFlatIndex index;
+  cuvs_debug("ivf_flat_float32: build index begin");
+  cuvs_check(
+    cuvsIvfFlatBuild(res.get(), index_params.get(), &dataset_tensor, index.get()),
+    "cuvsIvfFlatBuild"
+  );
+  cuvs_debug("ivf_flat_float32: build index done");
+  IvfFlatSearchParams search_params;
+  search_params.get()->n_probes = static_cast<uint32_t>(n_probes);
+
+  const int batch_size = std::min(
+    n_points,
+    env_int("FAISSR_CUVS_IVF_BATCH_SIZE", 8192, 1)
+  );
+  DeviceBuffer neighbors_d(
+    res.get(),
+    static_cast<std::size_t>(batch_size) * search_k * sizeof(int64_t)
+  );
+  DeviceBuffer distances_d(
+    res.get(),
+    static_cast<std::size_t>(batch_size) * search_k * sizeof(float)
+  );
+
+  std::vector<int64_t> labels(static_cast<std::size_t>(n_points) * search_k);
+  std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
+
+  for (int offset = 0; offset < n_points; offset += batch_size) {
+    const int current_batch = std::min(batch_size, n_points - offset);
+    int64_t query_shape[2] = {current_batch, n_features};
+    int64_t output_shape[2] = {current_batch, search_k};
+    char* batch_query_ptr = static_cast<char*>(query_ptr) +
+      static_cast<std::size_t>(offset) * n_features * sizeof(float);
+    DLManagedTensor query_tensor = make_tensor(
+      batch_query_ptr, query_shape, 2, kDLCUDA, kDLFloat, 32
+    );
+    DLManagedTensor neighbors_tensor = make_tensor(
+      neighbors_d.get(), output_shape, 2, kDLCUDA, kDLInt, 64
+    );
+    DLManagedTensor distances_tensor = make_tensor(
+      distances_d.get(), output_shape, 2, kDLCUDA, kDLFloat, 32
+    );
+
+    cuvs_check(
+      cuvsIvfFlatSearch(
+        res.get(),
+        search_params.get(),
+        index.get(),
+        &query_tensor,
+        &neighbors_tensor,
+        &distances_tensor,
+        no_filter()
+      ),
+      "cuvsIvfFlatSearch"
+    );
+    cuda_sync("cudaDeviceSynchronize");
+
+    const std::size_t batch_values =
+      static_cast<std::size_t>(current_batch) * search_k;
+    const std::size_t out_offset =
+      static_cast<std::size_t>(offset) * search_k;
+    cuda_check(
+      cudaMemcpy(
+        labels.data() + out_offset,
+        neighbors_d.get(),
+        batch_values * sizeof(int64_t),
+        cudaMemcpyDeviceToHost
+      ),
+      "cudaMemcpy(neighbors)"
+    );
+    cuda_check(
+      cudaMemcpy(
+        distances.data() + out_offset,
+        distances_d.get(),
+        batch_values * sizeof(float),
+        cudaMemcpyDeviceToHost
+      ),
+      "cudaMemcpy(distances)"
+    );
+  }
+
+  List out = format_int64_result(
+    labels,
+    distances,
+    n_points,
+    search_k,
+    k,
+    self_query,
+    exclude_self,
+    "cuVS_IVF_Flat",
+    false
+  );
+  out["n_lists"] = n_lists;
+  out["n_probes"] = n_probes;
+  out["search_batch_size"] = batch_size;
+  out["kmeans_n_iters"] = kmeans_iters;
+  out["kmeans_trainset_fraction"] = std::min(100, train_percent) / 100.0;
+  out["conservative_memory_allocation"] = true;
+  annotate_float32_input(out, xb, xq, same_storage);
+  return out;
+#endif
+}
+
 List cuvs_ivf_pq_knn_impl(NumericMatrix data,
                           NumericMatrix points,
                           int k,
@@ -1829,6 +2361,188 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix data,
   out["pq_parameters_adjusted"] = requested_pq_dim != static_cast<int>(actual_pq_dim) ||
     requested_pq_bits != static_cast<int>(actual_pq_bits);
   out["search_batch_size"] = batch_size;
+  return out;
+#endif
+}
+
+List cuvs_ivf_pq_float32_knn_impl(SEXP data,
+                                  SEXP points,
+                                  int k,
+                                  int n_lists,
+                                  int n_probes,
+                                  int pq_dim,
+                                  int pq_bits,
+                                  bool exclude_self) {
+#ifndef FAISSR_HAS_CUVS_IVF_PQ
+  Rcpp::stop(
+    "Direct cuVS IVF-PQ is not available in this cuVS installation. "
+    "Use `backend = \"faiss_gpu_ivfpq\"` or reinstall cuVS with "
+    "cuvs/neighbors/ivf_pq.h."
+  );
+#else
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  const bool same_storage = same_float32_object(data, points);
+  MatrixViewF32 xq = same_storage ? MatrixViewF32() :
+    make_float32_matrix_view(points, "points");
+  if (!same_storage && xq.ncol != xb.ncol) {
+    Rcpp::stop("data and points must have the same number of columns");
+  }
+  if (k < 1 || k > xb.nrow) {
+    Rcpp::stop("k must be in [1, nrow(data)]");
+  }
+  if (exclude_self && !same_storage) {
+    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  }
+  const bool self_query = exclude_self || same_storage;
+  const int n_data = xb.nrow;
+  const int n_points = same_storage ? xb.nrow : xq.nrow;
+  const int n_features = xb.ncol;
+  const int search_k = exclude_self ? std::min(n_data, k + 1) : k;
+  const int requested_pq_dim = pq_dim;
+  const int requested_pq_bits = pq_bits;
+  n_lists = std::max(1, std::min(n_lists, n_data));
+  n_probes = std::max(1, std::min(n_probes, n_lists));
+  pq_dim = std::max(0, pq_dim);
+  pq_bits = std::max(4, std::min(8, pq_bits));
+
+  CuvsResources res;
+  const std::size_t data_bytes =
+    static_cast<std::size_t>(n_data) * n_features * sizeof(float);
+  DeviceBuffer dataset_d(res.get(), data_bytes);
+  cuda_check(
+    cudaMemcpy(dataset_d.get(), xb.data, data_bytes, cudaMemcpyHostToDevice),
+    "cudaMemcpy(dataset)"
+  );
+
+  DeviceBuffer query_d;
+  void* query_ptr = dataset_d.get();
+  if (!same_storage) {
+    const std::size_t query_bytes =
+      static_cast<std::size_t>(n_points) * n_features * sizeof(float);
+    query_d.reset(res.get(), query_bytes);
+    cuda_check(
+      cudaMemcpy(query_d.get(), xq.data, query_bytes, cudaMemcpyHostToDevice),
+      "cudaMemcpy(queries)"
+    );
+    query_ptr = query_d.get();
+  }
+
+  int64_t dataset_shape[2] = {n_data, n_features};
+  DLManagedTensor dataset_tensor = make_tensor(
+    dataset_d.get(), dataset_shape, 2, kDLCUDA, kDLFloat, 32
+  );
+
+  IvfPqIndexParams index_params;
+  index_params.get()->metric = L2Expanded;
+  index_params.get()->add_data_on_build = true;
+  index_params.get()->n_lists = static_cast<uint32_t>(n_lists);
+  index_params.get()->pq_bits = static_cast<uint32_t>(pq_bits);
+  index_params.get()->pq_dim = static_cast<uint32_t>(pq_dim);
+  index_params.get()->conservative_memory_allocation = true;
+
+  IvfPqIndex index;
+  cuvs_check(
+    cuvsIvfPqBuild(res.get(), index_params.get(), &dataset_tensor, index.get()),
+    "cuvsIvfPqBuild"
+  );
+
+  IvfPqSearchParams search_params;
+  search_params.get()->n_probes = static_cast<uint32_t>(n_probes);
+
+  const int batch_size = std::min(
+    n_points,
+    env_int("FAISSR_CUVS_IVF_BATCH_SIZE", 8192, 1)
+  );
+  DeviceBuffer neighbors_d(
+    res.get(),
+    static_cast<std::size_t>(batch_size) * search_k * sizeof(int64_t)
+  );
+  DeviceBuffer distances_d(
+    res.get(),
+    static_cast<std::size_t>(batch_size) * search_k * sizeof(float)
+  );
+
+  std::vector<int64_t> labels(static_cast<std::size_t>(n_points) * search_k);
+  std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
+
+  for (int offset = 0; offset < n_points; offset += batch_size) {
+    const int current_batch = std::min(batch_size, n_points - offset);
+    int64_t query_shape[2] = {current_batch, n_features};
+    int64_t output_shape[2] = {current_batch, search_k};
+    char* batch_query_ptr = static_cast<char*>(query_ptr) +
+      static_cast<std::size_t>(offset) * n_features * sizeof(float);
+    DLManagedTensor query_tensor = make_tensor(
+      batch_query_ptr, query_shape, 2, kDLCUDA, kDLFloat, 32
+    );
+    DLManagedTensor neighbors_tensor = make_tensor(
+      neighbors_d.get(), output_shape, 2, kDLCUDA, kDLInt, 64
+    );
+    DLManagedTensor distances_tensor = make_tensor(
+      distances_d.get(), output_shape, 2, kDLCUDA, kDLFloat, 32
+    );
+
+    cuvs_check(
+      cuvsIvfPqSearch(
+        res.get(),
+        search_params.get(),
+        index.get(),
+        &query_tensor,
+        &neighbors_tensor,
+        &distances_tensor
+      ),
+      "cuvsIvfPqSearch"
+    );
+    cuda_sync("cudaDeviceSynchronize");
+
+    const std::size_t batch_values =
+      static_cast<std::size_t>(current_batch) * search_k;
+    const std::size_t out_offset =
+      static_cast<std::size_t>(offset) * search_k;
+    cuda_check(
+      cudaMemcpy(
+        labels.data() + out_offset,
+        neighbors_d.get(),
+        batch_values * sizeof(int64_t),
+        cudaMemcpyDeviceToHost
+      ),
+      "cudaMemcpy(neighbors)"
+    );
+    cuda_check(
+      cudaMemcpy(
+        distances.data() + out_offset,
+        distances_d.get(),
+        batch_values * sizeof(float),
+        cudaMemcpyDeviceToHost
+      ),
+      "cudaMemcpy(distances)"
+    );
+  }
+
+  List out = format_int64_result(
+    labels,
+    distances,
+    n_points,
+    search_k,
+    k,
+    self_query,
+    exclude_self,
+    "cuVS_IVF_PQ",
+    false
+  );
+  int64_t actual_pq_dim = pq_dim;
+  int64_t actual_pq_bits = pq_bits;
+  cuvsIvfPqIndexGetPqDim(index.get(), &actual_pq_dim);
+  cuvsIvfPqIndexGetPqBits(index.get(), &actual_pq_bits);
+  out["n_lists"] = n_lists;
+  out["n_probes"] = n_probes;
+  out["pq_dim"] = static_cast<int>(actual_pq_dim);
+  out["pq_bits"] = static_cast<int>(actual_pq_bits);
+  out["requested_pq_dim"] = requested_pq_dim;
+  out["requested_pq_bits"] = requested_pq_bits;
+  out["pq_parameters_adjusted"] = requested_pq_dim != static_cast<int>(actual_pq_dim) ||
+    requested_pq_bits != static_cast<int>(actual_pq_bits);
+  out["search_batch_size"] = batch_size;
+  annotate_float32_input(out, xb, xq, same_storage);
   return out;
 #endif
 }
@@ -2103,5 +2817,98 @@ List cuvs_nndescent_self_knn_impl(NumericMatrix data,
   out["graph_degree"] = graph_degree;
   out["intermediate_graph_degree"] = intermediate_graph_degree;
   out["max_iterations"] = max_iterations;
+  return out;
+}
+
+List cuvs_nndescent_self_float32_knn_impl(SEXP data,
+                                          int k,
+                                          int graph_degree,
+                                          int intermediate_graph_degree,
+                                          int max_iterations) {
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  if (xb.nrow < 2) Rcpp::stop("data must have at least two rows");
+  if (xb.ncol < 1) Rcpp::stop("data must have at least one column");
+  if (k < 1 || k >= xb.nrow) {
+    Rcpp::stop("k must be in [1, nrow(data) - 1]");
+  }
+
+  const int n_data = xb.nrow;
+  const int n_features = xb.ncol;
+  graph_degree = std::max(k, graph_degree);
+  graph_degree = std::min(graph_degree, n_data - 1);
+  intermediate_graph_degree = std::max(
+    intermediate_graph_degree,
+    std::max(graph_degree, graph_degree * 2)
+  );
+  intermediate_graph_degree = std::min(intermediate_graph_degree, n_data - 1);
+  max_iterations = std::max(1, max_iterations);
+
+  std::vector<uint32_t> graph(
+    static_cast<std::size_t>(n_data) * graph_degree,
+    0
+  );
+  std::vector<float> distances(
+    static_cast<std::size_t>(n_data) * graph_degree,
+    0.0f
+  );
+
+  CuvsResources res;
+  int64_t dataset_shape[2] = {n_data, n_features};
+  int64_t graph_shape[2] = {n_data, graph_degree};
+  DLManagedTensor dataset_tensor = make_tensor(
+    const_cast<float*>(xb.data), dataset_shape, 2, kDLCPU, kDLFloat, 32
+  );
+  DLManagedTensor graph_tensor = make_tensor(
+    graph.data(), graph_shape, 2, kDLCPU, kDLUInt, 32
+  );
+  DLManagedTensor distances_tensor = make_tensor(
+    distances.data(), graph_shape, 2, kDLCPU, kDLFloat, 32
+  );
+
+  NNDescentParams params;
+  params.get()->metric = L2Expanded;
+  params.get()->graph_degree = static_cast<std::size_t>(graph_degree);
+  params.get()->intermediate_graph_degree =
+    static_cast<std::size_t>(intermediate_graph_degree);
+  params.get()->max_iterations = static_cast<std::size_t>(max_iterations);
+  params.get()->return_distances = true;
+
+  NNDescentIndex index;
+  cuvs_check(
+    cuvsNNDescentBuild(
+      res.get(),
+      params.get(),
+      &dataset_tensor,
+      nullptr,
+      index.get()
+    ),
+    "cuvsNNDescentBuild"
+  );
+  cuvs_check(
+    cuvsNNDescentIndexGetGraph(res.get(), index.get(), &graph_tensor),
+    "cuvsNNDescentIndexGetGraph"
+  );
+  cuvs_check(
+    cuvsNNDescentIndexGetDistances(res.get(), index.get(), &distances_tensor),
+    "cuvsNNDescentIndexGetDistances"
+  );
+  cuda_sync("cudaDeviceSynchronize");
+
+  List out = format_uint32_result(
+    graph,
+    distances,
+    n_data,
+    graph_degree,
+    k,
+    true,
+    true,
+    "cuVS_NNDescent",
+    false
+  );
+  out["graph_degree"] = graph_degree;
+  out["intermediate_graph_degree"] = intermediate_graph_degree;
+  out["max_iterations"] = max_iterations;
+  MatrixViewF32 empty_points;
+  annotate_float32_input(out, xb, empty_points, true);
   return out;
 }

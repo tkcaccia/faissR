@@ -11,6 +11,10 @@ List cuvs_bruteforce_knn_impl(NumericMatrix data,
                               NumericMatrix points,
                               int k,
                               bool exclude_self);
+List cuvs_bruteforce_float32_knn_impl(SEXP data,
+                                      SEXP points,
+                                      int k,
+                                      bool exclude_self);
 List cuvs_cagra_knn_impl(NumericMatrix data,
                          NumericMatrix points,
                          int k,
@@ -20,11 +24,25 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
                          int search_width,
                          int itopk_size,
                          std::string build_algo);
+List cuvs_cagra_float32_knn_impl(SEXP data,
+                                 SEXP points,
+                                 int k,
+                                 bool exclude_self,
+                                 int graph_degree,
+                                 int intermediate_graph_degree,
+                                 int search_width,
+                                 int itopk_size,
+                                 std::string build_algo);
 List cuvs_nndescent_self_knn_impl(NumericMatrix data,
                                   int k,
                                   int graph_degree,
                                   int intermediate_graph_degree,
                                   int max_iterations);
+List cuvs_nndescent_self_float32_knn_impl(SEXP data,
+                                          int k,
+                                          int graph_degree,
+                                          int intermediate_graph_degree,
+                                          int max_iterations);
 List cuvs_hnsw_knn_impl(NumericMatrix data,
                         NumericMatrix points,
                         int k,
@@ -49,6 +67,12 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix data,
                             int n_lists,
                             int n_probes,
                             bool exclude_self);
+List cuvs_ivf_flat_float32_knn_impl(SEXP data,
+                                    SEXP points,
+                                    int k,
+                                    int n_lists,
+                                    int n_probes,
+                                    bool exclude_self);
 List cuvs_ivf_pq_knn_impl(NumericMatrix data,
                           NumericMatrix points,
                           int k,
@@ -57,6 +81,14 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix data,
                           int pq_dim,
                           int pq_bits,
                           bool exclude_self);
+List cuvs_ivf_pq_float32_knn_impl(SEXP data,
+                                  SEXP points,
+                                  int k,
+                                  int n_lists,
+                                  int n_probes,
+                                  int pq_dim,
+                                  int pq_bits,
+                                  bool exclude_self);
 List cuvs_kmeans_impl(NumericMatrix data,
                       int centers,
                       int max_iter,
@@ -84,6 +116,14 @@ List nn_cuvs_bruteforce_cpp(NumericMatrix data,
 }
 
 // [[Rcpp::export]]
+List nn_cuvs_bruteforce_float32_cpp(SEXP data,
+                                    SEXP points,
+                                    int k,
+                                    bool exclude_self) {
+  return cuvs_bruteforce_float32_knn_impl(data, points, k, exclude_self);
+}
+
+// [[Rcpp::export]]
 List nn_cuvs_cagra_cpp(NumericMatrix data,
                        NumericMatrix points,
                        int k,
@@ -107,12 +147,50 @@ List nn_cuvs_cagra_cpp(NumericMatrix data,
 }
 
 // [[Rcpp::export]]
+List nn_cuvs_cagra_float32_cpp(SEXP data,
+                               SEXP points,
+                               int k,
+                               bool exclude_self,
+                               int graph_degree,
+                               int intermediate_graph_degree,
+                               int search_width,
+                               int itopk_size,
+                               std::string build_algo) {
+  return cuvs_cagra_float32_knn_impl(
+    data,
+    points,
+    k,
+    exclude_self,
+    graph_degree,
+    intermediate_graph_degree,
+    search_width,
+    itopk_size,
+    build_algo
+  );
+}
+
+// [[Rcpp::export]]
 List nn_cuvs_nndescent_self_cpp(NumericMatrix data,
                                 int k,
                                 int graph_degree,
                                 int intermediate_graph_degree,
                                 int max_iterations) {
   return cuvs_nndescent_self_knn_impl(
+    data,
+    k,
+    graph_degree,
+    intermediate_graph_degree,
+    max_iterations
+  );
+}
+
+// [[Rcpp::export]]
+List nn_cuvs_nndescent_self_float32_cpp(SEXP data,
+                                        int k,
+                                        int graph_degree,
+                                        int intermediate_graph_degree,
+                                        int max_iterations) {
+  return cuvs_nndescent_self_float32_knn_impl(
     data,
     k,
     graph_degree,
@@ -185,6 +263,23 @@ List nn_cuvs_ivf_flat_cpp(NumericMatrix data,
 }
 
 // [[Rcpp::export]]
+List nn_cuvs_ivf_flat_float32_cpp(SEXP data,
+                                  SEXP points,
+                                  int k,
+                                  int n_lists,
+                                  int n_probes,
+                                  bool exclude_self) {
+  return cuvs_ivf_flat_float32_knn_impl(
+    data,
+    points,
+    k,
+    n_lists,
+    n_probes,
+    exclude_self
+  );
+}
+
+// [[Rcpp::export]]
 List nn_cuvs_ivf_pq_cpp(NumericMatrix data,
                         NumericMatrix points,
                         int k,
@@ -194,6 +289,27 @@ List nn_cuvs_ivf_pq_cpp(NumericMatrix data,
                         int pq_bits,
                         bool exclude_self) {
   return cuvs_ivf_pq_knn_impl(
+    data,
+    points,
+    k,
+    n_lists,
+    n_probes,
+    pq_dim,
+    pq_bits,
+    exclude_self
+  );
+}
+
+// [[Rcpp::export]]
+List nn_cuvs_ivf_pq_float32_cpp(SEXP data,
+                                SEXP points,
+                                int k,
+                                int n_lists,
+                                int n_probes,
+                                int pq_dim,
+                                int pq_bits,
+                                bool exclude_self) {
+  return cuvs_ivf_pq_float32_knn_impl(
     data,
     points,
     k,

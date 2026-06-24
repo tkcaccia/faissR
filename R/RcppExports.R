@@ -241,12 +241,24 @@ nn_cuvs_bruteforce_cpp <- function(data, points, k, exclude_self) {
     .Call(`_faissR_nn_cuvs_bruteforce_cpp`, data, points, k, exclude_self)
 }
 
+nn_cuvs_bruteforce_float32_cpp <- function(data, points, k, exclude_self) {
+    .Call(`_faissR_nn_cuvs_bruteforce_float32_cpp`, data, points, k, exclude_self)
+}
+
 nn_cuvs_cagra_cpp <- function(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size, build_algo) {
     .Call(`_faissR_nn_cuvs_cagra_cpp`, data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size, build_algo)
 }
 
+nn_cuvs_cagra_float32_cpp <- function(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size, build_algo) {
+    .Call(`_faissR_nn_cuvs_cagra_float32_cpp`, data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size, build_algo)
+}
+
 nn_cuvs_nndescent_self_cpp <- function(data, k, graph_degree, intermediate_graph_degree, max_iterations) {
     .Call(`_faissR_nn_cuvs_nndescent_self_cpp`, data, k, graph_degree, intermediate_graph_degree, max_iterations)
+}
+
+nn_cuvs_nndescent_self_float32_cpp <- function(data, k, graph_degree, intermediate_graph_degree, max_iterations) {
+    .Call(`_faissR_nn_cuvs_nndescent_self_float32_cpp`, data, k, graph_degree, intermediate_graph_degree, max_iterations)
 }
 
 nn_cuvs_hnsw_cpp <- function(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, ef, n_threads, cagra_build_algo) {
@@ -261,8 +273,16 @@ nn_cuvs_ivf_flat_cpp <- function(data, points, k, n_lists, n_probes, exclude_sel
     .Call(`_faissR_nn_cuvs_ivf_flat_cpp`, data, points, k, n_lists, n_probes, exclude_self)
 }
 
+nn_cuvs_ivf_flat_float32_cpp <- function(data, points, k, n_lists, n_probes, exclude_self) {
+    .Call(`_faissR_nn_cuvs_ivf_flat_float32_cpp`, data, points, k, n_lists, n_probes, exclude_self)
+}
+
 nn_cuvs_ivf_pq_cpp <- function(data, points, k, n_lists, n_probes, pq_dim, pq_bits, exclude_self) {
     .Call(`_faissR_nn_cuvs_ivf_pq_cpp`, data, points, k, n_lists, n_probes, pq_dim, pq_bits, exclude_self)
+}
+
+nn_cuvs_ivf_pq_float32_cpp <- function(data, points, k, n_lists, n_probes, pq_dim, pq_bits, exclude_self) {
+    .Call(`_faissR_nn_cuvs_ivf_pq_float32_cpp`, data, points, k, n_lists, n_probes, pq_dim, pq_bits, exclude_self)
 }
 
 kmeans_cuvs_cpp <- function(data, centers, max_iter, n_init, tol, streaming_batch_size, kmeans_plus_plus) {
@@ -289,6 +309,10 @@ nn_faiss_ivf_cpp <- function(data, points, k, nlist, nprobe, metric, distance_ou
     .Call(`_faissR_nn_faiss_ivf_cpp`, data, points, k, nlist, nprobe, metric, distance_output, exclude_self, n_threads)
 }
 
+nn_faiss_ivf_float32_cpp <- function(data, points, k, nlist, nprobe, metric, distance_output, exclude_self, n_threads, distance_storage) {
+    .Call(`_faissR_nn_faiss_ivf_float32_cpp`, data, points, k, nlist, nprobe, metric, distance_output, exclude_self, n_threads, distance_storage)
+}
+
 nn_faiss_flat_ip_cpp <- function(data, points, k, exclude_self, n_threads) {
     .Call(`_faissR_nn_faiss_flat_ip_cpp`, data, points, k, exclude_self, n_threads)
 }
@@ -299,6 +323,10 @@ nn_faiss_flat_normalized_ip_distance_cpp <- function(data, points, k, exclude_se
 
 nn_faiss_gpu_flat_cpp <- function(data, points, k, exclude_self) {
     .Call(`_faissR_nn_faiss_gpu_flat_cpp`, data, points, k, exclude_self)
+}
+
+nn_faiss_gpu_flat_float32_cpp <- function(data, points, k, exclude_self, metric, distance_output, distance_storage) {
+    .Call(`_faissR_nn_faiss_gpu_flat_float32_cpp`, data, points, k, exclude_self, metric, distance_output, distance_storage)
 }
 
 nn_faiss_gpu_flat_ip_cpp <- function(data, points, k, exclude_self) {
@@ -313,6 +341,10 @@ nn_faiss_ivfpq_cpp <- function(data, points, k, nlist, nprobe, pq_m, pq_nbits, m
     .Call(`_faissR_nn_faiss_ivfpq_cpp`, data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self, n_threads)
 }
 
+nn_faiss_ivfpq_float32_cpp <- function(data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self, n_threads, distance_storage) {
+    .Call(`_faissR_nn_faiss_ivfpq_float32_cpp`, data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self, n_threads, distance_storage)
+}
+
 nn_faiss_hnsw_cpp <- function(data, points, k, m, ef_construction, ef_search, metric, distance_output, exclude_self, n_threads) {
     .Call(`_faissR_nn_faiss_hnsw_cpp`, data, points, k, m, ef_construction, ef_search, metric, distance_output, exclude_self, n_threads)
 }
@@ -325,20 +357,40 @@ nn_faiss_nsg_cpp <- function(data, points, k, r, search_l, build_type, metric, d
     .Call(`_faissR_nn_faiss_nsg_cpp`, data, points, k, r, search_l, build_type, metric, distance_output, exclude_self, n_threads)
 }
 
+nn_faiss_nsg_float32_cpp <- function(data, points, k, r, search_l, build_type, metric, distance_output, exclude_self, n_threads, distance_storage) {
+    .Call(`_faissR_nn_faiss_nsg_float32_cpp`, data, points, k, r, search_l, build_type, metric, distance_output, exclude_self, n_threads, distance_storage)
+}
+
 nn_faiss_nndescent_cpp <- function(data, points, k, graph_k, n_iter, search_l, metric, distance_output, exclude_self, n_threads) {
     .Call(`_faissR_nn_faiss_nndescent_cpp`, data, points, k, graph_k, n_iter, search_l, metric, distance_output, exclude_self, n_threads)
+}
+
+nn_faiss_nndescent_float32_cpp <- function(data, points, k, graph_k, n_iter, search_l, metric, distance_output, exclude_self, n_threads, distance_storage) {
+    .Call(`_faissR_nn_faiss_nndescent_float32_cpp`, data, points, k, graph_k, n_iter, search_l, metric, distance_output, exclude_self, n_threads, distance_storage)
 }
 
 nn_faiss_gpu_ivf_flat_cpp <- function(data, points, k, nlist, nprobe, metric, distance_output, exclude_self) {
     .Call(`_faissR_nn_faiss_gpu_ivf_flat_cpp`, data, points, k, nlist, nprobe, metric, distance_output, exclude_self)
 }
 
+nn_faiss_gpu_ivf_flat_float32_cpp <- function(data, points, k, nlist, nprobe, metric, distance_output, exclude_self, distance_storage) {
+    .Call(`_faissR_nn_faiss_gpu_ivf_flat_float32_cpp`, data, points, k, nlist, nprobe, metric, distance_output, exclude_self, distance_storage)
+}
+
 nn_faiss_gpu_ivfpq_cpp <- function(data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self) {
     .Call(`_faissR_nn_faiss_gpu_ivfpq_cpp`, data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self)
 }
 
+nn_faiss_gpu_ivfpq_float32_cpp <- function(data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self, distance_storage) {
+    .Call(`_faissR_nn_faiss_gpu_ivfpq_float32_cpp`, data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self, distance_storage)
+}
+
 nn_faiss_gpu_cagra_cpp <- function(data, points, k, graph_degree, intermediate_graph_degree, search_width, itopk_size, exclude_self) {
     .Call(`_faissR_nn_faiss_gpu_cagra_cpp`, data, points, k, graph_degree, intermediate_graph_degree, search_width, itopk_size, exclude_self)
+}
+
+nn_faiss_gpu_cagra_float32_cpp <- function(data, points, k, graph_degree, intermediate_graph_degree, search_width, itopk_size, exclude_self, distance_storage) {
+    .Call(`_faissR_nn_faiss_gpu_cagra_float32_cpp`, data, points, k, graph_degree, intermediate_graph_degree, search_width, itopk_size, exclude_self, distance_storage)
 }
 
 kmeans_faiss_cpp <- function(data, centers, max_iter, nredo, tol, seed, n_threads, kmeans_plus_plus) {
@@ -348,3 +400,4 @@ kmeans_faiss_cpp <- function(data, centers, max_iter, nredo, tol, seed, n_thread
 kmeans_faiss_gpu_cpp <- function(data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus) {
     .Call(`_faissR_kmeans_faiss_gpu_cpp`, data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus)
 }
+

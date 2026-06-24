@@ -946,19 +946,25 @@ List nn_tune_cuvs_hnsw_cpp(int n,
   const std::string build_algo = auto_build_algo ?
     "iterative_cagra_search" :
     cagra_build_algo_for_shape_core(n, p, k, true, compact, build_algo_preference);
-  const int default_ef = large_k ? std::max(240, 3 * k) : std::max(120, 4 * k);
+  const int base_graph_degree = as<int>(base["graph_degree"]);
+  const int base_intermediate_graph_degree = as<int>(base["intermediate_graph_degree"]);
+  const int hnsw_graph_degree = manual_cagra ? base_graph_degree : std::max(2, k);
+  const int hnsw_intermediate_graph_degree = manual_cagra ?
+    base_intermediate_graph_degree :
+    std::max(hnsw_graph_degree, 2 * hnsw_graph_degree);
+  const int default_ef = large_k ? std::max(180, 2 * k) : std::max(100, 2 * k);
   const int requested_ef = requested_int(ef_option, default_ef);
   const int ef = option_int(ef_option, default_ef, k, 4096);
   const int threads = std::max(1, std::min(64, valid_int(n_threads) ? n_threads : 1));
 
   return List::create(
-    _["graph_degree"] = as<int>(base["graph_degree"]),
-    _["intermediate_graph_degree"] = as<int>(base["intermediate_graph_degree"]),
+    _["graph_degree"] = hnsw_graph_degree,
+    _["intermediate_graph_degree"] = hnsw_intermediate_graph_degree,
     _["ef"] = ef,
     _["n_threads"] = threads,
     _["cagra_build_algo"] = build_algo,
-    _["requested_graph_degree"] = as<int>(base["requested_graph_degree"]),
-    _["requested_intermediate_graph_degree"] = as<int>(base["requested_intermediate_graph_degree"]),
+    _["requested_graph_degree"] = hnsw_graph_degree,
+    _["requested_intermediate_graph_degree"] = hnsw_intermediate_graph_degree,
     _["requested_ef"] = requested_ef,
     _["requested_n_threads"] = threads,
     _["tuning_policy"] = as<std::string>(base["tuning_policy"]),

@@ -28,6 +28,16 @@ List faiss_ivf_knn_impl(NumericMatrix data,
                         std::string distance_output,
                         bool exclude_self,
                         int n_threads);
+List faiss_ivf_float32_knn_impl(SEXP data,
+                                SEXP points,
+                                int k,
+                                int nlist,
+                                int nprobe,
+                                std::string metric,
+                                std::string distance_output,
+                                bool exclude_self,
+                                int n_threads,
+                                std::string distance_storage);
 List faiss_flat_ip_knn_impl(NumericMatrix data,
                             NumericMatrix points,
                             int k,
@@ -42,6 +52,13 @@ List faiss_gpu_flat_knn_impl(NumericMatrix data,
                              NumericMatrix points,
                              int k,
                              bool exclude_self);
+List faiss_gpu_flat_float32_knn_impl(SEXP data,
+                                     SEXP points,
+                                     int k,
+                                     bool exclude_self,
+                                     std::string metric,
+                                     std::string distance_output,
+                                     std::string distance_storage);
 List faiss_gpu_flat_ip_knn_impl(NumericMatrix data,
                                 NumericMatrix points,
                                 int k,
@@ -61,6 +78,18 @@ List faiss_ivfpq_knn_impl(NumericMatrix data,
                           std::string distance_output,
                           bool exclude_self,
                           int n_threads);
+List faiss_ivfpq_float32_knn_impl(SEXP data,
+                                  SEXP points,
+                                  int k,
+                                  int nlist,
+                                  int nprobe,
+                                  int pq_m,
+                                  int pq_nbits,
+                                  std::string metric,
+                                  std::string distance_output,
+                                  bool exclude_self,
+                                  int n_threads,
+                                  std::string distance_storage);
 List faiss_hnsw_knn_impl(NumericMatrix data,
                          NumericMatrix points,
                          int k,
@@ -92,6 +121,17 @@ List faiss_nsg_knn_impl(NumericMatrix data,
                         std::string distance_output,
                         bool exclude_self,
                         int n_threads);
+List faiss_nsg_float32_knn_impl(SEXP data,
+                                SEXP points,
+                                int k,
+                                int r,
+                                int search_l,
+                                int build_type,
+                                std::string metric,
+                                std::string distance_output,
+                                bool exclude_self,
+                                int n_threads,
+                                std::string distance_storage);
 List faiss_nndescent_knn_impl(NumericMatrix data,
                               NumericMatrix points,
                               int k,
@@ -102,6 +142,17 @@ List faiss_nndescent_knn_impl(NumericMatrix data,
                               std::string distance_output,
                               bool exclude_self,
                               int n_threads);
+List faiss_nndescent_float32_knn_impl(SEXP data,
+                                      SEXP points,
+                                      int k,
+                                      int graph_k,
+                                      int n_iter,
+                                      int search_l,
+                                      std::string metric,
+                                      std::string distance_output,
+                                      bool exclude_self,
+                                      int n_threads,
+                                      std::string distance_storage);
 List faiss_gpu_ivf_flat_knn_impl(NumericMatrix data,
                                  NumericMatrix points,
                                  int k,
@@ -110,6 +161,15 @@ List faiss_gpu_ivf_flat_knn_impl(NumericMatrix data,
                                  std::string metric,
                                  std::string distance_output,
                                  bool exclude_self);
+List faiss_gpu_ivf_flat_float32_knn_impl(SEXP data,
+                                         SEXP points,
+                                         int k,
+                                         int nlist,
+                                         int nprobe,
+                                         std::string metric,
+                                         std::string distance_output,
+                                         bool exclude_self,
+                                         std::string distance_storage);
 List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
                               NumericMatrix points,
                               int k,
@@ -120,6 +180,17 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
                               std::string metric,
                               std::string distance_output,
                               bool exclude_self);
+List faiss_gpu_ivfpq_float32_knn_impl(SEXP data,
+                                      SEXP points,
+                                      int k,
+                                      int nlist,
+                                      int nprobe,
+                                      int pq_m,
+                                      int pq_nbits,
+                                      std::string metric,
+                                      std::string distance_output,
+                                      bool exclude_self,
+                                      std::string distance_storage);
 List faiss_gpu_cagra_knn_impl(NumericMatrix data,
                               NumericMatrix points,
                               int k,
@@ -128,6 +199,15 @@ List faiss_gpu_cagra_knn_impl(NumericMatrix data,
                               int search_width,
                               int itopk_size,
                               bool exclude_self);
+List faiss_gpu_cagra_float32_knn_impl(SEXP data,
+                                      SEXP points,
+                                      int k,
+                                      int graph_degree,
+                                      int intermediate_graph_degree,
+                                      int search_width,
+                                      int itopk_size,
+                                      bool exclude_self,
+                                      std::string distance_storage);
 List faiss_kmeans_impl(NumericMatrix data,
                        int centers,
                        int max_iter,
@@ -324,6 +404,23 @@ List nn_faiss_ivf_cpp(NumericMatrix data,
 }
 
 // [[Rcpp::export]]
+List nn_faiss_ivf_float32_cpp(SEXP data,
+                              SEXP points,
+                              int k,
+                              int nlist,
+                              int nprobe,
+                              std::string metric,
+                              std::string distance_output,
+                              bool exclude_self,
+                              int n_threads,
+                              std::string distance_storage) {
+  return faiss_ivf_float32_knn_impl(
+    data, points, k, nlist, nprobe, metric, distance_output, exclude_self,
+    n_threads, distance_storage
+  );
+}
+
+// [[Rcpp::export]]
 List nn_faiss_flat_ip_cpp(NumericMatrix data,
                           NumericMatrix points,
                           int k,
@@ -349,6 +446,19 @@ List nn_faiss_gpu_flat_cpp(NumericMatrix data,
                            int k,
                            bool exclude_self) {
   return faiss_gpu_flat_knn_impl(data, points, k, exclude_self);
+}
+
+// [[Rcpp::export]]
+List nn_faiss_gpu_flat_float32_cpp(SEXP data,
+                                   SEXP points,
+                                   int k,
+                                   bool exclude_self,
+                                   std::string metric,
+                                   std::string distance_output,
+                                   std::string distance_storage) {
+  return faiss_gpu_flat_float32_knn_impl(
+    data, points, k, exclude_self, metric, distance_output, distance_storage
+  );
 }
 
 // [[Rcpp::export]]
@@ -384,6 +494,25 @@ List nn_faiss_ivfpq_cpp(NumericMatrix data,
   return faiss_ivfpq_knn_impl(
     data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output,
     exclude_self, n_threads
+  );
+}
+
+// [[Rcpp::export]]
+List nn_faiss_ivfpq_float32_cpp(SEXP data,
+                                SEXP points,
+                                int k,
+                                int nlist,
+                                int nprobe,
+                                int pq_m,
+                                int pq_nbits,
+                                std::string metric,
+                                std::string distance_output,
+                                bool exclude_self,
+                                int n_threads,
+                                std::string distance_storage) {
+  return faiss_ivfpq_float32_knn_impl(
+    data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output,
+    exclude_self, n_threads, distance_storage
   );
 }
 
@@ -440,6 +569,24 @@ List nn_faiss_nsg_cpp(NumericMatrix data,
 }
 
 // [[Rcpp::export]]
+List nn_faiss_nsg_float32_cpp(SEXP data,
+                              SEXP points,
+                              int k,
+                              int r,
+                              int search_l,
+                              int build_type,
+                              std::string metric,
+                              std::string distance_output,
+                              bool exclude_self,
+                              int n_threads,
+                              std::string distance_storage) {
+  return faiss_nsg_float32_knn_impl(
+    data, points, k, r, search_l, build_type, metric, distance_output,
+    exclude_self, n_threads, distance_storage
+  );
+}
+
+// [[Rcpp::export]]
 List nn_faiss_nndescent_cpp(NumericMatrix data,
                             NumericMatrix points,
                             int k,
@@ -457,6 +604,24 @@ List nn_faiss_nndescent_cpp(NumericMatrix data,
 }
 
 // [[Rcpp::export]]
+List nn_faiss_nndescent_float32_cpp(SEXP data,
+                                    SEXP points,
+                                    int k,
+                                    int graph_k,
+                                    int n_iter,
+                                    int search_l,
+                                    std::string metric,
+                                    std::string distance_output,
+                                    bool exclude_self,
+                                    int n_threads,
+                                    std::string distance_storage) {
+  return faiss_nndescent_float32_knn_impl(
+    data, points, k, graph_k, n_iter, search_l, metric, distance_output,
+    exclude_self, n_threads, distance_storage
+  );
+}
+
+// [[Rcpp::export]]
 List nn_faiss_gpu_ivf_flat_cpp(NumericMatrix data,
                                NumericMatrix points,
                                int k,
@@ -467,6 +632,22 @@ List nn_faiss_gpu_ivf_flat_cpp(NumericMatrix data,
                                bool exclude_self) {
   return faiss_gpu_ivf_flat_knn_impl(
     data, points, k, nlist, nprobe, metric, distance_output, exclude_self
+  );
+}
+
+// [[Rcpp::export]]
+List nn_faiss_gpu_ivf_flat_float32_cpp(SEXP data,
+                                       SEXP points,
+                                       int k,
+                                       int nlist,
+                                       int nprobe,
+                                       std::string metric,
+                                       std::string distance_output,
+                                       bool exclude_self,
+                                       std::string distance_storage) {
+  return faiss_gpu_ivf_flat_float32_knn_impl(
+    data, points, k, nlist, nprobe, metric, distance_output, exclude_self,
+    distance_storage
   );
 }
 
@@ -488,6 +669,24 @@ List nn_faiss_gpu_ivfpq_cpp(NumericMatrix data,
 }
 
 // [[Rcpp::export]]
+List nn_faiss_gpu_ivfpq_float32_cpp(SEXP data,
+                                    SEXP points,
+                                    int k,
+                                    int nlist,
+                                    int nprobe,
+                                    int pq_m,
+                                    int pq_nbits,
+                                    std::string metric,
+                                    std::string distance_output,
+                                    bool exclude_self,
+                                    std::string distance_storage) {
+  return faiss_gpu_ivfpq_float32_knn_impl(
+    data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output,
+    exclude_self, distance_storage
+  );
+}
+
+// [[Rcpp::export]]
 List nn_faiss_gpu_cagra_cpp(NumericMatrix data,
                             NumericMatrix points,
                             int k,
@@ -505,6 +704,22 @@ List nn_faiss_gpu_cagra_cpp(NumericMatrix data,
     search_width,
     itopk_size,
     exclude_self
+  );
+}
+
+// [[Rcpp::export]]
+List nn_faiss_gpu_cagra_float32_cpp(SEXP data,
+                                    SEXP points,
+                                    int k,
+                                    int graph_degree,
+                                    int intermediate_graph_degree,
+                                    int search_width,
+                                    int itopk_size,
+                                    bool exclude_self,
+                                    std::string distance_storage) {
+  return faiss_gpu_cagra_float32_knn_impl(
+    data, points, k, graph_degree, intermediate_graph_degree, search_width,
+    itopk_size, exclude_self, distance_storage
   );
 }
 

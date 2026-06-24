@@ -22,11 +22,10 @@ nn(
 }
 \arguments{
 \item{data}{Numeric matrix/data frame or optional `float::fl()`/`float32`
-object of reference observations in rows. Float32 inputs use direct
-float-pointer routes for CPU FAISS Flat, CPU FAISS HNSW, and CUDA cuVS HNSW
-requests. Other resolved routes accept float32 inputs through a one-time
-compatibility conversion to an ordinary R numeric matrix and record
-`float32_compatibility_conversion = TRUE`.}
+object of reference observations in rows. FAISS CPU/GPU and RAPIDS cuVS
+nearest-neighbour routes use direct float-pointer input adapters. Native routes
+without a direct float32 adapter fail clearly instead of silently converting
+benchmark input back to R double.}
 
 \item{points}{Numeric matrix/data frame or optional `float::fl()`/`float32`
 query object with observations in rows. Defaults to `data`. A float32
@@ -136,14 +135,12 @@ returns the default R numeric distance matrix. `"float"` returns
 `distance_type = "float32"` plus
 `attr(result, "distance_type") = "float32"`; this requires the optional
 `float` package. When either `data` or `points` is a `float::fl()` matrix,
-CPU FAISS Flat, CPU FAISS HNSW, and CUDA cuVS HNSW can use direct
-float-pointer input routes. Other resolved routes accept float32 inputs through
-a one-time compatibility conversion to R numeric and record
-`float32_compatibility_conversion = TRUE`; this keeps float32 dataset files
-usable across all public methods while deeper backend-specific float-pointer
-routes are added incrementally. Ordinary R double inputs with a CPU FAISS
-Flat-style or HNSW request and `output = "float"` also use a float-pointer
-FAISS route. cuVS HNSW can also consume float32 input directly. On direct
+FAISS Flat/IVF/IVFPQ/HNSW/NSG/NNDescent, FAISS GPU Flat/IVF/IVFPQ/CAGRA,
+and RAPIDS cuVS brute-force/CAGRA/HNSW/IVF/IVFPQ/NN-descent routes consume
+float32 input directly through C++ adapters. Methods without a direct float32
+adapter now error instead of silently converting benchmark input back to R
+double. Ordinary R double inputs with a CPU FAISS Flat-style or HNSW request
+and `output = "float"` also use a float-pointer FAISS route. On direct
 FAISS float routes, float distance output is constructed directly from FAISS
 float results instead of first materializing an R double distance matrix,
 except for zero-row cosine/correlation correction.}

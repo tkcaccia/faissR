@@ -32,15 +32,15 @@ headers and libraries discovered by `configure`.
 - `nn()` for native CPU references, FAISS CPU indexes, FAISS GPU indexes, and
   optional direct RAPIDS cuVS/CUDA indexes [1-6,13-16,22-23].
 - Optional float32 KNN data flow: `nn()` and `nn_without_self()` accept
-  `float::fl()` matrices. CPU FAISS Flat requests use the direct float-pointer
-  route for all four public metrics; other resolved routes use a one-time
-  compatibility conversion and record `float32_compatibility_conversion`, and
+  `float::fl()` matrices. FAISS CPU/GPU and RAPIDS cuVS NN routes consume
+  float32 input through direct C++ adapters, and unsupported native routes now
+  fail clearly instead of silently converting benchmark input back to R double.
   `output = "float"` returns float32 distance matrices when the optional
-  `float` package is installed. The float32 FAISS Flat route constructs
-  returned float distances directly instead of materializing an intermediate R
-  double matrix. A versioned C-callable entry point is also registered so
-  downstream C++ packages can request the same float32 KNN result format
-  without routing through the R wrappers.
+  `float` package is installed. The float32 FAISS routes construct returned
+  float distances directly instead of materializing an intermediate R double
+  matrix. A versioned C-callable entry point is also registered so downstream
+  C++ packages can request the same float32 KNN result format without routing
+  through the R wrappers.
 - `candidate_knn()` for exact top-k ranking inside supplied candidate rows.
 - `knn_graph()` for native weighted KNN graph construction without requiring
   `igraph`.

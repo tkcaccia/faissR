@@ -1,3 +1,15 @@
+finish_float32_direct_result <- function(result, out) {
+  result$input_type <- out$input_type %||% "float32"
+  result$input_layout <- out$input_layout %||% NA_character_
+  result$input_owns_data <- isTRUE(out$input_owns_data)
+  result$float32_compatibility_conversion <- FALSE
+  attr(result, "input_type") <- result$input_type
+  attr(result, "input_layout") <- result$input_layout
+  attr(result, "input_owns_data") <- result$input_owns_data
+  attr(result, "float32_compatibility_conversion") <- FALSE
+  result
+}
+
 nn_compute <- function(data,
                        points,
                        k,
@@ -58,6 +70,12 @@ nn_compute <- function(data,
     }
     n_threads <- normalize_nn_threads(n_threads)
     metric <- normalize_nn_metric(metric)
+    if (backend %in% c("cuda_nndescent", "cuda_approx", "gpu_nndescent", "gpu_approx")) {
+      backend <- "cuda_cuvs_nndescent"
+    }
+    if (backend %in% c("cuvs_ivf", "cuda_cuvs_ivf")) {
+      backend <- "cuda_cuvs_ivf_flat"
+    }
     if (backend %in% c("auto", "cpu", "cpu_auto", "faiss", "cpu_faiss",
                        "cpu_faiss_flat", "faiss_flat", "faiss_flat_l2")) {
       backend <- switch(metric,
@@ -67,55 +85,546 @@ nn_compute <- function(data,
         "faiss_flat_l2"
       )
     }
+    if (backend %in% c("faiss_ivf", "cpu_faiss_index_ivf", "faiss_ivf_flat")) {
+      if (!metric %in% c("euclidean", "inner_product")) {
+        stop("float32 FAISS IVF input currently supports `metric = \"euclidean\"` or `\"inner_product\"`.", call. = FALSE)
+      }
+      if (!isTRUE(faiss_available())) {
+        stop("float32 FAISS IVF input requires faissR to be built with FAISS.", call. = FALSE)
+      }
+      params <- faiss_ivf_params(data_dim[[1L]], k, metric = metric)
+      out <- nn_faiss_ivf_float32_cpp(
+        data,
+        points,
+        as.integer(k),
+        as.integer(params$nlist),
+        as.integer(params$nprobe),
+        faiss_metric_search_arg(metric),
+        faiss_metric_distance_output_arg(metric),
+        isTRUE(exclude_self),
+        as.integer(n_threads),
+        output
+      )
+      result <- finish_nn_result(out, "faiss_ivf", k, self_query, exact = FALSE, metric = metric)
+      attr(result, "approximation") <- list(
+        strategy = "faiss_IndexIVFFlat",
+        backend = "faiss_ivf",
+        library = "faiss",
+        metric = metric,
+        input_type = "float32",
+        nlist = as.integer(out$nlist),
+        nprobe = as.integer(out$nprobe),
+        requested_nlist = as.integer(params$requested_nlist),
+        requested_nprobe = as.integer(params$requested_nprobe),
+        ivf_parameters_adjusted = !identical(as.integer(params$requested_nlist), as.integer(out$nlist)) ||
+          !identical(as.integer(params$requested_nprobe), as.integer(out$nprobe))
+      )
+      result <- append_nn_tuning_metadata(result, params)
+      return(finish_float32_direct_result(result, out))
+    }
+    if (identical(backend, "faiss_nsg")) {
+      if (!identical(metric, "euclidean")) {
+        stop("float32 FAISS NSG input currently supports `metric = \"euclidean\"`.", call. = FALSE)
+      }
+      if (!isTRUE(faiss_available())) {
+        stop("float32 FAISS NSG input requires faissR to be built with FAISS.", call. = FALSE)
+      }
+      params <- faiss_nsg_params(k)
+      out <- nn_faiss_nsg_float32_cpp(
+        data,
+        points,
+        as.integer(k),
+        as.integer(params$r),
+        as.integer(params$search_l),
+        as.integer(params$build_type),
+        "euclidean",
+        "euclidean",
+        isTRUE(exclude_self),
+        as.integer(n_threads),
+        output
+      )
+      result <- finish_nn_result(out, "faiss_nsg", k, self_query, exact = FALSE, metric = metric)
+      attr(result, "approximation") <- list(
+        strategy = "faiss_IndexNSGFlat",
+        backend = "faiss_nsg",
+        library = "faiss",
+        metric = metric,
+        input_type = "float32",
+        r = as.integer(out$r),
+        search_l = as.integer(out$search_l),
+        build_type = as.integer(out$build_type),
+        gk = as.integer(out$gk),
+        requested_r = as.integer(out$requested_r),
+        requested_search_l = as.integer(out$requested_search_l),
+        requested_build_type = as.integer(out$requested_build_type),
+        nsg_parameters_adjusted = isTRUE(out$nsg_parameters_adjusted)
+      )
+      result <- append_nn_tuning_metadata(result, params)
+      return(finish_float32_direct_result(result, out))
+    }
+    if (identical(backend, "faiss_nndescent")) {
+      if (!identical(metric, "euclidean")) {
+        stop("float32 FAISS NNDescent input currently supports `metric = \"euclidean\"`.", call. = FALSE)
+      }
+      if (!isTRUE(faissr_option("enable_faiss_nndescent", FALSE))) {
+        stop(
+          "FAISS NNDescent is disabled by default because linked FAISS builds can ",
+          "abort the R process during graph construction. Set ",
+          "`options(faissR.enable_faiss_nndescent = TRUE)` to opt into the ",
+          "experimental FAISS backend.",
+          call. = FALSE
+        )
+      }
+      if (!isTRUE(faiss_available())) {
+        stop("float32 FAISS NNDescent input requires faissR to be built with FAISS.", call. = FALSE)
+      }
+      params <- faiss_nndescent_params(k)
+      out <- nn_faiss_nndescent_float32_cpp(
+        data,
+        points,
+        as.integer(k),
+        as.integer(params$graph_k),
+        as.integer(params$n_iter),
+        as.integer(params$search_l),
+        "euclidean",
+        "euclidean",
+        isTRUE(exclude_self),
+        as.integer(n_threads),
+        output
+      )
+      result <- finish_nn_result(out, "faiss_nndescent", k, self_query, exact = FALSE, metric = metric)
+      attr(result, "approximation") <- list(
+        strategy = "faiss_IndexNNDescentFlat",
+        backend = "faiss_nndescent",
+        library = "faiss",
+        metric = metric,
+        input_type = "float32",
+        graph_k = as.integer(out$graph_k),
+        n_iter = as.integer(out$n_iter),
+        search_l = as.integer(out$search_l),
+        requested_graph_k = as.integer(out$requested_graph_k),
+        requested_n_iter = as.integer(out$requested_n_iter),
+        requested_search_l = as.integer(out$requested_search_l),
+        nndescent_parameters_adjusted = isTRUE(out$nndescent_parameters_adjusted)
+      )
+      result <- append_nn_tuning_metadata(result, params)
+      return(finish_float32_direct_result(result, out))
+    }
+    if (backend %in% c("cuvs_bruteforce", "cuda_cuvs_bruteforce", "cuda_cuvs_exact")) {
+      if (!identical(metric, "euclidean")) {
+        stop("float32 cuVS brute-force input currently supports `metric = \"euclidean\"`.", call. = FALSE)
+      }
+      require_cuvs_backend("cuVS brute-force")
+      out <- nn_cuvs_bruteforce_float32_cpp(
+        data,
+        points,
+        as.integer(k),
+        isTRUE(exclude_self)
+      )
+      resolved_backend <- "cuda_cuvs_bruteforce"
+      result_backend <- if (requested_backend %in% c("cuda", "gpu")) requested_backend else resolved_backend
+      result <- finish_nn_result(out, result_backend, k, self_query, exact = TRUE, metric = metric)
+      if (!identical(result_backend, resolved_backend)) {
+        attr(result, "resolved_backend") <- resolved_backend
+      }
+      attr(result, "cuvs") <- list(
+        index_type = as.character(out$index_type),
+        library = "cuvs",
+        backend = "cuda",
+        resolved_backend = resolved_backend,
+        metric = metric,
+        input_type = "float32"
+      )
+      return(finish_float32_direct_result(result, out))
+    }
+    if (backend %in% c("cuda_cuvs_cagra", "cuda_cagra", "gpu_cagra")) {
+      if (!identical(metric, "euclidean")) {
+        stop("float32 cuVS CAGRA input currently supports `metric = \"euclidean\"`.", call. = FALSE)
+      }
+      require_cuvs_backend("cuVS CAGRA")
+      params <- cuvs_cagra_params(data_dim[[1L]], k, p = data_dim[[2L]])
+      build_algo <- cuvs_cagra_build_algo_for_shape(data_dim[[1L]], data_dim[[2L]], k, self_query, params)
+      out <- nn_cuvs_cagra_float32_cpp(
+        data,
+        points,
+        as.integer(k),
+        isTRUE(exclude_self),
+        as.integer(params$graph_degree),
+        as.integer(params$intermediate_graph_degree),
+        as.integer(params$search_width),
+        as.integer(params$itopk_size),
+        build_algo
+      )
+      resolved_backend <- "cuda_cuvs_cagra"
+      result_backend <- if (requested_backend %in% c("cuda", "gpu")) requested_backend else resolved_backend
+      result <- finish_nn_result(out, result_backend, k, self_query, exact = FALSE, metric = metric)
+      if (!identical(result_backend, resolved_backend)) {
+        attr(result, "resolved_backend") <- resolved_backend
+      }
+      attr(result, "approximation") <- list(
+        strategy = "rapids_cuvs_cagra",
+        backend = resolved_backend,
+        library = "cuvs",
+        accelerator = "cuda",
+        cagra_provider = "cuvs",
+        metric = metric,
+        input_type = "float32",
+        graph_degree = as.integer(out$graph_degree),
+        intermediate_graph_degree = as.integer(out$intermediate_graph_degree),
+        search_width = as.integer(out$search_width),
+        itopk_size = as.integer(out$itopk_size),
+        cagra_build_algo = out$build_algo %||% build_algo,
+        search_batch_size = as.integer(out$search_batch_size)
+      )
+      result <- append_nn_tuning_metadata(result, params)
+      return(finish_float32_direct_result(result, out))
+    }
+    if (identical(backend, "faiss_ivfpq")) {
+      if (!metric %in% c("euclidean", "inner_product")) {
+        stop("float32 FAISS IVF-PQ input currently supports `metric = \"euclidean\"` or `\"inner_product\"`.", call. = FALSE)
+      }
+      if (!isTRUE(faiss_available())) {
+        stop("float32 FAISS IVF-PQ input requires faissR to be built with FAISS.", call. = FALSE)
+      }
+      validate_faiss_cpu_ivfpq_training_size(data_dim[[1L]])
+      params <- faiss_ivf_params(data_dim[[1L]], k, metric = metric)
+      pq <- faiss_pq_params(data_dim[[2L]], n = data_dim[[1L]])
+      out <- nn_faiss_ivfpq_float32_cpp(
+        data,
+        points,
+        as.integer(k),
+        as.integer(params$nlist),
+        as.integer(params$nprobe),
+        as.integer(pq$m),
+        as.integer(pq$nbits),
+        faiss_metric_search_arg(metric),
+        faiss_metric_distance_output_arg(metric),
+        isTRUE(exclude_self),
+        as.integer(n_threads),
+        output
+      )
+      result <- finish_nn_result(out, "faiss_ivfpq", k, self_query, exact = FALSE, metric = metric)
+      attr(result, "approximation") <- list(
+        strategy = "faiss_IndexIVFPQ",
+        backend = "faiss_ivfpq",
+        library = "faiss",
+        metric = metric,
+        input_type = "float32",
+        nlist = as.integer(out$nlist),
+        nprobe = as.integer(out$nprobe),
+        requested_nlist = as.integer(params$requested_nlist),
+        requested_nprobe = as.integer(params$requested_nprobe),
+        pq_m = as.integer(out$pq_m),
+        pq_nbits = as.integer(out$pq_nbits),
+        requested_pq_m = as.integer(out$requested_pq_m),
+        requested_pq_nbits = as.integer(out$requested_pq_nbits),
+        pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted)
+      )
+      result <- append_nn_tuning_metadata(result, params, pq, .prefixes = list(NULL, "pq_"))
+      return(finish_float32_direct_result(result, out))
+    }
+    if (backend %in% c("faiss_gpu_flat", "faiss_gpu_flat_l2", "cuda_faiss_flat_l2",
+                       "faiss_gpu_flat_ip", "cuda_faiss_flat_ip")) {
+      if (!metric %in% c("euclidean", "inner_product")) {
+        stop("float32 FAISS GPU Flat input currently supports `metric = \"euclidean\"` or `\"inner_product\"`.", call. = FALSE)
+      }
+      if (!isTRUE(faiss_gpu_available())) {
+        stop("float32 FAISS GPU Flat input requires faissR to be built with FAISS GPU.", call. = FALSE)
+      }
+      out <- nn_faiss_gpu_flat_float32_cpp(
+        data,
+        points,
+        as.integer(k),
+        isTRUE(exclude_self),
+        faiss_metric_search_arg(metric),
+        faiss_metric_distance_output_arg(metric),
+        output
+      )
+      result <- finish_nn_result(
+        out,
+        if (identical(metric, "inner_product")) "faiss_gpu_flat_ip" else "faiss_gpu_flat_l2",
+        k,
+        self_query,
+        exact = TRUE,
+        metric = metric
+      )
+      attr(result, "faiss") <- list(
+        index_type = as.character(out$index_type),
+        library = "faiss",
+        backend = "cuda",
+        accelerator = "cuda",
+        metric = as.character(out$metric %||% metric),
+        input_type = "float32"
+      )
+      return(finish_float32_direct_result(result, out))
+    }
+    if (backend %in% c("faiss_gpu_ivf", "faiss_gpu_ivf_flat", "cuda_faiss_ivf_flat")) {
+      if (!metric %in% c("euclidean", "inner_product")) {
+        stop("float32 FAISS GPU IVF-Flat input currently supports `metric = \"euclidean\"` or `\"inner_product\"`.", call. = FALSE)
+      }
+      if (!isTRUE(faiss_gpu_available())) {
+        stop("float32 FAISS GPU IVF-Flat input requires faissR to be built with FAISS GPU.", call. = FALSE)
+      }
+      params <- faiss_ivf_params(data_dim[[1L]], k, metric = metric)
+      out <- nn_faiss_gpu_ivf_flat_float32_cpp(
+        data,
+        points,
+        as.integer(k),
+        as.integer(params$nlist),
+        as.integer(params$nprobe),
+        faiss_metric_search_arg(metric),
+        faiss_metric_distance_output_arg(metric),
+        isTRUE(exclude_self),
+        output
+      )
+      result <- finish_nn_result(out, "faiss_gpu_ivf_flat", k, self_query, exact = FALSE, metric = metric)
+      attr(result, "approximation") <- list(
+        strategy = "faiss_gpu_IndexIVFFlat_cuVS",
+        backend = "faiss_gpu_ivf_flat",
+        library = "faiss",
+        accelerator = "cuda",
+        metric = metric,
+        input_type = "float32",
+        nlist = as.integer(out$nlist),
+        nprobe = as.integer(out$nprobe),
+        requested_nlist = as.integer(params$requested_nlist),
+        requested_nprobe = as.integer(params$requested_nprobe),
+        ivf_parameters_adjusted = !identical(as.integer(params$requested_nlist), as.integer(out$nlist)) ||
+          !identical(as.integer(params$requested_nprobe), as.integer(out$nprobe))
+      )
+      result <- append_nn_tuning_metadata(result, params)
+      return(finish_float32_direct_result(result, out))
+    }
+    if (backend %in% c("faiss_gpu_ivfpq", "cuda_faiss_ivfpq")) {
+      if (!metric %in% c("euclidean", "inner_product")) {
+        stop("float32 FAISS GPU IVF-PQ input currently supports `metric = \"euclidean\"` or `\"inner_product\"`.", call. = FALSE)
+      }
+      if (!isTRUE(faiss_gpu_available())) {
+        stop("float32 FAISS GPU IVF-PQ input requires faissR to be built with FAISS GPU.", call. = FALSE)
+      }
+      params <- faiss_ivf_params(data_dim[[1L]], k, metric = metric)
+      pq <- faiss_pq_params(data_dim[[2L]])
+      out <- nn_faiss_gpu_ivfpq_float32_cpp(
+        data,
+        points,
+        as.integer(k),
+        as.integer(params$nlist),
+        as.integer(params$nprobe),
+        as.integer(pq$m),
+        as.integer(pq$nbits),
+        faiss_metric_search_arg(metric),
+        faiss_metric_distance_output_arg(metric),
+        isTRUE(exclude_self),
+        output
+      )
+      result <- finish_nn_result(out, "faiss_gpu_ivfpq", k, self_query, exact = FALSE, metric = metric)
+      attr(result, "approximation") <- list(
+        strategy = "faiss_gpu_IndexIVFPQ_cuVS",
+        backend = "faiss_gpu_ivfpq",
+        library = "faiss",
+        accelerator = "cuda",
+        metric = metric,
+        input_type = "float32",
+        nlist = as.integer(out$nlist),
+        nprobe = as.integer(out$nprobe),
+        requested_nlist = as.integer(params$requested_nlist),
+        requested_nprobe = as.integer(params$requested_nprobe),
+        pq_m = as.integer(out$pq_m),
+        pq_nbits = as.integer(out$pq_nbits),
+        requested_pq_m = as.integer(out$requested_pq_m),
+        requested_pq_nbits = as.integer(out$requested_pq_nbits),
+        pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted)
+      )
+      result <- append_nn_tuning_metadata(result, params, pq, .prefixes = list(NULL, "pq_"))
+      return(finish_float32_direct_result(result, out))
+    }
+    if (backend %in% c("faiss_gpu_cagra", "cuda_faiss_cagra")) {
+      if (!identical(metric, "euclidean")) {
+        stop("float32 FAISS GPU CAGRA input currently supports `metric = \"euclidean\"`.", call. = FALSE)
+      }
+      if (!isTRUE(faiss_gpu_available())) {
+        stop("float32 FAISS GPU CAGRA input requires faissR to be built with FAISS GPU.", call. = FALSE)
+      }
+      params <- cuvs_cagra_params(data_dim[[1L]], k, p = data_dim[[2L]])
+      out <- nn_faiss_gpu_cagra_float32_cpp(
+        data,
+        points,
+        as.integer(k),
+        as.integer(params$graph_degree),
+        as.integer(params$intermediate_graph_degree),
+        as.integer(params$search_width),
+        as.integer(params$itopk_size),
+        isTRUE(exclude_self),
+        output
+      )
+      result <- finish_nn_result(out, "faiss_gpu_cagra", k, self_query, exact = FALSE, metric = metric)
+      attr(result, "approximation") <- list(
+        strategy = "faiss_gpu_GpuIndexCagra_cuVS",
+        backend = "faiss_gpu_cagra",
+        library = "faiss",
+        accelerator = "cuda",
+        cagra_provider = "faiss_gpu",
+        metric = metric,
+        input_type = "float32",
+        graph_degree = as.integer(out$graph_degree),
+        intermediate_graph_degree = as.integer(out$intermediate_graph_degree),
+        search_width = as.integer(out$search_width),
+        itopk_size = as.integer(out$itopk_size)
+      )
+      result <- append_nn_tuning_metadata(result, params)
+      return(finish_float32_direct_result(result, out))
+    }
     direct_float32_backend <- backend %in% c(
       "faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat",
       "faiss_flat_l2", "faiss_flat_ip",
       "faiss_flat_cosine", "faiss_flat_correlation",
-      "faiss_hnsw", "cuda_cuvs_hnsw", "cuvs_hnsw"
+      "faiss_ivf", "cpu_faiss_index_ivf", "faiss_ivf_flat",
+      "faiss_ivfpq", "faiss_hnsw", "faiss_nsg", "faiss_nndescent",
+      "faiss_gpu_flat", "faiss_gpu_flat_l2", "cuda_faiss_flat_l2",
+      "faiss_gpu_flat_ip", "cuda_faiss_flat_ip",
+      "faiss_gpu_ivf", "faiss_gpu_ivf_flat", "cuda_faiss_ivf_flat",
+      "faiss_gpu_ivfpq", "cuda_faiss_ivfpq",
+      "faiss_gpu_cagra", "cuda_faiss_cagra",
+      "cuvs_bruteforce", "cuda_cuvs_bruteforce", "cuda_cuvs_exact",
+      "cuda_cuvs_cagra", "cuda_cagra", "gpu_cagra",
+      "cuda_cuvs_hnsw", "cuvs_hnsw",
+      "cuvs_ivf_flat", "cuda_cuvs_ivf_flat",
+      "cuvs_ivfpq", "cuda_cuvs_ivfpq",
+      "cuvs_ivf_pq", "cuda_cuvs_ivf_pq",
+      "cuda_cuvs_nndescent", "cuvs_nndescent"
     )
     if (!isTRUE(direct_float32_backend)) {
-      converted_data <- if (isTRUE(data_float32)) {
-        float32_to_numeric_matrix(data, "data")
-      } else {
-        data
-      }
-      converted_points <- if (isTRUE(points_missing)) {
-        converted_data
-      } else if (isTRUE(points_float32)) {
-        float32_to_numeric_matrix(points, "points")
-      } else {
-        points
-      }
-      result <- nn_compute(
-        converted_data,
-        converted_points,
-        k,
-        backend,
-        points_missing,
-        exclude_self = exclude_self,
-        n_threads = n_threads,
-        metric = metric,
-        tuning = tuning,
-        output = output,
-        auto_selection = auto_selection
+      stop(
+        "float32 input for backend `", backend, "` has no direct float32 ",
+        "adapter yet. faissR no longer converts float32 inputs back to R ",
+        "double silently for benchmarked NN methods.",
+        call. = FALSE
       )
-      result$input_type <- "float32"
-      result$input_layout <- if (isTRUE(points_missing)) {
-        "float32_compatibility_to_r_double"
-      } else {
-        paste(
-          if (isTRUE(data_float32)) "data=float32_compatibility_to_r_double" else "data=r_double",
-          if (isTRUE(points_float32)) "points=float32_compatibility_to_r_double" else "points=r_double",
-          sep = ";"
-        )
+    }
+    if (backend %in% c("cuvs_ivf_flat", "cuda_cuvs_ivf_flat")) {
+      if (!identical(metric, "euclidean")) {
+        stop("float32 cuVS IVF-Flat input currently supports `metric = \"euclidean\"`.", call. = FALSE)
       }
-      result$input_owns_data <- TRUE
-      result$float32_compatibility_conversion <- TRUE
-      attr(result, "input_type") <- "float32"
-      attr(result, "input_layout") <- result$input_layout
-      attr(result, "input_owns_data") <- TRUE
-      attr(result, "float32_compatibility_conversion") <- TRUE
-      return(result)
+      require_cuvs_backend("cuVS IVF-Flat")
+      params <- faiss_ivf_params(data_dim[[1L]], k, metric = metric)
+      out <- nn_cuvs_ivf_flat_float32_cpp(
+        data,
+        points,
+        as.integer(k),
+        as.integer(params$nlist),
+        as.integer(params$nprobe),
+        isTRUE(exclude_self)
+      )
+      result <- finish_nn_result(out, "cuda_cuvs_ivf_flat", k, self_query, exact = FALSE, metric = metric)
+      attr(result, "approximation") <- list(
+        strategy = "rapids_cuvs_ivf_flat",
+        backend = "cuda_cuvs_ivf_flat",
+        library = "cuvs",
+        accelerator = "cuda",
+        metric = metric,
+        input_type = "float32",
+        default_candidate = FALSE,
+        nlist = as.integer(out$n_lists),
+        nprobe = as.integer(out$n_probes),
+        requested_nlist = as.integer(params$requested_nlist),
+        requested_nprobe = as.integer(params$requested_nprobe),
+        ivf_parameters_adjusted = !identical(as.integer(params$requested_nlist), as.integer(out$n_lists)) ||
+          !identical(as.integer(params$requested_nprobe), as.integer(out$n_probes)),
+        search_batch_size = as.integer(out$search_batch_size)
+      )
+      result <- append_nn_tuning_metadata(result, params)
+      return(finish_float32_direct_result(result, out))
+    }
+    if (backend %in% c("cuvs_ivfpq", "cuda_cuvs_ivfpq", "cuvs_ivf_pq", "cuda_cuvs_ivf_pq")) {
+      if (!identical(metric, "euclidean")) {
+        stop("float32 cuVS IVF-PQ input currently supports `metric = \"euclidean\"`.", call. = FALSE)
+      }
+      require_cuvs_backend("cuVS IVF-PQ")
+      params <- faiss_ivf_params(data_dim[[1L]], k, metric = metric)
+      pq <- cuvs_ivfpq_params(data_dim[[2L]], n = data_dim[[1L]])
+      out <- nn_cuvs_ivf_pq_float32_cpp(
+        data,
+        points,
+        as.integer(k),
+        as.integer(params$nlist),
+        as.integer(params$nprobe),
+        as.integer(pq$pq_dim),
+        as.integer(pq$pq_bits),
+        isTRUE(exclude_self)
+      )
+      result <- finish_nn_result(out, "cuda_cuvs_ivfpq", k, self_query, exact = FALSE, metric = metric)
+      attr(result, "approximation") <- list(
+        strategy = "rapids_cuvs_ivf_pq",
+        backend = "cuda_cuvs_ivfpq",
+        library = "cuvs",
+        accelerator = "cuda",
+        metric = metric,
+        input_type = "float32",
+        role = "explicit_memory_pressure_backend",
+        default_candidate = FALSE,
+        nlist = as.integer(out$n_lists),
+        nprobe = as.integer(out$n_probes),
+        requested_nlist = as.integer(params$requested_nlist),
+        requested_nprobe = as.integer(params$requested_nprobe),
+        pq_dim = as.integer(out$pq_dim),
+        pq_bits = as.integer(out$pq_bits),
+        requested_pq_dim = as.integer(pq$requested_pq_dim),
+        requested_pq_bits = as.integer(pq$requested_pq_bits),
+        pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted),
+        search_batch_size = as.integer(out$search_batch_size)
+      )
+      result <- append_nn_tuning_metadata(result, params, pq, .prefixes = list(NULL, "pq_"))
+      return(finish_float32_direct_result(result, out))
+    }
+    if (backend %in% c("cuvs_nndescent", "cuda_cuvs_nndescent")) {
+      if (!identical(metric, "euclidean")) {
+        stop("float32 cuVS NN-descent input currently supports `metric = \"euclidean\"`.", call. = FALSE)
+      }
+      require_cuvs_backend("cuVS NN-descent")
+      if (!isTRUE(self_query)) {
+        stop("`backend = \"cuda_cuvs_nndescent\"` is only available for self-KNN searches.", call. = FALSE)
+      }
+      nonself_k <- if (isTRUE(exclude_self)) k else max(0L, k - 1L)
+      if (nonself_k < 1L) {
+        out <- list(
+          indices = matrix(seq_len(data_dim[[1L]]), data_dim[[1L]], 1L),
+          distances = matrix(0, data_dim[[1L]], 1L),
+          input_type = "float32",
+          input_layout = "trivial_self",
+          input_owns_data = FALSE,
+          float32_compatibility_conversion = FALSE
+        )
+        params <- NULL
+      } else {
+        params <- cuvs_nndescent_params(data_dim[[1L]], nonself_k)
+        out <- nn_cuvs_nndescent_self_float32_cpp(
+          data,
+          as.integer(nonself_k),
+          as.integer(params$graph_degree),
+          as.integer(params$intermediate_graph_degree),
+          as.integer(params$max_iterations)
+        )
+        if (!isTRUE(exclude_self)) {
+          out$indices <- cbind(seq_len(data_dim[[1L]]), out$indices)
+          out$distances <- cbind(rep(0, data_dim[[1L]]), out$distances)
+        }
+      }
+      result <- finish_nn_result(out, "cuda_cuvs_nndescent", k, self_query, exact = FALSE, metric = metric)
+      attr(result, "approximation") <- list(
+        strategy = "rapids_cuvs_nndescent",
+        backend = "cuda_cuvs_nndescent",
+        library = "cuvs",
+        accelerator = "cuda",
+        metric = metric,
+        input_type = "float32",
+        graph_degree = as.integer(out$graph_degree %||% NA_integer_),
+        intermediate_graph_degree = as.integer(out$intermediate_graph_degree %||% NA_integer_),
+        max_iterations = as.integer(out$max_iterations %||% NA_integer_)
+      )
+      if (!is.null(params)) {
+        result <- append_nn_tuning_metadata(result, params)
+      }
+      return(finish_float32_direct_result(result, out))
     }
     if (identical(backend, "faiss_hnsw")) {
       if (!metric %in% c("euclidean", "inner_product")) {
@@ -173,11 +682,7 @@ nn_compute <- function(data,
         tuning_non_euclidean = isTRUE(params$non_euclidean),
         tuning_source = params$tuning_source %||% "cpp"
       )
-      attr(result, "input_type") <- out$input_type %||% "float32"
-      attr(result, "input_layout") <- out$input_layout %||% NA_character_
-      attr(result, "input_owns_data") <- isTRUE(out$input_owns_data)
-      attr(result, "float32_compatibility_conversion") <- FALSE
-      return(result)
+      return(finish_float32_direct_result(result, out))
     }
     if (backend %in% c("cuda_cuvs_hnsw", "cuvs_hnsw")) {
       if (!identical(metric, "euclidean")) {
@@ -229,11 +734,16 @@ nn_compute <- function(data,
         note = "cuVS HNSW is built from a CUDA CAGRA index and searched through the cuVS HNSW wrapper."
       )
       result <- append_nn_tuning_metadata(result, params)
-      attr(result, "input_type") <- out$input_type %||% "float32"
-      attr(result, "input_layout") <- out$input_layout %||% NA_character_
-      attr(result, "input_owns_data") <- isTRUE(out$input_owns_data)
-      attr(result, "float32_compatibility_conversion") <- FALSE
-      return(result)
+      return(finish_float32_direct_result(result, out))
+    }
+    if (!backend %in% c("faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat",
+                        "faiss_flat_l2", "faiss_flat_ip",
+                        "faiss_flat_cosine", "faiss_flat_correlation")) {
+      stop(
+        "float32 input for backend `", backend, "` reached no direct ",
+        "float32 method handler.",
+        call. = FALSE
+      )
     }
     if (!metric %in% c("euclidean", "cosine", "correlation", "inner_product")) {
       stop(
@@ -257,7 +767,7 @@ nn_compute <- function(data,
       metric,
       output
     )
-    return(finish_nn_result(
+    result <- finish_nn_result(
       out,
       switch(metric,
         inner_product = "faiss_flat_ip",
@@ -269,7 +779,8 @@ nn_compute <- function(data,
       self_query,
       exact = TRUE,
       metric = metric
-    ))
+    )
+    return(finish_float32_direct_result(result, out))
   }
   data <- as.matrix(data)
   storage.mode(data) <- "double"
@@ -6654,15 +7165,14 @@ grid_self_knn <- function(data,
 #' cuVS, including IVF and CAGRA integration.
 #'
 #' @param data Numeric matrix/data frame or optional `float::fl()`/`float32`
-#'   object of reference observations in rows. Float32 inputs use direct
-#'   float-pointer routes for CPU FAISS Flat, CPU FAISS HNSW, and CUDA cuVS HNSW
-#'   requests. Other resolved routes accept float32 inputs through a one-time
-#'   compatibility conversion to an ordinary R numeric matrix and record
-#'   `float32_compatibility_conversion = TRUE`.
+#'   object of reference observations in rows. FAISS CPU/GPU and RAPIDS cuVS
+#'   nearest-neighbour routes use direct float-pointer adapters for float32
+#'   inputs. Native routes without a direct float32 adapter fail clearly instead
+#'   of silently converting benchmark input back to R double.
 #' @param points Numeric matrix/data frame or optional `float::fl()`/`float32`
 #'   query object with observations in rows. Defaults to `data`. A float32
-#'   query can be paired with an ordinary R double
-#'   reference matrix on the CPU FAISS Flat float32 route.
+#'   query can be paired with an ordinary R double reference matrix on direct
+#'   FAISS/cuVS float32 routes.
 #' @param k Number of neighbors to return. `NULL` chooses the package's
 #'   automatic neighborhood size and includes the self-neighbor when `points`
 #'   is `data`.
@@ -6759,17 +7269,16 @@ grid_self_knn <- function(data,
 #'   `distance_type = "float32"` plus
 #'   `attr(result, "distance_type") = "float32"`; this requires the optional
 #'   `float` package. When either `data` or `points` is a `float::fl()` matrix,
-#'   CPU FAISS Flat, CPU FAISS HNSW, and CUDA cuVS HNSW can use direct
-#'   float-pointer input routes. Other resolved routes accept float32 inputs
-#'   through a one-time compatibility conversion to R numeric and record
-#'   `float32_compatibility_conversion = TRUE`; this keeps float32 dataset files
-#'   usable across all public methods while deeper backend-specific float-pointer
-#'   routes are added incrementally. Ordinary R double inputs
-#'   with a CPU FAISS Flat-style or HNSW request and `output = "float"` also use
-#'   a float-pointer FAISS route. cuVS HNSW can also consume float32 input
-#'   directly. On direct FAISS float routes, float distance output is constructed
-#'   directly from FAISS float results instead of first materializing an R double
-#'   distance matrix, except for zero-row cosine/correlation correction.
+#'   FAISS Flat/IVF/IVFPQ/HNSW/NSG/NNDescent, FAISS GPU Flat/IVF/IVFPQ/CAGRA,
+#'   and RAPIDS cuVS brute-force/CAGRA/HNSW/IVF/IVFPQ/NN-descent routes consume
+#'   float32 input directly through C++ adapters. Methods without a direct
+#'   float32 adapter now error instead of silently converting the benchmark
+#'   input back to R double. Ordinary R double inputs with a CPU FAISS
+#'   Flat-style or HNSW request and `output = "float"` also use a float-pointer
+#'   FAISS route. On direct FAISS float routes, float distance output is
+#'   constructed directly from FAISS float results instead of first materializing
+#'   an R double distance matrix, except for zero-row cosine/correlation
+#'   correction.
 #' @param distances Optional alias for `output`, kept for callers that prefer
 #'   `distances = "double"` or `distances = "float"` to describe the returned
 #'   distance storage type.
@@ -6894,8 +7403,7 @@ nn <- function(data,
 #' @param output Distance storage type: `"double"` for the default R numeric
 #'   matrix or `"float"` for a `float::fl()`/`float32` distance matrix when the
 #'   optional `float` package is installed. `float::fl()` input matrices use
-#'   the same direct FAISS Flat and compatibility routes described in
-#'   \code{\link{nn}()}.
+#'   the same direct FAISS/cuVS float32 routes described in \code{\link{nn}()}.
 #' @param distances Optional alias for `output`.
 #' @param n_threads Number of CPU worker threads used by CPU backends.
 #' @return A `faissR_nn` object with `indices`, `distances`, and stable
