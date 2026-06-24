@@ -593,6 +593,10 @@ continues to the next row. For very large all-method sweeps,
 `exact`/`flat`/`bruteforce` rows as `status = "timeout"` with
 `child_status = "preflight_timeout"` before launching native code, matching the
 CPU exhaustive preflight behavior for all-pairs routes known to exceed the cap.
+CUDA preflight applies a conservative minimum operation threshold of `1e14`
+even when a lower command-line threshold is supplied. This keeps GPU-feasible
+medium datasets such as MNIST70k in the measured rows while still avoiding
+known-impractical exhaustive rows on multi-million-row datasets.
 The aggregate file `nn_metric_recommendations_from_cycles.csv` emits one row
 per dataset/backend/metric/k: it chooses the fastest median row above the recall
 threshold when possible, the best-recall row when all measured methods are below

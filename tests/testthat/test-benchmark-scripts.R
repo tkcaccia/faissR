@@ -69,6 +69,8 @@ test_that("NN metric benchmark isolates high-work CPU native timeout risks", {
   )
 
   large_x <- matrix(0, nrow = 50000L, ncol = 2L)
+  cuda_feasible_x <- matrix(0, nrow = 70000L, ncol = 784L)
+  giant_x <- matrix(0, nrow = 2000000L, ncol = 32L)
   small_x <- matrix(0, nrow = 100L, ncol = 2L)
 
   expect_true(
@@ -213,7 +215,7 @@ test_that("NN metric benchmark isolates high-work CPU native timeout risks", {
   )
   expect_true(
     env$should_preflight_cuda_exhaustive_timeout(
-      large_x,
+      giant_x,
       backend = "auto",
       method = "exact",
       preflight_route = "faiss_gpu_flat_l2",
@@ -223,7 +225,7 @@ test_that("NN metric benchmark isolates high-work CPU native timeout risks", {
   )
   expect_true(
     env$should_preflight_cuda_exhaustive_timeout(
-      large_x,
+      giant_x,
       backend = "cuda",
       method = "bruteforce",
       preflight_route = "cuda_cuvs_bruteforce",
@@ -233,10 +235,20 @@ test_that("NN metric benchmark isolates high-work CPU native timeout risks", {
   )
   expect_false(
     env$should_preflight_cuda_exhaustive_timeout(
-      large_x,
+      giant_x,
       backend = "cuda",
       method = "hnsw",
       preflight_route = "cuda_cuvs_hnsw",
+      preflight_cuda_exhaustive_timeout = TRUE,
+      preflight_cuda_exhaustive_timeout_ops = 5e10
+    )
+  )
+  expect_false(
+    env$should_preflight_cuda_exhaustive_timeout(
+      cuda_feasible_x,
+      backend = "cuda",
+      method = "flat",
+      preflight_route = "faiss_gpu_flat_l2",
       preflight_cuda_exhaustive_timeout = TRUE,
       preflight_cuda_exhaustive_timeout_ops = 5e10
     )
