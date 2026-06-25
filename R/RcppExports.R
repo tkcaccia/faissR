@@ -133,6 +133,10 @@ graph_prune_candidate_graph_cpp <- function(data, seed_indices, r, alpha, metric
     .Call(`_faissR_graph_prune_candidate_graph_cpp`, data, seed_indices, r, alpha, metric, protect_top, max_exact_work, robust_vamana)
 }
 
+graph_prune_candidate_graph_float32_cpp <- function(data, seed_indices, r, alpha, metric, protect_top, max_exact_work, robust_vamana) {
+    .Call(`_faissR_graph_prune_candidate_graph_float32_cpp`, data, seed_indices, r, alpha, metric, protect_top, max_exact_work, robust_vamana)
+}
+
 landmark_candidate_knn_cpp <- function(data, projection_indices, k, bucket_cols, query_cols, parallel, cores) {
     .Call(`_faissR_landmark_candidate_knn_cpp`, data, projection_indices, k, bucket_cols, query_cols, parallel, cores)
 }
@@ -149,6 +153,10 @@ nndescent_self_knn_cpp <- function(data, k, pool_size, n_iters, max_candidates, 
     .Call(`_faissR_nndescent_self_knn_cpp`, data, k, pool_size, n_iters, max_candidates, n_random_projections, seed, parallel, cores, metric)
 }
 
+nndescent_self_knn_float32_cpp <- function(data, k, pool_size, n_iters, max_candidates, n_random_projections, seed, parallel, cores, metric) {
+    .Call(`_faissR_nndescent_self_knn_float32_cpp`, data, k, pool_size, n_iters, max_candidates, n_random_projections, seed, parallel, cores, metric)
+}
+
 ivf_self_knn_cpp <- function(data, k, nlist, nprobe, seed, parallel, cores) {
     .Call(`_faissR_ivf_self_knn_cpp`, data, k, nlist, nprobe, seed, parallel, cores)
 }
@@ -163,6 +171,10 @@ grid3d_self_knn_cpp <- function(data, k, parallel, cores, bins_per_dim, include_
 
 candidate_knn_cpp <- function(data, points, candidate_indices, k, method, square, exclude_self, parallel, cores) {
     .Call(`_faissR_candidate_knn_cpp`, data, points, candidate_indices, k, method, square, exclude_self, parallel, cores)
+}
+
+candidate_knn_float32_cpp <- function(data, points, candidate_indices, k, method, square, exclude_self, parallel, cores) {
+    .Call(`_faissR_candidate_knn_float32_cpp`, data, points, candidate_indices, k, method, square, exclude_self, parallel, cores)
 }
 
 nn_auto_select_backend_cpp <- function(resolved_backend, requested_backend, requested_method, metric, n, p, n_points, k, self_query, exclude_self, cuda_available, cuvs_available, faiss_available, faiss_gpu_available, rcpphnsw_available, cagra_preference, cuda_exact_n, cuda_exact_work, metric_graph_n, metric_graph_min_k, metric_graph_work, cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k, cuvs_bruteforce_work_threshold, cpu_exact_work, cpu_faiss_flat_work, tuning) {
@@ -253,12 +265,20 @@ nn_cuda_cpp <- function(data, points, k, square) {
     .Call(`_faissR_nn_cuda_cpp`, data, points, k, square)
 }
 
+nn_cuda_float32_cpp <- function(data, points, k, square) {
+    .Call(`_faissR_nn_cuda_float32_cpp`, data, points, k, square)
+}
+
 landmark_candidate_knn_cuda_cpp <- function(data, projection_indices, k, bucket_cols, query_cols) {
     .Call(`_faissR_landmark_candidate_knn_cuda_cpp`, data, projection_indices, k, bucket_cols, query_cols)
 }
 
 row_candidate_knn_cuda_cpp <- function(data, candidate_indices, k, metric) {
     .Call(`_faissR_row_candidate_knn_cuda_cpp`, data, candidate_indices, k, metric)
+}
+
+row_candidate_knn_cuda_float32_cpp <- function(data, candidate_indices, k, metric) {
+    .Call(`_faissR_row_candidate_knn_cuda_float32_cpp`, data, candidate_indices, k, metric)
 }
 
 cuda_grid_self_knn_cpp <- function(data, k, bins_per_dim, include_self) {

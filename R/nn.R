@@ -1098,6 +1098,7 @@ nn_compute <- function(data,
       "faiss_flat_cosine", "faiss_flat_correlation",
       "faiss_ivf", "cpu_faiss_index_ivf", "faiss_ivf_flat",
       "faiss_ivfpq", "faiss_scann", "faiss_hnsw", "faiss_nsg", "faiss_nndescent",
+      "cpu_nndescent", "cpu_nsg", "cuda_nsg", "cpu_vamana", "cuda_vamana",
       "faiss_gpu_flat", "faiss_gpu_flat_l2", "cuda_faiss_flat_l2",
       "faiss_gpu_flat_ip", "cuda_faiss_flat_ip",
       "faiss_gpu_ivf", "faiss_gpu_ivf_flat", "cuda_faiss_ivf_flat",
@@ -1380,6 +1381,246 @@ nn_compute <- function(data,
         output = output,
         result_backend = "cuda_cuvs_hnsw"
       ))
+    }
+    if (identical(backend, "cpu_nndescent")) {
+      if (!isTRUE(self_query)) {
+        stop("`method = \"nndescent\"` is only available for self-KNN searches on CPU.", call. = FALSE)
+      }
+      metric_inputs <- NULL
+      search_data <- data
+      if (metric %in% c("cosine", "correlation")) {
+        metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric, storage = "float")
+        search_data <- metric_inputs$data
+      }
+      search_dim <- if (is_float32_matrix_input(search_data)) {
+        float32_matrix_dims(search_data, "data")
+      } else {
+        dim(search_data)
+      }
+      nonself_k <- if (isTRUE(exclude_self)) k else k - 1L
+      if (nonself_k < 1L) {
+        out <- list(
+          indices = matrix(seq_len(search_dim[[1L]]), search_dim[[1L]], 1L),
+          distances = matrix(0, search_dim[[1L]], 1L),
+          input_type = "float32",
+          input_layout = "trivial_self",
+          input_owns_data = FALSE,
+          float32_compatibility_conversion = FALSE
+        )
+        attr(out, "approximation") <- list(
+          strategy = "native_cpu_nndescent_trivial_self",
+          backend = "cpu"
+        )
+      } else {
+        out <- nndescent_self_knn(
+          search_data,
+          k = nonself_k,
+          seed = fast_knn_approx_seed(),
+          n_threads = n_threads,
+          metric = if (is.null(metric_inputs)) metric else "euclidean"
+        )
+        if (!isTRUE(exclude_self)) {
+          out <- prepend_self_neighbor_column(out)
+        }
+      }
+      result <- finish_nn_result(out, "cpu_nndescent", k, self_query, exact = FALSE, metric = metric)
+      if (!is.null(metric_inputs)) {
+        result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
+      }
+      approximation <- attr(out, "approximation")
+      if (is.null(approximation)) approximation <- list()
+      approximation$metric <- metric
+      approximation$transform <- if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform
+      approximation$input_type <- "float32"
+      attr(result, "approximation") <- approximation
+      return(finish_float32_direct_result(result, out))
+    }
+    if (backend %in% c("cpu_nsg", "cuda_nsg")) {
+      if (!isTRUE(self_query)) {
+        stop("Native NSG is currently implemented for self-KNN searches only.", call. = FALSE)
+      }
+      use_cuda <- identical(backend, "cuda_nsg")
+      if (isTRUE(use_cuda) && !isTRUE(cuda_available())) {
+        stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
+      }
+      metric_inputs <- NULL
+      search_data <- data
+      refine_metric <- "euclidean"
+      if (metric %in% c("cosine", "correlation")) {
+        metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric, storage = "float")
+        search_data <- metric_inputs$data
+      } else if (identical(metric, "inner_product")) {
+        refine_metric <- "inner_product"
+      }
+      search_dim <- if (is_float32_matrix_input(search_data)) {
+        float32_matrix_dims(search_data, "data")
+      } else {
+        dim(search_data)
+      }
+      params <- native_nsg_params(
+        search_dim[[1L]],
+        search_dim[[2L]],
+        if (isTRUE(exclude_self)) k else max(1L, k - 1L),
+        metric = metric,
+        backend = if (isTRUE(use_cuda)) "cuda" else "cpu"
+      )
+      nonself_k <- if (isTRUE(exclude_self)) k else max(0L, k - 1L)
+      if (nonself_k < 1L) {
+        out <- list(
+          indices = matrix(seq_len(search_dim[[1L]]), search_dim[[1L]], 1L),
+          distances = matrix(0, search_dim[[1L]], 1L),
+          input_type = "float32",
+          input_layout = "trivial_self",
+          input_owns_data = FALSE,
+          float32_compatibility_conversion = FALSE
+        )
+        attr(out, "approximation") <- list(
+          seed_backend = "trivial_self",
+          candidate_columns = 0L,
+          seed_graph_k = 0L,
+          protected_seed_neighbors = 0L,
+          exact_mrng_prune = TRUE
+        )
+      } else {
+        out <- native_nsg_self_knn(
+          search_data,
+          k = nonself_k,
+          r = params$r,
+          graph_k = params$graph_k,
+          metric = refine_metric,
+          use_cuda = use_cuda,
+          n_threads = n_threads,
+          seed_backend = params$seed_backend %||% "exact"
+        )
+        if (!isTRUE(exclude_self)) {
+          out <- prepend_self_neighbor_column(out)
+        }
+      }
+      result <- finish_nn_result(out, backend, k, self_query, exact = FALSE, metric = metric)
+      if (!is.null(metric_inputs)) {
+        result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
+      }
+      approx <- attr(out, "approximation", exact = TRUE)
+      attr(result, "approximation") <- c(
+        list(
+          strategy = if (isTRUE(use_cuda)) "native_cuda_nsg_candidate_graph" else "native_cpu_nsg_candidate_graph",
+          backend = backend,
+          accelerator = if (isTRUE(use_cuda)) "cuda" else "cpu",
+          metric = metric,
+          input_type = "float32",
+          transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
+          r = as.integer(params$r),
+          graph_k = as.integer(params$graph_k),
+          requested_r = as.integer(params$requested_r),
+          requested_graph_k = as.integer(params$requested_graph_k),
+          requested_seed_backend = params$seed_backend %||% NA_character_,
+          seed_k = as.integer(params$seed_k %||% params$graph_k),
+          graph_k_cap = as.integer(params$graph_k_cap),
+          nsg_parameters_adjusted = !identical(as.integer(params$r), as.integer(params$requested_r)) ||
+            !identical(as.integer(params$graph_k), as.integer(params$requested_graph_k)),
+          tuning_policy = params$tuning_policy,
+          tuning_rule = params$tuning_rule,
+          tuning_large_k = isTRUE(params$tuning_large_k),
+          tuning_high_dim = isTRUE(params$tuning_high_dim),
+          tuning_source = params$tuning_source %||% "cpp"
+        ),
+        approx
+      )
+      return(finish_float32_direct_result(result, out))
+    }
+    if (backend %in% c("cpu_vamana", "cuda_vamana")) {
+      if (!isTRUE(self_query)) {
+        stop("Vamana is currently implemented for self-KNN searches only.", call. = FALSE)
+      }
+      use_cuda <- identical(backend, "cuda_vamana")
+      if (isTRUE(use_cuda) && !isTRUE(cuda_available())) {
+        stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
+      }
+      metric_inputs <- NULL
+      search_data <- data
+      refine_metric <- metric
+      if (metric %in% c("cosine", "correlation")) {
+        metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric, storage = "float")
+        search_data <- metric_inputs$data
+        refine_metric <- "euclidean"
+      }
+      search_dim <- if (is_float32_matrix_input(search_data)) {
+        float32_matrix_dims(search_data, "data")
+      } else {
+        dim(search_data)
+      }
+      nonself_k <- if (isTRUE(exclude_self)) k else max(0L, k - 1L)
+      params <- vamana_params(
+        search_dim[[1L]],
+        search_dim[[2L]],
+        if (nonself_k < 1L) 1L else nonself_k,
+        metric = metric,
+        backend = if (isTRUE(use_cuda)) "cuda" else "cpu"
+      )
+      if (nonself_k < 1L) {
+        out <- list(
+          indices = matrix(seq_len(search_dim[[1L]]), search_dim[[1L]], 1L),
+          distances = matrix(0, search_dim[[1L]], 1L),
+          input_type = "float32",
+          input_layout = "trivial_self",
+          input_owns_data = FALSE,
+          float32_compatibility_conversion = FALSE
+        )
+        attr(out, "approximation") <- list(
+          seed_backend = "trivial_self",
+          candidate_columns = 0L,
+          seed_search_l = 0L,
+          alpha = as.numeric(params$alpha),
+          protected_seed_neighbors = 0L,
+          exact_robust_prune = TRUE,
+          cuvs_vamana_note = "cuVS Vamana currently builds/serializes DiskANN-compatible graphs; faissR performs KNN refinement inside the candidate graph."
+        )
+      } else {
+        out <- vamana_self_knn(
+          search_data,
+          k = nonself_k,
+          r = params$r,
+          search_l = params$search_l,
+          alpha = params$alpha,
+          metric = refine_metric,
+          use_cuda = use_cuda,
+          n_threads = n_threads,
+          seed_backend = params$seed_backend %||% "exact"
+        )
+        if (!isTRUE(exclude_self)) {
+          out <- prepend_self_neighbor_column(out)
+        }
+      }
+      result <- finish_nn_result(out, backend, k, self_query, exact = FALSE, metric = metric)
+      if (!is.null(metric_inputs)) {
+        result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
+      }
+      approx <- attr(out, "approximation", exact = TRUE)
+      attr(result, "approximation") <- c(
+        list(
+          strategy = if (isTRUE(use_cuda)) "native_vamana_candidate_graph_cuda_refine" else "native_vamana_candidate_graph",
+          backend = backend,
+          accelerator = if (isTRUE(use_cuda)) "cuda" else "cpu",
+          metric = metric,
+          input_type = "float32",
+          transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
+          r = as.integer(params$r),
+          search_l = as.integer(params$search_l),
+          alpha = as.numeric(params$alpha),
+          requested_r = as.integer(params$requested_r),
+          requested_search_l = as.integer(params$requested_search_l),
+          requested_alpha = as.numeric(params$requested_alpha),
+          requested_seed_backend = params$seed_backend %||% NA_character_,
+          seed_k = as.integer(params$seed_k %||% params$search_l),
+          tuning_policy = params$tuning_policy,
+          tuning_rule = params$tuning_rule,
+          tuning_large_k = isTRUE(params$tuning_large_k),
+          tuning_high_dim = isTRUE(params$tuning_high_dim),
+          tuning_source = params$tuning_source %||% "cpp"
+        ),
+        approx
+      )
+      return(finish_float32_direct_result(result, out))
     }
     if (!backend %in% c("faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat",
                         "faiss_flat_l2", "faiss_flat_ip",
@@ -6441,13 +6682,26 @@ candidate_graph_hnsw_seed_knn <- function(data,
                                           n_threads = NULL) {
   metric <- normalize_nn_metric(metric)
   if (isTRUE(faiss_available())) {
-    out <- faiss_self_knn(
-      data,
-      k = k,
-      backend = "faiss_hnsw",
-      metric = metric,
-      n_threads = n_threads
-    )
+    out <- if (is_float32_matrix_input(data)) {
+      nn_compute(
+        data,
+        data,
+        k,
+        "faiss_hnsw",
+        points_missing = TRUE,
+        exclude_self = TRUE,
+        n_threads = n_threads,
+        metric = metric
+      )
+    } else {
+      faiss_self_knn(
+        data,
+        k = k,
+        backend = "faiss_hnsw",
+        metric = metric,
+        n_threads = n_threads
+      )
+    }
     attr(out, "seed_backend") <- "faiss_hnsw"
     return(out)
   }
@@ -6484,7 +6738,12 @@ nsg_prune_candidate_graph <- function(data,
   if (length(max_exact_work) != 1L || is.na(max_exact_work) || !is.finite(max_exact_work)) {
     max_exact_work <- 2e8
   }
-  graph_prune_candidate_graph_cpp(
+  prune_fun <- if (is_float32_matrix_input(data)) {
+    graph_prune_candidate_graph_float32_cpp
+  } else {
+    graph_prune_candidate_graph_cpp
+  }
+  prune_fun(
     data,
     seed_indices,
     as.integer(r),
@@ -6538,7 +6797,12 @@ vamana_robust_prune_candidate_graph <- function(data,
   if (length(max_exact_work) != 1L || is.na(max_exact_work) || !is.finite(max_exact_work)) {
     max_exact_work <- 2e8
   }
-  graph_prune_candidate_graph_cpp(
+  prune_fun <- if (is_float32_matrix_input(data)) {
+    graph_prune_candidate_graph_float32_cpp
+  } else {
+    graph_prune_candidate_graph_cpp
+  }
+  prune_fun(
     data,
     seed_indices,
     as.integer(r),
@@ -6581,9 +6845,30 @@ vamana_self_knn <- function(data,
     seed <- ann_seed
     seed_backend <- paste0("native_", attr(ann_seed, "seed_backend", exact = TRUE), "_seed")
   } else if (isTRUE(use_cuda) && identical(metric, "euclidean")) {
-    raw <- nn_cuda_cpp(data, data, as.integer(min(search_l + 1L, nrow(data))), FALSE)
+    raw <- if (is_float32_matrix_input(data)) {
+      nn_cuda_float32_cpp(data, data, as.integer(min(search_l + 1L, nrow(data))), FALSE)
+    } else {
+      nn_cuda_cpp(data, data, as.integer(min(search_l + 1L, nrow(data))), FALSE)
+    }
     seed <- drop_self_knn_result(raw, search_l)
     seed_backend <- "native_cuda_exact_seed"
+  } else if (is_float32_matrix_input(data)) {
+    seed_backend_name <- if (identical(metric, "inner_product")) "faiss_flat_ip" else "faiss_flat_l2"
+    seed <- nn_compute(
+      data,
+      data,
+      as.integer(search_l),
+      seed_backend_name,
+      points_missing = TRUE,
+      exclude_self = TRUE,
+      n_threads = n_threads,
+      metric = metric
+    )
+    seed_backend <- if (isTRUE(use_cuda)) {
+      paste0("native_", seed_backend_name, "_seed")
+    } else {
+      paste0("native_", seed_backend_name, "_seed")
+    }
   } else {
     seed <- nn_cpp(
       data,
@@ -6608,21 +6893,42 @@ vamana_self_knn <- function(data,
     protect_top = k
   )
   if (isTRUE(use_cuda)) {
-    refined <- row_candidate_knn_cuda_cpp(data, graph, as.integer(k), metric)
+    refined <- if (is_float32_matrix_input(data)) {
+      row_candidate_knn_cuda_float32_cpp(data, graph, as.integer(k), metric)
+    } else {
+      row_candidate_knn_cuda_cpp(data, graph, as.integer(k), metric)
+    }
     out <- list(indices = refined$indices, distances = refined$distances)
+    for (field in c("input_type", "input_layout", "input_owns_data", "float32_compatibility_conversion")) {
+      if (!is.null(refined[[field]])) out[[field]] <- refined[[field]]
+    }
     attr(out, "cuda_kernel") <- "row_candidate_knn"
   } else {
-    out <- candidate_knn_cpp(
-      data,
-      data,
-      graph,
-      as.integer(k),
-      metric,
-      FALSE,
-      TRUE,
-      TRUE,
-      as.integer(normalize_nn_threads(n_threads))
-    )
+    out <- if (is_float32_matrix_input(data)) {
+      candidate_knn_float32_cpp(
+        data,
+        data,
+        graph,
+        as.integer(k),
+        metric,
+        FALSE,
+        TRUE,
+        TRUE,
+        as.integer(normalize_nn_threads(n_threads))
+      )
+    } else {
+      candidate_knn_cpp(
+        data,
+        data,
+        graph,
+        as.integer(k),
+        metric,
+        FALSE,
+        TRUE,
+        TRUE,
+        as.integer(normalize_nn_threads(n_threads))
+      )
+    }
   }
   attr(out, "approximation") <- list(
     seed_backend = seed_backend,
@@ -6669,9 +6975,30 @@ native_nsg_self_knn <- function(data,
     seed <- ann_seed
     seed_backend <- paste0("native_", attr(ann_seed, "seed_backend", exact = TRUE), "_seed")
   } else if (isTRUE(use_cuda) && identical(metric, "euclidean")) {
-    raw <- nn_cuda_cpp(data, data, as.integer(graph_k + 1L), FALSE)
+    raw <- if (is_float32_matrix_input(data)) {
+      nn_cuda_float32_cpp(data, data, as.integer(graph_k + 1L), FALSE)
+    } else {
+      nn_cuda_cpp(data, data, as.integer(graph_k + 1L), FALSE)
+    }
     seed <- drop_self_knn_result(raw, graph_k)
     seed_backend <- "native_cuda_exact_seed"
+  } else if (is_float32_matrix_input(data)) {
+    seed_backend_name <- if (identical(metric, "inner_product")) "faiss_flat_ip" else "faiss_flat_l2"
+    seed <- nn_compute(
+      data,
+      data,
+      as.integer(graph_k),
+      seed_backend_name,
+      points_missing = TRUE,
+      exclude_self = TRUE,
+      n_threads = n_threads,
+      metric = metric
+    )
+    seed_backend <- if (identical(metric, "inner_product")) {
+      "native_faiss_flat_ip_seed"
+    } else {
+      "native_faiss_flat_l2_seed"
+    }
   } else {
     seed <- nn_cpp(
       data,
@@ -6701,26 +7028,52 @@ native_nsg_self_knn <- function(data,
     protect_top = k
   )
   if (isTRUE(use_cuda)) {
-    refined <- row_candidate_knn_cuda_cpp(
-      data,
-      graph,
-      as.integer(k),
-      metric
-    )
+    refined <- if (is_float32_matrix_input(data)) {
+      row_candidate_knn_cuda_float32_cpp(
+        data,
+        graph,
+        as.integer(k),
+        metric
+      )
+    } else {
+      row_candidate_knn_cuda_cpp(
+        data,
+        graph,
+        as.integer(k),
+        metric
+      )
+    }
     out <- list(indices = refined$indices, distances = refined$distances)
+    for (field in c("input_type", "input_layout", "input_owns_data", "float32_compatibility_conversion")) {
+      if (!is.null(refined[[field]])) out[[field]] <- refined[[field]]
+    }
     attr(out, "cuda_kernel") <- "row_candidate_knn"
   } else {
-    out <- candidate_knn_cpp(
-      data,
-      data,
-      graph,
-      as.integer(k),
-      metric,
-      FALSE,
-      TRUE,
-      TRUE,
-      as.integer(normalize_nn_threads(n_threads))
-    )
+    out <- if (is_float32_matrix_input(data)) {
+      candidate_knn_float32_cpp(
+        data,
+        data,
+        graph,
+        as.integer(k),
+        metric,
+        FALSE,
+        TRUE,
+        TRUE,
+        as.integer(normalize_nn_threads(n_threads))
+      )
+    } else {
+      candidate_knn_cpp(
+        data,
+        data,
+        graph,
+        as.integer(k),
+        metric,
+        FALSE,
+        TRUE,
+        TRUE,
+        as.integer(normalize_nn_threads(n_threads))
+      )
+    }
   }
   attr(out, "approximation") <- list(
     seed_backend = seed_backend,
@@ -7155,11 +7508,49 @@ rcpphnsw_knn <- function(data,
 }
 
 nndescent_pool_size <- function(n, k) {
-  as.integer(nn_tune_cpu_nndescent_cpp(as.integer(n), as.integer(k))$pool_size)
+  as.integer(cpu_nndescent_params(n, k)$pool_size)
 }
 
 nndescent_iterations <- function(n, k) {
-  as.integer(nn_tune_cpu_nndescent_cpp(as.integer(n), as.integer(k))$n_iters)
+  as.integer(cpu_nndescent_params(n, k)$n_iters)
+}
+
+cpu_nndescent_params <- function(n, k) {
+  n <- as.integer(n)
+  k <- as.integer(k)
+  tune <- nn_tune_cpu_nndescent_cpp(n, k)
+  n_cap <- max(1L, n - 1L)
+  manual <- nn_any_options(c(
+    "cpu_nndescent_pool_size",
+    "cpu_nndescent_n_iters",
+    "cpu_nndescent_max_candidates",
+    "cpu_nndescent_n_random_projections"
+  ))
+  requested_pool_size <- nn_option_int_or_na("cpu_nndescent_pool_size")
+  requested_n_iters <- nn_option_int_or_na("cpu_nndescent_n_iters")
+  requested_max_candidates <- nn_option_int_or_na("cpu_nndescent_max_candidates")
+  requested_n_random_projections <- nn_option_int_or_na("cpu_nndescent_n_random_projections")
+  if (!is.na(requested_pool_size)) {
+    tune$pool_size <- as.integer(max(k, min(n_cap, requested_pool_size)))
+  }
+  if (!is.na(requested_n_iters)) {
+    tune$n_iters <- as.integer(max(0L, min(100L, requested_n_iters)))
+  }
+  if (!is.na(requested_max_candidates)) {
+    tune$max_candidates <- as.integer(max(tune$pool_size, min(n_cap, requested_max_candidates)))
+  }
+  if (!is.na(requested_n_random_projections)) {
+    tune$n_random_projections <- as.integer(max(1L, min(256L, requested_n_random_projections)))
+  }
+  if (isTRUE(manual)) {
+    tune$tuning_policy <- "manual_options"
+    tune$tuning_rule <- "manual_cpu_nndescent"
+  }
+  tune$requested_pool_size <- if (is.na(requested_pool_size)) as.integer(tune$pool_size) else as.integer(requested_pool_size)
+  tune$requested_n_iters <- if (is.na(requested_n_iters)) as.integer(tune$n_iters) else as.integer(requested_n_iters)
+  tune$requested_max_candidates <- if (is.na(requested_max_candidates)) as.integer(tune$max_candidates) else as.integer(requested_max_candidates)
+  tune$requested_n_random_projections <- if (is.na(requested_n_random_projections)) as.integer(tune$n_random_projections) else as.integer(requested_n_random_projections)
+  tune
 }
 
 nndescent_self_knn <- function(data,
@@ -7198,23 +7589,38 @@ nndescent_self_knn <- function(data,
       metric = metric
     ))
   }
-  tune <- nn_tune_cpu_nndescent_cpp(as.integer(n), as.integer(k))
+  tune <- cpu_nndescent_params(n, k)
   pool_size <- as.integer(tune$pool_size)
   n_iters <- as.integer(tune$n_iters)
   max_candidates <- as.integer(tune$max_candidates)
   n_random_projections <- as.integer(tune$n_random_projections)
-  out <- nndescent_self_knn_cpp(
-    data,
-    as.integer(k),
-    as.integer(pool_size),
-    as.integer(n_iters),
-    as.integer(max_candidates),
-    as.integer(n_random_projections),
-    as.integer(seed),
-    TRUE,
-    as.integer(max(1L, min(8L, n_threads))),
-    metric
-  )
+  out <- if (is_float32_matrix_input(data)) {
+    nndescent_self_knn_float32_cpp(
+      data,
+      as.integer(k),
+      as.integer(pool_size),
+      as.integer(n_iters),
+      as.integer(max_candidates),
+      as.integer(n_random_projections),
+      as.integer(seed),
+      TRUE,
+      as.integer(max(1L, min(8L, n_threads))),
+      metric
+    )
+  } else {
+    nndescent_self_knn_cpp(
+      data,
+      as.integer(k),
+      as.integer(pool_size),
+      as.integer(n_iters),
+      as.integer(max_candidates),
+      as.integer(n_random_projections),
+      as.integer(seed),
+      TRUE,
+      as.integer(max(1L, min(8L, n_threads))),
+      metric
+    )
+  }
   params <- list(
     strategy = "native_cpu_nndescent",
     backend = "cpu",
@@ -7222,6 +7628,10 @@ nndescent_self_knn <- function(data,
     n_iters = n_iters,
     max_candidates = max_candidates,
     n_random_projections = n_random_projections,
+    requested_pool_size = as.integer(tune$requested_pool_size %||% pool_size),
+    requested_n_iters = as.integer(tune$requested_n_iters %||% n_iters),
+    requested_max_candidates = as.integer(tune$requested_max_candidates %||% max_candidates),
+    requested_n_random_projections = as.integer(tune$requested_n_random_projections %||% n_random_projections),
     reverse_candidates = "rank_ordered",
     seed_initialization = out$seed_initialization %||% "random_projection_window_plus_row_fill",
     candidate_layout = out$candidate_layout %||% "flat_row_major_graph",

@@ -491,6 +491,24 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// graph_prune_candidate_graph_float32_cpp
+IntegerMatrix graph_prune_candidate_graph_float32_cpp(SEXP data, IntegerMatrix seed_indices, int r, double alpha, std::string metric, int protect_top, double max_exact_work, bool robust_vamana);
+RcppExport SEXP _faissR_graph_prune_candidate_graph_float32_cpp(SEXP dataSEXP, SEXP seed_indicesSEXP, SEXP rSEXP, SEXP alphaSEXP, SEXP metricSEXP, SEXP protect_topSEXP, SEXP max_exact_workSEXP, SEXP robust_vamanaSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< IntegerMatrix >::type seed_indices(seed_indicesSEXP);
+    Rcpp::traits::input_parameter< int >::type r(rSEXP);
+    Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< int >::type protect_top(protect_topSEXP);
+    Rcpp::traits::input_parameter< double >::type max_exact_work(max_exact_workSEXP);
+    Rcpp::traits::input_parameter< bool >::type robust_vamana(robust_vamanaSEXP);
+    rcpp_result_gen = Rcpp::wrap(graph_prune_candidate_graph_float32_cpp(data, seed_indices, r, alpha, metric, protect_top, max_exact_work, robust_vamana));
+    return rcpp_result_gen;
+END_RCPP
+}
 // landmark_candidate_knn_cpp
 List landmark_candidate_knn_cpp(NumericMatrix data, IntegerMatrix projection_indices, int k, int bucket_cols, int query_cols, bool parallel, int cores);
 RcppExport SEXP _faissR_landmark_candidate_knn_cpp(SEXP dataSEXP, SEXP projection_indicesSEXP, SEXP kSEXP, SEXP bucket_colsSEXP, SEXP query_colsSEXP, SEXP parallelSEXP, SEXP coresSEXP) {
@@ -564,6 +582,26 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nndescent_self_knn_float32_cpp
+List nndescent_self_knn_float32_cpp(SEXP data, int k, int pool_size, int n_iters, int max_candidates, int n_random_projections, int seed, bool parallel, int cores, std::string metric);
+RcppExport SEXP _faissR_nndescent_self_knn_float32_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP pool_sizeSEXP, SEXP n_itersSEXP, SEXP max_candidatesSEXP, SEXP n_random_projectionsSEXP, SEXP seedSEXP, SEXP parallelSEXP, SEXP coresSEXP, SEXP metricSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type pool_size(pool_sizeSEXP);
+    Rcpp::traits::input_parameter< int >::type n_iters(n_itersSEXP);
+    Rcpp::traits::input_parameter< int >::type max_candidates(max_candidatesSEXP);
+    Rcpp::traits::input_parameter< int >::type n_random_projections(n_random_projectionsSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type parallel(parallelSEXP);
+    Rcpp::traits::input_parameter< int >::type cores(coresSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    rcpp_result_gen = Rcpp::wrap(nndescent_self_knn_float32_cpp(data, k, pool_size, n_iters, max_candidates, n_random_projections, seed, parallel, cores, metric));
+    return rcpp_result_gen;
+END_RCPP
+}
 // ivf_self_knn_cpp
 List ivf_self_knn_cpp(NumericMatrix data, int k, int nlist, int nprobe, int seed, bool parallel, int cores);
 RcppExport SEXP _faissR_ivf_self_knn_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP nlistSEXP, SEXP nprobeSEXP, SEXP seedSEXP, SEXP parallelSEXP, SEXP coresSEXP) {
@@ -629,6 +667,25 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type parallel(parallelSEXP);
     Rcpp::traits::input_parameter< int >::type cores(coresSEXP);
     rcpp_result_gen = Rcpp::wrap(candidate_knn_cpp(data, points, candidate_indices, k, method, square, exclude_self, parallel, cores));
+    return rcpp_result_gen;
+END_RCPP
+}
+// candidate_knn_float32_cpp
+List candidate_knn_float32_cpp(SEXP data, SEXP points, IntegerMatrix candidate_indices, int k, std::string method, bool square, bool exclude_self, bool parallel, int cores);
+RcppExport SEXP _faissR_candidate_knn_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP candidate_indicesSEXP, SEXP kSEXP, SEXP methodSEXP, SEXP squareSEXP, SEXP exclude_selfSEXP, SEXP parallelSEXP, SEXP coresSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< IntegerMatrix >::type candidate_indices(candidate_indicesSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< std::string >::type method(methodSEXP);
+    Rcpp::traits::input_parameter< bool >::type square(squareSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
+    Rcpp::traits::input_parameter< bool >::type parallel(parallelSEXP);
+    Rcpp::traits::input_parameter< int >::type cores(coresSEXP);
+    rcpp_result_gen = Rcpp::wrap(candidate_knn_float32_cpp(data, points, candidate_indices, k, method, square, exclude_self, parallel, cores));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1008,6 +1065,20 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nn_cuda_float32_cpp
+List nn_cuda_float32_cpp(SEXP data, SEXP points, int k, bool square);
+RcppExport SEXP _faissR_nn_cuda_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP squareSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< bool >::type square(squareSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_cuda_float32_cpp(data, points, k, square));
+    return rcpp_result_gen;
+END_RCPP
+}
 // landmark_candidate_knn_cuda_cpp
 List landmark_candidate_knn_cuda_cpp(NumericMatrix data, IntegerMatrix projection_indices, int k, int bucket_cols, int query_cols);
 RcppExport SEXP _faissR_landmark_candidate_knn_cuda_cpp(SEXP dataSEXP, SEXP projection_indicesSEXP, SEXP kSEXP, SEXP bucket_colsSEXP, SEXP query_colsSEXP) {
@@ -1034,6 +1105,20 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
     Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
     rcpp_result_gen = Rcpp::wrap(row_candidate_knn_cuda_cpp(data, candidate_indices, k, metric));
+    return rcpp_result_gen;
+END_RCPP
+}
+// row_candidate_knn_cuda_float32_cpp
+List row_candidate_knn_cuda_float32_cpp(SEXP data, IntegerMatrix candidate_indices, int k, std::string metric);
+RcppExport SEXP _faissR_row_candidate_knn_cuda_float32_cpp(SEXP dataSEXP, SEXP candidate_indicesSEXP, SEXP kSEXP, SEXP metricSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< IntegerMatrix >::type candidate_indices(candidate_indicesSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    rcpp_result_gen = Rcpp::wrap(row_candidate_knn_cuda_float32_cpp(data, candidate_indices, k, metric));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1958,14 +2043,17 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nndescent_candidate_matrix_adaptive_cpp", (DL_FUNC) &_faissR_nndescent_candidate_matrix_adaptive_cpp, 6},
     {"_faissR_nndescent_candidate_matrix_adaptive_subset_cpp", (DL_FUNC) &_faissR_nndescent_candidate_matrix_adaptive_subset_cpp, 5},
     {"_faissR_graph_prune_candidate_graph_cpp", (DL_FUNC) &_faissR_graph_prune_candidate_graph_cpp, 8},
+    {"_faissR_graph_prune_candidate_graph_float32_cpp", (DL_FUNC) &_faissR_graph_prune_candidate_graph_float32_cpp, 8},
     {"_faissR_landmark_candidate_knn_cpp", (DL_FUNC) &_faissR_landmark_candidate_knn_cpp, 7},
     {"_faissR_landmark_candidate_knn_subset_cpp", (DL_FUNC) &_faissR_landmark_candidate_knn_subset_cpp, 8},
     {"_faissR_landmark_projection_knn_approx_cpp", (DL_FUNC) &_faissR_landmark_projection_knn_approx_cpp, 8},
     {"_faissR_nndescent_self_knn_cpp", (DL_FUNC) &_faissR_nndescent_self_knn_cpp, 10},
+    {"_faissR_nndescent_self_knn_float32_cpp", (DL_FUNC) &_faissR_nndescent_self_knn_float32_cpp, 10},
     {"_faissR_ivf_self_knn_cpp", (DL_FUNC) &_faissR_ivf_self_knn_cpp, 7},
     {"_faissR_grid2d_self_knn_cpp", (DL_FUNC) &_faissR_grid2d_self_knn_cpp, 6},
     {"_faissR_grid3d_self_knn_cpp", (DL_FUNC) &_faissR_grid3d_self_knn_cpp, 6},
     {"_faissR_candidate_knn_cpp", (DL_FUNC) &_faissR_candidate_knn_cpp, 9},
+    {"_faissR_candidate_knn_float32_cpp", (DL_FUNC) &_faissR_candidate_knn_float32_cpp, 9},
     {"_faissR_nn_auto_select_backend_cpp", (DL_FUNC) &_faissR_nn_auto_select_backend_cpp, 28},
     {"_faissR_nn_tune_faiss_ivf_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_ivf_cpp, 6},
     {"_faissR_nn_tune_faiss_pq_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_pq_cpp, 6},
@@ -1988,8 +2076,10 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_cuda_available_cpp", (DL_FUNC) &_faissR_cuda_available_cpp, 0},
     {"_faissR_cuda_device_info_json_cpp", (DL_FUNC) &_faissR_cuda_device_info_json_cpp, 0},
     {"_faissR_nn_cuda_cpp", (DL_FUNC) &_faissR_nn_cuda_cpp, 4},
+    {"_faissR_nn_cuda_float32_cpp", (DL_FUNC) &_faissR_nn_cuda_float32_cpp, 4},
     {"_faissR_landmark_candidate_knn_cuda_cpp", (DL_FUNC) &_faissR_landmark_candidate_knn_cuda_cpp, 5},
     {"_faissR_row_candidate_knn_cuda_cpp", (DL_FUNC) &_faissR_row_candidate_knn_cuda_cpp, 4},
+    {"_faissR_row_candidate_knn_cuda_float32_cpp", (DL_FUNC) &_faissR_row_candidate_knn_cuda_float32_cpp, 4},
     {"_faissR_cuda_grid_self_knn_cpp", (DL_FUNC) &_faissR_cuda_grid_self_knn_cpp, 4},
     {"_faissR_cuvs_available_cpp", (DL_FUNC) &_faissR_cuvs_available_cpp, 0},
     {"_faissR_cuvs_info_json_cpp", (DL_FUNC) &_faissR_cuvs_info_json_cpp, 0},

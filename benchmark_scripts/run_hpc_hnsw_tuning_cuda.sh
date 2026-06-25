@@ -3,9 +3,8 @@
 #SBATCH --account=l40sfree
 #SBATCH --partition=l40s
 #SBATCH --nodes=1
-#SBATCH --ntasks=1
+#SBATCH --ntasks=2
 #SBATCH --gres=gpu:l40s:1
-#SBATCH --cpus-per-task=12
 #SBATCH --time=48:00:00
 #SBATCH --job-name="faissR_HNSW_CUDA"
 #SBATCH --chdir=/scratch/firenze/NN
@@ -14,16 +13,18 @@
 
 set -euo pipefail
 
-# Deprecated CUDA HNSW tuning-grid launcher.
-#
-# RAPIDS cuVS HNSW is a CAGRA-to-hnswlib host-wrapper path, not a pure
-# all-GPU HNSW implementation. faissR therefore reports backend="cuda",
-# method="hnsw" as unsupported. Use CUDA method="cagra" for GPU graph search
-# benchmarks, or run run_hpc_hnsw_tuning_cpu12.sh for CPU FAISS HNSW tuning.
 
-echo "CUDA HNSW tuning is disabled: cuVS HNSW is a host-wrapper path, not pure all-GPU HNSW." >&2
-echo "Use backend=cuda, method=cagra for CUDA graph search, or run CPU HNSW tuning." >&2
-exit 1
+# CUDA faissR HNSW tuning benchmark using precomputed exact references.
+#
+# First run, once, to create references in each dataset folder:
+#   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_precompute_exact_references_cpu12.sh
+#
+# Then submit this script with:
+#   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_hnsw_tuning_cuda.sh
+#
+# The job scans float32 .RData files, uses explicit backend="cuda",
+# method="hnsw", Euclidean distance, k=10,15,50,100, and writes
+# recommendation tables for target recall 0.90, 0.95, and 0.99.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 export DATA_ROOT="${DATA_ROOT:-${BASE_DIR}/Data}"
@@ -33,11 +34,14 @@ if command -v readlink >/dev/null 2>&1; then
 fi
 SUBMIT_SCRIPT_DIR="$(cd "$(dirname "${SUBMIT_SCRIPT}")" && pwd)"
 export SCRIPT_DIR="${SCRIPT_DIR:-${SUBMIT_SCRIPT_DIR}}"
+export METHOD="hnsw"
+export BACKEND="cuda"
 export THREADS_CPU="${THREADS_CPU:-12}"
+export THREAD_VALUES="${THREAD_VALUES:-${THREADS_CPU}}"
 export TIMEOUT="${TIMEOUT:-600}"
 export QUALITY_N="${QUALITY_N:-256}"
+export SEED="${SEED:-4}"
 export GRID_LEVEL="${GRID_LEVEL:-standard}"
-export CUDA_BUILD_ALGOS="${CUDA_BUILD_ALGOS:-auto}"
 export OUT_DIR="${OUT_DIR:-${BASE_DIR}/faissR_HNSW_TUNING_CUDA_$(date +%Y%m%d_%H%M%S)}"
 export LOG_DIR="${LOG_DIR:-${BASE_DIR}/benchmark_logs}"
 export SINGULARITY_IMAGE="${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda.sif}"
@@ -47,7 +51,7 @@ export R_BIN="${R_BIN:-Rscript}"
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
 export K_VALUES="${K_VALUES:-10,15,50,100}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
-export OUTPUT="${OUTPUT:-float}"
+export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
 
 export OMP_NUM_THREADS="${THREADS_CPU}"
 export OPENBLAS_NUM_THREADS="${THREADS_CPU}"
@@ -85,7 +89,7 @@ resolve_script() {
 }
 
 MANIFEST_SCRIPT="$(resolve_script make_hpc_float32_manifest.R)"
-BENCH_SCRIPT="$(resolve_script benchmark_hnsw_tuning_grid.R)"
+BENCH_SCRIPT="$(resolve_script benchmark_hnsw_tuning_from_reference.R)"
 MANIFEST="${MANIFEST:-${OUT_DIR}/float32_dataset_manifest.csv}"
 
 RUNNER=()
@@ -98,28 +102,15 @@ fi
   echo "SUBMIT_SCRIPT_DIR=${SUBMIT_SCRIPT_DIR}"
   echo "MANIFEST_SCRIPT=${MANIFEST_SCRIPT}"
   echo "BENCH_SCRIPT=${BENCH_SCRIPT}"
+  echo "METHOD=${METHOD}"
+  echo "BACKEND=${BACKEND}"
+  echo "QUALITY_N=${QUALITY_N}"
+  echo "SEED=${SEED}"
   echo "[$(date --iso-8601=seconds)] building float32 manifest"
-  "${RUNNER[@]}" "${R_BIN}" "${MANIFEST_SCRIPT}" \
-    --data_root="${DATA_ROOT}" \
-    --out="${MANIFEST}" \
-    --datasets="${DATASETS}"
+  "${RUNNER[@]}" "${R_BIN}" "${MANIFEST_SCRIPT}"     --data_root="${DATA_ROOT}"     --out="${MANIFEST}"     --datasets="${DATASETS}"
 
-  echo "[$(date --iso-8601=seconds)] running CUDA HNSW tuning grid"
-  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}" \
-    --manifest="${MANIFEST}" \
-    --out_dir="${OUT_DIR}" \
-    --datasets="${DATASETS}" \
-    --backend=cuda \
-    --k_values="${K_VALUES}" \
-    --target_recalls="${TARGET_RECALLS}" \
-    --threads="${THREADS_CPU}" \
-    --timeout="${TIMEOUT}" \
-    --quality_n="${QUALITY_N}" \
-    --output="${OUTPUT}" \
-    --grid_level="${GRID_LEVEL}" \
-    --cuda_build_algos="${CUDA_BUILD_ALGOS}" \
-    --reference_backend=cuda \
-    --resume=TRUE
+  echo "[$(date --iso-8601=seconds)] running CUDA HNSW tuning from precomputed references"
+  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --backend="${BACKEND}"     --k_values="${K_VALUES}"     --target_recalls="${TARGET_RECALLS}"     --threads="${THREADS_CPU}"     --thread_values="${THREAD_VALUES}"     --timeout="${TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --output_values="${OUTPUT_VALUES}"     --grid_level="${GRID_LEVEL}"     --resume=TRUE
 
   echo "DONE: ${OUT_DIR}"
 } 2>&1 | tee -a "${OUT_DIR}/hnsw_tuning_cuda.log"

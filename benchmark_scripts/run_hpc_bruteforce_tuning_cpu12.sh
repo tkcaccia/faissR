@@ -2,27 +2,26 @@
 
 #SBATCH --account=immunology
 #SBATCH --partition=ada
-#SBATCH --nodes=1
-#SBATCH --ntasks=12
+#SBATCH --nodes=12
 #SBATCH --time=48:00:00
-#SBATCH --job-name="faissR_HNSW_CPU12"
+#SBATCH --job-name="faissR_BRUTEFORCE_CPU12"
 #SBATCH --chdir=/scratch/firenze/NN
-#SBATCH --output=/scratch/firenze/NN/benchmark_logs/faissR_hnsw_cpu12_%j.out
-#SBATCH --error=/scratch/firenze/NN/benchmark_logs/faissR_hnsw_cpu12_%j.err
+#SBATCH --output=/scratch/firenze/NN/benchmark_logs/faissR_bruteforce_cpu12_%j.out
+#SBATCH --error=/scratch/firenze/NN/benchmark_logs/faissR_bruteforce_cpu12_%j.err
 
 set -euo pipefail
 
 
-# CPU-only faissR HNSW tuning benchmark using precomputed exact references.
+# CPU-only faissR BRUTEFORCE tuning benchmark using precomputed exact references.
 #
 # First run, once, to create references in each dataset folder:
 #   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_precompute_exact_references_cpu12.sh
 #
 # Then submit this script with:
-#   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_hnsw_tuning_cpu12.sh
+#   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_bruteforce_tuning_cpu12.sh
 #
 # The job scans float32 .RData files, uses explicit backend="cpu",
-# method="hnsw", Euclidean distance, k=10,15,50,100, and writes
+# method="bruteforce", Euclidean distance, k=10,15,50,100, and writes
 # recommendation tables for target recall 0.90, 0.95, and 0.99.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
@@ -33,7 +32,7 @@ if command -v readlink >/dev/null 2>&1; then
 fi
 SUBMIT_SCRIPT_DIR="$(cd "$(dirname "${SUBMIT_SCRIPT}")" && pwd)"
 export SCRIPT_DIR="${SCRIPT_DIR:-${SUBMIT_SCRIPT_DIR}}"
-export METHOD="hnsw"
+export METHOD="bruteforce"
 export BACKEND="cpu"
 export THREADS_CPU="${THREADS_CPU:-12}"
 export THREAD_VALUES="${THREAD_VALUES:-${THREADS_CPU}}"
@@ -41,7 +40,7 @@ export TIMEOUT="${TIMEOUT:-600}"
 export QUALITY_N="${QUALITY_N:-256}"
 export SEED="${SEED:-4}"
 export GRID_LEVEL="${GRID_LEVEL:-standard}"
-export OUT_DIR="${OUT_DIR:-${BASE_DIR}/faissR_HNSW_TUNING_CPU12_$(date +%Y%m%d_%H%M%S)}"
+export OUT_DIR="${OUT_DIR:-${BASE_DIR}/faissR_BRUTEFORCE_TUNING_CPU12_$(date +%Y%m%d_%H%M%S)}"
 export LOG_DIR="${LOG_DIR:-${BASE_DIR}/benchmark_logs}"
 export SINGULARITY_IMAGE="${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda.sif}"
 export SINGULARITY_GPU_FLAG="${SINGULARITY_GPU_FLAG:-}"
@@ -88,7 +87,7 @@ resolve_script() {
 }
 
 MANIFEST_SCRIPT="$(resolve_script make_hpc_float32_manifest.R)"
-BENCH_SCRIPT="$(resolve_script benchmark_hnsw_tuning_from_reference.R)"
+BENCH_SCRIPT="$(resolve_script benchmark_bruteforce_tuning_from_reference.R)"
 MANIFEST="${MANIFEST:-${OUT_DIR}/float32_dataset_manifest.csv}"
 
 RUNNER=()
@@ -108,8 +107,8 @@ fi
   echo "[$(date --iso-8601=seconds)] building float32 manifest"
   "${RUNNER[@]}" "${R_BIN}" "${MANIFEST_SCRIPT}"     --data_root="${DATA_ROOT}"     --out="${MANIFEST}"     --datasets="${DATASETS}"
 
-  echo "[$(date --iso-8601=seconds)] running CPU-only HNSW tuning from precomputed references"
+  echo "[$(date --iso-8601=seconds)] running CPU-only BRUTEFORCE tuning from precomputed references"
   "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --backend="${BACKEND}"     --k_values="${K_VALUES}"     --target_recalls="${TARGET_RECALLS}"     --threads="${THREADS_CPU}"     --thread_values="${THREAD_VALUES}"     --timeout="${TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --output_values="${OUTPUT_VALUES}"     --grid_level="${GRID_LEVEL}"     --resume=TRUE
 
   echo "DONE: ${OUT_DIR}"
-} 2>&1 | tee -a "${OUT_DIR}/hnsw_tuning_cpu12.log"
+} 2>&1 | tee -a "${OUT_DIR}/bruteforce_tuning_cpu12.log"

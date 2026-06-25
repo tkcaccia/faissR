@@ -12,6 +12,10 @@ List cuda_nn_impl(NumericMatrix data,
                   NumericMatrix points,
                   int k,
                   bool square);
+List cuda_nn_float32_impl(SEXP data,
+                          SEXP points,
+                          int k,
+                          bool square);
 List cuda_landmark_candidate_knn_impl(NumericMatrix data,
                                       IntegerMatrix projection_indices,
                                       int k,
@@ -21,6 +25,10 @@ List cuda_row_candidate_knn_impl(NumericMatrix data,
                                  IntegerMatrix candidate_indices,
                                  int k,
                                  std::string metric);
+List cuda_row_candidate_knn_float32_impl(SEXP data,
+                                         IntegerMatrix candidate_indices,
+                                         int k,
+                                         std::string metric);
 List cuda_grid_self_knn_impl(NumericMatrix data,
                              int k,
                              int bins_per_dim,
@@ -45,6 +53,14 @@ List nn_cuda_cpp(NumericMatrix data,
 }
 
 // [[Rcpp::export]]
+List nn_cuda_float32_cpp(SEXP data,
+                         SEXP points,
+                         int k,
+                         bool square) {
+  return cuda_nn_float32_impl(data, points, k, square);
+}
+
+// [[Rcpp::export]]
 List landmark_candidate_knn_cuda_cpp(NumericMatrix data,
                                      IntegerMatrix projection_indices,
                                      int k,
@@ -61,6 +77,14 @@ List row_candidate_knn_cuda_cpp(NumericMatrix data,
                                 int k,
                                 std::string metric) {
   return cuda_row_candidate_knn_impl(data, candidate_indices, k, metric);
+}
+
+// [[Rcpp::export]]
+List row_candidate_knn_cuda_float32_cpp(SEXP data,
+                                        IntegerMatrix candidate_indices,
+                                        int k,
+                                        std::string metric) {
+  return cuda_row_candidate_knn_float32_impl(data, candidate_indices, k, metric);
 }
 
 // [[Rcpp::export]]

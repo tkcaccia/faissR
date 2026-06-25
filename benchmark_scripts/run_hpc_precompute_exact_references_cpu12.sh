@@ -3,27 +3,21 @@
 #SBATCH --account=immunology
 #SBATCH --partition=ada
 #SBATCH --nodes=1
-#SBATCH --ntasks=12
+#SBATCH --ntasks=40
 #SBATCH --time=48:00:00
-#SBATCH --job-name="faissR_HNSW_CPU12"
+#SBATCH --job-name="faissR_REF_CPU12"
 #SBATCH --chdir=/scratch/firenze/NN
-#SBATCH --output=/scratch/firenze/NN/benchmark_logs/faissR_hnsw_cpu12_%j.out
-#SBATCH --error=/scratch/firenze/NN/benchmark_logs/faissR_hnsw_cpu12_%j.err
+#SBATCH --output=/scratch/firenze/NN/benchmark_logs/faissR_ref_cpu12_%j.out
+#SBATCH --error=/scratch/firenze/NN/benchmark_logs/faissR_ref_cpu12_%j.err
 
 set -euo pipefail
 
-
-# CPU-only faissR HNSW tuning benchmark using precomputed exact references.
+# CPU-only exact-reference precompute for faissR tuning benchmarks.
 #
-# First run, once, to create references in each dataset folder:
-#   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_precompute_exact_references_cpu12.sh
+# This writes one reference file into each dataset folder:
+#   faissR_exact_reference_euclidean_k<K>_q<QUALITY_N>_seed<SEED>.RData
 #
-# Then submit this script with:
-#   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_hnsw_tuning_cpu12.sh
-#
-# The job scans float32 .RData files, uses explicit backend="cpu",
-# method="hnsw", Euclidean distance, k=10,15,50,100, and writes
-# recommendation tables for target recall 0.90, 0.95, and 0.99.
+# Run this once before method-specific tuning jobs.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 export DATA_ROOT="${DATA_ROOT:-${BASE_DIR}/Data}"
@@ -33,15 +27,11 @@ if command -v readlink >/dev/null 2>&1; then
 fi
 SUBMIT_SCRIPT_DIR="$(cd "$(dirname "${SUBMIT_SCRIPT}")" && pwd)"
 export SCRIPT_DIR="${SCRIPT_DIR:-${SUBMIT_SCRIPT_DIR}}"
-export METHOD="hnsw"
-export BACKEND="cpu"
 export THREADS_CPU="${THREADS_CPU:-12}"
-export THREAD_VALUES="${THREAD_VALUES:-${THREADS_CPU}}"
-export TIMEOUT="${TIMEOUT:-600}"
+export REFERENCE_TIMEOUT="${REFERENCE_TIMEOUT:-1800}"
 export QUALITY_N="${QUALITY_N:-256}"
 export SEED="${SEED:-4}"
-export GRID_LEVEL="${GRID_LEVEL:-standard}"
-export OUT_DIR="${OUT_DIR:-${BASE_DIR}/faissR_HNSW_TUNING_CPU12_$(date +%Y%m%d_%H%M%S)}"
+export OUT_DIR="${OUT_DIR:-${BASE_DIR}/faissR_EXACT_REFERENCES_CPU12_$(date +%Y%m%d_%H%M%S)}"
 export LOG_DIR="${LOG_DIR:-${BASE_DIR}/benchmark_logs}"
 export SINGULARITY_IMAGE="${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda.sif}"
 export SINGULARITY_GPU_FLAG="${SINGULARITY_GPU_FLAG:-}"
@@ -49,8 +39,6 @@ export R_BIN="${R_BIN:-Rscript}"
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
 export K_VALUES="${K_VALUES:-10,15,50,100}"
-export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
-export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
 
 export OMP_NUM_THREADS="${THREADS_CPU}"
 export OPENBLAS_NUM_THREADS="${THREADS_CPU}"
@@ -88,7 +76,7 @@ resolve_script() {
 }
 
 MANIFEST_SCRIPT="$(resolve_script make_hpc_float32_manifest.R)"
-BENCH_SCRIPT="$(resolve_script benchmark_hnsw_tuning_from_reference.R)"
+REF_SCRIPT="$(resolve_script benchmark_precompute_exact_references.R)"
 MANIFEST="${MANIFEST:-${OUT_DIR}/float32_dataset_manifest.csv}"
 
 RUNNER=()
@@ -100,16 +88,14 @@ fi
   echo "SCRIPT_DIR=${SCRIPT_DIR}"
   echo "SUBMIT_SCRIPT_DIR=${SUBMIT_SCRIPT_DIR}"
   echo "MANIFEST_SCRIPT=${MANIFEST_SCRIPT}"
-  echo "BENCH_SCRIPT=${BENCH_SCRIPT}"
-  echo "METHOD=${METHOD}"
-  echo "BACKEND=${BACKEND}"
+  echo "REF_SCRIPT=${REF_SCRIPT}"
   echo "QUALITY_N=${QUALITY_N}"
   echo "SEED=${SEED}"
   echo "[$(date --iso-8601=seconds)] building float32 manifest"
   "${RUNNER[@]}" "${R_BIN}" "${MANIFEST_SCRIPT}"     --data_root="${DATA_ROOT}"     --out="${MANIFEST}"     --datasets="${DATASETS}"
 
-  echo "[$(date --iso-8601=seconds)] running CPU-only HNSW tuning from precomputed references"
-  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --backend="${BACKEND}"     --k_values="${K_VALUES}"     --target_recalls="${TARGET_RECALLS}"     --threads="${THREADS_CPU}"     --thread_values="${THREAD_VALUES}"     --timeout="${TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --output_values="${OUTPUT_VALUES}"     --grid_level="${GRID_LEVEL}"     --resume=TRUE
+  echo "[$(date --iso-8601=seconds)] precomputing exact CPU references"
+  "${RUNNER[@]}" "${R_BIN}" "${REF_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --k_values="${K_VALUES}"     --threads="${THREADS_CPU}"     --timeout="${REFERENCE_TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --resume=TRUE
 
   echo "DONE: ${OUT_DIR}"
-} 2>&1 | tee -a "${OUT_DIR}/hnsw_tuning_cpu12.log"
+} 2>&1 | tee -a "${OUT_DIR}/exact_reference_precompute_cpu12.log"

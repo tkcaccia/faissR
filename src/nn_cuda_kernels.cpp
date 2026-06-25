@@ -757,6 +757,19 @@ int copy_double_to_float_device(const double* host,
   return 0;
 }
 
+int copy_float_to_device(const float* host,
+                         float* device,
+                         std::size_t n,
+                         const char* where) {
+  if (check_cuda(
+    cudaMemcpy(device, host, n * sizeof(float), cudaMemcpyHostToDevice),
+    where
+  )) {
+    return 1;
+  }
+  return 0;
+}
+
 int copy_query_batch_to_float_device(const double* host_points,
                                      float* device_points,
                                      int n_points_total,
@@ -778,6 +791,29 @@ int copy_query_batch_to_float_device(const double* host_points,
         cudaMemcpyHostToDevice
       ),
       "cudaMemcpy(query batch H2D)"
+    )) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+int copy_query_batch_float_to_device(const float* host_points,
+                                     float* device_points,
+                                     int n_points_total,
+                                     int n_features,
+                                     int start,
+                                     int batch_n) {
+  for (int c = 0; c < n_features; ++c) {
+    const float* column = host_points + static_cast<std::size_t>(c) * n_points_total + start;
+    if (check_cuda(
+      cudaMemcpy(
+        device_points + static_cast<std::size_t>(c) * batch_n,
+        column,
+        static_cast<std::size_t>(batch_n) * sizeof(float),
+        cudaMemcpyHostToDevice
+      ),
+      "cudaMemcpy(float query batch H2D)"
     )) {
       return 1;
     }
@@ -1132,9 +1168,149 @@ extern "C" int faissr_cuda_knn(const double* data,
   return 0;
 }
 
+extern "C" int faissr_cuda_knn_float(const float* data,
+                                         const float* points,
+                                         int n_data,
+                                         int n_points,
+                                         int n_features,
+                                         int k,
+                                         int square,
+                                         int* out_indices,
+                                         double* out_distances) {
+  last_error.clear();
+  if (data == nullptr || points == nullptr || out_indices == nullptr || out_distances == nullptr) {
+    set_error("null host pointer");
+    return 1;
+  }
+  if (n_data < 1 || n_points < 1 || n_features < 1 || k < 1 || k > n_data || k > kMaxCudaK) {
+    set_error("invalid KNN dimensions");
+    return 1;
+  }
+
+  float* d_data = nullptr;
+  float* d_points = nullptr;
+  int* d_indices = nullptr;
+  float* d_distances = nullptr;
+  const bool self_query = data == points && n_data == n_points;
+  const std::size_t data_size = static_cast<std::size_t>(n_data) * n_features;
+  const std::size_t data_bytes = data_size * sizeof(float);
+  const int max_batch = self_query ?
+    n_points :
+    choose_query_batch_size(n_points, n_features, k, data_bytes);
+  if (max_batch < 1) {
+    set_error("CUDA KNN allocation preflight: insufficient free device memory for reference data and one query batch");
+    return 1;
+  }
+  const std::size_t batch_points_size = static_cast<std::size_t>(max_batch) * n_features;
+  const std::size_t batch_out_size = static_cast<std::size_t>(max_batch) * k;
+  const std::size_t points_bytes = self_query ? 0u : batch_points_size * sizeof(float);
+  const std::size_t out_i_bytes = batch_out_size * sizeof(int);
+  const std::size_t out_d_bytes = batch_out_size * sizeof(float);
+  const std::size_t required_bytes = data_bytes + points_bytes + out_i_bytes + out_d_bytes;
+
+  auto cleanup = [&]() {
+    if (d_data != nullptr) cudaFree(d_data);
+    if (d_points != nullptr && d_points != d_data) cudaFree(d_points);
+    if (d_indices != nullptr) cudaFree(d_indices);
+    if (d_distances != nullptr) cudaFree(d_distances);
+  };
+
+  if (check_memory_available(required_bytes, "CUDA KNN allocation preflight")) {
+    return 1;
+  }
+  if (check_cuda(cudaMalloc(reinterpret_cast<void**>(&d_data), data_bytes), "cudaMalloc(data)")) {
+    cleanup();
+    return 1;
+  }
+  if (self_query) {
+    d_points = d_data;
+  } else {
+    if (check_cuda(cudaMalloc(reinterpret_cast<void**>(&d_points), points_bytes), "cudaMalloc(points)")) {
+      cleanup();
+      return 1;
+    }
+  }
+  if (check_cuda(cudaMalloc(reinterpret_cast<void**>(&d_indices), out_i_bytes), "cudaMalloc(indices)")) {
+    cleanup();
+    return 1;
+  }
+  if (check_cuda(cudaMalloc(reinterpret_cast<void**>(&d_distances), out_d_bytes), "cudaMalloc(distances)")) {
+    cleanup();
+    return 1;
+  }
+  if (copy_float_to_device(data, d_data, data_size, "cudaMemcpy(float data H2D)")) {
+    cleanup();
+    return 1;
+  }
+
+  std::vector<int> host_indices(batch_out_size);
+  std::vector<float> host_distances(batch_out_size);
+
+  for (int start = 0; start < n_points; start += max_batch) {
+    const int batch_n = std::min(max_batch, n_points - start);
+    if (!self_query) {
+      if (copy_query_batch_float_to_device(
+        points,
+        d_points,
+        n_points,
+        n_features,
+        start,
+        batch_n
+      )) {
+        cleanup();
+        return 1;
+      }
+    }
+
+    const KnnParams params{n_data, batch_n, n_features, k, square ? 1 : 0};
+    if (k <= kFastCudaK) {
+      const int threads = 64;
+      const std::size_t shared_bytes =
+        static_cast<std::size_t>(threads) * k * (sizeof(float) + sizeof(int));
+      knn_cooperative_query_kernel<<<batch_n, threads, shared_bytes>>>(
+        d_data,
+        d_points,
+        d_indices,
+        d_distances,
+        params
+      );
+      if (check_cuda(cudaGetLastError(), "knn_cooperative_query_kernel launch")) {
+        cleanup();
+        return 1;
+      }
+    } else {
+      const int threads = 128;
+      const int blocks = (batch_n + threads - 1) / threads;
+      knn_serial_query_kernel<<<blocks, threads>>>(d_data, d_points, d_indices, d_distances, params);
+      if (check_cuda(cudaGetLastError(), "knn_serial_query_kernel launch")) {
+        cleanup();
+        return 1;
+      }
+    }
+    if (copy_batch_results_to_host(
+      d_indices,
+      d_distances,
+      batch_n,
+      n_points,
+      start,
+      k,
+      out_indices,
+      out_distances,
+      host_indices,
+      host_distances
+    )) {
+      cleanup();
+      return 1;
+    }
+  }
+
+  cleanup();
+  return 0;
+}
+
 extern "C" int faissr_cuda_grid_self_knn(const double* data,
-                                             int n,
-                                             int n_features,
+                                  int n,
+                                  int n_features,
                                              int k,
                                              int bins_per_dim,
                                              int* out_indices,
@@ -1489,6 +1665,116 @@ extern "C" int faissr_cuda_row_candidate_knn(const double* data,
     return 1;
   }
   if (copy_double_to_float_device(data, d_data, data_size, "cudaMemcpy(row candidate data H2D)")) {
+    cleanup();
+    return 1;
+  }
+  if (check_cuda(cudaMemcpy(d_candidates, candidate_indices, candidate_items * sizeof(int), cudaMemcpyHostToDevice), "cudaMemcpy(row candidates H2D)")) {
+    cleanup();
+    return 1;
+  }
+
+  const int threads = 128;
+  const int blocks = (n + threads - 1) / threads;
+  row_candidate_knn_kernel<<<blocks, threads>>>(
+    d_data,
+    d_candidates,
+    d_indices,
+    d_distances,
+    n,
+    n_features,
+    k,
+    n_candidates,
+    metric_kind
+  );
+  if (check_cuda(cudaGetLastError(), "row_candidate_knn_kernel launch")) {
+    cleanup();
+    return 1;
+  }
+  if (check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(row candidate KNN)")) {
+    cleanup();
+    return 1;
+  }
+
+  std::vector<int> h_indices(out_items);
+  std::vector<float> h_distances(out_items);
+  if (check_cuda(cudaMemcpy(h_indices.data(), d_indices, out_items * sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(row candidate indices D2H)")) {
+    cleanup();
+    return 1;
+  }
+  if (check_cuda(cudaMemcpy(h_distances.data(), d_distances, out_items * sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(row candidate distances D2H)")) {
+    cleanup();
+    return 1;
+  }
+  for (std::size_t i = 0; i < out_items; ++i) {
+    out_indices[i] = h_indices[i];
+    out_distances[i] = static_cast<double>(h_distances[i]);
+  }
+
+  cleanup();
+  return 0;
+}
+
+extern "C" int faissr_cuda_row_candidate_knn_float(const float* data,
+                                                       const int* candidate_indices,
+                                                       int n,
+                                                       int n_features,
+                                                       int n_candidates,
+                                                       int k,
+                                                       int metric_kind,
+                                                       int* out_indices,
+                                                       double* out_distances) {
+  last_error.clear();
+  if (data == nullptr || candidate_indices == nullptr ||
+      out_indices == nullptr || out_distances == nullptr) {
+    set_error("null host pointer");
+    return 1;
+  }
+  if (n < 2 || n_features < 1 || n_candidates < 1 ||
+      k < 1 || k >= n || k > kMaxCudaK ||
+      (metric_kind != 0 && metric_kind != 1)) {
+    set_error("invalid row candidate KNN dimensions");
+    return 1;
+  }
+
+  const std::size_t data_size = static_cast<std::size_t>(n) * n_features;
+  const std::size_t candidate_items = static_cast<std::size_t>(n) * n_candidates;
+  const std::size_t out_items = static_cast<std::size_t>(n) * k;
+  const std::size_t required_bytes =
+    data_size * sizeof(float) +
+    candidate_items * sizeof(int) +
+    out_items * (sizeof(int) + sizeof(float));
+
+  float* d_data = nullptr;
+  int* d_candidates = nullptr;
+  int* d_indices = nullptr;
+  float* d_distances = nullptr;
+  auto cleanup = [&]() {
+    if (d_data != nullptr) cudaFree(d_data);
+    if (d_candidates != nullptr) cudaFree(d_candidates);
+    if (d_indices != nullptr) cudaFree(d_indices);
+    if (d_distances != nullptr) cudaFree(d_distances);
+  };
+
+  if (check_memory_available(required_bytes, "CUDA row candidate KNN allocation preflight")) {
+    return 1;
+  }
+  if (check_cuda(cudaMalloc(reinterpret_cast<void**>(&d_data), data_size * sizeof(float)), "cudaMalloc(row candidate data)")) {
+    cleanup();
+    return 1;
+  }
+  if (check_cuda(cudaMalloc(reinterpret_cast<void**>(&d_candidates), candidate_items * sizeof(int)), "cudaMalloc(row candidate indices)")) {
+    cleanup();
+    return 1;
+  }
+  if (check_cuda(cudaMalloc(reinterpret_cast<void**>(&d_indices), out_items * sizeof(int)), "cudaMalloc(row candidate output indices)")) {
+    cleanup();
+    return 1;
+  }
+  if (check_cuda(cudaMalloc(reinterpret_cast<void**>(&d_distances), out_items * sizeof(float)), "cudaMalloc(row candidate output distances)")) {
+    cleanup();
+    return 1;
+  }
+  if (copy_float_to_device(data, d_data, data_size, "cudaMemcpy(float row candidate data H2D)")) {
     cleanup();
     return 1;
   }

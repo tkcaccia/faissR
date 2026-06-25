@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <limits>
 #include <numeric>
 #include <random>
@@ -557,6 +558,139 @@ void copy_row_major_float(const double* src,
   }
 }
 
+struct MatrixViewF32 {
+  const float* data = nullptr;
+  int nrow = 0;
+  int ncol = 0;
+  bool row_major = true;
+  bool owns_data = false;
+  bool compatibility_conversion = false;
+  std::string layout;
+  std::vector<float> buffer;
+};
+
+Rcpp::IntegerVector matrix_dims_from_object_f32(SEXP x, const char* name) {
+  SEXP dim = Rf_getAttrib(x, R_DimSymbol);
+  if (Rf_isNull(dim) && Rf_isS4(x)) {
+    SEXP data_slot = R_do_slot(x, Rf_install("Data"));
+    dim = Rf_getAttrib(data_slot, R_DimSymbol);
+  }
+  if (Rf_isNull(dim) || Rf_length(dim) != 2) {
+    Rcpp::stop("%s must be a two-dimensional numeric or float32 matrix", name);
+  }
+  Rcpp::IntegerVector dims(dim);
+  if (dims[0] < 1 || dims[1] < 1) {
+    Rcpp::stop("%s must have at least one row and one column", name);
+  }
+  return dims;
+}
+
+const float* float32_slot_ptr_f32(SEXP slot, const int expected_length, const char* name) {
+  if (TYPEOF(slot) == INTSXP) {
+    if (Rf_length(slot) != expected_length) {
+      Rcpp::stop("%s float32 payload length does not match its dimensions", name);
+    }
+    return reinterpret_cast<const float*>(INTEGER(slot));
+  }
+  if (TYPEOF(slot) == RAWSXP) {
+    const R_xlen_t expected_bytes = static_cast<R_xlen_t>(expected_length) *
+      static_cast<R_xlen_t>(sizeof(float));
+    if (Rf_xlength(slot) != expected_bytes) {
+      Rcpp::stop("%s float32 raw payload length does not match its dimensions", name);
+    }
+    return reinterpret_cast<const float*>(RAW(slot));
+  }
+  return nullptr;
+}
+
+bool finite_float32_payload_f32(const float* ptr, const int length) {
+  bool finite = true;
+  for (int i = 0; i < length; ++i) {
+    if (!std::isfinite(ptr[i])) {
+      finite = false;
+      break;
+    }
+  }
+  return finite;
+}
+
+MatrixViewF32 make_row_major_float32_view(SEXP x, const char* name) {
+  Rcpp::IntegerVector dims = matrix_dims_from_object_f32(x, name);
+  MatrixViewF32 view;
+  view.nrow = dims[0];
+  view.ncol = dims[1];
+  const int expected_length = view.nrow * view.ncol;
+
+  bool finite = true;
+  if (TYPEOF(x) == REALSXP) {
+    if (Rf_length(x) != expected_length) {
+      Rcpp::stop("%s payload length does not match its dimensions", name);
+    }
+    view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
+    view.owns_data = true;
+    view.compatibility_conversion = true;
+    view.layout = "r_double_column_major_to_row_major_float32";
+    const double* src = REAL(x);
+    for (int r = 0; r < view.nrow; ++r) {
+      for (int c = 0; c < view.ncol; ++c) {
+        const double value = src[static_cast<std::size_t>(c) * view.nrow + r];
+        if (!std::isfinite(value)) finite = false;
+        view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
+          static_cast<float>(value);
+      }
+    }
+  } else if (Rf_isS4(x)) {
+    SEXP slot = R_do_slot(x, Rf_install("Data"));
+    const float* payload = float32_slot_ptr_f32(slot, expected_length, name);
+    if (payload != nullptr) {
+      finite = finite_float32_payload_f32(payload, expected_length);
+      const bool row_major_payload =
+        Rf_asLogical(Rf_getAttrib(x, Rf_install("faissR_row_major_float32"))) == TRUE;
+      if (row_major_payload || view.nrow == 1 || view.ncol == 1) {
+        view.data = payload;
+        view.owns_data = false;
+        view.layout = row_major_payload ?
+          "float32_payload_direct_row_major" :
+          "float32_payload_direct_row_compatible";
+      } else {
+        view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
+        view.owns_data = true;
+        view.layout = "float32_column_major_payload_to_row_major";
+        for (int r = 0; r < view.nrow; ++r) {
+          for (int c = 0; c < view.ncol; ++c) {
+            view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
+              payload[static_cast<std::size_t>(c) * view.nrow + r];
+          }
+        }
+      }
+    } else if (TYPEOF(slot) == REALSXP) {
+      if (Rf_length(slot) != expected_length) {
+        Rcpp::stop("%s payload length does not match its dimensions", name);
+      }
+      view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
+      view.owns_data = true;
+      view.compatibility_conversion = true;
+      view.layout = "s4_double_column_major_to_row_major_float32";
+      const double* src = REAL(slot);
+      for (int r = 0; r < view.nrow; ++r) {
+        for (int c = 0; c < view.ncol; ++c) {
+          const double value = src[static_cast<std::size_t>(c) * view.nrow + r];
+          if (!std::isfinite(value)) finite = false;
+          view.buffer[static_cast<std::size_t>(r) * view.ncol + c] =
+            static_cast<float>(value);
+        }
+      }
+    } else {
+      Rcpp::stop("%s must be a float::fl()/float32 object with an integer or raw @Data payload", name);
+    }
+  } else {
+    Rcpp::stop("%s must be an ordinary R double matrix or float::fl()/float32 object", name);
+  }
+  if (!finite) Rcpp::stop("%s requires finite values", name);
+  if (view.data == nullptr) view.data = view.buffer.data();
+  return view;
+}
+
 bool sorted_top_contains(const std::vector<NeighborF>& top, const int candidate) {
   for (const NeighborF& item : top) {
     if (item.index == candidate) return true;
@@ -621,6 +755,146 @@ float pair_distance_row_major_float(const float* data,
     return -dot;
   }
   return squared_euclidean_row_major_float(data, a, b, n_features);
+}
+
+double candidate_distance_row_major_float(const float* data,
+                                          const float* points,
+                                          const int data_row,
+                                          const int point_row,
+                                          const int n_features,
+                                          const DistanceKind kind) {
+  const float* x = data + static_cast<std::size_t>(data_row) * n_features;
+  const float* y = points + static_cast<std::size_t>(point_row) * n_features;
+  if (kind == DistanceKind::Euclidean) {
+    double acc = 0.0;
+    for (int c = 0; c < n_features; ++c) {
+      const double diff = static_cast<double>(x[c]) - static_cast<double>(y[c]);
+      acc += diff * diff;
+    }
+    return acc;
+  }
+  if (kind == DistanceKind::Cosine) {
+    double dot = 0.0;
+    double x_norm = 0.0;
+    double y_norm = 0.0;
+    for (int c = 0; c < n_features; ++c) {
+      const double xv = static_cast<double>(x[c]);
+      const double yv = static_cast<double>(y[c]);
+      dot += xv * yv;
+      x_norm += xv * xv;
+      y_norm += yv * yv;
+    }
+    if (x_norm <= 0.0 && y_norm <= 0.0) return 0.0;
+    if (x_norm <= 0.0 || y_norm <= 0.0) return 1.0;
+    double cosine = dot / (std::sqrt(x_norm) * std::sqrt(y_norm));
+    if (cosine > 1.0) cosine = 1.0;
+    if (cosine < -1.0) cosine = -1.0;
+    return 1.0 - cosine;
+  }
+  if (kind == DistanceKind::Correlation) {
+    double x_mean = 0.0;
+    double y_mean = 0.0;
+    for (int c = 0; c < n_features; ++c) {
+      x_mean += static_cast<double>(x[c]);
+      y_mean += static_cast<double>(y[c]);
+    }
+    x_mean /= static_cast<double>(n_features);
+    y_mean /= static_cast<double>(n_features);
+    double dot = 0.0;
+    double x_norm = 0.0;
+    double y_norm = 0.0;
+    for (int c = 0; c < n_features; ++c) {
+      const double xc = static_cast<double>(x[c]) - x_mean;
+      const double yc = static_cast<double>(y[c]) - y_mean;
+      dot += xc * yc;
+      x_norm += xc * xc;
+      y_norm += yc * yc;
+    }
+    if (x_norm <= 0.0 && y_norm <= 0.0) return 0.0;
+    if (x_norm <= 0.0 || y_norm <= 0.0) return 1.0;
+    double corr = dot / (std::sqrt(x_norm) * std::sqrt(y_norm));
+    if (corr > 1.0) corr = 1.0;
+    if (corr < -1.0) corr = -1.0;
+    return 1.0 - corr;
+  }
+  if (kind == DistanceKind::InnerProduct) {
+    double dot = 0.0;
+    for (int c = 0; c < n_features; ++c) {
+      dot += static_cast<double>(x[c]) * static_cast<double>(y[c]);
+    }
+    return -dot;
+  }
+  Rcpp::stop("candidate_knn_float32_cpp supports euclidean, cosine, correlation, and inner_product distances");
+}
+
+void write_candidate_knn_rows_float(const float* data,
+                                    const float* points,
+                                    const IntegerMatrix& candidate_indices,
+                                    const int n_data,
+                                    const int n_points,
+                                    const int n_features,
+                                    const int k,
+                                    const DistanceKind kind,
+                                    const bool square,
+                                    const bool exclude_self,
+                                    IntegerMatrix& indices,
+                                    NumericMatrix& distances,
+                                    const int query_start,
+                                    const int query_end) {
+  std::vector<Neighbor> top;
+  top.reserve(static_cast<std::size_t>(k));
+  std::vector<int> seen(static_cast<std::size_t>(n_data), 0);
+  int stamp = 0;
+
+  for (int q = query_start; q < query_end; ++q) {
+    top.clear();
+    ++stamp;
+    if (stamp == std::numeric_limits<int>::max()) {
+      std::fill(seen.begin(), seen.end(), 0);
+      stamp = 1;
+    }
+    for (int c = 0; c < candidate_indices.ncol(); ++c) {
+      const int one_based = candidate_indices(q, c);
+      if (one_based == NA_INTEGER || one_based < 1 || one_based > n_data) continue;
+      const int candidate = one_based - 1;
+      if (exclude_self && candidate == q) continue;
+      if (seen[static_cast<std::size_t>(candidate)] == stamp) continue;
+      seen[static_cast<std::size_t>(candidate)] = stamp;
+      const Neighbor item{
+        candidate_distance_row_major_float(data, points, candidate, q, n_features, kind),
+        candidate
+      };
+      if (static_cast<int>(top.size()) < k) {
+        top.push_back(item);
+        if (static_cast<int>(top.size()) == k) std::make_heap(top.begin(), top.end(), neighbor_less);
+      } else if (neighbor_less(item, top.front())) {
+        std::pop_heap(top.begin(), top.end(), neighbor_less);
+        top.back() = item;
+        std::push_heap(top.begin(), top.end(), neighbor_less);
+      }
+    }
+
+    if (static_cast<int>(top.size()) == k) {
+      std::sort_heap(top.begin(), top.end(), neighbor_less);
+    } else {
+      std::sort(top.begin(), top.end(), neighbor_less);
+    }
+    for (int j = 0; j < k; ++j) {
+      if (j < static_cast<int>(top.size())) {
+        double dist = top[static_cast<std::size_t>(j)].distance;
+        if (kind == DistanceKind::Euclidean && !square) {
+          dist = std::sqrt(std::max(dist, 0.0));
+        } else if (kind == DistanceKind::InnerProduct && !top.empty()) {
+          dist = std::max(dist - top.front().distance, 0.0);
+        }
+        indices(q, j) = top[static_cast<std::size_t>(j)].index + 1;
+        distances(q, j) = dist;
+      } else {
+        indices(q, j) = NA_INTEGER;
+        distances(q, j) = R_PosInf;
+      }
+    }
+  }
 }
 
 void build_limited_reverse_matrix(const IntegerMatrix& indices,
@@ -1853,6 +2127,139 @@ IntegerMatrix graph_prune_candidate_graph_cpp(NumericMatrix data,
 }
 
 // [[Rcpp::export]]
+IntegerMatrix graph_prune_candidate_graph_float32_cpp(SEXP data,
+                                                      IntegerMatrix seed_indices,
+                                                      int r,
+                                                      double alpha,
+                                                      std::string metric,
+                                                      int protect_top,
+                                                      double max_exact_work,
+                                                      bool robust_vamana) {
+  MatrixViewF32 view = make_row_major_float32_view(data, "data");
+  const int n = seed_indices.nrow();
+  const int seed_k = seed_indices.ncol();
+  const int n_features = view.ncol;
+  if (n < 2 || view.nrow != n) {
+    Rcpp::stop("data and seed_indices must have the same row count >= 2");
+  }
+  if (seed_k < 1) Rcpp::stop("seed_indices must have at least one column");
+  const DistanceKind distance_kind = distance_kind_from_method(metric);
+  if (distance_kind != DistanceKind::Euclidean &&
+      distance_kind != DistanceKind::InnerProduct) {
+    Rcpp::stop("graph_prune_candidate_graph_float32_cpp supports euclidean or inner_product metrics");
+  }
+  r = std::max(1, std::min(r, std::min(seed_k, n - 1)));
+  protect_top = std::max(0, std::min(protect_top, std::min(r, seed_k)));
+  if (!std::isfinite(alpha) || alpha < 1.0) alpha = 1.2;
+  if (!std::isfinite(max_exact_work) || max_exact_work <= 0.0) {
+    max_exact_work = 200000000.0;
+  }
+  const bool exact_prune =
+    static_cast<double>(n) * static_cast<double>(r) *
+    static_cast<double>(r) * static_cast<double>(n_features) <= max_exact_work;
+
+  const float* x = view.data;
+  IntegerMatrix out(n, r);
+  std::vector<int> seen(static_cast<std::size_t>(n) + 1, 0);
+  std::vector<int> candidates;
+  std::vector<int> keep;
+  candidates.reserve(static_cast<std::size_t>(seed_k));
+  keep.reserve(static_cast<std::size_t>(r));
+  int fallback_rows = 0;
+  int pruned_rows = 0;
+
+  for (int row = 0; row < n; ++row) {
+    const int stamp = row + 1;
+    candidates.clear();
+    keep.clear();
+
+    const auto add_seed_candidate = [&](const int candidate) {
+      if (candidate < 1 || candidate > n || candidate == row + 1) return;
+      if (seen[static_cast<std::size_t>(candidate)] == stamp) return;
+      seen[static_cast<std::size_t>(candidate)] = stamp;
+      candidates.push_back(candidate);
+    };
+
+    for (int col = 0; col < seed_k; ++col) {
+      add_seed_candidate(seed_indices(row, col));
+    }
+    if (candidates.empty()) {
+      ++fallback_rows;
+      for (int candidate = 1; candidate <= n && static_cast<int>(candidates.size()) < r; ++candidate) {
+        if (candidate != row + 1) candidates.push_back(candidate);
+      }
+    }
+
+    for (int i = 0; i < protect_top && i < static_cast<int>(candidates.size()); ++i) {
+      keep.push_back(candidates[static_cast<std::size_t>(i)]);
+    }
+
+    if (exact_prune) {
+      for (const int candidate_one_based : candidates) {
+        if (static_cast<int>(keep.size()) >= r) break;
+        if (std::find(keep.begin(), keep.end(), candidate_one_based) != keep.end()) continue;
+        const int candidate = candidate_one_based - 1;
+        const float query_candidate =
+          pair_distance_row_major_float(x, row, candidate, n_features, distance_kind);
+        bool rejected = false;
+        for (const int kept_one_based : keep) {
+          const float kept_candidate = pair_distance_row_major_float(
+            x,
+            kept_one_based - 1,
+            candidate,
+            n_features,
+            distance_kind
+          );
+          if (robust_vamana) {
+            if (static_cast<float>(alpha) * kept_candidate <= query_candidate) {
+              rejected = true;
+              break;
+            }
+          } else if (kept_candidate < query_candidate) {
+            rejected = true;
+            break;
+          }
+        }
+        if (!rejected) keep.push_back(candidate_one_based);
+      }
+      if (static_cast<int>(keep.size()) < static_cast<int>(candidates.size())) {
+        ++pruned_rows;
+      }
+    }
+
+    for (const int candidate_one_based : candidates) {
+      if (static_cast<int>(keep.size()) >= r) break;
+      if (std::find(keep.begin(), keep.end(), candidate_one_based) == keep.end()) {
+        keep.push_back(candidate_one_based);
+      }
+    }
+    for (int candidate = 1; static_cast<int>(keep.size()) < r && candidate <= n; ++candidate) {
+      if (candidate == row + 1) continue;
+      if (std::find(keep.begin(), keep.end(), candidate) == keep.end()) {
+        keep.push_back(candidate);
+      }
+    }
+
+    for (int col = 0; col < r; ++col) {
+      out(row, col) = keep[static_cast<std::size_t>(col)];
+    }
+  }
+
+  out.attr("exact_prune") = exact_prune;
+  out.attr("protected_top") = protect_top;
+  out.attr("seed_columns") = seed_k;
+  out.attr("candidate_layout") = "compiled_column_major_compact";
+  out.attr("pruning_rule") = robust_vamana ? "vamana_robust_prune" : "nsg_mrng_prune";
+  out.attr("fallback_rows") = fallback_rows;
+  out.attr("pruned_rows") = pruned_rows;
+  out.attr("input_type") = "float32";
+  out.attr("input_layout") = view.layout;
+  out.attr("input_owns_data") = view.owns_data;
+  out.attr("float32_compatibility_conversion") = view.compatibility_conversion;
+  return out;
+}
+
+// [[Rcpp::export]]
 List landmark_candidate_knn_cpp(NumericMatrix data,
                                 IntegerMatrix projection_indices,
                                 int k,
@@ -2538,6 +2945,220 @@ List nndescent_self_knn_cpp(NumericMatrix data,
 }
 
 // [[Rcpp::export]]
+List nndescent_self_knn_float32_cpp(SEXP data,
+                                    int k,
+                                    int pool_size,
+                                    int n_iters,
+                                    int max_candidates,
+                                    int n_random_projections,
+                                    int seed,
+                                    bool parallel,
+                                    int cores,
+                                    std::string metric) {
+  MatrixViewF32 view = make_row_major_float32_view(data, "data");
+  const int n = view.nrow;
+  const int n_features = view.ncol;
+  if (n < 2) Rcpp::stop("data must have at least two rows");
+  if (k < 1 || k >= n) Rcpp::stop("k must be in [1, nrow(data) - 1]");
+  const DistanceKind distance_kind = distance_kind_from_method(metric);
+  if (distance_kind != DistanceKind::Euclidean &&
+      distance_kind != DistanceKind::InnerProduct) {
+    Rcpp::stop("native CPU NN-descent supports euclidean or inner_product metrics");
+  }
+  pool_size = std::max(k, std::min(pool_size, n - 1));
+  n_iters = std::max(0, n_iters);
+  max_candidates = std::max(pool_size, std::min(max_candidates, n - 1));
+  n_random_projections = std::max(1, n_random_projections);
+
+  const float* x = view.data;
+  std::vector<int> graph_indices(static_cast<std::size_t>(n) * pool_size, -1);
+  std::vector<float> graph_distances(
+    static_cast<std::size_t>(n) * pool_size,
+    std::numeric_limits<float>::infinity()
+  );
+  std::vector<std::vector<NeighborF>> init_top(static_cast<std::size_t>(n));
+  for (int i = 0; i < n; ++i) {
+    init_top[static_cast<std::size_t>(i)].reserve(pool_size);
+  }
+
+  std::mt19937 rng(static_cast<unsigned int>(seed));
+  std::normal_distribution<float> normal(0.0f, 1.0f);
+  const int projection_window = std::max(4, std::min(32, pool_size / 2));
+  std::vector<float> direction(static_cast<std::size_t>(n_features));
+  std::vector<std::pair<float, int>> scores(static_cast<std::size_t>(n));
+
+  for (int proj = 0; proj < n_random_projections; ++proj) {
+    for (int c = 0; c < n_features; ++c) direction[static_cast<std::size_t>(c)] = normal(rng);
+    for (int i = 0; i < n; ++i) {
+      const float* row = x + static_cast<std::size_t>(i) * n_features;
+      float score = 0.0f;
+      for (int c = 0; c < n_features; ++c) score += row[c] * direction[static_cast<std::size_t>(c)];
+      scores[static_cast<std::size_t>(i)] = std::make_pair(score, i);
+    }
+    std::sort(scores.begin(), scores.end(), [](const auto& a, const auto& b) {
+      if (a.first == b.first) return a.second < b.second;
+      return a.first < b.first;
+    });
+    for (int pos = 0; pos < n; ++pos) {
+      const int query = scores[static_cast<std::size_t>(pos)].second;
+      const int lo = std::max(0, pos - projection_window);
+      const int hi = std::min(n - 1, pos + projection_window);
+      std::vector<NeighborF>& top = init_top[static_cast<std::size_t>(query)];
+      for (int other_pos = lo; other_pos <= hi; ++other_pos) {
+        if (other_pos == pos) continue;
+        const int candidate = scores[static_cast<std::size_t>(other_pos)].second;
+        insert_sorted_top_float(
+          x, query, candidate, n_features, pool_size, top, distance_kind
+        );
+      }
+    }
+  }
+
+  for (int i = 0; i < n; ++i) {
+    std::mt19937 row_rng(static_cast<unsigned int>(seed + 104729 * (i + 1)));
+    std::uniform_int_distribution<int> uniform(0, n - 1);
+    std::vector<NeighborF>& top = init_top[static_cast<std::size_t>(i)];
+    int attempts = 0;
+    while (static_cast<int>(top.size()) < pool_size && attempts < pool_size * 32) {
+      insert_sorted_top_float(
+        x, i, uniform(row_rng), n_features, pool_size, top, distance_kind
+      );
+      ++attempts;
+    }
+    for (int candidate = 0; static_cast<int>(top.size()) < pool_size && candidate < n; ++candidate) {
+      insert_sorted_top_float(
+        x, i, candidate, n_features, pool_size, top, distance_kind
+      );
+    }
+    write_sorted_top_to_graph(top, graph_indices, graph_distances, i, pool_size);
+  }
+  init_top.clear();
+  init_top.shrink_to_fit();
+
+  const int n_threads = requested_threads(parallel, cores, n);
+  const int reverse_limit = std::max(pool_size, std::min(max_candidates, pool_size * 2));
+
+  for (int iter = 0; iter < n_iters; ++iter) {
+    const std::vector<int> old_indices = graph_indices;
+    std::vector<int> reverse_counts;
+    std::vector<int> reverse_values;
+    build_limited_reverse_graph(
+      old_indices,
+      n,
+      pool_size,
+      reverse_limit,
+      reverse_counts,
+      reverse_values
+    );
+
+    auto refine_rows = [&](const int row_start, const int row_end) {
+      std::vector<int> seen(static_cast<std::size_t>(n), 0);
+      std::vector<NeighborF> top;
+      top.reserve(pool_size);
+      int stamp = 1;
+
+      auto consider = [&](const int query,
+                          const int candidate,
+                          int& candidate_count) {
+        if (candidate < 0 || candidate >= n || candidate == query) return;
+        if (candidate_count >= max_candidates) return;
+        if (seen[static_cast<std::size_t>(candidate)] == stamp) return;
+        seen[static_cast<std::size_t>(candidate)] = stamp;
+        ++candidate_count;
+        insert_sorted_top_float(
+          x, query, candidate, n_features, pool_size, top, distance_kind
+        );
+      };
+
+      for (int q = row_start; q < row_end; ++q) {
+        if (stamp == std::numeric_limits<int>::max()) {
+          std::fill(seen.begin(), seen.end(), 0);
+          stamp = 1;
+        }
+        ++stamp;
+        top.clear();
+        seen[static_cast<std::size_t>(q)] = stamp;
+        int candidate_count = 0;
+
+        const std::size_t row_base = static_cast<std::size_t>(q) * pool_size;
+        for (int j = 0; j < pool_size; ++j) {
+          const int nb = old_indices[row_base + j];
+          if (nb < 0) continue;
+          seen[static_cast<std::size_t>(nb)] = stamp;
+          top.push_back(NeighborF{graph_distances[row_base + j], nb});
+        }
+        std::sort(top.begin(), top.end(), neighborf_less);
+
+        for (int j = 0; j < pool_size && candidate_count < max_candidates; ++j) {
+          const int nb = old_indices[row_base + j];
+          if (nb < 0 || nb >= n) continue;
+          const std::size_t nb_base = static_cast<std::size_t>(nb) * pool_size;
+          for (int t = 0; t < pool_size && candidate_count < max_candidates; ++t) {
+            consider(q, old_indices[nb_base + t], candidate_count);
+          }
+        }
+
+        const int rev_count = reverse_counts[static_cast<std::size_t>(q)];
+        const std::size_t rev_base = static_cast<std::size_t>(q) * reverse_limit;
+        for (int rev_pos = 0; rev_pos < rev_count; ++rev_pos) {
+          if (candidate_count >= max_candidates) break;
+          const int nb = reverse_values[rev_base + rev_pos];
+          consider(q, nb, candidate_count);
+          const std::size_t nb_base = static_cast<std::size_t>(nb) * pool_size;
+          for (int t = 0; t < pool_size && candidate_count < max_candidates; ++t) {
+            consider(q, old_indices[nb_base + t], candidate_count);
+          }
+        }
+
+        write_sorted_top_to_graph(top, graph_indices, graph_distances, q, pool_size);
+      }
+    };
+
+    if (n_threads == 1) {
+      refine_rows(0, n);
+    } else {
+      std::vector<std::thread> workers;
+      workers.reserve(static_cast<std::size_t>(n_threads));
+      for (int t = 0; t < n_threads; ++t) {
+        const int start = (n * t) / n_threads;
+        const int end = (n * (t + 1)) / n_threads;
+        workers.emplace_back(refine_rows, start, end);
+      }
+      for (auto& worker : workers) worker.join();
+    }
+  }
+
+  IntegerMatrix indices(n, k);
+  NumericMatrix distances(n, k);
+  int* indices_ptr = indices.begin();
+  double* distances_ptr = distances.begin();
+  for (int i = 0; i < n; ++i) {
+    const std::size_t base = static_cast<std::size_t>(i) * pool_size;
+    for (int j = 0; j < k; ++j) {
+      const int idx = graph_indices[base + j];
+      indices_ptr[static_cast<std::size_t>(j) * n + i] = idx + 1;
+      double distance = static_cast<double>(graph_distances[base + j]);
+      if (distance_kind == DistanceKind::InnerProduct) {
+        const double row_best = static_cast<double>(graph_distances[base]);
+        distance = std::max(distance - row_best, 0.0);
+      } else {
+        distance = std::sqrt(std::max(distance, 0.0));
+      }
+      distances_ptr[static_cast<std::size_t>(j) * n + i] = distance;
+    }
+  }
+
+  return List::create(
+    Rcpp::Named("indices") = indices,
+    Rcpp::Named("distances") = distances,
+    Rcpp::Named("input_type") = "float32",
+    Rcpp::Named("input_layout") = view.layout,
+    Rcpp::Named("input_owns_data") = view.owns_data,
+    Rcpp::Named("float32_compatibility_conversion") = view.compatibility_conversion
+  );
+}
+
+// [[Rcpp::export]]
 List ivf_self_knn_cpp(NumericMatrix data,
                       int k,
                       int nlist,
@@ -2959,5 +3580,96 @@ List candidate_knn_cpp(NumericMatrix data,
     Rcpp::Named("indices") = indices,
     Rcpp::Named("distances") = distances,
     Rcpp::Named("n_threads") = n_threads
+  );
+}
+
+// [[Rcpp::export]]
+List candidate_knn_float32_cpp(SEXP data,
+                               SEXP points,
+                               IntegerMatrix candidate_indices,
+                               int k,
+                               std::string method,
+                               bool square,
+                               bool exclude_self,
+                               bool parallel,
+                               int cores) {
+  MatrixViewF32 data_view = make_row_major_float32_view(data, "data");
+  const bool same_object = data == points;
+  MatrixViewF32 points_view = same_object ?
+    MatrixViewF32() :
+    make_row_major_float32_view(points, "points");
+  if (same_object) {
+    points_view.nrow = data_view.nrow;
+    points_view.ncol = data_view.ncol;
+    points_view.data = data_view.data;
+    points_view.layout = data_view.layout;
+  }
+
+  const int n_data = data_view.nrow;
+  const int n_points = points_view.nrow;
+  const int n_features = data_view.ncol;
+  if (n_data < 1 || n_points < 1) {
+    Rcpp::stop("data and points must have at least one row");
+  }
+  if (n_features < 1 || points_view.ncol != n_features) {
+    Rcpp::stop("data and points must have the same positive number of columns");
+  }
+  if (candidate_indices.nrow() != n_points || candidate_indices.ncol() < 1) {
+    Rcpp::stop("candidate_indices must have one row per query and at least one column");
+  }
+  if (k < 1 || k > candidate_indices.ncol()) {
+    Rcpp::stop("k must be in [1, ncol(candidate_indices)]");
+  }
+  const DistanceKind kind = distance_kind_from_method(method);
+  if (kind != DistanceKind::Euclidean &&
+      kind != DistanceKind::Cosine &&
+      kind != DistanceKind::Correlation &&
+      kind != DistanceKind::InnerProduct) {
+    Rcpp::stop("candidate_knn_float32_cpp supports euclidean, cosine, correlation, and inner_product distances");
+  }
+
+  IntegerMatrix indices(n_points, k);
+  NumericMatrix distances(n_points, k);
+  const int n_threads = requested_threads(parallel, cores, n_points);
+  auto worker = [&](const int start, const int end) {
+    write_candidate_knn_rows_float(
+      data_view.data,
+      points_view.data,
+      candidate_indices,
+      n_data,
+      n_points,
+      n_features,
+      k,
+      kind,
+      square,
+      exclude_self,
+      indices,
+      distances,
+      start,
+      end
+    );
+  };
+
+  if (n_threads == 1) {
+    worker(0, n_points);
+  } else {
+    std::vector<std::thread> workers;
+    workers.reserve(static_cast<std::size_t>(n_threads));
+    for (int t = 0; t < n_threads; ++t) {
+      const int start = (n_points * t) / n_threads;
+      const int end = (n_points * (t + 1)) / n_threads;
+      workers.emplace_back(worker, start, end);
+    }
+    for (auto& thread : workers) thread.join();
+  }
+
+  return List::create(
+    Rcpp::Named("indices") = indices,
+    Rcpp::Named("distances") = distances,
+    Rcpp::Named("n_threads") = n_threads,
+    Rcpp::Named("input_type") = "float32",
+    Rcpp::Named("input_layout") = data_view.layout,
+    Rcpp::Named("input_owns_data") = data_view.owns_data,
+    Rcpp::Named("float32_compatibility_conversion") = data_view.compatibility_conversion
   );
 }
