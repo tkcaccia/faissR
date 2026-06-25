@@ -23,7 +23,8 @@ List cuda_row_candidate_knn_impl(NumericMatrix data,
                                  std::string metric);
 List cuda_grid_self_knn_impl(NumericMatrix data,
                              int k,
-                             int bins_per_dim);
+                             int bins_per_dim,
+                             bool include_self);
 
 // [[Rcpp::export]]
 bool cuda_available_cpp() {
@@ -65,6 +66,7 @@ List row_candidate_knn_cuda_cpp(NumericMatrix data,
 // [[Rcpp::export]]
 List cuda_grid_self_knn_cpp(NumericMatrix data,
                             int k,
-                            int bins_per_dim) {
-  return cuda_grid_self_knn_impl(data, k, bins_per_dim);
+                            int bins_per_dim,
+                            bool include_self) {
+  return cuda_grid_self_knn_impl(data, k, bins_per_dim, include_self);
 }

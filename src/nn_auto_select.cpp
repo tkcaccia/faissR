@@ -116,6 +116,8 @@ std::string public_method_from_backend(const std::string& backend) {
       backend == "cuda_faiss_ivfpq" || backend == "cuvs_ivfpq" ||
       backend == "cuda_cuvs_ivfpq" || backend == "cuvs_ivf_pq" ||
       backend == "cuda_cuvs_ivf_pq") return "ivfpq";
+  if (backend == "faiss_scann" || backend == "cuda_cuvs_scann" ||
+      backend == "cuvs_scann") return "scann";
   if (backend == "cpu_vamana" || backend == "cuda_vamana") return "vamana";
   if (backend == "faiss_nsg" || backend == "cpu_nsg" ||
       backend == "cuda_nsg") return "nsg";
@@ -900,102 +902,6 @@ List nn_tune_faiss_hnsw_cpp(int n,
 }
 
 // [[Rcpp::export]]
-List nn_tune_usearch_cpp(int n,
-                         int p,
-                         int k,
-                         double target_recall = 0.99,
-                         int connectivity_option = NA_INTEGER,
-                         int expansion_add_option = NA_INTEGER,
-                         int expansion_search_option = NA_INTEGER,
-                         bool manual = false) {
-  n = valid_int(n) ? n : NA_INTEGER;
-  p = valid_int(p) ? p : NA_INTEGER;
-  k = safe_k(k);
-  target_recall = hnsw_target_recall_cpp(target_recall);
-  const bool low_dim = valid_int(p) && p <= 64;
-  const bool high_dim = valid_int(p) && p >= 256;
-  const bool large_n = valid_int(n) && n >= 50000;
-  const bool small_k = k <= 15;
-  const bool large_k = k >= 100;
-
-  std::string rule;
-  int default_connectivity = 16;
-  int default_expansion_add = 128;
-  int default_expansion_search = 64;
-  if (large_n && low_dim) {
-    if (target_recall <= 0.90 && small_k) {
-      rule = "recall90_large_low_dim_small_k";
-      default_connectivity = 8;
-      default_expansion_add = 64;
-      default_expansion_search = std::max(k, 24);
-    } else if (target_recall <= 0.95) {
-      rule = "recall95_large_low_dim";
-      default_connectivity = 12;
-      default_expansion_add = 96;
-      default_expansion_search = std::max(k, 48);
-    } else {
-      rule = "recall99_large_low_dim";
-      default_connectivity = 16;
-      default_expansion_add = 128;
-      default_expansion_search = std::max(k, 80);
-    }
-  } else if (large_n && high_dim) {
-    if (target_recall <= 0.90 && small_k) {
-      rule = "recall90_large_high_dim_small_k";
-      default_connectivity = 12;
-      default_expansion_add = 64;
-      default_expansion_search = std::max(k, 64);
-    } else if (target_recall <= 0.95) {
-      rule = "recall95_large_high_dim";
-      default_connectivity = 12;
-      default_expansion_add = 64;
-      default_expansion_search = std::max(k, 64);
-    } else {
-      rule = "recall99_large_high_dim";
-      default_connectivity = 16;
-      default_expansion_add = 128;
-      default_expansion_search = std::max(k, 80);
-    }
-  } else if (high_dim) {
-    rule = "balanced_high_dim";
-    default_connectivity = 16;
-    default_expansion_add = 128;
-    default_expansion_search = std::max(k, target_recall <= 0.95 ? 64 : 96);
-  } else {
-    rule = "balanced_shape";
-    default_connectivity = 16;
-    default_expansion_add = 128;
-    default_expansion_search = std::max(k, 64);
-  }
-
-  const int n_cap = valid_int(n) ? std::max(2, n - 1) : std::numeric_limits<int>::max();
-  const int requested_connectivity = requested_int(connectivity_option, default_connectivity);
-  const int requested_expansion_add = requested_int(expansion_add_option, default_expansion_add);
-  const int requested_expansion_search = requested_int(expansion_search_option, default_expansion_search);
-  const int connectivity = clamp_int(requested_connectivity, 2, std::min(n_cap, 256));
-  const int expansion_add = clamp_int(requested_expansion_add, connectivity, 4096);
-  const int expansion_search = clamp_int(requested_expansion_search, k, 4096);
-
-  return List::create(
-    _["connectivity"] = connectivity,
-    _["expansion_add"] = expansion_add,
-    _["expansion_search"] = expansion_search,
-    _["rule"] = rule,
-    _["policy"] = manual ? "manual_options" : "auto_shape_metric",
-    _["high_dim"] = high_dim,
-    _["low_dim"] = low_dim,
-    _["large_n"] = large_n,
-    _["small_k"] = small_k,
-    _["large_k"] = large_k,
-    _["requested_connectivity"] = default_connectivity,
-    _["requested_expansion_add"] = default_expansion_add,
-    _["requested_expansion_search"] = default_expansion_search,
-    _["target_recall"] = target_recall,
-    _["tuning_source"] = "cpp"
-  );
-}
-
-// [[Rcpp::export]]
 List nn_tune_rcpphnsw_cpp(int k,
                           int m_option = NA_INTEGER,
                           int ef_construction_option = NA_INTEGER,
@@ -1143,210 +1049,86 @@ List nn_tune_cuvs_hnsw_cpp(int n,
   n = safe_n(n);
   p = safe_p(p);
   k = safe_k(k);
-  const double requested_target_recall = hnsw_target_recall_cpp(target_recall_option);
+  const double target_recall = hnsw_target_recall_cpp(target_recall_option);
   const bool low_dim = p <= 64;
   const bool high_dim = p >= 256;
-  const bool medium_n = n >= 50000 && n < 500000;
-  const bool huge_low_dim = low_dim && n >= 5000000;
+  const bool large_n = n >= 50000;
   const bool large_k = k >= 100;
-  const bool large_n = n >= 1000000;
-  const bool compact = as<bool>(base["tuning_compact_build"]);
-  const bool auto_build_algo = build_algo_preference == "auto";
-  const std::string build_algo = auto_build_algo ?
-    "iterative_cagra_search" :
-    cagra_build_algo_for_shape_core(n, p, k, true, compact, build_algo_preference);
   const int n_cap = std::max(1, n - 1);
+  const int min_degree = std::min(n_cap, std::max(2, k + 1));
 
-  int recall99_graph_degree;
-  int default_ef;
-  double target_recall = 0.99;
-  std::string hnsw_rule;
-  if (low_dim && n >= 50000) {
-    if (medium_n && requested_target_recall <= 0.90) {
-      if (k <= 50) {
-        recall99_graph_degree = 24;
-        default_ef = 75;
-        hnsw_rule = "recall90_medium_low_dim_small_mid_k_hnsw_from_cagra";
-      } else {
-        recall99_graph_degree = 48;
-        default_ef = 150;
-        hnsw_rule = "recall90_medium_low_dim_large_k_hnsw_from_cagra";
-      }
-      target_recall = requested_target_recall;
-    } else if (medium_n && requested_target_recall <= 0.95) {
-      if (k <= 50) {
-        recall99_graph_degree = 48;
-        default_ef = 150;
-        hnsw_rule = "recall95_medium_low_dim_small_mid_k_hnsw_from_cagra";
-      } else {
-        recall99_graph_degree = 64;
-        default_ef = 200;
-        hnsw_rule = "recall95_medium_low_dim_large_k_hnsw_from_cagra";
-      }
-      target_recall = requested_target_recall;
-    } else if (medium_n) {
-      recall99_graph_degree = 96;
-      default_ef = large_k ? 300 : 250;
-      hnsw_rule = "recall99_medium_low_dim_hnsw_from_cagra";
-      target_recall = requested_target_recall;
-    } else if (huge_low_dim && k > 15 && requested_target_recall <= 0.90) {
-      recall99_graph_degree = 24;
-      default_ef = std::max(50, k);
-      target_recall = requested_target_recall;
-      hnsw_rule = "recall90_huge_low_dim_runtime_guard_hnsw_from_cagra";
-    } else if (huge_low_dim && k > 15 && requested_target_recall <= 0.95) {
-      recall99_graph_degree = 24;
-      default_ef = std::max(100, k);
-      target_recall = requested_target_recall;
-      hnsw_rule = "recall95_huge_low_dim_runtime_guard_hnsw_from_cagra";
-    } else if (huge_low_dim && k > 15) {
-      recall99_graph_degree = 24;
-      default_ef = std::max(100, k);
-      target_recall = NA_REAL;
-      hnsw_rule = "runtime_guard_huge_low_dim_hnsw_from_cagra";
-    } else if (requested_target_recall <= 0.90 && k <= 15) {
-      recall99_graph_degree = 24;
-      default_ef = 75;
-      hnsw_rule = "recall90_large_low_dim_small_k_hnsw_from_cagra";
-      target_recall = requested_target_recall;
-    } else if (requested_target_recall <= 0.90 && k <= 50) {
-      recall99_graph_degree = 24;
-      default_ef = 150;
-      hnsw_rule = "recall90_large_low_dim_mid_k_hnsw_from_cagra";
-      target_recall = requested_target_recall;
-    } else if (requested_target_recall <= 0.90) {
-      recall99_graph_degree = 48;
-      default_ef = 100;
-      hnsw_rule = "recall90_large_low_dim_large_k_hnsw_from_cagra";
-      target_recall = requested_target_recall;
-    } else if (requested_target_recall <= 0.95 && k <= 15) {
-      recall99_graph_degree = 32;
-      default_ef = 100;
-      hnsw_rule = "recall95_large_low_dim_small_k_hnsw_from_cagra";
-      target_recall = requested_target_recall;
-    } else if (requested_target_recall <= 0.95 && k <= 50) {
-      recall99_graph_degree = 48;
-      default_ef = 150;
-      hnsw_rule = "recall95_large_low_dim_mid_k_hnsw_from_cagra";
-      target_recall = requested_target_recall;
-    } else if (requested_target_recall <= 0.95) {
-      recall99_graph_degree = 48;
-      default_ef = 200;
-      hnsw_rule = "recall95_large_low_dim_large_k_hnsw_from_cagra";
-      target_recall = requested_target_recall;
-    } else if (k <= 15) {
-      recall99_graph_degree = 48;
-      default_ef = 150;
-      hnsw_rule = "recall99_large_low_dim_small_k_hnsw_from_cagra";
-      target_recall = requested_target_recall;
-    } else if (k <= 50) {
-      recall99_graph_degree = 96;
-      default_ef = 250;
-      hnsw_rule = "recall99_large_low_dim_mid_k_hnsw_from_cagra";
-      target_recall = requested_target_recall;
-    } else {
-      recall99_graph_degree = 96;
-      default_ef = 300;
-      hnsw_rule = "recall99_large_low_dim_large_k_hnsw_from_cagra";
-      target_recall = requested_target_recall;
-    }
-  } else if (high_dim && n >= 50000) {
-    if (requested_target_recall <= 0.90 && k <= 15) {
-      recall99_graph_degree = 8;
-      default_ef = 20;
-      hnsw_rule = "recall90_large_high_dim_small_k_hnsw_from_cagra";
-    } else if (requested_target_recall <= 0.90 && k <= 50) {
-      recall99_graph_degree = 12;
-      default_ef = 50;
-      hnsw_rule = "recall90_large_high_dim_mid_k_hnsw_from_cagra";
-    } else if (requested_target_recall <= 0.90) {
-      recall99_graph_degree = 16;
-      default_ef = 75;
-      hnsw_rule = "recall90_large_high_dim_large_k_hnsw_from_cagra";
-    } else if (requested_target_recall <= 0.95 && k <= 15) {
-      recall99_graph_degree = 8;
-      default_ef = 30;
-      hnsw_rule = "recall95_large_high_dim_small_k_hnsw_from_cagra";
-    } else if (requested_target_recall <= 0.95 && k <= 50) {
-      recall99_graph_degree = 16;
-      default_ef = 60;
-      hnsw_rule = "recall95_large_high_dim_mid_k_hnsw_from_cagra";
-    } else if (requested_target_recall <= 0.95) {
-      recall99_graph_degree = 16;
-      default_ef = 100;
-      hnsw_rule = "recall95_large_high_dim_large_k_hnsw_from_cagra";
-    } else if (k <= 15) {
-      recall99_graph_degree = 12;
-      default_ef = 40;
-      hnsw_rule = "recall99_large_high_dim_small_k_hnsw_from_cagra";
-    } else if (k <= 50) {
-      recall99_graph_degree = 24;
-      default_ef = 50;
-      hnsw_rule = "recall99_large_high_dim_mid_k_hnsw_from_cagra";
-    } else {
-      recall99_graph_degree = 24;
-      default_ef = 100;
-      hnsw_rule = "recall99_large_high_dim_large_k_hnsw_from_cagra";
-    }
-    target_recall = requested_target_recall;
+  int default_graph_degree = as<int>(base["graph_degree"]);
+  int default_ef = std::max(k, 50);
+  std::string rule = "balanced_cuvs_hnsw_from_cagra";
+  if (target_recall <= 0.90) {
+    default_graph_degree = high_dim ? 16 : (low_dim && large_n ? 24 : 32);
+    default_ef = std::max(k, large_k ? 100 : 64);
+    rule = high_dim ? "recall90_high_dim_cuvs_hnsw_from_cagra" :
+      "recall90_cuvs_hnsw_from_cagra";
+  } else if (target_recall <= 0.95) {
+    default_graph_degree = high_dim ? 24 : (low_dim && large_n ? 48 : 48);
+    default_ef = std::max(k, large_k ? 150 : 96);
+    rule = high_dim ? "recall95_high_dim_cuvs_hnsw_from_cagra" :
+      "recall95_cuvs_hnsw_from_cagra";
   } else {
-    recall99_graph_degree = large_k ?
-      std::max(48, static_cast<int>(std::ceil(k / 2.0))) :
-      (k <= 10 ? std::max(16, k + 1) : 24);
-    default_ef = std::max(50, k);
-    target_recall = requested_target_recall;
-    hnsw_rule = (large_n && large_k) ? "recall99_large_n_large_k_hnsw_from_cagra" :
-      (large_n ? "recall99_large_n_hnsw_from_cagra" :
-        (large_k ? "recall99_large_k_hnsw_from_cagra" : "recall99_balanced_hnsw_from_cagra"));
+    default_graph_degree = high_dim ? 32 : (low_dim && large_n ? 96 : 64);
+    default_ef = std::max(k, large_k ? 250 : 150);
+    rule = high_dim ? "recall99_high_dim_cuvs_hnsw_from_cagra" :
+      "recall99_cuvs_hnsw_from_cagra";
   }
-
-  const int requested_graph_degree = requested_int(graph_degree_option, recall99_graph_degree);
-  const int hnsw_graph_degree = option_int(
+  default_graph_degree = std::max(default_graph_degree, min_degree);
+  default_graph_degree = std::min(default_graph_degree, n_cap);
+  const int requested_graph_degree = requested_int(graph_degree_option, default_graph_degree);
+  const int graph_degree = option_int(
     graph_degree_option,
-    recall99_graph_degree,
-    2,
+    default_graph_degree,
+    min_degree,
     n_cap
   );
-  const int default_intermediate_graph_degree =
-    std::max(hnsw_graph_degree, 2 * hnsw_graph_degree);
-  const int requested_intermediate_graph_degree =
-    requested_int(intermediate_graph_degree_option, default_intermediate_graph_degree);
-  const int hnsw_intermediate_graph_degree = option_int(
+  const int default_intermediate = std::max(
+    graph_degree,
+    std::max(as<int>(base["intermediate_graph_degree"]), 2 * graph_degree)
+  );
+  const int requested_intermediate = requested_int(
     intermediate_graph_degree_option,
-    default_intermediate_graph_degree,
-    hnsw_graph_degree,
+    default_intermediate
+  );
+  const int intermediate = option_int(
+    intermediate_graph_degree_option,
+    default_intermediate,
+    graph_degree,
     n_cap
   );
-  // The CAGRA seed graph remains high-quality; lower target-recall tiers trim
-  // HNSW graph/search effort without changing the public algorithm. Users can
-  // override faissR.cuvs_hnsw_ef for stricter recall when needed.
   const int requested_ef = requested_int(ef_option, default_ef);
   const int ef = option_int(ef_option, default_ef, k, 4096);
   const int threads = std::max(1, std::min(64, valid_int(n_threads) ? n_threads : 1));
+  const bool compact = as<bool>(base["tuning_compact_build"]);
+  const bool auto_build_algo = build_algo_preference == "auto";
+  const std::string build_algo = auto_build_algo ?
+    cagra_build_algo_for_shape_core(n, p, k, true, compact, "auto") :
+    cagra_build_algo_for_shape_core(n, p, k, true, compact, build_algo_preference);
 
   return List::create(
-    _["graph_degree"] = hnsw_graph_degree,
-    _["intermediate_graph_degree"] = hnsw_intermediate_graph_degree,
+    _["graph_degree"] = graph_degree,
+    _["intermediate_graph_degree"] = intermediate,
     _["ef"] = ef,
     _["n_threads"] = threads,
     _["cagra_build_algo"] = build_algo,
     _["requested_graph_degree"] = requested_graph_degree,
-    _["requested_intermediate_graph_degree"] = requested_intermediate_graph_degree,
+    _["requested_intermediate_graph_degree"] = requested_intermediate,
     _["requested_ef"] = requested_ef,
     _["requested_n_threads"] = threads,
-    _["requested_target_recall"] = requested_target_recall,
-    _["tuning_policy"] = as<std::string>(base["tuning_policy"]),
-    _["tuning_rule"] = auto_build_algo ? hnsw_rule : (hnsw_rule + "_manual_build_algo"),
+    _["requested_target_recall"] = target_recall,
     _["target_recall"] = target_recall,
+    _["tuning_policy"] = manual_cagra ? "manual_options" : "auto_shape_k_recall",
+    _["tuning_rule"] = auto_build_algo ? rule : (rule + "_manual_build_algo"),
     _["tuning_low_dim"] = low_dim,
     _["tuning_high_dim"] = high_dim,
-    _["tuning_medium_n"] = medium_n,
-    _["tuning_huge_low_dim"] = huge_low_dim,
-    _["tuning_runtime_guard"] = huge_low_dim && k > 15,
     _["tuning_large_n"] = large_n,
     _["tuning_large_k"] = large_k,
-    _["tuning_small_k"] = as<bool>(base["tuning_small_k"]),
-    _["tuning_source"] = "cpp"
+    _["tuning_source"] = "cpp",
+    _["cuda_hnsw_design"] = "cuvs_hnsw_from_cagra_cpu_hierarchy",
+    _["cuda_hnsw_pure_gpu"] = false
   );
 }
 

@@ -35,9 +35,8 @@ route was attempted, not that the package silently ran a CPU fallback.
 5. Expensive KNN work should be reusable by graph, clustering, embedding, and
    supervised prediction functions.
 6. Benchmark-only quality helpers are kept out of the public API.
-7. External compiled libraries are linked as system dependencies. The only
-   vendored third-party source is the header-only USEARCH route for
-   `method = "usearch"`, which remains under its upstream Apache-2.0 license.
+7. External compiled libraries are linked as system dependencies rather than
+   vendored into the package source tree.
 8. Distance semantics are explicit: algorithm choice belongs in `method`, while
    Euclidean/cosine/correlation/inner-product choices belong in `metric`.
 9. Approximate routes should expose enough metadata to make speed/quality
@@ -64,8 +63,6 @@ Compiled backends are reached through Rcpp/C++ bridge files:
 - FAISS CPU/GPU routines are isolated behind the FAISS bridge and use FAISS
   indexes such as Flat, IVF, IVFPQ, HNSW, NSG, NNDescent, and GPU CAGRA where
   the linked FAISS build exposes them [1-2,5-6,13-16].
-- USEARCH dense HNSW is isolated behind its own CPU bridge and compiled from
-  bundled Apache-2.0 header-only USEARCH source for `method = "usearch"` [5,34].
 - Direct RAPIDS cuVS routines are isolated behind the cuVS bridge and are
   optional at build time [3].
 - CUDA-native helper kernels, such as the low-dimensional grid and candidate
@@ -75,8 +72,7 @@ Compiled backends are reached through Rcpp/C++ bridge files:
 
 The package does not vendor FAISS, cuVS, cuGraph, CUDA, or cuDNN. Those
 projects remain system dependencies with their own release cadence and
-licenses. The package vendors only the USEARCH header-only source needed by the
-CPU-only `method = "usearch"` route.
+licenses.
 
 ## `nn()`
 
@@ -89,11 +85,8 @@ approximate metadata.
 Supported CPU routes include:
 
 - native exact dense CPU search;
-- FAISS CPU Flat, IVF-Flat, IVF-PQ, HNSW, NSG, and NN-Descent when present in
-  the linked FAISS build [1-6,16];
-- USEARCH dense HNSW for CPU-only Euclidean/L2 approximate search, compiled
-  from bundled header-only source and benchmarked separately from FAISS HNSW
-  [5,34];
+- FAISS CPU Flat, IVF-Flat, IVF-PQ, IVFPQ FastScan, HNSW, NSG, and NN-Descent
+  when present in the linked FAISS build [1-6,16,34];
 - RcppHNSW as an optional CRAN-friendly fallback;
 - exact 2D/3D grid routes for low-dimensional Euclidean, cosine, and
   correlation self-KNN.
@@ -102,10 +95,13 @@ Supported CUDA routes include:
 
 - FAISS GPU Flat, IVF-Flat, IVF-PQ, and CAGRA when FAISS GPU support is built
   [1-2,13-16];
-- direct RAPIDS cuVS brute force, CAGRA, IVF-Flat, IVF-PQ, and NN-Descent when
-  cuVS is available [3,13-15];
+- direct RAPIDS cuVS brute force, CAGRA, HNSW-from-CAGRA, IVF-Flat, IVF-PQ,
+  ScaNN-inspired 4-bit IVF-PQ, and NN-Descent when cuVS is available
+  [3,13-15,22,34];
 - native CUDA 2D/3D grid search for low-dimensional Euclidean, cosine, and
-  correlation self-KNN.
+  correlation self-KNN;
+- native CUDA candidate-refinement routes used by Vamana, NSG, and selected
+  NN-descent cases.
 
 The validated high-performance metric is Euclidean/L2. Cosine and correlation
 are exposed for exact CPU, FAISS CPU/GPU Flat, FAISS CPU/GPU IVF-Flat,
@@ -117,13 +113,16 @@ centering plus L2 normalization before inner-product search; both routes return
 are zero-normalized edge cases. faissR treats two zero-normalized rows as
 distance `0` and a zero-normalized row versus a nonzero row as distance `1`.
 CPU FAISS Flat uses the exact CPU scorer for those rows to preserve
-deterministic small-`k` tie handling; explicit CUDA routes remain on CUDA and
-apply the normalized-distance repair without relabelling the backend.
+deterministic small-`k` tie handling; explicit CUDA routes do not perform
+CPU repair and therefore error clearly for those degenerate normalized rows.
 Direct cuVS IVF/PQ use normalized Euclidean search for cosine/correlation and
 the standard maximum-inner-product-to-L2 extra-dimension transform for raw inner
 product before building the L2 index. Direct cuVS CAGRA and NN-Descent use
-normalized Euclidean search for cosine/correlation; their raw inner-product
-routes remain disabled because the cuVS graph APIs used by faissR are L2-based.
+normalized Euclidean search for cosine/correlation. Raw inner product is
+supported only through routes with an implemented transform or native scorer:
+CAGRA uses a maximum-inner-product-to-L2 transform, while CUDA NN-descent uses
+faissR's native CUDA candidate-refinement path because direct cuVS NN-descent
+does not expose raw inner-product search.
 Graph-style routes that implement cosine/correlation through normalized
 Euclidean search convert returned neighbour distances back to `1 - similarity`
 with the stable formula
@@ -132,6 +131,13 @@ record `metric_transform` and `attr(result, "distance_transform")`, and
 approximate routes also copy the fields into `attr(result, "approximation")`,
 so benchmark summaries can distinguish the search space from the reported
 distance semantics.
+The normalized cosine/correlation transform is cached in the R session as a
+row-major float32 matrix keyed by matrix contents, dimensions, and metric. FAISS
+and cuVS float-pointer adapters recognize this internal row-major payload and
+can pass it directly to the compiled index/search path on repeated calls. The
+bounded cache defaults to four transformed matrices and is controlled by
+`options(faissR.cache_transformed_float32 = TRUE/FALSE)` and
+`options(faissR.cache_transformed_float32_max_entries = 4L)`.
 Inner-product search is exposed for exact native CPU
 scoring, FAISS Flat IP routes, FAISS IVF-Flat/IVFPQ IP, FAISS HNSW
 IP, and the RcppHNSW/hnswlib IP
@@ -148,7 +154,7 @@ All KNN routes return a `faissR_nn` object with:
 - `attr(result, "backend")`: the public/resolved backend label returned to the
   user;
 - `attr(result, "requested_backend")`: the public backend argument supplied to
-  `nn()`/`nn_without_self()`;
+  `nn()`/`nn(..., exclude_self = TRUE)`;
 - `attr(result, "requested_method")`: the public method argument after alias
   normalization;
 - `attr(result, "resolved_backend")`: when relevant, the concrete backend chosen
@@ -218,7 +224,7 @@ The R wrapper normalizes arguments, collects runtime capability flags and
 option thresholds, and dispatches to the compiled selector's backend.
 The deterministic parameter rules used by `tuning = "auto"` are also C++ owned:
 FAISS IVF, FAISS/PQ, FAISS HNSW, FAISS NSG, FAISS NN-descent, direct cuVS
-IVFPQ, cuVS CAGRA, cuVS HNSW, cuVS NN-descent, native NSG, Vamana, native CUDA
+IVFPQ, cuVS CAGRA, cuVS NN-descent, native NSG, Vamana, native CUDA
 NN-descent, and RcppHNSW fallback parameters are computed by `nn_tune_*_cpp()`
 helpers. R still reads user-facing `options(faissR.*)` values, but clipping,
 default choice, requested-vs-effective values, tuning-rule labels, and shape
@@ -235,7 +241,8 @@ as the fallback exact CUDA route when FAISS GPU Flat is unavailable.
 Explicit methods map to the selected backend. For example,
 `method = "grid", backend = "cpu"` resolves to the CPU grid implementation,
 whereas `method = "grid", backend = "cuda"` resolves to the CUDA grid
-implementation. Invalid combinations fail before computation; for example,
+implementation. Both grid routes return the final include-self matrix layout
+from compiled code, avoiding R-side self-column reshaping. Invalid combinations fail before computation; for example,
 `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only.
 For CUDA CAGRA, `options(faissR.cagra_implementation = "auto")` keeps the
 deterministic shape-aware provider rule: compact high-dimensional self-KNN uses
@@ -277,6 +284,12 @@ cuVS IVF-PQ uses the same deterministic small-training rule below 9,984 rows
 unless the user explicitly sets cuVS PQ bits. FAISS GPU IVFPQ remains an
 explicit 8-bit route because FAISS' GPU IVFPQ implementation requires 8-bit
 product-quantizer codes.
+The public `method = "scann"` route is separate from general IVFPQ. On CPU it
+requires FAISS FastScan (`IndexIVFPQFastScan`) and uses 4-bit compressed PQ
+codes with optional Flat reranking. On CUDA it resolves to direct cuVS IVF-PQ
+with 4-bit compressed codes and records `cuda_cuvs_scann`; it does not fall
+back to CPU FastScan when CUDA/cuVS is unavailable. This route is Euclidean-only
+until non-Euclidean transforms have separate quality validation [6,34].
 FAISS HNSW uses no pilot tuning in the user call. Its default parameters are a
 static shape/k/metric policy implemented in C++ and selected by
 `target_recall`. The public options are `target_recall = 0.9`, `0.95`, and
@@ -297,14 +310,15 @@ public method names map to different concrete functions depending on `backend`.
 
 | Method | CPU behavior | CUDA behavior | Notes |
 | --- | --- | --- | --- |
-| `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, cuVS HNSW, FAISS GPU CAGRA selector, FAISS GPU Flat IP for exact small/query raw inner product, transformed FAISS GPU/direct cuVS CAGRA for large raw-inner-product self-KNN, or faissR native CUDA candidate refinement as a large-self-search fallback. Explicit CUDA exact/brute-force calls can use transformed cuVS brute force. | Default for general use. |
+| `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, FAISS GPU CAGRA/direct cuVS CAGRA selector, FAISS GPU Flat IP for exact small/query raw inner product, transformed FAISS GPU/direct cuVS CAGRA for large raw-inner-product self-KNN, or faissR native CUDA candidate refinement as a large-self-search fallback. Explicit CUDA exact/brute-force calls can use transformed cuVS brute force. | Default for general use. |
 | `exact` | Native exact CPU route. | FAISS GPU Flat when available; otherwise cuVS brute force can provide exact transformed metric search. | Accuracy-first baseline. |
-| `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP while staying on CUDA for explicit CUDA calls. | Exact FAISS route [1-2,16]. |
+| `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP; degenerate zero-normalized rows error instead of being repaired on CPU. | Exact FAISS route [1-2,16]. |
 | `bruteforce` | Native exact CPU route. | Direct cuVS brute force when available, with exact transforms for cosine, correlation, and raw inner product. | Useful for comparing direct cuVS against FAISS GPU Flat [1-3,16]. |
 | `grid` | Native 2D/3D exact spatial grid. | CUDA 2D/3D grid. | Errors outside two or three columns. |
-| `hnsw` | FAISS CPU HNSW. | RAPIDS cuVS HNSW from a CUDA CAGRA index for Euclidean/cosine/correlation and transformed raw inner product. | Graph-search route; automatic CPU and CUDA HNSW use compiled shape/k tiers selected by `target_recall = 0.9`, `0.95`, or `0.99`, with a runtime guard for 5M-row-class low-dimensional CUDA `k > 15` workloads where wider high-recall graphs exceeded the benchmark timeout. CUDA raw inner product uses the maximum-inner-product-to-L2 transform and shifted returned distances [3,5,16,22-23]. |
+| `hnsw` | FAISS CPU HNSW. | RAPIDS cuVS HNSW from CAGRA. | CPU graph-search route with compiled shape/k tiers selected by `target_recall = 0.9`, `0.95`, or `0.99`. CUDA builds a cuVS CAGRA seed graph and converts it with `cuvsHnswFromCagraWithDataset` using the host dataset and cuVS CPU hierarchy; result metadata records `cuda_hnsw_design = "cuvs_hnsw_from_cagra_cpu_hierarchy"` because this is not a pure all-GPU HNSW implementation [5,16,22-23]. |
 | `ivf` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | Coarse-list approximate route [1-2,16]. |
 | `ivfpq` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | Compressed approximate route [6,16]. |
+| `scann` | FAISS CPU `IndexIVFPQFastScan` with 4-bit PQ and optional Flat refinement. | Direct RAPIDS cuVS IVF-PQ with 4-bit compressed codes. | ScaNN-inspired compressed-code route for Euclidean/L2 search; CPU requires linked FAISS FastScan support and CUDA requires cuVS, with no CPU fallback for explicit CUDA requests [6,34]. |
 | `vamana` | Native DiskANN/Vamana-style robust-pruned candidate graph with CPU refinement. | Native DiskANN/Vamana-style robust-pruned candidate graph with CUDA row-candidate refinement. | Distinct pruned directed graph route implemented in faissR; large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning, while smaller CPU inputs keep exact seed neighbours. Robust pruning protects the first `k` seed neighbours before applying the Vamana rule; cuVS Vamana currently provides build/serialization rather than KNN search [3,5,24]. |
 | `nsg` | Native CPU NSG-style self-KNN candidate graph for Euclidean, cosine, correlation, and inner product. | Native CUDA NSG-style self-KNN candidate graph for all public metrics. | Optional graph-search baseline; public CPU NSG avoids unsafe linked-FAISS graph construction by using faissR-owned candidate pruning/refinement. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before NSG/MRNG-style pruning; smaller CPU inputs and CUDA keep exact seed neighbours. Native CPU/CUDA NSG protect the first `k` seed neighbours before pruning and use backend-specific auto defaults/options (`faissR.cpu_nsg_*`, `faissR.cuda_nsg_*`) [5,16,21,29]. |
 | `nndescent` | Native CPU NNDescent for Euclidean/L2, cosine, correlation, and raw inner product. | Direct cuVS NN-descent for Euclidean/L2, cosine, and correlation; faissR native CUDA candidate refinement for raw inner product. | Approximate KNN graph construction; cosine/correlation use normalized Euclidean search, CPU and native CUDA raw inner product use shifted dot-product distances, and FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
@@ -339,9 +353,9 @@ and rejects the route if the pilot cannot meet the configured minimum recall.
 This opt-in behavior exists because some direct cuVS CAGRA runs were fast but
 produced untrustworthy recall on raw high-dimensional data.
 
-## `nn_without_self()`
+## `nn(..., exclude_self = TRUE)`
 
-`nn_without_self()` wraps self-KNN and returns exactly `k` non-self neighbours.
+`nn(..., exclude_self = TRUE)` wraps self-KNN and returns exactly `k` non-self neighbours.
 It is used internally by graph construction, clustering, and benchmarks. The
 function requests enough neighbours to remove the self-match safely and keeps the
 same `faissR_nn` result shape as `nn()`.
@@ -363,7 +377,7 @@ output can feed graph construction, prediction, or diagnostic code.
 
 `knn_graph()` converts a matrix, an existing KNN object, or an embedding-like
 object into a native `faissR_graph` edge list. When KNN is not supplied, it calls
-`nn_without_self()` with the requested backend, NN method, metric, and tuning
+`nn(..., exclude_self = TRUE)` with the requested backend, NN method, metric, and tuning
 policy. Supported edge weights include:
 
 - `"distance"`: distance-derived edge strengths;
@@ -608,6 +622,14 @@ returns class probabilities for classification. Prediction outputs carry
 requested backend/method/tuning, resolved backend, metric, `k`, and whether the
 route was exact.
 
+For explicit CPU Euclidean `method = "hnsw"` models, `knn()` builds the FAISS
+HNSW index during fitting and keeps it as a session-local external pointer. The
+FAISS HNSW pointer owns the `IndexHNSWFlat` object; FAISS copies vectors into
+the index during `add()`, so a separate training buffer is not retained.
+Matching `predict()` calls search the fitted index directly and record
+`approximation$index_reused = TRUE`; mismatched calls or invalid external
+pointers rebuild the same route through `nn()`.
+
 The supervised API intentionally reuses `nn()` rather than creating independent
 FAISS/cuVS model classes. That keeps method selection, backend validation,
 tuning, and result semantics identical between unsupervised KNN and supervised
@@ -638,29 +660,31 @@ for very large datasets it can dominate memory use.
 
 The core FAISS KNN implementation is being moved toward float-pointer entry
 points. The first direct public slice accepts optional `float::fl()`/`float32`
-matrices in `nn()` and `nn_without_self()` for the CPU FAISS Flat route across
+matrices in `nn()` for the CPU FAISS Flat route across
 the four public metrics: Euclidean, cosine, correlation, and inner product.
 Cosine and correlation are normalized in the float32 row-major buffer before
 FAISS `IndexFlatIP` search, with the same zero-row semantics as the
-double-precision routes. CPU FAISS HNSW and CUDA cuVS HNSW also accept the same
-float32 matrix adapter, so those HNSW routes avoid the previous
+double-precision routes. CPU FAISS HNSW also accepts the same float32 matrix
+adapter, so the CPU HNSW route avoids the previous
 float32-to-R-double-to-float32 path. Float objects are read from their float32
 payload and copied only once into each backend's row-major `float*` layout.
 Ordinary R double matrices still work and are converted once to float32
-internally. When an ordinary R double input uses a CPU FAISS Flat-style or HNSW
-request with `output = "float"`, it also enters a float-pointer route so FAISS
-does not produce an intermediate R double distance matrix. CUDA HNSW auto-tuning
-uses this direct float32 path with the selected `target_recall` tier; raise
-`faissR.cuvs_graph_degree`, `faissR.cuvs_intermediate_graph_degree`, or
-`faissR.cuvs_hnsw_ef` for stricter recall beyond the defaults.
-
+internally. When an ordinary R double input uses `output = "float"`, direct
+Euclidean FAISS/cuVS routes enter float-pointer adapters instead of producing an
+intermediate R double distance matrix. This includes CPU FAISS
+Flat/IVF/IVFPQ/FastScan, cached CPU FAISS fitted indexes, FAISS GPU
+Flat/IVF/IVFPQ, and direct Euclidean RAPIDS cuVS brute-force/CAGRA/IVF/IVFPQ
+and ScaNN-style routes. CUDA HNSW uses the direct cuVS HNSW wrapper path from
+a CAGRA seed graph and records that design in result metadata.
 FAISS CPU/GPU and RAPIDS cuVS nearest-neighbour routes can also receive
 `float::fl()` inputs through direct C++ adapters. Native routes that still expose
 only `NumericMatrix` inputs now error for float32 inputs instead of silently
 converting benchmark data back to R double. This keeps benchmark timings honest:
-rows with `float32_compatibility_conversion = FALSE` used the float32 adapter,
-and unsupported native float32 routes must be implemented separately before they
-can be included in a float32-only benchmark.
+`input_layout` and `float32_compatibility_conversion` show whether the route
+consumed a supplied float32 payload directly or performed a one-time
+double-to-float adapter conversion, and unsupported native float32 routes must
+be implemented separately before they can be included in a float32-only
+benchmark.
 
 The float32 adapter records the route it used in the returned KNN object.
 `input_layout` distinguishes ordinary R double conversion, float32 payload
@@ -671,20 +695,34 @@ correlation, direct float32 payloads still make one owned copy before
 normalization because those transforms are applied in-place before FAISS search.
 
 Distance output remains an ordinary R numeric matrix by default. Calling
-`nn(..., output = "float")` or `nn_without_self(..., output = "float")` stores
-`distances` as a `float::fl()`/`float32` object and records both
+`nn(..., output = "float")` or
+`nn(..., exclude_self = TRUE, output = "float")` stores `distances` as a
+`float::fl()`/`float32` object and records both
 `distance_type = "float32"` and `attr(result, "distance_type") = "float32"`.
-On the float32 FAISS Flat route, faissR constructs the returned float32
-distance payload directly from FAISS's float results, so the common Euclidean,
-inner-product, cosine, and correlation cases avoid an intermediate R double
-distance matrix. The only fallback is the deterministic zero-row correction for
-cosine/correlation inputs with all-zero normalized rows, where faissR first
-repairs and sorts the double distance matrix before converting it to float32.
+On direct float32 FAISS/cuVS routes, faissR constructs the returned float32
+distance payload directly from backend float results, so Euclidean
+Flat/IVF/IVFPQ/FastScan and direct Euclidean CUDA/cuVS routes avoid an
+intermediate R double distance matrix. Transformed metrics and deterministic
+zero-row correction for cosine/correlation can still repair or convert a double
+distance matrix before returning float32 because those paths need R-side metric
+post-processing.
 KNN results also expose stable list fields for downstream packages:
 `index_base`, `metric`, `backend_used`, and, on the float32 route,
 `input_layout`/`input_owns_data`. The `float` package is in `Suggests`; faissR
 does not require it unless a user supplies a float32 object or requests float32
 distance output.
+
+Raw `nn()` also keeps a bounded session-local fitted-index
+cache for CPU FAISS Flat, HNSW, IVF-Flat, and IVFPQ routes. The cache key includes
+the reference matrix fingerprint, dimensions, method, metric, CPU thread count,
+and fitted-index parameters. Repeated compatible calls reuse the FAISS external
+pointer and search it directly, so HNSW graph construction, IVF centroid
+training, inverted-list construction, and IVFPQ codebook/PQ-code training are not
+repeated. `nn(..., exclude_self = TRUE)` removes self-neighbours inside the C++ fitted-index
+search path. Metadata reports `persistent_index_cache`, `index_cache_hit`, and
+the usual FAISS reuse fields. Users can disable the cache with
+`options(faissR.cache_fitted_nn_indexes = FALSE)` or bound it with
+`options(faissR.cache_fitted_nn_indexes_max_entries = 2L)`.
 
 faissR also registers a C-callable entry point named
 `faissR_nn_float32_call` during package initialization with
@@ -707,28 +745,20 @@ Both callables return a stable KNN list with `indices`, `distances`,
 `distances = "float"`, the optional `float` package is required at runtime and
 the returned `distances` component is a `float::fl()`/`float32` matrix.
 
-## Large Data And ImageNet
+## Large Data
 
-The ImageNet feature file used in package benchmarks contains 1,281,167 rows by
-1,024 features. In the tested representation it was stored as a double
-`data.table`, about 10 GB in R. Before FAISS or cuVS can index it, R must create
-a contiguous numeric matrix and the backend then creates float/index buffers. On
-a memory-limited workstation, full-reference 1.28M-row query tests were killed
-by the OS for FAISS HNSW, FAISS IVF, FAISS GPU CAGRA, and direct cuVS IVF-Flat.
-This is a data representation and host-memory limit, not evidence that those
-algorithms cannot handle ImageNet on a larger or more memory-efficient setup.
+Large feature tables can be limited by host memory before the
+nearest-neighbour algorithm itself becomes the bottleneck. For example, a
+1.28M x 1,024 double-precision feature table occupies about 10 GB before R
+creates the contiguous matrix and backend-side float/index buffers required by
+FAISS or cuVS. On memory-limited hosts, full-reference searches can be killed by
+the operating system because of this representation overhead.
 
-Bounded ImageNet samples did work. On a 50,000-row sample with `k = 50`,
-`faiss_gpu_flat_l2` completed in 1.208 seconds with exact recall, direct
-`cuda_cuvs_bruteforce` completed in 1.747 seconds at 0.999999 recall, and
-`faiss_hnsw` completed in 31.692 seconds at 0.999524 recall. The saved probe
-files are listed in [Autotuning](autotuning.md).
-
-For full ImageNet-scale runs on small-memory hosts, the preferred next
-implementation step is to avoid loading the dataset as a double data frame.
-Using a matrix, `float::fl()` object, or on-disk float32 representation removes
-one large conversion copy and makes FAISS/cuVS index construction more
-practical.
+For large-scale runs, prefer a matrix, `float::fl()` object, or on-disk
+float32 representation so faissR can avoid one large double-to-float expansion.
+Benchmark reports should separate representation failures from algorithmic
+failures by recording input type, backend memory, and whether a float32 adapter
+was used.
 
 ## Licensing And Acknowledgement
 

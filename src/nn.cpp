@@ -608,6 +608,69 @@ bool insert_sorted_top_float(const float* data,
   return true;
 }
 
+float pair_distance_row_major_float(const float* data,
+                                    const int a,
+                                    const int b,
+                                    const int n_features,
+                                    const DistanceKind kind) {
+  if (kind == DistanceKind::InnerProduct) {
+    const float* x = data + static_cast<std::size_t>(a) * n_features;
+    const float* y = data + static_cast<std::size_t>(b) * n_features;
+    float dot = 0.0f;
+    for (int c = 0; c < n_features; ++c) dot += x[c] * y[c];
+    return -dot;
+  }
+  return squared_euclidean_row_major_float(data, a, b, n_features);
+}
+
+void build_limited_reverse_matrix(const IntegerMatrix& indices,
+                                  const int reverse_limit,
+                                  std::vector<int>& reverse_counts,
+                                  std::vector<int>& reverse_values) {
+  const int n = indices.nrow();
+  const int k = indices.ncol();
+  reverse_counts.assign(static_cast<std::size_t>(n), 0);
+  reverse_values.assign(
+    static_cast<std::size_t>(std::max(0, reverse_limit)) * n,
+    0
+  );
+  if (reverse_limit <= 0) return;
+  for (int row = 0; row < n; ++row) {
+    for (int col = 0; col < k; ++col) {
+      const int neighbor = indices(row, col);
+      if (neighbor < 1 || neighbor > n || neighbor == row + 1) continue;
+      int& count = reverse_counts[static_cast<std::size_t>(neighbor - 1)];
+      if (count >= reverse_limit) continue;
+      reverse_values[static_cast<std::size_t>(neighbor - 1) * reverse_limit + count] = row + 1;
+      ++count;
+    }
+  }
+}
+
+void build_limited_reverse_graph(const std::vector<int>& indices,
+                                 const int n,
+                                 const int graph_k,
+                                 const int reverse_limit,
+                                 std::vector<int>& reverse_counts,
+                                 std::vector<int>& reverse_values) {
+  reverse_counts.assign(static_cast<std::size_t>(n), 0);
+  reverse_values.assign(
+    static_cast<std::size_t>(std::max(0, reverse_limit)) * n,
+    -1
+  );
+  if (reverse_limit <= 0) return;
+  for (int rank = 0; rank < graph_k; ++rank) {
+    for (int row = 0; row < n; ++row) {
+      const int neighbor = indices[static_cast<std::size_t>(row) * graph_k + rank];
+      if (neighbor < 0 || neighbor >= n || neighbor == row) continue;
+      int& count = reverse_counts[static_cast<std::size_t>(neighbor)];
+      if (count >= reverse_limit) continue;
+      reverse_values[static_cast<std::size_t>(neighbor) * reverse_limit + count] = row;
+      ++count;
+    }
+  }
+}
+
 void add_projection_candidate_topk(const float* landmarks,
                                    const float* queries,
                                    const int query,
@@ -1328,6 +1391,8 @@ IntegerMatrix nndescent_candidate_matrix_cpp(IntegerMatrix indices,
   out.attr("mean_unique_candidates") = mean_unique;
   out.attr("max_unique_candidates") = max_unique;
   out.attr("raw_candidate_columns") = k + n_sources * n_neighbors;
+  out.attr("candidate_layout") = "compiled_column_major_compact";
+  out.attr("reverse_storage") = "disabled";
   return out;
 }
 
@@ -1351,19 +1416,10 @@ IntegerMatrix nndescent_candidate_matrix_adaptive_cpp(IntegerMatrix indices,
   // graph is moving, then keep NEW-neighbour expansion and skip reverse
   // candidates once the graph is nearly stable.
   const int reverse_limit = use_reverse ? std::max(1, std::min(k, n_sources)) : 0;
-  std::vector<std::vector<int> > reverse_lists;
+  std::vector<int> reverse_counts;
+  std::vector<int> reverse_values;
   if (use_reverse) {
-    reverse_lists.resize(static_cast<std::size_t>(n));
-    for (int row = 0; row < n; ++row) {
-      for (int col = 0; col < k; ++col) {
-        const int neighbor = indices(row, col);
-        if (neighbor < 1 || neighbor > n || neighbor == row + 1) continue;
-        std::vector<int>& bucket = reverse_lists[static_cast<std::size_t>(neighbor - 1)];
-        if (static_cast<int>(bucket.size()) < reverse_limit) {
-          bucket.push_back(row + 1);
-        }
-      }
-    }
+    build_limited_reverse_matrix(indices, reverse_limit, reverse_counts, reverse_values);
   }
 
   std::vector<int> seen(static_cast<std::size_t>(n) + 1, 0);
@@ -1421,8 +1477,10 @@ IntegerMatrix nndescent_candidate_matrix_adaptive_cpp(IntegerMatrix indices,
       }
 
       if (use_reverse) {
-        const std::vector<int>& rev = reverse_lists[static_cast<std::size_t>(row)];
-        for (const int source_one_based : rev) {
+        const int rev_count = reverse_counts[static_cast<std::size_t>(row)];
+        const std::size_t rev_base = static_cast<std::size_t>(row) * reverse_limit;
+        for (int rev_pos = 0; rev_pos < rev_count; ++rev_pos) {
+          const int source_one_based = reverse_values[rev_base + rev_pos];
           add_candidate(source_one_based);
           const int source = source_one_based - 1;
           for (int neighbor_col = 0; neighbor_col < n_neighbors; ++neighbor_col) {
@@ -1468,8 +1526,10 @@ IntegerMatrix nndescent_candidate_matrix_adaptive_cpp(IntegerMatrix indices,
       }
 
       if (use_reverse) {
-        const std::vector<int>& rev = reverse_lists[static_cast<std::size_t>(row)];
-        for (const int source_one_based : rev) {
+        const int rev_count = reverse_counts[static_cast<std::size_t>(row)];
+        const std::size_t rev_base = static_cast<std::size_t>(row) * reverse_limit;
+        for (int rev_pos = 0; rev_pos < rev_count; ++rev_pos) {
+          const int source_one_based = reverse_values[rev_base + rev_pos];
           add_candidate(source_one_based);
           const int source = source_one_based - 1;
           for (int neighbor_col = 0; neighbor_col < n_neighbors; ++neighbor_col) {
@@ -1492,6 +1552,8 @@ IntegerMatrix nndescent_candidate_matrix_adaptive_cpp(IntegerMatrix indices,
   out.attr("active_only") = active_only;
   out.attr("sources") = n_sources;
   out.attr("neighbors") = n_neighbors;
+  out.attr("candidate_layout") = "compiled_column_major_compact";
+  out.attr("reverse_storage") = use_reverse ? "flat_fixed_width" : "disabled";
   return out;
 }
 
@@ -1511,19 +1573,10 @@ List nndescent_candidate_matrix_adaptive_subset_cpp(IntegerMatrix indices,
   n_neighbors = std::max(1, std::min(n_neighbors, k));
 
   const int reverse_limit = use_reverse ? std::max(1, std::min(k, n_sources)) : 0;
-  std::vector<std::vector<int> > reverse_lists;
+  std::vector<int> reverse_counts;
+  std::vector<int> reverse_values;
   if (use_reverse) {
-    reverse_lists.resize(static_cast<std::size_t>(n));
-    for (int row = 0; row < n; ++row) {
-      for (int col = 0; col < k; ++col) {
-        const int neighbor = indices(row, col);
-        if (neighbor < 1 || neighbor > n || neighbor == row + 1) continue;
-        std::vector<int>& bucket = reverse_lists[static_cast<std::size_t>(neighbor - 1)];
-        if (static_cast<int>(bucket.size()) < reverse_limit) {
-          bucket.push_back(row + 1);
-        }
-      }
-    }
+    build_limited_reverse_matrix(indices, reverse_limit, reverse_counts, reverse_values);
   }
 
   const auto row_has_new = [&](const int row) {
@@ -1583,8 +1636,10 @@ List nndescent_candidate_matrix_adaptive_subset_cpp(IntegerMatrix indices,
     }
 
     if (use_reverse) {
-      const std::vector<int>& rev = reverse_lists[static_cast<std::size_t>(row)];
-      for (const int source_one_based : rev) {
+      const int rev_count = reverse_counts[static_cast<std::size_t>(row)];
+      const std::size_t rev_base = static_cast<std::size_t>(row) * reverse_limit;
+      for (int rev_pos = 0; rev_pos < rev_count; ++rev_pos) {
+        const int source_one_based = reverse_values[rev_base + rev_pos];
         add_candidate(source_one_based);
         const int source = source_one_based - 1;
         for (int neighbor_col = 0; neighbor_col < n_neighbors; ++neighbor_col) {
@@ -1627,8 +1682,10 @@ List nndescent_candidate_matrix_adaptive_subset_cpp(IntegerMatrix indices,
     }
 
     if (use_reverse) {
-      const std::vector<int>& rev = reverse_lists[static_cast<std::size_t>(row)];
-      for (const int source_one_based : rev) {
+      const int rev_count = reverse_counts[static_cast<std::size_t>(row)];
+      const std::size_t rev_base = static_cast<std::size_t>(row) * reverse_limit;
+      for (int rev_pos = 0; rev_pos < rev_count; ++rev_pos) {
+        const int source_one_based = reverse_values[rev_base + rev_pos];
         add_candidate(source_one_based);
         const int source = source_one_based - 1;
         for (int neighbor_col = 0; neighbor_col < n_neighbors; ++neighbor_col) {
@@ -1655,11 +1712,144 @@ List nndescent_candidate_matrix_adaptive_subset_cpp(IntegerMatrix indices,
   out.attr("active_only") = true;
   out.attr("sources") = n_sources;
   out.attr("neighbors") = n_neighbors;
+  out.attr("candidate_layout") = "compiled_column_major_compact";
+  out.attr("reverse_storage") = use_reverse ? "flat_fixed_width" : "disabled";
 
   return List::create(
     Rcpp::Named("candidates") = out,
     Rcpp::Named("query_rows") = query_rows
   );
+}
+
+// [[Rcpp::export]]
+IntegerMatrix graph_prune_candidate_graph_cpp(NumericMatrix data,
+                                              IntegerMatrix seed_indices,
+                                              int r,
+                                              double alpha,
+                                              std::string metric,
+                                              int protect_top,
+                                              double max_exact_work,
+                                              bool robust_vamana) {
+  const int n = seed_indices.nrow();
+  const int seed_k = seed_indices.ncol();
+  const int n_features = data.ncol();
+  if (n < 2 || data.nrow() != n) {
+    Rcpp::stop("data and seed_indices must have the same row count >= 2");
+  }
+  if (seed_k < 1) Rcpp::stop("seed_indices must have at least one column");
+  const DistanceKind distance_kind = distance_kind_from_method(metric);
+  if (distance_kind != DistanceKind::Euclidean &&
+      distance_kind != DistanceKind::InnerProduct) {
+    Rcpp::stop("graph_prune_candidate_graph_cpp supports euclidean or inner_product metrics");
+  }
+  r = std::max(1, std::min(r, std::min(seed_k, n - 1)));
+  protect_top = std::max(0, std::min(protect_top, std::min(r, seed_k)));
+  if (!std::isfinite(alpha) || alpha < 1.0) alpha = 1.2;
+  if (!std::isfinite(max_exact_work) || max_exact_work <= 0.0) {
+    max_exact_work = 200000000.0;
+  }
+  const bool exact_prune =
+    static_cast<double>(n) * static_cast<double>(r) *
+    static_cast<double>(r) * static_cast<double>(n_features) <= max_exact_work;
+
+  std::vector<float> data_row_major;
+  copy_row_major_float(data.begin(), data_row_major, n, n_features);
+  const float* x = data_row_major.data();
+
+  IntegerMatrix out(n, r);
+  std::vector<int> seen(static_cast<std::size_t>(n) + 1, 0);
+  std::vector<int> candidates;
+  std::vector<int> keep;
+  candidates.reserve(static_cast<std::size_t>(seed_k));
+  keep.reserve(static_cast<std::size_t>(r));
+  int fallback_rows = 0;
+  int pruned_rows = 0;
+
+  for (int row = 0; row < n; ++row) {
+    const int stamp = row + 1;
+    candidates.clear();
+    keep.clear();
+
+    const auto add_seed_candidate = [&](const int candidate) {
+      if (candidate < 1 || candidate > n || candidate == row + 1) return;
+      if (seen[static_cast<std::size_t>(candidate)] == stamp) return;
+      seen[static_cast<std::size_t>(candidate)] = stamp;
+      candidates.push_back(candidate);
+    };
+
+    for (int col = 0; col < seed_k; ++col) {
+      add_seed_candidate(seed_indices(row, col));
+    }
+    if (candidates.empty()) {
+      ++fallback_rows;
+      for (int candidate = 1; candidate <= n && static_cast<int>(candidates.size()) < r; ++candidate) {
+        if (candidate != row + 1) candidates.push_back(candidate);
+      }
+    }
+
+    for (int i = 0; i < protect_top && i < static_cast<int>(candidates.size()); ++i) {
+      keep.push_back(candidates[static_cast<std::size_t>(i)]);
+    }
+
+    if (exact_prune) {
+      for (const int candidate_one_based : candidates) {
+        if (static_cast<int>(keep.size()) >= r) break;
+        if (std::find(keep.begin(), keep.end(), candidate_one_based) != keep.end()) continue;
+        const int candidate = candidate_one_based - 1;
+        const float query_candidate =
+          pair_distance_row_major_float(x, row, candidate, n_features, distance_kind);
+        bool rejected = false;
+        for (const int kept_one_based : keep) {
+          const float kept_candidate = pair_distance_row_major_float(
+            x,
+            kept_one_based - 1,
+            candidate,
+            n_features,
+            distance_kind
+          );
+          if (robust_vamana) {
+            if (static_cast<float>(alpha) * kept_candidate <= query_candidate) {
+              rejected = true;
+              break;
+            }
+          } else if (kept_candidate < query_candidate) {
+            rejected = true;
+            break;
+          }
+        }
+        if (!rejected) keep.push_back(candidate_one_based);
+      }
+      if (static_cast<int>(keep.size()) < static_cast<int>(candidates.size())) {
+        ++pruned_rows;
+      }
+    }
+
+    for (const int candidate_one_based : candidates) {
+      if (static_cast<int>(keep.size()) >= r) break;
+      if (std::find(keep.begin(), keep.end(), candidate_one_based) == keep.end()) {
+        keep.push_back(candidate_one_based);
+      }
+    }
+    for (int candidate = 1; static_cast<int>(keep.size()) < r && candidate <= n; ++candidate) {
+      if (candidate == row + 1) continue;
+      if (std::find(keep.begin(), keep.end(), candidate) == keep.end()) {
+        keep.push_back(candidate);
+      }
+    }
+
+    for (int col = 0; col < r; ++col) {
+      out(row, col) = keep[static_cast<std::size_t>(col)];
+    }
+  }
+
+  out.attr("exact_prune") = exact_prune;
+  out.attr("protected_top") = protect_top;
+  out.attr("seed_columns") = seed_k;
+  out.attr("candidate_layout") = "compiled_column_major_compact";
+  out.attr("pruning_rule") = robust_vamana ? "vamana_robust_prune" : "nsg_mrng_prune";
+  out.attr("fallback_rows") = fallback_rows;
+  out.attr("pruned_rows") = pruned_rows;
+  return out;
 }
 
 // [[Rcpp::export]]
@@ -1783,7 +1973,11 @@ List landmark_candidate_knn_cpp(NumericMatrix data,
 
   return List::create(
     Rcpp::Named("indices") = indices,
-    Rcpp::Named("distances") = distances
+    Rcpp::Named("distances") = distances,
+    Rcpp::Named("seed_initialization") = "random_projection_window_plus_row_fill",
+    Rcpp::Named("candidate_layout") = "flat_row_major_graph",
+    Rcpp::Named("reverse_storage") = "flat_fixed_width",
+    Rcpp::Named("distance_snapshot_copy") = false
   );
 }
 
@@ -2229,17 +2423,16 @@ List nndescent_self_knn_cpp(NumericMatrix data,
 
   for (int iter = 0; iter < n_iters; ++iter) {
     const std::vector<int> old_indices = graph_indices;
-    const std::vector<float> old_distances = graph_distances;
-    std::vector<std::vector<int>> reverse(static_cast<std::size_t>(n));
-    for (int rank = 0; rank < pool_size; ++rank) {
-      for (int i = 0; i < n; ++i) {
-        const std::size_t base = static_cast<std::size_t>(i) * pool_size;
-        const int nb = old_indices[base + rank];
-        if (nb < 0 || nb >= n) continue;
-        std::vector<int>& rev = reverse[static_cast<std::size_t>(nb)];
-        if (static_cast<int>(rev.size()) < reverse_limit) rev.push_back(i);
-      }
-    }
+    std::vector<int> reverse_counts;
+    std::vector<int> reverse_values;
+    build_limited_reverse_graph(
+      old_indices,
+      n,
+      pool_size,
+      reverse_limit,
+      reverse_counts,
+      reverse_values
+    );
 
     auto refine_rows = [&](const int row_start, const int row_end) {
       std::vector<int> seen(static_cast<std::size_t>(n), 0);
@@ -2275,7 +2468,7 @@ List nndescent_self_knn_cpp(NumericMatrix data,
           const int nb = old_indices[row_base + j];
           if (nb < 0) continue;
           seen[static_cast<std::size_t>(nb)] = stamp;
-          top.push_back(NeighborF{old_distances[row_base + j], nb});
+          top.push_back(NeighborF{graph_distances[row_base + j], nb});
         }
         std::sort(top.begin(), top.end(), neighborf_less);
 
@@ -2288,9 +2481,11 @@ List nndescent_self_knn_cpp(NumericMatrix data,
           }
         }
 
-        const std::vector<int>& rev = reverse[static_cast<std::size_t>(q)];
-        for (const int nb : rev) {
+        const int rev_count = reverse_counts[static_cast<std::size_t>(q)];
+        const std::size_t rev_base = static_cast<std::size_t>(q) * reverse_limit;
+        for (int rev_pos = 0; rev_pos < rev_count; ++rev_pos) {
           if (candidate_count >= max_candidates) break;
+          const int nb = reverse_values[rev_base + rev_pos];
           consider(q, nb, candidate_count);
           const std::size_t nb_base = static_cast<std::size_t>(nb) * pool_size;
           for (int t = 0; t < pool_size && candidate_count < max_candidates; ++t) {
@@ -2506,13 +2701,16 @@ List grid2d_self_knn_cpp(NumericMatrix data,
                          int k,
                          bool parallel,
                          int cores,
-                         int bins_per_dim) {
+                         int bins_per_dim,
+                         bool include_self) {
   const int n = data.nrow();
   const int n_features = data.ncol();
   if (n_features != 2) Rcpp::stop("grid2d_self_knn_cpp requires exactly two columns");
   if (n < 2) Rcpp::stop("data must have at least two rows");
-  if (k < 1 || k >= n) Rcpp::stop("k must be in [1, nrow(data) - 1]");
+  if (k < 1 || k > n) Rcpp::stop("k must be in [1, nrow(data)]");
+  if (!include_self && k >= n) Rcpp::stop("k must be in [1, nrow(data) - 1] when excluding self");
   if (bins_per_dim < 1) Rcpp::stop("bins_per_dim must be positive");
+  const int search_k = include_self ? k - 1 : k;
 
   std::vector<double> x(static_cast<std::size_t>(n));
   std::vector<double> y(static_cast<std::size_t>(n));
@@ -2532,26 +2730,33 @@ List grid2d_self_knn_cpp(NumericMatrix data,
 
   auto query_rows = [&](const int row_start, const int row_end) {
     std::vector<Neighbor> top;
-    top.reserve(static_cast<std::size_t>(k));
+    top.reserve(static_cast<std::size_t>(search_k));
     for (int q = row_start; q < row_end; ++q) {
-      search_grid2d_exact(x, y, grid, q, k, top);
-      if (static_cast<int>(top.size()) < k) {
+      if (include_self) {
+        indices_ptr[static_cast<std::size_t>(q)] = q + 1;
+        distances_ptr[static_cast<std::size_t>(q)] = 0.0;
+      }
+      if (search_k == 0) continue;
+
+      search_grid2d_exact(x, y, grid, q, search_k, top);
+      if (static_cast<int>(top.size()) < search_k) {
         for (int candidate = 0; candidate < n; ++candidate) {
           if (candidate == q) continue;
           const double dx = x[static_cast<std::size_t>(q)] - x[static_cast<std::size_t>(candidate)];
           const double dy = y[static_cast<std::size_t>(q)] - y[static_cast<std::size_t>(candidate)];
-          insert_heap_top_double(candidate, dx * dx + dy * dy, k, top);
+          insert_heap_top_double(candidate, dx * dx + dy * dy, search_k, top);
         }
       }
-      if (static_cast<int>(top.size()) == k) {
+      if (static_cast<int>(top.size()) == search_k) {
         std::sort_heap(top.begin(), top.end(), neighbor_less);
       } else {
         std::sort(top.begin(), top.end(), neighbor_less);
       }
-      for (int j = 0; j < k; ++j) {
-        indices_ptr[static_cast<std::size_t>(j) * n + q] =
+      const int col_offset = include_self ? 1 : 0;
+      for (int j = 0; j < search_k; ++j) {
+        indices_ptr[static_cast<std::size_t>(j + col_offset) * n + q] =
           top[static_cast<std::size_t>(j)].index + 1;
-        distances_ptr[static_cast<std::size_t>(j) * n + q] =
+        distances_ptr[static_cast<std::size_t>(j + col_offset) * n + q] =
           std::sqrt(std::max(top[static_cast<std::size_t>(j)].distance, 0.0));
       }
     }
@@ -2575,7 +2780,10 @@ List grid2d_self_knn_cpp(NumericMatrix data,
     Rcpp::Named("distances") = distances,
     Rcpp::Named("bins_per_dim") = bins_per_dim,
     Rcpp::Named("n_cells") = grid.bins_x * grid.bins_y,
-    Rcpp::Named("n_threads") = n_threads
+    Rcpp::Named("n_threads") = n_threads,
+    Rcpp::Named("self_column_included") = include_self,
+    Rcpp::Named("output_layout") = "knn_matrix_final",
+    Rcpp::Named("r_side_reshaping") = false
   );
 }
 
@@ -2584,13 +2792,16 @@ List grid3d_self_knn_cpp(NumericMatrix data,
                          int k,
                          bool parallel,
                          int cores,
-                         int bins_per_dim) {
+                         int bins_per_dim,
+                         bool include_self) {
   const int n = data.nrow();
   const int n_features = data.ncol();
   if (n_features != 3) Rcpp::stop("grid3d_self_knn_cpp requires exactly three columns");
   if (n < 2) Rcpp::stop("data must have at least two rows");
-  if (k < 1 || k >= n) Rcpp::stop("k must be in [1, nrow(data) - 1]");
+  if (k < 1 || k > n) Rcpp::stop("k must be in [1, nrow(data)]");
+  if (!include_self && k >= n) Rcpp::stop("k must be in [1, nrow(data) - 1] when excluding self");
   if (bins_per_dim < 1) Rcpp::stop("bins_per_dim must be positive");
+  const int search_k = include_self ? k - 1 : k;
 
   std::vector<double> x(static_cast<std::size_t>(n));
   std::vector<double> y(static_cast<std::size_t>(n));
@@ -2613,27 +2824,34 @@ List grid3d_self_knn_cpp(NumericMatrix data,
 
   auto query_rows = [&](const int row_start, const int row_end) {
     std::vector<Neighbor> top;
-    top.reserve(static_cast<std::size_t>(k));
+    top.reserve(static_cast<std::size_t>(search_k));
     for (int q = row_start; q < row_end; ++q) {
-      search_grid3d_exact(x, y, z, grid, q, k, top);
-      if (static_cast<int>(top.size()) < k) {
+      if (include_self) {
+        indices_ptr[static_cast<std::size_t>(q)] = q + 1;
+        distances_ptr[static_cast<std::size_t>(q)] = 0.0;
+      }
+      if (search_k == 0) continue;
+
+      search_grid3d_exact(x, y, z, grid, q, search_k, top);
+      if (static_cast<int>(top.size()) < search_k) {
         for (int candidate = 0; candidate < n; ++candidate) {
           if (candidate == q) continue;
           const double dx = x[static_cast<std::size_t>(q)] - x[static_cast<std::size_t>(candidate)];
           const double dy = y[static_cast<std::size_t>(q)] - y[static_cast<std::size_t>(candidate)];
           const double dz = z[static_cast<std::size_t>(q)] - z[static_cast<std::size_t>(candidate)];
-          insert_heap_top_double(candidate, dx * dx + dy * dy + dz * dz, k, top);
+          insert_heap_top_double(candidate, dx * dx + dy * dy + dz * dz, search_k, top);
         }
       }
-      if (static_cast<int>(top.size()) == k) {
+      if (static_cast<int>(top.size()) == search_k) {
         std::sort_heap(top.begin(), top.end(), neighbor_less);
       } else {
         std::sort(top.begin(), top.end(), neighbor_less);
       }
-      for (int j = 0; j < k; ++j) {
-        indices_ptr[static_cast<std::size_t>(j) * n + q] =
+      const int col_offset = include_self ? 1 : 0;
+      for (int j = 0; j < search_k; ++j) {
+        indices_ptr[static_cast<std::size_t>(j + col_offset) * n + q] =
           top[static_cast<std::size_t>(j)].index + 1;
-        distances_ptr[static_cast<std::size_t>(j) * n + q] =
+        distances_ptr[static_cast<std::size_t>(j + col_offset) * n + q] =
           std::sqrt(std::max(top[static_cast<std::size_t>(j)].distance, 0.0));
       }
     }
@@ -2657,7 +2875,10 @@ List grid3d_self_knn_cpp(NumericMatrix data,
     Rcpp::Named("distances") = distances,
     Rcpp::Named("bins_per_dim") = bins_per_dim,
     Rcpp::Named("n_cells") = grid.bins_x * grid.bins_y * grid.bins_z,
-    Rcpp::Named("n_threads") = n_threads
+    Rcpp::Named("n_threads") = n_threads,
+    Rcpp::Named("self_column_included") = include_self,
+    Rcpp::Named("output_layout") = "knn_matrix_final",
+    Rcpp::Named("r_side_reshaping") = false
   );
 }
 

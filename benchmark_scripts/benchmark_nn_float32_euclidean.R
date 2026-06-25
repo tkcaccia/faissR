@@ -286,7 +286,7 @@ run_method_child <- function(config) {
   x <- load_float_dataset(config$dataset_path)
   row <- empty_result_row(config)
   started <- proc.time()[["elapsed"]]
-  out <- faissR::nn_without_self(
+  out <- faissR::nn(exclude_self = TRUE,
     x,
     k = config$k,
     backend = config$backend,
@@ -532,7 +532,7 @@ main <- function() {
   manifest <- manifest[match(datasets, manifest$dataset), , drop = FALSE]
   methods <- split_arg(
     args$methods,
-    "exact,flat,bruteforce,grid,hnsw,ivf,ivfpq,vamana,nsg,nndescent,usearch,cagra"
+    "exact,flat,bruteforce,grid,hnsw,ivf,ivfpq,vamana,nsg,nndescent,cagra"
   )
   methods <- setdiff(unique(methods), "auto")
   backends <- split_arg(args$backends, "cpu,cuda")

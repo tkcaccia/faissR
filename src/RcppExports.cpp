@@ -21,6 +21,29 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// matrix_fingerprint_cpp
+std::string matrix_fingerprint_cpp(SEXP x);
+RcppExport SEXP _faissR_matrix_fingerprint_cpp(SEXP xSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type x(xSEXP);
+    rcpp_result_gen = Rcpp::wrap(matrix_fingerprint_cpp(x));
+    return rcpp_result_gen;
+END_RCPP
+}
+// normalized_float32_transform_cpp
+List normalized_float32_transform_cpp(SEXP x, std::string metric);
+RcppExport SEXP _faissR_normalized_float32_transform_cpp(SEXP xSEXP, SEXP metricSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type x(xSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    rcpp_result_gen = Rcpp::wrap(normalized_float32_transform_cpp(x, metric));
+    return rcpp_result_gen;
+END_RCPP
+}
 // strip_self_neighbors_cpp
 List strip_self_neighbors_cpp(IntegerMatrix indices, NumericMatrix distances);
 RcppExport SEXP _faissR_strip_self_neighbors_cpp(SEXP indicesSEXP, SEXP distancesSEXP) {
@@ -30,6 +53,73 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< IntegerMatrix >::type indices(indicesSEXP);
     Rcpp::traits::input_parameter< NumericMatrix >::type distances(distancesSEXP);
     rcpp_result_gen = Rcpp::wrap(strip_self_neighbors_cpp(indices, distances));
+    return rcpp_result_gen;
+END_RCPP
+}
+// prepend_self_neighbors_cpp
+List prepend_self_neighbors_cpp(IntegerMatrix indices, NumericMatrix distances);
+RcppExport SEXP _faissR_prepend_self_neighbors_cpp(SEXP indicesSEXP, SEXP distancesSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< IntegerMatrix >::type indices(indicesSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type distances(distancesSEXP);
+    rcpp_result_gen = Rcpp::wrap(prepend_self_neighbors_cpp(indices, distances));
+    return rcpp_result_gen;
+END_RCPP
+}
+// sort_knn_rows_cpp
+List sort_knn_rows_cpp(IntegerMatrix indices, NumericMatrix distances);
+RcppExport SEXP _faissR_sort_knn_rows_cpp(SEXP indicesSEXP, SEXP distancesSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< IntegerMatrix >::type indices(indicesSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type distances(distancesSEXP);
+    rcpp_result_gen = Rcpp::wrap(sort_knn_rows_cpp(indices, distances));
+    return rcpp_result_gen;
+END_RCPP
+}
+// restore_zero_normalized_ip_distances_cpp
+List restore_zero_normalized_ip_distances_cpp(IntegerMatrix indices, NumericMatrix distances, Rcpp::LogicalVector data_zero, Rcpp::LogicalVector points_zero, bool self_query, bool exclude_self);
+RcppExport SEXP _faissR_restore_zero_normalized_ip_distances_cpp(SEXP indicesSEXP, SEXP distancesSEXP, SEXP data_zeroSEXP, SEXP points_zeroSEXP, SEXP self_querySEXP, SEXP exclude_selfSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< IntegerMatrix >::type indices(indicesSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type distances(distancesSEXP);
+    Rcpp::traits::input_parameter< Rcpp::LogicalVector >::type data_zero(data_zeroSEXP);
+    Rcpp::traits::input_parameter< Rcpp::LogicalVector >::type points_zero(points_zeroSEXP);
+    Rcpp::traits::input_parameter< bool >::type self_query(self_querySEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
+    rcpp_result_gen = Rcpp::wrap(restore_zero_normalized_ip_distances_cpp(indices, distances, data_zero, points_zero, self_query, exclude_self));
+    return rcpp_result_gen;
+END_RCPP
+}
+// normalized_euclidean_to_similarity_distance_cpp
+NumericMatrix normalized_euclidean_to_similarity_distance_cpp(IntegerMatrix indices, NumericMatrix distances, Rcpp::LogicalVector data_zero, Rcpp::LogicalVector points_zero);
+RcppExport SEXP _faissR_normalized_euclidean_to_similarity_distance_cpp(SEXP indicesSEXP, SEXP distancesSEXP, SEXP data_zeroSEXP, SEXP points_zeroSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< IntegerMatrix >::type indices(indicesSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type distances(distancesSEXP);
+    Rcpp::traits::input_parameter< Rcpp::LogicalVector >::type data_zero(data_zeroSEXP);
+    Rcpp::traits::input_parameter< Rcpp::LogicalVector >::type points_zero(points_zeroSEXP);
+    rcpp_result_gen = Rcpp::wrap(normalized_euclidean_to_similarity_distance_cpp(indices, distances, data_zero, points_zero));
+    return rcpp_result_gen;
+END_RCPP
+}
+// mips_l2_to_shifted_inner_product_distance_cpp
+NumericMatrix mips_l2_to_shifted_inner_product_distance_cpp(NumericMatrix distances, NumericVector points_norm2, double radius2);
+RcppExport SEXP _faissR_mips_l2_to_shifted_inner_product_distance_cpp(SEXP distancesSEXP, SEXP points_norm2SEXP, SEXP radius2SEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix >::type distances(distancesSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type points_norm2(points_norm2SEXP);
+    Rcpp::traits::input_parameter< double >::type radius2(radius2SEXP);
+    rcpp_result_gen = Rcpp::wrap(mips_l2_to_shifted_inner_product_distance_cpp(distances, points_norm2, radius2));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -208,6 +298,23 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// knn_graph_edges_range_cpp
+List knn_graph_edges_range_cpp(IntegerMatrix indices, NumericMatrix distances, std::string weight_type, double prune, bool mutual, int col_start, int n_neighbors);
+RcppExport SEXP _faissR_knn_graph_edges_range_cpp(SEXP indicesSEXP, SEXP distancesSEXP, SEXP weight_typeSEXP, SEXP pruneSEXP, SEXP mutualSEXP, SEXP col_startSEXP, SEXP n_neighborsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< IntegerMatrix >::type indices(indicesSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type distances(distancesSEXP);
+    Rcpp::traits::input_parameter< std::string >::type weight_type(weight_typeSEXP);
+    Rcpp::traits::input_parameter< double >::type prune(pruneSEXP);
+    Rcpp::traits::input_parameter< bool >::type mutual(mutualSEXP);
+    Rcpp::traits::input_parameter< int >::type col_start(col_startSEXP);
+    Rcpp::traits::input_parameter< int >::type n_neighbors(n_neighborsSEXP);
+    rcpp_result_gen = Rcpp::wrap(knn_graph_edges_range_cpp(indices, distances, weight_type, prune, mutual, col_start, n_neighbors));
+    return rcpp_result_gen;
+END_RCPP
+}
 // knn_graph_edges_cpp
 List knn_graph_edges_cpp(IntegerMatrix indices, NumericMatrix distances, std::string weight_type, double prune, bool mutual);
 RcppExport SEXP _faissR_knn_graph_edges_cpp(SEXP indicesSEXP, SEXP distancesSEXP, SEXP weight_typeSEXP, SEXP pruneSEXP, SEXP mutualSEXP) {
@@ -366,6 +473,24 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// graph_prune_candidate_graph_cpp
+IntegerMatrix graph_prune_candidate_graph_cpp(NumericMatrix data, IntegerMatrix seed_indices, int r, double alpha, std::string metric, int protect_top, double max_exact_work, bool robust_vamana);
+RcppExport SEXP _faissR_graph_prune_candidate_graph_cpp(SEXP dataSEXP, SEXP seed_indicesSEXP, SEXP rSEXP, SEXP alphaSEXP, SEXP metricSEXP, SEXP protect_topSEXP, SEXP max_exact_workSEXP, SEXP robust_vamanaSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< IntegerMatrix >::type seed_indices(seed_indicesSEXP);
+    Rcpp::traits::input_parameter< int >::type r(rSEXP);
+    Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< int >::type protect_top(protect_topSEXP);
+    Rcpp::traits::input_parameter< double >::type max_exact_work(max_exact_workSEXP);
+    Rcpp::traits::input_parameter< bool >::type robust_vamana(robust_vamanaSEXP);
+    rcpp_result_gen = Rcpp::wrap(graph_prune_candidate_graph_cpp(data, seed_indices, r, alpha, metric, protect_top, max_exact_work, robust_vamana));
+    return rcpp_result_gen;
+END_RCPP
+}
 // landmark_candidate_knn_cpp
 List landmark_candidate_knn_cpp(NumericMatrix data, IntegerMatrix projection_indices, int k, int bucket_cols, int query_cols, bool parallel, int cores);
 RcppExport SEXP _faissR_landmark_candidate_knn_cpp(SEXP dataSEXP, SEXP projection_indicesSEXP, SEXP kSEXP, SEXP bucket_colsSEXP, SEXP query_colsSEXP, SEXP parallelSEXP, SEXP coresSEXP) {
@@ -457,8 +582,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // grid2d_self_knn_cpp
-List grid2d_self_knn_cpp(NumericMatrix data, int k, bool parallel, int cores, int bins_per_dim);
-RcppExport SEXP _faissR_grid2d_self_knn_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP parallelSEXP, SEXP coresSEXP, SEXP bins_per_dimSEXP) {
+List grid2d_self_knn_cpp(NumericMatrix data, int k, bool parallel, int cores, int bins_per_dim, bool include_self);
+RcppExport SEXP _faissR_grid2d_self_knn_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP parallelSEXP, SEXP coresSEXP, SEXP bins_per_dimSEXP, SEXP include_selfSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -467,13 +592,14 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type parallel(parallelSEXP);
     Rcpp::traits::input_parameter< int >::type cores(coresSEXP);
     Rcpp::traits::input_parameter< int >::type bins_per_dim(bins_per_dimSEXP);
-    rcpp_result_gen = Rcpp::wrap(grid2d_self_knn_cpp(data, k, parallel, cores, bins_per_dim));
+    Rcpp::traits::input_parameter< bool >::type include_self(include_selfSEXP);
+    rcpp_result_gen = Rcpp::wrap(grid2d_self_knn_cpp(data, k, parallel, cores, bins_per_dim, include_self));
     return rcpp_result_gen;
 END_RCPP
 }
 // grid3d_self_knn_cpp
-List grid3d_self_knn_cpp(NumericMatrix data, int k, bool parallel, int cores, int bins_per_dim);
-RcppExport SEXP _faissR_grid3d_self_knn_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP parallelSEXP, SEXP coresSEXP, SEXP bins_per_dimSEXP) {
+List grid3d_self_knn_cpp(NumericMatrix data, int k, bool parallel, int cores, int bins_per_dim, bool include_self);
+RcppExport SEXP _faissR_grid3d_self_knn_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP parallelSEXP, SEXP coresSEXP, SEXP bins_per_dimSEXP, SEXP include_selfSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -482,7 +608,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type parallel(parallelSEXP);
     Rcpp::traits::input_parameter< int >::type cores(coresSEXP);
     Rcpp::traits::input_parameter< int >::type bins_per_dim(bins_per_dimSEXP);
-    rcpp_result_gen = Rcpp::wrap(grid3d_self_knn_cpp(data, k, parallel, cores, bins_per_dim));
+    Rcpp::traits::input_parameter< bool >::type include_self(include_selfSEXP);
+    rcpp_result_gen = Rcpp::wrap(grid3d_self_knn_cpp(data, k, parallel, cores, bins_per_dim, include_self));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -606,24 +733,6 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type ef_search_option(ef_search_optionSEXP);
     Rcpp::traits::input_parameter< bool >::type manual(manualSEXP);
     rcpp_result_gen = Rcpp::wrap(nn_tune_faiss_hnsw_cpp(n, p, k, metric, target_recall, m_option, ef_construction_option, ef_search_option, manual));
-    return rcpp_result_gen;
-END_RCPP
-}
-// nn_tune_usearch_cpp
-List nn_tune_usearch_cpp(int n, int p, int k, double target_recall, int connectivity_option, int expansion_add_option, int expansion_search_option, bool manual);
-RcppExport SEXP _faissR_nn_tune_usearch_cpp(SEXP nSEXP, SEXP pSEXP, SEXP kSEXP, SEXP target_recallSEXP, SEXP connectivity_optionSEXP, SEXP expansion_add_optionSEXP, SEXP expansion_search_optionSEXP, SEXP manualSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< int >::type n(nSEXP);
-    Rcpp::traits::input_parameter< int >::type p(pSEXP);
-    Rcpp::traits::input_parameter< int >::type k(kSEXP);
-    Rcpp::traits::input_parameter< double >::type target_recall(target_recallSEXP);
-    Rcpp::traits::input_parameter< int >::type connectivity_option(connectivity_optionSEXP);
-    Rcpp::traits::input_parameter< int >::type expansion_add_option(expansion_add_optionSEXP);
-    Rcpp::traits::input_parameter< int >::type expansion_search_option(expansion_search_optionSEXP);
-    Rcpp::traits::input_parameter< bool >::type manual(manualSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_tune_usearch_cpp(n, p, k, target_recall, connectivity_option, expansion_add_option, expansion_search_option, manual));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -929,15 +1038,16 @@ BEGIN_RCPP
 END_RCPP
 }
 // cuda_grid_self_knn_cpp
-List cuda_grid_self_knn_cpp(NumericMatrix data, int k, int bins_per_dim);
-RcppExport SEXP _faissR_cuda_grid_self_knn_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP bins_per_dimSEXP) {
+List cuda_grid_self_knn_cpp(NumericMatrix data, int k, int bins_per_dim, bool include_self);
+RcppExport SEXP _faissR_cuda_grid_self_knn_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP bins_per_dimSEXP, SEXP include_selfSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
     Rcpp::traits::input_parameter< int >::type bins_per_dim(bins_per_dimSEXP);
-    rcpp_result_gen = Rcpp::wrap(cuda_grid_self_knn_cpp(data, k, bins_per_dim));
+    Rcpp::traits::input_parameter< bool >::type include_self(include_selfSEXP);
+    rcpp_result_gen = Rcpp::wrap(cuda_grid_self_knn_cpp(data, k, bins_per_dim, include_self));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -976,8 +1086,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // nn_cuvs_bruteforce_float32_cpp
-List nn_cuvs_bruteforce_float32_cpp(SEXP data, SEXP points, int k, bool exclude_self);
-RcppExport SEXP _faissR_nn_cuvs_bruteforce_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP) {
+List nn_cuvs_bruteforce_float32_cpp(SEXP data, SEXP points, int k, bool exclude_self, std::string distance_storage);
+RcppExport SEXP _faissR_nn_cuvs_bruteforce_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP distance_storageSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -985,7 +1095,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< SEXP >::type points(pointsSEXP);
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
     Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_cuvs_bruteforce_float32_cpp(data, points, k, exclude_self));
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_cuvs_bruteforce_float32_cpp(data, points, k, exclude_self, distance_storage));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1009,8 +1120,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // nn_cuvs_cagra_float32_cpp
-List nn_cuvs_cagra_float32_cpp(SEXP data, SEXP points, int k, bool exclude_self, int graph_degree, int intermediate_graph_degree, int search_width, int itopk_size, std::string build_algo);
-RcppExport SEXP _faissR_nn_cuvs_cagra_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP graph_degreeSEXP, SEXP intermediate_graph_degreeSEXP, SEXP search_widthSEXP, SEXP itopk_sizeSEXP, SEXP build_algoSEXP) {
+List nn_cuvs_cagra_float32_cpp(SEXP data, SEXP points, int k, bool exclude_self, int graph_degree, int intermediate_graph_degree, int search_width, int itopk_size, std::string build_algo, std::string distance_storage);
+RcppExport SEXP _faissR_nn_cuvs_cagra_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP graph_degreeSEXP, SEXP intermediate_graph_degreeSEXP, SEXP search_widthSEXP, SEXP itopk_sizeSEXP, SEXP build_algoSEXP, SEXP distance_storageSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -1023,7 +1134,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type search_width(search_widthSEXP);
     Rcpp::traits::input_parameter< int >::type itopk_size(itopk_sizeSEXP);
     Rcpp::traits::input_parameter< std::string >::type build_algo(build_algoSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_cuvs_cagra_float32_cpp(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size, build_algo));
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_cuvs_cagra_float32_cpp(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size, build_algo, distance_storage));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1043,8 +1155,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // nn_cuvs_nndescent_self_float32_cpp
-List nn_cuvs_nndescent_self_float32_cpp(SEXP data, int k, int graph_degree, int intermediate_graph_degree, int max_iterations);
-RcppExport SEXP _faissR_nn_cuvs_nndescent_self_float32_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP graph_degreeSEXP, SEXP intermediate_graph_degreeSEXP, SEXP max_iterationsSEXP) {
+List nn_cuvs_nndescent_self_float32_cpp(SEXP data, int k, int graph_degree, int intermediate_graph_degree, int max_iterations, std::string distance_storage);
+RcppExport SEXP _faissR_nn_cuvs_nndescent_self_float32_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP graph_degreeSEXP, SEXP intermediate_graph_degreeSEXP, SEXP max_iterationsSEXP, SEXP distance_storageSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -1053,7 +1165,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type graph_degree(graph_degreeSEXP);
     Rcpp::traits::input_parameter< int >::type intermediate_graph_degree(intermediate_graph_degreeSEXP);
     Rcpp::traits::input_parameter< int >::type max_iterations(max_iterationsSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_cuvs_nndescent_self_float32_cpp(data, k, graph_degree, intermediate_graph_degree, max_iterations));
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_cuvs_nndescent_self_float32_cpp(data, k, graph_degree, intermediate_graph_degree, max_iterations, distance_storage));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1077,8 +1190,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // nn_cuvs_hnsw_float32_cpp
-List nn_cuvs_hnsw_float32_cpp(SEXP data, SEXP points, int k, bool exclude_self, int graph_degree, int intermediate_graph_degree, int ef, int n_threads, std::string cagra_build_algo);
-RcppExport SEXP _faissR_nn_cuvs_hnsw_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP graph_degreeSEXP, SEXP intermediate_graph_degreeSEXP, SEXP efSEXP, SEXP n_threadsSEXP, SEXP cagra_build_algoSEXP) {
+List nn_cuvs_hnsw_float32_cpp(SEXP data, SEXP points, int k, bool exclude_self, int graph_degree, int intermediate_graph_degree, int ef, int n_threads, std::string cagra_build_algo, std::string distance_storage);
+RcppExport SEXP _faissR_nn_cuvs_hnsw_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP graph_degreeSEXP, SEXP intermediate_graph_degreeSEXP, SEXP efSEXP, SEXP n_threadsSEXP, SEXP cagra_build_algoSEXP, SEXP distance_storageSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -1091,7 +1204,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type ef(efSEXP);
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
     Rcpp::traits::input_parameter< std::string >::type cagra_build_algo(cagra_build_algoSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_cuvs_hnsw_float32_cpp(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, ef, n_threads, cagra_build_algo));
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_cuvs_hnsw_float32_cpp(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, ef, n_threads, cagra_build_algo, distance_storage));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1112,8 +1226,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // nn_cuvs_ivf_flat_float32_cpp
-List nn_cuvs_ivf_flat_float32_cpp(SEXP data, SEXP points, int k, int n_lists, int n_probes, bool exclude_self);
-RcppExport SEXP _faissR_nn_cuvs_ivf_flat_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP n_listsSEXP, SEXP n_probesSEXP, SEXP exclude_selfSEXP) {
+List nn_cuvs_ivf_flat_float32_cpp(SEXP data, SEXP points, int k, int n_lists, int n_probes, bool exclude_self, std::string distance_storage);
+RcppExport SEXP _faissR_nn_cuvs_ivf_flat_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP n_listsSEXP, SEXP n_probesSEXP, SEXP exclude_selfSEXP, SEXP distance_storageSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -1123,7 +1237,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type n_lists(n_listsSEXP);
     Rcpp::traits::input_parameter< int >::type n_probes(n_probesSEXP);
     Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_cuvs_ivf_flat_float32_cpp(data, points, k, n_lists, n_probes, exclude_self));
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_cuvs_ivf_flat_float32_cpp(data, points, k, n_lists, n_probes, exclude_self, distance_storage));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1146,8 +1261,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // nn_cuvs_ivf_pq_float32_cpp
-List nn_cuvs_ivf_pq_float32_cpp(SEXP data, SEXP points, int k, int n_lists, int n_probes, int pq_dim, int pq_bits, bool exclude_self);
-RcppExport SEXP _faissR_nn_cuvs_ivf_pq_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP n_listsSEXP, SEXP n_probesSEXP, SEXP pq_dimSEXP, SEXP pq_bitsSEXP, SEXP exclude_selfSEXP) {
+List nn_cuvs_ivf_pq_float32_cpp(SEXP data, SEXP points, int k, int n_lists, int n_probes, int pq_dim, int pq_bits, bool exclude_self, std::string distance_storage);
+RcppExport SEXP _faissR_nn_cuvs_ivf_pq_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP n_listsSEXP, SEXP n_probesSEXP, SEXP pq_dimSEXP, SEXP pq_bitsSEXP, SEXP exclude_selfSEXP, SEXP distance_storageSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -1159,7 +1274,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type pq_dim(pq_dimSEXP);
     Rcpp::traits::input_parameter< int >::type pq_bits(pq_bitsSEXP);
     Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_cuvs_ivf_pq_float32_cpp(data, points, k, n_lists, n_probes, pq_dim, pq_bits, exclude_self));
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_cuvs_ivf_pq_float32_cpp(data, points, k, n_lists, n_probes, pq_dim, pq_bits, exclude_self, distance_storage));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1229,6 +1345,22 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
     Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
     rcpp_result_gen = Rcpp::wrap(nn_faiss_flat_float32_cpp(data, points, k, exclude_self, n_threads, metric, distance_storage));
+    return rcpp_result_gen;
+END_RCPP
+}
+// nn_faiss_flat_pretransformed_float32_cpp
+List nn_faiss_flat_pretransformed_float32_cpp(SEXP data, SEXP points, int k, bool exclude_self, int n_threads, std::string distance_storage);
+RcppExport SEXP _faissR_nn_faiss_flat_pretransformed_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP, SEXP distance_storageSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_flat_pretransformed_float32_cpp(data, points, k, exclude_self, n_threads, distance_storage));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1403,6 +1535,47 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nn_faiss_scann_cpp
+List nn_faiss_scann_cpp(NumericMatrix data, NumericMatrix points, int k, int nlist, int nprobe, int pq_m, int refine_factor, int bbs, bool exclude_self, int n_threads);
+RcppExport SEXP _faissR_nn_faiss_scann_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP nlistSEXP, SEXP nprobeSEXP, SEXP pq_mSEXP, SEXP refine_factorSEXP, SEXP bbsSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type nlist(nlistSEXP);
+    Rcpp::traits::input_parameter< int >::type nprobe(nprobeSEXP);
+    Rcpp::traits::input_parameter< int >::type pq_m(pq_mSEXP);
+    Rcpp::traits::input_parameter< int >::type refine_factor(refine_factorSEXP);
+    Rcpp::traits::input_parameter< int >::type bbs(bbsSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_scann_cpp(data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// nn_faiss_scann_float32_cpp
+List nn_faiss_scann_float32_cpp(SEXP data, SEXP points, int k, int nlist, int nprobe, int pq_m, int refine_factor, int bbs, bool exclude_self, int n_threads, std::string distance_storage);
+RcppExport SEXP _faissR_nn_faiss_scann_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP nlistSEXP, SEXP nprobeSEXP, SEXP pq_mSEXP, SEXP refine_factorSEXP, SEXP bbsSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP, SEXP distance_storageSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type nlist(nlistSEXP);
+    Rcpp::traits::input_parameter< int >::type nprobe(nprobeSEXP);
+    Rcpp::traits::input_parameter< int >::type pq_m(pq_mSEXP);
+    Rcpp::traits::input_parameter< int >::type refine_factor(refine_factorSEXP);
+    Rcpp::traits::input_parameter< int >::type bbs(bbsSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_scann_float32_cpp(data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self, n_threads, distance_storage));
+    return rcpp_result_gen;
+END_RCPP
+}
 // nn_faiss_hnsw_cpp
 List nn_faiss_hnsw_cpp(NumericMatrix data, NumericMatrix points, int k, int m, int ef_construction, int ef_search, std::string metric, std::string distance_output, bool exclude_self, int n_threads);
 RcppExport SEXP _faissR_nn_faiss_hnsw_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP mSEXP, SEXP ef_constructionSEXP, SEXP ef_searchSEXP, SEXP metricSEXP, SEXP distance_outputSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP) {
@@ -1441,6 +1614,80 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
     Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
     rcpp_result_gen = Rcpp::wrap(nn_faiss_hnsw_float32_cpp(data, points, k, m, ef_construction, ef_search, metric, distance_output, exclude_self, n_threads, distance_storage));
+    return rcpp_result_gen;
+END_RCPP
+}
+// nn_faiss_hnsw_index_build_float32_cpp
+SEXP nn_faiss_hnsw_index_build_float32_cpp(SEXP data, int m, int ef_construction, int ef_search, std::string metric, std::string distance_output, int n_threads);
+RcppExport SEXP _faissR_nn_faiss_hnsw_index_build_float32_cpp(SEXP dataSEXP, SEXP mSEXP, SEXP ef_constructionSEXP, SEXP ef_searchSEXP, SEXP metricSEXP, SEXP distance_outputSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< int >::type m(mSEXP);
+    Rcpp::traits::input_parameter< int >::type ef_construction(ef_constructionSEXP);
+    Rcpp::traits::input_parameter< int >::type ef_search(ef_searchSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< std::string >::type distance_output(distance_outputSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_hnsw_index_build_float32_cpp(data, m, ef_construction, ef_search, metric, distance_output, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// nn_faiss_hnsw_index_search_float32_cpp
+List nn_faiss_hnsw_index_search_float32_cpp(SEXP index_ptr, SEXP points, int k, bool exclude_self, int ef_search, int n_threads, std::string distance_storage);
+RcppExport SEXP _faissR_nn_faiss_hnsw_index_search_float32_cpp(SEXP index_ptrSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP ef_searchSEXP, SEXP n_threadsSEXP, SEXP distance_storageSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type index_ptr(index_ptrSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
+    Rcpp::traits::input_parameter< int >::type ef_search(ef_searchSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_hnsw_index_search_float32_cpp(index_ptr, points, k, exclude_self, ef_search, n_threads, distance_storage));
+    return rcpp_result_gen;
+END_RCPP
+}
+// nn_faiss_index_build_float32_cpp
+SEXP nn_faiss_index_build_float32_cpp(SEXP data, std::string kind, int nlist, int nprobe, int pq_m, int pq_nbits, int graph_degree, int search_width, int build_type, int n_iter, std::string metric, std::string distance_output, int n_threads);
+RcppExport SEXP _faissR_nn_faiss_index_build_float32_cpp(SEXP dataSEXP, SEXP kindSEXP, SEXP nlistSEXP, SEXP nprobeSEXP, SEXP pq_mSEXP, SEXP pq_nbitsSEXP, SEXP graph_degreeSEXP, SEXP search_widthSEXP, SEXP build_typeSEXP, SEXP n_iterSEXP, SEXP metricSEXP, SEXP distance_outputSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< std::string >::type kind(kindSEXP);
+    Rcpp::traits::input_parameter< int >::type nlist(nlistSEXP);
+    Rcpp::traits::input_parameter< int >::type nprobe(nprobeSEXP);
+    Rcpp::traits::input_parameter< int >::type pq_m(pq_mSEXP);
+    Rcpp::traits::input_parameter< int >::type pq_nbits(pq_nbitsSEXP);
+    Rcpp::traits::input_parameter< int >::type graph_degree(graph_degreeSEXP);
+    Rcpp::traits::input_parameter< int >::type search_width(search_widthSEXP);
+    Rcpp::traits::input_parameter< int >::type build_type(build_typeSEXP);
+    Rcpp::traits::input_parameter< int >::type n_iter(n_iterSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< std::string >::type distance_output(distance_outputSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_index_build_float32_cpp(data, kind, nlist, nprobe, pq_m, pq_nbits, graph_degree, search_width, build_type, n_iter, metric, distance_output, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// nn_faiss_index_search_float32_cpp
+List nn_faiss_index_search_float32_cpp(SEXP index_ptr, SEXP points, int k, bool exclude_self, int search_width, int n_threads, std::string distance_storage);
+RcppExport SEXP _faissR_nn_faiss_index_search_float32_cpp(SEXP index_ptrSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP search_widthSEXP, SEXP n_threadsSEXP, SEXP distance_storageSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type index_ptr(index_ptrSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
+    Rcpp::traits::input_parameter< int >::type search_width(search_widthSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_index_search_float32_cpp(index_ptr, points, k, exclude_self, search_width, n_threads, distance_storage));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1676,39 +1923,17 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// usearch_available_cpp
-bool usearch_available_cpp();
-RcppExport SEXP _faissR_usearch_available_cpp() {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    rcpp_result_gen = Rcpp::wrap(usearch_available_cpp());
-    return rcpp_result_gen;
-END_RCPP
-}
-// nn_usearch_float32_cpp
-List nn_usearch_float32_cpp(SEXP data, SEXP points, int k, int connectivity, int expansion_add, int expansion_search, bool exclude_self, int n_threads, std::string distance_storage);
-RcppExport SEXP _faissR_nn_usearch_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP connectivitySEXP, SEXP expansion_addSEXP, SEXP expansion_searchSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP, SEXP distance_storageSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
-    Rcpp::traits::input_parameter< SEXP >::type points(pointsSEXP);
-    Rcpp::traits::input_parameter< int >::type k(kSEXP);
-    Rcpp::traits::input_parameter< int >::type connectivity(connectivitySEXP);
-    Rcpp::traits::input_parameter< int >::type expansion_add(expansion_addSEXP);
-    Rcpp::traits::input_parameter< int >::type expansion_search(expansion_searchSEXP);
-    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
-    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
-    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_usearch_float32_cpp(data, points, k, connectivity, expansion_add, expansion_search, exclude_self, n_threads, distance_storage));
-    return rcpp_result_gen;
-END_RCPP
-}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_faissR_standardize_cpu_cpp", (DL_FUNC) &_faissR_standardize_cpu_cpp, 1},
+    {"_faissR_matrix_fingerprint_cpp", (DL_FUNC) &_faissR_matrix_fingerprint_cpp, 1},
+    {"_faissR_normalized_float32_transform_cpp", (DL_FUNC) &_faissR_normalized_float32_transform_cpp, 2},
     {"_faissR_strip_self_neighbors_cpp", (DL_FUNC) &_faissR_strip_self_neighbors_cpp, 2},
+    {"_faissR_prepend_self_neighbors_cpp", (DL_FUNC) &_faissR_prepend_self_neighbors_cpp, 2},
+    {"_faissR_sort_knn_rows_cpp", (DL_FUNC) &_faissR_sort_knn_rows_cpp, 2},
+    {"_faissR_restore_zero_normalized_ip_distances_cpp", (DL_FUNC) &_faissR_restore_zero_normalized_ip_distances_cpp, 6},
+    {"_faissR_normalized_euclidean_to_similarity_distance_cpp", (DL_FUNC) &_faissR_normalized_euclidean_to_similarity_distance_cpp, 4},
+    {"_faissR_mips_l2_to_shifted_inner_product_distance_cpp", (DL_FUNC) &_faissR_mips_l2_to_shifted_inner_product_distance_cpp, 3},
     {"_faissR_validate_projection_knn_cpp", (DL_FUNC) &_faissR_validate_projection_knn_cpp, 4},
     {"_faissR_mean_neighbor_rank_error_cpp", (DL_FUNC) &_faissR_mean_neighbor_rank_error_cpp, 3},
     {"_faissR_majority_vote_knn_labels_cpp", (DL_FUNC) &_faissR_majority_vote_knn_labels_cpp, 4},
@@ -1721,6 +1946,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_project_embedding_knn_cpp", (DL_FUNC) &_faissR_project_embedding_knn_cpp, 3},
     {"_faissR_project_embedding_affine_cpp", (DL_FUNC) &_faissR_project_embedding_affine_cpp, 8},
     {"_faissR_project_embedding_affine_parallel_cpp", (DL_FUNC) &_faissR_project_embedding_affine_parallel_cpp, 9},
+    {"_faissR_knn_graph_edges_range_cpp", (DL_FUNC) &_faissR_knn_graph_edges_range_cpp, 7},
     {"_faissR_knn_graph_edges_cpp", (DL_FUNC) &_faissR_knn_graph_edges_cpp, 5},
     {"_faissR_graph_resolution_candidates_cpp", (DL_FUNC) &_faissR_graph_resolution_candidates_cpp, 3},
     {"_faissR_cugraph_available_cpp", (DL_FUNC) &_faissR_cugraph_available_cpp, 0},
@@ -1731,20 +1957,20 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nndescent_candidate_matrix_cpp", (DL_FUNC) &_faissR_nndescent_candidate_matrix_cpp, 3},
     {"_faissR_nndescent_candidate_matrix_adaptive_cpp", (DL_FUNC) &_faissR_nndescent_candidate_matrix_adaptive_cpp, 6},
     {"_faissR_nndescent_candidate_matrix_adaptive_subset_cpp", (DL_FUNC) &_faissR_nndescent_candidate_matrix_adaptive_subset_cpp, 5},
+    {"_faissR_graph_prune_candidate_graph_cpp", (DL_FUNC) &_faissR_graph_prune_candidate_graph_cpp, 8},
     {"_faissR_landmark_candidate_knn_cpp", (DL_FUNC) &_faissR_landmark_candidate_knn_cpp, 7},
     {"_faissR_landmark_candidate_knn_subset_cpp", (DL_FUNC) &_faissR_landmark_candidate_knn_subset_cpp, 8},
     {"_faissR_landmark_projection_knn_approx_cpp", (DL_FUNC) &_faissR_landmark_projection_knn_approx_cpp, 8},
     {"_faissR_nndescent_self_knn_cpp", (DL_FUNC) &_faissR_nndescent_self_knn_cpp, 10},
     {"_faissR_ivf_self_knn_cpp", (DL_FUNC) &_faissR_ivf_self_knn_cpp, 7},
-    {"_faissR_grid2d_self_knn_cpp", (DL_FUNC) &_faissR_grid2d_self_knn_cpp, 5},
-    {"_faissR_grid3d_self_knn_cpp", (DL_FUNC) &_faissR_grid3d_self_knn_cpp, 5},
+    {"_faissR_grid2d_self_knn_cpp", (DL_FUNC) &_faissR_grid2d_self_knn_cpp, 6},
+    {"_faissR_grid3d_self_knn_cpp", (DL_FUNC) &_faissR_grid3d_self_knn_cpp, 6},
     {"_faissR_candidate_knn_cpp", (DL_FUNC) &_faissR_candidate_knn_cpp, 9},
     {"_faissR_nn_auto_select_backend_cpp", (DL_FUNC) &_faissR_nn_auto_select_backend_cpp, 28},
     {"_faissR_nn_tune_faiss_ivf_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_ivf_cpp, 6},
     {"_faissR_nn_tune_faiss_pq_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_pq_cpp, 6},
     {"_faissR_nn_tune_cuvs_ivfpq_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_ivfpq_cpp, 5},
     {"_faissR_nn_tune_faiss_hnsw_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_hnsw_cpp, 9},
-    {"_faissR_nn_tune_usearch_cpp", (DL_FUNC) &_faissR_nn_tune_usearch_cpp, 8},
     {"_faissR_nn_tune_rcpphnsw_cpp", (DL_FUNC) &_faissR_nn_tune_rcpphnsw_cpp, 4},
     {"_faissR_nn_tune_faiss_nsg_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_nsg_cpp, 5},
     {"_faissR_nn_tune_faiss_nndescent_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_nndescent_cpp, 5},
@@ -1764,26 +1990,27 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_cuda_cpp", (DL_FUNC) &_faissR_nn_cuda_cpp, 4},
     {"_faissR_landmark_candidate_knn_cuda_cpp", (DL_FUNC) &_faissR_landmark_candidate_knn_cuda_cpp, 5},
     {"_faissR_row_candidate_knn_cuda_cpp", (DL_FUNC) &_faissR_row_candidate_knn_cuda_cpp, 4},
-    {"_faissR_cuda_grid_self_knn_cpp", (DL_FUNC) &_faissR_cuda_grid_self_knn_cpp, 3},
+    {"_faissR_cuda_grid_self_knn_cpp", (DL_FUNC) &_faissR_cuda_grid_self_knn_cpp, 4},
     {"_faissR_cuvs_available_cpp", (DL_FUNC) &_faissR_cuvs_available_cpp, 0},
     {"_faissR_cuvs_info_json_cpp", (DL_FUNC) &_faissR_cuvs_info_json_cpp, 0},
     {"_faissR_nn_cuvs_bruteforce_cpp", (DL_FUNC) &_faissR_nn_cuvs_bruteforce_cpp, 4},
-    {"_faissR_nn_cuvs_bruteforce_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_bruteforce_float32_cpp, 4},
+    {"_faissR_nn_cuvs_bruteforce_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_bruteforce_float32_cpp, 5},
     {"_faissR_nn_cuvs_cagra_cpp", (DL_FUNC) &_faissR_nn_cuvs_cagra_cpp, 9},
-    {"_faissR_nn_cuvs_cagra_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_cagra_float32_cpp, 9},
+    {"_faissR_nn_cuvs_cagra_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_cagra_float32_cpp, 10},
     {"_faissR_nn_cuvs_nndescent_self_cpp", (DL_FUNC) &_faissR_nn_cuvs_nndescent_self_cpp, 5},
-    {"_faissR_nn_cuvs_nndescent_self_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_nndescent_self_float32_cpp, 5},
+    {"_faissR_nn_cuvs_nndescent_self_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_nndescent_self_float32_cpp, 6},
     {"_faissR_nn_cuvs_hnsw_cpp", (DL_FUNC) &_faissR_nn_cuvs_hnsw_cpp, 9},
-    {"_faissR_nn_cuvs_hnsw_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_hnsw_float32_cpp, 9},
+    {"_faissR_nn_cuvs_hnsw_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_hnsw_float32_cpp, 10},
     {"_faissR_nn_cuvs_ivf_flat_cpp", (DL_FUNC) &_faissR_nn_cuvs_ivf_flat_cpp, 6},
-    {"_faissR_nn_cuvs_ivf_flat_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_ivf_flat_float32_cpp, 6},
+    {"_faissR_nn_cuvs_ivf_flat_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_ivf_flat_float32_cpp, 7},
     {"_faissR_nn_cuvs_ivf_pq_cpp", (DL_FUNC) &_faissR_nn_cuvs_ivf_pq_cpp, 8},
-    {"_faissR_nn_cuvs_ivf_pq_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_ivf_pq_float32_cpp, 8},
+    {"_faissR_nn_cuvs_ivf_pq_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_ivf_pq_float32_cpp, 9},
     {"_faissR_kmeans_cuvs_cpp", (DL_FUNC) &_faissR_kmeans_cuvs_cpp, 7},
     {"_faissR_faiss_available_cpp", (DL_FUNC) &_faissR_faiss_available_cpp, 0},
     {"_faissR_faiss_info_json_cpp", (DL_FUNC) &_faissR_faiss_info_json_cpp, 0},
     {"_faissR_nn_faiss_flat_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_cpp, 5},
     {"_faissR_nn_faiss_flat_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_float32_cpp, 7},
+    {"_faissR_nn_faiss_flat_pretransformed_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_pretransformed_float32_cpp, 6},
     {"_faissR_nn_faiss_ivf_cpp", (DL_FUNC) &_faissR_nn_faiss_ivf_cpp, 9},
     {"_faissR_nn_faiss_ivf_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_ivf_float32_cpp, 10},
     {"_faissR_nn_faiss_flat_ip_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_ip_cpp, 5},
@@ -1794,8 +2021,14 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_faiss_gpu_flat_normalized_ip_distance_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_flat_normalized_ip_distance_cpp, 4},
     {"_faissR_nn_faiss_ivfpq_cpp", (DL_FUNC) &_faissR_nn_faiss_ivfpq_cpp, 11},
     {"_faissR_nn_faiss_ivfpq_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_ivfpq_float32_cpp, 12},
+    {"_faissR_nn_faiss_scann_cpp", (DL_FUNC) &_faissR_nn_faiss_scann_cpp, 10},
+    {"_faissR_nn_faiss_scann_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_scann_float32_cpp, 11},
     {"_faissR_nn_faiss_hnsw_cpp", (DL_FUNC) &_faissR_nn_faiss_hnsw_cpp, 10},
     {"_faissR_nn_faiss_hnsw_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_hnsw_float32_cpp, 11},
+    {"_faissR_nn_faiss_hnsw_index_build_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_hnsw_index_build_float32_cpp, 7},
+    {"_faissR_nn_faiss_hnsw_index_search_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_hnsw_index_search_float32_cpp, 7},
+    {"_faissR_nn_faiss_index_build_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_index_build_float32_cpp, 13},
+    {"_faissR_nn_faiss_index_search_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_index_search_float32_cpp, 7},
     {"_faissR_nn_faiss_nsg_cpp", (DL_FUNC) &_faissR_nn_faiss_nsg_cpp, 10},
     {"_faissR_nn_faiss_nsg_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_nsg_float32_cpp, 11},
     {"_faissR_nn_faiss_nndescent_cpp", (DL_FUNC) &_faissR_nn_faiss_nndescent_cpp, 10},
@@ -1808,8 +2041,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_faiss_gpu_cagra_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_cagra_float32_cpp, 9},
     {"_faissR_kmeans_faiss_cpp", (DL_FUNC) &_faissR_kmeans_faiss_cpp, 8},
     {"_faissR_kmeans_faiss_gpu_cpp", (DL_FUNC) &_faissR_kmeans_faiss_gpu_cpp, 7},
-    {"_faissR_usearch_available_cpp", (DL_FUNC) &_faissR_usearch_available_cpp, 0},
-    {"_faissR_nn_usearch_float32_cpp", (DL_FUNC) &_faissR_nn_usearch_float32_cpp, 9},
     {NULL, NULL, 0}
 };
 

@@ -21,7 +21,9 @@
 \arguments{
 \item{object}{A model returned by \code{\link{knn}()}.}
 
-\item{newdata}{Numeric query matrix with observations in rows.}
+\item{newdata}{Numeric or optional `float::fl()`/`float32` query matrix with
+observations in rows. Float32 queries are preserved for methods with
+direct float32 adapters.}
 
 \item{k}{Number of neighbours.}
 
@@ -58,7 +60,10 @@ class probability matrices from classification models.}
 A factor for classification, a numeric vector for regression, or a
   numeric class-probability matrix when `type = "prob"`. Outputs carry
   `attr(result, "faissR_nn")` route metadata, approximation parameters, and
-  auto-selection metadata from the underlying \code{\link{nn}()} call.
+  auto-selection metadata from the underlying \code{\link{nn}()} call. The
+  prediction-time neighbour search is batched: the full `newdata` matrix is
+  sent to the resolved FAISS/cuVS/native NN route in one call, and metadata
+  records `batch_query`, `query_n`, and `query_call_count`.
 }
 \description{
 Predict from a faissR kNN model

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstring>
 #include <cstdint>
 #include <limits>
 #include <cstdlib>
@@ -207,7 +208,14 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
     const float* col_major = float32_slot_ptr(slot, expected_length, name);
     if (col_major != nullptr) {
       finite = finite_float32_payload(col_major, expected_length);
-      if (view.nrow == 1 || view.ncol == 1) {
+      const bool row_major_payload =
+        Rf_asLogical(Rf_getAttrib(x, Rf_install("faissR_row_major_float32"))) == TRUE;
+      if (row_major_payload) {
+        view.data = col_major;
+        view.owns_data = false;
+        view.row_major = true;
+        view.layout = "float32_payload_direct_row_major";
+      } else if (view.nrow == 1 || view.ncol == 1) {
         view.data = col_major;
         view.owns_data = false;
         view.row_major = true;
@@ -275,6 +283,50 @@ bool same_float32_object(SEXP data, SEXP points) {
   return data == points;
 }
 
+bool wants_float_distance_storage(const std::string& distance_storage) {
+  if (distance_storage == "float" || distance_storage == "float32") return true;
+  if (distance_storage == "double") return false;
+  Rcpp::stop("`distance_storage` must be \"double\" or \"float\"");
+  return false;
+}
+
+SEXP make_float32_distance_matrix(IntegerMatrix& float_dists) {
+  Rcpp::Environment base = Rcpp::Environment::namespace_env("base");
+  Rcpp::Function require_namespace = base["requireNamespace"];
+  const bool ok = Rcpp::as<bool>(
+    require_namespace("float", Rcpp::Named("quietly") = true)
+  );
+  if (!ok) {
+    Rcpp::stop("`output = \"float\"` requires the optional float package");
+  }
+  Rcpp::S4 float_matrix("float32");
+  float_matrix.slot("Data") = float_dists;
+  return float_matrix;
+}
+
+void set_distance_value(double* dists_ptr,
+                        int* float_dists_ptr,
+                        const std::size_t output_offset,
+                        const float raw,
+                        const bool already_sqrt,
+                        const bool float_distances) {
+  const double value = already_sqrt ? static_cast<double>(raw) :
+    std::sqrt(std::max(static_cast<double>(raw), 0.0));
+  if (float_distances) {
+    const float value_f = static_cast<float>(value);
+    std::memcpy(float_dists_ptr + output_offset, &value_f, sizeof(float));
+  } else {
+    dists_ptr[output_offset] = value;
+  }
+}
+
+void tag_float_distance_output(List& out, const bool float_distances) {
+  if (float_distances) {
+    out["distance_type"] = "float32";
+    out.attr("distance_type") = "float32";
+  }
+}
+
 void annotate_float32_input(List& out,
                             const MatrixViewF32& xb,
                             const MatrixViewF32& xq,
@@ -287,6 +339,58 @@ void annotate_float32_input(List& out,
     xb.owns_data :
     (xb.owns_data || xq.owns_data);
   out["float32_compatibility_conversion"] = false;
+}
+
+double float32_bytes(const int rows, const int cols) {
+  return static_cast<double>(rows) * static_cast<double>(cols) *
+    static_cast<double>(sizeof(float));
+}
+
+void annotate_cuvs_gpu_residency(List& out,
+                                 const std::string& index_residency,
+                                 const bool same_storage,
+                                 const int n_data,
+                                 const int n_points,
+                                 const int n_features,
+                                 const int search_k,
+                                 const bool query_on_device,
+                                 const bool result_on_device,
+                                 const int data_h2d_copies = 1,
+                                 const bool gpu_index_resident = true) {
+  const int query_h2d_copies = query_on_device && !same_storage ? 1 : 0;
+  const double data_bytes = data_h2d_copies > 0 ?
+    float32_bytes(n_data, n_features) : 0.0;
+  const double query_bytes = query_h2d_copies > 0 ?
+    float32_bytes(n_points, n_features) : 0.0;
+  const double result_bytes = result_on_device ?
+    static_cast<double>(n_points) * static_cast<double>(search_k) *
+      static_cast<double>(sizeof(int64_t) + sizeof(float)) :
+    0.0;
+  out["accelerator"] = "cuda";
+  out["gpu_provider"] = "cuvs";
+  out["device_residency"] = "cuda";
+  out["index_residency"] = index_residency;
+  out["gpu_index_resident"] = gpu_index_resident;
+  out["gpu_index_persistent"] = false;
+  out["host_to_device_transfer_strategy"] = "explicit_cuvs_device_buffers";
+  out["host_to_device_copies_known"] = true;
+  out["host_to_device_data_copies"] = data_h2d_copies;
+  out["host_to_device_query_copies"] = query_h2d_copies;
+  out["host_to_device_copies"] = data_h2d_copies + query_h2d_copies;
+  out["host_to_device_data_bytes"] = data_bytes;
+  out["host_to_device_query_bytes"] = query_bytes;
+  out["host_to_device_bytes"] = data_bytes + query_bytes;
+  out["query_reuses_device_data"] = query_on_device && same_storage;
+  out["query_residency"] = query_on_device ?
+    (same_storage ? "dataset_device_buffer" : "query_device_buffer") :
+    (same_storage ? "input_host_buffer" : "query_host_buffer");
+  out["result_residency"] = result_on_device ?
+    "device_result_buffer_then_R" : "host_result_tensor";
+  out["device_to_host_result_copies_known"] = true;
+  out["device_to_host_result_copies"] = result_on_device ? 2 : 0;
+  out["device_to_host_result_bytes"] = result_bytes;
+  out["cpu_fallback"] = false;
+  out["cpu_side_result_repair"] = false;
 }
 
 bool same_matrix_storage(const NumericMatrix& data,
@@ -718,11 +822,19 @@ List format_uint32_result(const std::vector<uint32_t>& labels,
                           const bool exclude_self,
                           const std::string& index_type,
                           const bool exact,
-                          const bool already_sqrt = false) {
+                          const bool already_sqrt = false,
+                          const bool float_distances = false) {
   IntegerMatrix indices(n_points, out_k);
-  NumericMatrix dists(n_points, out_k);
+  NumericMatrix dists;
+  IntegerMatrix float_dists;
+  if (float_distances) {
+    float_dists = IntegerMatrix(n_points, out_k);
+  } else {
+    dists = NumericMatrix(n_points, out_k);
+  }
   int* indices_ptr = indices.begin();
-  double* dists_ptr = dists.begin();
+  double* dists_ptr = float_distances ? nullptr : dists.begin();
+  int* float_dists_ptr = float_distances ? float_dists.begin() : nullptr;
   const bool skip_self = exclude_self && self_query;
 
   for (int i = 0; i < n_points; ++i) {
@@ -737,8 +849,14 @@ List format_uint32_result(const std::vector<uint32_t>& labels,
       const std::size_t output_offset = static_cast<std::size_t>(written) * n_points + i;
       indices_ptr[output_offset] = static_cast<int>(label) + 1;
       const float raw = distances[result_offset];
-      dists_ptr[output_offset] = already_sqrt ? static_cast<double>(raw) :
-        std::sqrt(std::max(static_cast<double>(raw), 0.0));
+      set_distance_value(
+        dists_ptr,
+        float_dists_ptr,
+        output_offset,
+        raw,
+        already_sqrt,
+        float_distances
+      );
       ++written;
     }
     if (written < out_k) {
@@ -746,12 +864,17 @@ List format_uint32_result(const std::vector<uint32_t>& labels,
     }
   }
 
-  return List::create(
+  SEXP distance_sexp = float_distances ?
+    make_float32_distance_matrix(float_dists) :
+    static_cast<SEXP>(dists);
+  List out = List::create(
     Rcpp::Named("indices") = indices,
-    Rcpp::Named("distances") = dists,
+    Rcpp::Named("distances") = distance_sexp,
     Rcpp::Named("index_type") = index_type,
     Rcpp::Named("exact") = exact
   );
+  tag_float_distance_output(out, float_distances);
+  return out;
 }
 
 List format_int64_result(const std::vector<int64_t>& labels,
@@ -763,11 +886,19 @@ List format_int64_result(const std::vector<int64_t>& labels,
                          const bool exclude_self,
                          const std::string& index_type,
                          const bool exact,
-                         const bool already_sqrt = false) {
+                         const bool already_sqrt = false,
+                         const bool float_distances = false) {
   IntegerMatrix indices(n_points, out_k);
-  NumericMatrix dists(n_points, out_k);
+  NumericMatrix dists;
+  IntegerMatrix float_dists;
+  if (float_distances) {
+    float_dists = IntegerMatrix(n_points, out_k);
+  } else {
+    dists = NumericMatrix(n_points, out_k);
+  }
   int* indices_ptr = indices.begin();
-  double* dists_ptr = dists.begin();
+  double* dists_ptr = float_distances ? nullptr : dists.begin();
+  int* float_dists_ptr = float_distances ? float_dists.begin() : nullptr;
   const bool skip_self = exclude_self && self_query;
 
   for (int i = 0; i < n_points; ++i) {
@@ -786,8 +917,14 @@ List format_int64_result(const std::vector<int64_t>& labels,
       const std::size_t output_offset = static_cast<std::size_t>(written) * n_points + i;
       indices_ptr[output_offset] = static_cast<int>(label) + 1;
       const float raw = distances[result_offset];
-      dists_ptr[output_offset] = already_sqrt ? static_cast<double>(raw) :
-        std::sqrt(std::max(static_cast<double>(raw), 0.0));
+      set_distance_value(
+        dists_ptr,
+        float_dists_ptr,
+        output_offset,
+        raw,
+        already_sqrt,
+        float_distances
+      );
       ++written;
     }
     if (written < out_k) {
@@ -795,12 +932,17 @@ List format_int64_result(const std::vector<int64_t>& labels,
     }
   }
 
-  return List::create(
+  SEXP distance_sexp = float_distances ?
+    make_float32_distance_matrix(float_dists) :
+    static_cast<SEXP>(dists);
+  List out = List::create(
     Rcpp::Named("indices") = indices,
-    Rcpp::Named("distances") = dists,
+    Rcpp::Named("distances") = distance_sexp,
     Rcpp::Named("index_type") = index_type,
     Rcpp::Named("exact") = exact
   );
+  tag_float_distance_output(out, float_distances);
+  return out;
 }
 
 List format_uint64_result(const std::vector<uint64_t>& labels,
@@ -812,11 +954,19 @@ List format_uint64_result(const std::vector<uint64_t>& labels,
                           const bool exclude_self,
                           const std::string& index_type,
                           const bool exact,
-                          const bool already_sqrt = false) {
+                          const bool already_sqrt = false,
+                          const bool float_distances = false) {
   IntegerMatrix indices(n_points, out_k);
-  NumericMatrix dists(n_points, out_k);
+  NumericMatrix dists;
+  IntegerMatrix float_dists;
+  if (float_distances) {
+    float_dists = IntegerMatrix(n_points, out_k);
+  } else {
+    dists = NumericMatrix(n_points, out_k);
+  }
   int* indices_ptr = indices.begin();
-  double* dists_ptr = dists.begin();
+  double* dists_ptr = float_distances ? nullptr : dists.begin();
+  int* float_dists_ptr = float_distances ? float_dists.begin() : nullptr;
   const bool skip_self = exclude_self && self_query;
 
   for (int i = 0; i < n_points; ++i) {
@@ -834,8 +984,14 @@ List format_uint64_result(const std::vector<uint64_t>& labels,
       const std::size_t output_offset = static_cast<std::size_t>(written) * n_points + i;
       indices_ptr[output_offset] = static_cast<int>(label) + 1;
       const float raw = distances[result_offset];
-      dists_ptr[output_offset] = already_sqrt ? static_cast<double>(raw) :
-        std::sqrt(std::max(static_cast<double>(raw), 0.0));
+      set_distance_value(
+        dists_ptr,
+        float_dists_ptr,
+        output_offset,
+        raw,
+        already_sqrt,
+        float_distances
+      );
       ++written;
     }
     if (written < out_k) {
@@ -843,12 +999,17 @@ List format_uint64_result(const std::vector<uint64_t>& labels,
     }
   }
 
-  return List::create(
+  SEXP distance_sexp = float_distances ?
+    make_float32_distance_matrix(float_dists) :
+    static_cast<SEXP>(dists);
+  List out = List::create(
     Rcpp::Named("indices") = indices,
-    Rcpp::Named("distances") = dists,
+    Rcpp::Named("distances") = distance_sexp,
     Rcpp::Named("index_type") = index_type,
     Rcpp::Named("exact") = exact
   );
+  tag_float_distance_output(out, float_distances);
+  return out;
 }
 
 std::string json_escape(const std::string& text) {
@@ -1005,7 +1166,8 @@ List cuvs_bruteforce_knn_impl(NumericMatrix data,
 List cuvs_bruteforce_float32_knn_impl(SEXP data,
                                       SEXP points,
                                       int k,
-                                      bool exclude_self) {
+                                      bool exclude_self,
+                                      std::string distance_storage) {
   MatrixViewF32 xb = make_float32_matrix_view(data, "data");
   const bool same_storage = same_float32_object(data, points);
   MatrixViewF32 xq = same_storage ? MatrixViewF32() :
@@ -1024,6 +1186,7 @@ List cuvs_bruteforce_float32_knn_impl(SEXP data,
   const int n_points = same_storage ? xb.nrow : xq.nrow;
   const int n_features = xb.ncol;
   const int search_k = exclude_self ? std::min(n_data, k + 1) : k;
+  const bool float_distances = wants_float_distance_storage(distance_storage);
 
   CuvsResources res;
   const std::size_t data_bytes =
@@ -1110,9 +1273,15 @@ List cuvs_bruteforce_float32_knn_impl(SEXP data,
     self_query,
     exclude_self,
     "cuVS_BruteForce",
-    true
+    true,
+    false,
+    float_distances
   );
   annotate_float32_input(out, xb, xq, same_storage);
+  annotate_cuvs_gpu_residency(
+    out, "gpu_transient", same_storage, n_data, n_points, n_features,
+    search_k, true, true
+  );
   return out;
 }
 
@@ -1343,7 +1512,8 @@ List cuvs_cagra_float32_knn_impl(SEXP data,
                                  int intermediate_graph_degree,
                                  int search_width,
                                  int itopk_size,
-                                 std::string build_algo) {
+                                 std::string build_algo,
+                                 std::string distance_storage) {
   MatrixViewF32 xb = make_float32_matrix_view(data, "data");
   const bool same_storage = same_float32_object(data, points);
   MatrixViewF32 xq = same_storage ? MatrixViewF32() :
@@ -1366,6 +1536,7 @@ List cuvs_cagra_float32_knn_impl(SEXP data,
   const int requested_intermediate_graph_degree = intermediate_graph_degree;
   const int requested_search_width = search_width;
   const int requested_itopk_size = itopk_size;
+  const bool float_distances = wants_float_distance_storage(distance_storage);
 
   graph_degree = std::max(search_k, graph_degree);
   graph_degree = std::min(graph_degree, std::max(1, n_data - 1));
@@ -1526,7 +1697,9 @@ List cuvs_cagra_float32_knn_impl(SEXP data,
     self_query,
     exclude_self,
     "cuVS_CAGRA",
-    false
+    false,
+    false,
+    float_distances
   );
   out["graph_degree"] = graph_degree;
   out["intermediate_graph_degree"] = intermediate_graph_degree;
@@ -1544,6 +1717,10 @@ List cuvs_cagra_float32_knn_impl(SEXP data,
     requested_search_width != search_width || requested_itopk_size != itopk_size;
   out["search_batch_size"] = batch_size;
   annotate_float32_input(out, xb, xq, same_storage);
+  annotate_cuvs_gpu_residency(
+    out, "gpu_transient", same_storage, n_data, n_points, n_features,
+    search_k, true, true
+  );
   index.reset();
   cuda_sync("cuvsCagraIndexDestroy synchronize");
   neighbors_d.reset(res.get(), 0);
@@ -1566,8 +1743,10 @@ List cuvs_hnsw_knn_from_row_major(const float* xb,
                                   int intermediate_graph_degree,
                                   int ef,
                                   int n_threads,
-                                  std::string cagra_build_algo) {
+                                  std::string cagra_build_algo,
+                                  const bool float_distances = false) {
 #ifndef FAISSR_HAS_CUVS_HNSW
+  (void)float_distances;
   Rcpp::stop(
     "Direct cuVS HNSW is not available in this cuVS installation. "
     "Reinstall cuVS with cuvs/neighbors/hnsw.h."
@@ -1643,8 +1822,13 @@ List cuvs_hnsw_knn_from_row_major(const float* xb,
     "cuvsCagraBuild"
   );
 
+  int64_t host_dataset_shape[2] = {n_data, n_features};
+  DLManagedTensor host_dataset_tensor = make_tensor(
+    const_cast<float*>(xb), host_dataset_shape, 2, kDLCPU, kDLFloat, 32
+  );
+
   HnswIndexParams hnsw_params;
-  hnsw_params.get()->hierarchy = NONE;
+  hnsw_params.get()->hierarchy = CPU;
   hnsw_params.get()->ef_construction = std::max(ef, intermediate_graph_degree);
   hnsw_params.get()->num_threads = n_threads;
   hnsw_params.get()->M =
@@ -1652,8 +1836,14 @@ List cuvs_hnsw_knn_from_row_major(const float* xb,
   hnsw_params.get()->metric = L2Expanded;
   HnswIndex hnsw_index;
   cuvs_check(
-    cuvsHnswFromCagra(res.get(), hnsw_params.get(), cagra_index.get(), hnsw_index.get()),
-    "cuvsHnswFromCagra"
+    cuvsHnswFromCagraWithDataset(
+      res.get(),
+      hnsw_params.get(),
+      cagra_index.get(),
+      hnsw_index.get(),
+      &host_dataset_tensor
+    ),
+    "cuvsHnswFromCagraWithDataset"
   );
 
   const float* query_ptr = same_storage ? xb : xq;
@@ -1695,7 +1885,9 @@ List cuvs_hnsw_knn_from_row_major(const float* xb,
     self_query,
     exclude_self,
     "cuVS_HNSW",
-    false
+    false,
+    false,
+    float_distances
   );
   out["graph_degree"] = graph_degree;
   out["intermediate_graph_degree"] = intermediate_graph_degree;
@@ -1706,14 +1898,20 @@ List cuvs_hnsw_knn_from_row_major(const float* xb,
   out["requested_ef"] = requested_ef;
   out["requested_num_threads"] = requested_n_threads;
   out["cagra_build_algo"] = selected_build_algo;
-  out["hnsw_build_algo"] = "from_cagra";
-  out["hnsw_hierarchy"] = "none";
+  out["hnsw_build_algo"] = "from_cagra_with_dataset";
+  out["hnsw_hierarchy"] = "cpu";
   out["hnsw_m"] = static_cast<int>(hnsw_params.get()->M);
   out["hnsw_ef_construction"] = hnsw_params.get()->ef_construction;
   out["hnsw_parameters_adjusted"] = requested_graph_degree != graph_degree ||
     requested_intermediate_graph_degree != intermediate_graph_degree ||
     requested_ef != ef ||
     requested_n_threads != n_threads;
+  annotate_cuvs_gpu_residency(
+    out, "hybrid_gpu_cagra_build_host_hnsw_search", same_storage, n_data,
+    n_points, n_features, search_k, false, false, 1, false
+  );
+  out["cuda_hnsw_design"] = "cuvs_hnsw_from_cagra_cpu_hierarchy";
+  out["cuda_hnsw_pure_gpu"] = false;
   return out;
 #endif
 }
@@ -1765,8 +1963,10 @@ List cuvs_hnsw_float32_knn_impl(SEXP data,
                                 int intermediate_graph_degree,
                                 int ef,
                                 int n_threads,
-                                std::string cagra_build_algo) {
+                                std::string cagra_build_algo,
+                                std::string distance_storage) {
 #ifndef FAISSR_HAS_CUVS_HNSW
+  (void)distance_storage;
   Rcpp::stop(
     "Direct cuVS HNSW is not available in this cuVS installation. "
     "Reinstall cuVS with cuvs/neighbors/hnsw.h."
@@ -1785,6 +1985,7 @@ List cuvs_hnsw_float32_knn_impl(SEXP data,
   if (exclude_self && !same_storage) {
     Rcpp::stop("self-neighbor exclusion requires points to be data");
   }
+  const bool float_distances = wants_float_distance_storage(distance_storage);
 
   List out = cuvs_hnsw_knn_from_row_major(
     xb.data,
@@ -1799,7 +2000,8 @@ List cuvs_hnsw_float32_knn_impl(SEXP data,
     intermediate_graph_degree,
     ef,
     n_threads,
-    cagra_build_algo
+    cagra_build_algo,
+    float_distances
   );
   out["input_type"] = "float32";
   out["input_layout"] = same_storage ?
@@ -1996,6 +2198,10 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix data,
   out["kmeans_n_iters"] = kmeans_iters;
   out["kmeans_trainset_fraction"] = std::min(100, train_percent) / 100.0;
   out["conservative_memory_allocation"] = true;
+  annotate_cuvs_gpu_residency(
+    out, "gpu_transient", same_storage, n_data, n_points, n_features,
+    search_k, true, true
+  );
   return out;
 #endif
 }
@@ -2005,8 +2211,10 @@ List cuvs_ivf_flat_float32_knn_impl(SEXP data,
                                     int k,
                                     int n_lists,
                                     int n_probes,
-                                    bool exclude_self) {
+                                    bool exclude_self,
+                                    std::string distance_storage) {
 #ifndef FAISSR_HAS_CUVS_IVF_FLAT
+  (void)distance_storage;
   Rcpp::stop(
     "Direct cuVS IVF-Flat is not available in this cuVS installation. "
     "Use `backend = \"faiss_gpu_ivf_flat\"` or reinstall cuVS with "
@@ -2031,6 +2239,7 @@ List cuvs_ivf_flat_float32_knn_impl(SEXP data,
   const int n_points = same_storage ? xb.nrow : xq.nrow;
   const int n_features = xb.ncol;
   const int search_k = exclude_self ? std::min(n_data, k + 1) : k;
+  const bool float_distances = wants_float_distance_storage(distance_storage);
   n_lists = std::max(1, std::min(n_lists, n_data));
   n_probes = std::max(1, std::min(n_probes, n_lists));
 
@@ -2172,7 +2381,9 @@ List cuvs_ivf_flat_float32_knn_impl(SEXP data,
     self_query,
     exclude_self,
     "cuVS_IVF_Flat",
-    false
+    false,
+    false,
+    float_distances
   );
   out["n_lists"] = n_lists;
   out["n_probes"] = n_probes;
@@ -2181,6 +2392,10 @@ List cuvs_ivf_flat_float32_knn_impl(SEXP data,
   out["kmeans_trainset_fraction"] = std::min(100, train_percent) / 100.0;
   out["conservative_memory_allocation"] = true;
   annotate_float32_input(out, xb, xq, same_storage);
+  annotate_cuvs_gpu_residency(
+    out, "gpu_transient", same_storage, n_data, n_points, n_features,
+    search_k, true, true
+  );
   return out;
 #endif
 }
@@ -2361,6 +2576,10 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix data,
   out["pq_parameters_adjusted"] = requested_pq_dim != static_cast<int>(actual_pq_dim) ||
     requested_pq_bits != static_cast<int>(actual_pq_bits);
   out["search_batch_size"] = batch_size;
+  annotate_cuvs_gpu_residency(
+    out, "gpu_transient", same_storage, n_data, n_points, n_features,
+    search_k, true, true
+  );
   return out;
 #endif
 }
@@ -2372,8 +2591,10 @@ List cuvs_ivf_pq_float32_knn_impl(SEXP data,
                                   int n_probes,
                                   int pq_dim,
                                   int pq_bits,
-                                  bool exclude_self) {
+                                  bool exclude_self,
+                                  std::string distance_storage) {
 #ifndef FAISSR_HAS_CUVS_IVF_PQ
+  (void)distance_storage;
   Rcpp::stop(
     "Direct cuVS IVF-PQ is not available in this cuVS installation. "
     "Use `backend = \"faiss_gpu_ivfpq\"` or reinstall cuVS with "
@@ -2400,6 +2621,7 @@ List cuvs_ivf_pq_float32_knn_impl(SEXP data,
   const int search_k = exclude_self ? std::min(n_data, k + 1) : k;
   const int requested_pq_dim = pq_dim;
   const int requested_pq_bits = pq_bits;
+  const bool float_distances = wants_float_distance_storage(distance_storage);
   n_lists = std::max(1, std::min(n_lists, n_data));
   n_probes = std::max(1, std::min(n_probes, n_lists));
   pq_dim = std::max(0, pq_dim);
@@ -2527,7 +2749,9 @@ List cuvs_ivf_pq_float32_knn_impl(SEXP data,
     self_query,
     exclude_self,
     "cuVS_IVF_PQ",
-    false
+    false,
+    false,
+    float_distances
   );
   int64_t actual_pq_dim = pq_dim;
   int64_t actual_pq_bits = pq_bits;
@@ -2543,6 +2767,10 @@ List cuvs_ivf_pq_float32_knn_impl(SEXP data,
     requested_pq_bits != static_cast<int>(actual_pq_bits);
   out["search_batch_size"] = batch_size;
   annotate_float32_input(out, xb, xq, same_storage);
+  annotate_cuvs_gpu_residency(
+    out, "gpu_transient", same_storage, n_data, n_points, n_features,
+    search_k, true, true
+  );
   return out;
 #endif
 }
@@ -2824,7 +3052,8 @@ List cuvs_nndescent_self_float32_knn_impl(SEXP data,
                                           int k,
                                           int graph_degree,
                                           int intermediate_graph_degree,
-                                          int max_iterations) {
+                                          int max_iterations,
+                                          std::string distance_storage) {
   MatrixViewF32 xb = make_float32_matrix_view(data, "data");
   if (xb.nrow < 2) Rcpp::stop("data must have at least two rows");
   if (xb.ncol < 1) Rcpp::stop("data must have at least one column");
@@ -2842,6 +3071,7 @@ List cuvs_nndescent_self_float32_knn_impl(SEXP data,
   );
   intermediate_graph_degree = std::min(intermediate_graph_degree, n_data - 1);
   max_iterations = std::max(1, max_iterations);
+  const bool float_distances = wants_float_distance_storage(distance_storage);
 
   std::vector<uint32_t> graph(
     static_cast<std::size_t>(n_data) * graph_degree,
@@ -2903,12 +3133,18 @@ List cuvs_nndescent_self_float32_knn_impl(SEXP data,
     true,
     true,
     "cuVS_NNDescent",
-    false
+    false,
+    false,
+    float_distances
   );
   out["graph_degree"] = graph_degree;
   out["intermediate_graph_degree"] = intermediate_graph_degree;
   out["max_iterations"] = max_iterations;
   MatrixViewF32 empty_points;
   annotate_float32_input(out, xb, empty_points, true);
+  annotate_cuvs_gpu_residency(
+    out, "host_tensor_nndescent", true, n_data, n_data, n_features,
+    graph_degree, false, false, 0, false
+  );
   return out;
 }

@@ -162,8 +162,7 @@ test_that("public API excludes retired wrapper and platform-specific helper name
     "knn",
     "knn_graph",
     "nn",
-    "nn_capabilities",
-    "nn_without_self"
+    "nn_capabilities"
   )
   retired_exports <- c(
     "knn_fit",
@@ -348,7 +347,6 @@ test_that("GitHub docs list all public availability helpers", {
 
 test_that("reference manual documents live public function arguments", {
   expect_rd_documents_formals("nn", nn)
-  expect_rd_documents_formals("nn_without_self", nn_without_self)
   expect_rd_documents_formals("knn", knn)
   expect_rd_documents_formals("knn_graph", knn_graph)
   expect_rd_documents_formals("graph_cluster", graph_cluster)
@@ -448,7 +446,7 @@ test_that("README describes public NN metrics and correlation semantics", {
   expect_true(grepl("smaller-is-better", prose, fixed = TRUE))
   expect_true(grepl("distance choices belong in `metric`", prose, fixed = TRUE))
   expect_true(grepl("zero-normalized rows have distance `0`", prose, fixed = TRUE))
-  expect_true(grepl("explicit CUDA routes remain on CUDA", prose, fixed = TRUE))
+  expect_true(grepl("explicit CUDA routes do not perform CPU repair", prose, fixed = TRUE))
 })
 
 test_that("GitHub NN docs describe requested and resolved result metadata", {
@@ -657,7 +655,6 @@ test_that("usage API includes all exported public workflow sections", {
   lines <- readLines(docs_file, warn = FALSE)
   expected_sections <- paste0("## `", c(
     "nn",
-    "nn_without_self",
     "candidate_knn",
     "knn_graph",
     "graph_cluster",
@@ -709,7 +706,6 @@ test_that("usage API argument tables document live function formals", {
   lines <- readLines(docs_file, warn = FALSE)
   sections <- list(
     "## `nn()`" = names(formals(nn)),
-    "## `nn_without_self()`" = names(formals(nn_without_self)),
     "## `candidate_knn()`" = names(formals(candidate_knn)),
     "## `knn_graph()`" = names(formals(knn_graph)),
     "## `graph_cluster()`" = names(formals(graph_cluster)),
@@ -741,9 +737,7 @@ test_that("usage API NN method documentation agrees with live signatures", {
   live <- eval(formals(nn)$method, envir = baseenv())
   expect_equal(documented, live)
 
-  nn_without_self_rows <- grep("^\\| `method` \\| Same algorithm selector as `nn\\(\\)`\\.", lines, value = TRUE)
-  expect_length(nn_without_self_rows, 1L)
-  expect_equal(eval(formals(nn_without_self)$method, envir = baseenv()), live)
+  expect_true("exclude_self" %in% usage_argument_rows(lines, "## `nn()`"))
 })
 
 test_that("usage API graph_cluster signature shows the live default method", {
@@ -880,19 +874,20 @@ test_that("backend auto documentation states the CUDA runtime requirement", {
   }
 })
 
-test_that("backend docs describe explicit HNSW auto CUDA routing", {
+test_that("backend docs describe CUDA HNSW wrapper design", {
   docs_file <- test_path("../../docs/backend-capabilities.md")
   if (!file.exists(docs_file)) {
     skip("Backend documentation is not available in this installed-package test context.")
   }
   prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
   expect_true(grepl('method = "hnsw"', prose, fixed = TRUE))
-  expect_true(grepl("selects the cuVS HNSW route", prose, fixed = TRUE))
-  expect_true(grepl("normalized cosine/correlation", prose, fixed = TRUE))
-  expect_true(grepl("maximum-inner-product-to-L2 transform", prose, fixed = TRUE))
+  expect_true(grepl("CUDA HNSW resolves to RAPIDS cuVS HNSW", prose, fixed = TRUE))
+  expect_true(grepl("cuvsHnswFromCagraWithDataset", prose, fixed = TRUE))
+  expect_true(grepl("not a pure all-GPU HNSW search path", prose, fixed = TRUE))
+  expect_true(grepl('method = "cagra"', prose, fixed = TRUE))
 })
 
-test_that("NN methods page describes CUDA HNSW transformed raw inner product", {
+test_that("NN methods page describes CPU and CUDA HNSW routes", {
   docs_files <- c(
     test_path("../../docs", c("nn-methods.md", "backend-capabilities.md", "implementation.md", "usage-api.md")),
     test_path("../../man/nn.Rd")
@@ -904,10 +899,9 @@ test_that("NN methods page describes CUDA HNSW transformed raw inner product", {
 
   prose <- paste(unlist(lapply(docs_files, readLines, warn = FALSE)), collapse = " ")
   expect_true(grepl("cuVS HNSW", prose, fixed = TRUE))
-  expect_true(grepl("transformed raw inner product", prose, fixed = TRUE))
-  expect_true(grepl("CPU HNSW supports Euclidean, cosine, correlation, and inner product", prose, fixed = TRUE))
-  expect_false(grepl("It is CPU-only in faissR", prose, fixed = TRUE))
-  expect_true(grepl("maximum-inner-product-to-L2 transform", prose, fixed = TRUE))
+  expect_true(grepl("HNSW supports Euclidean, cosine, correlation, and inner product", prose, fixed = TRUE))
+  expect_true(grepl("cuda_hnsw_design", prose, fixed = TRUE))
+  expect_true(grepl("cuvs_hnsw_from_cagra_cpu_hierarchy", prose, fixed = TRUE))
 })
 
 test_that("nn_capabilities manual separates HNSW and CAGRA inner-product routes", {
@@ -917,7 +911,7 @@ test_that("nn_capabilities manual separates HNSW and CAGRA inner-product routes"
   }
   prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
   expect_true(grepl("Public CUDA CAGRA supports raw inner product", prose, fixed = TRUE))
-  expect_true(grepl("Public CUDA HNSW uses the same transform", prose, fixed = TRUE))
+  expect_true(grepl("Public CUDA HNSW uses RAPIDS cuVS HNSW", prose, fixed = TRUE))
   expect_false(grepl("CUDA CAGRA/HNSW raw", prose, fixed = TRUE))
 })
 
@@ -929,8 +923,7 @@ test_that("backend docs describe shape-dependent CUDA auto non-Euclidean capabil
   prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
   expect_true(grepl("reported as shape-dependent", prose, fixed = TRUE))
   expect_true(grepl("transformed FAISS GPU/direct cuVS CAGRA for large self-KNN", prose, fixed = TRUE))
-  expect_true(grepl("Explicit CUDA HNSW can also use", prose, fixed = TRUE))
-  expect_true(grepl("MIPS-to-L2 graph-search transform", prose, fixed = TRUE))
+  expect_true(grepl("Explicit CUDA HNSW is routed to the", prose, fixed = TRUE))
 })
 
 test_that("benchmark documentation describes canonical metric aliases once", {

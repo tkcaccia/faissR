@@ -13,9 +13,7 @@ Description: Native nearest-neighbour search, graph construction, graph clusteri
     reduction workflows. The package requires the FAISS C++ library for CPU
     indexes and can optionally use FAISS GPU indexes with NVIDIA cuVS
     integration or direct RAPIDS cuVS/CUDA indexes on NVIDIA machines.
-    CPU-only systems do not need NVIDIA libraries. A CPU-only USEARCH dense
-    HNSW route is compiled from bundled Apache-2.0 header-only USEARCH source
-    and does not require a separate USEARCH installation. Supervised kNN models use
+    CPU-only systems do not need NVIDIA libraries. Supervised kNN models use
     knn(Xtrain, Ytrain) and predict(), or knn(Xtrain, Ytrain, Xtest) for
     immediate prediction. Class probabilities are returned through
     predict(type = "prob") for kNN classification models.
@@ -30,9 +28,10 @@ Suggests:
     Matrix,
     float,
     RcppHNSW,
-    testthat
+    testthat,
+    withr
 LinkingTo:
     Rcpp
-SystemRequirements: C++20, Fortran, FAISS C++ library; optional CUDA toolkit, RAPIDS cuVS library for CUDA/cuVS NN and k-means backends, RAPIDS libcugraph for CUDA graph clustering, and bundled USEARCH header-only source for CPU method = "usearch"
+SystemRequirements: C++20, Fortran, FAISS C++ library; optional CUDA toolkit, RAPIDS cuVS library for CUDA/cuVS NN and k-means backends, and RAPIDS libcugraph for CUDA graph clustering
 Config/roxygen2/version: 8.0.0
 Config/testthat/edition: 3

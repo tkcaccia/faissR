@@ -10,7 +10,7 @@ knn_graph(
   k = 50L,
   backend = c("auto", "cpu", "cuda"),
   nn_method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
-    "vamana", "nsg", "nndescent", "usearch", "cagra"),
+    "vamana", "nsg", "nndescent", "scann", "cagra"),
   method = NULL,
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
@@ -27,14 +27,14 @@ knn_graph(
 \item{data}{Numeric matrix/data frame, a KNN object returned by \code{nn()}, or an embedding object with a matrix \code{layout}.}
 \item{knn}{Optional precomputed KNN object returned by \code{nn()}. If supplied, \code{data} is ignored for neighbour search.}
 \item{k}{Number of non-self neighbours used in the graph.}
-\item{backend}{Device backend passed to \code{nn_without_self()} when \code{knn} is not supplied: \code{"auto"}, \code{"cpu"}, or \code{"cuda"}.}
-\item{nn_method}{Nearest-neighbour method passed to \code{nn_without_self()} when \code{knn} is not supplied. The default \code{"auto"} uses the shape-aware selector for the chosen backend. \code{"usearch"} selects the CPU-only USEARCH dense HNSW route for Euclidean/L2 graph KNN.}
+\item{backend}{Device backend passed to \code{nn(..., exclude_self = TRUE)} when \code{knn} is not supplied: \code{"auto"}, \code{"cpu"}, or \code{"cuda"}.}
+\item{nn_method}{Nearest-neighbour method passed to \code{nn(..., exclude_self = TRUE)} when \code{knn} is not supplied. The default \code{"auto"} uses the shape-aware selector for the chosen backend.}
 \item{method}{Alias for \code{nn_method}, matching the public method argument used by \code{nn()} and \code{knn()}. If both \code{method} and \code{nn_method} are supplied they must resolve to the same public nearest-neighbour method label.}
-\item{metric}{Distance metric passed to \code{nn_without_self()} when \code{knn} is not supplied. Aliases such as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as canonical metric labels. Correlation is centered cosine similarity, not raw inner product. Inner-product graph construction ranks neighbours by larger raw dot product while reusing faissR's shifted smaller-is-better distance convention from \code{nn()}.}
-\item{tuning}{Tuning policy passed to \code{nn_without_self()} when \code{knn} is not supplied.}
-\item{target_recall}{HNSW speed/recall tier passed to \code{nn_without_self()} when KNN is computed here. Use \code{0.9}, \code{0.95}, or \code{0.99}; non-HNSW methods ignore this value but retain it in graph metadata.}
-\item{cagra_implementation}{CUDA CAGRA provider passed to \code{nn_without_self()} when KNN is computed here. \code{NULL} uses the global option; \code{"auto"} uses the same deterministic shape-aware provider rule as \code{nn()}, while \code{"faiss_gpu"} or \code{"cuvs"} force one provider.}
-\item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm passed to \code{nn_without_self()} when KNN is computed here. \code{NULL} uses the global \code{faissR.cuvs_cagra_build_algo} option. This setting applies to direct cuVS CAGRA and accepts \code{"auto"}, \code{"ivf_pq"}, \code{"nn_descent"}, or \code{"iterative_cagra_search"}.}
+\item{metric}{Distance metric passed to \code{nn(..., exclude_self = TRUE)} when \code{knn} is not supplied. Aliases such as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as canonical metric labels. Correlation is centered cosine similarity, not raw inner product. Inner-product graph construction ranks neighbours by larger raw dot product while reusing faissR's shifted smaller-is-better distance convention from \code{nn()}.}
+\item{tuning}{Tuning policy passed to \code{nn(..., exclude_self = TRUE)} when \code{knn} is not supplied.}
+\item{target_recall}{HNSW speed/recall tier passed to \code{nn(..., exclude_self = TRUE)} when KNN is computed here. Use \code{0.9}, \code{0.95}, or \code{0.99}; non-HNSW methods ignore this value but retain it in graph metadata.}
+\item{cagra_implementation}{CUDA CAGRA provider passed to \code{nn(..., exclude_self = TRUE)} when KNN is computed here. \code{NULL} uses the global option; \code{"auto"} uses the same deterministic shape-aware provider rule as \code{nn()}, while \code{"faiss_gpu"} or \code{"cuvs"} force one provider.}
+\item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm passed to \code{nn(..., exclude_self = TRUE)} when KNN is computed here. \code{NULL} uses the global \code{faissR.cuvs_cagra_build_algo} option. This setting applies to direct cuVS CAGRA and accepts \code{"auto"}, \code{"ivf_pq"}, \code{"nn_descent"}, or \code{"iterative_cagra_search"}.}
 \item{weight}{Graph weighting. \code{"auto"} uses SNN/Jaccard weights for input space and distance weights for embedding space. \code{"snn"} builds shared-nearest-neighbour Jaccard weights. \code{"adaptive"} uses a local radius kernel. \code{"distance"} uses \code{1 / (1 + distance)}. \code{"binary"} gives every edge weight 1.}
 \item{mutual}{If \code{TRUE}, keep only reciprocal nearest-neighbour edges.}
 \item{prune}{Drop edges with weight less than or equal to this value.}

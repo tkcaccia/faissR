@@ -46,9 +46,9 @@ NNDescent candidate-refinement route also support raw inner-product self-KNN
 through faissR's shifted dot-product distance convention. Public CUDA CAGRA
 supports raw inner product through the same maximum-inner-product-to-L2
 transform used by direct cuVS brute-force and IVF/PQ routes. Public CUDA HNSW
-uses the same transform before building the CAGRA-derived cuVS HNSW graph and
-converts returned L2 distances back to faissR's shifted inner-product distance
-convention. Public CPU NSG uses faissR's native
+uses RAPIDS cuVS HNSW from a CAGRA seed graph with a cuVS CPU hierarchy and records that wrapper design
+in metadata rather than presenting it as a pure all-GPU HNSW implementation.
+Public CPU NSG uses faissR's native
 NSG-style route for all metrics because linked FAISS graph builders can abort
 during graph construction; large high-dimensional CPU inputs use deterministic
 FAISS HNSW seeding before NSG/MRNG-style pruning. Direct cuVS NNDescent does

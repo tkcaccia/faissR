@@ -19,7 +19,7 @@ internal_nn <- function(data,
   )
 }
 
-internal_nn_without_self <- function(data,
+internal_nn_exclude_self <- function(data,
                                      k,
                                      backend,
                                      n_threads = NULL,
@@ -41,12 +41,11 @@ internal_nn_without_self <- function(data,
 test_that("public nearest-neighbour wrappers expose one canonical method and metric set", {
   canonical_methods <- c(
     "auto", "exact", "flat", "bruteforce", "grid",
-    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra"
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "scann", "cagra"
   )
   canonical_metrics <- c("euclidean", "cosine", "correlation", "inner_product")
   wrappers <- list(
     nn = formals(nn),
-    nn_without_self = formals(nn_without_self),
     knn = formals(knn),
     knn_graph = formals(knn_graph),
     graph_cluster = formals(graph_cluster)
@@ -68,7 +67,6 @@ test_that("public high-level APIs expose auto/cpu/cuda backend and auto tuning",
   kmeans_tuning_choices <- c("auto", "fixed", "off", "none")
   wrappers <- list(
     nn = formals(nn),
-    nn_without_self = formals(nn_without_self),
     knn = formals(knn),
     knn_graph = formals(knn_graph),
     graph_cluster = formals(graph_cluster),
@@ -186,7 +184,7 @@ test_that("nn output distance storage can be requested explicitly", {
     expect_equal(fout$index_base, 1L)
     expect_equal(attr(fout, "distance_type"), "float32")
 
-    dout <- nn_without_self(
+    dout <- nn(exclude_self = TRUE,
       x,
       k = 2L,
       backend = "cpu",
@@ -195,7 +193,7 @@ test_that("nn output distance storage can be requested explicitly", {
     )
     expect_true(inherits(dout$distances, "float32"))
     expect_equal(dout$input_type, "float32")
-    expect_equal(dout$input_layout, "r_double_column_major_to_row_major_float32")
+    expect_match(dout$input_layout, "r_double_column_major_to_row_major_float32", fixed = TRUE)
     expect_true(dout$input_owns_data)
     expect_equal(dout$backend_used, "faiss_flat_l2")
     expect_equal(dout$distance_type, "float32")
@@ -217,6 +215,54 @@ test_that("nn output distance storage can be requested explicitly", {
   )
 })
 
+test_that("ordinary double FAISS routes can stay float32 through output", {
+  skip_if_not_installed("float")
+  skip_if_not(faiss_available(), "FAISS is required for direct float32 FAISS output")
+
+  old_cache <- getOption("faissR.cache_fitted_nn_indexes", NULL)
+  on.exit(options(faissR.cache_fitted_nn_indexes = old_cache), add = TRUE)
+  options(faissR.cache_fitted_nn_indexes = FALSE)
+
+  set.seed(20260625)
+  x <- matrix(rnorm(900 * 12), nrow = 900)
+  methods <- c("flat", "ivf", "ivfpq")
+  if (isTRUE(faissR:::faiss_fastscan_available())) {
+    methods <- c(methods, "scann")
+  }
+
+  for (method in methods) {
+    out <- nn(exclude_self = TRUE,
+      x,
+      k = 5L,
+      backend = "cpu",
+      method = method,
+      metric = "euclidean",
+      output = "float",
+      n_threads = 2L
+    )
+    expect_true(inherits(out$distances, "float32"), info = method)
+    expect_equal(out$distance_type, "float32", info = method)
+    expect_equal(out$input_type, "float32", info = method)
+    expect_equal(out$input_layout, "r_double_column_major_to_row_major_float32", info = method)
+    expect_true(out$input_owns_data, info = method)
+    expect_false(any(out$indices == row(out$indices), na.rm = TRUE), info = method)
+
+    query <- nn(
+      x,
+      x[1:25, , drop = FALSE],
+      k = 5L,
+      backend = "cpu",
+      method = method,
+      metric = "euclidean",
+      output = "float",
+      n_threads = 2L
+    )
+    expect_true(inherits(query$distances, "float32"), info = paste("query", method))
+    expect_equal(query$distance_type, "float32", info = paste("query", method))
+    expect_equal(query$input_type, "float32", info = paste("query", method))
+  }
+})
+
 test_that("float32 input routes through FAISS Flat when float is installed", {
   skip_if_not_installed("float")
   skip_if_not(faiss_available(), "FAISS is required for float32 input")
@@ -230,11 +276,11 @@ test_that("float32 input routes through FAISS Flat when float is installed", {
   ), ncol = 2, byrow = TRUE)
   xf <- float::fl(x)
 
-  ref <- nn_without_self(x, k = 2L, backend = "cpu", method = "flat", n_threads = 2L)
-  out <- nn_without_self(xf, k = 2L, backend = "cpu", method = "flat", n_threads = 2L)
-  auto <- nn_without_self(xf, k = 2L, backend = "cpu", method = "auto", n_threads = 2L)
-  exact <- nn_without_self(xf, k = 2L, backend = "cpu", method = "exact", n_threads = 2L)
-  fout <- nn_without_self(
+  ref <- nn(exclude_self = TRUE, x, k = 2L, backend = "cpu", method = "flat", n_threads = 2L)
+  out <- nn(exclude_self = TRUE, xf, k = 2L, backend = "cpu", method = "flat", n_threads = 2L)
+  auto <- nn(exclude_self = TRUE, xf, k = 2L, backend = "cpu", method = "auto", n_threads = 2L)
+  exact <- nn(exclude_self = TRUE, xf, k = 2L, backend = "cpu", method = "exact", n_threads = 2L)
+  fout <- nn(exclude_self = TRUE,
     xf,
     k = 2L,
     backend = "cpu",
@@ -250,7 +296,7 @@ test_that("float32 input routes through FAISS Flat when float is installed", {
   expect_equal(out$distance_type, "double")
   expect_equal(out$metric, "euclidean")
   expect_equal(out$backend_used, "faiss_flat_l2")
-  expect_equal(out$input_layout, "float32_column_major_payload_to_row_major")
+  expect_match(out$input_layout, "float32_column_major_payload_to_row_major", fixed = TRUE)
   expect_true(out$input_owns_data)
   expect_equal(attr(out, "distance_type"), "double")
   expect_equal(attr(out, "resolved_backend"), "faiss_flat_l2")
@@ -297,19 +343,15 @@ test_that("float32 FAISS Flat input accepts mixed double and float32 query matri
   expect_equal(float_data$indices, ref$indices)
   expect_equal(float_data$distances, ref$distances, tolerance = 1e-6)
   expect_equal(float_data$input_type, "float32")
-  expect_equal(
-    float_data$input_layout,
-    "data=float32_column_major_payload_to_row_major;points=r_double_column_major_to_row_major_float32"
-  )
+  expect_match(float_data$input_layout, "float32_column_major_payload_to_row_major", fixed = TRUE)
+  expect_match(float_data$input_layout, "r_double_column_major_to_row_major_float32", fixed = TRUE)
   expect_equal(float_data$backend_used, "faiss_flat_l2")
 
   expect_equal(float_query$indices, ref$indices)
   expect_equal(float_query$distances, ref$distances, tolerance = 1e-6)
   expect_equal(float_query$input_type, "float32")
-  expect_equal(
-    float_query$input_layout,
-    "data=r_double_column_major_to_row_major_float32;points=float32_column_major_payload_to_row_major"
-  )
+  expect_match(float_query$input_layout, "r_double_column_major_to_row_major_float32", fixed = TRUE)
+  expect_match(float_query$input_layout, "float32_column_major_payload_to_row_major", fixed = TRUE)
   expect_equal(float_query$backend_used, "faiss_flat_l2")
 })
 
@@ -327,17 +369,78 @@ test_that("float32 input can run non-Flat methods through direct adapters", {
   ), ncol = 2, byrow = TRUE)
   xf <- float::fl(x)
 
-  ref <- nn_without_self(x, k = 2L, backend = "cpu", method = "hnsw", n_threads = 2L)
-  out <- nn_without_self(xf, k = 2L, backend = "cpu", method = "hnsw", n_threads = 2L)
+  ref <- nn(exclude_self = TRUE, x, k = 2L, backend = "cpu", method = "hnsw", n_threads = 2L)
+  out <- nn(exclude_self = TRUE, xf, k = 2L, backend = "cpu", method = "hnsw", n_threads = 2L)
 
   expect_equal(out$indices, ref$indices)
   expect_equal(out$distances, ref$distances, tolerance = 1e-6)
   expect_equal(out$input_type, "float32")
-  expect_equal(out$input_layout, "float32_column_major_payload_to_row_major")
+  expect_match(out$input_layout, "float32_column_major_payload_to_row_major", fixed = TRUE)
   expect_true(out$input_owns_data)
   expect_false(out$float32_compatibility_conversion)
   expect_false(attr(out, "float32_compatibility_conversion"))
   expect_equal(out$backend_used, "faiss_hnsw")
+
+  mixed_query <- nn(
+    xf,
+    x[1:3, , drop = FALSE],
+    k = 2L,
+    backend = "cpu",
+    method = "hnsw",
+    n_threads = 2L
+  )
+  expect_equal(mixed_query$backend_used, "faiss_hnsw")
+  expect_equal(mixed_query$input_type, "float32")
+  expect_true(mixed_query$float32_compatibility_conversion)
+  expect_true(attr(mixed_query, "float32_compatibility_conversion"))
+})
+
+test_that("raw nn exclude_self reuses fitted CPU FAISS indexes", {
+  skip_if_not(faiss_available(), "FAISS is required for fitted-index reuse")
+
+  cache_env <- faissR:::.faissR_fitted_nn_index_cache
+  old_keys <- cache_env$.keys
+  old_names <- setdiff(ls(cache_env, all.names = TRUE), ".keys")
+  old_entries <- if (length(old_names)) {
+    mget(old_names, envir = cache_env, inherits = FALSE)
+  } else {
+    list()
+  }
+  old_cache <- getOption("faissR.cache_fitted_nn_indexes")
+  old_limit <- getOption("faissR.cache_fitted_nn_indexes_max_entries")
+  on.exit({
+    options(
+      faissR.cache_fitted_nn_indexes = old_cache,
+      faissR.cache_fitted_nn_indexes_max_entries = old_limit
+    )
+    rm(list = setdiff(ls(cache_env, all.names = TRUE), ".keys"), envir = cache_env)
+    for (name in names(old_entries)) {
+      assign(name, old_entries[[name]], envir = cache_env)
+    }
+    cache_env$.keys <- old_keys
+  }, add = TRUE)
+
+  rm(list = setdiff(ls(cache_env, all.names = TRUE), ".keys"), envir = cache_env)
+  cache_env$.keys <- character()
+  options(
+    faissR.cache_fitted_nn_indexes = TRUE,
+    faissR.cache_fitted_nn_indexes_max_entries = 8L
+  )
+
+  set.seed(981)
+  x <- matrix(rnorm(800L * 8L), nrow = 800L)
+  for (method in c("flat", "hnsw", "ivf", "ivfpq")) {
+    first <- nn(exclude_self = TRUE, x, k = 10L, backend = "cpu", method = method, n_threads = 2L)
+    second <- nn(exclude_self = TRUE, x, k = 10L, backend = "cpu", method = method, n_threads = 2L)
+    first_meta <- attr(first, "faiss", exact = TRUE)
+    second_meta <- attr(second, "faiss", exact = TRUE)
+
+    expect_true(isTRUE(first_meta$persistent_index_cache), info = method)
+    expect_false(isTRUE(first_meta$index_cache_hit), info = method)
+    expect_true(isTRUE(second_meta$index_cache_hit), info = method)
+    expect_equal(first$indices, second$indices, info = method)
+    expect_false(any(row(second$indices) == second$indices), info = method)
+  }
 })
 
 test_that("row-compatible float32 inputs can use the direct payload route", {
@@ -345,10 +448,10 @@ test_that("row-compatible float32 inputs can use the direct payload route", {
   skip_if_not(faiss_available(), "FAISS is required for float32 input")
 
   x <- float::fl(matrix(c(0, 1, 3, 7, 8), ncol = 1))
-  out <- nn_without_self(x, k = 2L, backend = "cpu", method = "flat", n_threads = 2L)
+  out <- nn(exclude_self = TRUE, x, k = 2L, backend = "cpu", method = "flat", n_threads = 2L)
 
   expect_equal(out$input_type, "float32")
-  expect_equal(out$input_layout, "float32_payload_direct_row_compatible")
+  expect_match(out$input_layout, "float32_payload_direct_row_compatible", fixed = TRUE)
   expect_false(out$input_owns_data)
   expect_equal(out$backend_used, "faiss_flat_l2")
 })
@@ -368,7 +471,7 @@ test_that("float32 FAISS Flat input supports normalized metrics", {
   xf <- float::fl(x)
 
   for (metric in c("cosine", "correlation")) {
-    out <- nn_without_self(
+    out <- nn(exclude_self = TRUE,
       xf,
       k = 2L,
       backend = "cpu",
@@ -376,7 +479,7 @@ test_that("float32 FAISS Flat input supports normalized metrics", {
       metric = metric,
       n_threads = 2L
     )
-    exact <- nn_without_self(
+    exact <- nn(exclude_self = TRUE,
       x,
       k = 2L,
       backend = "cpu",
@@ -390,6 +493,169 @@ test_that("float32 FAISS Flat input supports normalized metrics", {
     expect_equal(out$input_type, "float32", info = metric)
     expect_equal(attr(out, "resolved_backend"), paste0("faiss_flat_", metric), info = metric)
   }
+})
+
+test_that("normalized FAISS Flat routes reuse cached float32 transforms", {
+  skip_if_not_installed("float")
+  skip_if_not(faiss_available(), "FAISS is required for cached transformed input")
+
+  old_cache <- getOption("faissR.cache_transformed_float32")
+  old_limit <- getOption("faissR.cache_transformed_float32_max_entries")
+  cache_env <- faissR:::.faissR_transformed_float32_cache
+  old_keys <- cache_env$.keys
+  old_entries <- mget(
+    setdiff(ls(cache_env, all.names = TRUE), ".keys"),
+    envir = cache_env,
+    ifnotfound = list(NULL)
+  )
+  on.exit({
+    options(
+      faissR.cache_transformed_float32 = old_cache,
+      faissR.cache_transformed_float32_max_entries = old_limit
+    )
+    rm(list = setdiff(ls(cache_env, all.names = TRUE), ".keys"), envir = cache_env)
+    for (name in names(old_entries)) {
+      assign(name, old_entries[[name]], envir = cache_env)
+    }
+    cache_env$.keys <- old_keys
+  }, add = TRUE)
+  rm(list = setdiff(ls(cache_env, all.names = TRUE), ".keys"), envir = cache_env)
+  cache_env$.keys <- character()
+  options(
+    faissR.cache_transformed_float32 = TRUE,
+    faissR.cache_transformed_float32_max_entries = 4L
+  )
+
+  x <- matrix(c(
+    0.20,  1.10, -0.40,
+    1.30, -0.20,  0.70,
+   -0.80,  0.40,  1.50,
+    2.10,  1.70, -1.20,
+   -1.40,  2.20,  0.30,
+    0.60, -1.30, -0.90
+  ), ncol = 3, byrow = TRUE)
+
+  first <- nn(exclude_self = TRUE,
+    x,
+    k = 2L,
+    backend = "cpu",
+    method = "flat",
+    metric = "cosine",
+    n_threads = 2L
+  )
+  second <- nn(exclude_self = TRUE,
+    x,
+    k = 2L,
+    backend = "cpu",
+    method = "flat",
+    metric = "cosine",
+    n_threads = 2L
+  )
+  exact <- nn(exclude_self = TRUE,
+    x,
+    k = 2L,
+    backend = "cpu",
+    method = "exact",
+    metric = "cosine",
+    n_threads = 2L
+  )
+
+  expect_equal(first$indices, exact$indices)
+  expect_equal(first$distances, exact$distances, tolerance = 1e-5)
+  expect_equal(second$indices, exact$indices)
+  expect_equal(second$distances, exact$distances, tolerance = 1e-5)
+  expect_equal(first$input_layout, "float32_payload_direct_row_major")
+  expect_equal(second$input_layout, "float32_payload_direct_row_major")
+  expect_false(first$input_owns_data)
+  expect_false(second$input_owns_data)
+
+  first_cache <- attr(first, "faiss")$transform_cache
+  second_cache <- attr(second, "faiss")$transform_cache
+  expect_true(isTRUE(first_cache$enabled))
+  expect_false(isTRUE(first_cache$data_hit))
+  expect_true(isTRUE(second_cache$data_hit))
+  expect_true(isTRUE(second_cache$points_hit))
+  expect_true(isTRUE(second_cache$row_major))
+
+  xf <- float::fl(x)
+  third <- nn(exclude_self = TRUE,
+    xf,
+    k = 2L,
+    backend = "cpu",
+    method = "flat",
+    metric = "cosine",
+    n_threads = 2L
+  )
+  fourth <- nn(exclude_self = TRUE,
+    xf,
+    k = 2L,
+    backend = "cpu",
+    method = "flat",
+    metric = "cosine",
+    n_threads = 2L
+  )
+
+  expect_equal(third$indices, exact$indices)
+  expect_equal(third$distances, exact$distances, tolerance = 1e-5)
+  expect_equal(fourth$indices, exact$indices)
+  expect_equal(fourth$distances, exact$distances, tolerance = 1e-5)
+  expect_equal(fourth$input_layout, "float32_payload_direct_row_major")
+  expect_false(fourth$input_owns_data)
+
+  third_cache <- attr(third, "faiss")$transform_cache
+  fourth_cache <- attr(fourth, "faiss")$transform_cache
+  expect_false(isTRUE(third_cache$data_hit))
+  expect_true(isTRUE(fourth_cache$data_hit))
+  expect_true(isTRUE(fourth_cache$points_hit))
+  expect_true(isTRUE(fourth_cache$row_major))
+})
+
+test_that("cuVS float32 wrappers expose direct distance storage", {
+  wrappers <- c(
+    "nn_cuvs_bruteforce_float32_cpp",
+    "nn_cuvs_cagra_float32_cpp",
+    "nn_cuvs_nndescent_self_float32_cpp",
+    "nn_cuvs_hnsw_float32_cpp",
+    "nn_cuvs_ivf_flat_float32_cpp",
+    "nn_cuvs_ivf_pq_float32_cpp"
+  )
+  ns <- asNamespace("faissR")
+  for (wrapper in wrappers) {
+    expect_true(
+      "distance_storage" %in% names(formals(get(wrapper, envir = ns))),
+      info = wrapper
+    )
+  }
+})
+
+test_that("float32 cuVS input can return float distances directly", {
+  skip_if_not_installed("float")
+  skip_if_not(cuvs_available(), "cuVS is required for direct CUDA float32 input")
+
+  x <- float::fl(matrix(c(
+    0, 0,
+    1, 0,
+    0, 1,
+    2, 2,
+    3, 3
+  ), ncol = 2, byrow = TRUE))
+
+  out <- faissR:::nn_compute(
+    data = x,
+    points = x,
+    k = 2L,
+    backend = "cuda_cuvs_bruteforce",
+    points_missing = TRUE,
+    exclude_self = TRUE,
+    metric = "euclidean",
+    output = "float"
+  )
+
+  expect_true(inherits(out$distances, "float32"))
+  expect_equal(out$distance_type, "float32")
+  expect_equal(out$input_type, "float32")
+  expect_equal(out$backend_used, "cuda_cuvs_bruteforce")
+  expect_false(out$float32_compatibility_conversion)
 })
 
 test_that("float32 C-callable entry point is registered", {
@@ -535,7 +801,7 @@ test_that("public NN APIs canonicalize common metric aliases", {
   l2 <- nn(x, k = 2L, backend = "cpu", metric = "l2")
   cor <- nn(x, k = 2L, backend = "cpu", metric = "pearson")
   ip <- nn(x, k = 2L, backend = "cpu", metric = "ip")
-  without_self <- nn_without_self(x, k = 1L, backend = "cpu", metric = "cor")
+  without_self <- nn(exclude_self = TRUE, x, k = 1L, backend = "cpu", metric = "cor")
 
   expect_equal(attr(l2, "metric"), "euclidean")
   expect_equal(attr(cor, "metric"), "correlation")
@@ -557,7 +823,7 @@ test_that("public NN results preserve requested and resolved routing metadata", 
     tuning = "off",
     n_threads = 2L
   )
-  without_self <- nn_without_self(
+  without_self <- nn(exclude_self = TRUE,
     x,
     k = 3L,
     backend = "auto",
@@ -717,6 +983,8 @@ test_that("resolved backend labels map to stable auto-selection method and devic
   expect_equal(faissR:::nn_resolved_backend_public_method("cuda_native_nndescent"), "nndescent")
   expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_hnsw"), "hnsw")
   expect_equal(faissR:::nn_resolved_backend_public_method("faiss_gpu_cagra"), "cagra")
+  expect_equal(faissR:::nn_resolved_backend_public_method("faiss_scann"), "scann")
+  expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_scann"), "scann")
   expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_bruteforce"), "bruteforce")
   expect_equal(faissR:::nn_resolved_backend_public_method("unknown_backend"), NA_character_)
 
@@ -733,13 +1001,13 @@ test_that("public NN APIs require scalar backend method metric and tuning choice
   y <- factor(rep(c("a", "b"), each = 5L))
 
   expect_no_error(nn(x, k = 2L))
-  expect_no_error(nn_without_self(x, k = 2L))
+  expect_no_error(nn(exclude_self = TRUE, x, k = 2L))
   expect_error(nn(x, k = c(2L, 3L), backend = "cpu"), "`k` must be NULL or a positive integer")
   expect_error(nn(x, k = 2.5, backend = "cpu"), "`k` must be NULL or a positive integer")
-  expect_error(nn_without_self(x, k = 1.5, backend = "cpu"), "`k` must be NULL or a positive integer")
+  expect_error(nn(exclude_self = TRUE, x, k = 1.5, backend = "cpu"), "`k` must be NULL or a positive integer")
   expect_error(nn(x, k = 2L, backend = "cpu", n_threads = c(1L, 2L)), "`n_threads` must be NULL or a single positive integer")
   expect_error(nn(x, k = 2L, backend = "cpu", n_threads = 1.5), "`n_threads` must be NULL or a single positive integer")
-  expect_error(nn_without_self(x, k = 2L, backend = "cpu", n_threads = 0L), "`n_threads` must be NULL or a single positive integer")
+  expect_error(nn(exclude_self = TRUE, x, k = 2L, backend = "cpu", n_threads = 0L), "`n_threads` must be NULL or a single positive integer")
   expect_equal(faissR:::normalize_nn_threads(128L), 64L)
   expect_error(nn(x, k = 2L, backend = c("cpu", "cuda")), "`backend` must be a single value")
   expect_error(nn(x, k = 2L, method = c("exact", "hnsw")), "`method` must be a single value")
@@ -748,7 +1016,7 @@ test_that("public NN APIs require scalar backend method metric and tuning choice
   internal_routes <- c("faiss_hnsw", "faiss_ivf", "faiss_gpu_cagra", "cuda_cuvs_nndescent", "cuda_cuvs_hnsw")
   for (route in internal_routes) {
     expect_error(nn(x, k = 2L, method = route), "canonical lowercase", info = route)
-    expect_error(nn_without_self(x, k = 2L, method = route), "canonical lowercase", info = route)
+    expect_error(nn(exclude_self = TRUE, x, k = 2L, method = route), "canonical lowercase", info = route)
     expect_error(knn(x, y, method = route), "canonical lowercase", info = route)
     expect_error(knn_graph(x, k = 2L, method = route), "canonical lowercase", info = route)
   }
@@ -762,16 +1030,16 @@ test_that("public NN APIs validate tuning at the exported boundary", {
   x <- matrix(rnorm(40), ncol = 4)
 
   expect_no_error(nn(x, k = 2L, backend = "cpu", method = "exact", tuning = "none"))
-  expect_no_error(nn_without_self(x, k = 2L, backend = "cpu", method = "exact", tuning = "none"))
+  expect_no_error(nn(exclude_self = TRUE, x, k = 2L, backend = "cpu", method = "exact", tuning = "none"))
   expect_error(nn(x, k = 2L, backend = "cpu", tuning = "aggressive"), "tuning")
-  expect_error(nn_without_self(x, k = 2L, backend = "cpu", tuning = "aggressive"), "tuning")
+  expect_error(nn(exclude_self = TRUE, x, k = 2L, backend = "cpu", tuning = "aggressive"), "tuning")
 })
 
 test_that("nn_capabilities documents the public method metric matrix", {
   caps <- nn_capabilities()
   methods <- c(
     "auto", "exact", "flat", "bruteforce", "grid",
-    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra"
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "scann", "cagra"
   )
   metrics <- c("euclidean", "cosine", "correlation", "inner_product")
 
@@ -795,16 +1063,6 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(all(caps$supported[
     caps$method == "hnsw" & caps$backend == "cuda"
   ]))
-  expect_true(caps$supported[
-    caps$method == "usearch" & caps$backend == "cpu" & caps$metric == "euclidean"
-  ])
-  expect_true(caps$supported[
-    caps$method == "usearch" & caps$backend == "auto" & caps$metric == "euclidean"
-  ])
-  expect_true(all(!caps$supported[
-    caps$method == "usearch" &
-      (caps$backend == "cuda" | caps$metric != "euclidean")
-  ]))
   hnsw_ip <- caps[
     caps$method == "hnsw" & caps$backend == "cuda" &
       caps$metric == "inner_product",
@@ -812,7 +1070,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
     drop = FALSE
   ]
   expect_true(hnsw_ip$supported)
-  expect_match(hnsw_ip$notes, "maximum-inner-product-to-L2")
+  expect_match(hnsw_ip$notes, "cpu_hierarchy")
   cagra_ip <- caps[
     caps$method == "cagra" & caps$backend == "cuda" &
       caps$metric == "inner_product",
@@ -881,11 +1139,11 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_equal(nrow(cuda_auto_cor), 1L)
   expect_match(cuda_auto_cosine$notes, "CUDA grid")
   expect_match(cuda_auto_cosine$notes, "FAISS GPU Flat")
-  expect_match(cuda_auto_cosine$notes, "cuVS HNSW/CAGRA")
+  expect_match(cuda_auto_cosine$notes, "CAGRA")
   expect_match(cuda_auto_cosine$notes, "shape-dependent")
   expect_match(cuda_auto_cor$notes, "CUDA grid")
   expect_match(cuda_auto_cor$notes, "FAISS GPU Flat")
-  expect_match(cuda_auto_cor$notes, "cuVS HNSW/CAGRA")
+  expect_match(cuda_auto_cor$notes, "CAGRA")
   expect_match(cuda_auto_cor$notes, "shape-dependent")
   expect_match(cuda_auto_ip$notes, "FAISS GPU Flat IP")
   expect_match(cuda_auto_ip$notes, "CAGRA")
@@ -1013,7 +1271,7 @@ test_that("runtime-available CPU capability rows execute across public metrics",
       dense
     )
     label <- paste(row$method, row$metric, row$resolved_backend, sep = "/")
-    out <- nn_without_self(
+    out <- nn(exclude_self = TRUE,
       x,
       k = 5L,
       backend = "cpu",
@@ -1060,7 +1318,7 @@ test_that("runtime-available CPU core methods execute across benchmark k grid", 
     row <- rows[i, , drop = FALSE]
     for (k in k_values) {
       label <- paste(row$method, row$metric, row$resolved_backend, paste0("k=", k), sep = "/")
-      out <- nn_without_self(
+      out <- nn(exclude_self = TRUE,
         x,
         k = k,
         backend = "cpu",
@@ -1556,7 +1814,7 @@ test_that("FAISS Flat zero-row normalized metrics match exact CPU at small k", {
     expect_equal(unname(flat$indices), unname(exact$indices))
     expect_equal(unname(flat$distances), unname(exact$distances), tolerance = 1e-5)
 
-    flat_without_self <- nn_without_self(
+    flat_without_self <- nn(exclude_self = TRUE,
       x,
       k = 1L,
       backend = "cpu",
@@ -1564,7 +1822,7 @@ test_that("FAISS Flat zero-row normalized metrics match exact CPU at small k", {
       metric = metric,
       n_threads = 2L
     )
-    exact_without_self <- nn_without_self(
+    exact_without_self <- nn(exclude_self = TRUE,
       x,
       k = 1L,
       backend = "cpu",
@@ -1664,8 +1922,18 @@ test_that("2D grid self KNN matches exact CPU neighbors", {
   expect_equal(attr(grid, "backend"), "cpu_grid2d")
   expect_true(isTRUE(attr(grid, "exact")))
   expect_equal(attr(grid, "spatial_index")$strategy, "native_exact_uniform_grid_2d")
+  expect_true(isTRUE(attr(grid, "spatial_index")$self_column_included))
+  expect_false(isTRUE(attr(grid, "spatial_index")$r_side_reshaping))
+  expect_equal(attr(grid, "spatial_index")$output_layout, "knn_matrix_final")
+  expect_equal(grid$indices[, 1L], seq_len(nrow(x)))
+  expect_equal(grid$distances[, 1L], rep(0, nrow(x)))
   expect_equal(grid$indices, exact$indices)
   expect_equal(grid$distances, exact$distances, tolerance = 1e-12)
+
+  self_only <- internal_nn(x[seq_len(20L), , drop = FALSE], k = 1L, backend = "cpu_grid2d", n_threads = 2L)
+  expect_equal(self_only$indices[, 1L], seq_len(20L))
+  expect_equal(self_only$distances[, 1L], rep(0, 20L))
+  expect_true(isTRUE(attr(self_only, "spatial_index")$self_column_included))
 })
 
 test_that("3D grid self KNN matches exact CPU neighbors", {
@@ -1717,7 +1985,7 @@ test_that("public grid method rejects higher-dimensional data explicitly", {
     "two- or three-column"
   )
   expect_error(
-    nn_without_self(x, k = 5L, backend = "cpu", method = "grid", n_threads = 2L),
+    nn(exclude_self = TRUE, x, k = 5L, backend = "cpu", method = "grid", n_threads = 2L),
     "two- or three-column"
   )
 })
@@ -1728,8 +1996,8 @@ test_that("generic CPU spatial KNN keeps duplicate-heavy data on grid", {
   x <- base[sample.int(nrow(base), 3000L, replace = TRUE), , drop = FALSE]
   k <- 12L
 
-  exact <- nn_without_self(x, k = k, backend = "cpu", n_threads = 2L)
-  spatial <- internal_nn_without_self(x, k = k, backend = "cpu_grid", n_threads = 2L)
+  exact <- nn(exclude_self = TRUE, x, k = k, backend = "cpu", n_threads = 2L)
+  spatial <- internal_nn(exclude_self = TRUE, x, k = k, backend = "cpu_grid", n_threads = 2L)
 
   expect_equal(attr(spatial, "backend"), "cpu_grid2d")
   expect_equal(attr(spatial, "spatial_index")$strategy, "native_exact_uniform_grid_2d")
@@ -1748,7 +2016,7 @@ test_that("clustered self KNN reports approximation and preserves useful neighbo
   x <- x + matrix(rep(centers[labels], 6L), ncol = 6L)
   k <- 12L
 
-  exact <- faissR:::nn_without_self(x, k = k, backend = "cpu")
+  exact <- faissR:::nn(exclude_self = TRUE, x, k = k, backend = "cpu")
   clustered <- faissR:::clustered_self_knn(x, k = k, exclude_self = TRUE, seed = 122L)
   clustered <- faissR:::finish_nn_result(
     clustered,
@@ -2018,6 +2286,75 @@ test_that("explicit FAISS GPU NN backends require FAISS GPU availability", {
   }
 })
 
+test_that("GPU residency metadata is preserved on NN results", {
+  out <- list(
+    indices = matrix(1L, nrow = 2L, ncol = 1L),
+    distances = matrix(0, nrow = 2L, ncol = 1L),
+    accelerator = "cuda",
+    gpu_provider = "cuvs",
+    device_residency = "cuda",
+    index_residency = "gpu_transient",
+    host_to_device_copies_known = TRUE,
+    host_to_device_copies = 1L,
+    host_to_device_data_copies = 1L,
+    host_to_device_query_copies = 0L,
+    query_reuses_device_data = TRUE,
+    device_to_host_result_copies = 2L,
+    cpu_fallback = FALSE,
+    cpu_side_result_repair = FALSE
+  )
+
+  result <- faissR:::finish_nn_result(
+    out,
+    "cuda_cuvs_bruteforce",
+    k = 1L,
+    self_query = TRUE,
+    exact = TRUE
+  )
+  meta <- attr(result, "gpu_residency")
+  expect_equal(meta$gpu_provider, "cuvs")
+  expect_equal(meta$index_residency, "gpu_transient")
+  expect_true(meta$query_reuses_device_data)
+  expect_false(meta$cpu_fallback)
+
+  attr(result, "cuvs") <- list(library = "cuvs")
+  result <- faissR:::attach_gpu_residency_metadata(result, out)
+  expect_equal(attr(result, "cuvs")$host_to_device_copies, 1L)
+  expect_true(attr(result, "cuvs")$query_reuses_device_data)
+})
+
+test_that("explicit CUDA normalized FAISS routes do not use CPU zero-row repair", {
+  x_zero <- matrix(c(0, 0, 1, 0), nrow = 2L, byrow = TRUE)
+  expect_error(
+    faissR:::faiss_flat_normalized_metric_result(
+      x_zero,
+      x_zero,
+      k = 1L,
+      self_query = TRUE,
+      exclude_self = FALSE,
+      metric = "cosine",
+      backend = "faiss_gpu_flat_cosine",
+      accelerator = "cuda"
+    ),
+    "does not repair zero-normalized CUDA results on CPU"
+  )
+
+  x_constant <- matrix(c(1, 1, 2, 3), nrow = 2L, byrow = TRUE)
+  expect_error(
+    faissR:::faiss_flat_normalized_metric_result(
+      x_constant,
+      x_constant,
+      k = 1L,
+      self_query = TRUE,
+      exclude_self = FALSE,
+      metric = "correlation",
+      backend = "faiss_gpu_flat_correlation",
+      accelerator = "cuda"
+    ),
+    "does not repair zero-normalized CUDA results on CPU"
+  )
+})
+
 test_that("CUDA resolver uses FAISS GPU availability for routes with alternatives", {
   expected_exact <- if (faiss_gpu_available()) {
     "faiss_gpu_flat_l2"
@@ -2228,7 +2565,7 @@ test_that("CUDA CAGRA implementation can be selected per call", {
   expect_equal(faissR:::normalize_cagra_implementation_arg("direct-cuvs"), "cuvs")
   expect_equal(faissR:::normalize_cagra_implementation_arg("faiss"), "faiss_gpu")
   expect_error(
-    nn_without_self(
+    nn(exclude_self = TRUE,
       matrix(rnorm(20), ncol = 4),
       k = 2L,
       backend = "cpu",
@@ -2250,13 +2587,7 @@ test_that("public backend and method resolver maps device plus method", {
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("auto", "hnsw", "euclidean"),
-    if (cuvs_available()) {
-      "cuda_cuvs_hnsw"
-    } else if (faiss_available()) {
-      "faiss_hnsw"
-    } else {
-      "hnsw"
-    }
+    if (faiss_available()) "faiss_hnsw" else "hnsw"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("auto", "hnsw", "inner_product"),
@@ -2273,22 +2604,6 @@ test_that("public backend and method resolver maps device plus method", {
   expect_equal(
     faissR:::resolve_public_nn_backend("auto", "nsg", "euclidean"),
     if (cuda_available()) "cuda_nsg" else "cpu_nsg"
-  )
-  expect_equal(
-    faissR:::resolve_public_nn_backend("auto", "usearch", "euclidean"),
-    "usearch"
-  )
-  expect_equal(
-    faissR:::resolve_public_nn_backend("cpu", "usearch", "euclidean"),
-    "usearch"
-  )
-  expect_error(
-    faissR:::resolve_public_nn_backend("cuda", "usearch", "euclidean"),
-    "CPU-only"
-  )
-  expect_error(
-    faissR:::resolve_public_nn_backend("cpu", "usearch", "cosine"),
-    "supports only"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "grid", "euclidean"),
@@ -2432,6 +2747,22 @@ test_that("public backend and method resolver maps device plus method", {
     "faiss_gpu_ivfpq"
   )
   expect_equal(
+    faissR:::resolve_public_nn_backend("cpu", "scann", "euclidean"),
+    "faiss_scann"
+  )
+  expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "scann", "euclidean"),
+    "cuda_cuvs_scann"
+  )
+  expect_error(
+    faissR:::resolve_public_nn_backend("cpu", "scann", "cosine"),
+    "scann"
+  )
+  expect_error(
+    faissR:::resolve_public_nn_backend("cuda", "scann", "inner_product"),
+    "scann"
+  )
+  expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "vamana", "euclidean"),
     "cpu_vamana"
   )
@@ -2561,6 +2892,7 @@ test_that("CPU-supported public method/metric rows execute on smoke data", {
   dense <- matrix(rnorm(20L * 6L), nrow = 20L)
   spatial <- matrix(runif(40L * 2L), ncol = 2L)
   nsg_dense <- matrix(rnorm(200L * 8L), nrow = 200L)
+  pq_dense <- matrix(rnorm(720L * 8L), nrow = 720L)
   caps <- nn_capabilities()
   checked <- caps[
     caps$supported &
@@ -2579,11 +2911,12 @@ test_that("CPU-supported public method/metric rows execute on smoke data", {
     data <- switch(
       method,
       grid = spatial,
+      scann = pq_dense,
       nsg = nsg_dense,
       dense
     )
     label <- paste(method, metric)
-    out <- nn_without_self(
+    out <- nn(exclude_self = TRUE,
       data,
       k = 3L,
       backend = "cpu",
@@ -2603,7 +2936,7 @@ test_that("native Vamana returns metric-aware CPU self-KNN results", {
   x <- matrix(rnorm(90L * 5L), nrow = 90L)
 
   for (metric in c("euclidean", "cosine", "correlation")) {
-    out <- internal_nn_without_self(
+    out <- internal_nn(exclude_self = TRUE,
       x,
       k = 6L,
       backend = "cpu_vamana",
@@ -2617,6 +2950,8 @@ test_that("native Vamana returns metric-aware CPU self-KNN results", {
     expect_equal(approx$backend, "cpu_vamana", info = metric)
     expect_equal(approx$strategy, "native_vamana_candidate_graph", info = metric)
     expect_equal(approx$protected_seed_neighbors, 6L, info = metric)
+    expect_equal(approx$candidate_layout, "compiled_column_major_compact", info = metric)
+    expect_equal(approx$pruning_rule, "vamana_robust_prune", info = metric)
     expect_true(all(is.finite(out$distances)), info = metric)
   }
 })
@@ -2626,7 +2961,7 @@ test_that("native CPU NSG returns metric-aware self-KNN results", {
   x <- matrix(rnorm(90L * 5L), nrow = 90L)
 
   for (metric in c("euclidean", "cosine", "correlation", "inner_product")) {
-    out <- internal_nn_without_self(
+    out <- internal_nn(exclude_self = TRUE,
       x,
       k = 6L,
       backend = "cpu_nsg",
@@ -2643,6 +2978,8 @@ test_that("native CPU NSG returns metric-aware self-KNN results", {
     expect_equal(approx$accelerator, "cpu", info = metric)
     expect_equal(approx$graph_k_cap, 512L, info = metric)
     expect_equal(approx$protected_seed_neighbors, 6L, info = metric)
+    expect_equal(approx$candidate_layout, "compiled_column_major_compact", info = metric)
+    expect_equal(approx$pruning_rule, "nsg_mrng_prune", info = metric)
     expect_match(approx$tuning_rule, "cpu_nsg", info = metric)
     expect_true(all(is.finite(out$distances)), info = metric)
     expect_true(all(out$indices >= 1L & out$indices <= nrow(x)), info = metric)
@@ -2662,7 +2999,7 @@ test_that("native Vamana and NSG preserve include-self semantics", {
       metric = "euclidean",
       n_threads = 2L
     )
-    no_self <- internal_nn_without_self(
+    no_self <- internal_nn(exclude_self = TRUE,
       x,
       k = 4L,
       backend = backend,
@@ -2680,7 +3017,7 @@ test_that("public CPU NSG uses native route for euclidean instead of unsafe FAIS
   set.seed(240126)
   x <- matrix(rnorm(120L * 8L), nrow = 120L)
 
-  out <- nn_without_self(
+  out <- nn(exclude_self = TRUE,
     x,
     k = 5L,
     backend = "cpu",
@@ -2746,7 +3083,7 @@ test_that("native NSG tuning is backend-specific", {
 
 test_that("nearest-neighbour results expose resolved backend metadata", {
   x <- matrix(rnorm(200), ncol = 4)
-  out <- nn_without_self(x, k = 5L, backend = "cpu", method = "exact", n_threads = 2L)
+  out <- nn(exclude_self = TRUE, x, k = 5L, backend = "cpu", method = "exact", n_threads = 2L)
   expect_equal(attr(out, "backend"), "cpu")
   expect_equal(attr(out, "resolved_backend"), "cpu")
 })
@@ -3118,7 +3455,8 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
     faissR.cuvs_itopk_size = NULL,
     faissR.cuvs_nndescent_graph_degree = NULL,
     faissR.cuvs_nndescent_intermediate_graph_degree = NULL,
-    faissR.cuvs_nndescent_max_iterations = NULL
+    faissR.cuvs_nndescent_max_iterations = NULL,
+    faissR.faiss_hnsw_m = NULL
   )
   on.exit(options(old_options), add = TRUE)
 
@@ -3646,8 +3984,8 @@ test_that("real FAISS C++ backend is either exact or clearly unavailable", {
   k <- 7L
 
   if (faiss_available()) {
-    exact <- nn_without_self(x, k = k, backend = "cpu", n_threads = 2L)
-    out <- internal_nn_without_self(x, k = k, backend = "faiss", n_threads = 2L)
+    exact <- nn(exclude_self = TRUE, x, k = k, backend = "cpu", n_threads = 2L)
+    out <- internal_nn(exclude_self = TRUE, x, k = k, backend = "faiss", n_threads = 2L)
     recall <- faissR:::.knn_recall_summary(out, exact, k = k)
 
     expect_equal(dim(out$indices), c(nrow(x), k))
@@ -3752,7 +4090,7 @@ test_that("CPU IVFPQ rejects too-small training sets before FAISS warnings", {
   x <- matrix(rnorm(120L * 8L), nrow = 120L)
 
   expect_error(
-    nn_without_self(x, k = 5L, backend = "cpu", method = "ivfpq", n_threads = 2L),
+    nn(exclude_self = TRUE, x, k = 5L, backend = "cpu", method = "ivfpq", n_threads = 2L),
     "at least 624 training rows"
   )
 })
@@ -3763,11 +4101,11 @@ test_that("FAISS graph backends reject too-small training sets clearly", {
 
   if (faiss_available()) {
     expect_error(
-      internal_nn_without_self(x, k = 10L, backend = "faiss_nsg", n_threads = 2L),
+      internal_nn(exclude_self = TRUE, x, k = 10L, backend = "faiss_nsg", n_threads = 2L),
       "more than 100 training rows"
     )
     expect_error(
-      internal_nn_without_self(x, k = 10L, backend = "faiss_nndescent", n_threads = 2L),
+      internal_nn(exclude_self = TRUE, x, k = 10L, backend = "faiss_nndescent", n_threads = 2L),
       "disabled"
     )
   } else {
@@ -3781,7 +4119,7 @@ test_that("FAISS graph backends report actual and requested parameters", {
   x <- matrix(rnorm(200L * 8L), nrow = 200L)
 
   if (faiss_available()) {
-    nsg <- internal_nn_without_self(x, k = 10L, backend = "faiss_nsg", n_threads = 2L)
+    nsg <- internal_nn(exclude_self = TRUE, x, k = 10L, backend = "faiss_nsg", n_threads = 2L)
     nsg_approx <- attr(nsg, "approximation")
     expect_equal(dim(nsg$indices), c(nrow(x), 10L))
     expect_equal(nsg_approx$r, 48L)
@@ -3791,16 +4129,19 @@ test_that("FAISS graph backends report actual and requested parameters", {
     expect_equal(nsg_approx$gk, max(64L, 2L * 10L, 2L * nsg_approx$r))
     expect_false(nsg_approx$nsg_parameters_adjusted)
 
-    nnd <- nn_without_self(x, k = 10L, backend = "cpu", method = "nndescent", n_threads = 2L)
+    nnd <- nn(exclude_self = TRUE, x, k = 10L, backend = "cpu", method = "nndescent", n_threads = 2L)
     nnd_approx <- attr(nnd, "approximation")
     expect_equal(dim(nnd$indices), c(nrow(x), 10L))
     expect_equal(attr(nnd, "backend"), "cpu_nndescent")
     expect_equal(nnd_approx$strategy, "native_cpu_nndescent")
     expect_equal(nnd_approx$backend, "cpu")
+    expect_equal(nnd_approx$candidate_layout, "flat_row_major_graph")
+    expect_equal(nnd_approx$reverse_storage, "flat_fixed_width")
+    expect_false(isTRUE(nnd_approx$distance_snapshot_copy))
 
     for (metric in c("cosine", "correlation")) {
       expect_error(
-        internal_nn_without_self(
+        internal_nn(exclude_self = TRUE,
           x,
           k = 5L,
           backend = "faiss_nsg",
@@ -3809,7 +4150,7 @@ test_that("FAISS graph backends report actual and requested parameters", {
         ),
         "euclidean"
       )
-      nnd_metric <- internal_nn_without_self(
+      nnd_metric <- internal_nn(exclude_self = TRUE,
         x,
         k = 5L,
         backend = "cpu_nndescent",
@@ -3822,7 +4163,7 @@ test_that("FAISS graph backends report actual and requested parameters", {
       expect_equal(dim(nnd_metric$indices), c(nrow(x), 5L))
       expect_match(nnd_metric_approx$transform, "normalize")
     }
-    nnd_ip <- internal_nn_without_self(
+    nnd_ip <- internal_nn(exclude_self = TRUE,
       x,
       k = 5L,
       backend = "cpu_nndescent",
@@ -3837,22 +4178,22 @@ test_that("FAISS graph backends report actual and requested parameters", {
     expect_equal(unname(nnd_ip$distances[, 1L]), rep(0, nrow(x)))
     expect_true(all(is.finite(nnd_ip$distances)))
     expect_error(
-      internal_nn_without_self(x, k = 5L, backend = "faiss_nsg", metric = "inner_product", n_threads = 2L),
+      internal_nn(exclude_self = TRUE, x, k = 5L, backend = "faiss_nsg", metric = "inner_product", n_threads = 2L),
       "euclidean"
     )
     expect_error(
-      internal_nn_without_self(x, k = 5L, backend = "faiss_nndescent", metric = "inner_product", n_threads = 2L),
+      internal_nn(exclude_self = TRUE, x, k = 5L, backend = "faiss_nndescent", metric = "inner_product", n_threads = 2L),
       "euclidean"
     )
     withr::with_options(
       list(faissR.enable_faiss_nndescent = TRUE),
       expect_error(
-        internal_nn_without_self(x, k = 5L, backend = "faiss_nndescent", metric = "inner_product", n_threads = 2L),
+        internal_nn(exclude_self = TRUE, x, k = 5L, backend = "faiss_nndescent", metric = "inner_product", n_threads = 2L),
         "euclidean"
       )
     )
     expect_error(
-      internal_nn_without_self(x, k = 5L, backend = "faiss_nndescent", metric = "euclidean", n_threads = 2L),
+      internal_nn(exclude_self = TRUE, x, k = 5L, backend = "faiss_nndescent", metric = "euclidean", n_threads = 2L),
       "disabled"
     )
   } else {
@@ -3873,7 +4214,7 @@ test_that("FAISS HNSW reports actual and requested parameters", {
     )
     on.exit(options(old_options), add = TRUE)
 
-    out <- internal_nn_without_self(x, k = 10L, backend = "faiss_hnsw", n_threads = 2L)
+    out <- internal_nn(exclude_self = TRUE, x, k = 10L, backend = "faiss_hnsw", n_threads = 2L)
     approx <- attr(out, "approximation")
     expect_equal(dim(out$indices), c(nrow(x), 10L))
     expect_equal(approx$m, nrow(x))
@@ -3983,7 +4324,7 @@ test_that("GPU approximate KNN helpers require explicit backend requests", {
 test_that("approximate KNN recall metadata is attached against exact subset", {
   set.seed(131)
   x <- matrix(rnorm(80L * 5L), nrow = 80L)
-  exact <- faissR:::nn_without_self(x, k = 6L, backend = "cpu")
+  exact <- faissR:::nn(exclude_self = TRUE, x, k = 6L, backend = "cpu")
   approx <- faissR:::finish_nn_result(exact, "test_approx", 6L, TRUE, exact = FALSE)
   approx <- faissR:::attach_knn_recall_subset(
     approx,
@@ -4074,9 +4415,9 @@ test_that("Fortran CPU nn path matches C++ fallback", {
   expect_equal(fortran$distances, cpp$distances, tolerance = 1e-12)
 
   Sys.setenv(FAISSR_USE_FORTRAN_NN = "1")
-  fortran_self <- faissR:::nn_without_self(data, k = 6L, backend = "cpu")
+  fortran_self <- faissR:::nn(exclude_self = TRUE, data, k = 6L, backend = "cpu")
   Sys.setenv(FAISSR_USE_FORTRAN_NN = "0")
-  cpp_self <- faissR:::nn_without_self(data, k = 6L, backend = "cpu")
+  cpp_self <- faissR:::nn(exclude_self = TRUE, data, k = 6L, backend = "cpu")
 
   expect_equal(fortran_self$indices, cpp_self$indices)
   expect_equal(fortran_self$distances, cpp_self$distances, tolerance = 1e-12)
@@ -4245,7 +4586,7 @@ test_that("CUDA NSG returns metric-aware self-KNN results", {
   set.seed(1449)
   x <- matrix(rnorm(120L * 8L), nrow = 120L)
   for (metric in c("euclidean", "cosine", "correlation", "inner_product")) {
-    out <- internal_nn_without_self(
+    out <- internal_nn(exclude_self = TRUE,
       x,
       k = 8L,
       backend = "cuda_nsg",
@@ -4273,8 +4614,8 @@ test_that("CUDA NN-descent requests use RAPIDS cuVS", {
   k <- 8L
 
   for (metric in c("euclidean", "cosine", "correlation", "inner_product")) {
-    exact <- nn_without_self(x, k = k, backend = "cpu", metric = metric, n_threads = 4L)
-    refined <- internal_nn_without_self(
+    exact <- nn(exclude_self = TRUE, x, k = k, backend = "cpu", metric = metric, n_threads = 4L)
+    refined <- internal_nn(exclude_self = TRUE,
       x,
       k = k,
       backend = "cuda_cuvs_nndescent",
@@ -4355,7 +4696,7 @@ test_that("cuVS CAGRA reports actual and requested graph parameters", {
   )
   on.exit(options(old_options), add = TRUE)
 
-  out <- internal_nn_without_self(x, k = 10L, backend = "cuda_cuvs_cagra")
+  out <- internal_nn(exclude_self = TRUE, x, k = 10L, backend = "cuda_cuvs_cagra")
   approx <- attr(out, "approximation")
   expect_equal(dim(out$indices), c(nrow(x), 10L))
   expect_equal(approx$graph_degree, 32L)
@@ -4383,7 +4724,7 @@ test_that("CUDA CAGRA supports transformed raw inner product", {
     matrix(rnorm(40L * 6L, 0.5, 0.7), ncol = 6L)
   )
   k <- 6L
-  exact <- internal_nn_without_self(
+  exact <- internal_nn(exclude_self = TRUE,
     x,
     k = k,
     backend = "cpu",
@@ -4401,7 +4742,7 @@ test_that("CUDA CAGRA supports transformed raw inner product", {
   on.exit(options(old_options), add = TRUE)
 
   for (backend in providers) {
-    out <- internal_nn_without_self(
+    out <- internal_nn(exclude_self = TRUE,
       x,
       k = k,
       backend = backend,
@@ -4430,22 +4771,8 @@ test_that("direct cuVS CAGRA auto build rule uses iterative construction for com
 
   coil20_like <- matrix(0, nrow = 1440L, ncol = 1024L)
   params <- faissR:::cuvs_cagra_params(nrow(coil20_like), 50L, p = ncol(coil20_like))
-  hnsw_params <- faissR:::cuvs_hnsw_params(nrow(coil20_like), 50L, p = ncol(coil20_like))
-  mnist_hnsw90 <- faissR:::cuvs_hnsw_params(70000L, 50L, p = 784L, target_recall = 0.9)
-  mnist_hnsw95 <- faissR:::cuvs_hnsw_params(70000L, 50L, p = 784L, target_recall = 0.95)
-  mnist_hnsw99 <- faissR:::cuvs_hnsw_params(70000L, 50L, p = 784L, target_recall = 0.99)
 
   expect_equal(params$tuning_source, "cpp")
-  expect_equal(hnsw_params$tuning_source, "cpp")
-  expect_equal(mnist_hnsw90$tuning_rule, "recall90_large_high_dim_mid_k_hnsw_from_cagra")
-  expect_equal(mnist_hnsw90$graph_degree, 12L)
-  expect_equal(mnist_hnsw90$target_recall, 0.9)
-  expect_equal(mnist_hnsw95$tuning_rule, "recall95_large_high_dim_mid_k_hnsw_from_cagra")
-  expect_equal(mnist_hnsw95$graph_degree, 16L)
-  expect_equal(mnist_hnsw95$target_recall, 0.95)
-  expect_equal(mnist_hnsw99$tuning_rule, "recall99_large_high_dim_mid_k_hnsw_from_cagra")
-  expect_equal(mnist_hnsw99$graph_degree, 24L)
-  expect_equal(mnist_hnsw99$target_recall, 0.99)
   expect_equal(
     faissR:::cuvs_cagra_build_algo_for(coil20_like, 50L, self_query = TRUE, params = params),
     "iterative_cagra_search"
@@ -4454,12 +4781,9 @@ test_that("direct cuVS CAGRA auto build rule uses iterative construction for com
     faissR:::cuvs_cagra_build_algo_for(coil20_like, 50L, self_query = FALSE, params = params),
     "ivf_pq"
   )
-  expect_equal(hnsw_params$cagra_build_algo, "iterative_cagra_search")
 })
 
-test_that("cuVS HNSW reports metric-aware CUDA results for supported metrics", {
-  skip_if_not(cuvs_available())
-
+test_that("CUDA HNSW resolves to explicit cuVS HNSW route", {
   set.seed(840)
   x <- rbind(
     matrix(rnorm(40L * 6L, -0.5, 0.7), ncol = 6L),
@@ -4467,57 +4791,24 @@ test_that("cuVS HNSW reports metric-aware CUDA results for supported metrics", {
   )
   k <- 6L
 
-  for (metric in c("euclidean", "cosine", "correlation")) {
-    exact <- internal_nn_without_self(
-      x,
-      k = k,
-      backend = "cpu",
-      metric = metric,
-      n_threads = 2L
+  for (metric in c("euclidean", "cosine", "correlation", "inner_product")) {
+    expect_equal(
+      faissR:::resolve_public_nn_backend("cuda", "hnsw", metric),
+      "cuda_cuvs_hnsw",
+      info = metric
     )
-    out <- internal_nn_without_self(
-      x,
-      k = k,
-      backend = "cuda_cuvs_hnsw",
-      metric = metric,
-      n_threads = 2L
-    )
-    approx <- attr(out, "approximation")
-    recall <- faissR:::.knn_recall_summary(out, exact, k)
-
-    expect_equal(dim(out$indices), c(nrow(x), k), info = metric)
-    expect_equal(dim(out$distances), c(nrow(x), k), info = metric)
-    expect_equal(attr(out, "backend"), "cuda_cuvs_hnsw", info = metric)
-    expect_equal(attr(out, "metric"), metric, info = metric)
-    expect_equal(approx$strategy, "rapids_cuvs_hnsw_from_cagra", info = metric)
-    expect_equal(approx$library, "cuvs", info = metric)
-    expect_equal(approx$accelerator, "cuda", info = metric)
-    expect_equal(approx$metric, metric, info = metric)
-    expect_true(all(is.finite(out$distances)), info = metric)
-    expect_true(recall$recall_at_k >= 0.4, info = metric)
-
-    if (metric %in% c("cosine", "correlation")) {
-      expect_match(attr(out, "metric_transform"), "euclidean_graph_search", info = metric)
-      expect_equal(
-        attr(out, "distance_transform"),
-        "normalized_euclidean_squared_over_2_to_1_minus_similarity",
+    if (!cuvs_available()) {
+      expect_error(
+        internal_nn(exclude_self = TRUE,
+          x,
+          k = k,
+          backend = "cuda_cuvs_hnsw",
+          metric = metric,
+          n_threads = 2L
+        ),
+        "cuVS",
         info = metric
       )
-      expect_equal(approx$metric_transform, attr(out, "metric_transform"), info = metric)
-      expect_equal(approx$distance_transform, attr(out, "distance_transform"), info = metric)
-    } else if (identical(metric, "inner_product")) {
-      expect_equal(
-        attr(out, "metric_transform"),
-        "maximum_inner_product_to_l2_extra_dimension",
-        info = metric
-      )
-      expect_equal(
-        attr(out, "distance_transform"),
-        "mips_l2_to_shifted_inner_product_distance",
-        info = metric
-      )
-      expect_equal(approx$metric_transform, attr(out, "metric_transform"), info = metric)
-      expect_equal(approx$distance_transform, attr(out, "distance_transform"), info = metric)
     }
   }
 })

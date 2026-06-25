@@ -43,30 +43,32 @@ void push_edge(std::vector<Edge>& edges,
 
 bool contains_neighbor(const IntegerMatrix& indices,
                        const int row,
-                       const int target) {
-  const int k = indices.ncol();
+                       const int target,
+                       const int col_start,
+                       const int k) {
   for (int col = 0; col < k; ++col) {
-    if (indices(row, col) == target) return true;
+    if (indices(row, col_start + col) == target) return true;
   }
   return false;
 }
 
 std::vector<Edge> build_full_snn_edges(const IntegerMatrix& indices,
-                                       const double prune) {
+                                       const double prune,
+                                       const int col_start,
+                                       const int k) {
   // Inspired by bluster::neighborsToSNNGraph() / scran_graph_cluster:
   // build an inverted neighbour index and count shared-neighbour
   // co-occurrences directly. This creates the standard full SNN graph
   // between all observations sharing at least one neighbour, not only
   // edges already present in the directed KNN graph.
   const int n = indices.nrow();
-  const int k = indices.ncol();
 
   std::vector<int> valid_count(static_cast<std::size_t>(n), 0);
   std::vector<int> reverse_count(static_cast<std::size_t>(n) + 1U, 0);
   for (int row = 0; row < n; ++row) {
     const int self = row + 1;
     for (int col = 0; col < k; ++col) {
-      const int idx = indices(row, col);
+      const int idx = indices(row, col_start + col);
       if (idx >= 1 && idx <= n && idx != self) {
         ++valid_count[static_cast<std::size_t>(row)];
         ++reverse_count[static_cast<std::size_t>(idx)];
@@ -85,7 +87,7 @@ std::vector<Edge> build_full_snn_edges(const IntegerMatrix& indices,
   for (int row = 0; row < n; ++row) {
     const int self = row + 1;
     for (int col = 0; col < k; ++col) {
-      const int idx = indices(row, col);
+      const int idx = indices(row, col_start + col);
       if (idx >= 1 && idx <= n && idx != self) {
         const std::size_t offset =
           static_cast<std::size_t>(reverse_ptr[static_cast<std::size_t>(idx)] +
@@ -105,7 +107,7 @@ std::vector<Edge> build_full_snn_edges(const IntegerMatrix& indices,
     touched.clear();
     const int self = row + 1;
     for (int col = 0; col < k; ++col) {
-      const int idx = indices(row, col);
+      const int idx = indices(row, col_start + col);
       if (idx < 1 || idx > n || idx == self) continue;
       const int begin = reverse_ptr[static_cast<std::size_t>(idx)];
       const int end = reverse_ptr[static_cast<std::size_t>(idx + 1)];
@@ -134,16 +136,17 @@ std::vector<Edge> build_full_snn_edges(const IntegerMatrix& indices,
   return edges;
 }
 
-std::vector<double> local_sigmas(const NumericMatrix& distances) {
+std::vector<double> local_sigmas(const NumericMatrix& distances,
+                                 const int col_start,
+                                 const int k) {
   const int n = distances.nrow();
-  const int k = distances.ncol();
   std::vector<double> sigma(static_cast<std::size_t>(n), 1.0);
   for (int row = 0; row < n; ++row) {
     double last = 0.0;
     double sum = 0.0;
     int count = 0;
     for (int col = 0; col < k; ++col) {
-      const double d = distances(row, col);
+      const double d = distances(row, col_start + col);
       if (std::isfinite(d) && d > 0.0) {
         last = d;
         sum += d;
@@ -220,22 +223,47 @@ std::vector<double> unique_sorted_positive(std::vector<double> values) {
   return out;
 }
 
+struct KnnColumnRange {
+  int col_start = 0;
+  int k = 0;
+};
+
+KnnColumnRange normalize_knn_column_range(const IntegerMatrix& indices,
+                                          const NumericMatrix& distances,
+                                          const int col_start,
+                                          const int n_neighbors) {
+  const int n = indices.nrow();
+  const int full_k = indices.ncol();
+  if (distances.nrow() != n || distances.ncol() != full_k) {
+    Rcpp::stop("KNN indices and distances must have the same dimensions");
+  }
+  if (n < 2 || full_k < 1) {
+    Rcpp::stop("KNN input must have at least two rows and one neighbor column");
+  }
+  if (col_start < 0 || col_start >= full_k) {
+    Rcpp::stop("KNN column offset is outside the available neighbor columns");
+  }
+  if (n_neighbors < 1 || col_start + n_neighbors > full_k) {
+    Rcpp::stop("KNN neighbor count is outside the available neighbor columns");
+  }
+  return KnnColumnRange{col_start, n_neighbors};
+}
+
 } // namespace
 
 // [[Rcpp::export]]
-List knn_graph_edges_cpp(IntegerMatrix indices,
-                         NumericMatrix distances,
-                         std::string weight_type,
-                         double prune,
-                         bool mutual) {
+List knn_graph_edges_range_cpp(IntegerMatrix indices,
+                               NumericMatrix distances,
+                               std::string weight_type,
+                               double prune,
+                               bool mutual,
+                               int col_start,
+                               int n_neighbors) {
   const int n = indices.nrow();
-  const int k = indices.ncol();
-  if (distances.nrow() != n || distances.ncol() != k) {
-    Rcpp::stop("KNN indices and distances must have the same dimensions");
-  }
-  if (n < 2 || k < 1) {
-    Rcpp::stop("KNN input must have at least two rows and one neighbor column");
-  }
+  const KnnColumnRange range =
+    normalize_knn_column_range(indices, distances, col_start, n_neighbors);
+  const int start = range.col_start;
+  const int k = range.k;
   if (weight_type != "snn" &&
       weight_type != "distance" &&
       weight_type != "adaptive" &&
@@ -247,7 +275,7 @@ List knn_graph_edges_cpp(IntegerMatrix indices,
   std::vector<Edge> edges;
 
   if (weight_type == "snn" && !mutual) {
-    edges = build_full_snn_edges(indices, prune);
+    edges = build_full_snn_edges(indices, prune, start, k);
   } else if (weight_type == "snn") {
     edges.reserve(static_cast<std::size_t>(n) * static_cast<std::size_t>(k));
     std::vector<int> mark(static_cast<std::size_t>(n) + 1U, 0);
@@ -259,20 +287,20 @@ List knn_graph_edges_cpp(IntegerMatrix indices,
       }
       const int i = row + 1;
       for (int col = 0; col < k; ++col) {
-        const int idx = indices(row, col);
+        const int idx = indices(row, start + col);
         if (idx >= 1 && idx <= n && idx != i) {
           mark[static_cast<std::size_t>(idx)] = stamp;
         }
       }
 
       for (int col = 0; col < k; ++col) {
-        const int j = indices(row, col);
+        const int j = indices(row, start + col);
         if (j < 1 || j > n || j == i) continue;
-        if (mutual && !contains_neighbor(indices, j - 1, i)) continue;
+        if (mutual && !contains_neighbor(indices, j - 1, i, start, k)) continue;
         int shared = 0;
         const int jrow = j - 1;
         for (int jcol = 0; jcol < k; ++jcol) {
-          const int jj = indices(jrow, jcol);
+          const int jj = indices(jrow, start + jcol);
           if (jj >= 1 && jj <= n && mark[static_cast<std::size_t>(jj)] == stamp) {
             ++shared;
           }
@@ -288,21 +316,21 @@ List knn_graph_edges_cpp(IntegerMatrix indices,
     edges.reserve(static_cast<std::size_t>(n) * static_cast<std::size_t>(k));
     std::vector<double> sigma;
     if (weight_type == "adaptive") {
-      sigma = local_sigmas(distances);
+      sigma = local_sigmas(distances, start, k);
     }
     for (int row = 0; row < n; ++row) {
       const int i = row + 1;
       for (int col = 0; col < k; ++col) {
-        const int j = indices(row, col);
+        const int j = indices(row, start + col);
         if (j < 1 || j > n || j == i) continue;
-        if (mutual && !contains_neighbor(indices, j - 1, i)) continue;
+        if (mutual && !contains_neighbor(indices, j - 1, i, start, k)) continue;
         double weight = 1.0;
         if (weight_type == "distance") {
-          const double d = distances(row, col);
+          const double d = distances(row, start + col);
           if (!std::isfinite(d) || d < 0.0) continue;
           weight = 1.0 / (1.0 + d);
         } else if (weight_type == "adaptive") {
-          const double d = distances(row, col);
+          const double d = distances(row, start + col);
           if (!std::isfinite(d) || d < 0.0) continue;
           const double si = sigma[static_cast<std::size_t>(row)];
           const double sj = sigma[static_cast<std::size_t>(j - 1)];
@@ -348,6 +376,23 @@ List knn_graph_edges_cpp(IntegerMatrix indices,
     Rcpp::Named("weight_type") = weight_type,
     Rcpp::Named("prune") = prune,
     Rcpp::Named("mutual") = mutual
+  );
+}
+
+// [[Rcpp::export]]
+List knn_graph_edges_cpp(IntegerMatrix indices,
+                         NumericMatrix distances,
+                         std::string weight_type,
+                         double prune,
+                         bool mutual) {
+  return knn_graph_edges_range_cpp(
+    indices,
+    distances,
+    weight_type,
+    prune,
+    mutual,
+    0,
+    indices.ncol()
   );
 }
 

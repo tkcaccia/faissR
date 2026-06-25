@@ -43,7 +43,7 @@
 31. NVIDIA. CUDA Installation Guide for Linux. Available from: https://docs.nvidia.com/cuda/cuda-installation-guide-linux/.
 32. NVIDIA. CUDA Installation Guide for Microsoft Windows. Available from: https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/.
 33. RAPIDS Development Team. RAPIDS Installation Guide. Available from: https://docs.rapids.ai/install/.
-34. Unum Cloud/Nomic AI. USearch: compact single-header vector search engine [software, Apache-2.0]. Available from: https://github.com/unum-cloud/usearch and https://github.com/nomic-ai/usearch.
+34. FAISS Project. Fast accumulation of PQ and AQ codes (FastScan). Available from: https://github.com/facebookresearch/faiss/wiki/Fast-accumulation-of-PQ-and-AQ-codes-(FastScan).
 
 ## Software Acknowledgements
 
@@ -58,10 +58,13 @@ Leiden, walktrap/random-walk, and multicore graph-clustering literature
 [9-11,17-19]. CUDA Louvain and Leiden use RAPIDS libcugraph when available [12].
 FAISS GPU CAGRA and FAISS GPU IVF routes follow the FAISS GPU/cuVS integration
 documented by FAISS, NVIDIA, and Meta [13-15]. Direct cuVS routes call RAPIDS
-cuVS C/C++ libraries [3]. Direct CUDA HNSW uses the RAPIDS cuVS HNSW wrapper
-path documented by NVIDIA/RAPIDS [22]. CUHNSW is acknowledged as related
-Apache-2.0 CUDA HNSW prior software, but no CUHNSW source code is vendored or
-copied into faissR [23]. The native Vamana route is inspired by DiskANN/Vamana
+cuVS C/C++ libraries [3]. RAPIDS cuVS HNSW is cited because its C API documents
+the CAGRA-to-hnswlib wrapper behavior that faissR intentionally does not expose
+as CUDA HNSW [22]. CUHNSW is acknowledged as related Apache-2.0 CUDA HNSW prior
+software, but no CUHNSW source code is vendored or copied into faissR [23]. The
+ScaNN-inspired `method = "scann"` route uses
+FAISS FastScan on CPU and direct RAPIDS cuVS 4-bit IVF-PQ on CUDA; faissR does
+not vendor or copy Google ScaNN source code [3,6,34]. The native Vamana route is inspired by DiskANN/Vamana
 robust-pruned graph construction [24] and uses faissR-owned candidate
 refinement code; GGNN, SONG, BANG, and PilotANN are acknowledged as related GPU
 ANN systems and design references, but their source code is not vendored or

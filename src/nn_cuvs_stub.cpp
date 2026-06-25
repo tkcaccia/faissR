@@ -28,7 +28,8 @@ List cuvs_bruteforce_knn_impl(NumericMatrix,
 List cuvs_bruteforce_float32_knn_impl(SEXP,
                                       SEXP,
                                       int,
-                                      bool) {
+                                      bool,
+                                      std::string) {
   Rcpp::stop(
     "cuVS float32 brute-force backend is not available. Reinstall faissR "
     "with RAPIDS cuVS visible to configure, for example FAISSR_USE_CUVS=1 "
@@ -60,6 +61,7 @@ List cuvs_cagra_float32_knn_impl(SEXP,
                                  int,
                                  int,
                                  int,
+                                 std::string,
                                  std::string) {
   Rcpp::stop(
     "cuVS float32 CAGRA backend is not available. Reinstall faissR with "
@@ -84,7 +86,8 @@ List cuvs_nndescent_self_float32_knn_impl(SEXP,
                                           int,
                                           int,
                                           int,
-                                          int) {
+                                          int,
+                                          std::string) {
   Rcpp::stop(
     "cuVS float32 NN-descent backend is not available. Reinstall faissR "
     "with RAPIDS cuVS visible to configure, for example FAISSR_USE_CUVS=1 "
@@ -102,9 +105,10 @@ List cuvs_hnsw_knn_impl(NumericMatrix,
                         int,
                         std::string) {
   Rcpp::stop(
-    "cuVS HNSW backend is not available. Reinstall faissR with RAPIDS "
-    "cuVS visible to configure, for example FAISSR_USE_CUVS=1 and "
-    "CUVS_HOME=/path/to/cuvs."
+    "CUDA HNSW requires RAPIDS cuVS HNSW support. Reinstall faissR with "
+    "RAPIDS cuVS visible to configure so backend = \"cuda\", method = "
+    "\"hnsw\" can build a CAGRA seed graph and convert it with "
+    "cuvsHnswFromCagraWithDataset."
   );
 }
 
@@ -116,11 +120,13 @@ List cuvs_hnsw_float32_knn_impl(SEXP,
                                 int,
                                 int,
                                 int,
+                                std::string,
                                 std::string) {
   Rcpp::stop(
-    "cuVS HNSW backend is not available. Reinstall faissR with RAPIDS "
-    "cuVS visible to configure, for example FAISSR_USE_CUVS=1 and "
-    "CUVS_HOME=/path/to/cuvs."
+    "CUDA HNSW requires RAPIDS cuVS HNSW support. Reinstall faissR with "
+    "RAPIDS cuVS visible to configure so backend = \"cuda\", method = "
+    "\"hnsw\" can build a CAGRA seed graph and convert it with "
+    "cuvsHnswFromCagraWithDataset."
   );
 }
 
@@ -142,7 +148,8 @@ List cuvs_ivf_flat_float32_knn_impl(SEXP,
                                     int,
                                     int,
                                     int,
-                                    bool) {
+                                    bool,
+                                    std::string) {
   Rcpp::stop(
     "Direct cuVS float32 IVF-Flat backend is not available. Reinstall "
     "faissR with RAPIDS cuVS visible to configure, for example "
@@ -173,7 +180,8 @@ List cuvs_ivf_pq_float32_knn_impl(SEXP,
                                   int,
                                   int,
                                   int,
-                                  bool) {
+                                  bool,
+                                  std::string) {
   Rcpp::stop(
     "Direct cuVS float32 IVF-PQ backend is not available. Reinstall faissR "
     "with RAPIDS cuVS visible to configure, for example FAISSR_USE_CUVS=1 "

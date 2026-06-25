@@ -76,7 +76,7 @@ default_nn_metric_values <- function() {
 default_nn_method_values <- function() {
   c(
     "auto", "exact", "flat", "bruteforce", "grid",
-    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra"
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "scann", "cagra"
   )
 }
 
@@ -612,7 +612,7 @@ should_isolate_cuda_native_timeout <- function(x, backend, method, preflight_rou
   public_auto_request <- identical(method, "auto") && cuda_request
   cuda_native_timeout_method <- method %in% c(
     "auto", "exact", "flat", "bruteforce", "hnsw", "ivf", "ivfpq",
-    "vamana", "nsg", "nndescent", "usearch", "cagra"
+    "vamana", "nsg", "nndescent", "scann", "cagra"
   )
   cuda_request && cuda_native_timeout_method && (cuda_route || public_auto_request)
 }
@@ -633,7 +633,7 @@ should_isolate_native_timeout <- function(x, backend, method, preflight_route,
   cpu_exact_route <- identical(route, "cpu") || isTRUE(grepl("^faiss_flat", route))
   cpu_approx_route <- identical(route, "cpu_auto") ||
     isTRUE(grepl(
-      "^(faiss_(hnsw|ivf|ivfpq|nsg|nndescent)|cpu_(auto|hnsw|vamana|nsg|nndescent)|hnsw|rcpphnsw|cpu_approx)",
+      "^(faiss_(hnsw|ivf|ivfpq|scann|nsg|nndescent)|cpu_(auto|hnsw|vamana|nsg|nndescent)|hnsw|rcpphnsw|cpu_approx)",
       route
     ))
   explicit_cpu_exact <- identical(backend, "cpu") &&
@@ -641,7 +641,7 @@ should_isolate_native_timeout <- function(x, backend, method, preflight_route,
   auto_cpu_exact <- identical(backend, "auto") &&
     method %in% c("exact", "flat", "bruteforce") &&
     cpu_exact_route
-  cpu_approx_methods <- c("auto", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch")
+  cpu_approx_methods <- c("auto", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "scann")
   explicit_cpu_approx <- identical(backend, "cpu") &&
     method %in% cpu_approx_methods
   auto_cpu_approx <- identical(backend, "auto") &&
@@ -2427,7 +2427,7 @@ materials <- c(
   "`method = \"grid\"` is included in the default public method list but is recorded as an expected skip for datasets outside two or three columns, because it is a native low-dimensional spatial search route.",
   "`nn_metric_benchmark_config.csv` records the run configuration, the loaded faissR version, package path, namespace path, R library paths, and the available real plus simulated dataset names accepted by the dataset selector. `nn_metric_benchmark_results.csv` is the raw row-level result table, including successes, failures, expected skips, `expected_skip_reason`, timings, memory, recall metadata, compact backend route-parameter metadata, tuning status when a backend reports tuning, the requested CAGRA implementation for public `method = \"cagra\"` rows, the requested direct-cuVS `cagra_build_algo` when `cagra_implementation = \"cuvs\"`, optional child-process isolation fields, and resolved backend fields. Public `method = \"auto\"` is benchmarked once per backend/metric/k row; provider-forced FAISS GPU versus direct cuVS CAGRA comparisons are kept under explicit `method = \"cagra\"` rows.",
   "When `--isolate_cuda_cagra=true`, CUDA CAGRA rows that request a provider selector are executed in a child R process. The child writes the KNN result back to the parent, which still computes quality against the same reference. The `isolated_process` and `child_status` columns make this auditable. Timings are measured inside the child around `faissR::nn()` so process start-up and result serialization are not counted as method time.",
-  "When `--isolate_native_timeout=true` (the default on Unix-like systems), high-work CPU rows are executed in a forked worker process for exhaustive methods (`exact`, `flat`, and `bruteforce`) and approximate graph/index methods (`auto`, `hnsw`, `ivf`, `ivfpq`, `vamana`, `nsg`, and `nndescent`). High-work CUDA/auto rows, including exhaustive `exact`/`flat`/`bruteforce` rows and graph/index rows such as `hnsw`, `ivf`, `ivfpq`, `vamana`, `nsg`, `nndescent`, `cagra`, and CUDA-selected `auto` rows, are executed in a separate Rscript child process. This gives the benchmark an OS-level timeout for native code paths that may not check R's `setTimeLimit()` while inside C++/FAISS/cuVS loops, and records timed-out rows with `child_status = \"timeout\"` instead of blocking subsequent rows.",
+  "When `--isolate_native_timeout=true` (the default on Unix-like systems), high-work CPU rows are executed in a forked worker process for exhaustive methods (`exact`, `flat`, and `bruteforce`) and approximate graph/index methods (`auto`, `hnsw`, `ivf`, `ivfpq`, `scann`, `vamana`, `nsg`, and `nndescent`). High-work CUDA/auto rows, including exhaustive `exact`/`flat`/`bruteforce` rows and graph/index rows such as `hnsw`, `ivf`, `ivfpq`, `scann`, `vamana`, `nsg`, `nndescent`, `cagra`, and CUDA-selected `auto` rows, are executed in a separate Rscript child process. This gives the benchmark an OS-level timeout for native code paths that may not check R's `setTimeLimit()` while inside C++/FAISS/cuVS loops, and records timed-out rows with `child_status = \"timeout\"` instead of blocking subsequent rows.",
   "For large datasets that require child-process isolation, the parent writes one temporary per-dataset matrix cache in the output directory and passes that path to each child job. This avoids repeatedly embedding the full matrix in every small child-job configuration file while preserving the same measured method timing inside the child.",
   "When `--preflight_cpu_exhaustive_timeout=true`, high-work CPU exhaustive rows are recorded as `status = \"timeout\"` with `child_status = \"preflight_timeout\"` before launching native code. This opt-in mode is intended for large all-method sweeps after at least one equivalent exhaustive CPU route has demonstrated that the 600-second cap is binding.",
   "When `--preflight_cuda_exhaustive_timeout=true`, very high-work CUDA exhaustive rows (`exact`, `flat`, and `bruteforce`) are recorded as `status = \"timeout\"` with `child_status = \"preflight_timeout\"` before launching native code. The CUDA preflight uses a conservative lower bound of `1e14` distance operations even when a smaller command-line threshold is supplied, so medium GPU-feasible datasets such as MNIST70k are measured instead of being marked as timeouts only from their all-pairs operation count.",

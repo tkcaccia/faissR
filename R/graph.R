@@ -10,38 +10,39 @@
 #' @param knn Optional precomputed KNN object returned by `nn()`. If supplied,
 #'   `data` is ignored for neighbour search.
 #' @param k Number of non-self neighbours used in the graph.
-#' @param backend Device backend passed to \code{\link{nn_without_self}()} when
+#' @param backend Device backend passed to \code{\link{nn}()} with
+#'   `exclude_self = TRUE` when
 #'   `knn` is not supplied: `"auto"`, `"cpu"`, or `"cuda"`.
 #' @param nn_method Nearest-neighbour method passed to
-#'   \code{\link{nn_without_self}()} when `knn` is not supplied. The default
-#'   `"auto"` uses the shape-aware selector for the chosen backend.
+#'   \code{\link{nn}()} with `exclude_self = TRUE` when `knn` is not supplied.
+#'   The default `"auto"` uses the shape-aware selector for the chosen backend.
 #' @param method Backward-compatible alias for `nn_method`, provided so
 #'   `knn_graph()` accepts the same nearest-neighbour method argument name as
 #'   `nn()` and `knn()`. If both `method` and `nn_method` are supplied they must
 #'   resolve to the same public method label.
-#' @param metric Distance metric passed to \code{\link{nn_without_self}()} when
-#'   `knn` is not supplied. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and
-#'   `"ip"` are accepted and stored as canonical metric labels. Correlation is
-#'   centered cosine similarity, not raw inner product. Inner-product graph
-#'   construction ranks neighbours by larger raw dot product while reusing
-#'   faissR's shifted smaller-is-better distance convention from
-#'   \code{\link{nn}()}.
-#' @param tuning Tuning policy passed to \code{\link{nn_without_self}()} when
-#'   `knn` is not supplied.
+#' @param metric Distance metric passed to \code{\link{nn}()} with
+#'   `exclude_self = TRUE` when `knn` is not supplied. Aliases such as `"l2"`,
+#'   `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as canonical
+#'   metric labels. Correlation is centered cosine similarity, not raw inner
+#'   product. Inner-product graph construction ranks neighbours by larger raw
+#'   dot product while reusing faissR's shifted smaller-is-better distance
+#'   convention from \code{\link{nn}()}.
+#' @param tuning Tuning policy passed to \code{\link{nn}()} with
+#'   `exclude_self = TRUE` when `knn` is not supplied.
 #' @param target_recall HNSW speed/recall tier passed to
-#'   \code{\link{nn_without_self}()} when KNN is computed here. Use `0.9`,
-#'   `0.95`, or `0.99`; non-HNSW methods ignore this value but retain it in
-#'   graph metadata.
+#'   \code{\link{nn}()} with `exclude_self = TRUE` when KNN is computed here.
+#'   Use `0.9`, `0.95`, or `0.99`; non-HNSW methods ignore this value but
+#'   retain it in graph metadata.
 #' @param cagra_implementation CUDA CAGRA provider passed to
-#'   \code{\link{nn_without_self}()} when KNN is computed here. `NULL` uses the
-#'   global option; `"auto"` uses the same deterministic shape-aware provider
-#'   rule as \code{\link{nn}()}, while `"faiss_gpu"` or `"cuvs"` force one
-#'   provider.
+#'   \code{\link{nn}()} with `exclude_self = TRUE` when KNN is computed here.
+#'   `NULL` uses the global option; `"auto"` uses the same deterministic
+#'   shape-aware provider rule as \code{\link{nn}()}, while `"faiss_gpu"` or
+#'   `"cuvs"` force one provider.
 #' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm passed
-#'   to \code{\link{nn_without_self}()} when KNN is computed here. `NULL` uses
-#'   the global `faissR.cuvs_cagra_build_algo` option. This setting applies to
-#'   direct cuVS CAGRA and accepts `"auto"`, `"ivf_pq"`, `"nn_descent"`, or
-#'   `"iterative_cagra_search"`.
+#'   to \code{\link{nn}()} with `exclude_self = TRUE` when KNN is computed
+#'   here. `NULL` uses the global `faissR.cuvs_cagra_build_algo` option. This
+#'   setting applies to direct cuVS CAGRA and accepts `"auto"`, `"ivf_pq"`,
+#'   `"nn_descent"`, or `"iterative_cagra_search"`.
 #' @param weight Graph weighting. `"auto"` uses SNN/Jaccard weights for input
 #'   space and distance weights for embedding space. `"snn"` builds full
 #'   shared-nearest-neighbour Jaccard weights between all rows sharing at least
@@ -70,7 +71,7 @@ knn_graph <- function(data,
                       knn = NULL,
                       k = 50L,
                       backend = c("auto", "cpu", "cuda"),
-                      nn_method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra"),
+                      nn_method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "scann", "cagra"),
                       method = NULL,
                       metric = c("euclidean", "cosine", "correlation", "inner_product"),
                       tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
@@ -125,9 +126,10 @@ knn_graph <- function(data,
       }
       graph_space <- "embedding"
       graph_backend <- requested_graph_backend
-      knn <- nn_without_self(
+      knn <- nn(
         data$layout,
         k = k,
+        exclude_self = TRUE,
         backend = graph_backend,
         method = nn_method,
         metric = metric,
@@ -141,9 +143,10 @@ knn_graph <- function(data,
       input_backend <- attr(knn, "backend") %||% resolved_graph_backend
     } else {
       graph_backend <- requested_graph_backend
-      knn <- nn_without_self(
+      knn <- nn(
         data,
         k = k,
+        exclude_self = TRUE,
         backend = graph_backend,
         method = nn_method,
         metric = metric,
@@ -168,13 +171,14 @@ knn_graph <- function(data,
     resolved_graph_backend <- input_backend
   }
   if (knn_input$n_neighbors < k) k <- knn_input$n_neighbors
-  cols <- seq_len(k)
-  edges <- knn_graph_edges_cpp(
-    knn_input$indices[, cols, drop = FALSE],
-    knn_input$distances[, cols, drop = FALSE],
+  edges <- knn_graph_edges_range_cpp(
+    knn_input$indices,
+    knn_input$distances,
     weight,
     prune,
-    mutual
+    mutual,
+    as.integer(knn_input$col_start),
+    as.integer(k)
   )
   metadata <- list(
     k = as.integer(k),
@@ -272,31 +276,35 @@ graph_cluster_backend_selection <- function(backend,
 #'   decision is made by the compiled `graph_cluster_auto_backend_cpp()`
 #'   selector and recorded in `parameters$backend_selection`.
 #' @param k Number of neighbours when `graph` is not already a KNN object.
-#' @param graph_backend Backend passed to \code{\link{nn_without_self}()} for
-#'   neighbour search when `graph` is a matrix or embedding.
+#' @param graph_backend Backend passed to \code{\link{nn}()} with
+#'   `exclude_self = TRUE` for neighbour search when `graph` is a matrix or
+#'   embedding.
 #' @param graph_method Nearest-neighbour method passed to
-#'   \code{\link{nn_without_self}()} when `graph` is a matrix or embedding.
-#' @param metric Distance metric passed to \code{\link{nn_without_self}()} when
-#'   `graph` is a matrix or embedding. Aliases such as `"l2"`,
+#'   \code{\link{nn}()} with `exclude_self = TRUE` when `graph` is a matrix or
+#'   embedding.
+#' @param metric Distance metric passed to \code{\link{nn}()} with
+#'   `exclude_self = TRUE` when `graph` is a matrix or embedding. Aliases such
+#'   as `"l2"`,
 #'   `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as canonical
 #'   metric labels. Correlation is centered cosine similarity, not raw inner
 #'   product. Inner-product graph construction ranks neighbours by larger raw
 #'   dot product while reusing faissR's shifted smaller-is-better distance
 #'   convention from \code{\link{nn}()}.
-#' @param tuning Tuning policy passed to \code{\link{nn_without_self}()} when
-#'   `graph` is a matrix or embedding.
+#' @param tuning Tuning policy passed to \code{\link{nn}()} with
+#'   `exclude_self = TRUE` when `graph` is a matrix or embedding.
 #' @param target_recall HNSW speed/recall tier passed to
-#'   \code{\link{nn_without_self}()} when `graph` is a matrix or embedding.
-#'   Use `0.9`, `0.95`, or `0.99`.
+#'   \code{\link{nn}()} with `exclude_self = TRUE` when `graph` is a matrix or
+#'   embedding. Use `0.9`, `0.95`, or `0.99`.
 #' @param cagra_implementation CUDA CAGRA provider passed to
-#'   \code{\link{nn_without_self}()} when graph KNN is computed here. `NULL`
-#'   uses the global option; `"auto"`, `"faiss_gpu"`, or `"cuvs"` select the
-#'   CAGRA provider for CUDA `graph_method = "cagra"` and CUDA-auto CAGRA
-#'   routes.
+#'   \code{\link{nn}()} with `exclude_self = TRUE` when graph KNN is computed
+#'   here. `NULL` uses the global option; `"auto"`, `"faiss_gpu"`, or
+#'   `"cuvs"` select the CAGRA provider for CUDA `graph_method = "cagra"` and
+#'   CUDA-auto CAGRA routes.
 #' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm passed
-#'   to \code{\link{nn_without_self}()} when graph KNN is computed here. `NULL`
-#'   uses the global `faissR.cuvs_cagra_build_algo` option. This is a CAGRA
-#'   construction parameter, not a fallback to a different public NN method.
+#'   to \code{\link{nn}()} with `exclude_self = TRUE` when graph KNN is
+#'   computed here. `NULL` uses the global `faissR.cuvs_cagra_build_algo`
+#'   option. This is a CAGRA construction parameter, not a fallback to a
+#'   different public NN method.
 #' @param weight KNN graph weighting. See \code{\link{knn_graph}()}.
 #' @param mutual If `TRUE`, keep only reciprocal nearest-neighbour edges when a
 #'   graph must be built from data or a KNN object.
@@ -394,7 +402,7 @@ graph_cluster <- function(graph,
                           backend = c("auto", "cpu", "cuda"),
                           k = 50L,
                           graph_backend = "auto",
-                          graph_method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra"),
+                          graph_method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "scann", "cagra"),
                           metric = c("euclidean", "cosine", "correlation", "inner_product"),
                           tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                           target_recall = 0.99,
@@ -533,9 +541,10 @@ graph_cluster <- function(graph,
     input_method <- as.character(graph$method %||% "embedding")[1L]
     resolved <- normalize_public_backend_arg(graph_backend, arg = "graph_backend")
     graph_requested_backend <- resolved
-    knn <- nn_without_self(
+    knn <- nn(
       graph$layout,
       k = k,
+      exclude_self = TRUE,
       backend = resolved,
       method = graph_method,
       metric = metric,
@@ -549,9 +558,10 @@ graph_cluster <- function(graph,
   } else {
     resolved <- normalize_public_backend_arg(graph_backend, arg = "graph_backend")
     graph_requested_backend <- resolved
-    knn <- nn_without_self(
+    knn <- nn(
       graph,
       k = k,
+      exclude_self = TRUE,
       backend = resolved,
       method = graph_method,
       metric = metric,
@@ -574,13 +584,14 @@ graph_cluster <- function(graph,
     weight <- if (identical(graph_space, "embedding")) "distance" else "snn"
   }
   if (knn_input$n_neighbors < k) k <- knn_input$n_neighbors
-  cols <- seq_len(k)
-  graph_edges <- knn_graph_edges_cpp(
-    knn_input$indices[, cols, drop = FALSE],
-    knn_input$distances[, cols, drop = FALSE],
+  graph_edges <- knn_graph_edges_range_cpp(
+    knn_input$indices,
+    knn_input$distances,
     weight_type = weight,
     prune = prune,
-    mutual = mutual
+    mutual = mutual,
+    col_start = as.integer(knn_input$col_start),
+    n_neighbors = as.integer(k)
   )
   n_clusters <- validate_graph_target_cluster_count(n_clusters, graph_edges$n_vertices)
   ans <- graph_cluster_edges_target(

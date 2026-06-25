@@ -40,7 +40,7 @@ test_that("NN metric benchmark defaults cover full method metric backend and k g
     env$default_nn_method_values(),
     c(
       "auto", "exact", "flat", "bruteforce", "grid",
-      "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra"
+      "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "scann", "cagra"
     )
   )
   expect_equal(env$default_nn_k_values(), c(5L, 10L, 15L, 50L, 100L))
@@ -869,7 +869,7 @@ test_that("NN metric benchmark requires canonical public method labels", {
   )
   expect_error(
     env$canonical_method_values(c("HNSW", "faiss_hnsw")),
-    "Valid value\\(s\\): auto, exact, flat, bruteforce, grid, hnsw, ivf, ivfpq, vamana, nsg, nndescent, usearch, cagra"
+    "Valid value\\(s\\): auto, exact, flat, bruteforce, grid, hnsw, ivf, ivfpq, vamana, nsg, nndescent, scann, cagra"
   )
   expect_error(
     env$canonical_method_values(character()),
@@ -2814,8 +2814,14 @@ test_that("graph benchmark defaults cover requested methods backends and k grid"
     env$cagra_implementation_values_for("cuda", "cagra", c("faiss_gpu", "cuvs")),
     c("faiss_gpu", "cuvs")
   )
-  expect_true(is.na(env$cagra_implementation_values_for("cuda", "auto", c("faiss_gpu", "cuvs"))))
-  expect_true(is.na(env$cagra_implementation_values_for("auto", "auto", c("faiss_gpu", "cuvs"))))
+  expect_equal(
+    env$cagra_implementation_values_for("cuda", "auto", c("faiss_gpu", "cuvs")),
+    c("faiss_gpu", "cuvs")
+  )
+  expect_equal(
+    env$cagra_implementation_values_for("auto", "auto", c("faiss_gpu", "cuvs")),
+    c("faiss_gpu", "cuvs")
+  )
   expect_true(is.na(env$cagra_implementation_values_for("cpu", "auto", c("faiss_gpu", "cuvs"))))
   expect_true(is.na(env$cagra_implementation_values_for("cpu", "cagra", c("faiss_gpu", "cuvs"))))
   expect_error(

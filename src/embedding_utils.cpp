@@ -1,7 +1,13 @@
 #include <Rcpp.h>
 #include <algorithm>
+#include <cstdint>
+#include <cstring>
 #include <cmath>
+#include <iomanip>
 #include <limits>
+#include <numeric>
+#include <sstream>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -13,6 +19,149 @@ using Rcpp::NumericMatrix;
 using Rcpp::NumericVector;
 
 namespace {
+
+constexpr std::uint64_t kFnvOffset = 1469598103934665603ULL;
+constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
+
+void hash_bytes(std::uint64_t& hash, const void* data, const std::size_t nbytes) {
+  const unsigned char* bytes = static_cast<const unsigned char*>(data);
+  for (std::size_t i = 0; i < nbytes; ++i) {
+    hash ^= static_cast<std::uint64_t>(bytes[i]);
+    hash *= kFnvPrime;
+  }
+}
+
+template <typename T>
+void hash_value(std::uint64_t& hash, const T& value) {
+  hash_bytes(hash, &value, sizeof(T));
+}
+
+std::string hash_to_hex(const std::uint64_t hash) {
+  std::ostringstream os;
+  os << std::hex << std::setw(16) << std::setfill('0') << hash;
+  return os.str();
+}
+
+Rcpp::IntegerVector matrix_dims_from_object(SEXP x, const char* name) {
+  SEXP dim = Rf_getAttrib(x, R_DimSymbol);
+  if (Rf_isNull(dim) && Rf_isS4(x)) {
+    SEXP data_slot = R_do_slot(x, Rf_install("Data"));
+    dim = Rf_getAttrib(data_slot, R_DimSymbol);
+  }
+  if (Rf_isNull(dim) || Rf_length(dim) != 2) {
+    Rcpp::stop("%s must be a two-dimensional numeric or float32 matrix", name);
+  }
+  Rcpp::IntegerVector dims(dim);
+  if (dims[0] < 1 || dims[1] < 1) {
+    Rcpp::stop("%s must have at least one row and one column", name);
+  }
+  if (dims[0] > std::numeric_limits<int>::max() ||
+      dims[1] > std::numeric_limits<int>::max()) {
+    Rcpp::stop("%s dimensions exceed int limits", name);
+  }
+  return dims;
+}
+
+const float* float32_slot_ptr(SEXP slot, const int expected_length, const char* name) {
+  if (TYPEOF(slot) == INTSXP) {
+    if (Rf_length(slot) != expected_length) {
+      Rcpp::stop("%s float32 payload length does not match its dimensions", name);
+    }
+    return reinterpret_cast<const float*>(INTEGER(slot));
+  }
+  if (TYPEOF(slot) == RAWSXP) {
+    const R_xlen_t expected_bytes = static_cast<R_xlen_t>(expected_length) *
+      static_cast<R_xlen_t>(sizeof(float));
+    if (Rf_xlength(slot) != expected_bytes) {
+      Rcpp::stop("%s float32 raw payload length does not match its dimensions", name);
+    }
+    return reinterpret_cast<const float*>(RAW(slot));
+  }
+  return nullptr;
+}
+
+struct NumericOrFloatMatrixView {
+  int nrow = 0;
+  int ncol = 0;
+  bool is_float32 = false;
+  const double* doubles = nullptr;
+  const float* floats = nullptr;
+};
+
+NumericOrFloatMatrixView make_numeric_or_float_view(SEXP x, const char* name) {
+  Rcpp::IntegerVector dims = matrix_dims_from_object(x, name);
+  NumericOrFloatMatrixView view;
+  view.nrow = dims[0];
+  view.ncol = dims[1];
+  const int expected_length = view.nrow * view.ncol;
+
+  if (TYPEOF(x) == REALSXP) {
+    if (Rf_length(x) != expected_length) {
+      Rcpp::stop("%s payload length does not match its dimensions", name);
+    }
+    view.doubles = REAL(x);
+    view.is_float32 = false;
+    return view;
+  }
+
+  if (Rf_isS4(x)) {
+    SEXP slot = R_do_slot(x, Rf_install("Data"));
+    const float* floats = float32_slot_ptr(slot, expected_length, name);
+    if (floats != nullptr) {
+      view.floats = floats;
+      view.is_float32 = true;
+      return view;
+    }
+    if (TYPEOF(slot) == REALSXP) {
+      if (Rf_length(slot) != expected_length) {
+        Rcpp::stop("%s payload length does not match its dimensions", name);
+      }
+      view.doubles = REAL(slot);
+      view.is_float32 = false;
+      return view;
+    }
+  }
+
+  Rcpp::stop("%s must be an ordinary R double matrix or float::fl()/float32 object", name);
+}
+
+double matrix_value(const NumericOrFloatMatrixView& view, const int row, const int col) {
+  const std::size_t offset = static_cast<std::size_t>(row) +
+    static_cast<std::size_t>(view.nrow) * static_cast<std::size_t>(col);
+  return view.is_float32 ?
+    static_cast<double>(view.floats[offset]) :
+    view.doubles[offset];
+}
+
+std::uint64_t matrix_fingerprint_hash(const NumericOrFloatMatrixView& view) {
+  std::uint64_t hash = kFnvOffset;
+  hash_value(hash, view.nrow);
+  hash_value(hash, view.ncol);
+  const char type_tag = view.is_float32 ? 'f' : 'd';
+  hash_value(hash, type_tag);
+  const int expected_length = view.nrow * view.ncol;
+  if (view.is_float32) {
+    hash_bytes(hash, view.floats, static_cast<std::size_t>(expected_length) * sizeof(float));
+  } else {
+    hash_bytes(hash, view.doubles, static_cast<std::size_t>(expected_length) * sizeof(double));
+  }
+  return hash;
+}
+
+IntegerMatrix float_vector_as_integer_matrix_bits(const std::vector<float>& values,
+                                                  const int nrow,
+                                                  const int ncol) {
+  IntegerMatrix out(nrow, ncol);
+  static_assert(sizeof(float) == sizeof(int), "float payload requires 32-bit integers");
+  if (!values.empty()) {
+    std::memcpy(
+      INTEGER(out),
+      values.data(),
+      values.size() * sizeof(float)
+    );
+  }
+  return out;
+}
 
 double layout_distance_sq(const NumericMatrix& layout, const int i, const int j) {
   if (layout.ncol() == 2) {
@@ -255,6 +404,87 @@ List standardize_cpu_cpp(NumericMatrix data) {
 }
 
 // [[Rcpp::export]]
+std::string matrix_fingerprint_cpp(SEXP x) {
+  NumericOrFloatMatrixView view = make_numeric_or_float_view(x, "x");
+  return hash_to_hex(matrix_fingerprint_hash(view));
+}
+
+// [[Rcpp::export]]
+List normalized_float32_transform_cpp(SEXP x, std::string metric) {
+  if (metric != "cosine" && metric != "correlation") {
+    Rcpp::stop("normalized_float32_transform_cpp requires cosine or correlation");
+  }
+  NumericOrFloatMatrixView view = make_numeric_or_float_view(x, "x");
+  const std::uint64_t fingerprint = matrix_fingerprint_hash(view);
+  const int n = view.nrow;
+  const int p = view.ncol;
+  const std::size_t total = static_cast<std::size_t>(n) * static_cast<std::size_t>(p);
+  std::vector<float> row_major(total, 0.0f);
+  Rcpp::LogicalVector zero(n);
+
+  bool finite = true;
+  for (int row = 0; row < n; ++row) {
+    double mean = 0.0;
+    if (metric == "correlation") {
+      for (int col = 0; col < p; ++col) {
+        const double value = matrix_value(view, row, col);
+        if (!std::isfinite(value)) {
+          finite = false;
+          continue;
+        }
+        mean += value;
+      }
+      mean /= static_cast<double>(p);
+    }
+
+    double norm2 = 0.0;
+    for (int col = 0; col < p; ++col) {
+      const double raw = matrix_value(view, row, col);
+      if (!std::isfinite(raw)) {
+        finite = false;
+        continue;
+      }
+      const double value = metric == "correlation" ? raw - mean : raw;
+      row_major[static_cast<std::size_t>(row) * p + col] =
+        static_cast<float>(value);
+      norm2 += value * value;
+    }
+
+    const double norm = std::sqrt(norm2);
+    const bool keep = std::isfinite(norm) && norm > 0.0;
+    zero[row] = !keep;
+    if (keep) {
+      const float inv_norm = static_cast<float>(1.0 / norm);
+      for (int col = 0; col < p; ++col) {
+        row_major[static_cast<std::size_t>(row) * p + col] *= inv_norm;
+      }
+    } else {
+      for (int col = 0; col < p; ++col) {
+        row_major[static_cast<std::size_t>(row) * p + col] = 0.0f;
+      }
+    }
+  }
+
+  if (!finite) {
+    Rcpp::stop("normalized float32 transforms require finite values");
+  }
+
+  Rcpp::S4 float_matrix("float32");
+  float_matrix.slot("Data") = float_vector_as_integer_matrix_bits(row_major, n, p);
+  float_matrix.attr("faissR_row_major_float32") = true;
+  float_matrix.attr("faissR_metric_transform") = metric;
+  float_matrix.attr("faissR_fingerprint") = hash_to_hex(fingerprint);
+
+  return List::create(
+    Rcpp::Named("data") = float_matrix,
+    Rcpp::Named("zero") = zero,
+    Rcpp::Named("fingerprint") = hash_to_hex(fingerprint),
+    Rcpp::Named("row_major") = true,
+    Rcpp::Named("storage") = "float32"
+  );
+}
+
+// [[Rcpp::export]]
 List strip_self_neighbors_cpp(IntegerMatrix indices, NumericMatrix distances) {
   const int n = indices.nrow();
   const int k = indices.ncol();
@@ -370,6 +600,215 @@ List strip_self_neighbors_cpp(IntegerMatrix indices, NumericMatrix distances) {
     Rcpp::Named("n_neighbors") = k - 1,
     Rcpp::Named("materialized") = true
   );
+}
+
+// [[Rcpp::export]]
+List prepend_self_neighbors_cpp(IntegerMatrix indices, NumericMatrix distances) {
+  const int n = indices.nrow();
+  const int k = indices.ncol();
+  if (distances.nrow() != n || distances.ncol() != k) {
+    Rcpp::stop("KNN indices and distances must have the same dimensions");
+  }
+
+  IntegerMatrix out_indices(n, k + 1);
+  NumericMatrix out_distances(n, k + 1);
+  for (int row = 0; row < n; ++row) {
+    out_indices(row, 0) = row + 1;
+    out_distances(row, 0) = 0.0;
+    for (int col = 0; col < k; ++col) {
+      out_indices(row, col + 1) = indices(row, col);
+      out_distances(row, col + 1) = distances(row, col);
+    }
+  }
+
+  return List::create(
+    Rcpp::Named("indices") = out_indices,
+    Rcpp::Named("distances") = out_distances
+  );
+}
+
+// [[Rcpp::export]]
+List sort_knn_rows_cpp(IntegerMatrix indices, NumericMatrix distances) {
+  const int n = indices.nrow();
+  const int k = indices.ncol();
+  if (distances.nrow() != n || distances.ncol() != k) {
+    Rcpp::stop("KNN indices and distances must have the same dimensions");
+  }
+  if (k < 2) {
+    return List::create(
+      Rcpp::Named("indices") = indices,
+      Rcpp::Named("distances") = distances
+    );
+  }
+
+  IntegerMatrix out_indices(n, k);
+  NumericMatrix out_distances(n, k);
+  std::vector<int> order(static_cast<std::size_t>(k));
+  for (int row = 0; row < n; ++row) {
+    std::iota(order.begin(), order.end(), 0);
+    std::sort(order.begin(), order.end(), [&](const int a, const int b) {
+      const double da = distances(row, a);
+      const double db = distances(row, b);
+      const bool da_na = Rcpp::NumericVector::is_na(da);
+      const bool db_na = Rcpp::NumericVector::is_na(db);
+      if (da_na != db_na) return !da_na;
+      if (!da_na && da != db) return da < db;
+      const int ia = indices(row, a);
+      const int ib = indices(row, b);
+      if (ia == NA_INTEGER) return false;
+      if (ib == NA_INTEGER) return true;
+      return ia < ib;
+    });
+    for (int col = 0; col < k; ++col) {
+      const int src = order[static_cast<std::size_t>(col)];
+      out_indices(row, col) = indices(row, src);
+      out_distances(row, col) = distances(row, src);
+    }
+  }
+
+  return List::create(
+    Rcpp::Named("indices") = out_indices,
+    Rcpp::Named("distances") = out_distances
+  );
+}
+
+// [[Rcpp::export]]
+List restore_zero_normalized_ip_distances_cpp(IntegerMatrix indices,
+                                             NumericMatrix distances,
+                                             Rcpp::LogicalVector data_zero,
+                                             Rcpp::LogicalVector points_zero,
+                                             bool self_query,
+                                             bool exclude_self) {
+  const int n_points = indices.nrow();
+  const int k = indices.ncol();
+  const int n_data = data_zero.size();
+  if (distances.nrow() != n_points || distances.ncol() != k) {
+    Rcpp::stop("KNN indices and distances must have the same dimensions");
+  }
+  if (points_zero.size() != n_points) {
+    Rcpp::stop("points_zero must have one value per query row");
+  }
+
+  IntegerMatrix out_indices = Rcpp::clone(indices);
+  NumericMatrix out_distances = Rcpp::clone(distances);
+  if (k < 1 || n_data < 1) {
+    return List::create(
+      Rcpp::Named("indices") = out_indices,
+      Rcpp::Named("distances") = out_distances
+    );
+  }
+
+  std::vector<int> zero_candidates;
+  std::vector<int> nonzero_candidates;
+  zero_candidates.reserve(static_cast<std::size_t>(n_data));
+  nonzero_candidates.reserve(static_cast<std::size_t>(n_data));
+  for (int idx = 0; idx < n_data; ++idx) {
+    const int one_based = idx + 1;
+    if (data_zero[idx] == TRUE) {
+      zero_candidates.push_back(one_based);
+    } else {
+      nonzero_candidates.push_back(one_based);
+    }
+  }
+
+  for (int row = 0; row < n_points; ++row) {
+    if (points_zero[row] != TRUE) continue;
+    int written = 0;
+    for (const int idx : zero_candidates) {
+      if (self_query && exclude_self && row < n_data && idx == row + 1) continue;
+      if (written >= k) break;
+      out_indices(row, written) = idx;
+      out_distances(row, written) = 0.0;
+      ++written;
+    }
+    for (const int idx : nonzero_candidates) {
+      if (written >= k) break;
+      out_indices(row, written) = idx;
+      out_distances(row, written) = 1.0;
+      ++written;
+    }
+    while (written < k) {
+      out_indices(row, written) = NA_INTEGER;
+      out_distances(row, written) = R_PosInf;
+      ++written;
+    }
+  }
+
+  return List::create(
+    Rcpp::Named("indices") = out_indices,
+    Rcpp::Named("distances") = out_distances
+  );
+}
+
+// [[Rcpp::export]]
+NumericMatrix normalized_euclidean_to_similarity_distance_cpp(
+    IntegerMatrix indices,
+    NumericMatrix distances,
+    Rcpp::LogicalVector data_zero,
+    Rcpp::LogicalVector points_zero) {
+  const int n = indices.nrow();
+  const int k = indices.ncol();
+  if (distances.nrow() != n || distances.ncol() != k) {
+    Rcpp::stop("KNN indices and distances must have the same dimensions");
+  }
+  if (points_zero.size() != n) {
+    Rcpp::stop("points_zero must have one value per query row");
+  }
+
+  NumericMatrix out(n, k);
+  for (int row = 0; row < n; ++row) {
+    const bool query_zero = points_zero[row] == TRUE;
+    for (int col = 0; col < k; ++col) {
+      const int idx = indices(row, col);
+      const double d = distances(row, col);
+      double value = d * d / 2.0;
+      if (value < 0.0 && value > -1e-8) value = 0.0;
+      if (value > 2.0 && value < 2.0 + 1e-8) value = 2.0;
+      const bool neighbor_zero =
+        idx != NA_INTEGER && idx >= 1 && idx <= data_zero.size() &&
+        data_zero[idx - 1] == TRUE;
+      if (query_zero && neighbor_zero) {
+        value = 0.0;
+      } else if (query_zero != neighbor_zero) {
+        value = 1.0;
+      }
+      out(row, col) = value;
+    }
+  }
+  return out;
+}
+
+// [[Rcpp::export]]
+NumericMatrix mips_l2_to_shifted_inner_product_distance_cpp(
+    NumericMatrix distances,
+    NumericVector points_norm2,
+    double radius2) {
+  const int n = distances.nrow();
+  const int k = distances.ncol();
+  if (points_norm2.size() < 1) {
+    Rcpp::stop("points_norm2 must contain at least one value");
+  }
+
+  NumericMatrix out(n, k);
+  for (int row = 0; row < n; ++row) {
+    const double q_norm2 = points_norm2[row % points_norm2.size()];
+    double best = -std::numeric_limits<double>::infinity();
+    std::vector<double> scores(static_cast<std::size_t>(k));
+    for (int col = 0; col < k; ++col) {
+      const double d = distances(row, col);
+      const double score = (radius2 + q_norm2 - d * d) / 2.0;
+      scores[static_cast<std::size_t>(col)] = score;
+      if (std::isfinite(score) && score > best) best = score;
+    }
+    for (int col = 0; col < k; ++col) {
+      const double score = scores[static_cast<std::size_t>(col)];
+      double value = std::isfinite(best) && std::isfinite(score) ?
+        best - score : R_PosInf;
+      if (!std::isfinite(value)) value = R_PosInf;
+      out(row, col) = value;
+    }
+  }
+  return out;
 }
 
 // [[Rcpp::export]]

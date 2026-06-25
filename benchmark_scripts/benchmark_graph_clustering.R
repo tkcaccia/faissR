@@ -137,7 +137,7 @@ default_graph_nn_methods <- function() {
 valid_graph_nn_methods <- function() {
   c(
     "auto", "exact", "flat", "bruteforce", "grid",
-    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra"
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "cagra"
   )
 }
 

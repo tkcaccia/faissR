@@ -38,6 +38,7 @@ List cuda_row_candidate_knn_impl(NumericMatrix,
 
 List cuda_grid_self_knn_impl(NumericMatrix,
                              int,
-                             int) {
+                             int,
+                             bool) {
   Rcpp::stop("CUDA grid KNN is available only when the package is built with CUDA support.");
 }

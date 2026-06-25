@@ -15,6 +15,8 @@
 ^cache/
 ^dev$
 ^dev/
+^docs$
+^docs/
 ^tools$
 ^tools/
 ^inst$
@@ -33,3 +35,5 @@
 
 ^benchmark_scripts$
 ^benchmark_scripts/
+^faiss_hnsw_mnist70k_.*[.]csv$
+^mnist70k_knn_predict_speed.*[.]csv$

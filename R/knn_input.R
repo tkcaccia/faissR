@@ -52,93 +52,28 @@ is_knn_input <- function(x) {
   is.list(x) && all(c("indices", "distances") %in% names(x))
 }
 
-knn_index_base <- function(indices, n = nrow(indices)) {
-  min_idx <- suppressWarnings(min(indices, na.rm = TRUE))
-  max_idx <- suppressWarnings(max(indices, na.rm = TRUE))
-  if (is.finite(min_idx) && is.finite(max_idx) && min_idx >= 1L && max_idx <= n) {
-    return("one")
-  }
-  "zero"
-}
-
-strip_self_neighbors <- function(indices, distances) {
-  if (ncol(indices) < 1L) {
-    return(list(
-      indices = indices, distances = distances, has_self = FALSE,
-      col_start = 0L, n_neighbors = 0L, materialized = FALSE
-    ))
-  }
-  n <- nrow(indices)
-  k <- ncol(indices)
-  expected <- if (identical(knn_index_base(indices, n), "one")) seq_len(n) else seq_len(n) - 1L
-  tolerance <- max(sqrt(.Machine$double.eps), 1e-12)
-
-  first_self <- indices[, 1L] == expected & distances[, 1L] <= tolerance
-  if (all(first_self)) {
-    return(list(
-      indices = indices,
-      distances = distances,
-      has_self = TRUE,
-      col_start = 1L,
-      n_neighbors = as.integer(k - 1L),
-      materialized = FALSE
-    ))
-  }
-
-  self_mask <- indices == expected & distances <= tolerance
-  has_self <- all(rowSums(self_mask) > 0L)
-  if (!has_self) {
-    return(list(
-      indices = indices, distances = distances, has_self = FALSE,
-      col_start = 0L, n_neighbors = as.integer(k), materialized = FALSE
-    ))
-  }
-  if (k == 1L) {
-    return(list(
-      indices = indices[, 0L, drop = FALSE],
-      distances = distances[, 0L, drop = FALSE],
-      has_self = TRUE,
-      col_start = 0L,
-      n_neighbors = 0L,
-      materialized = TRUE
-    ))
-  }
-  out_indices <- matrix(0L, nrow = n, ncol = k - 1L)
-  out_distances <- matrix(0, nrow = n, ncol = k - 1L)
-  storage.mode(out_indices) <- "integer"
-  storage.mode(out_distances) <- "double"
-  cols <- seq_len(k)
-  for (i in seq_len(n)) {
-    self_pos <- which(self_mask[i, ])[1L]
-    keep <- cols[-self_pos]
-    out_indices[i, ] <- indices[i, keep]
-    out_distances[i, ] <- distances[i, keep]
-  }
-  list(
-    indices = out_indices,
-    distances = out_distances,
-    has_self = TRUE,
-    col_start = 0L,
-    n_neighbors = as.integer(k - 1L),
-    materialized = TRUE
-  )
-}
-
-materialize_knn_range <- function(indices, distances, col_start = 0L, n_neighbors = ncol(indices) - col_start) {
-  col_start <- as.integer(col_start)
-  n_neighbors <- as.integer(n_neighbors)
-  if (col_start == 0L && n_neighbors == ncol(indices)) {
-    return(list(indices = indices, distances = distances))
-  }
-  cols <- seq.int(col_start + 1L, length.out = n_neighbors)
-  list(
-    indices = indices[, cols, drop = FALSE],
-    distances = distances[, cols, drop = FALSE]
-  )
-}
-
 knn_has_self_column <- function(indices, distances) {
-  strip_self_neighbors(indices, distances)$has_self
+  strip_self_neighbors_cpp(indices, distances)$has_self
+}
+
+prepend_self_neighbor_column <- function(out) {
+  if (!is.list(out) || is.null(out$indices) || is.null(out$distances)) {
+    stop("KNN result must contain `indices` and `distances`.", call. = FALSE)
+  }
+  distances_are_float32 <- inherits(out$distances, "float32")
+  distances <- if (isTRUE(distances_are_float32)) {
+    float32_to_numeric_matrix(out$distances, "distances")
+  } else {
+    out$distances
+  }
+  prepended <- prepend_self_neighbors_cpp(out$indices, distances)
+  out$indices <- prepended$indices
+  out$distances <- if (isTRUE(distances_are_float32)) {
+    as_float_distances(prepended$distances)
+  } else {
+    prepended$distances
+  }
+  out
 }
 
 set_embedding_colnames <- function(layout, prefix) {
@@ -173,7 +108,45 @@ finish_nn_result <- function(out,
   attr(out, "index_base") <- as.integer(out$index_base)
   attr(out, "backend_used") <- out$backend_used
   class(out) <- c("faissR_nn", "list")
-  out
+  attach_gpu_residency_metadata(out, out)
+}
+
+nn_gpu_residency_metadata <- function(out) {
+  if (!is.list(out)) return(NULL)
+  fields <- c(
+    "accelerator", "gpu_provider", "device_residency", "index_residency",
+    "gpu_index_resident", "gpu_index_persistent",
+    "host_to_device_transfer_strategy", "host_to_device_copies_known",
+    "host_to_device_data_copies", "host_to_device_query_copies",
+    "host_to_device_copies", "host_to_device_data_copies_minimum",
+    "host_to_device_query_copies_minimum", "host_to_device_data_bytes",
+    "host_to_device_query_bytes", "host_to_device_bytes",
+    "host_to_device_data_bytes_minimum",
+    "host_to_device_query_bytes_minimum", "host_to_device_bytes_minimum",
+    "query_reuses_host_data", "query_reuses_device_data",
+    "query_residency", "result_residency",
+    "device_to_host_result_copies_known", "device_to_host_result_copies",
+    "device_to_host_result_bytes", "device_to_host_result_bytes_minimum",
+    "cpu_fallback", "cpu_side_result_repair"
+  )
+  fields <- fields[fields %in% names(out)]
+  if (!length(fields)) return(NULL)
+  out[fields]
+}
+
+attach_gpu_residency_metadata <- function(result, out) {
+  gpu <- nn_gpu_residency_metadata(out)
+  if (!length(gpu)) return(result)
+  result$gpu_residency <- gpu
+  attr(result, "gpu_residency") <- gpu
+  for (attr_name in c("faiss", "cuvs", "approximation")) {
+    metadata <- attr(result, attr_name, exact = TRUE)
+    if (is.list(metadata)) {
+      metadata <- c(metadata, gpu[setdiff(names(gpu), names(metadata))])
+      attr(result, attr_name) <- metadata
+    }
+  }
+  result
 }
 
 normalize_nn_output <- function(output) {
@@ -267,6 +240,94 @@ as_float_distances <- function(x) {
     )
   }
   float::fl(x)
+}
+
+.faissR_transformed_float32_cache <- new.env(parent = emptyenv())
+.faissR_transformed_float32_cache$.keys <- character()
+
+transformed_float32_cache_enabled <- function() {
+  isTRUE(faissr_option("cache_transformed_float32", TRUE)) &&
+    requireNamespace("float", quietly = TRUE)
+}
+
+transformed_float32_cache_limit <- function() {
+  value <- suppressWarnings(as.integer(faissr_option("cache_transformed_float32_max_entries", 4L)))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 0L) {
+    return(4L)
+  }
+  value
+}
+
+transformed_float32_cache_transform_label <- function(metric) {
+  if (identical(metric, "correlation")) {
+    "row_center_l2_normalize_float32_cached"
+  } else {
+    "row_l2_normalize_float32_cached"
+  }
+}
+
+transformed_float32_cache_prune <- function() {
+  limit <- transformed_float32_cache_limit()
+  keys <- .faissR_transformed_float32_cache$.keys
+  if (limit < 1L) {
+    rm(list = setdiff(ls(.faissR_transformed_float32_cache, all.names = TRUE), ".keys"),
+       envir = .faissR_transformed_float32_cache)
+    .faissR_transformed_float32_cache$.keys <- character()
+    return(invisible(NULL))
+  }
+  while (length(keys) > limit) {
+    old <- keys[[1L]]
+    if (exists(old, envir = .faissR_transformed_float32_cache, inherits = FALSE)) {
+      rm(list = old, envir = .faissR_transformed_float32_cache)
+    }
+    keys <- keys[-1L]
+  }
+  .faissR_transformed_float32_cache$.keys <- keys
+  invisible(NULL)
+}
+
+normalized_float32_transform_cached <- function(x, metric, role = "data") {
+  metric <- normalize_nn_metric(metric)
+  if (!metric %in% c("cosine", "correlation")) {
+    stop("Cached normalized float32 transforms require cosine or correlation.", call. = FALSE)
+  }
+  if (!requireNamespace("float", quietly = TRUE)) {
+    return(NULL)
+  }
+
+  dims <- if (is_float32_matrix_input(x)) float32_matrix_dims(x, role) else dim(x)
+  fingerprint <- matrix_fingerprint_cpp(x)
+  key <- paste(metric, paste(as.integer(dims), collapse = "x"), fingerprint, sep = ":")
+  cache_enabled <- transformed_float32_cache_enabled()
+  if (isTRUE(cache_enabled) &&
+      exists(key, envir = .faissR_transformed_float32_cache, inherits = FALSE)) {
+    entry <- get(key, envir = .faissR_transformed_float32_cache, inherits = FALSE)
+    entry$cache_hit <- TRUE
+    entry$role <- role
+    return(entry)
+  }
+
+  transformed <- normalized_float32_transform_cpp(x, metric)
+  entry <- list(
+    data = transformed$data,
+    zero = as.logical(transformed$zero),
+    transform = transformed_float32_cache_transform_label(metric),
+    storage = "float32",
+    row_major = TRUE,
+    cache_key = key,
+    fingerprint = fingerprint,
+    cache_hit = FALSE,
+    cache_enabled = isTRUE(cache_enabled),
+    role = role
+  )
+
+  if (isTRUE(cache_enabled) && transformed_float32_cache_limit() > 0L) {
+    assign(key, entry, envir = .faissR_transformed_float32_cache)
+    keys <- .faissR_transformed_float32_cache$.keys
+    .faissR_transformed_float32_cache$.keys <- c(setdiff(keys, key), key)
+    transformed_float32_cache_prune()
+  }
+  entry
 }
 
 finalize_nn_output <- function(result, output = "double") {

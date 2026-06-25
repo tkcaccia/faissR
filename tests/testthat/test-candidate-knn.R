@@ -43,7 +43,7 @@ test_that("candidate_knn exclude_self matches exact CPU without self", {
   x <- matrix(rnorm(25 * 3), nrow = 25)
   candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
 
-  exact <- faissR:::nn_without_self(x, k = 4L, backend = "cpu")
+  exact <- faissR:::nn(exclude_self = TRUE, x, k = 4L, backend = "cpu")
   cand <- candidate_knn(x, candidates, k = 4L, backend = "cpu", exclude_self = TRUE)
 
   expect_equal(cand$indices, exact$indices)

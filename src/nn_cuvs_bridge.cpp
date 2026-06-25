@@ -14,7 +14,8 @@ List cuvs_bruteforce_knn_impl(NumericMatrix data,
 List cuvs_bruteforce_float32_knn_impl(SEXP data,
                                       SEXP points,
                                       int k,
-                                      bool exclude_self);
+                                      bool exclude_self,
+                                      std::string distance_storage);
 List cuvs_cagra_knn_impl(NumericMatrix data,
                          NumericMatrix points,
                          int k,
@@ -32,7 +33,8 @@ List cuvs_cagra_float32_knn_impl(SEXP data,
                                  int intermediate_graph_degree,
                                  int search_width,
                                  int itopk_size,
-                                 std::string build_algo);
+                                 std::string build_algo,
+                                 std::string distance_storage);
 List cuvs_nndescent_self_knn_impl(NumericMatrix data,
                                   int k,
                                   int graph_degree,
@@ -42,7 +44,8 @@ List cuvs_nndescent_self_float32_knn_impl(SEXP data,
                                           int k,
                                           int graph_degree,
                                           int intermediate_graph_degree,
-                                          int max_iterations);
+                                          int max_iterations,
+                                          std::string distance_storage);
 List cuvs_hnsw_knn_impl(NumericMatrix data,
                         NumericMatrix points,
                         int k,
@@ -60,7 +63,8 @@ List cuvs_hnsw_float32_knn_impl(SEXP data,
                                 int intermediate_graph_degree,
                                 int ef,
                                 int n_threads,
-                                std::string cagra_build_algo);
+                                std::string cagra_build_algo,
+                                std::string distance_storage);
 List cuvs_ivf_flat_knn_impl(NumericMatrix data,
                             NumericMatrix points,
                             int k,
@@ -72,7 +76,8 @@ List cuvs_ivf_flat_float32_knn_impl(SEXP data,
                                     int k,
                                     int n_lists,
                                     int n_probes,
-                                    bool exclude_self);
+                                    bool exclude_self,
+                                    std::string distance_storage);
 List cuvs_ivf_pq_knn_impl(NumericMatrix data,
                           NumericMatrix points,
                           int k,
@@ -88,7 +93,8 @@ List cuvs_ivf_pq_float32_knn_impl(SEXP data,
                                   int n_probes,
                                   int pq_dim,
                                   int pq_bits,
-                                  bool exclude_self);
+                                  bool exclude_self,
+                                  std::string distance_storage);
 List cuvs_kmeans_impl(NumericMatrix data,
                       int centers,
                       int max_iter,
@@ -119,8 +125,15 @@ List nn_cuvs_bruteforce_cpp(NumericMatrix data,
 List nn_cuvs_bruteforce_float32_cpp(SEXP data,
                                     SEXP points,
                                     int k,
-                                    bool exclude_self) {
-  return cuvs_bruteforce_float32_knn_impl(data, points, k, exclude_self);
+                                    bool exclude_self,
+                                    std::string distance_storage) {
+  return cuvs_bruteforce_float32_knn_impl(
+    data,
+    points,
+    k,
+    exclude_self,
+    distance_storage
+  );
 }
 
 // [[Rcpp::export]]
@@ -155,7 +168,8 @@ List nn_cuvs_cagra_float32_cpp(SEXP data,
                                int intermediate_graph_degree,
                                int search_width,
                                int itopk_size,
-                               std::string build_algo) {
+                               std::string build_algo,
+                               std::string distance_storage) {
   return cuvs_cagra_float32_knn_impl(
     data,
     points,
@@ -165,7 +179,8 @@ List nn_cuvs_cagra_float32_cpp(SEXP data,
     intermediate_graph_degree,
     search_width,
     itopk_size,
-    build_algo
+    build_algo,
+    distance_storage
   );
 }
 
@@ -189,13 +204,15 @@ List nn_cuvs_nndescent_self_float32_cpp(SEXP data,
                                         int k,
                                         int graph_degree,
                                         int intermediate_graph_degree,
-                                        int max_iterations) {
+                                        int max_iterations,
+                                        std::string distance_storage) {
   return cuvs_nndescent_self_float32_knn_impl(
     data,
     k,
     graph_degree,
     intermediate_graph_degree,
-    max_iterations
+    max_iterations,
+    distance_storage
   );
 }
 
@@ -231,7 +248,8 @@ List nn_cuvs_hnsw_float32_cpp(SEXP data,
                               int intermediate_graph_degree,
                               int ef,
                               int n_threads,
-                              std::string cagra_build_algo) {
+                              std::string cagra_build_algo,
+                              std::string distance_storage) {
   return cuvs_hnsw_float32_knn_impl(
     data,
     points,
@@ -241,7 +259,8 @@ List nn_cuvs_hnsw_float32_cpp(SEXP data,
     intermediate_graph_degree,
     ef,
     n_threads,
-    cagra_build_algo
+    cagra_build_algo,
+    distance_storage
   );
 }
 
@@ -268,14 +287,16 @@ List nn_cuvs_ivf_flat_float32_cpp(SEXP data,
                                   int k,
                                   int n_lists,
                                   int n_probes,
-                                  bool exclude_self) {
+                                  bool exclude_self,
+                                  std::string distance_storage) {
   return cuvs_ivf_flat_float32_knn_impl(
     data,
     points,
     k,
     n_lists,
     n_probes,
-    exclude_self
+    exclude_self,
+    distance_storage
   );
 }
 
@@ -308,7 +329,8 @@ List nn_cuvs_ivf_pq_float32_cpp(SEXP data,
                                 int n_probes,
                                 int pq_dim,
                                 int pq_bits,
-                                bool exclude_self) {
+                                bool exclude_self,
+                                std::string distance_storage) {
   return cuvs_ivf_pq_float32_knn_impl(
     data,
     points,
@@ -317,7 +339,8 @@ List nn_cuvs_ivf_pq_float32_cpp(SEXP data,
     n_probes,
     pq_dim,
     pq_bits,
-    exclude_self
+    exclude_self,
+    distance_storage
   );
 }
 

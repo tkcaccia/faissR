@@ -10,7 +10,7 @@ knn(
   Xtest = NULL,
   backend = c("auto", "cpu", "cuda"),
   method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
-    "vamana", "nsg", "nndescent", "usearch", "cagra"),
+    "vamana", "nsg", "nndescent", "scann", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   target_recall = 0.99,
@@ -25,14 +25,14 @@ knn(
 )
 }
 \arguments{
-\item{Xtrain}{Numeric training matrix with observations in rows.}
+\item{Xtrain}{Numeric training matrix or optional \code{float::fl()}/\code{float32} matrix with observations in rows. Float32 inputs are preserved for \code{nn()} methods with direct float32 adapters.}
 \item{Ytrain}{Training labels or numeric response.}
-\item{Xtest}{Optional numeric query matrix. If supplied, \code{knn()} returns predictions for \code{Xtest}; otherwise it returns a fitted model.}
+\item{Xtest}{Optional numeric or float32 query matrix. If supplied, \code{knn()} returns predictions for \code{Xtest}; otherwise it returns a fitted model.}
 \item{backend}{Device backend passed to \code{nn()}: \code{"auto"}, \code{"cpu"}, or
 \code{"cuda"}. \code{"auto"} follows \code{nn()} backend/method/metric
 resolution, using CUDA only for validated CUDA combinations when CUDA/cuVS
 runtime support is available, and CPU otherwise.}
-\item{method}{Nearest-neighbour algorithm selector passed to \code{nn()}. \code{"auto"} chooses the most appropriate method for the selected backend. See \code{?nn} for descriptions and references for \code{"exact"}, \code{"flat"}, \code{"bruteforce"}, \code{"grid"}, \code{"hnsw"}, \code{"ivf"}, \code{"ivfpq"}, \code{"vamana"}, \code{"nsg"}, \code{"nndescent"}, \code{"usearch"}, and \code{"cagra"}.}
+\item{method}{Nearest-neighbour algorithm selector passed to \code{nn()}. \code{"auto"} chooses the most appropriate method for the selected backend. See \code{?nn} for descriptions and references for \code{"exact"}, \code{"flat"}, \code{"bruteforce"}, \code{"grid"}, \code{"hnsw"}, \code{"ivf"}, \code{"ivfpq"}, \code{"scann"}, \code{"vamana"}, \code{"nsg"}, \code{"nndescent"}, and \code{"cagra"}.}
 \item{metric}{Distance metric passed to \code{nn()}: \code{"euclidean"},
 \code{"cosine"}, \code{"correlation"}, or \code{"inner_product"}. Aliases such
 as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as
@@ -40,7 +40,7 @@ canonical metric labels. Correlation is centered cosine similarity, not raw
 inner product. See \code{nn()} for metric/backend support details, including
 metric-aware CPU HNSW routing.}
 \item{tuning}{Tuning policy passed to \code{nn()}. \code{"auto"} uses the deterministic default for the resolved method; \code{"cache"} and \code{"pilot"} opt into pilot tuning where implemented. FAISS GPU IVF pilot/cache tuning is Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware defaults.}
-\item{target_recall}{HNSW speed/recall tier passed to \code{nn()}. Use \code{0.9}, \code{0.95}, or \code{0.99}. Lower targets use faster FAISS CPU HNSW and CUDA cuVS HNSW defaults; non-HNSW methods ignore this value but keep it in metadata for reproducibility.}
+\item{target_recall}{HNSW speed/recall tier passed to \code{nn()}. Use \code{0.9}, \code{0.95}, or \code{0.99}. Lower targets use faster CPU FAISS HNSW and CUDA cuVS HNSW defaults; CUDA HNSW metadata records that the available cuVS route is a CAGRA-to-HNSW wrapper. Non-HNSW methods ignore this value but keep it in metadata for reproducibility.}
 \item{cagra_implementation}{CUDA CAGRA provider passed to \code{nn()} for \code{method = "cagra"} or CUDA-auto routes that select CAGRA. \code{NULL} uses the global \code{faissR.cagra_implementation} option; \code{"auto"} uses the same deterministic shape-aware provider rule as \code{nn()}, while \code{"faiss_gpu"} or \code{"cuvs"} force one provider.}
 \item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm passed to \code{nn()} for direct cuVS CAGRA routes. \code{NULL} uses the global \code{faissR.cuvs_cagra_build_algo} option.}
 \item{task}{\code{"auto"}, \code{"classification"}, or \code{"regression"}. \code{"auto"} treats numeric responses as regression and other response types as classification.}
@@ -51,10 +51,10 @@ metric-aware CPU HNSW routing.}
 \item{...}{Reserved for future options.}
 }
 \value{
-If \code{Xtest} is not supplied, a fitted \code{faissR_knn_model} object that stores the training data, response, task, backend, method, metric, tuning, \code{target_recall}, \code{k}, and CPU thread settings used by later \code{\link{predict}()} calls. If \code{Xtest} is supplied, a factor for classification, a numeric vector for regression, or a numeric class-probability matrix when \code{type = "prob"}; prediction outputs carry \code{attr(result, "faissR_nn")} route metadata, approximation parameters, and auto-selection metadata from the underlying \code{\link{nn}()} call.
+If \code{Xtest} is not supplied, a fitted \code{faissR_knn_model} object that stores the training data, response, task, backend, method, metric, tuning, \code{target_recall}, \code{k}, and CPU thread settings used by later \code{\link{predict}()} calls. Explicit CPU FAISS Flat/HNSW/IVF/IVFPQ models also store a session-local fitted index for compatible prediction calls; saved/reloaded models safely rebuild the same route when the external pointer is no longer valid. IVF metadata records whether trained centroids/inverted lists were reused and whether search used a query-specific \code{nprobe}; IVFPQ metadata also records product-quantizer codebook/code reuse. If \code{Xtest} is supplied, a factor for classification, a numeric vector for regression, or a numeric class-probability matrix when \code{type = "prob"}; prediction outputs carry \code{attr(result, "faissR_nn")} route metadata, approximation parameters, and auto-selection metadata from the underlying \code{\link{nn}()} call, including \code{batch_query = TRUE}, \code{query_n}, and \code{query_call_count = 1L} for the full-matrix prediction query.
 }
 \description{
-\code{knn()} is the high-level supervised kNN API. With \code{Xtrain} and \code{Ytrain} only, it returns a reusable model. With \code{Xtest}, it immediately predicts the query rows by fitting the model and calling \code{predict()} internally. The low-level nearest-neighbour search API remains \code{nn()}.
+\code{knn()} is the high-level supervised kNN API. With \code{Xtrain} and \code{Ytrain} only, it returns a reusable model. With \code{Xtest}, it immediately predicts the query rows by fitting the model and calling \code{predict()} internally. The low-level nearest-neighbour search API remains \code{nn()}. For explicit CPU FAISS-backed \code{method = "flat"}, \code{"hnsw"}, \code{"ivf"}, and \code{"ivfpq"} models, the fitted object stores a session-local NN index and \code{predict()} reuses it for compatible prediction calls. For IVF/IVFPQ, this reuses trained centroids, inverted lists, and indexed vectors; IVFPQ also reuses trained product-quantizer codebooks and compressed codes.
 }
 \examples{
 x <- scale(as.matrix(iris[, 1:4]))

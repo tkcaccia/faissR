@@ -15,6 +15,31 @@ test_that("knn_graph builds a native graph from a KNN object", {
   expect_equal(attr(g, "faissR_graph")$weight, "snn")
 })
 
+test_that("knn_graph uses C++ non-self column ranges for precomputed KNN", {
+  knn <- list(
+    indices = matrix(c(
+      1L, 2L, 3L,
+      2L, 1L, 3L,
+      3L, 2L, 1L
+    ), nrow = 3L, byrow = TRUE),
+    distances = matrix(c(
+      0, 1, 2,
+      0, 1, 2,
+      0, 1, 2
+    ), nrow = 3L, byrow = TRUE)
+  )
+  class(knn) <- "faissR_nn"
+  attr(knn, "backend") <- "cpu"
+  attr(knn, "resolved_backend") <- "faissR_cpu_exact"
+  attr(knn, "metric") <- "euclidean"
+
+  g <- knn_graph(knn, k = 1L, weight = "distance")
+
+  expect_equal(g$n_edges, 2L)
+  expect_equal(g$from, c(1L, 2L))
+  expect_equal(g$to, c(2L, 3L))
+})
+
 test_that("precomputed KNN graph metadata prefers resolved backend", {
   knn <- list(
     indices = matrix(c(
@@ -495,7 +520,7 @@ test_that("graph_cluster owns target cluster count", {
   )
   expect_true(auto_resolution$resolution_selection$candidate_center %in% auto_resolution$resolution_search$resolution)
 
-  precomputed <- nn_without_self(x, k = 8L, backend = "cpu", n_threads = 2L)
+  precomputed <- nn(exclude_self = TRUE, x, k = 8L, backend = "cpu", n_threads = 2L)
   g_knn <- knn_graph(precomputed, k = 8L)
   expect_s3_class(g_knn, "faissR_graph")
   expect_equal(class(g_knn), c("faissR_graph", "list"))

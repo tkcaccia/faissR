@@ -411,7 +411,7 @@ Graph construction can also vary the nearest-neighbour route and metric with
 `--cagra_implementations=auto`,
 `--metrics=euclidean,cosine,correlation,inner_product`, and
 `--k_values=5,10,15,50,100` so benchmark rows cover the public metric surface
-and the full requested graph-density grid. Expanded HPC runs can also use
+and the full requested graph-density grid. Expanded runs can also use
 public NN methods such as
 `auto,hnsw,ivf,nndescent,grid` and metrics such as
 `euclidean,cosine,correlation,inner_product` to evaluate how graph construction

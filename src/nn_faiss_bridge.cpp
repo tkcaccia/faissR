@@ -19,6 +19,12 @@ List faiss_flat_float32_knn_impl(SEXP data,
                                  int n_threads,
                                  std::string metric,
                                  std::string distance_storage);
+List faiss_flat_pretransformed_float32_knn_impl(SEXP data,
+                                                SEXP points,
+                                                int k,
+                                                bool exclude_self,
+                                                int n_threads,
+                                                std::string distance_storage);
 List faiss_ivf_knn_impl(NumericMatrix data,
                         NumericMatrix points,
                         int k,
@@ -90,6 +96,27 @@ List faiss_ivfpq_float32_knn_impl(SEXP data,
                                   bool exclude_self,
                                   int n_threads,
                                   std::string distance_storage);
+List faiss_scann_knn_impl(NumericMatrix data,
+                          NumericMatrix points,
+                          int k,
+                          int nlist,
+                          int nprobe,
+                          int pq_m,
+                          int refine_factor,
+                          int bbs,
+                          bool exclude_self,
+                          int n_threads);
+List faiss_scann_float32_knn_impl(SEXP data,
+                                  SEXP points,
+                                  int k,
+                                  int nlist,
+                                  int nprobe,
+                                  int pq_m,
+                                  int refine_factor,
+                                  int bbs,
+                                  bool exclude_self,
+                                  int n_threads,
+                                  std::string distance_storage);
 List faiss_hnsw_knn_impl(NumericMatrix data,
                          NumericMatrix points,
                          int k,
@@ -111,6 +138,40 @@ List faiss_hnsw_float32_knn_impl(SEXP data,
                                  bool exclude_self,
                                  int n_threads,
                                  std::string distance_storage);
+SEXP faiss_hnsw_index_build_float32_impl(SEXP data,
+                                         int m,
+                                         int ef_construction,
+                                         int ef_search,
+                                         std::string metric,
+                                         std::string distance_output,
+                                         int n_threads);
+List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
+                                          SEXP points,
+                                          int k,
+                                          bool exclude_self,
+                                          int ef_search,
+                                          int n_threads,
+                                          std::string distance_storage);
+SEXP faiss_index_build_float32_impl(SEXP data,
+                                    std::string kind,
+                                    int nlist,
+                                    int nprobe,
+                                    int pq_m,
+                                    int pq_nbits,
+                                    int graph_degree,
+                                    int search_width,
+                                    int build_type,
+                                    int n_iter,
+                                    std::string metric,
+                                    std::string distance_output,
+                                    int n_threads);
+List faiss_index_search_float32_impl(SEXP index_ptr,
+                                     SEXP points,
+                                     int k,
+                                     bool exclude_self,
+                                     int search_width,
+                                     int n_threads,
+                                     std::string distance_storage);
 List faiss_nsg_knn_impl(NumericMatrix data,
                         NumericMatrix points,
                         int k,
@@ -253,6 +314,18 @@ List nn_faiss_flat_float32_cpp(SEXP data,
                                std::string distance_storage) {
   return faiss_flat_float32_knn_impl(
     data, points, k, exclude_self, n_threads, metric, distance_storage
+  );
+}
+
+// [[Rcpp::export]]
+List nn_faiss_flat_pretransformed_float32_cpp(SEXP data,
+                                              SEXP points,
+                                              int k,
+                                              bool exclude_self,
+                                              int n_threads,
+                                              std::string distance_storage) {
+  return faiss_flat_pretransformed_float32_knn_impl(
+    data, points, k, exclude_self, n_threads, distance_storage
   );
 }
 
@@ -517,6 +590,41 @@ List nn_faiss_ivfpq_float32_cpp(SEXP data,
 }
 
 // [[Rcpp::export]]
+List nn_faiss_scann_cpp(NumericMatrix data,
+                        NumericMatrix points,
+                        int k,
+                        int nlist,
+                        int nprobe,
+                        int pq_m,
+                        int refine_factor,
+                        int bbs,
+                        bool exclude_self,
+                        int n_threads) {
+  return faiss_scann_knn_impl(
+    data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self,
+    n_threads
+  );
+}
+
+// [[Rcpp::export]]
+List nn_faiss_scann_float32_cpp(SEXP data,
+                                SEXP points,
+                                int k,
+                                int nlist,
+                                int nprobe,
+                                int pq_m,
+                                int refine_factor,
+                                int bbs,
+                                bool exclude_self,
+                                int n_threads,
+                                std::string distance_storage) {
+  return faiss_scann_float32_knn_impl(
+    data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self,
+    n_threads, distance_storage
+  );
+}
+
+// [[Rcpp::export]]
 List nn_faiss_hnsw_cpp(NumericMatrix data,
                        NumericMatrix points,
                        int k,
@@ -548,6 +656,82 @@ List nn_faiss_hnsw_float32_cpp(SEXP data,
   return faiss_hnsw_float32_knn_impl(
     data, points, k, m, ef_construction, ef_search, metric, distance_output,
     exclude_self, n_threads, distance_storage
+  );
+}
+
+// [[Rcpp::export]]
+SEXP nn_faiss_hnsw_index_build_float32_cpp(SEXP data,
+                                           int m,
+                                           int ef_construction,
+                                           int ef_search,
+                                           std::string metric,
+                                           std::string distance_output,
+                                           int n_threads) {
+  return faiss_hnsw_index_build_float32_impl(
+    data, m, ef_construction, ef_search, metric, distance_output, n_threads
+  );
+}
+
+// [[Rcpp::export]]
+List nn_faiss_hnsw_index_search_float32_cpp(SEXP index_ptr,
+                                            SEXP points,
+                                            int k,
+                                            bool exclude_self,
+                                            int ef_search,
+                                            int n_threads,
+                                            std::string distance_storage) {
+  return faiss_hnsw_index_search_float32_impl(
+    index_ptr, points, k, exclude_self, ef_search, n_threads, distance_storage
+  );
+}
+
+// [[Rcpp::export]]
+SEXP nn_faiss_index_build_float32_cpp(SEXP data,
+                                      std::string kind,
+                                      int nlist,
+                                      int nprobe,
+                                      int pq_m,
+                                      int pq_nbits,
+                                      int graph_degree,
+                                      int search_width,
+                                      int build_type,
+                                      int n_iter,
+                                      std::string metric,
+                                      std::string distance_output,
+                                      int n_threads) {
+  return faiss_index_build_float32_impl(
+    data,
+    kind,
+    nlist,
+    nprobe,
+    pq_m,
+    pq_nbits,
+    graph_degree,
+    search_width,
+    build_type,
+    n_iter,
+    metric,
+    distance_output,
+    n_threads
+  );
+}
+
+// [[Rcpp::export]]
+List nn_faiss_index_search_float32_cpp(SEXP index_ptr,
+                                       SEXP points,
+                                       int k,
+                                       bool exclude_self,
+                                       int search_width,
+                                       int n_threads,
+                                       std::string distance_storage) {
+  return faiss_index_search_float32_impl(
+    index_ptr,
+    points,
+    k,
+    exclude_self,
+    search_width,
+    n_threads,
+    distance_storage
   );
 }
 

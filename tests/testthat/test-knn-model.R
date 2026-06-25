@@ -42,10 +42,18 @@ test_that("predict preserves nearest-neighbour route metadata", {
   expect_equal(pred_meta$tuning, "off")
   expect_equal(pred_meta$metric, "cosine")
   expect_equal(pred_meta$k, 2L)
+  expect_true(pred_meta$batch_query)
+  expect_equal(pred_meta$query_n, 2L)
+  expect_equal(pred_meta$query_call_count, 1L)
+  expect_equal(pred_meta$query_source, "nn")
   expect_equal(proba_meta$requested_backend, "auto")
   expect_equal(proba_meta$requested_method, "exact")
   expect_equal(proba_meta$tuning, "off")
   expect_equal(proba_meta$metric, "cosine")
+  expect_true(proba_meta$batch_query)
+  expect_equal(proba_meta$query_n, 2L)
+  expect_equal(proba_meta$query_call_count, 1L)
+  expect_equal(proba_meta$query_source, "nn")
   expect_equal(proba_meta$resolved_backend, proba_meta$backend)
   expect_true(is.null(pred_meta$auto_selection) || is.list(pred_meta$auto_selection))
   expect_equal(pred_meta$distance_type, "double")
@@ -57,6 +65,255 @@ test_that("predict preserves nearest-neighbour route metadata", {
   expect_equal(reg_meta$requested_method, "exact")
   expect_equal(reg_meta$tuning, "off")
   expect_equal(reg_meta$metric, "euclidean")
+  expect_true(reg_meta$batch_query)
+  expect_equal(reg_meta$query_n, 2L)
+  expect_equal(reg_meta$query_call_count, 1L)
+  expect_equal(reg_meta$query_source, "nn")
+})
+
+test_that("knn preserves float32 input for direct NN backends", {
+  skip_if_not_installed("float")
+  skip_if_not(faiss_available())
+
+  set.seed(19)
+  x_num <- matrix(runif(120), nrow = 20L, ncol = 6L)
+  x <- float::fl(x_num)
+  y <- factor(rep(c("a", "b"), length.out = nrow(x_num)))
+  query <- float::fl(x_num[1:5, , drop = FALSE])
+
+  fit <- knn(
+    x,
+    y,
+    backend = "cpu",
+    method = "hnsw",
+    metric = "euclidean",
+    target_recall = 0.95,
+    k = 3L,
+    n_threads = 2L
+  )
+  expect_s3_class(fit, "faissR_knn_model")
+  expect_true(inherits(fit$Xtrain, "float32"))
+
+  pred <- predict(fit, query, backend = "cpu")
+  meta <- attr(pred, "faissR_nn")
+  expect_s3_class(pred, "factor")
+  expect_equal(length(pred), 5L)
+  expect_equal(meta$resolved_backend, "faiss_hnsw")
+  expect_equal(meta$requested_method, "hnsw")
+  expect_equal(meta$input_type, "float32")
+  expect_false(meta$float32_compatibility_conversion)
+  expect_equal(meta$approximation$tuning_policy, "auto_shape_metric")
+})
+
+test_that("knn reuses fitted FAISS HNSW index for matching predictions", {
+  skip_if_not_installed("float")
+  skip_if_not(faiss_available())
+
+  set.seed(23)
+  x_num <- matrix(runif(180), nrow = 30L, ncol = 6L)
+  x <- float::fl(x_num)
+  y <- factor(rep(c("a", "b", "c"), length.out = nrow(x_num)))
+
+  fit <- knn(
+    x,
+    y,
+    backend = "cpu",
+    method = "hnsw",
+    metric = "euclidean",
+    target_recall = 0.95,
+    k = 3L,
+    n_threads = 2L
+  )
+  expect_equal(fit$nn_index_backend, "faiss_hnsw")
+  expect_s3_class(fit$nn_index, "faissR_faiss_hnsw_index")
+
+  pred <- predict(fit, x[1:5, , drop = FALSE], backend = "cpu", k = 3L)
+  meta <- attr(pred, "faissR_nn")
+  expect_equal(meta$resolved_backend, "faiss_hnsw")
+  expect_equal(meta$requested_method, "hnsw")
+  expect_true(meta$approximation$fitted_index)
+  expect_true(meta$approximation$index_reused)
+  expect_true(meta$faiss$index_reused)
+  expect_true(meta$batch_query)
+  expect_equal(meta$query_n, 5L)
+  expect_equal(meta$query_call_count, 1L)
+  expect_equal(meta$query_source, "fitted_index")
+  expect_true(meta$approximation$batch_query)
+  expect_equal(meta$approximation$query_n, 5L)
+  expect_equal(meta$approximation$query_call_count, 1L)
+  expect_true(meta$faiss$batch_query)
+  expect_equal(meta$faiss$query_n, 5L)
+  expect_equal(meta$input_type, "float32")
+  expect_false(meta$float32_compatibility_conversion)
+
+  pred_k5 <- predict(fit, x[1:5, , drop = FALSE], backend = "cpu", k = 5L)
+  meta_k5 <- attr(pred_k5, "faissR_nn")
+  expect_equal(meta_k5$resolved_backend, "faiss_hnsw")
+  expect_true(meta_k5$approximation$index_reused)
+  expect_equal(meta_k5$k, 5L)
+
+  pred_double <- predict(fit, x_num[1:5, , drop = FALSE], backend = "cpu", k = 3L)
+  meta_double <- attr(pred_double, "faissR_nn")
+  expect_equal(meta_double$resolved_backend, "faiss_hnsw")
+  expect_equal(meta_double$query_source, "fitted_index")
+  expect_true(meta_double$faiss$index_reused)
+  expect_true(meta_double$float32_compatibility_conversion)
+})
+
+test_that("knn reuses fitted FAISS Flat index for matching predictions", {
+  skip_if_not_installed("float")
+  skip_if_not(faiss_available())
+
+  set.seed(25)
+  x_num <- matrix(runif(160), nrow = 40L, ncol = 4L)
+  x <- float::fl(x_num)
+  y <- factor(rep(c("a", "b"), length.out = nrow(x_num)))
+
+  fit <- knn(
+    x,
+    y,
+    backend = "cpu",
+    method = "flat",
+    metric = "euclidean",
+    k = 3L,
+    n_threads = 2L
+  )
+  expect_equal(fit$nn_index_backend, "faiss_flat_l2")
+  expect_s3_class(fit$nn_index, "faissR_faiss_flat_index")
+
+  pred <- predict(fit, x[1:7, , drop = FALSE], backend = "cpu", k = 3L)
+  meta <- attr(pred, "faissR_nn")
+  expect_equal(length(pred), 7L)
+  expect_equal(meta$resolved_backend, "faiss_flat_l2")
+  expect_equal(meta$requested_method, "flat")
+  expect_true(meta$exact)
+  expect_true(meta$approximation$fitted_index)
+  expect_true(meta$approximation$index_reused)
+  expect_true(meta$approximation$exact)
+  expect_equal(meta$approximation$index_type, "IndexFlatL2ExternalPtr")
+  expect_true(meta$faiss$index_reused)
+  expect_true(meta$faiss$exact)
+  expect_equal(meta$faiss$index_type, "IndexFlatL2ExternalPtr")
+  expect_true(meta$batch_query)
+  expect_equal(meta$query_n, 7L)
+  expect_equal(meta$query_call_count, 1L)
+  expect_equal(meta$query_source, "fitted_index")
+  expect_true(meta$approximation$batch_query)
+  expect_equal(meta$approximation$query_n, 7L)
+  expect_equal(meta$approximation$query_call_count, 1L)
+  expect_true(meta$faiss$batch_query)
+  expect_equal(meta$faiss$query_n, 7L)
+  expect_equal(meta$input_type, "float32")
+})
+
+test_that("knn reuses fitted FAISS IVF index for repeated predictions", {
+  skip_if_not(faiss_available())
+
+  set.seed(24)
+  x <- matrix(runif(320), nrow = 80L, ncol = 4L)
+  y <- factor(rep(c("a", "b"), length.out = nrow(x)))
+
+  fit <- knn(
+    x,
+    y,
+    backend = "cpu",
+    method = "ivf",
+    metric = "euclidean",
+    k = 3L,
+    n_threads = 2L
+  )
+  expect_equal(fit$nn_index_backend, "faiss_ivf")
+  expect_s3_class(fit$nn_index, "faissR_faiss_ivf_index")
+  expect_true(isTRUE(attr(fit$nn_index, "index_trained", exact = TRUE)))
+  expect_true(isTRUE(attr(fit$nn_index, "centroids_trained", exact = TRUE)))
+  expect_true(isTRUE(attr(fit$nn_index, "inverted_lists_built", exact = TRUE)))
+
+  pred <- predict(fit, x[1:6, , drop = FALSE], backend = "cpu", k = 4L)
+  meta <- attr(pred, "faissR_nn")
+  expect_equal(length(pred), 6L)
+  expect_equal(meta$resolved_backend, "faiss_ivf")
+  expect_equal(meta$requested_method, "ivf")
+  expect_true(meta$approximation$fitted_index)
+  expect_true(meta$approximation$index_reused)
+  expect_true(meta$approximation$index_trained)
+  expect_true(meta$approximation$index_training_reused)
+  expect_true(meta$approximation$centroids_reused)
+  expect_true(meta$approximation$inverted_lists_reused)
+  expect_true(meta$approximation$vectors_reused)
+  expect_equal(meta$approximation$search_train_call_count, 0L)
+  expect_equal(meta$approximation$build_train_call_count, 1L)
+  expect_equal(meta$approximation$search_nprobe, meta$approximation$nprobe)
+  expect_equal(meta$approximation$tuning_query_k, 4L)
+  expect_true(meta$faiss$index_reused)
+  expect_true(meta$faiss$index_training_reused)
+  expect_true(meta$faiss$centroids_reused)
+  expect_true(meta$faiss$inverted_lists_reused)
+  expect_equal(meta$faiss$search_train_call_count, 0L)
+  expect_true(meta$batch_query)
+  expect_equal(meta$query_n, 6L)
+  expect_equal(meta$query_call_count, 1L)
+  expect_equal(meta$query_source, "fitted_index")
+  expect_true(meta$approximation$batch_query)
+  expect_equal(meta$approximation$query_n, 6L)
+  expect_equal(meta$approximation$query_call_count, 1L)
+  expect_true(meta$faiss$batch_query)
+  expect_equal(meta$faiss$query_n, 6L)
+  expect_equal(meta$k, 4L)
+  expect_equal(meta$input_type, "float32")
+})
+
+test_that("knn reuses fitted FAISS IVFPQ codebooks for repeated predictions", {
+  skip_if_not(faiss_available())
+
+  set.seed(26)
+  x <- matrix(runif(700L * 8L), nrow = 700L, ncol = 8L)
+  y <- factor(rep(c("a", "b", "c"), length.out = nrow(x)))
+
+  fit <- knn(
+    x,
+    y,
+    backend = "cpu",
+    method = "ivfpq",
+    metric = "euclidean",
+    k = 5L,
+    n_threads = 2L
+  )
+  expect_equal(fit$nn_index_backend, "faiss_ivfpq")
+  expect_s3_class(fit$nn_index, "faissR_faiss_ivfpq_index")
+  expect_true(isTRUE(attr(fit$nn_index, "index_trained", exact = TRUE)))
+  expect_true(isTRUE(attr(fit$nn_index, "centroids_trained", exact = TRUE)))
+  expect_true(isTRUE(attr(fit$nn_index, "inverted_lists_built", exact = TRUE)))
+  expect_true(isTRUE(attr(fit$nn_index, "pq_codebooks_trained", exact = TRUE)))
+  expect_true(isTRUE(attr(fit$nn_index, "pq_codes_built", exact = TRUE)))
+  expect_equal(attr(fit$nn_index, "build_pq_train_call_count", exact = TRUE), 1L)
+
+  pred <- predict(fit, x[1:8, , drop = FALSE], backend = "cpu", k = 6L)
+  meta <- attr(pred, "faissR_nn")
+  expect_equal(length(pred), 8L)
+  expect_equal(meta$resolved_backend, "faiss_ivfpq")
+  expect_equal(meta$requested_method, "ivfpq")
+  expect_true(meta$approximation$fitted_index)
+  expect_true(meta$approximation$index_reused)
+  expect_true(meta$approximation$centroids_reused)
+  expect_true(meta$approximation$inverted_lists_reused)
+  expect_true(meta$approximation$pq_codebooks_reused)
+  expect_true(meta$approximation$pq_codes_reused)
+  expect_true(meta$approximation$pq_training_reused)
+  expect_equal(meta$approximation$search_train_call_count, 0L)
+  expect_equal(meta$approximation$search_pq_train_call_count, 0L)
+  expect_equal(meta$approximation$build_pq_train_call_count, 1L)
+  expect_equal(meta$approximation$search_nprobe, meta$approximation$nprobe)
+  expect_equal(meta$approximation$tuning_query_k, 6L)
+  expect_true(meta$faiss$index_reused)
+  expect_true(meta$faiss$pq_codebooks_reused)
+  expect_true(meta$faiss$pq_codes_reused)
+  expect_true(meta$faiss$pq_training_reused)
+  expect_equal(meta$faiss$search_pq_train_call_count, 0L)
+  expect_equal(meta$query_source, "fitted_index")
+  expect_true(meta$batch_query)
+  expect_equal(meta$query_n, 8L)
+  expect_equal(meta$query_call_count, 1L)
+  expect_equal(meta$input_type, "float32")
 })
 
 test_that("predict carries NN auto-selection route metadata", {
@@ -212,9 +469,19 @@ test_that("knn immediately predicts when Xtest is supplied", {
 
   pred <- knn(x, y, query, backend = "cpu", k = 2L)
   expect_equal(as.character(pred), c("a", "b"))
+  pred_meta <- attr(pred, "faissR_nn")
+  expect_true(pred_meta$batch_query)
+  expect_equal(pred_meta$query_n, 2L)
+  expect_equal(pred_meta$query_call_count, 1L)
+  expect_equal(pred_meta$query_source, "nn")
 
   proba <- knn(x, y, query, backend = "cpu", k = 2L, type = "prob")
   expect_equal(dim(proba), c(2L, 2L))
   expect_gt(proba[1, "a"], proba[1, "b"])
   expect_gt(proba[2, "b"], proba[2, "a"])
+  proba_meta <- attr(proba, "faissR_nn")
+  expect_true(proba_meta$batch_query)
+  expect_equal(proba_meta$query_n, 2L)
+  expect_equal(proba_meta$query_call_count, 1L)
+  expect_equal(proba_meta$query_source, "nn")
 })

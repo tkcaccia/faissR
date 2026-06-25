@@ -27,7 +27,7 @@ optionally, CUDA/RAPIDS libraries.
 |---|---|---|
 | CPU/FAISS | FAISS C++ library | FAISS CPU Flat, IVF, IVFPQ, HNSW, NSG/NNDescent where supported, native CPU routes, graph clustering, kNN models, k-means |
 | CUDA with FAISS GPU | FAISS built with GPU support, CUDA toolkit | FAISS GPU Flat, IVF, IVFPQ, CAGRA where the linked FAISS build exposes them |
-| CUDA with direct cuVS | CUDA toolkit plus RAPIDS cuVS C/C++ library | Direct cuVS brute force, IVF, IVFPQ, CAGRA, HNSW, NN-descent, cuVS k-means |
+| CUDA with direct cuVS | CUDA toolkit plus RAPIDS cuVS C/C++ library | Direct cuVS brute force, IVF, IVFPQ, CAGRA, HNSW, NN-descent, cuVS k-means. cuVS HNSW builds a CAGRA seed graph and converts it with `cuvsHnswFromCagraWithDataset` using the host dataset and cuVS CPU hierarchy; result metadata marks this wrapper design. |
 | CUDA graph clustering | CUDA toolkit plus RAPIDS libcugraph | CUDA Louvain/Leiden in `graph_cluster()` |
 
 GPU requests are explicit. If a GPU backend was not compiled or is unavailable

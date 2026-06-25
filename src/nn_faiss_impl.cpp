@@ -1,8 +1,10 @@
 #include <Rcpp.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <memory>
@@ -17,10 +19,17 @@
 #include <faiss/IndexFlat.h>
 #include <faiss/Clustering.h>
 #include <faiss/IndexHNSW.h>
+#include <faiss/IndexIVF.h>
 #include <faiss/IndexIVFFlat.h>
 #include <faiss/IndexIVFPQ.h>
 #include <faiss/IndexNNDescent.h>
 #include <faiss/IndexNSG.h>
+
+#if __has_include(<faiss/IndexIVFPQFastScan.h>) && __has_include(<faiss/IndexRefine.h>)
+#define FAISSR_HAS_FAISS_FASTSCAN 1
+#include <faiss/IndexIVFPQFastScan.h>
+#include <faiss/IndexRefine.h>
+#endif
 
 #if __has_include(<faiss/gpu/StandardGpuResources.h>) && \
     __has_include(<faiss/gpu/GpuIndexFlat.h>) && \
@@ -107,14 +116,164 @@ bool same_matrix_storage(const NumericMatrix& data,
     data.begin() == points.begin();
 }
 
+int env_positive_int(const char* name, const int fallback) {
+  const char* value = std::getenv(name);
+  if (value == nullptr || *value == '\0') return fallback;
+  char* end = nullptr;
+  const long parsed = std::strtol(value, &end, 10);
+  if (end == value || parsed < 1L ||
+      parsed > static_cast<long>(std::numeric_limits<int>::max())) {
+    return fallback;
+  }
+  return static_cast<int>(parsed);
+}
+
+bool env_false(const char* name) {
+  const char* value = std::getenv(name);
+  if (value == nullptr) return false;
+  const std::string text(value);
+  return text == "0" || text == "false" || text == "FALSE" ||
+    text == "no" || text == "NO" || text == "off" || text == "OFF";
+}
+
+int faiss_query_batch_size(const int n_points,
+                           const int search_k,
+                           const bool gpu_index) {
+  if (n_points < 1) return 1;
+  const int env_batch = env_positive_int(
+    gpu_index ? "FAISSR_FAISS_GPU_QUERY_BATCH_SIZE" : "FAISSR_FAISS_QUERY_BATCH_SIZE",
+    0
+  );
+  int batch = env_batch > 0 ? env_batch : (gpu_index ? 8192 : 16384);
+  if (search_k >= 512 && env_batch <= 0) {
+    batch = std::max(1024, batch / 2);
+  }
+  return std::max(1, std::min(batch, n_points));
+}
+
+#ifdef FAISSR_HAS_FAISS_GPU
+faiss::gpu::StandardGpuResources& reusable_faiss_gpu_resources() {
+  static thread_local std::unique_ptr<faiss::gpu::StandardGpuResources> resources;
+  if (resources == nullptr || env_false("FAISSR_FAISS_GPU_REUSE_RESOURCES")) {
+    resources.reset(new faiss::gpu::StandardGpuResources());
+  }
+  return *resources;
+}
+#endif
+
 struct MatrixViewF32 {
   const float* data = nullptr;
   int nrow = 0;
   int ncol = 0;
   bool row_major = true;
   bool owns_data = false;
+  bool compatibility_conversion = false;
   std::string layout = "unknown";
   std::vector<float> buffer;
+};
+
+struct FaissHnswIndexHandle {
+  std::unique_ptr<faiss::IndexHNSWFlat> index;
+  int n = 0;
+  int p = 0;
+  int m = 0;
+  int ef_construction = 0;
+  int ef_search = 0;
+  int requested_m = 0;
+  int requested_ef_construction = 0;
+  int requested_ef_search = 0;
+  int max_threads = 1;
+  DistanceOutput distance_output = DistanceOutput::L2Squared;
+  std::string metric = "euclidean";
+  std::string input_layout = "unknown";
+  bool input_owns_data = false;
+
+  FaissHnswIndexHandle(std::unique_ptr<faiss::IndexHNSWFlat>&& index_,
+                       const int n_,
+                       const int p_,
+                       const int m_,
+                       const int ef_construction_,
+                       const int ef_search_,
+                       const int requested_m_,
+                       const int requested_ef_construction_,
+                       const int requested_ef_search_,
+                       const int max_threads_,
+                       const DistanceOutput distance_output_,
+                       std::string metric_,
+                       std::string input_layout_,
+                       const bool input_owns_data_)
+      : index(std::move(index_)),
+        n(n_),
+        p(p_),
+        m(m_),
+        ef_construction(ef_construction_),
+        ef_search(ef_search_),
+        requested_m(requested_m_),
+        requested_ef_construction(requested_ef_construction_),
+        requested_ef_search(requested_ef_search_),
+        max_threads(std::max(1, max_threads_)),
+        distance_output(distance_output_),
+        metric(std::move(metric_)),
+        input_layout(std::move(input_layout_)),
+        input_owns_data(input_owns_data_) {}
+};
+
+struct FaissFittedIndexHandle {
+  std::unique_ptr<faiss::Index> index;
+  std::string kind;
+  std::string index_type;
+  int n = 0;
+  int p = 0;
+  int nlist = NA_INTEGER;
+  int nprobe = NA_INTEGER;
+  int requested_nlist = NA_INTEGER;
+  int requested_nprobe = NA_INTEGER;
+  int pq_m = NA_INTEGER;
+  int pq_nbits = NA_INTEGER;
+  int requested_pq_m = NA_INTEGER;
+  int requested_pq_nbits = NA_INTEGER;
+  int graph_degree = NA_INTEGER;
+  int search_width = NA_INTEGER;
+  int requested_graph_degree = NA_INTEGER;
+  int requested_search_width = NA_INTEGER;
+  int build_type = NA_INTEGER;
+  int requested_build_type = NA_INTEGER;
+  int n_iter = NA_INTEGER;
+  int requested_n_iter = NA_INTEGER;
+  int gk = NA_INTEGER;
+  int max_threads = 1;
+  DistanceOutput distance_output = DistanceOutput::L2Squared;
+  std::string metric = "euclidean";
+  std::string input_layout = "unknown";
+  bool input_owns_data = false;
+  bool index_trained = false;
+  bool centroids_trained = false;
+  bool inverted_lists_built = false;
+  bool pq_codebooks_trained = false;
+  bool pq_codes_built = false;
+  int build_train_call_count = 0;
+  int build_pq_train_call_count = 0;
+
+  FaissFittedIndexHandle(std::unique_ptr<faiss::Index>&& index_,
+                         std::string kind_,
+                         std::string index_type_,
+                         const int n_,
+                         const int p_,
+                         const int max_threads_,
+                         const DistanceOutput distance_output_,
+                         std::string metric_,
+                         std::string input_layout_,
+                         const bool input_owns_data_)
+      : index(std::move(index_)),
+        kind(std::move(kind_)),
+        index_type(std::move(index_type_)),
+        n(n_),
+        p(p_),
+        max_threads(std::max(1, max_threads_)),
+        distance_output(distance_output_),
+        metric(std::move(metric_)),
+        input_layout(std::move(input_layout_)),
+        input_owns_data(input_owns_data_) {}
 };
 
 Rcpp::IntegerVector matrix_dims_from_object(SEXP x, const char* name) {
@@ -177,6 +336,7 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
   if (TYPEOF(x) == REALSXP) {
     view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
     view.owns_data = true;
+    view.compatibility_conversion = true;
     view.row_major = true;
     view.layout = "r_double_column_major_to_row_major_float32";
     if (Rf_length(x) != expected_length) {
@@ -202,7 +362,14 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
     const float* col_major = float32_slot_ptr(slot, expected_length, name);
     if (col_major != nullptr) {
       finite = finite_float32_payload(col_major, expected_length);
-      if (view.nrow == 1 || view.ncol == 1) {
+      const bool row_major_payload =
+        Rf_asLogical(Rf_getAttrib(x, Rf_install("faissR_row_major_float32"))) == TRUE;
+      if (row_major_payload) {
+        view.data = col_major;
+        view.owns_data = false;
+        view.row_major = true;
+        view.layout = "float32_payload_direct_row_major";
+      } else if (view.nrow == 1 || view.ncol == 1) {
         view.data = col_major;
         view.owns_data = false;
         view.row_major = true;
@@ -225,6 +392,7 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
     } else if (TYPEOF(slot) == REALSXP) {
       view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
       view.owns_data = true;
+      view.compatibility_conversion = true;
       view.row_major = true;
       view.layout = "s4_double_column_major_to_row_major_float32";
       const double* col_major_double = REAL(slot);
@@ -370,6 +538,22 @@ List format_faiss_result(const std::vector<faiss::idx_t>& labels,
                          const int search_width,
                          const bool float_distances = false);
 
+struct FaissBatchSearchInfo {
+  int batch_size = 1;
+  int batches = 1;
+};
+
+FaissBatchSearchInfo search_faiss_queries(faiss::Index& index,
+                                          const float* query_ptr,
+                                          int n_points,
+                                          int n_features,
+                                          int search_k,
+                                          bool use_ivf_search_params,
+                                          int nprobe,
+                                          bool gpu_index,
+                                          std::vector<float>& distances,
+                                          std::vector<faiss::idx_t>& labels);
+
 List search_faiss_flat_float32_ptr(const float* data,
                                    const int n,
                                    const int p,
@@ -414,14 +598,26 @@ List search_faiss_flat_float32_ptr(const float* data,
   const int search_k = exclude_self ? std::min(n, k + 1) : k;
   std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
   std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
+  FaissBatchSearchInfo batch_info;
   try {
     index->add(n, data);
-    index->search(n_points, points, search_k, distances.data(), labels.data());
+    batch_info = search_faiss_queries(
+      *index,
+      points,
+      n_points,
+      p,
+      search_k,
+      false,
+      NA_INTEGER,
+      false,
+      distances,
+      labels
+    );
   } catch (const std::exception& e) {
     Rcpp::stop("FAISS float32 Flat search failed: %s", e.what());
   }
 
-  return format_faiss_result(
+  List out = format_faiss_result(
     labels,
     distances,
     n_points,
@@ -439,6 +635,12 @@ List search_faiss_flat_float32_ptr(const float* data,
     NA_INTEGER,
     float_distances
   );
+  out["search_batch_size"] = batch_info.batch_size;
+  out["search_batches"] = batch_info.batches;
+  out["batch_query"] = true;
+  out["query_n"] = n_points;
+  out["query_call_count"] = batch_info.batches;
+  return out;
 }
 
 List format_faiss_result(const std::vector<faiss::idx_t>& labels,
@@ -566,6 +768,94 @@ List format_faiss_result(const std::vector<faiss::idx_t>& labels,
   return out;
 }
 
+double float32_bytes(const int rows, const int cols) {
+  return static_cast<double>(rows) * static_cast<double>(cols) *
+    static_cast<double>(sizeof(float));
+}
+
+bool is_faiss_gpu_index_type(const std::string& index_type) {
+  return index_type.rfind("GpuIndex", 0) == 0;
+}
+
+void annotate_faiss_gpu_residency(List& out,
+                                  const bool same_storage,
+                                  const int n_data,
+                                  const int n_points,
+                                  const int n_features,
+                                  const int search_k) {
+  const double data_bytes = float32_bytes(n_data, n_features);
+  const double query_bytes = float32_bytes(n_points, n_features);
+  const double result_bytes =
+    static_cast<double>(n_points) * static_cast<double>(search_k) *
+    static_cast<double>(sizeof(faiss::idx_t) + sizeof(float));
+  out["accelerator"] = "cuda";
+  out["gpu_provider"] = "faiss_gpu";
+  out["device_residency"] = "cuda";
+  out["index_residency"] = "gpu_transient";
+  out["gpu_index_resident"] = true;
+  out["gpu_index_persistent"] = false;
+  out["gpu_resources_reused"] = !env_false("FAISSR_FAISS_GPU_REUSE_RESOURCES");
+  out["gpu_resource_scope"] = "thread_local_standard_gpu_resources";
+  out["host_to_device_transfer_strategy"] = "faiss_gpu_managed";
+  out["host_to_device_copies_known"] = false;
+  out["host_to_device_data_copies_minimum"] = 1;
+  out["host_to_device_query_copies_minimum"] = 1;
+  out["host_to_device_data_bytes_minimum"] = data_bytes;
+  out["host_to_device_query_bytes_minimum"] = query_bytes;
+  out["host_to_device_bytes_minimum"] = data_bytes + query_bytes;
+  out["query_reuses_host_data"] = same_storage;
+  out["query_reuses_device_data"] = false;
+  out["device_to_host_result_copies_known"] = false;
+  out["device_to_host_result_bytes_minimum"] = result_bytes;
+  out["cpu_fallback"] = false;
+  out["cpu_side_result_repair"] = false;
+}
+
+FaissBatchSearchInfo search_faiss_queries(faiss::Index& index,
+                                          const float* query_ptr,
+                                          const int n_points,
+                                          const int n_features,
+                                          const int search_k,
+                                          const bool use_ivf_search_params,
+                                          const int nprobe,
+                                          const bool gpu_index,
+                                          std::vector<float>& distances,
+                                          std::vector<faiss::idx_t>& labels) {
+  const int batch_size = faiss_query_batch_size(n_points, search_k, gpu_index);
+  int batches = 0;
+  faiss::SearchParametersIVF params;
+  params.nprobe = static_cast<std::size_t>(std::max(1, nprobe));
+
+  for (int offset = 0; offset < n_points; offset += batch_size) {
+    const int current = std::min(batch_size, n_points - offset);
+    const std::size_t output_offset =
+      static_cast<std::size_t>(offset) * search_k;
+    const float* batch_query = query_ptr +
+      static_cast<std::size_t>(offset) * n_features;
+    if (use_ivf_search_params && nprobe != NA_INTEGER) {
+      index.search(
+        current,
+        batch_query,
+        search_k,
+        distances.data() + output_offset,
+        labels.data() + output_offset,
+        &params
+      );
+    } else {
+      index.search(
+        current,
+        batch_query,
+        search_k,
+        distances.data() + output_offset,
+        labels.data() + output_offset
+      );
+    }
+    ++batches;
+  }
+
+  return FaissBatchSearchInfo{batch_size, batches};
+}
+
 List search_faiss_index(faiss::Index& index,
                         NumericMatrix data,
                         NumericMatrix points,
@@ -601,29 +891,44 @@ List search_faiss_index(faiss::Index& index,
 
   std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
   std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
+  FaissBatchSearchInfo batch_info;
 
   try {
     if (!index.is_trained) {
       index.train(n_data, xb.data());
     }
     index.add(n_data, xb.data());
-    if (use_ivf_search_params && nprobe != NA_INTEGER) {
-      faiss::SearchParametersIVF params;
-      params.nprobe = static_cast<std::size_t>(std::max(1, nprobe));
-      index.search(
-        n_points, query_ptr, search_k, distances.data(), labels.data(), &params
-      );
-    } else {
-      index.search(n_points, query_ptr, search_k, distances.data(), labels.data());
-    }
+    batch_info = search_faiss_queries(
+      index,
+      query_ptr,
+      n_points,
+      data.ncol(),
+      search_k,
+      use_ivf_search_params,
+      nprobe,
+      is_faiss_gpu_index_type(index_type),
+      distances,
+      labels
+    );
   } catch (const std::exception& e) {
     Rcpp::stop("FAISS %s search failed: %s", index_type.c_str(), e.what());
   }
 
-  return format_faiss_result(
+  List out = format_faiss_result(
     labels, distances, n_points, search_k, k, self_query, exclude_self,
     index_type, exact, distance_output, n_threads, nlist, nprobe, graph_degree, search_width
   );
+  out["search_batch_size"] = batch_info.batch_size;
+  out["search_batches"] = batch_info.batches;
+  out["batch_query"] = true;
+  out["query_n"] = n_points;
+  out["query_call_count"] = batch_info.batches;
+  if (is_faiss_gpu_index_type(index_type)) {
+    annotate_faiss_gpu_residency(
+      out, same_storage, n_data, n_points, data.ncol(), search_k
+    );
+  }
+  return out;
 }
 
 List search_faiss_index_float32(faiss::Index& index,
@@ -667,21 +972,25 @@ List search_faiss_index_float32(faiss::Index& index,
   OmpThreadScope threads(n_threads);
   std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
   std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
+  FaissBatchSearchInfo batch_info;
 
   try {
     if (!index.is_trained) {
       index.train(xb.nrow, xb.data);
     }
     index.add(xb.nrow, xb.data);
-    if (use_ivf_search_params && nprobe != NA_INTEGER) {
-      faiss::SearchParametersIVF params;
-      params.nprobe = static_cast<std::size_t>(std::max(1, nprobe));
-      index.search(
-        n_points, query_ptr, search_k, distances.data(), labels.data(), &params
-      );
-    } else {
-      index.search(n_points, query_ptr, search_k, distances.data(), labels.data());
-    }
+    batch_info = search_faiss_queries(
+      index,
+      query_ptr,
+      n_points,
+      xb.ncol,
+      search_k,
+      use_ivf_search_params,
+      nprobe,
+      is_faiss_gpu_index_type(index_type),
+      distances,
+      labels
+    );
   } catch (const std::exception& e) {
     Rcpp::stop("FAISS %s float32 search failed: %s", index_type.c_str(), e.what());
   }
@@ -691,6 +1000,11 @@ List search_faiss_index_float32(faiss::Index& index,
     index_type, exact, distance_output, n_threads, nlist, nprobe,
     graph_degree, search_width, wants_float_distances
   );
+  out["search_batch_size"] = batch_info.batch_size;
+  out["search_batches"] = batch_info.batches;
+  out["batch_query"] = true;
+  out["query_n"] = n_points;
+  out["query_call_count"] = batch_info.batches;
   out["input_type"] = "float32";
   out["input_layout"] = same_storage ?
     xb.layout :
@@ -698,7 +1012,14 @@ List search_faiss_index_float32(faiss::Index& index,
   out["input_owns_data"] = same_storage ?
     xb.owns_data :
     (xb.owns_data || xq.owns_data);
-  out["float32_compatibility_conversion"] = false;
+  out["float32_compatibility_conversion"] = same_storage ?
+    xb.compatibility_conversion :
+    (xb.compatibility_conversion || xq.compatibility_conversion);
+  if (is_faiss_gpu_index_type(index_type)) {
+    annotate_faiss_gpu_residency(
+      out, same_storage, xb.nrow, n_points, xb.ncol, search_k
+    );
+  }
   return out;
 }
 
@@ -868,6 +1189,9 @@ List search_faiss_flat_float32(SEXP data,
   out["input_owns_data"] = same_storage ?
     xb.owns_data :
     (xb.owns_data || xq.owns_data);
+  out["float32_compatibility_conversion"] = same_storage ?
+    xb.compatibility_conversion :
+    (xb.compatibility_conversion || xq.compatibility_conversion);
   if (direct_float_distances) {
     out["distance_type"] = "float32";
     out.attr("distance_type") = "float32";
@@ -881,7 +1205,20 @@ int clamp_positive(const int value, const int fallback, const int upper) {
   return std::max(1, out);
 }
 
-bool faiss_gpu_supported_pq_code_size(const int code_size) {
+int adjust_fastscan_pq_m(const int requested, const int n_features) {
+  int pq_m = clamp_positive(requested, std::min(32, n_features), n_features);
+  while (pq_m > 1 && (n_features % pq_m) != 0) --pq_m;
+  return std::max(1, pq_m);
+}
+
+int adjust_fastscan_bbs(const int requested) {
+  if (requested <= 0) return 32;
+  if (requested <= 32) return 32;
+  const int rounded = (requested / 32) * 32;
+  return std::max(32, rounded);
+}
+
+[[maybe_unused]] bool faiss_gpu_supported_pq_code_size(const int code_size) {
   switch (code_size) {
     case 1:
     case 2:
@@ -935,8 +1272,14 @@ std::string faiss_info_json_impl() {
 #else
   const char* gpu_cagra = "false";
 #endif
+#ifdef FAISSR_HAS_FAISS_FASTSCAN
+  const char* fastscan = "true";
+#else
+  const char* fastscan = "false";
+#endif
   return std::string("{\"available\":true,\"library\":\"faiss\",\"interface\":\"c++\",") +
-    "\"gpu\":" + gpu + ",\"gpu_cagra\":" + gpu_cagra + "}";
+    "\"gpu\":" + gpu + ",\"gpu_cagra\":" + gpu_cagra +
+    ",\"fastscan\":" + fastscan + "}";
 }
 
 List faiss_flat_knn_impl(NumericMatrix data,
@@ -968,6 +1311,59 @@ List faiss_flat_float32_knn_impl(SEXP data,
     metric,
     distance_storage
   );
+}
+
+List faiss_flat_pretransformed_float32_knn_impl(SEXP data,
+                                                SEXP points,
+                                                int k,
+                                                bool exclude_self,
+                                                int n_threads,
+                                                std::string distance_storage) {
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  MatrixViewF32 xq = same_float32_object(data, points) ?
+    MatrixViewF32() :
+    make_float32_matrix_view(points, "points");
+  const bool same_storage = same_float32_object(data, points);
+  const bool self_query = exclude_self || same_storage;
+  if (!same_storage && (xq.nrow < 1 || xq.ncol != xb.ncol)) {
+    Rcpp::stop("data and points must have the same number of columns");
+  }
+  const bool wants_float_distances = distance_storage == "float" ||
+    distance_storage == "float32";
+  if (!wants_float_distances && distance_storage != "double") {
+    Rcpp::stop("`distance_storage` must be \"double\" or \"float\"");
+  }
+  const int n_points = same_storage ? xb.nrow : xq.nrow;
+  const float* query_ptr = same_storage ? xb.data : xq.data;
+  List out = search_faiss_flat_float32_ptr(
+    xb.data,
+    xb.nrow,
+    xb.ncol,
+    query_ptr,
+    n_points,
+    k,
+    exclude_self,
+    self_query,
+    n_threads,
+    "cosine",
+    wants_float_distances
+  );
+  out["input_type"] = "float32";
+  out["input_layout"] = same_storage ?
+    xb.layout :
+    ("data=" + xb.layout + ";points=" + xq.layout);
+  out["input_owns_data"] = same_storage ?
+    xb.owns_data :
+    (xb.owns_data || xq.owns_data);
+  out["float32_compatibility_conversion"] = same_storage ?
+    xb.compatibility_conversion :
+    (xb.compatibility_conversion || xq.compatibility_conversion);
+  if (wants_float_distances) {
+    out["distance_type"] = "float32";
+    out.attr("distance_type") = "float32";
+  }
+  out["metric"] = "one_minus_inner_product";
+  return out;
 }
 
 List faiss_flat_ip_knn_impl(NumericMatrix data,
@@ -1002,7 +1398,7 @@ List faiss_gpu_flat_knn_impl(NumericMatrix data,
                              bool exclude_self) {
 #ifdef FAISSR_HAS_FAISS_GPU
   const int n_features = data.ncol();
-  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
   faiss::gpu::GpuIndexFlatConfig config;
   config.device = 0;
   faiss::gpu::GpuIndexFlatL2 index(&resources, n_features, config);
@@ -1032,7 +1428,7 @@ List faiss_gpu_flat_float32_knn_impl(SEXP data,
 #ifdef FAISSR_HAS_FAISS_GPU
   Rcpp::IntegerVector dims = matrix_dims_from_object(data, "data");
   const int n_features = dims[1];
-  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
   faiss::gpu::GpuIndexFlatConfig config;
   config.device = 0;
   const DistanceOutput output = parse_distance_output(distance_output, "GPU Flat");
@@ -1072,7 +1468,7 @@ List faiss_gpu_flat_ip_knn_impl(NumericMatrix data,
                                 bool exclude_self) {
 #ifdef FAISSR_HAS_FAISS_GPU
   const int n_features = data.ncol();
-  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
   faiss::gpu::GpuIndexFlatConfig config;
   config.device = 0;
   faiss::gpu::GpuIndexFlatIP index(&resources, n_features, config);
@@ -1098,7 +1494,7 @@ List faiss_gpu_flat_normalized_ip_distance_knn_impl(NumericMatrix data,
                                                     bool exclude_self) {
 #ifdef FAISSR_HAS_FAISS_GPU
   const int n_features = data.ncol();
-  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
   faiss::gpu::GpuIndexFlatConfig config;
   config.device = 0;
   faiss::gpu::GpuIndexFlatIP index(&resources, n_features, config);
@@ -1304,6 +1700,198 @@ List faiss_ivfpq_float32_knn_impl(SEXP data,
   return out;
 }
 
+List faiss_scann_knn_impl(NumericMatrix data,
+                          NumericMatrix points,
+                          int k,
+                          int nlist,
+                          int nprobe,
+                          int pq_m,
+                          int refine_factor,
+                          int bbs,
+                          bool exclude_self,
+                          int n_threads) {
+#ifdef FAISSR_HAS_FAISS_FASTSCAN
+  const int n_data = data.nrow();
+  const int n_features = data.ncol();
+  const int requested_nlist = nlist;
+  const int requested_nprobe = nprobe;
+  const int requested_pq_m = pq_m;
+  const int requested_refine_factor = refine_factor;
+  const int requested_bbs = bbs;
+  nlist = std::max(1, std::min(nlist, n_data));
+  nprobe = std::max(1, std::min(nprobe, nlist));
+  pq_m = adjust_fastscan_pq_m(pq_m, n_features);
+  refine_factor = std::max(1, refine_factor);
+  bbs = adjust_fastscan_bbs(bbs);
+
+  std::unique_ptr<faiss::Index> quantizer(new faiss::IndexFlatL2(n_features));
+  std::unique_ptr<faiss::IndexIVFPQFastScan> base(
+    new faiss::IndexIVFPQFastScan(
+      quantizer.get(),
+      n_features,
+      nlist,
+      pq_m,
+      4,
+      faiss::METRIC_L2,
+      bbs
+    )
+  );
+  base->nprobe = nprobe;
+
+  std::unique_ptr<faiss::Index> index;
+  const char* index_type = "IndexIVFPQFastScan";
+  if (refine_factor > 1) {
+    faiss::IndexIVFPQFastScan* base_ptr = base.release();
+    std::unique_ptr<faiss::IndexRefineFlat> refine(
+      new faiss::IndexRefineFlat(base_ptr)
+    );
+    refine->own_fields = true;
+    refine->k_factor = static_cast<float>(refine_factor);
+    index = std::move(refine);
+    index_type = "IndexIVFPQFastScanRefineFlat";
+  } else {
+    index = std::move(base);
+  }
+
+  List out = search_faiss_index(
+    *index, data, points, k, exclude_self, n_threads,
+    index_type,
+    false,
+    DistanceOutput::L2Squared,
+    nlist,
+    nprobe
+  );
+  out["pq_m"] = pq_m;
+  out["pq_nbits"] = 4;
+  out["requested_nlist"] = requested_nlist;
+  out["requested_nprobe"] = requested_nprobe;
+  out["requested_pq_m"] = requested_pq_m;
+  out["requested_pq_nbits"] = 4;
+  out["pq_parameters_adjusted"] = requested_pq_m != pq_m;
+  out["refine_factor"] = refine_factor;
+  out["requested_refine_factor"] = requested_refine_factor;
+  out["bbs"] = bbs;
+  out["requested_bbs"] = requested_bbs;
+  out["fastscan"] = true;
+  out["scann_inspired"] = true;
+  out["refine"] = refine_factor > 1;
+  return out;
+#else
+  (void)data;
+  (void)points;
+  (void)k;
+  (void)nlist;
+  (void)nprobe;
+  (void)pq_m;
+  (void)refine_factor;
+  (void)bbs;
+  (void)exclude_self;
+  (void)n_threads;
+  Rcpp::stop(
+    "FAISS FastScan is not available in this build. Rebuild faissR against "
+    "a FAISS version that provides faiss/IndexIVFPQFastScan.h."
+  );
+#endif
+}
+
+List faiss_scann_float32_knn_impl(SEXP data,
+                                  SEXP points,
+                                  int k,
+                                  int nlist,
+                                  int nprobe,
+                                  int pq_m,
+                                  int refine_factor,
+                                  int bbs,
+                                  bool exclude_self,
+                                  int n_threads,
+                                  std::string distance_storage) {
+#ifdef FAISSR_HAS_FAISS_FASTSCAN
+  Rcpp::IntegerVector dims = matrix_dims_from_object(data, "data");
+  const int n_data = dims[0];
+  const int n_features = dims[1];
+  const int requested_nlist = nlist;
+  const int requested_nprobe = nprobe;
+  const int requested_pq_m = pq_m;
+  const int requested_refine_factor = refine_factor;
+  const int requested_bbs = bbs;
+  nlist = std::max(1, std::min(nlist, n_data));
+  nprobe = std::max(1, std::min(nprobe, nlist));
+  pq_m = adjust_fastscan_pq_m(pq_m, n_features);
+  refine_factor = std::max(1, refine_factor);
+  bbs = adjust_fastscan_bbs(bbs);
+
+  std::unique_ptr<faiss::Index> quantizer(new faiss::IndexFlatL2(n_features));
+  std::unique_ptr<faiss::IndexIVFPQFastScan> base(
+    new faiss::IndexIVFPQFastScan(
+      quantizer.get(),
+      n_features,
+      nlist,
+      pq_m,
+      4,
+      faiss::METRIC_L2,
+      bbs
+    )
+  );
+  base->nprobe = nprobe;
+
+  std::unique_ptr<faiss::Index> index;
+  const char* index_type = "IndexIVFPQFastScan";
+  if (refine_factor > 1) {
+    faiss::IndexIVFPQFastScan* base_ptr = base.release();
+    std::unique_ptr<faiss::IndexRefineFlat> refine(
+      new faiss::IndexRefineFlat(base_ptr)
+    );
+    refine->own_fields = true;
+    refine->k_factor = static_cast<float>(refine_factor);
+    index = std::move(refine);
+    index_type = "IndexIVFPQFastScanRefineFlat";
+  } else {
+    index = std::move(base);
+  }
+
+  List out = search_faiss_index_float32(
+    *index, data, points, k, exclude_self, n_threads,
+    index_type,
+    false,
+    DistanceOutput::L2Squared,
+    distance_storage,
+    nlist,
+    nprobe
+  );
+  out["pq_m"] = pq_m;
+  out["pq_nbits"] = 4;
+  out["requested_nlist"] = requested_nlist;
+  out["requested_nprobe"] = requested_nprobe;
+  out["requested_pq_m"] = requested_pq_m;
+  out["requested_pq_nbits"] = 4;
+  out["pq_parameters_adjusted"] = requested_pq_m != pq_m;
+  out["refine_factor"] = refine_factor;
+  out["requested_refine_factor"] = requested_refine_factor;
+  out["bbs"] = bbs;
+  out["requested_bbs"] = requested_bbs;
+  out["fastscan"] = true;
+  out["scann_inspired"] = true;
+  out["refine"] = refine_factor > 1;
+  return out;
+#else
+  (void)data;
+  (void)points;
+  (void)k;
+  (void)nlist;
+  (void)nprobe;
+  (void)pq_m;
+  (void)refine_factor;
+  (void)bbs;
+  (void)exclude_self;
+  (void)n_threads;
+  (void)distance_storage;
+  Rcpp::stop(
+    "FAISS FastScan is not available in this build. Rebuild faissR against "
+    "a FAISS version that provides faiss/IndexIVFPQFastScan.h."
+  );
+#endif
+}
+
 List faiss_hnsw_knn_impl(NumericMatrix data,
                          NumericMatrix points,
                          int k,
@@ -1390,6 +1978,555 @@ List faiss_hnsw_float32_knn_impl(SEXP data,
   out["requested_ef_search"] = requested_ef_search;
   out["hnsw_parameters_adjusted"] = requested_m != m ||
     requested_ef_construction != ef_construction || requested_ef_search != ef_search;
+  return out;
+}
+
+SEXP faiss_hnsw_index_build_float32_impl(SEXP data,
+                                         int m,
+                                         int ef_construction,
+                                         int ef_search,
+                                         std::string metric,
+                                         std::string distance_output,
+                                         int n_threads) {
+  Rcpp::IntegerVector dims = matrix_dims_from_object(data, "data");
+  const int n_data = dims[0];
+  const int n_features = dims[1];
+  const int requested_m = m;
+  const int requested_ef_construction = ef_construction;
+  const int requested_ef_search = ef_search;
+  n_threads = std::max(1, n_threads);
+  m = clamp_positive(m, 32, n_data);
+  ef_construction = std::max(ef_construction, m);
+  ef_search = std::max(ef_search, 1);
+
+  faiss::MetricType faiss_metric = faiss::METRIC_L2;
+  if (metric == "inner_product") {
+    faiss_metric = faiss::METRIC_INNER_PRODUCT;
+  } else if (metric != "euclidean") {
+    Rcpp::stop("FAISS HNSW fitted index supports metric = 'euclidean' or 'inner_product'");
+  }
+  const DistanceOutput output = parse_distance_output(distance_output, "HNSW");
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+
+  try {
+    std::unique_ptr<faiss::IndexHNSWFlat> index(
+      new faiss::IndexHNSWFlat(n_features, m, faiss_metric)
+    );
+    index->hnsw.efConstruction = ef_construction;
+    index->hnsw.efSearch = ef_search;
+
+    {
+      OmpThreadScope threads(n_threads);
+      index->add(n_data, xb.data);
+    }
+
+    FaissHnswIndexHandle* handle = new FaissHnswIndexHandle(
+      std::move(index),
+      n_data,
+      n_features,
+      m,
+      ef_construction,
+      ef_search,
+      requested_m,
+      requested_ef_construction,
+      requested_ef_search,
+      n_threads,
+      output,
+      metric,
+      xb.layout,
+      xb.owns_data
+    );
+    Rcpp::XPtr<FaissHnswIndexHandle> ptr(handle, true);
+    ptr.attr("class") = "faissR_faiss_hnsw_index";
+    ptr.attr("n") = n_data;
+    ptr.attr("p") = n_features;
+    ptr.attr("m") = m;
+    ptr.attr("ef_construction") = ef_construction;
+    ptr.attr("ef_search") = ef_search;
+    ptr.attr("requested_m") = requested_m;
+    ptr.attr("requested_ef_construction") = requested_ef_construction;
+    ptr.attr("requested_ef_search") = requested_ef_search;
+    ptr.attr("max_threads") = n_threads;
+    ptr.attr("metric") = metric;
+    ptr.attr("input_type") = "float32";
+    ptr.attr("input_layout") = xb.layout;
+    ptr.attr("input_owns_data") = xb.owns_data;
+    ptr.attr("float32_compatibility_conversion") = xb.compatibility_conversion;
+    return ptr;
+  } catch (const std::exception& e) {
+    Rcpp::stop("FAISS HNSW fitted-index build failed: %s", e.what());
+  }
+}
+
+List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
+                                          SEXP points,
+                                          int k,
+                                          bool exclude_self,
+                                          int ef_search,
+                                          int n_threads,
+                                          std::string distance_storage) {
+  if (k < 1) {
+    Rcpp::stop("k must be positive");
+  }
+  Rcpp::XPtr<FaissHnswIndexHandle> handle(index_ptr);
+  if (handle.get() == nullptr || handle->index.get() == nullptr) {
+    Rcpp::stop("FAISS HNSW index pointer is not valid");
+  }
+  if (k > handle->n) {
+    Rcpp::stop("k must not exceed the fitted FAISS HNSW index size");
+  }
+  n_threads = std::max(1, std::min(n_threads, handle->max_threads));
+  ef_search = std::max(k, ef_search);
+  const bool wants_float_distances = distance_storage == "float" ||
+    distance_storage == "float32";
+  if (!wants_float_distances && distance_storage != "double") {
+    Rcpp::stop("`distance_storage` must be \"double\" or \"float\"");
+  }
+
+  MatrixViewF32 xq = make_float32_matrix_view(points, "points");
+  if (xq.ncol != handle->p) {
+    Rcpp::stop("points must have the same number of columns as the fitted FAISS HNSW index");
+  }
+  const int n_points = xq.nrow;
+  const bool self_query = exclude_self;
+  const int search_k = exclude_self ? std::min(handle->n, k + 1) : k;
+  std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
+  std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
+
+  try {
+    OmpThreadScope threads(n_threads);
+    handle->index->hnsw.efSearch = ef_search;
+    handle->index->search(n_points, xq.data, search_k, distances.data(), labels.data());
+  } catch (const std::exception& e) {
+    Rcpp::stop("FAISS HNSW fitted-index search failed: %s", e.what());
+  }
+
+  List out = format_faiss_result(
+    labels,
+    distances,
+    n_points,
+    search_k,
+    k,
+    self_query,
+    exclude_self,
+    "IndexHNSWFlatExternalPtr",
+    false,
+    handle->distance_output,
+    n_threads,
+    NA_INTEGER,
+    NA_INTEGER,
+    handle->m,
+    ef_search,
+    wants_float_distances
+  );
+  out["m"] = handle->m;
+  out["ef_construction"] = handle->ef_construction;
+  out["ef_search"] = ef_search;
+  out["requested_m"] = handle->requested_m;
+  out["requested_ef_construction"] = handle->requested_ef_construction;
+  out["requested_ef_search"] = handle->requested_ef_search;
+  out["hnsw_parameters_adjusted"] = handle->requested_m != handle->m ||
+    handle->requested_ef_construction != handle->ef_construction ||
+    handle->requested_ef_search != ef_search;
+  out["index_reused"] = true;
+  out["index_n"] = handle->n;
+  out["index_p"] = handle->p;
+  out["query_n"] = n_points;
+  out["batch_query"] = true;
+  out["query_call_count"] = 1;
+  out["input_type"] = "float32";
+  out["input_layout"] = handle->input_layout + ";fitted_index_query:" + xq.layout;
+  out["input_owns_data"] = xq.owns_data;
+  out["index_input_owns_data"] = handle->input_owns_data;
+  out["float32_compatibility_conversion"] = xq.compatibility_conversion;
+  return out;
+}
+
+SEXP faiss_index_build_float32_impl(SEXP data,
+                                    std::string kind,
+                                    int nlist,
+                                    int nprobe,
+                                    int pq_m,
+                                    int pq_nbits,
+                                    int graph_degree,
+                                    int search_width,
+                                    int build_type,
+                                    int n_iter,
+                                    std::string metric,
+                                    std::string distance_output,
+                                    int n_threads) {
+  Rcpp::IntegerVector dims = matrix_dims_from_object(data, "data");
+  const int n_data = dims[0];
+  const int n_features = dims[1];
+  n_threads = std::max(1, n_threads);
+  std::transform(kind.begin(), kind.end(), kind.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (kind == "ivf_flat") kind = "ivf";
+  if (kind == "ivf_pq") kind = "ivfpq";
+  const DistanceOutput output = parse_distance_output(distance_output, "fitted FAISS index");
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+
+  std::unique_ptr<faiss::Index> index;
+  std::string index_type;
+  const int requested_nlist = nlist;
+  const int requested_nprobe = nprobe;
+  const int requested_pq_m = pq_m;
+  const int requested_pq_nbits = pq_nbits;
+  const int requested_graph_degree = graph_degree;
+  const int requested_search_width = search_width;
+  const int requested_build_type = build_type;
+  const int requested_n_iter = n_iter;
+  int gk = NA_INTEGER;
+
+  try {
+    if (kind == "flat") {
+      if (metric == "inner_product") {
+        index.reset(new faiss::IndexFlatIP(n_features));
+        index_type = "IndexFlatIPExternalPtr";
+      } else if (metric == "euclidean") {
+        index.reset(new faiss::IndexFlatL2(n_features));
+        index_type = "IndexFlatL2ExternalPtr";
+      } else {
+        Rcpp::stop("FAISS fitted Flat supports metric = 'euclidean' or 'inner_product'");
+      }
+    } else if (kind == "ivf") {
+      nlist = std::max(1, std::min(nlist, n_data));
+      nprobe = std::max(1, std::min(nprobe, nlist));
+      faiss::MetricType faiss_metric = faiss::METRIC_L2;
+      faiss::Index* quantizer = nullptr;
+      if (metric == "inner_product") {
+        faiss_metric = faiss::METRIC_INNER_PRODUCT;
+        quantizer = new faiss::IndexFlatIP(n_features);
+        index_type = "IndexIVFFlatIPExternalPtr";
+      } else if (metric == "euclidean") {
+        quantizer = new faiss::IndexFlatL2(n_features);
+        index_type = "IndexIVFFlatExternalPtr";
+      } else {
+        Rcpp::stop("FAISS fitted IVF supports metric = 'euclidean' or 'inner_product'");
+      }
+      std::unique_ptr<faiss::IndexIVFFlat> ivf(
+        new faiss::IndexIVFFlat(quantizer, n_features, nlist, faiss_metric)
+      );
+      ivf->own_fields = true;
+      ivf->nprobe = nprobe;
+      index = std::move(ivf);
+    } else if (kind == "ivfpq") {
+      nlist = std::max(1, std::min(nlist, n_data));
+      nprobe = std::max(1, std::min(nprobe, nlist));
+      pq_m = clamp_positive(pq_m, 8, n_features);
+      while (pq_m > 1 && (n_features % pq_m) != 0) --pq_m;
+      pq_nbits = std::max(4, std::min(pq_nbits, 12));
+      while (pq_nbits > 4 && (1 << pq_nbits) > n_data) {
+        --pq_nbits;
+      }
+      faiss::MetricType faiss_metric = faiss::METRIC_L2;
+      faiss::Index* quantizer = nullptr;
+      if (metric == "inner_product") {
+        faiss_metric = faiss::METRIC_INNER_PRODUCT;
+        quantizer = new faiss::IndexFlatIP(n_features);
+        index_type = "IndexIVFPQIPExternalPtr";
+      } else if (metric == "euclidean") {
+        quantizer = new faiss::IndexFlatL2(n_features);
+        index_type = "IndexIVFPQExternalPtr";
+      } else {
+        Rcpp::stop("FAISS fitted IVFPQ supports metric = 'euclidean' or 'inner_product'");
+      }
+      std::unique_ptr<faiss::IndexIVFPQ> ivfpq(
+        new faiss::IndexIVFPQ(
+          quantizer, n_features, nlist, pq_m, pq_nbits, faiss_metric
+        )
+      );
+      ivfpq->own_fields = true;
+      ivfpq->nprobe = nprobe;
+      index = std::move(ivfpq);
+    } else if (kind == "nsg") {
+      if (n_data <= 100) {
+        Rcpp::stop("FAISS NSG requires more than 100 training rows in this FAISS build.");
+      }
+      if (metric != "euclidean") {
+        Rcpp::stop("FAISS fitted NSG is currently validated only for metric = 'euclidean'");
+      }
+      graph_degree = clamp_positive(graph_degree, 32, n_data);
+      search_width = std::max(search_width, 1);
+      build_type = build_type == 1 ? 1 : 0;
+      gk = std::max(64, std::max(2 * graph_degree, 2 * search_width));
+      std::unique_ptr<faiss::IndexNSGFlat> nsg(
+        new faiss::IndexNSGFlat(n_features, graph_degree, faiss::METRIC_L2)
+      );
+      nsg->nsg.search_L = search_width;
+      nsg->build_type = static_cast<char>(build_type);
+      nsg->GK = gk;
+      index_type = "IndexNSGFlatExternalPtr";
+      index = std::move(nsg);
+    } else if (kind == "nndescent") {
+      if (n_data <= 100) {
+        Rcpp::stop("FAISS NN-Descent requires more than 100 training rows in this FAISS build.");
+      }
+      if (metric != "euclidean") {
+        Rcpp::stop("FAISS fitted NNDescent is currently validated only for metric = 'euclidean'");
+      }
+      graph_degree = std::max(1, graph_degree);
+      n_iter = std::max(1, n_iter);
+      search_width = std::max(search_width, 1);
+      std::unique_ptr<faiss::IndexNNDescentFlat> nnd(
+        new faiss::IndexNNDescentFlat(n_features, graph_degree, faiss::METRIC_L2)
+      );
+      nnd->nndescent.iter = n_iter;
+      nnd->nndescent.search_L = search_width;
+      index_type = "IndexNNDescentFlatExternalPtr";
+      index = std::move(nnd);
+    } else {
+      Rcpp::stop("Unsupported fitted FAISS index kind: %s", kind);
+    }
+
+    int build_train_call_count = 0;
+    {
+      OmpThreadScope threads(n_threads);
+      const bool needs_training = !index->is_trained;
+      if (!index->is_trained) {
+        index->train(n_data, xb.data);
+      }
+      index->add(n_data, xb.data);
+      if (needs_training) {
+        build_train_call_count = 1;
+      }
+    }
+
+    FaissFittedIndexHandle* handle = new FaissFittedIndexHandle(
+      std::move(index),
+      kind,
+      index_type,
+      n_data,
+      n_features,
+      n_threads,
+      output,
+      metric,
+      xb.layout,
+      xb.owns_data
+    );
+    handle->nlist = nlist;
+    handle->nprobe = nprobe;
+    handle->requested_nlist = requested_nlist;
+    handle->requested_nprobe = requested_nprobe;
+    handle->pq_m = pq_m;
+    handle->pq_nbits = pq_nbits;
+    handle->requested_pq_m = requested_pq_m;
+    handle->requested_pq_nbits = requested_pq_nbits;
+    handle->graph_degree = graph_degree;
+    handle->search_width = search_width;
+    handle->requested_graph_degree = requested_graph_degree;
+    handle->requested_search_width = requested_search_width;
+    handle->build_type = build_type;
+    handle->requested_build_type = requested_build_type;
+    handle->n_iter = n_iter;
+    handle->requested_n_iter = requested_n_iter;
+    handle->gk = gk;
+    handle->index_trained = handle->index->is_trained;
+    handle->centroids_trained = kind == "ivf" || kind == "ivfpq";
+    handle->inverted_lists_built = kind == "ivf" || kind == "ivfpq";
+    handle->pq_codebooks_trained = kind == "ivfpq";
+    handle->pq_codes_built = kind == "ivfpq";
+    handle->build_train_call_count = handle->centroids_trained ? build_train_call_count : 0;
+    handle->build_pq_train_call_count = handle->pq_codebooks_trained ? build_train_call_count : 0;
+
+    Rcpp::XPtr<FaissFittedIndexHandle> ptr(handle, true);
+    const std::string primary_class = "faissR_faiss_" + kind + "_index";
+    ptr.attr("class") = Rcpp::CharacterVector::create(
+      primary_class,
+      "faissR_faiss_index"
+    );
+    ptr.attr("kind") = kind;
+    ptr.attr("index_type") = index_type;
+    ptr.attr("n") = n_data;
+    ptr.attr("p") = n_features;
+    ptr.attr("nlist") = nlist;
+    ptr.attr("nprobe") = nprobe;
+    ptr.attr("pq_m") = pq_m;
+    ptr.attr("pq_nbits") = pq_nbits;
+    ptr.attr("graph_degree") = graph_degree;
+    ptr.attr("search_width") = search_width;
+    ptr.attr("build_type") = build_type;
+    ptr.attr("n_iter") = n_iter;
+    ptr.attr("max_threads") = n_threads;
+    ptr.attr("metric") = metric;
+    ptr.attr("input_type") = "float32";
+    ptr.attr("input_layout") = xb.layout;
+    ptr.attr("input_owns_data") = xb.owns_data;
+    ptr.attr("float32_compatibility_conversion") = xb.compatibility_conversion;
+    ptr.attr("index_trained") = handle->index_trained;
+    ptr.attr("centroids_trained") = handle->centroids_trained;
+    ptr.attr("inverted_lists_built") = handle->inverted_lists_built;
+    ptr.attr("build_train_call_count") = handle->build_train_call_count;
+    ptr.attr("pq_codebooks_trained") = handle->pq_codebooks_trained;
+    ptr.attr("pq_codes_built") = handle->pq_codes_built;
+    ptr.attr("build_pq_train_call_count") = handle->build_pq_train_call_count;
+    return ptr;
+  } catch (const std::exception& e) {
+    Rcpp::stop("FAISS fitted-index build failed: %s", e.what());
+  }
+}
+
+List faiss_index_search_float32_impl(SEXP index_ptr,
+                                     SEXP points,
+                                     int k,
+                                     bool exclude_self,
+                                     int search_width,
+                                     int n_threads,
+                                     std::string distance_storage) {
+  if (k < 1) {
+    Rcpp::stop("k must be positive");
+  }
+  Rcpp::XPtr<FaissFittedIndexHandle> handle(index_ptr);
+  if (handle.get() == nullptr || handle->index.get() == nullptr) {
+    Rcpp::stop("FAISS index pointer is not valid");
+  }
+  if (k > handle->n) {
+    Rcpp::stop("k must not exceed the fitted FAISS index size");
+  }
+  n_threads = std::max(1, std::min(n_threads, handle->max_threads));
+  const bool wants_float_distances = distance_storage == "float" ||
+    distance_storage == "float32";
+  if (!wants_float_distances && distance_storage != "double") {
+    Rcpp::stop("`distance_storage` must be \"double\" or \"float\"");
+  }
+
+  int effective_search_width = search_width;
+  if (effective_search_width < 1) {
+    effective_search_width = handle->search_width;
+  }
+  if (handle->kind == "ivf" || handle->kind == "ivfpq") {
+    effective_search_width = std::max(1, std::min(effective_search_width, handle->nlist));
+    faiss::IndexIVF* ivf = dynamic_cast<faiss::IndexIVF*>(handle->index.get());
+    if (ivf == nullptr) {
+      Rcpp::stop("Stored FAISS IVF index pointer has an unexpected type");
+    }
+    ivf->nprobe = effective_search_width;
+  } else if (handle->kind == "nsg") {
+    effective_search_width = std::max(k, effective_search_width);
+    faiss::IndexNSGFlat* nsg = dynamic_cast<faiss::IndexNSGFlat*>(handle->index.get());
+    if (nsg == nullptr) {
+      Rcpp::stop("Stored FAISS NSG index pointer has an unexpected type");
+    }
+    nsg->nsg.search_L = effective_search_width;
+  } else if (handle->kind == "nndescent") {
+    effective_search_width = std::max(k, effective_search_width);
+    faiss::IndexNNDescentFlat* nnd = dynamic_cast<faiss::IndexNNDescentFlat*>(handle->index.get());
+    if (nnd == nullptr) {
+      Rcpp::stop("Stored FAISS NNDescent index pointer has an unexpected type");
+    }
+    nnd->nndescent.search_L = effective_search_width;
+  }
+
+  MatrixViewF32 xq = make_float32_matrix_view(points, "points");
+  if (xq.ncol != handle->p) {
+    Rcpp::stop("points must have the same number of columns as the fitted FAISS index");
+  }
+  const int n_points = xq.nrow;
+  const bool self_query = exclude_self;
+  const int search_k = exclude_self ? std::min(handle->n, k + 1) : k;
+  std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
+  std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
+
+  try {
+    OmpThreadScope threads(n_threads);
+    handle->index->search(n_points, xq.data, search_k, distances.data(), labels.data());
+  } catch (const std::exception& e) {
+    Rcpp::stop("FAISS fitted-index search failed: %s", e.what());
+  }
+
+  const int out_nlist = (handle->kind == "ivf" || handle->kind == "ivfpq") ?
+    handle->nlist : NA_INTEGER;
+  const int out_nprobe = (handle->kind == "ivf" || handle->kind == "ivfpq") ?
+    effective_search_width : NA_INTEGER;
+  const int out_graph_degree = (handle->kind == "nsg" || handle->kind == "nndescent") ?
+    handle->graph_degree : NA_INTEGER;
+  const int out_search_width = (handle->kind == "nsg" || handle->kind == "nndescent") ?
+    effective_search_width : NA_INTEGER;
+
+  List out = format_faiss_result(
+    labels,
+    distances,
+    n_points,
+    search_k,
+    k,
+    self_query,
+    exclude_self,
+    handle->index_type,
+    false,
+    handle->distance_output,
+    n_threads,
+    out_nlist,
+    out_nprobe,
+    out_graph_degree,
+    out_search_width,
+    wants_float_distances
+  );
+  out["index_reused"] = true;
+  out["index_n"] = handle->n;
+  out["index_p"] = handle->p;
+  out["index_trained"] = handle->index->is_trained;
+  out["index_training_reused"] = handle->index->is_trained;
+  out["build_train_call_count"] = handle->build_train_call_count;
+  out["search_train_call_count"] = 0;
+  out["vectors_reused"] = true;
+  out["query_n"] = n_points;
+  out["batch_query"] = true;
+  out["query_call_count"] = 1;
+  out["input_type"] = "float32";
+  out["input_layout"] = handle->input_layout + ";fitted_index_query:" + xq.layout;
+  out["input_owns_data"] = xq.owns_data;
+  out["index_input_owns_data"] = handle->input_owns_data;
+  out["float32_compatibility_conversion"] = xq.compatibility_conversion;
+  out["kind"] = handle->kind;
+
+  if (handle->kind == "ivf" || handle->kind == "ivfpq") {
+    out["nlist"] = handle->nlist;
+    out["nprobe"] = effective_search_width;
+    out["build_nprobe"] = handle->nprobe;
+    out["search_nprobe"] = effective_search_width;
+    out["requested_nlist"] = handle->requested_nlist;
+    out["requested_nprobe"] = handle->requested_nprobe;
+    out["centroids_reused"] = handle->centroids_trained;
+    out["inverted_lists_reused"] = handle->inverted_lists_built;
+    out["ivf_parameters_adjusted"] = handle->requested_nlist != handle->nlist ||
+      handle->requested_nprobe != effective_search_width;
+  }
+  if (handle->kind == "ivfpq") {
+    out["pq_m"] = handle->pq_m;
+    out["pq_nbits"] = handle->pq_nbits;
+    out["requested_pq_m"] = handle->requested_pq_m;
+    out["requested_pq_nbits"] = handle->requested_pq_nbits;
+    out["pq_codebooks_reused"] = handle->pq_codebooks_trained;
+    out["pq_codes_reused"] = handle->pq_codes_built;
+    out["pq_training_reused"] = handle->pq_codebooks_trained;
+    out["build_pq_train_call_count"] = handle->build_pq_train_call_count;
+    out["search_pq_train_call_count"] = 0;
+    out["pq_parameters_adjusted"] = handle->requested_pq_m != handle->pq_m ||
+      handle->requested_pq_nbits != handle->pq_nbits;
+  }
+  if (handle->kind == "nsg") {
+    out["r"] = handle->graph_degree;
+    out["search_l"] = effective_search_width;
+    out["build_type"] = handle->build_type;
+    out["gk"] = handle->gk;
+    out["requested_r"] = handle->requested_graph_degree;
+    out["requested_search_l"] = handle->requested_search_width;
+    out["requested_build_type"] = handle->requested_build_type;
+    out["nsg_parameters_adjusted"] = handle->requested_graph_degree != handle->graph_degree ||
+      handle->requested_search_width != effective_search_width ||
+      handle->requested_build_type != handle->build_type;
+  }
+  if (handle->kind == "nndescent") {
+    out["graph_k"] = handle->graph_degree;
+    out["n_iter"] = handle->n_iter;
+    out["search_l"] = effective_search_width;
+    out["requested_graph_k"] = handle->requested_graph_degree;
+    out["requested_n_iter"] = handle->requested_n_iter;
+    out["requested_search_l"] = handle->requested_search_width;
+    out["nndescent_parameters_adjusted"] = handle->requested_graph_degree != handle->graph_degree ||
+      handle->requested_n_iter != handle->n_iter ||
+      handle->requested_search_width != effective_search_width;
+  }
   return out;
 }
 
@@ -1609,7 +2746,7 @@ List faiss_gpu_ivf_flat_knn_impl(NumericMatrix data,
     Rcpp::stop("FAISS GPU IVF Flat supports metric = 'euclidean' or 'inner_product'");
   }
   const DistanceOutput output = parse_distance_output(distance_output, "GPU IVF Flat");
-  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
   faiss::gpu::GpuIndexIVFFlatConfig config;
   config.device = 0;
   faiss::gpu::GpuIndexIVFFlat index(
@@ -1664,7 +2801,7 @@ List faiss_gpu_ivf_flat_float32_knn_impl(SEXP data,
     Rcpp::stop("FAISS GPU IVF Flat float32 supports metric = 'euclidean' or 'inner_product'");
   }
   const DistanceOutput output = parse_distance_output(distance_output, "GPU IVF Flat");
-  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
   faiss::gpu::GpuIndexIVFFlatConfig config;
   config.device = 0;
   faiss::gpu::GpuIndexIVFFlat index(
@@ -1737,7 +2874,7 @@ List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
   while (pq_m > 1 && ((n_features % pq_m) != 0 || !faiss_gpu_supported_pq_code_size(pq_m))) {
     --pq_m;
   }
-  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
   faiss::gpu::GpuIndexIVFPQConfig config;
   config.device = 0;
   // Full-precision lookup tables are safer for raw, unscaled benchmark data.
@@ -1822,7 +2959,7 @@ List faiss_gpu_ivfpq_float32_knn_impl(SEXP data,
   while (pq_m > 1 && ((n_features % pq_m) != 0 || !faiss_gpu_supported_pq_code_size(pq_m))) {
     --pq_m;
   }
-  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
   faiss::gpu::GpuIndexIVFPQConfig config;
   config.device = 0;
   config.useFloat16LookupTables = false;
@@ -1908,7 +3045,7 @@ List faiss_gpu_cagra_knn_impl(NumericMatrix data,
   }
   const float* query_ptr = same_storage ? xb.data() : xq.data();
 
-  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
   faiss::gpu::GpuIndexCagraConfig config;
   config.device = 0;
   config.graph_degree = static_cast<std::size_t>(graph_degree);
@@ -1954,6 +3091,9 @@ List faiss_gpu_cagra_knn_impl(NumericMatrix data,
   out["cagra_parameters_adjusted"] = requested_graph_degree != graph_degree ||
     requested_intermediate_graph_degree != intermediate_graph_degree ||
     requested_search_width != search_width || requested_itopk_size != itopk_size;
+  annotate_faiss_gpu_residency(
+    out, same_storage, n_data, n_points, n_features, search_k
+  );
   return out;
 #else
   (void)data;
@@ -2022,7 +3162,7 @@ List faiss_gpu_cagra_float32_knn_impl(SEXP data,
     Rcpp::stop("`distance_storage` must be \"double\" or \"float\"");
   }
 
-  faiss::gpu::StandardGpuResources resources;
+  faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
   faiss::gpu::GpuIndexCagraConfig config;
   config.device = 0;
   config.graph_degree = static_cast<std::size_t>(graph_degree);
@@ -2069,6 +3209,9 @@ List faiss_gpu_cagra_float32_knn_impl(SEXP data,
   out["cagra_parameters_adjusted"] = requested_graph_degree != graph_degree ||
     requested_intermediate_graph_degree != intermediate_graph_degree ||
     requested_search_width != search_width || requested_itopk_size != itopk_size;
+  annotate_faiss_gpu_residency(
+    out, same_storage, n_data, n_points, n_features, search_k
+  );
   out["input_type"] = "float32";
   out["input_layout"] = same_storage ?
     xb.layout :
@@ -2076,7 +3219,9 @@ List faiss_gpu_cagra_float32_knn_impl(SEXP data,
   out["input_owns_data"] = same_storage ?
     xb.owns_data :
     (xb.owns_data || xq.owns_data);
-  out["float32_compatibility_conversion"] = false;
+  out["float32_compatibility_conversion"] = same_storage ?
+    xb.compatibility_conversion :
+    (xb.compatibility_conversion || xq.compatibility_conversion);
   return out;
 #else
   (void)data;
@@ -2237,7 +3382,7 @@ List faiss_gpu_kmeans_impl(NumericMatrix data,
   }
 
   try {
-    faiss::gpu::StandardGpuResources resources;
+    faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
     faiss::gpu::GpuIndexFlatConfig config;
     config.device = 0;
 

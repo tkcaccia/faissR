@@ -12,7 +12,7 @@ graph_cluster(
   k = 50L,
   graph_backend = "auto",
   graph_method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf",
-    "ivfpq", "vamana", "nsg", "nndescent", "usearch", "cagra"),
+    "ivfpq", "vamana", "nsg", "nndescent", "scann", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   target_recall = 0.99,
@@ -44,13 +44,13 @@ libcugraph was detected at build time; random-walking is CPU-only. The
 \code{graph_cluster_auto_backend_cpp()} selector and recorded in
 \code{parameters$backend_selection}.}
 \item{k}{Number of neighbours when \code{graph} is not already a KNN object.}
-\item{graph_backend}{Backend passed to \code{nn_without_self()} for neighbour search.}
-\item{graph_method}{Nearest-neighbour method passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding. \code{"usearch"} selects the CPU-only USEARCH dense HNSW route for Euclidean/L2 graph construction.}
-\item{metric}{Distance metric passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding. Aliases such as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as canonical metric labels. Correlation is centered cosine similarity, not raw inner product. Inner-product graph construction ranks neighbours by larger raw dot product while reusing faissR's shifted smaller-is-better distance convention from \code{nn()}.}
-\item{tuning}{Tuning policy passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding.}
-\item{target_recall}{HNSW speed/recall tier passed to \code{nn_without_self()} when \code{graph} is a matrix or embedding. Use \code{0.9}, \code{0.95}, or \code{0.99}.}
-\item{cagra_implementation}{CUDA CAGRA provider passed to \code{nn_without_self()} when graph KNN is computed here. \code{NULL} uses the global option; \code{"auto"}, \code{"faiss_gpu"}, or \code{"cuvs"} select the CAGRA provider for CUDA \code{graph_method = "cagra"} and CUDA-auto CAGRA routes.}
-\item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm passed to \code{nn_without_self()} when graph KNN is computed here. \code{NULL} uses the global \code{faissR.cuvs_cagra_build_algo} option. This is a CAGRA construction parameter, not a fallback to a different public NN method.}
+\item{graph_backend}{Backend passed to \code{nn(..., exclude_self = TRUE)} for neighbour search.}
+\item{graph_method}{Nearest-neighbour method passed to \code{nn(..., exclude_self = TRUE)} when \code{graph} is a matrix or embedding.}
+\item{metric}{Distance metric passed to \code{nn(..., exclude_self = TRUE)} when \code{graph} is a matrix or embedding. Aliases such as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as canonical metric labels. Correlation is centered cosine similarity, not raw inner product. Inner-product graph construction ranks neighbours by larger raw dot product while reusing faissR's shifted smaller-is-better distance convention from \code{nn()}.}
+\item{tuning}{Tuning policy passed to \code{nn(..., exclude_self = TRUE)} when \code{graph} is a matrix or embedding.}
+\item{target_recall}{HNSW speed/recall tier passed to \code{nn(..., exclude_self = TRUE)} when \code{graph} is a matrix or embedding. Use \code{0.9}, \code{0.95}, or \code{0.99}.}
+\item{cagra_implementation}{CUDA CAGRA provider passed to \code{nn(..., exclude_self = TRUE)} when graph KNN is computed here. \code{NULL} uses the global option; \code{"auto"}, \code{"faiss_gpu"}, or \code{"cuvs"} select the CAGRA provider for CUDA \code{graph_method = "cagra"} and CUDA-auto CAGRA routes.}
+\item{cagra_build_algo}{Direct RAPIDS cuVS CAGRA graph-build algorithm passed to \code{nn(..., exclude_self = TRUE)} when graph KNN is computed here. \code{NULL} uses the global \code{faissR.cuvs_cagra_build_algo} option. This is a CAGRA construction parameter, not a fallback to a different public NN method.}
 \item{weight}{KNN graph weighting used when a graph must be built.}
 \item{mutual}{If \code{TRUE}, keep only reciprocal nearest-neighbour edges when a graph must be built from data or a KNN object.}
 \item{prune}{Drop graph edges with weight less than or equal to this value when a graph must be built from data or a KNN object.}

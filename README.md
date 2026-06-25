@@ -30,20 +30,30 @@ headers and libraries discovered by `configure`.
 ## Main Features
 
 - `nn()` for native CPU references, FAISS CPU indexes, FAISS GPU indexes, and
-  optional direct RAPIDS cuVS/CUDA indexes [1-6,13-16,22-23].
-- `method = "usearch"` for a CPU-only Euclidean/L2 dense HNSW route compiled
-  from bundled header-only USEARCH source; no separate USEARCH runtime library
-  is required [5,34].
-- Optional float32 KNN data flow: `nn()` and `nn_without_self()` accept
+  optional direct RAPIDS cuVS/CUDA indexes, including a ScaNN-inspired
+  `method = "scann"` route through FAISS FastScan on CPU and cuVS 4-bit IVF-PQ
+  on CUDA [1-6,13-16,22-23,34].
+- Optional float32 KNN data flow: `nn()` accepts
   `float::fl()` matrices. FAISS CPU/GPU and RAPIDS cuVS NN routes consume
   float32 input through direct C++ adapters, and unsupported native routes now
   fail clearly instead of silently converting benchmark input back to R double.
   `output = "float"` returns float32 distance matrices when the optional
   `float` package is installed. The float32 FAISS routes construct returned
   float distances directly instead of materializing an intermediate R double
-  matrix. A versioned C-callable entry point is also registered so downstream
-  C++ packages can request the same float32 KNN result format without routing
-  through the R wrappers.
+  matrix for CPU FAISS Flat/IVF/IVFPQ/FastScan, cached CPU FAISS fitted
+  indexes, FAISS GPU Flat/IVF/IVFPQ, and direct Euclidean RAPIDS cuVS routes.
+  Cosine and correlation transforms are cached as row-major float32 buffers
+  inside the R session, so repeated FAISS/cuVS normalized searches can
+  reuse the transformed data instead of normalizing on every call. A versioned
+  C-callable entry point is also registered so downstream C++ packages can
+  request the same float32 KNN result format without routing through the R
+  wrappers.
+- Raw `nn()` calls reuse a bounded session-local CPU
+  FAISS fitted-index cache for matching Flat, HNSW, IVF, and IVFPQ requests.
+  This avoids rebuilding FAISS indexes across repeated calls; result metadata
+  reports `persistent_index_cache` and `index_cache_hit`. Use
+  `options(faissR.cache_fitted_nn_indexes = FALSE)` to disable the cache or
+  `faissR.cache_fitted_nn_indexes_max_entries` to bound memory.
 - `candidate_knn()` for exact top-k ranking inside supplied candidate rows.
 - `knn_graph()` for native weighted KNN graph construction without requiring
   `igraph`.
@@ -57,8 +67,23 @@ headers and libraries discovered by `configure`.
   when `tuning = "auto"`, including no-pilot multistart tiers for cheap
   many-cluster jobs.
 - `knn()` and `predict()` for kNN classification/regression, including
-  immediate prediction with `knn(Xtrain, Ytrain, Xtest)` and class
-  probabilities with `predict(type = "prob")`.
+  immediate prediction with `knn(Xtrain, Ytrain, Xtest)`, class probabilities
+  with `predict(type = "prob")`, and preserved `float::fl()`/`float32`
+  training/query matrices for NN methods with direct float32 adapters. Explicit
+  CPU FAISS Flat, HNSW, IVF, and IVFPQ models cache a session-local fitted
+  index for matching `predict()` calls, so repeated predictions can reuse the
+  indexed float32 vectors instead of rebuilding the FAISS index. IVF and IVFPQ
+  predictions reuse trained centroids and inverted lists; IVFPQ additionally
+  reuses trained product-quantizer codebooks and compressed codes. Prediction
+  can adjust search-time `nprobe` for a requested `k` without retraining and
+  sends the full `Xtest`/`newdata` matrix to the resolved NN backend in one
+  batched search call, recording `batch_query`, `query_n`, and
+  `query_call_count` in
+  prediction metadata.
+- CUDA FAISS/cuVS NN results record `attr(result, "gpu_residency")`, including
+  the GPU provider, transient versus persistent index residency, host/device
+  transfer strategy, whether a self-query reused the dataset device buffer, and
+  whether any CPU fallback or CPU-side result repair occurred.
 - `backend_info()`, `faiss_available()`, `faiss_gpu_available()`,
   `cuda_available()`, `cuvs_available()`, and `cugraph_available()` to report
   compiled/runtime backend support.
@@ -71,9 +96,12 @@ instead of silently running CPU code and labelling it as GPU.
 
 For public nearest-neighbour APIs, `backend` selects the device family:
 `"auto"`, `"cpu"`, or `"cuda"`. The `method` argument selects the algorithm,
-for example `method = "grid"` or `method = "cagra"`. Thus
+for example `method = "grid"`, `method = "scann"`, or `method = "cagra"`. Thus
 `nn(x, backend = "cuda", method = "grid")` uses the CUDA grid route, while
 `nn(x, backend = "cpu", method = "cagra")` stops because CAGRA is CUDA-only.
+`method = "scann"` is Euclidean-only and resolves to FAISS FastScan on CPU or
+direct cuVS 4-bit IVF-PQ on CUDA, with no silent CPU fallback for explicit CUDA
+requests.
 With the default `method = "auto"`, faissR chooses the most appropriate method
 for the selected backend. With `tuning = "auto"`, approximate methods use
 deterministic defaults identified for the resolved method; pilot/cache tuning is
@@ -93,7 +121,8 @@ correlation routes, all-zero cosine rows and constant correlation rows are
 handled explicitly: two zero-normalized rows have distance `0`, while a
 zero-normalized row versus a nonzero row has distance `1`. CPU FAISS Flat uses
 the exact CPU scorer for this degenerate case to preserve deterministic
-small-`k` tie handling; explicit CUDA routes remain on CUDA.
+small-`k` tie handling; explicit CUDA routes do not perform CPU repair and
+therefore error clearly for these degenerate normalized rows.
 The [NN methods guide](docs/nn-methods.md) describes each nearest-neighbour
 method and cites the relevant algorithm/software references.
 
@@ -139,11 +168,13 @@ See [Installation](docs/installation.md) for CRAN/source-build details.
   `GpuIndexIVFPQ_cuVS`, and `GpuIndexCagra_cuVS`.
 - Direct RAPIDS cuVS calls, exposed through explicit backends such as
   `cuda_cuvs_cagra`, `cuda_cuvs_hnsw`, `cuda_cuvs_nndescent`,
-  `cuda_cuvs_bruteforce`, `cuda_cuvs_ivf_flat`, and `cuda_cuvs_ivfpq`.
-  The HNSW route uses RAPIDS cuVS HNSW conversion from a CUDA-built CAGRA
-  index, supports `target_recall = 0.9`, `0.95`, or `0.99` speed/recall
-  tiers, and is documented as a cuVS wrapper route, not vendored CUDA code
-  [3,22-23].
+  `cuda_cuvs_bruteforce`, `cuda_cuvs_ivf_flat`, `cuda_cuvs_ivfpq`, and
+  `cuda_cuvs_scann`.
+  The HNSW route builds a CUDA CAGRA seed graph and converts it with
+  `cuvsHnswFromCagraWithDataset`, supports `target_recall = 0.9`, `0.95`, or `0.99`
+  speed/recall tiers, and records `cuda_hnsw_design =
+  "cuvs_hnsw_from_cagra_cpu_hierarchy"` because this is a cuVS wrapper route,
+  not vendored CUDA code or a pure all-GPU HNSW implementation [3,22-23].
 
 Use `backend_info()` and the attributes returned by `nn()` to confirm which
 route and parameters a result used.
@@ -169,6 +200,4 @@ cl$selected_resolution
 
 `faissR` is released under the MIT license. External libraries such as FAISS,
 RAPIDS cuVS, and RAPIDS cuGraph are linked as system dependencies and are not
-vendored into the R package [1-3,12-16]. The optional `method = "usearch"`
-CPU route is compiled from bundled header-only USEARCH source, which remains
-under its upstream Apache-2.0 license [34].
+vendored into the R package [1-3,12-16].
