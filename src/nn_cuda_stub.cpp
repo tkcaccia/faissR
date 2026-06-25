@@ -28,14 +28,6 @@ List cuda_nn_float32_impl(SEXP,
   Rcpp::stop("CUDA GPU backend is available only when the package is built with CUDA support.");
 }
 
-List cuda_landmark_candidate_knn_impl(NumericMatrix,
-                                      IntegerMatrix,
-                                      int,
-                                      int,
-                                      int) {
-  Rcpp::stop("CUDA landmark candidate KNN is available only when the package is built with CUDA support.");
-}
-
 List cuda_row_candidate_knn_impl(NumericMatrix,
                                  IntegerMatrix,
                                  int,

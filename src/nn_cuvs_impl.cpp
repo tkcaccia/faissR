@@ -48,10 +48,32 @@ namespace {
 void cuvs_check(const cuvsError_t status, const char* context) {
   if (status == CUVS_SUCCESS) return;
   const char* detail = cuvsGetLastErrorText();
+  std::string message(context);
+  message += " failed";
   if (detail != nullptr && detail[0] != '\0') {
-    Rcpp::stop("%s failed: %s", context, detail);
+    message += ": ";
+    message += detail;
+  } else {
+    message += ".";
   }
-  Rcpp::stop("%s failed.", context);
+  std::string lower = message;
+  std::transform(lower.begin(), lower.end(), lower.begin(),
+                 [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+  if (std::string(context) == "cuvsNNDescentBuild" &&
+      lower.find("invalid") != std::string::npos &&
+      (lower.find("cudaerrorinvalidvalue") != std::string::npos ||
+       lower.find("invalid argument") != std::string::npos)) {
+    message +=
+      "\n\nfaissR note: this matches a known RAPIDS cuVS NN-descent "
+      "launch failure seen on high-dimensional FP32 L2 inputs. The cuVS "
+      "L2-norm kernel can require more than CUDA's default dynamic shared "
+      "memory per block and must opt in with "
+      "cudaFuncSetAttribute(cudaFuncAttributeMaxDynamicSharedMemorySize). "
+      "Update cuVS to a patched release or rebuild cuVS with that fix. "
+      "faissR does not silently fall back to CPU or another algorithm for "
+      "an explicit CUDA/cuVS NN-descent request.";
+  }
+  Rcpp::stop("%s", message.c_str());
 }
 
 void cuda_check(const cudaError_t status, const char* context) {
@@ -122,6 +144,14 @@ struct MatrixViewF32 {
   std::string layout = "unknown";
   std::vector<float> buffer;
 };
+
+std::size_t nndescent_l2_norm_shared_bytes(const int n_features,
+                                           const std::size_t element_size) {
+  if (n_features <= 0) return 0;
+  const std::size_t rounded =
+    ((static_cast<std::size_t>(n_features) + 31u) / 32u) * 32u;
+  return rounded * element_size;
+}
 
 Rcpp::IntegerVector matrix_dims_from_object(SEXP x, const char* name) {
   SEXP dim = Rf_getAttrib(x, R_DimSymbol);
@@ -3045,6 +3075,12 @@ List cuvs_nndescent_self_knn_impl(NumericMatrix data,
   out["graph_degree"] = graph_degree;
   out["intermediate_graph_degree"] = intermediate_graph_degree;
   out["max_iterations"] = max_iterations;
+  out["cuvs_nndescent_input_dtype"] = "float32";
+  out["cuvs_nndescent_shared_memory_workaround"] = false;
+  out["cuvs_nndescent_l2_norm_shared_bytes_fp32"] =
+    static_cast<double>(nndescent_l2_norm_shared_bytes(n_features, sizeof(float)));
+  out["cuvs_nndescent_l2_norm_shared_bytes_used"] =
+    static_cast<double>(nndescent_l2_norm_shared_bytes(n_features, sizeof(float)));
   return out;
 }
 
@@ -3140,6 +3176,12 @@ List cuvs_nndescent_self_float32_knn_impl(SEXP data,
   out["graph_degree"] = graph_degree;
   out["intermediate_graph_degree"] = intermediate_graph_degree;
   out["max_iterations"] = max_iterations;
+  out["cuvs_nndescent_input_dtype"] = "float32";
+  out["cuvs_nndescent_shared_memory_workaround"] = false;
+  out["cuvs_nndescent_l2_norm_shared_bytes_fp32"] =
+    static_cast<double>(nndescent_l2_norm_shared_bytes(n_features, sizeof(float)));
+  out["cuvs_nndescent_l2_norm_shared_bytes_used"] =
+    static_cast<double>(nndescent_l2_norm_shared_bytes(n_features, sizeof(float)));
   MatrixViewF32 empty_points;
   annotate_float32_input(out, xb, empty_points, true);
   annotate_cuvs_gpu_residency(

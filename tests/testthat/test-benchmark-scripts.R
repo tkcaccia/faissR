@@ -1674,18 +1674,18 @@ test_that("legacy Benchmark #1 records faissR runtime capability preflight", {
   expect_equal(cpu_nnd_ip$public_resolved_backend, "cpu_nndescent")
   expect_true(isTRUE(cpu_nnd_ip$runtime_available))
 
-  cuda_native_nnd_ip <- caps[
-    caps$method == "faissR_cuda_native_nndescent" & caps$metric == "inner_product",
+  cuda_cuvs_nnd_ip <- caps[
+    caps$method == "faissR_cuda_cuvs_nndescent" & caps$metric == "inner_product",
     ,
     drop = FALSE
   ]
-  expect_equal(cuda_native_nnd_ip$execution_backend, "cuda_native_nndescent")
-  expect_equal(cuda_native_nnd_ip$public_backend, "cuda")
-  expect_equal(cuda_native_nnd_ip$public_method, "nndescent")
-  expect_equal(cuda_native_nnd_ip$public_metric, "inner_product")
-  expect_true(isTRUE(cuda_native_nnd_ip$metric_supported))
-  expect_true(isTRUE(cuda_native_nnd_ip$public_supported))
-  expect_equal(cuda_native_nnd_ip$public_resolved_backend, "cuda_native_nndescent")
+  expect_equal(cuda_cuvs_nnd_ip$execution_backend, "cuda_cuvs_nndescent")
+  expect_equal(cuda_cuvs_nnd_ip$public_backend, "cuda")
+  expect_equal(cuda_cuvs_nnd_ip$public_method, "nndescent")
+  expect_equal(cuda_cuvs_nnd_ip$public_metric, "inner_product")
+  expect_false(isTRUE(cuda_cuvs_nnd_ip$metric_supported))
+  expect_false(isTRUE(cuda_cuvs_nnd_ip$public_supported))
+  expect_true(is.na(cuda_cuvs_nnd_ip$public_resolved_backend))
 
   direct_cuvs_ivf_ip <- caps[
     caps$method == "faissR_cuda_cuvs_ivf_flat" & caps$metric == "inner_product",
@@ -1847,9 +1847,6 @@ test_that("legacy Benchmark #1 exposes faissR NNDescent metric support", {
     expect_true(isTRUE(env$method_metric_applicable(method, "correlation")$ok))
   }
   expect_true(isTRUE(env$method_metric_applicable("faissR_cpu_nndescent", "inner_product")$ok))
-  expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_native_nndescent", "inner_product")$ok))
-  expect_false(isTRUE(env$method_metric_applicable("faissR_cuda_native_nndescent", "l2")$ok))
-  expect_false(isTRUE(env$method_metric_applicable("faissR_cuda_native_nndescent", "cosine")$ok))
   expect_false(isTRUE(env$method_metric_applicable("faissR_cuda_cuvs_nndescent", "inner_product")$ok))
   for (metric in c("l2", "cosine", "correlation", "inner_product")) {
     expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_nsg", metric)$ok), info = metric)
@@ -1875,12 +1872,12 @@ test_that("legacy Benchmark #1 exposes faissR NNDescent metric support", {
   expect_equal(cuda_nsg$public_backend, "cuda")
   expect_equal(cuda_nsg$public_method, "nsg")
   expect_equal(cuda_nsg$backend_detail, "Native CUDA NSG candidate graph")
-  cuda_native_nnd <- methods[methods$method == "faissR_cuda_native_nndescent", , drop = FALSE]
-  expect_equal(nrow(cuda_native_nnd), 1L)
-  expect_equal(cuda_native_nnd$execution_backend, "cuda_native_nndescent")
-  expect_equal(cuda_native_nnd$public_backend, "cuda")
-  expect_equal(cuda_native_nnd$public_method, "nndescent")
-  expect_equal(cuda_native_nnd$backend_detail, "Native CUDA NN-descent candidate refinement")
+  cuda_cuvs_nnd <- methods[methods$method == "faissR_cuda_cuvs_nndescent", , drop = FALSE]
+  expect_equal(nrow(cuda_cuvs_nnd), 1L)
+  expect_equal(cuda_cuvs_nnd$execution_backend, "cuda_cuvs_nndescent")
+  expect_equal(cuda_cuvs_nnd$public_backend, "cuda")
+  expect_equal(cuda_cuvs_nnd$public_method, "nndescent")
+  expect_equal(cuda_cuvs_nnd$backend_detail, "Direct RAPIDS cuVS")
 })
 
 test_that("legacy Benchmark #1 best ranking is quality-aware before speed", {
@@ -3047,12 +3044,8 @@ test_that("graph benchmark preflights graph method and metric skips", {
 
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nndescent", metric = "inner_product", x = dense))
   cuda_nnd_ip_skip <- env$graph_build_expected_skip("cuda", graph_method = "nndescent", metric = "inner_product", x = dense)
-  if (isTRUE(cuda_available()) || isTRUE(cuvs_available())) {
-    expect_null(cuda_nnd_ip_skip)
-  } else {
-    expect_equal(cuda_nnd_ip_skip$reason, "missing_cuda")
-    expect_match(cuda_nnd_ip_skip$notes, "cuda_native_nndescent")
-  }
+  expect_equal(cuda_nnd_ip_skip$reason, "unsupported_combination")
+  expect_match(cuda_nnd_ip_skip$notes, "raw inner-product")
 
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(80 * 4), ncol = 4)))
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(120 * 4), ncol = 4)))

@@ -16,11 +16,6 @@ List cuda_nn_float32_impl(SEXP data,
                           SEXP points,
                           int k,
                           bool square);
-List cuda_landmark_candidate_knn_impl(NumericMatrix data,
-                                      IntegerMatrix projection_indices,
-                                      int k,
-                                      int bucket_cols,
-                                      int query_cols);
 List cuda_row_candidate_knn_impl(NumericMatrix data,
                                  IntegerMatrix candidate_indices,
                                  int k,
@@ -58,17 +53,6 @@ List nn_cuda_float32_cpp(SEXP data,
                          int k,
                          bool square) {
   return cuda_nn_float32_impl(data, points, k, square);
-}
-
-// [[Rcpp::export]]
-List landmark_candidate_knn_cuda_cpp(NumericMatrix data,
-                                     IntegerMatrix projection_indices,
-                                     int k,
-                                     int bucket_cols,
-                                     int query_cols) {
-  return cuda_landmark_candidate_knn_impl(
-    data, projection_indices, k, bucket_cols, query_cols
-  );
 }
 
 // [[Rcpp::export]]

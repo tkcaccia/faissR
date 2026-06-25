@@ -33,6 +33,18 @@ optionally, CUDA/RAPIDS libraries.
 GPU requests are explicit. If a GPU backend was not compiled or is unavailable
 at runtime, faissR errors instead of silently falling back to CPU.
 
+## Known cuVS NN-Descent Issue
+
+Direct RAPIDS cuVS NN-descent can fail on high-dimensional FP32 Euclidean/L2
+inputs in affected cuVS builds with `cudaErrorInvalidValue` from
+`cuvsNNDescentBuild`. The confirmed cause is a cuVS kernel launch that requires
+more than CUDA's default dynamic shared memory per block but does not opt in to
+the larger device-supported dynamic shared-memory limit. faissR reports this
+case with a specific diagnostic and does not vendor a patched cuVS library.
+Users who need direct cuVS NN-descent on such data should update to a patched
+cuVS release or rebuild cuVS with the upstream-style fix described in
+[the cuVS issue report](cuvs-nndescent-shared-memory-issue.md).
+
 ## R Package Install
 
 After the system libraries are installed:

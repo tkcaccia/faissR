@@ -237,10 +237,6 @@ nn_tune_vamana_cpp <- function(n, p, k, metric, r_option = NA_integer_, search_l
     .Call(`_faissR_nn_tune_vamana_cpp`, n, p, k, metric, r_option, search_l_option, alpha_option)
 }
 
-nn_tune_gpu_nndescent_cpp <- function(n, k, backend, graph_degree_option = NA_integer_, n_iters_option = NA_integer_, sources_option = NA_integer_, neighbors_option = NA_integer_, delta_option = NA_real_) {
-    .Call(`_faissR_nn_tune_gpu_nndescent_cpp`, n, k, backend, graph_degree_option, n_iters_option, sources_option, neighbors_option, delta_option)
-}
-
 kmeans_auto_params_cpp <- function(n, p, centers, tuning) {
     .Call(`_faissR_kmeans_auto_params_cpp`, n, p, centers, tuning)
 }
@@ -267,10 +263,6 @@ nn_cuda_cpp <- function(data, points, k, square) {
 
 nn_cuda_float32_cpp <- function(data, points, k, square) {
     .Call(`_faissR_nn_cuda_float32_cpp`, data, points, k, square)
-}
-
-landmark_candidate_knn_cuda_cpp <- function(data, projection_indices, k, bucket_cols, query_cols) {
-    .Call(`_faissR_landmark_candidate_knn_cuda_cpp`, data, projection_indices, k, bucket_cols, query_cols)
 }
 
 row_candidate_knn_cuda_cpp <- function(data, candidate_indices, k, metric) {
@@ -484,3 +476,4 @@ kmeans_faiss_cpp <- function(data, centers, max_iter, nredo, tol, seed, n_thread
 kmeans_faiss_gpu_cpp <- function(data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus) {
     .Call(`_faissR_kmeans_faiss_gpu_cpp`, data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus)
 }
+

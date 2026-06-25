@@ -31,5 +31,8 @@ backends [3,12-15].
   `nn()` method, including the `nn_capabilities()` method/backend/metric
   support table.
 - [Backends](backend-capabilities.md): supported CPU and CUDA paths.
+- [cuVS NN-descent issue report](cuvs-nndescent-shared-memory-issue.md):
+  copy-ready upstream report for the high-dimensional FP32 dynamic
+  shared-memory launch issue observed in cuVS NN-descent.
 - [References](references.md): references, software acknowledgements, and
   implementation inspirations.

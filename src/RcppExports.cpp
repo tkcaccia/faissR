@@ -955,24 +955,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// nn_tune_gpu_nndescent_cpp
-List nn_tune_gpu_nndescent_cpp(int n, int k, std::string backend, int graph_degree_option, int n_iters_option, int sources_option, int neighbors_option, double delta_option);
-RcppExport SEXP _faissR_nn_tune_gpu_nndescent_cpp(SEXP nSEXP, SEXP kSEXP, SEXP backendSEXP, SEXP graph_degree_optionSEXP, SEXP n_iters_optionSEXP, SEXP sources_optionSEXP, SEXP neighbors_optionSEXP, SEXP delta_optionSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< int >::type n(nSEXP);
-    Rcpp::traits::input_parameter< int >::type k(kSEXP);
-    Rcpp::traits::input_parameter< std::string >::type backend(backendSEXP);
-    Rcpp::traits::input_parameter< int >::type graph_degree_option(graph_degree_optionSEXP);
-    Rcpp::traits::input_parameter< int >::type n_iters_option(n_iters_optionSEXP);
-    Rcpp::traits::input_parameter< int >::type sources_option(sources_optionSEXP);
-    Rcpp::traits::input_parameter< int >::type neighbors_option(neighbors_optionSEXP);
-    Rcpp::traits::input_parameter< double >::type delta_option(delta_optionSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_tune_gpu_nndescent_cpp(n, k, backend, graph_degree_option, n_iters_option, sources_option, neighbors_option, delta_option));
-    return rcpp_result_gen;
-END_RCPP
-}
 // kmeans_auto_params_cpp
 List kmeans_auto_params_cpp(int n, int p, int centers, std::string tuning);
 RcppExport SEXP _faissR_kmeans_auto_params_cpp(SEXP nSEXP, SEXP pSEXP, SEXP centersSEXP, SEXP tuningSEXP) {
@@ -1076,21 +1058,6 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
     Rcpp::traits::input_parameter< bool >::type square(squareSEXP);
     rcpp_result_gen = Rcpp::wrap(nn_cuda_float32_cpp(data, points, k, square));
-    return rcpp_result_gen;
-END_RCPP
-}
-// landmark_candidate_knn_cuda_cpp
-List landmark_candidate_knn_cuda_cpp(NumericMatrix data, IntegerMatrix projection_indices, int k, int bucket_cols, int query_cols);
-RcppExport SEXP _faissR_landmark_candidate_knn_cuda_cpp(SEXP dataSEXP, SEXP projection_indicesSEXP, SEXP kSEXP, SEXP bucket_colsSEXP, SEXP query_colsSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
-    Rcpp::traits::input_parameter< IntegerMatrix >::type projection_indices(projection_indicesSEXP);
-    Rcpp::traits::input_parameter< int >::type k(kSEXP);
-    Rcpp::traits::input_parameter< int >::type bucket_cols(bucket_colsSEXP);
-    Rcpp::traits::input_parameter< int >::type query_cols(query_colsSEXP);
-    rcpp_result_gen = Rcpp::wrap(landmark_candidate_knn_cuda_cpp(data, projection_indices, k, bucket_cols, query_cols));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2069,7 +2036,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_tune_cuvs_nndescent_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_nndescent_cpp, 6},
     {"_faissR_nn_tune_native_nsg_cpp", (DL_FUNC) &_faissR_nn_tune_native_nsg_cpp, 7},
     {"_faissR_nn_tune_vamana_cpp", (DL_FUNC) &_faissR_nn_tune_vamana_cpp, 7},
-    {"_faissR_nn_tune_gpu_nndescent_cpp", (DL_FUNC) &_faissR_nn_tune_gpu_nndescent_cpp, 8},
     {"_faissR_kmeans_auto_params_cpp", (DL_FUNC) &_faissR_kmeans_auto_params_cpp, 4},
     {"_faissR_kmeans_auto_backend_policy_cpp", (DL_FUNC) &_faissR_kmeans_auto_backend_policy_cpp, 8},
     {"_faissR_kmeans_auto_select_backend_cpp", (DL_FUNC) &_faissR_kmeans_auto_select_backend_cpp, 16},
@@ -2077,7 +2043,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_cuda_device_info_json_cpp", (DL_FUNC) &_faissR_cuda_device_info_json_cpp, 0},
     {"_faissR_nn_cuda_cpp", (DL_FUNC) &_faissR_nn_cuda_cpp, 4},
     {"_faissR_nn_cuda_float32_cpp", (DL_FUNC) &_faissR_nn_cuda_float32_cpp, 4},
-    {"_faissR_landmark_candidate_knn_cuda_cpp", (DL_FUNC) &_faissR_landmark_candidate_knn_cuda_cpp, 5},
     {"_faissR_row_candidate_knn_cuda_cpp", (DL_FUNC) &_faissR_row_candidate_knn_cuda_cpp, 4},
     {"_faissR_row_candidate_knn_cuda_float32_cpp", (DL_FUNC) &_faissR_row_candidate_knn_cuda_float32_cpp, 4},
     {"_faissR_cuda_grid_self_knn_cpp", (DL_FUNC) &_faissR_cuda_grid_self_knn_cpp, 4},

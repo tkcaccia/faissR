@@ -51,7 +51,7 @@ backend_info <- function() {
       "euclidean, cosine, correlation, inner_product; method-specific exclusions in nn_capabilities()",
       "euclidean, cosine, correlation, inner_product for Flat/IVF/IVFPQ/HNSW; public NSG uses the native CPU route for all metrics, with deterministic FAISS HNSW seeding on large high-dimensional CPU inputs, while explicit FAISS NSG is Euclidean-only",
       "euclidean, cosine, correlation, inner_product for IVF/IVFPQ and CAGRA; CAGRA inner_product uses a maximum-inner-product-to-L2 transform",
-      "euclidean, cosine, correlation, inner_product for direct brute force, direct IVF/PQ, HNSW from CAGRA, and direct CAGRA using metric transforms where needed; euclidean plus normalized cosine/correlation for direct cuVS NN-descent; public CUDA NN-descent inner_product uses native CUDA candidate refinement",
+      "euclidean, cosine, correlation, inner_product for direct brute force, direct IVF/PQ, HNSW from CAGRA, and direct CAGRA using metric transforms where needed; euclidean plus normalized cosine/correlation for direct cuVS NN-descent; public CUDA NN-descent inner_product is unsupported",
       "euclidean, cosine, correlation, inner_product where the selected CUDA method supports the metric",
       "not metric-based; uses graph edge weights"
     ),
@@ -60,7 +60,7 @@ backend_info <- function() {
       "implementation labels include faiss_flat_l2, faiss_ivf, faiss_hnsw, faiss_scann, and faiss_gpu_*",
       "implementation labels include faiss_gpu_ivf_flat, faiss_gpu_ivfpq, and faiss_gpu_cagra",
       "implementation labels include cuda_cuvs_bruteforce, cuda_cuvs_hnsw, cuda_cuvs_nndescent, cuda_cuvs_scann, and cuda_cuvs_cagra",
-      "implementation labels include cuda_grid, cuda_cuvs_hnsw, cuda_vamana, cuda_nsg, and cuda_nndescent; exact CUDA may report cuda",
+      "implementation labels include cuda_grid, cuda_vamana, and cuda_nsg; exact CUDA may report cuda",
       "implementation route: graph_cluster(..., backend = \"cuda\")"
     ),
     device = c(

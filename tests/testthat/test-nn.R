@@ -980,7 +980,6 @@ test_that("resolved backend labels map to stable auto-selection method and devic
   expect_equal(faissR:::nn_resolved_backend_public_method("faiss_hnsw"), "hnsw")
   expect_equal(faissR:::nn_resolved_backend_public_method("faiss_flat_cosine"), "flat")
   expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_nndescent"), "nndescent")
-  expect_equal(faissR:::nn_resolved_backend_public_method("cuda_native_nndescent"), "nndescent")
   expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_hnsw"), "hnsw")
   expect_equal(faissR:::nn_resolved_backend_public_method("faiss_gpu_cagra"), "cagra")
   expect_equal(faissR:::nn_resolved_backend_public_method("faiss_scann"), "scann")
@@ -1100,7 +1099,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(caps$supported[
     caps$method == "nndescent" & caps$backend == "auto" & caps$metric == "inner_product"
   ])
-  expect_true(caps$supported[
+  expect_false(caps$supported[
     caps$method == "nndescent" & caps$backend == "cuda" & caps$metric == "inner_product"
   ])
   expect_false("removed_method" %in% caps$method)
@@ -1147,7 +1146,6 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_match(cuda_auto_cor$notes, "shape-dependent")
   expect_match(cuda_auto_ip$notes, "FAISS GPU Flat IP")
   expect_match(cuda_auto_ip$notes, "CAGRA")
-  expect_match(cuda_auto_ip$notes, "native CUDA candidate-refinement")
 })
 
 test_that("nn_capabilities agrees with public CPU/CUDA resolver support", {
@@ -1378,10 +1376,10 @@ test_that("cuda_auto runtime availability distinguishes cuVS and FAISS GPU metri
     cuvs_available_value = FALSE,
     faiss_gpu_available_value = FALSE
   )
-  expect_true(ip_native_cuda$available)
-  expect_equal(ip_native_cuda$reason, "available")
-  expect_match(ip_native_cuda$notes, "native CUDA")
-  expect_match(ip_native_cuda$notes, "candidate-refinement")
+  expect_false(ip_native_cuda$available)
+  expect_equal(ip_native_cuda$reason, "missing_cuda_route")
+  expect_match(ip_native_cuda$notes, "FAISS GPU Flat IP")
+  expect_match(ip_native_cuda$notes, "cuVS CAGRA")
 
   ip_faiss_gpu <- faissR:::nn_cuda_auto_runtime_available(
     "inner_product",
@@ -1457,7 +1455,7 @@ test_that("backend auto explicit methods require metric-capable CUDA routes befo
       cuvs_available_value = TRUE,
       faiss_gpu_available_value = TRUE
     ),
-    "cuda"
+    "cpu"
   )
   expect_equal(
     faissR:::resolve_auto_public_nn_device(
@@ -2810,9 +2808,9 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "nndescent", "correlation"),
     "cuda_cuvs_nndescent"
   )
-  expect_equal(
+  expect_error(
     faissR:::resolve_public_nn_backend("cuda", "nndescent", "inner_product"),
-    "cuda_native_nndescent"
+    "does not support"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "hnsw", "euclidean"),
@@ -3559,9 +3557,9 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   expect_equal(vamana$tuning_rule, "high_recall_vamana")
   expect_equal(vamana$seed_backend, "faiss_hnsw")
 
-  gpu_nnd <- faissR:::gpu_nndescent_params(50L, backend = "cuda", n = 70000L)
+  gpu_nnd <- faissR:::cuvs_nndescent_params(70000L, 50L)
   expect_equal(gpu_nnd$tuning_source, "cpp")
-  expect_equal(gpu_nnd$tuning_rule, "large_graph_adaptive")
+  expect_equal(gpu_nnd$tuning_rule, "balanced_graph_search")
 
   cpu_nnd <- faissR:::nn_tune_cpu_nndescent_cpp(70000L, 50L)
   expect_equal(cpu_nnd$tuning_source, "cpp")
@@ -4268,59 +4266,6 @@ test_that("FAISS GPU backends are explicit and do not fall back to CPU", {
   }
 })
 
-test_that("GPU approximate KNN helpers require explicit backend requests", {
-  expect_false(faissR:::should_use_gpu_approx_self_knn(
-    backend = "auto",
-    self_query = TRUE,
-    n = 100000L,
-    p = 20L,
-    k = 30L,
-    exclude_self = FALSE,
-    work_size = 1e9
-  ))
-  expect_true(faissR:::should_use_gpu_approx_self_knn(
-    backend = "cuda_approx",
-    self_query = TRUE,
-    n = 1000L,
-    p = 20L,
-    k = 30L,
-    exclude_self = FALSE,
-    work_size = 1e6
-  ))
-  expect_false(faissR:::should_use_gpu_approx_self_knn(
-    backend = "cuda_approx",
-    self_query = FALSE,
-    n = 100000L,
-    p = 20L,
-    k = 30L,
-    exclude_self = FALSE,
-    work_size = 1e9
-  ))
-  params <- faissR:::gpu_approx_params(50000L, 30L)
-  expect_gte(params$anchors, 128L)
-  expect_gte(params$projection_k, 12L)
-  expect_gte(params$query_cols, params$bucket_cols)
-  expect_error(
-    faissR:::gpu_approx_self_knn(
-      matrix(rnorm(50), ncol = 5),
-      k = 2L,
-      backend = "cuda",
-      metric = "cosine"
-    ),
-    "supports only"
-  )
-  trivial <- faissR:::gpu_approx_self_knn(
-    matrix(rnorm(50), ncol = 5),
-    k = 1L,
-    backend = "cuda",
-    exclude_self = FALSE,
-    metric = "euclidean"
-  )
-  expect_equal(trivial$metric, "euclidean")
-  expect_equal(attr(trivial, "metric"), "euclidean")
-  expect_equal(trivial$backend_used, "cuda_approx")
-})
-
 test_that("approximate KNN recall metadata is attached against exact subset", {
   set.seed(131)
   x <- matrix(rnorm(80L * 5L), nrow = 80L)
@@ -4489,7 +4434,7 @@ test_that("backend_info reports native availability without crashing", {
   expect_match(info$supported_metrics[info$backend == "faiss_gpu_cuvs"], "CAGRA inner_product uses")
   expect_match(info$supported_metrics[info$backend == "cuvs"], "direct brute force, direct IVF/PQ")
   expect_match(info$supported_metrics[info$backend == "cuvs"], "direct CAGRA")
-  expect_match(info$supported_metrics[info$backend == "cuvs"], "public CUDA NN-descent inner_product uses native CUDA")
+  expect_match(info$supported_metrics[info$backend == "cuvs"], "public CUDA NN-descent inner_product is unsupported")
 
   cuda_info <- faissR:::cuda_device_info_json_cpp()
   expect_type(cuda_info, "character")
@@ -4911,6 +4856,4 @@ test_that("cuVS backend reports unavailable runtime clearly", {
   }
   expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs_nndescent"), "cuVS")
   expect_error(internal_nn(x, x, k = 2, backend = "cuda_cuvs_hnsw"), "cuVS")
-  expect_error(internal_nn(x, x, k = 2, backend = "cuda_approx"), "cuVS")
-  expect_error(internal_nn(x, x, k = 2, backend = "cuda_nndescent"), "cuVS")
 })

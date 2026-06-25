@@ -58,7 +58,7 @@ The `runtime_reason` labels are machine-readable, for example `available`,
 | `"scann"` | approximate | FAISS IVFPQ FastScan with Flat refinement | cuVS IVF-PQ with 4-bit compressed codes | ScaNN-inspired FastScan/PQ [6,34] |
 | `"vamana"` | approximate | native Vamana candidate graph | native Vamana candidate graph with CUDA refinement | DiskANN/Vamana [3,24] |
 | `"nsg"` | approximate | native CPU NSG-style candidate graph for all public metrics | native CUDA NSG-style candidate graph for all public metrics | NSG/FAISS [16,21,29] |
-| `"nndescent"` | approximate | native CPU NNDescent | cuVS NN-descent for Euclidean/cosine/correlation; native CUDA candidate refinement for raw inner product | NN-descent/cuVS [3-4,16] |
+| `"nndescent"` | approximate | native CPU NNDescent | cuVS NN-descent for Euclidean/cosine/correlation; raw inner product unsupported | NN-descent/cuVS [3-4,16] |
 | `"cagra"` | approximate | unsupported | FAISS GPU CAGRA or cuVS CAGRA | FAISS/cuVS CAGRA [3,13-16] |
 
 ## Metric Support Matrix
@@ -96,7 +96,7 @@ clearly instead of repairing those rows on CPU.
 | `"scann"` | euclidean | euclidean | ScaNN-inspired route. CPU uses FAISS `IndexIVFPQFastScan` with 4-bit PQ lookup tables in registers plus optional Flat reranking; CUDA uses direct cuVS IVF-PQ with 4-bit compressed codes. |
 | `"vamana"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native robust-pruned candidate graph inspired by DiskANN/Vamana; CPU/CUDA refine top-k within candidate rows. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning. Cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
 | `"nsg"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Public CPU NSG uses faissR's native NSG-style candidate graph for all metrics. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before NSG/MRNG-style pruning. CUDA NSG is self-KNN only; cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
-| `"nndescent"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native CPU NN-descent supports raw inner-product search; CPU/CUDA cosine and correlation use normalized Euclidean graph search. CUDA raw inner product uses faissR's native CUDA candidate-refinement route because direct cuVS NN-descent does not expose raw inner product. FAISS NNDescent is experimental opt-in because linked FAISS builds can abort during graph construction. |
+| `"nndescent"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation | Native CPU NN-descent supports raw inner-product search; CPU/CUDA cosine and correlation use normalized Euclidean graph search. CUDA uses direct RAPIDS cuVS NN-descent, which does not expose raw inner-product search. FAISS NNDescent is experimental opt-in because linked FAISS builds can abort during graph construction. |
 | `"cagra"` | unsupported | euclidean, cosine, correlation, inner_product | CUDA-only FAISS/cuVS graph search; cosine/correlation use normalized Euclidean graph search, and raw inner product uses a maximum-inner-product-to-L2 transform. |
 
 Programmatic form:
@@ -465,14 +465,23 @@ construction [4].
   expansion.
 - CPU and CUDA NNDescent support cosine/correlation by row normalization
   followed by Euclidean graph search.
-- CUDA raw inner-product NNDescent uses faissR's native CUDA
-  candidate-refinement kernel with an Euclidean seed graph and shifted
-  dot-product distances because direct cuVS NN-descent does not expose raw
-  inner-product search.
+- CUDA raw inner-product NNDescent is unsupported because direct cuVS
+  NN-descent does not expose raw inner-product search and faissR does not
+  provide a separate native CUDA NN-descent route.
 - FAISS NNDescent is disabled by default because linked FAISS builds could
   abort the R process during graph construction. The explicit FAISS backend is
   available only behind `options(faissR.enable_faiss_nndescent = TRUE)` for
   local experiments.
+- Affected cuVS builds can fail on high-dimensional FP32 L2 data with
+  `cudaErrorInvalidValue` during `cuvsNNDescentBuild`. On COIL20
+  (`1440 x 16384`), the cuVS L2-norm kernel required about 64 KiB of dynamic
+  shared memory, above CUDA's default per-block launch limit. Rebuilding cuVS
+  with an opt-in call to
+  `cudaFuncSetAttribute(cudaFuncAttributeMaxDynamicSharedMemorySize)` fixed the
+  cuVS route on the test machine. faissR documents this as an upstream cuVS
+  issue and reports a specific error; it does not silently switch an explicit
+  cuVS request to CPU or another algorithm. See
+  [the upstream issue report](cuvs-nndescent-shared-memory-issue.md).
 
 NN-descent can be fast for building approximate KNN graphs, but recall and
 runtime depend strongly on graph degree, iterations, data shape, and backend.

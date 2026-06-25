@@ -473,9 +473,6 @@ nn_compute <- function(data,
     }
     n_threads <- normalize_nn_threads(n_threads)
     metric <- normalize_nn_metric(metric)
-    if (backend %in% c("cuda_nndescent", "cuda_approx", "gpu_nndescent", "gpu_approx")) {
-      backend <- "cuda_cuvs_nndescent"
-    }
     if (backend %in% c("cuvs_ivf", "cuda_cuvs_ivf")) {
       backend <- "cuda_cuvs_ivf_flat"
     }
@@ -1285,7 +1282,14 @@ nn_compute <- function(data,
         input_type = "float32",
         graph_degree = as.integer(out$graph_degree %||% NA_integer_),
         intermediate_graph_degree = as.integer(out$intermediate_graph_degree %||% NA_integer_),
-        max_iterations = as.integer(out$max_iterations %||% NA_integer_)
+        max_iterations = as.integer(out$max_iterations %||% NA_integer_),
+        cuvs_nndescent_input_dtype = out$cuvs_nndescent_input_dtype %||% "float32",
+        cuvs_nndescent_shared_memory_workaround =
+          isTRUE(out$cuvs_nndescent_shared_memory_workaround),
+        cuvs_nndescent_l2_norm_shared_bytes_fp32 =
+          as.numeric(out$cuvs_nndescent_l2_norm_shared_bytes_fp32 %||% NA_real_),
+        cuvs_nndescent_l2_norm_shared_bytes_used =
+          as.numeric(out$cuvs_nndescent_l2_norm_shared_bytes_used %||% NA_real_)
       )
       if (!is.null(params)) {
         result <- append_nn_tuning_metadata(result, params)
@@ -1799,7 +1803,6 @@ nn_compute <- function(data,
                                "cuvs_bruteforce", "cuda_cuvs_bruteforce",
                                "cuda_cuvs_exact",
                                "cuda_cuvs_nndescent", "cuvs_nndescent",
-                               "cuda_native_nndescent",
                                "cuda_cuvs_hnsw", "cuvs_hnsw")) {
       stop(
         "`metric = \"", metric, "\"` currently supports only `backend = \"cpu\"` ",
@@ -1811,9 +1814,6 @@ nn_compute <- function(data,
     }
   }
 
-  if (backend %in% c("cuda_nndescent", "cuda_approx", "gpu_nndescent", "gpu_approx")) {
-    backend <- "cuda_cuvs_nndescent"
-  }
   if (backend %in% c("cuvs_ivf", "cuda_cuvs_ivf")) {
     backend <- "cuda_cuvs_ivf_flat"
   }
@@ -1845,27 +1845,6 @@ nn_compute <- function(data,
       stop("`backend = \"cpu_approx\"` is only available for self-KNN searches.", call. = FALSE)
     }
     backend <- select_cpu_approx_backend(nrow(data), ncol(data), k)
-  }
-
-  gpu_ivf <- resolve_gpu_ivf_backend(
-    backend = backend,
-    self_query = self_query,
-    n = nrow(data),
-    p = ncol(data),
-    k = k,
-    exclude_self = isTRUE(exclude_self)
-  )
-  if (!is.na(gpu_ivf$backend)) {
-    return(gpu_ivf_self_knn(
-      data,
-      k = k,
-      backend = gpu_ivf$backend,
-      label = gpu_ivf$label,
-      strategy = gpu_ivf$strategy,
-      exclude_self = isTRUE(exclude_self),
-      seed = fast_knn_approx_seed(),
-      metric = metric
-    ))
   }
 
   if (identical(output, "float") &&
@@ -3459,45 +3438,6 @@ nn_compute <- function(data,
     return(result)
   }
 
-  if (identical(backend, "cuda_native_nndescent")) {
-    if (!identical(metric, "inner_product")) {
-      stop("`backend = \"cuda_native_nndescent\"` is reserved for raw inner-product search.", call. = FALSE)
-    }
-    if (!isTRUE(self_query)) {
-      stop("`backend = \"cuda_native_nndescent\"` is only available for self-KNN searches.", call. = FALSE)
-    }
-    nonself_k <- if (isTRUE(exclude_self)) k else max(0L, k - 1L)
-    if (nonself_k < 1L) {
-      out <- list(
-        indices = matrix(seq_len(nrow(data)), nrow(data), 1L),
-        distances = matrix(0, nrow(data), 1L)
-      )
-    } else {
-      out <- gpu_nndescent_self_knn(
-        data,
-        k = nonself_k,
-        backend = "cuda",
-        seed = fast_knn_approx_seed(),
-        metric = "inner_product"
-      )
-      if (!isTRUE(exclude_self)) {
-        out <- prepend_self_neighbor_column(out)
-      }
-    }
-    result <- finish_nn_result(out, "cuda_native_nndescent", k, self_query, exact = FALSE, metric = metric)
-    attr(result, "approximation") <- c(
-      list(
-        strategy = "native_cuda_nndescent_candidate_refine",
-        backend = "cuda_native_nndescent",
-        accelerator = "cuda",
-        metric = metric,
-        metric_strategy = "euclidean_seed_inner_product_refine"
-      ),
-      attr(out, "approximation", exact = TRUE)
-    )
-    return(result)
-  }
-
   if (backend %in% c("cuvs_nndescent", "cuda_cuvs_nndescent")) {
     if (identical(metric, "inner_product")) {
       stop("cuVS NN-descent does not support `metric = \"inner_product\"`.", call. = FALSE)
@@ -3560,6 +3500,13 @@ nn_compute <- function(data,
       graph_degree = as.integer(out$graph_degree),
       intermediate_graph_degree = as.integer(out$intermediate_graph_degree),
       max_iterations = as.integer(out$max_iterations),
+      cuvs_nndescent_input_dtype = out$cuvs_nndescent_input_dtype %||% "float32",
+      cuvs_nndescent_shared_memory_workaround =
+        isTRUE(out$cuvs_nndescent_shared_memory_workaround),
+      cuvs_nndescent_l2_norm_shared_bytes_fp32 =
+        as.numeric(out$cuvs_nndescent_l2_norm_shared_bytes_fp32 %||% NA_real_),
+      cuvs_nndescent_l2_norm_shared_bytes_used =
+        as.numeric(out$cuvs_nndescent_l2_norm_shared_bytes_used %||% NA_real_),
       transform_storage = metric_inputs$transform_storage %||% "double",
       transform_cache = metric_inputs$transform_cache %||% NULL
     )
@@ -4090,11 +4037,11 @@ cuda_cagra_route_available <- function(faiss_gpu_available_value = faiss_gpu_ava
 #' faissR treats `metric = "inner_product"` as raw-dot-product ranking while
 #' keeping returned `distances` in the usual smaller-is-better orientation via
 #' per-query shifted dot-product distances.
-#' Direct cuVS NNDescent does not expose raw inner-product search; public CUDA
-#' `method = "nndescent", metric = "inner_product"` uses faissR's native CUDA
-#' candidate-refinement route. Public CUDA CAGRA supports raw inner product
-#' through the same maximum-inner-product-to-L2 transform used by direct cuVS
-#' brute-force and IVF/PQ routes. Public CUDA HNSW uses RAPIDS cuVS HNSW from
+#' Direct cuVS NNDescent does not expose raw inner-product search, so public
+#' CUDA `method = "nndescent", metric = "inner_product"` is an expected
+#' unsupported combination. Public CUDA CAGRA supports raw inner product through
+#' the same maximum-inner-product-to-L2 transform used by direct cuVS brute-force
+#' and IVF/PQ routes. Public CUDA HNSW uses RAPIDS cuVS HNSW from
 #' a CAGRA seed graph; metadata records that this is the cuVS wrapper design
 #' rather than a pure all-GPU HNSW search implementation.
 #' Public CUDA `method = "cagra"` can resolve to FAISS GPU CAGRA or direct cuVS
@@ -4208,8 +4155,7 @@ nn_cuda_auto_runtime_available <- function(metric,
   }
   if (identical(metric, "inner_product")) {
     ok <- isTRUE(faiss_gpu_available_value) ||
-      isTRUE(cuvs_available_value) ||
-      isTRUE(cuda_available_value)
+      isTRUE(cuvs_available_value)
     return(list(
       available = ok,
       reason = if (ok) "available" else "missing_cuda_route",
@@ -4219,20 +4165,6 @@ nn_cuda_auto_runtime_available <- function(metric,
           "exact small/query searches can use FAISS GPU Flat IP, while large",
           "self-KNN can use transformed FAISS GPU or direct cuVS CAGRA graph search."
         )
-      } else if (isTRUE(cuda_available_value) && isTRUE(cuvs_available_value)) {
-        paste(
-          "CUDA auto raw-inner-product route is shape-dependent on this runtime:",
-          "large self-KNN graph searches can use transformed direct cuVS CAGRA",
-          "or faissR's native CUDA candidate-refinement route, while explicit",
-          "CUDA exact/brute-force calls can use transformed cuVS brute force."
-        )
-      } else if (isTRUE(cuda_available_value)) {
-        paste(
-          "CUDA auto raw-inner-product route is shape-dependent on this runtime:",
-          "self-KNN graph searches can use faissR's native CUDA",
-          "candidate-refinement route, while exact or query inner-product search",
-          "requires FAISS GPU Flat or cuVS brute force."
-        )
       } else if (isTRUE(cuvs_available_value)) {
         paste(
           "CUDA auto raw-inner-product route is shape-dependent on this runtime:",
@@ -4241,7 +4173,7 @@ nn_cuda_auto_runtime_available <- function(metric,
           "an explicit transformed cuVS brute-force route."
         )
       } else {
-        "CUDA auto raw-inner-product search requires FAISS GPU Flat IP, transformed cuVS CAGRA/brute force, or faissR's native CUDA self-KNN candidate-refinement route."
+        "CUDA auto raw-inner-product search requires FAISS GPU Flat IP or transformed cuVS CAGRA/brute force."
       }
     ))
   }
@@ -4401,7 +4333,7 @@ nn_capability_row <- function(method, backend, metric) {
       } else if (metric %in% c("cosine", "correlation")) {
         "CUDA auto can resolve to CUDA grid for large 2D/3D self-search, FAISS GPU Flat normalized-IP search for exact small/query workloads, or FAISS GPU/direct cuVS CAGRA graph routes for large self-KNN when available; cuVS-only runtimes are shape-dependent and keep small/query workloads on CPU."
       } else {
-        "CUDA auto uses FAISS GPU Flat IP for exact small/query inner-product search when FAISS GPU Flat is available, transformed FAISS GPU/direct cuVS CAGRA for large self-KNN graph search when available, or faissR's native CUDA candidate-refinement route when native CUDA kernels are the available large-self-search route."
+        "CUDA auto uses FAISS GPU Flat IP for exact small/query inner-product search when FAISS GPU Flat is available, or transformed FAISS GPU/direct cuVS CAGRA for large self-KNN graph search when available."
       }
     }
   } else if (method %in% c("exact", "bruteforce")) {
@@ -4503,25 +4435,19 @@ nn_capability_row <- function(method, backend, metric) {
       "Builds a Vamana-style candidate graph using compiled C++ pruning over compact candidate storage and refines candidate rows with the native CUDA row-candidate kernel; cuVS Vamana currently builds/serializes DiskANN-compatible indexes but does not expose KNN search."
     }
   } else if (identical(method, "nndescent")) {
-    supported <- all_metrics
+    supported <- if (identical(backend, "cpu")) all_metrics else non_ip_metric
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) {
       "native CPU NNDescent"
-    } else if (identical(metric, "inner_product")) {
-      "native CUDA NNDescent candidate refinement"
     } else {
       "cuVS CUDA NN-descent"
     }
     notes <- if (identical(backend, "cpu")) {
       "Native CPU NNDescent supports Euclidean/L2 and raw inner-product self-KNN; cosine/correlation use normalized Euclidean graph search. Seed neighbours use random-projection windows plus deterministic row fill, with flat row-major graph buffers and fixed-width reverse-neighbour storage in C++."
     } else if (supported) {
-      if (identical(metric, "inner_product")) {
-        "Raw inner-product CUDA NNDescent uses faissR's native CUDA candidate-refinement kernel with an Euclidean IVF seed graph and inner-product top-k refinement."
-      } else {
-        "Validated for Euclidean/L2 self-KNN search through cuVS NN-descent; cosine/correlation use normalized Euclidean graph search."
-      }
+      "CUDA NN-descent uses direct RAPIDS cuVS NN-descent for Euclidean/L2 self-KNN; cosine/correlation use normalized Euclidean graph search."
     } else {
-      "CUDA NNDescent does not expose raw inner-product search."
+      "Direct cuVS NN-descent does not expose raw inner-product search."
     }
   } else if (identical(method, "cagra")) {
     supported <- identical(backend, "cuda") && all_metrics
@@ -4712,8 +4638,11 @@ resolve_public_nn_backend <- function(backend,
     if (identical(method, "scann") && !identical(metric, "euclidean")) {
       stop("CUDA `method = \"scann\"` currently supports only `metric = \"euclidean\"`.", call. = FALSE)
     }
-    if (identical(metric, "inner_product") && !method %in% c("ivf", "ivfpq", "nsg", "vamana", "nndescent", "cagra", "hnsw")) {
-      stop("CUDA `metric = \"inner_product\"` currently supports `method = \"exact\"`, `\"bruteforce\"`, `\"flat\"`, `\"ivf\"`, `\"ivfpq\"`, `\"hnsw\"`, `\"nsg\"`, `\"vamana\"`, `\"nndescent\"`, or `\"cagra\"`.", call. = FALSE)
+    if (identical(metric, "inner_product") && identical(method, "nndescent")) {
+      stop("CUDA `method = \"nndescent\"` uses direct cuVS NN-descent, which does not support `metric = \"inner_product\"`.", call. = FALSE)
+    }
+    if (identical(metric, "inner_product") && !method %in% c("ivf", "ivfpq", "nsg", "vamana", "cagra", "hnsw")) {
+      stop("CUDA `metric = \"inner_product\"` currently supports `method = \"exact\"`, `\"bruteforce\"`, `\"flat\"`, `\"ivf\"`, `\"ivfpq\"`, `\"hnsw\"`, `\"nsg\"`, `\"vamana\"`, or `\"cagra\"`.", call. = FALSE)
     }
     switch(
       method,
@@ -4726,11 +4655,7 @@ resolve_public_nn_backend <- function(backend,
       ivfpq = "faiss_gpu_ivfpq",
       vamana = "cuda_vamana",
       nsg = "cuda_nsg",
-      nndescent = if (!identical(metric, "inner_product")) {
-        "cuda_cuvs_nndescent"
-      } else {
-        "cuda_native_nndescent"
-      },
+      nndescent = "cuda_cuvs_nndescent",
       scann = "cuda_cuvs_scann",
       cagra = resolve_cuda_cagra_backend(
         n = n,
@@ -4796,10 +4721,7 @@ nn_resolved_backend_public_method <- function(backend) {
   if (backend %in% c("cpu_vamana", "cuda_vamana")) return("vamana")
   if (backend %in% c("faiss_nsg", "cpu_nsg", "cuda_nsg")) return("nsg")
   if (backend %in% c("cpu_nndescent", "faiss_nndescent",
-                     "cuda_cuvs_nndescent", "cuvs_nndescent",
-                     "cuda_native_nndescent",
-                     "cuda_nndescent", "cuda_approx",
-                     "gpu_nndescent", "gpu_approx")) return("nndescent")
+                     "cuda_cuvs_nndescent", "cuvs_nndescent")) return("nndescent")
   if (backend %in% c("faiss_gpu_cagra", "cuda_faiss_cagra",
                      "cuda_cuvs_cagra", "cuda_cagra",
                      "gpu_cagra")) return("cagra")
@@ -5008,7 +4930,7 @@ public_nn_cuda_route_available <- function(method,
     return(identical(metric, "euclidean") && isTRUE(cuvs_available_value))
   }
   if (identical(metric, "inner_product")) {
-    if (identical(method, "nndescent")) return(isTRUE(cuda_available_value))
+    if (identical(method, "nndescent")) return(FALSE)
     if (identical(method, "cagra")) {
       return(cuda_cagra_route_available(
         faiss_gpu_available_value = faiss_gpu_available_value,
@@ -6240,412 +6162,10 @@ should_use_clustered_self_knn <- function(backend,
   FALSE
 }
 
-resolve_gpu_ivf_backend <- function(backend,
-                                    self_query,
-                                    n,
-                                    p,
-                                    k,
-                                    exclude_self) {
-  out <- list(backend = NA_character_, label = NA_character_, strategy = NA_character_)
-  explicit <- backend %in% c("cuda_ivf", "cuda_faiss")
-  if (!explicit) return(out)
-  if (!isTRUE(self_query)) {
-    stop("GPU IVF/FAISS-style KNN currently supports self-KNN only.", call. = FALSE)
-  }
-  if (isTRUE(exclude_self) && n < 2L) return(out)
-  nonself_k <- if (isTRUE(exclude_self)) k else k - 1L
-  if (nonself_k < 1L) return(out)
-  if (k > 256L) {
-    stop("Native GPU IVF/FAISS-style KNN currently supports `k <= 256`.", call. = FALSE)
-  }
-
-  if (!isTRUE(cuda_available())) {
-    stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
-  }
-  selected <- "cuda"
-  out$backend <- selected
-  out$label <- switch(
-    backend,
-    cuda_faiss = "cuda_faiss_ivf",
-    backend
-  )
-  out$strategy <- if (grepl("faiss", backend, fixed = TRUE)) {
-    "faiss_style_ivf_flat_native"
-  } else {
-    "ivf_flat_native"
-  }
-  out
-}
-
-should_use_gpu_approx_self_knn <- function(backend,
-                                           self_query,
-                                           n,
-                                           p,
-                                           k,
-                                           exclude_self,
-                                           work_size) {
-  if (!backend %in% c("cuda_approx")) return(FALSE)
-  if (!isTRUE(self_query)) return(FALSE)
-  if (p < 2L || k < 10L || k > 256L) return(FALSE)
-  nonself_k <- if (isTRUE(exclude_self)) k else k - 1L
-  if (nonself_k < 1L) return(FALSE)
-  TRUE
-}
-
 fast_knn_approx_seed <- function() {
   value <- faissr_option("approx_knn_seed", 4L)
   value <- suppressWarnings(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) 4L else value
-}
-
-gpu_approx_params <- function(n,
-                              k,
-                              backend = NULL,
-                              label = NULL) {
-  n <- as.integer(n)
-  k <- as.integer(k)
-  anchors <- faissr_option("gpu_approx_anchors", NULL)
-  if (is.null(anchors)) {
-    anchors <- max(128L, ceiling(4 * sqrt(n)), ceiling(n / 500))
-    anchors <- min(n - 1L, 4096L, as.integer(anchors))
-  } else {
-    anchors <- suppressWarnings(as.integer(anchors))
-    if (length(anchors) != 1L || is.na(anchors) || !is.finite(anchors)) {
-      anchors <- max(128L, ceiling(4 * sqrt(n)))
-    }
-    anchors <- max(2L, min(n - 1L, anchors))
-  }
-  projection_k <- faissr_option("gpu_approx_projection_k", NULL)
-  if (is.null(projection_k)) {
-    projection_k <- max(12L, ceiling(k / 2))
-    projection_k <- min(anchors, as.integer(projection_k))
-  } else {
-    projection_k <- suppressWarnings(as.integer(projection_k))
-    if (length(projection_k) != 1L || is.na(projection_k) || !is.finite(projection_k)) {
-      projection_k <- max(12L, ceiling(k / 2))
-    }
-    projection_k <- max(1L, min(anchors, projection_k))
-  }
-  cols <- clustered_knn_graph_columns(projection_k, k)
-  list(
-    anchors = as.integer(anchors),
-    projection_k = as.integer(projection_k),
-    bucket_cols = as.integer(cols$bucket_cols),
-    query_cols = as.integer(cols$query_cols)
-  )
-}
-
-gpu_approx_self_knn <- function(data,
-                                k,
-                                backend,
-                                exclude_self = FALSE,
-                                seed = 4L,
-                                label = NULL,
-                                strategy = "anchor_projection_candidate_knn",
-                                metric = "euclidean") {
-  metric <- normalize_nn_metric(metric)
-  if (!identical(metric, "euclidean")) {
-    stop("Native GPU approximate KNN currently supports only `metric = \"euclidean\"`.", call. = FALSE)
-  }
-  n <- nrow(data)
-  label <- if (is.null(label)) paste0(backend, "_approx") else as.character(label)
-  nonself_k <- if (isTRUE(exclude_self)) k else k - 1L
-  if (nonself_k < 1L) {
-    out <- list(
-      indices = matrix(seq_len(n), n, 1L),
-      distances = matrix(0, n, 1L)
-    )
-    return(finish_nn_result(out, label, k, TRUE, exact = FALSE, metric = metric))
-  }
-
-  params <- gpu_approx_params(n, nonself_k, backend = backend, label = label)
-  anchors <- select_landmark_rows(data, params$anchors, seed)
-  projection <- nn_compute(
-    data[anchors, , drop = FALSE],
-    data,
-    k = params$projection_k,
-    backend = backend,
-    points_missing = FALSE,
-    exclude_self = FALSE,
-    metric = metric
-  )
-  out <- if (identical(backend, "cuda")) {
-    landmark_candidate_knn_cuda_cpp(
-      data,
-      projection$indices,
-      as.integer(nonself_k),
-      as.integer(params$bucket_cols),
-      as.integer(params$query_cols)
-    )
-  } else {
-    stop("Unsupported CUDA KNN backend.", call. = FALSE)
-  }
-
-  if (!isTRUE(exclude_self)) {
-    out <- prepend_self_neighbor_column(out)
-  }
-  result <- finish_nn_result(out, label, k, TRUE, exact = FALSE, metric = metric)
-  attr(result, "approximation") <- list(
-    strategy = strategy,
-    backend = backend,
-    metric = metric,
-    anchors = as.integer(params$anchors),
-    projection_k = as.integer(params$projection_k),
-    bucket_cols = as.integer(params$bucket_cols),
-    query_cols = as.integer(params$query_cols),
-    seed = as.integer(seed)
-  )
-  if (isTRUE(faissr_option("gpu_approx_recall", FALSE))) {
-    result <- attach_knn_recall_subset(
-      result,
-      data = data,
-      k = k,
-      exclude_self = isTRUE(exclude_self),
-      seed = seed
-    )
-  }
-  result
-}
-
-gpu_ivf_self_knn <- function(data,
-                             k,
-                             backend,
-                             label,
-                             strategy,
-                             exclude_self = FALSE,
-                             seed = 4L,
-                             metric = "euclidean") {
-  gpu_approx_self_knn(
-    data,
-    k = k,
-    backend = backend,
-    exclude_self = exclude_self,
-    seed = seed,
-    label = label,
-    strategy = strategy,
-    metric = metric
-  )
-}
-
-gpu_nndescent_option <- function(backend, name, default = NULL) {
-  backend <- as.character(backend)
-  keys <- c(
-    sprintf("%s_nndescent_%s", backend, name),
-    sprintf("gpu_nndescent_%s", name)
-  )
-  faissr_option(keys, default)
-}
-
-gpu_nndescent_graph_degree <- function(n, k, backend = "cuda") {
-  graph_degree <- gpu_nndescent_option(backend, "graph_degree", NULL)
-  if (is.null(graph_degree)) {
-    graph_degree <- if (!is.null(n) && n >= 50000L && k <= 30L) {
-      max(k, 64L)
-    } else {
-      k
-    }
-  }
-  graph_degree <- suppressWarnings(as.integer(graph_degree))
-  if (length(graph_degree) != 1L || is.na(graph_degree) || !is.finite(graph_degree)) {
-    graph_degree <- k
-  }
-  if (!is.null(n)) graph_degree <- min(graph_degree, as.integer(n) - 1L)
-  as.integer(max(k, min(256L, graph_degree)))
-}
-
-gpu_nndescent_params <- function(k, backend = "cuda", n = NULL) {
-  backend <- match.arg(as.character(backend), c("cuda"))
-  nn_tune_gpu_nndescent_cpp(
-    suppressWarnings(as.integer(n %||% NA_integer_)),
-    as.integer(k),
-    backend,
-    nn_option_int_or_na(c(
-      sprintf("%s_nndescent_graph_degree", backend),
-      "gpu_nndescent_graph_degree"
-    )),
-    nn_option_int_or_na(c(
-      sprintf("%s_nndescent_iters", backend),
-      "gpu_nndescent_iters"
-    )),
-    nn_option_int_or_na(c(
-      sprintf("%s_nndescent_sources", backend),
-      "gpu_nndescent_sources"
-    )),
-    nn_option_int_or_na(c(
-      sprintf("%s_nndescent_neighbors", backend),
-      "gpu_nndescent_neighbors"
-    )),
-    {
-      value <- faissr_option(c(
-        sprintf("%s_nndescent_delta", backend),
-        "gpu_nndescent_delta"
-      ), NULL)
-      if (is.null(value)) 0.015 else nn_option_double_or_na(c(
-        sprintf("%s_nndescent_delta", backend),
-        "gpu_nndescent_delta"
-      ))
-    }
-  )
-}
-
-gpu_nndescent_self_knn <- function(data,
-                                   k,
-                                   backend,
-                                   seed = 4L,
-                                   metric = "euclidean") {
-  n <- nrow(data)
-  k <- as.integer(k)
-  backend <- match.arg(as.character(backend), c("cuda"))
-  metric <- normalize_nn_metric(metric)
-  if (!metric %in% c("euclidean", "inner_product")) {
-    stop("Native GPU NN-descent supports Euclidean or inner-product candidate refinement.", call. = FALSE)
-  }
-  if (length(k) != 1L || is.na(k) || !is.finite(k) || k < 1L || k >= n) {
-    stop("`k` must be in [1, nrow(data) - 1].", call. = FALSE)
-  }
-  if (k > 256L) {
-    stop("Native GPU NN-descent currently supports `k <= 256`.", call. = FALSE)
-  }
-  if (identical(backend, "cuda") && !isTRUE(cuda_available())) {
-    stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
-  }
-  output_k <- k
-  params <- gpu_nndescent_params(output_k, backend = backend, n = n)
-  work_k <- params$graph_degree
-
-  base <- gpu_ivf_self_knn(
-    data,
-    k = work_k,
-    backend = backend,
-    label = paste0(backend, "_ivf_seed"),
-    strategy = "ivf_flat_native",
-    exclude_self = TRUE,
-    seed = seed,
-    metric = "euclidean"
-  )
-  indices <- base$indices
-  distances <- base$distances
-  changes <- numeric(params$n_iters)
-  used_iters <- 0L
-  candidate_stats <- list()
-  flags <- matrix(TRUE, nrow = nrow(indices), ncol = ncol(indices))
-  update_frac <- 1
-  candidate_attr <- function(x, name, default) {
-    value <- attr(x, name, exact = TRUE)
-    if (is.null(value)) default else value
-  }
-
-  for (iter in seq_len(params$n_iters)) {
-    if (identical(backend, "cuda")) {
-      # Native adaptive NN-descent schedule: expand aggressively while the graph
-      # is moving, then use only NEW-neighbour sources and skip reverse
-      # candidates near convergence.
-      adaptive_scale <- min(1, sqrt(max(update_frac, 0)) * 3)
-      min_sources <- min(work_k, 3L)
-      iter_sources <- min(
-        work_k,
-        max(min_sources, as.integer(ceiling(params$sources * adaptive_scale)))
-      )
-      min_neighbors <- min(work_k, max(1L, as.integer(ceiling(work_k / 2))))
-      iter_neighbors <- min(
-        work_k,
-        max(min_neighbors, as.integer(ceiling(params$neighbors * adaptive_scale)))
-      )
-      active_only <- isTRUE(update_frac < 0.5)
-      use_reverse <- isTRUE(update_frac >= 0.10)
-      query_rows <- NULL
-      candidate_indices <- nndescent_candidate_matrix_adaptive_cpp(
-        indices,
-        flags,
-        as.integer(iter_sources),
-        as.integer(iter_neighbors),
-        use_reverse = use_reverse,
-        active_only = active_only
-      )
-    } else {
-      query_rows <- NULL
-      candidate_indices <- nndescent_candidate_matrix_cpp(
-        indices,
-        as.integer(params$sources),
-        as.integer(params$neighbors)
-      )
-    }
-    candidate_stats[[iter]] <- list(
-      columns = as.integer(ncol(candidate_indices)),
-      mean_unique = as.numeric(attr(candidate_indices, "mean_unique_candidates")),
-      max_unique = as.integer(attr(candidate_indices, "max_unique_candidates")),
-      raw_columns = as.integer(attr(candidate_indices, "raw_candidate_columns")),
-      sources = as.integer(candidate_attr(candidate_indices, "sources", params$sources)),
-      neighbors = as.integer(candidate_attr(candidate_indices, "neighbors", params$neighbors)),
-      active_rows = as.integer(candidate_attr(candidate_indices, "active_rows", n)),
-      use_reverse = isTRUE(candidate_attr(candidate_indices, "use_reverse", TRUE)),
-      active_only = isTRUE(candidate_attr(candidate_indices, "active_only", FALSE)),
-      candidate_layout = candidate_attr(candidate_indices, "candidate_layout", NA_character_),
-      reverse_storage = candidate_attr(candidate_indices, "reverse_storage", NA_character_)
-    )
-
-    refined <- row_candidate_knn_cuda_cpp(
-      data,
-      candidate_indices,
-      as.integer(work_k),
-      metric
-    )
-    new_indices <- refined$indices
-    new_flags <- new_indices != indices
-    changes[iter] <- mean(new_flags)
-    flags <- new_flags
-    update_frac <- changes[iter]
-    indices <- new_indices
-    distances <- refined$distances
-    used_iters <- iter
-    if (changes[iter] < params$delta) break
-  }
-
-  if (work_k > output_k) {
-    keep <- seq_len(output_k)
-    indices <- indices[, keep, drop = FALSE]
-    distances <- distances[, keep, drop = FALSE]
-  }
-  if (identical(metric, "inner_product") && ncol(distances) > 0L) {
-    distances <- distances - distances[, 1L]
-  }
-
-  out <- list(indices = indices, distances = distances)
-  attr(out, "cuda_kernel") <- "row_candidate_knn"
-  attr(out, "approximation") <- list(
-    strategy = paste0("adaptive_seeded_nndescent_native_", backend),
-    backend = backend,
-    seed_backend = paste0(backend, "_ivf"),
-    metric = metric,
-    seed_metric = "euclidean",
-    refine_metric = metric,
-    metric_strategy = if (identical(metric, "inner_product")) {
-      "euclidean_seed_inner_product_refine"
-    } else {
-      "euclidean_seed_euclidean_refine"
-    },
-    seed_bucket_cols = as.integer(attr(base, "approximation")$bucket_cols),
-    seed_query_cols = as.integer(attr(base, "approximation")$query_cols),
-    output_graph_degree = as.integer(output_k),
-    graph_degree = as.integer(work_k),
-    n_iters = as.integer(used_iters),
-    changes = changes[seq_len(used_iters)],
-    sources = as.integer(params$sources),
-    neighbors = as.integer(params$neighbors),
-    candidate_columns = vapply(candidate_stats[seq_len(used_iters)], `[[`, integer(1L), "columns"),
-    mean_unique_candidates = vapply(candidate_stats[seq_len(used_iters)], `[[`, numeric(1L), "mean_unique"),
-    raw_candidate_columns = vapply(candidate_stats[seq_len(used_iters)], `[[`, integer(1L), "raw_columns"),
-    iteration_sources = vapply(candidate_stats[seq_len(used_iters)], `[[`, integer(1L), "sources"),
-    iteration_neighbors = vapply(candidate_stats[seq_len(used_iters)], `[[`, integer(1L), "neighbors"),
-    active_rows = vapply(candidate_stats[seq_len(used_iters)], `[[`, integer(1L), "active_rows"),
-    use_reverse = vapply(candidate_stats[seq_len(used_iters)], `[[`, logical(1L), "use_reverse"),
-    active_only = vapply(candidate_stats[seq_len(used_iters)], `[[`, logical(1L), "active_only"),
-    candidate_layout = vapply(candidate_stats[seq_len(used_iters)], `[[`, character(1L), "candidate_layout"),
-    reverse_storage = vapply(candidate_stats[seq_len(used_iters)], `[[`, character(1L), "reverse_storage"),
-    delta = as.numeric(params$delta),
-    seed = as.integer(seed)
-  )
-  out
 }
 
 native_nsg_params <- function(n, p, k, metric = "euclidean", backend = c("cpu", "cuda")) {
@@ -7087,15 +6607,8 @@ native_nsg_self_knn <- function(data,
   out
 }
 
-cuda_nndescent_self_knn <- function(data,
-                                    k,
-                                    seed = 4L,
-                                    metric = "euclidean") {
-  gpu_nndescent_self_knn(data, k = k, backend = "cuda", seed = seed, metric = metric)
-}
-
 knn_recall_subset_size <- function(n) {
-  value <- faissr_option("gpu_approx_recall_sample", 512L)
+  value <- faissr_option("approx_recall_sample", 512L)
   value <- suppressWarnings(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 1L) {
     value <- 512L
@@ -8934,9 +8447,8 @@ grid_self_knn <- function(data,
 #'   self-KNN, exact FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for
 #'   Euclidean searches when appropriate, FAISS GPU Flat IP routes for exact small/query inner-product
 #'   searches when FAISS GPU Flat is available, transformed FAISS GPU/direct
-#'   cuVS CAGRA for large raw-inner-product self-KNN, faissR native CUDA
-#'   candidate refinement as the large-self-search fallback, and transformed
-#'   direct cuVS brute force for explicit CUDA exact/brute-force non-Euclidean
+#'   cuVS CAGRA for large raw-inner-product self-KNN, and transformed direct
+#'   cuVS brute force for explicit CUDA exact/brute-force non-Euclidean
 #'   searches when cuVS is available
 #'   [1-3,5,13-15,22-23]. When `backend = "auto"` is
 #'   combined with an explicit method, faissR first checks whether that exact
@@ -9011,9 +8523,9 @@ grid_self_knn <- function(data,
 #'   protected before compiled C++ NSG/MRNG-style pruning over compact
 #'   candidate storage.
 #'   \item `"nndescent"`: NN-descent approximate graph construction via
-#'   faissR's native CPU route, direct cuVS on CUDA for Euclidean/L2 plus
-#'   normalized cosine/correlation, or faissR's native CUDA candidate-refinement
-#'   route for raw inner-product self-KNN. The native CPU route uses
+#'   faissR's native CPU route, or direct cuVS on CUDA for Euclidean/L2 plus
+#'   normalized cosine/correlation. CUDA raw inner-product NN-descent is not
+#'   exposed because direct cuVS NN-descent does not support it. The native CPU route uses
 #'   random-projection window seeds, flat row-major graph buffers, and
 #'   fixed-width reverse-neighbour candidate storage in C++. FAISS NNDescent is
 #'   experimental opt-in because linked FAISS builds can abort during graph
@@ -9124,7 +8636,8 @@ grid_self_knn <- function(data,
 #'   dot-product search, direct cuVS brute force through an exact MIPS-to-L2
 #'   transform, direct cuVS IVF/PQ through transformed approximate L2 indexes,
 #'   CUDA CAGRA and CUDA cuVS HNSW through the same MIPS-to-L2 graph-search
-#'   transform, and native CUDA NN-descent candidate refinement.
+#'   transform. CUDA `method = "nndescent"` uses direct cuVS NN-descent and
+#'   does not support raw inner-product search.
 #'   Direct cuVS NN-descent does not expose a safe raw-inner-product route in
 #'   faissR. CUDA HNSW metadata records the available cuVS HNSW wrapper design.
 #'   Unsupported backend combinations fail clearly instead of returning neighbours
@@ -9250,12 +8763,17 @@ nn <- function(data,
   output <- resolve_nn_output(output, distances)
   validate_public_nn_method_shape(data, method)
   self_query <- isTRUE(points_missing) || identical(data, points)
+  data_dim_for_resolve <- if (is_float32_matrix_input(data)) {
+    float32_matrix_dims(data, "data")
+  } else {
+    dim(data)
+  }
   resolved_backend <- resolve_public_nn_backend(
     backend,
     method,
     metric,
-    n = nrow(data),
-    p = ncol(data),
+    n = data_dim_for_resolve[[1L]],
+    p = data_dim_for_resolve[[2L]],
     k = k,
     self_query = self_query
   )

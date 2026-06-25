@@ -95,10 +95,9 @@ available and RcppHNSW/hnswlib when FAISS is unavailable.
 FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, native CPU NN-descent raw
 dot-product search, direct cuVS brute force through an exact MIPS-to-L2
 transform, direct cuVS IVF/PQ through transformed approximate L2 indexes,
-CUDA CAGRA through the same MIPS-to-L2 graph-search transform, and native
-CUDA NN-descent candidate refinement.
-Direct cuVS NN-descent does not expose a safe raw-inner-product route in
-faissR. CUDA HNSW uses RAPIDS cuVS HNSW from a CAGRA seed graph with a cuVS CPU hierarchy and records
+and CUDA CAGRA/CUDA HNSW through the same MIPS-to-L2 graph-search transform.
+CUDA `method = "nndescent"` uses direct cuVS NN-descent and does not support
+raw inner-product search. CUDA HNSW uses RAPIDS cuVS HNSW from a CAGRA seed graph with a cuVS CPU hierarchy and records
 that wrapper design in metadata.
 Unsupported backend combinations fail clearly instead of returning neighbours
 computed under a different metric.}
@@ -220,9 +219,8 @@ Method descriptions:
   self-KNN, exact FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for
   Euclidean searches when appropriate, FAISS GPU Flat IP routes for exact small/query inner-product
   searches when FAISS GPU Flat is available, transformed FAISS GPU/direct
-  cuVS CAGRA for large raw-inner-product self-KNN, faissR native CUDA
-  candidate refinement as the large-self-search fallback, and transformed
-  direct cuVS brute force for explicit CUDA exact/brute-force non-Euclidean
+  cuVS CAGRA for large raw-inner-product self-KNN, and transformed direct
+  cuVS brute force for explicit CUDA exact/brute-force non-Euclidean
   searches when cuVS is available
   [1-3,5,13-15,22-23]. When `backend = "auto"` is
   combined with an explicit method, faissR first checks whether that exact
@@ -296,9 +294,10 @@ Method descriptions:
   protected before compiled C++ NSG/MRNG-style pruning over compact
   candidate storage.
   \item `"nndescent"`: NN-descent approximate graph construction via
-  faissR's native CPU route, direct cuVS on CUDA for Euclidean/L2 plus
-  normalized cosine/correlation, or faissR's native CUDA candidate-refinement
-  route for raw inner-product self-KNN. The native CPU route uses
+  faissR's native CPU route, or direct cuVS on CUDA for Euclidean/L2 plus
+  normalized cosine/correlation. Raw inner-product CUDA NN-descent is
+  unsupported because direct cuVS NN-descent does not expose raw IP. The native
+  CPU route uses
   random-projection window seeds, flat row-major graph buffers, and
   fixed-width reverse-neighbour candidate storage in C++. FAISS NNDescent is
   experimental opt-in because linked FAISS builds can abort during graph

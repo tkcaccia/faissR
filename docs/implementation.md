@@ -100,8 +100,7 @@ Supported CUDA routes include:
   [3,13-15,22,34];
 - native CUDA 2D/3D grid search for low-dimensional Euclidean, cosine, and
   correlation self-KNN;
-- native CUDA candidate-refinement routes used by Vamana, NSG, and selected
-  NN-descent cases.
+- native CUDA candidate-refinement routes used by Vamana and NSG.
 
 The validated high-performance metric is Euclidean/L2. Cosine and correlation
 are exposed for exact CPU, FAISS CPU/GPU Flat, FAISS CPU/GPU IVF-Flat,
@@ -120,9 +119,9 @@ the standard maximum-inner-product-to-L2 extra-dimension transform for raw inner
 product before building the L2 index. Direct cuVS CAGRA and NN-Descent use
 normalized Euclidean search for cosine/correlation. Raw inner product is
 supported only through routes with an implemented transform or native scorer:
-CAGRA uses a maximum-inner-product-to-L2 transform, while CUDA NN-descent uses
-faissR's native CUDA candidate-refinement path because direct cuVS NN-descent
-does not expose raw inner-product search.
+CAGRA uses a maximum-inner-product-to-L2 transform, while CUDA NN-descent marks
+raw inner product as unsupported because direct cuVS NN-descent does not expose
+that metric.
 Graph-style routes that implement cosine/correlation through normalized
 Euclidean search convert returned neighbour distances back to `1 - similarity`
 with the stable formula
@@ -310,7 +309,7 @@ public method names map to different concrete functions depending on `backend`.
 
 | Method | CPU behavior | CUDA behavior | Notes |
 | --- | --- | --- | --- |
-| `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, FAISS GPU CAGRA/direct cuVS CAGRA selector, FAISS GPU Flat IP for exact small/query raw inner product, transformed FAISS GPU/direct cuVS CAGRA for large raw-inner-product self-KNN, or faissR native CUDA candidate refinement as a large-self-search fallback. Explicit CUDA exact/brute-force calls can use transformed cuVS brute force. | Default for general use. |
+| `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, FAISS GPU CAGRA/direct cuVS CAGRA selector, FAISS GPU Flat IP for exact small/query raw inner product, or transformed FAISS GPU/direct cuVS CAGRA for large raw-inner-product self-KNN. Explicit CUDA exact/brute-force calls can use transformed cuVS brute force. | Default for general use. |
 | `exact` | Native exact CPU route. | FAISS GPU Flat when available; otherwise cuVS brute force can provide exact transformed metric search. | Accuracy-first baseline. |
 | `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP; degenerate zero-normalized rows error instead of being repaired on CPU. | Exact FAISS route [1-2,16]. |
 | `bruteforce` | Native exact CPU route. | Direct cuVS brute force when available, with exact transforms for cosine, correlation, and raw inner product. | Useful for comparing direct cuVS against FAISS GPU Flat [1-3,16]. |
@@ -321,7 +320,7 @@ public method names map to different concrete functions depending on `backend`.
 | `scann` | FAISS CPU `IndexIVFPQFastScan` with 4-bit PQ and optional Flat refinement. | Direct RAPIDS cuVS IVF-PQ with 4-bit compressed codes. | ScaNN-inspired compressed-code route for Euclidean/L2 search; CPU requires linked FAISS FastScan support and CUDA requires cuVS, with no CPU fallback for explicit CUDA requests [6,34]. |
 | `vamana` | Native DiskANN/Vamana-style robust-pruned candidate graph with CPU refinement. | Native DiskANN/Vamana-style robust-pruned candidate graph with CUDA row-candidate refinement. | Distinct pruned directed graph route implemented in faissR; large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning, while smaller CPU inputs keep exact seed neighbours. Robust pruning protects the first `k` seed neighbours before applying the Vamana rule; cuVS Vamana currently provides build/serialization rather than KNN search [3,5,24]. |
 | `nsg` | Native CPU NSG-style self-KNN candidate graph for Euclidean, cosine, correlation, and inner product. | Native CUDA NSG-style self-KNN candidate graph for all public metrics. | Optional graph-search baseline; public CPU NSG avoids unsafe linked-FAISS graph construction by using faissR-owned candidate pruning/refinement. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before NSG/MRNG-style pruning; smaller CPU inputs and CUDA keep exact seed neighbours. Native CPU/CUDA NSG protect the first `k` seed neighbours before pruning and use backend-specific auto defaults/options (`faissR.cpu_nsg_*`, `faissR.cuda_nsg_*`) [5,16,21,29]. |
-| `nndescent` | Native CPU NNDescent for Euclidean/L2, cosine, correlation, and raw inner product. | Direct cuVS NN-descent for Euclidean/L2, cosine, and correlation; faissR native CUDA candidate refinement for raw inner product. | Approximate KNN graph construction; cosine/correlation use normalized Euclidean search, CPU and native CUDA raw inner product use shifted dot-product distances, and FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
+| `nndescent` | Native CPU NNDescent for Euclidean/L2, cosine, correlation, and raw inner product. | Direct cuVS NN-descent for Euclidean/L2, cosine, and correlation. | Approximate KNN graph construction; cosine/correlation use normalized Euclidean search. CUDA raw inner product is unsupported for NN-descent because direct cuVS NN-descent does not expose raw IP, and FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
 | `cagra` | Unsupported. | FAISS GPU CAGRA or direct cuVS CAGRA; `faissR.cagra_implementation` can force `"faiss_gpu"` or `"cuvs"`, while `"auto"` uses a deterministic shape-aware provider rule. Cosine/correlation use normalized Euclidean graph search; raw inner product uses a maximum-inner-product-to-L2 transform. | CUDA-only FAISS/cuVS graph-search method [3,13-16]. |
 
 For direct cuVS brute force, cosine and correlation are transformed to exact

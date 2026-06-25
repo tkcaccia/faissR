@@ -115,12 +115,11 @@ that the no-pilot graph-shape rule came from compiled policy.
 | `nsg` | `cpu_nsg` speed/balanced tiers | CPU graph candidate | Native faissR NSG-style route for all public metrics; avoids linked-FAISS NSG aborts in public calls. Large high-dimensional CPU inputs use deterministic HNSW seeding before NSG/MRNG-style pruning so explicit NSG no longer starts with an all-pairs exact seed on MNIST/FashionMNIST-scale matrices. |
 | `vamana` | `cpu_vamana` speed/balanced tiers | CPU graph candidate | Native DiskANN/Vamana-style robust-pruned candidate graph; large high-dimensional CPU inputs use deterministic HNSW seeding before robust pruning, while smaller inputs keep exact seeding. |
 | `nndescent` | `cpu_nndescent` speed/balanced tiers | CPU graph speed tier | Native faissR NN-descent route; useful as an explicit Euclidean, normalized cosine/correlation, or raw inner-product graph-search candidate, but recall was usually lower than HNSW. |
-| `nndescent` | `cuda_cuvs_nndescent` | CUDA graph speed tier | Fast and useful at around 0.99 recall on some datasets; failed on COIL20. |
-| `nndescent` | `cuda_native_nndescent` | CUDA raw inner-product tier | Native CUDA candidate-refinement route used by public `backend = "cuda", method = "nndescent", metric = "inner_product"` because direct cuVS NN-descent does not expose raw IP. |
+| `nndescent` | `cuda_cuvs_nndescent` | CUDA graph speed tier | Fast and useful at around 0.99 recall on some datasets. On affected cuVS builds, high-dimensional FP32 inputs such as COIL20 can fail with `cudaErrorInvalidValue` because cuVS NN-descent does not opt into the required dynamic shared-memory launch limit; a local upstream-style cuVS patch fixed COIL20 and MNIST70k on the test machine. |
 | `cagra` | `faiss_gpu_cagra` | CUDA graph high-recall tier | FAISS `GpuIndexCagra` path using the FAISS GPU/cuVS integration when the linked FAISS build exposes it. This provider is selected by `cagra_implementation = "faiss_gpu"` and remains the default for most shapes when both providers are available [13-15]. |
 | `cagra` | `cuda_cuvs_cagra` with `ivf_pq` build | Direct cuVS CAGRA default large-shape builder | Direct RAPIDS cuVS CAGRA using the cuVS IVF-PQ graph builder. This can be fast, but high-dimensional compact matrices can request very large temporary workspace, so the auto build rule avoids it for COIL20-like shapes [3]. |
 | `cagra` | `cuda_cuvs_cagra` with `iterative_cagra_search` build | Direct cuVS compact high-dimensional builder | Direct RAPIDS cuVS CAGRA using iterative CAGRA graph construction. This is the default direct-cuVS build for compact high-dimensional self-KNN (`n <= 5000`, `p >= 1024`, `k <= 100`) because it avoids the IVF-PQ workspace spike observed on COIL20 while keeping the method as CAGRA. |
-| `cagra` | `cuda_cuvs_cagra` with `nn_descent` build | Direct cuVS experimental builder | Direct RAPIDS cuVS CAGRA using cuVS NN-descent graph construction. This failed on COIL20 in the current runtime with a CUDA invalid-argument error and should remain an explicit benchmark setting rather than an auto default. |
+| `cagra` | `cuda_cuvs_cagra` with `nn_descent` build | Direct cuVS experimental builder | Direct RAPIDS cuVS CAGRA using cuVS NN-descent graph construction. This inherits the cuVS NN-descent dynamic shared-memory launch issue on affected builds for high-dimensional FP32 inputs, so it should remain an explicit benchmark setting until the linked cuVS contains the upstream fix. |
 | `grid` | `cpu_grid` | Exact 2D/3D spatial path | Best for simulated 2D/3D Euclidean/cosine/correlation data; unavailable by design outside 2D/3D. |
 | `grid` | `cuda_grid` | CUDA 2D/3D spatial path | Correct for 2D/3D, but benchmark speed depends strongly on GPU model and transfer overhead. |
 
@@ -294,8 +293,8 @@ produced by the compiled selector. The metadata policy string is
 The same C++ policy layer now owns the deterministic tuning rules used after a
 route is selected. For example, CPU HNSW tiering, IVF `nlist`/`nprobe`, PQ
 bit-width selection for small training sets, cuVS CAGRA graph degree and build
-widths, cuVS NN-descent/IVFPQ parameters, native NSG/Vamana candidate graph
-sizes, and native CUDA NN-descent iteration widths all return
+widths, cuVS NN-descent/IVFPQ parameters, and native NSG/Vamana candidate graph
+sizes all return
 `tuning_source = "cpp"`. Pilot/cache tuning, where explicitly requested,
 remains opt-in and separate from `tuning = "auto"`.
 

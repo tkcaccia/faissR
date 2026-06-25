@@ -122,10 +122,9 @@ std::string public_method_from_backend(const std::string& backend) {
   if (backend == "faiss_nsg" || backend == "cpu_nsg" ||
       backend == "cuda_nsg") return "nsg";
   if (backend == "cpu_nndescent" || backend == "faiss_nndescent" ||
-      backend == "cuda_cuvs_nndescent" || backend == "cuvs_nndescent" ||
-      backend == "cuda_native_nndescent" || backend == "cuda_nndescent" ||
-      backend == "cuda_approx" || backend == "gpu_nndescent" ||
-      backend == "gpu_approx") return "nndescent";
+      backend == "cuda_cuvs_nndescent" || backend == "cuvs_nndescent") {
+    return "nndescent";
+  }
   if (backend == "faiss_gpu_cagra" || backend == "cuda_faiss_cagra" ||
       backend == "cuda_cuvs_cagra" || backend == "cuda_cagra" ||
       backend == "gpu_cagra") return "cagra";
@@ -177,9 +176,6 @@ std::string cuda_non_euclidean_backend(const std::string& metric,
     );
   }
   if (faiss_gpu_available) return flat_backend;
-  if (metric == "inner_product" && cuda_available && self_query) {
-    return "cuda_native_nndescent";
-  }
   if (requested_device == "auto") return "cpu_auto";
   return "__cuda_non_euclidean_unavailable__";
 }
@@ -1252,42 +1248,6 @@ List nn_tune_vamana_cpp(int n,
       ((high_dim || large_k) ? "high_recall_vamana" : "balanced_vamana"),
     _["tuning_large_k"] = large_k,
     _["tuning_high_dim"] = high_dim,
-    _["tuning_source"] = "cpp"
-  );
-}
-
-// [[Rcpp::export]]
-List nn_tune_gpu_nndescent_cpp(int n,
-                               int k,
-                               std::string backend,
-                               int graph_degree_option = NA_INTEGER,
-                               int n_iters_option = NA_INTEGER,
-                               int sources_option = NA_INTEGER,
-                               int neighbors_option = NA_INTEGER,
-                               double delta_option = NA_REAL) {
-  n = valid_int(n) ? n : NA_INTEGER;
-  k = safe_k(k);
-  int graph_degree_default = (valid_int(n) && n >= 50000 && k <= 30) ? std::max(k, 64) : k;
-  int graph_degree = valid_int(graph_degree_option) ? graph_degree_option : graph_degree_default;
-  if (valid_int(n)) graph_degree = std::min(graph_degree, n - 1);
-  graph_degree = clamp_int(graph_degree, k, 256);
-  const int default_iters = (backend == "cuda" && valid_int(n) && n >= 50000) ? 3 : 1;
-  const int n_iters = option_int(n_iters_option, default_iters, 1, 5);
-  const int default_sources = std::max(3, std::min(graph_degree, 10));
-  const int sources = option_int(sources_option, default_sources, 1, graph_degree);
-  const int default_neighbors = std::max(5, std::min(graph_degree, static_cast<int>(std::ceil(graph_degree / 2.0))));
-  const int neighbors = option_int(neighbors_option, default_neighbors, 1, graph_degree);
-  const double delta = option_double(delta_option, 0.015, 0.0, R_PosInf);
-  return List::create(
-    _["graph_degree"] = graph_degree,
-    _["n_iters"] = n_iters,
-    _["sources"] = sources,
-    _["neighbors"] = neighbors,
-    _["delta"] = delta,
-    _["tuning_policy"] = "auto_shape_k",
-    _["tuning_rule"] = (valid_int(n) && n >= 50000) ? "large_graph_adaptive" : "balanced_adaptive",
-    _["tuning_large_n"] = valid_int(n) && n >= 50000,
-    _["tuning_small_k"] = k <= 10,
     _["tuning_source"] = "cpp"
   );
 }

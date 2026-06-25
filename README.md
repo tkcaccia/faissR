@@ -181,6 +181,20 @@ route and parameters a result used.
 Use `nn_capabilities()` to inspect which public `method`, `backend`, and
 `metric` combinations are supported before launching a large benchmark.
 
+### cuVS NN-Descent Shared-Memory Note
+
+On some RAPIDS cuVS builds, direct CUDA NN-descent can fail on
+high-dimensional FP32 L2 inputs with `cudaErrorInvalidValue` during
+`cuvsNNDescentBuild`. We traced this to the cuVS L2-norm kernel requesting more
+than CUDA's default dynamic shared memory per block without opting into the
+larger device-supported limit. A local cuVS patch that calls
+`cudaFuncSetAttribute(cudaFuncAttributeMaxDynamicSharedMemorySize)` before the
+kernel launch fixed the full COIL20 `1440 x 16384` case and MNIST70k on the
+test machine. faissR does not vendor this cuVS patch or silently fall back to
+CPU; affected users should update to a cuVS release containing the fix or build
+cuVS with the patch. See the copy-ready upstream report in
+[docs/cuvs-nndescent-shared-memory-issue.md](docs/cuvs-nndescent-shared-memory-issue.md).
+
 ## Quick Example
 
 ```r
