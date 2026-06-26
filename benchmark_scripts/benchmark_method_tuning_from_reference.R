@@ -73,6 +73,29 @@ script_path <- function() {
   normalizePath(file.path("benchmark_scripts", "benchmark_method_tuning_from_reference.R"), mustWork = FALSE)
 }
 
+safe_timeout_bin <- local({
+  cached <- NULL
+  function() {
+    if (!is.null(cached)) return(cached)
+    env <- Sys.getenv("FAISSR_TIMEOUT_BIN", unset = "")
+    if (nzchar(env)) {
+      cached <<- if (tolower(env) %in% c("none", "false", "0", "off")) "" else env
+      return(cached)
+    }
+    found <- tryCatch(unname(Sys.which("timeout")), error = function(e) "")
+    if (!nzchar(found)) {
+      for (candidate in c("/usr/bin/timeout", "/bin/timeout")) {
+        if (file.exists(candidate) && file.access(candidate, 1L) == 0L) {
+          found <- candidate
+          break
+        }
+      }
+    }
+    cached <<- found %||% ""
+    cached
+  }
+})
+
 configure_threads <- function(n_threads) {
   value <- as.character(as.integer(n_threads))
   Sys.setenv(
@@ -228,7 +251,7 @@ shape_group <- function(n, p) {
 
 all_option_columns <- c(
   "candidate_target_recall", "faiss_query_batch_size", "faiss_gpu_query_batch_size",
-  "faiss_gpu_reuse_resources", "cache_fitted_indexes",
+  "cuvs_ivf_batch_size", "faiss_gpu_reuse_resources", "cache_fitted_indexes",
   "hnsw_m", "hnsw_ef_construction", "hnsw_ef_search",
   "ivf_nlist", "ivf_nprobe", "pq_m", "pq_nbits", "pq_dim",
   "ivfpq_fastscan_refine_factor", "ivfpq_fastscan_bbs",
@@ -291,11 +314,88 @@ cuvs_byte_aligned_pq_dim <- function(p, pq_dim, pq_bits = 4L) {
   if (effective_dim >= 1L) effective_dim else pq_dim
 }
 
+grid_number_label <- function(prefix, value) {
+  txt <- format(as.numeric(value), trim = TRUE, scientific = FALSE)
+  txt <- gsub("[^0-9A-Za-z]+", "p", txt)
+  paste0(prefix, txt)
+}
+
+ivfpq_fastscan_pq_dim_candidates <- function(p, values = NULL, backend = "cpu") {
+  p <- as.integer(max(1L, p))
+  if (!identical(backend, "cuda")) {
+    return(divisor_at_most(p, 16L))
+  }
+  if (length(values)) {
+    out <- unique(vapply(values, function(value) {
+      cuvs_byte_aligned_pq_dim(p, as.integer(round(value)), pq_bits = 4L)
+    }, integer(1L)))
+  } else {
+    out <- cuvs_byte_aligned_pq_dim(p, divisor_at_most(p, 32L), pq_bits = 4L)
+  }
+  out <- out[is.finite(out) & out >= 1L & out <= p & (4L * out) %% 8L == 0L]
+  if (length(out)) unique(as.integer(out)) else cuvs_byte_aligned_pq_dim(p, divisor_at_most(p, 32L), pq_bits = 4L)
+}
+
+nndescent_cuda_candidate_values <- function(n,
+                                            k,
+                                            grid_level,
+                                            graph_degrees = NULL,
+                                            intermediate_graph_degrees = NULL,
+                                            max_iterations = NULL) {
+  k <- as.integer(k)
+  manual <- length(graph_degrees) || length(intermediate_graph_degrees) || length(max_iterations)
+  if (manual) {
+    graph <- as.integer(graph_degrees %||% c(32L, 48L, 64L, 96L))
+    intermediate <- as.integer(intermediate_graph_degrees %||% ceiling(1.5 * pmax(k, graph)))
+    iterations <- as.integer(max_iterations %||% c(5L, 8L, 12L, 16L))
+    lens <- c(length(graph), length(intermediate), length(iterations))
+    if (length(unique(lens)) == 1L) {
+      vals <- data.frame(
+        nndescent_graph_degree = graph,
+        nndescent_intermediate_graph_degree = intermediate,
+        nndescent_max_iterations = iterations
+      )
+    } else {
+      vals <- expand.grid(
+        nndescent_graph_degree = graph,
+        nndescent_intermediate_graph_degree = intermediate,
+        nndescent_max_iterations = iterations,
+        KEEP.OUT.ATTRS = FALSE,
+        stringsAsFactors = FALSE
+      )
+    }
+  } else if (n >= 1000000L && k >= 100L) {
+    vals <- data.frame(
+      nndescent_graph_degree = as.integer(c(k, k, ceiling(112L * k / 100), ceiling(128L * k / 100))),
+      nndescent_intermediate_graph_degree = as.integer(c(k, ceiling(125L * k / 100), ceiling(150L * k / 100), ceiling(175L * k / 100))),
+      nndescent_max_iterations = c(5L, 8L, 12L, 16L)
+    )
+  } else {
+    vals <- data.frame(
+      nndescent_graph_degree = c(32L, 48L, 64L, 96L),
+      nndescent_intermediate_graph_degree = c(64L, 96L, 128L, 192L),
+      nndescent_max_iterations = c(5L, 8L, 12L, 16L)
+    )
+    if (identical(grid_level, "compact")) vals <- vals[c(1L, 2L, 3L), , drop = FALSE]
+  }
+  vals$nndescent_graph_degree <- as.integer(pmax(k, vals$nndescent_graph_degree))
+  vals$nndescent_intermediate_graph_degree <- as.integer(pmax(vals$nndescent_graph_degree, vals$nndescent_intermediate_graph_degree))
+  vals <- unique(vals)
+  row.names(vals) <- NULL
+  vals
+}
+
 candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_values, output_values, grid_level,
                            ivfpq_fastscan_refine_factors = NULL,
+                           ivfpq_fastscan_nlist_multipliers = NULL,
                            ivfpq_fastscan_nprobe_multipliers = NULL,
+                           ivfpq_fastscan_pq_dim_values = NULL,
                            ivfpq_fastscan_pq_m_values = NULL,
-                           ivfpq_fastscan_bbs_values = NULL) {
+                           ivfpq_fastscan_bbs_values = NULL,
+                           cuvs_ivf_batch_sizes = NULL,
+                           nndescent_cuda_graph_degrees = NULL,
+                           nndescent_cuda_intermediate_graph_degrees = NULL,
+                           nndescent_cuda_max_iterations = NULL) {
   rows <- list()
   add <- function(x) {
     rows[[length(rows) + 1L]] <<- fill_candidate(x)
@@ -336,13 +436,35 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
     }
   } else if (method %in% c("ivf", "ivfpq", "ivfpq_fastscan")) {
     base_nlist <- ivf_nlist(n, k)
-    specs <- data.frame(label = c("speed", "balanced", "recall", "recall_plus"), nlist_mult = c(0.5, 1, 2, 4), nprobe_mult = c(0.5, 1, 2, 3))
-    if (identical(grid_level, "compact")) specs <- specs[c(1L, 2L, 3L), , drop = FALSE]
+    custom_ivfpq_fastscan_grid <- method == "ivfpq_fastscan" &&
+      (length(ivfpq_fastscan_nlist_multipliers) || length(ivfpq_fastscan_nprobe_multipliers))
+    if (custom_ivfpq_fastscan_grid) {
+      nlist_mults <- ivfpq_fastscan_nlist_multipliers
+      if (!length(nlist_mults)) nlist_mults <- c(0.5, 1, 2, 4)
+      nprobe_mults <- ivfpq_fastscan_nprobe_multipliers
+      if (!length(nprobe_mults)) nprobe_mults <- c(0.5, 1, 2, 3)
+      specs <- expand.grid(
+        nlist_mult = unique(as.numeric(nlist_mults)),
+        nprobe_mult = unique(as.numeric(nprobe_mults)),
+        KEEP.OUT.ATTRS = FALSE,
+        stringsAsFactors = FALSE
+      )
+      specs$label <- paste(
+        grid_number_label("nlx", specs$nlist_mult),
+        grid_number_label("npx", specs$nprobe_mult),
+        sep = "_"
+      )
+      specs <- specs[, c("label", "nlist_mult", "nprobe_mult"), drop = FALSE]
+    } else {
+      specs <- data.frame(label = c("speed", "balanced", "recall", "recall_plus"), nlist_mult = c(0.5, 1, 2, 4), nprobe_mult = c(0.5, 1, 2, 3))
+      if (identical(grid_level, "compact")) specs <- specs[c(1L, 2L, 3L), , drop = FALSE]
+    }
     for (i in seq_len(nrow(specs))) {
       nlist <- as.integer(max(1L, min(n, round(base_nlist * specs$nlist_mult[[i]]))))
       base_probe <- ivf_nprobe(nlist, k)
       nprobe_values <- as.integer(max(1L, min(nlist, ceiling(base_probe * specs$nprobe_mult[[i]]))))
-      if (method == "ivfpq_fastscan" && identical(backend, "cpu") && length(ivfpq_fastscan_nprobe_multipliers)) {
+      if (method == "ivfpq_fastscan" && identical(backend, "cpu") &&
+          length(ivfpq_fastscan_nprobe_multipliers) && !isTRUE(custom_ivfpq_fastscan_grid)) {
         nprobe_values <- unique(as.integer(pmax(1L, pmin(nlist, ceiling(base_probe * ivfpq_fastscan_nprobe_multipliers)))))
       }
       x <- base_candidates(method, backend, k, thread_values, output_values, sprintf("%s_nl%d_np%d", specs$label[[i]], nlist, nprobe_values[[1L]]))
@@ -358,9 +480,36 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
             divisor_at_most(p, as.integer(round(value)))
           }, integer(1L)))
         }
-        pq_dim <- divisor_at_most(p, if (backend == "cuda") 32L else 16L)
-        if (identical(backend, "cuda")) {
-          pq_dim <- cuvs_byte_aligned_pq_dim(p, pq_dim, pq_bits = 4L)
+        pq_dim_values <- ivfpq_fastscan_pq_dim_candidates(
+          p,
+          values = ivfpq_fastscan_pq_dim_values,
+          backend = backend
+        )
+        if (method == "ivfpq_fastscan" && identical(backend, "cuda")) {
+          batch_values <- unique(as.integer(cuvs_ivf_batch_sizes %||% 32768L))
+          batch_values <- batch_values[is.finite(batch_values) & batch_values > 0L]
+          if (!length(batch_values)) batch_values <- 32768L
+          for (nprobe in nprobe_values) {
+            for (pq_dim in pq_dim_values) {
+              for (batch_size in batch_values) {
+                y <- x
+                y$ivf_nprobe <- as.integer(nprobe)
+                y$pq_m <- NA_integer_
+                y$pq_dim <- as.integer(pq_dim)
+                y$pq_nbits <- 4L
+                y$ivfpq_fastscan_refine_factor <- NA_integer_
+                y$ivfpq_fastscan_bbs <- NA_integer_
+                y$cuvs_ivf_batch_size <- as.integer(batch_size)
+                y$candidate_id <- sprintf(
+                  "%s_nl%d_np%d_pqdim%d_bs%d",
+                  specs$label[[i]], nlist, as.integer(nprobe),
+                  as.integer(pq_dim), as.integer(batch_size)
+                )
+                add(y)
+              }
+            }
+          }
+          next
         }
         refine_values <- c(2L, 4L, 8L, 12L)[[i]]
         if (identical(backend, "cpu") && length(ivfpq_fastscan_refine_factors)) {
@@ -377,14 +526,14 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
                 y <- x
                 y$ivf_nprobe <- as.integer(nprobe)
                 y$pq_m <- as.integer(pq_m)
-                y$pq_dim <- pq_dim
+                y$pq_dim <- pq_dim_values[[1L]]
                 y$pq_nbits <- 4L
                 y$ivfpq_fastscan_refine_factor <- as.integer(refine_factor)
                 y$ivfpq_fastscan_bbs <- as.integer(bbs)
                 y$candidate_id <- sprintf(
                   "%s_nl%d_np%d_m%d_pqdim%d_rf%d_bbs%d",
                   specs$label[[i]], nlist, as.integer(nprobe),
-                  as.integer(pq_m), pq_dim, as.integer(refine_factor),
+                  as.integer(pq_m), as.integer(pq_dim_values[[1L]]), as.integer(refine_factor),
                   as.integer(bbs)
                 )
                 add(y)
@@ -417,7 +566,14 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
     if (backend == "cpu") {
       vals <- data.frame(nndescent_pool_size = c(20L, 30L, 40L, 60L), nndescent_n_iters = c(5L, 7L, 10L, 12L), nndescent_max_candidates = c(60L, 90L, 120L, 180L), nndescent_n_random_projections = c(4L, 6L, 8L, 12L))
     } else {
-      vals <- data.frame(nndescent_graph_degree = c(32L, 48L, 64L, 96L), nndescent_intermediate_graph_degree = c(64L, 96L, 128L, 192L), nndescent_max_iterations = c(5L, 8L, 12L, 16L))
+      vals <- nndescent_cuda_candidate_values(
+        n = n,
+        k = k,
+        grid_level = grid_level,
+        graph_degrees = nndescent_cuda_graph_degrees,
+        intermediate_graph_degrees = nndescent_cuda_intermediate_graph_degrees,
+        max_iterations = nndescent_cuda_max_iterations
+      )
     }
     for (i in seq_len(nrow(vals))) {
       x <- base_candidates(method, backend, k, thread_values, output_values, paste(names(vals), vals[i, ], sep = "", collapse = "_"))
@@ -445,7 +601,10 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
 }
 
 apply_candidate <- function(candidate) {
-  Sys.unsetenv(c("FAISSR_FAISS_QUERY_BATCH_SIZE", "FAISSR_FAISS_GPU_QUERY_BATCH_SIZE", "FAISSR_FAISS_GPU_REUSE_RESOURCES"))
+  Sys.unsetenv(c(
+    "FAISSR_FAISS_QUERY_BATCH_SIZE", "FAISSR_FAISS_GPU_QUERY_BATCH_SIZE",
+    "FAISSR_FAISS_GPU_REUSE_RESOURCES", "FAISSR_CUVS_IVF_BATCH_SIZE"
+  ))
   options(
     faissR.faiss_nlist = NULL, faissR.ivf_nlist = NULL,
     faissR.faiss_nprobe = NULL, faissR.ivf_nprobe = NULL,
@@ -468,6 +627,7 @@ apply_candidate <- function(candidate) {
   set_opt <- function(name, value) if (!is.null(value) && length(value) && !is.na(value[[1L]])) options(stats::setNames(list(value[[1L]]), paste0("faissR.", name)))
   if (!is.na(candidate$faiss_query_batch_size)) Sys.setenv(FAISSR_FAISS_QUERY_BATCH_SIZE = as.integer(candidate$faiss_query_batch_size))
   if (!is.na(candidate$faiss_gpu_query_batch_size)) Sys.setenv(FAISSR_FAISS_GPU_QUERY_BATCH_SIZE = as.integer(candidate$faiss_gpu_query_batch_size))
+  if (!is.na(candidate$cuvs_ivf_batch_size)) Sys.setenv(FAISSR_CUVS_IVF_BATCH_SIZE = as.integer(candidate$cuvs_ivf_batch_size))
   if (!is.na(candidate$faiss_gpu_reuse_resources)) Sys.setenv(FAISSR_FAISS_GPU_REUSE_RESOURCES = if (isTRUE(candidate$faiss_gpu_reuse_resources)) "1" else "0")
   if (!is.na(candidate$cache_fitted_indexes)) options(faissR.cache_fitted_nn_indexes = isTRUE(candidate$cache_fitted_indexes), faissR.cache_fitted_nn_indexes_max_entries = 1L)
   set_opt("ivf_nlist", candidate$ivf_nlist); set_opt("faiss_nlist", candidate$ivf_nlist)
@@ -504,6 +664,15 @@ base_row <- function(config, status = "success", error = NA_character_) {
     result_backend = NA_character_, resolved_backend = NA_character_,
     implementation_backend = NA_character_, distance_type = NA_character_,
     input_type = NA_character_, input_layout = NA_character_,
+    search_batch_size = NA_integer_, requested_search_batch_size = NA_integer_,
+    search_batch_policy = NA_character_, query_call_count = NA_integer_,
+    dataset_residency = NA_character_, query_residency = NA_character_,
+    query_uses_index_dataset_buffer = NA, query_device_buffer_cached = NA,
+    query_device_buffer_reused = NA, query_device_cache_status = NA_character_,
+    query_host_to_device_copies = NA_integer_,
+    index_build_host_to_device_copies = NA_integer_,
+    query_upload_count = NA_integer_, query_cache_hit_count = NA_integer_,
+    host_device_traffic_policy = NA_character_,
     exact = NA, error = error, stringsAsFactors = FALSE
   )
   cbind(out, candidate[all_option_columns])
@@ -544,6 +713,57 @@ run_method <- function(config) {
   row$distance_type <- res$distance_type %||% attr(res, "distance_type") %||% NA_character_
   row$input_type <- res$input_type %||% attr(res, "input_type") %||% NA_character_
   row$input_layout <- res$input_layout %||% attr(res, "input_layout") %||% NA_character_
+  approx <- attr(res, "approximation") %||% list()
+  row$search_batch_size <- as.integer(res$search_batch_size %||% approx$search_batch_size %||% NA_integer_)
+  row$requested_search_batch_size <- as.integer(
+    res$requested_search_batch_size %||% approx$requested_search_batch_size %||% NA_integer_
+  )
+  row$search_batch_policy <- as.character(
+    res$search_batch_policy %||% approx$search_batch_policy %||% NA_character_
+  )
+  row$query_call_count <- as.integer(res$query_call_count %||% approx$query_call_count %||% NA_integer_)
+  gpu <- attr(res, "gpu_residency") %||% list()
+  row$dataset_residency <- as.character(
+    res$dataset_residency %||% approx$dataset_residency %||% gpu$dataset_residency %||% NA_character_
+  )
+  row$query_residency <- as.character(
+    res$query_residency %||% approx$query_residency %||% gpu$query_residency %||% NA_character_
+  )
+  row$query_uses_index_dataset_buffer <- as.logical(
+    res$query_uses_index_dataset_buffer %||% approx$query_uses_index_dataset_buffer %||%
+      gpu$query_uses_index_dataset_buffer %||% NA
+  )
+  row$query_device_buffer_cached <- as.logical(
+    res$query_device_buffer_cached %||% approx$query_device_buffer_cached %||%
+      gpu$query_device_buffer_cached %||% NA
+  )
+  row$query_device_buffer_reused <- as.logical(
+    res$query_device_buffer_reused %||% approx$query_device_buffer_reused %||%
+      gpu$query_device_buffer_reused %||% NA
+  )
+  row$query_device_cache_status <- as.character(
+    res$query_device_cache_status %||% approx$query_device_cache_status %||%
+      gpu$query_device_cache_status %||% NA_character_
+  )
+  row$query_host_to_device_copies <- as.integer(
+    res$query_host_to_device_copies %||% approx$query_host_to_device_copies %||%
+      gpu$query_host_to_device_copies %||% NA_integer_
+  )
+  row$index_build_host_to_device_copies <- as.integer(
+    res$index_build_host_to_device_copies %||% approx$index_build_host_to_device_copies %||%
+      gpu$index_build_host_to_device_copies %||% NA_integer_
+  )
+  row$query_upload_count <- as.integer(
+    res$query_upload_count %||% approx$query_upload_count %||% gpu$query_upload_count %||% NA_integer_
+  )
+  row$query_cache_hit_count <- as.integer(
+    res$query_cache_hit_count %||% approx$query_cache_hit_count %||%
+      gpu$query_cache_hit_count %||% NA_integer_
+  )
+  row$host_device_traffic_policy <- as.character(
+    res$host_device_traffic_policy %||% approx$host_device_traffic_policy %||%
+      gpu$host_device_traffic_policy %||% NA_character_
+  )
   row$exact <- isTRUE(attr(res, "exact"))
   row
 }
@@ -565,7 +785,7 @@ run_task <- function(config, timeout, bench_script) {
   on.exit(unlink(c(cfg, out)), add = TRUE)
   cmd <- c(Sys.getenv("R_BIN", "Rscript"), "--vanilla", bench_script,
            "--child=TRUE", paste0("--config=", cfg), paste0("--result=", out))
-  timeout_bin <- Sys.which("timeout")
+  timeout_bin <- safe_timeout_bin()
   if (nzchar(timeout_bin)) cmd <- c(timeout_bin, as.character(as.integer(ceiling(timeout))), cmd)
   status <- system(paste(shQuote(cmd), collapse = " "), intern = TRUE)
   exit_status <- attr(status, "status") %||% 0L
@@ -603,12 +823,27 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
   }
   rec <- if (length(rows)) do.call(rbind, rows) else cbind(target_recall_threshold = numeric(0), recommendation_basis = character(0), x[FALSE, , drop = FALSE])
   write.csv(rec, file.path(out_dir, sprintf("%s_tuning_recommendations.csv", method)), row.names = FALSE)
+  method_notes <- character()
+  if (identical(method, "ivfpq_fastscan")) {
+    method_notes <- c(
+      "",
+      "## IVFPQ FastScan Notes",
+      "",
+      "- CUDA rows tune `ivf_nlist`, `ivf_nprobe`, byte-aligned 4-bit `cuvs_ivfpq_pq_dim`, and `FAISSR_CUVS_IVF_BATCH_SIZE`.",
+      "- For cuVS 4-bit IVF-PQ, `pq_dim` is repaired to a byte-aligned value when needed; smaller `pq_dim` and smaller `nprobe` are expected to be faster but can reduce recall.",
+      "- `nlist` controls the IVF build/search balance; too few lists can hurt recall, while too many lists can increase build and coarse-search overhead.",
+      "- `FAISSR_CUVS_IVF_BATCH_SIZE` changes query batching and GPU memory use, not the IVF-PQ recall target directly.",
+      "- faissR submits multi-query cuVS IVF-PQ/FastScan searches in batches and prevents row-by-row search for multi-query calls.",
+      "- CUDA host-device traffic columns (`dataset_residency`, `query_residency`, `query_device_cache_status`, `query_host_to_device_copies`) show whether searches reused GPU-resident buffers or uploaded query data."
+    )
+  }
   writeLines(c(
     sprintf("# %s Tuning Report", method),
     "",
     sprintf("Generated: %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
     "",
     "References are loaded from max-k dataset-folder files created by benchmark_precompute_exact_references.R and cropped to the requested k.",
+    method_notes,
     "",
     "## Status Counts",
     "",
@@ -647,7 +882,7 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   threads <- positive_int(args$threads, 12L, "threads")
   thread_values <- as.integer(split_arg(args$thread_values, if (backend == "cpu") "12" else "12"))
   output_values <- split_arg(args$output_values, args$output %||% "float")
-  timeout <- positive_int(args$timeout, 600L, "timeout")
+  timeout <- positive_int(args$timeout, 2000L, "timeout")
   quality_n <- positive_int(args$quality_n, 256L, "quality_n")
   seed <- positive_int(args$seed, 4L, "seed")
   grid_level <- args$grid_level %||% "standard"
@@ -656,10 +891,20 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
     default = NULL,
     name = "ivfpq_fastscan_refine_factors"
   )
+  ivfpq_fastscan_nlist_multipliers <- positive_num_values(
+    args$ivfpq_fastscan_nlist_multipliers,
+    default = NULL,
+    name = "ivfpq_fastscan_nlist_multipliers"
+  )
   ivfpq_fastscan_nprobe_multipliers <- positive_num_values(
     args$ivfpq_fastscan_nprobe_multipliers,
     default = NULL,
     name = "ivfpq_fastscan_nprobe_multipliers"
+  )
+  ivfpq_fastscan_pq_dim_values <- positive_int_values(
+    args$ivfpq_fastscan_pq_dim_values,
+    default = NULL,
+    name = "ivfpq_fastscan_pq_dim_values"
   )
   ivfpq_fastscan_pq_m_values <- positive_int_values(
     args$ivfpq_fastscan_pq_m_values,
@@ -671,6 +916,30 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
     default = NULL,
     name = "ivfpq_fastscan_bbs_values"
   )
+  cuvs_ivf_batch_sizes <- positive_int_values(
+    args$cuvs_ivf_batch_sizes,
+    default = if (identical(method, "ivfpq_fastscan") && identical(backend, "cuda")) {
+      c(8192L, 16384L, 32768L, 65536L)
+    } else {
+      NULL
+    },
+    name = "cuvs_ivf_batch_sizes"
+  )
+  nndescent_cuda_graph_degrees <- positive_int_values(
+    args$nndescent_cuda_graph_degrees,
+    default = NULL,
+    name = "nndescent_cuda_graph_degrees"
+  )
+  nndescent_cuda_intermediate_graph_degrees <- positive_int_values(
+    args$nndescent_cuda_intermediate_graph_degrees,
+    default = NULL,
+    name = "nndescent_cuda_intermediate_graph_degrees"
+  )
+  nndescent_cuda_max_iterations <- positive_int_values(
+    args$nndescent_cuda_max_iterations,
+    default = NULL,
+    name = "nndescent_cuda_max_iterations"
+  )
   resume <- logical_arg(args$resume, TRUE)
   resume_statuses <- split_arg(args$resume_statuses, "success,unsupported,unavailable,timeout")
   all_candidates <- do.call(rbind, lapply(seq_len(nrow(manifest)), function(i) {
@@ -680,9 +949,15 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
         method, backend, as.integer(ds$n), as.integer(ds$p), k,
         target_recalls, thread_values, output_values, grid_level,
         ivfpq_fastscan_refine_factors = ivfpq_fastscan_refine_factors,
+        ivfpq_fastscan_nlist_multipliers = ivfpq_fastscan_nlist_multipliers,
         ivfpq_fastscan_nprobe_multipliers = ivfpq_fastscan_nprobe_multipliers,
+        ivfpq_fastscan_pq_dim_values = ivfpq_fastscan_pq_dim_values,
         ivfpq_fastscan_pq_m_values = ivfpq_fastscan_pq_m_values,
-        ivfpq_fastscan_bbs_values = ivfpq_fastscan_bbs_values
+        ivfpq_fastscan_bbs_values = ivfpq_fastscan_bbs_values,
+        cuvs_ivf_batch_sizes = cuvs_ivf_batch_sizes,
+        nndescent_cuda_graph_degrees = nndescent_cuda_graph_degrees,
+        nndescent_cuda_intermediate_graph_degrees = nndescent_cuda_intermediate_graph_degrees,
+        nndescent_cuda_max_iterations = nndescent_cuda_max_iterations
       )
       x$dataset <- ds$dataset[[1L]]; x$n <- as.integer(ds$n); x$p <- as.integer(ds$p); x$k <- as.integer(k)
       x
@@ -699,9 +974,15 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
         method, backend, as.integer(ds$n), as.integer(ds$p), k,
         target_recalls, thread_values, output_values, grid_level,
         ivfpq_fastscan_refine_factors = ivfpq_fastscan_refine_factors,
+        ivfpq_fastscan_nlist_multipliers = ivfpq_fastscan_nlist_multipliers,
         ivfpq_fastscan_nprobe_multipliers = ivfpq_fastscan_nprobe_multipliers,
+        ivfpq_fastscan_pq_dim_values = ivfpq_fastscan_pq_dim_values,
         ivfpq_fastscan_pq_m_values = ivfpq_fastscan_pq_m_values,
-        ivfpq_fastscan_bbs_values = ivfpq_fastscan_bbs_values
+        ivfpq_fastscan_bbs_values = ivfpq_fastscan_bbs_values,
+        cuvs_ivf_batch_sizes = cuvs_ivf_batch_sizes,
+        nndescent_cuda_graph_degrees = nndescent_cuda_graph_degrees,
+        nndescent_cuda_intermediate_graph_degrees = nndescent_cuda_intermediate_graph_degrees,
+        nndescent_cuda_max_iterations = nndescent_cuda_max_iterations
       )
       for (j in seq_len(nrow(candidates))) {
         cand <- candidates[j, , drop = FALSE]

@@ -299,10 +299,10 @@ cuda_candidates <- function(k, grid_level = "standard") {
   )
   specs <- data.frame(
     label = c("fast", "balanced", "balanced_plus", "recall", "recall_plus"),
-    graph_mult = c(1.0, 1.25, 1.5, 2.0, 3.0),
+    graph_mult = c(1.0, 1.0, 1.12, 1.28, 1.5),
     graph_min = c(k, 32L, 48L, 64L, 96L),
-    intermediate_mult = c(2L, 2L, 3L, 3L, 4L),
-    iterations = c(10L, 15L, 20L, 30L, 40L),
+    intermediate_mult = c(1.0, 1.25, 1.5, 1.75, 2.0),
+    iterations = c(5L, 8L, 12L, 16L, 24L),
     stringsAsFactors = FALSE
   )
   if (identical(grid_level, "compact")) specs <- specs[c(1L, 3L, 4L), , drop = FALSE]
@@ -313,15 +313,15 @@ cuda_candidates <- function(k, grid_level = "standard") {
         label = c("recall_wide", "recall_max"),
         graph_mult = c(4.0, 5.0),
         graph_min = c(128L, 192L),
-        intermediate_mult = c(4L, 5L),
-        iterations = c(60L, 80L),
+        intermediate_mult = c(2.5, 3.0),
+        iterations = c(32L, 48L),
         stringsAsFactors = FALSE
       )
     )
   }
   manual <- do.call(rbind, lapply(seq_len(nrow(specs)), function(i) {
     graph_degree <- as.integer(max(k, ceiling(specs$graph_mult[[i]] * k), specs$graph_min[[i]]))
-    intermediate <- as.integer(max(graph_degree * 2L, graph_degree * specs$intermediate_mult[[i]]))
+    intermediate <- as.integer(max(graph_degree, ceiling(graph_degree * specs$intermediate_mult[[i]])))
     data.frame(
       candidate_id = paste0("cuda_", specs$label[[i]], "_gd", graph_degree, "_it", specs$iterations[[i]]),
       candidate_kind = "manual",
@@ -750,7 +750,7 @@ main <- function() {
   k_values <- as.integer(split_arg(args$k_values, "10,15,50,100"))
   target_recalls <- as.numeric(split_arg(args$target_recalls, "0.9,0.95,0.99"))
   n_threads <- positive_int(args$threads, if (backend == "cpu") 12 else 2, "threads")
-  timeout <- positive_num(args$timeout, 600, "timeout")
+  timeout <- positive_num(args$timeout, 2000, "timeout")
   quality_n <- positive_int(args$quality_n, 256, "quality_n")
   seed <- positive_int(args$seed, 4, "seed")
   output <- args$output %||% if (backend == "cuda") "float" else "double"

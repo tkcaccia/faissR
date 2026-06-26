@@ -38,7 +38,7 @@ export METHOD="nndescent"
 export BACKEND="cuda"
 export THREADS_CPU="${THREADS_CPU:-12}"
 export THREAD_VALUES="${THREAD_VALUES:-${THREADS_CPU}}"
-export TIMEOUT="${TIMEOUT:-600}"
+export TIMEOUT="${TIMEOUT:-2000}"
 export QUALITY_N="${QUALITY_N:-256}"
 export SEED="${SEED:-4}"
 export GRID_LEVEL="${GRID_LEVEL:-standard}"
@@ -52,6 +52,9 @@ export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM
 export K_VALUES="${K_VALUES:-10,15,50,100}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
+export NNDESCENT_CUDA_GRAPH_DEGREES="${NNDESCENT_CUDA_GRAPH_DEGREES:-}"
+export NNDESCENT_CUDA_INTERMEDIATE_GRAPH_DEGREES="${NNDESCENT_CUDA_INTERMEDIATE_GRAPH_DEGREES:-}"
+export NNDESCENT_CUDA_MAX_ITERATIONS="${NNDESCENT_CUDA_MAX_ITERATIONS:-}"
 
 export OMP_NUM_THREADS="${THREADS_CPU}"
 export OPENBLAS_NUM_THREADS="${THREADS_CPU}"
@@ -106,11 +109,14 @@ fi
   echo "BACKEND=${BACKEND}"
   echo "QUALITY_N=${QUALITY_N}"
   echo "SEED=${SEED}"
+  echo "NNDESCENT_CUDA_GRAPH_DEGREES=${NNDESCENT_CUDA_GRAPH_DEGREES}"
+  echo "NNDESCENT_CUDA_INTERMEDIATE_GRAPH_DEGREES=${NNDESCENT_CUDA_INTERMEDIATE_GRAPH_DEGREES}"
+  echo "NNDESCENT_CUDA_MAX_ITERATIONS=${NNDESCENT_CUDA_MAX_ITERATIONS}"
   echo "[$(date --iso-8601=seconds)] building float32 manifest"
   "${RUNNER[@]}" "${R_BIN}" "${MANIFEST_SCRIPT}"     --data_root="${DATA_ROOT}"     --out="${MANIFEST}"     --datasets="${DATASETS}"
 
   echo "[$(date --iso-8601=seconds)] running CUDA NNDESCENT tuning from precomputed references"
-  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --backend="${BACKEND}"     --k_values="${K_VALUES}"     --target_recalls="${TARGET_RECALLS}"     --threads="${THREADS_CPU}"     --thread_values="${THREAD_VALUES}"     --timeout="${TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --output_values="${OUTPUT_VALUES}"     --grid_level="${GRID_LEVEL}"     --resume=TRUE
+  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --backend="${BACKEND}"     --k_values="${K_VALUES}"     --target_recalls="${TARGET_RECALLS}"     --threads="${THREADS_CPU}"     --thread_values="${THREAD_VALUES}"     --timeout="${TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --output_values="${OUTPUT_VALUES}"     --grid_level="${GRID_LEVEL}"     --nndescent_cuda_graph_degrees="${NNDESCENT_CUDA_GRAPH_DEGREES}"     --nndescent_cuda_intermediate_graph_degrees="${NNDESCENT_CUDA_INTERMEDIATE_GRAPH_DEGREES}"     --nndescent_cuda_max_iterations="${NNDESCENT_CUDA_MAX_ITERATIONS}"     --resume=TRUE
 
   echo "DONE: ${OUT_DIR}"
 } 2>&1 | tee -a "${OUT_DIR}/nndescent_tuning_cuda.log"

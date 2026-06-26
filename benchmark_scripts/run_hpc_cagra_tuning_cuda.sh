@@ -38,7 +38,7 @@ export METHOD="cagra"
 export BACKEND="cuda"
 export THREADS_CPU="${THREADS_CPU:-12}"
 export THREAD_VALUES="${THREAD_VALUES:-${THREADS_CPU}}"
-export TIMEOUT="${TIMEOUT:-600}"
+export TIMEOUT="${TIMEOUT:-2000}"
 export QUALITY_N="${QUALITY_N:-256}"
 export SEED="${SEED:-4}"
 export GRID_LEVEL="${GRID_LEVEL:-standard}"
@@ -47,11 +47,21 @@ export LOG_DIR="${LOG_DIR:-${BASE_DIR}/benchmark_logs}"
 export SINGULARITY_IMAGE="${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda.sif}"
 export SINGULARITY_GPU_FLAG="${SINGULARITY_GPU_FLAG:---nv}"
 export R_BIN="${R_BIN:-Rscript}"
+if [[ -z "${FAISSR_TIMEOUT_BIN:-}" ]]; then
+  if [[ -x /usr/bin/timeout ]]; then
+    export FAISSR_TIMEOUT_BIN="/usr/bin/timeout"
+  elif command -v timeout >/dev/null 2>&1; then
+    export FAISSR_TIMEOUT_BIN="$(command -v timeout)"
+  else
+    export FAISSR_TIMEOUT_BIN=""
+  fi
+fi
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
 export K_VALUES="${K_VALUES:-10,15,50,100}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
+export RESUME_STATUSES="${RESUME_STATUSES:-success,unsupported,unavailable,timeout}"
 
 export OMP_NUM_THREADS="${THREADS_CPU}"
 export OPENBLAS_NUM_THREADS="${THREADS_CPU}"
@@ -106,11 +116,14 @@ fi
   echo "BACKEND=${BACKEND}"
   echo "QUALITY_N=${QUALITY_N}"
   echo "SEED=${SEED}"
+  echo "TIMEOUT=${TIMEOUT}"
+  echo "FAISSR_TIMEOUT_BIN=${FAISSR_TIMEOUT_BIN}"
+  echo "RESUME_STATUSES=${RESUME_STATUSES}"
   echo "[$(date --iso-8601=seconds)] building float32 manifest"
   "${RUNNER[@]}" "${R_BIN}" "${MANIFEST_SCRIPT}"     --data_root="${DATA_ROOT}"     --out="${MANIFEST}"     --datasets="${DATASETS}"
 
   echo "[$(date --iso-8601=seconds)] running CUDA CAGRA tuning from precomputed references"
-  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --backend="${BACKEND}"     --k_values="${K_VALUES}"     --target_recalls="${TARGET_RECALLS}"     --threads="${THREADS_CPU}"     --thread_values="${THREAD_VALUES}"     --timeout="${TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --output_values="${OUTPUT_VALUES}"     --grid_level="${GRID_LEVEL}"     --resume=TRUE
+  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --backend="${BACKEND}"     --k_values="${K_VALUES}"     --target_recalls="${TARGET_RECALLS}"     --threads="${THREADS_CPU}"     --thread_values="${THREAD_VALUES}"     --timeout="${TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --output_values="${OUTPUT_VALUES}"     --grid_level="${GRID_LEVEL}"     --resume=TRUE     --resume_statuses="${RESUME_STATUSES}"
 
   echo "DONE: ${OUT_DIR}"
 } 2>&1 | tee -a "${OUT_DIR}/cagra_tuning_cuda.log"

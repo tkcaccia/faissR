@@ -190,6 +190,34 @@ List cuvs_ivf_pq_float32_knn_impl(SEXP,
   );
 }
 
+SEXP cuvs_ivf_pq_index_build_float32_impl(SEXP,
+                                          int,
+                                          int,
+                                          int,
+                                          int) {
+  Rcpp::stop(
+    "Direct cuVS float32 IVF-PQ fitted indexes are not available. Reinstall "
+    "faissR with RAPIDS cuVS visible to configure, for example FAISSR_USE_CUVS=1 "
+    "and CUVS_HOME=/path/to/cuvs."
+  );
+}
+
+List cuvs_ivf_pq_index_search_float32_impl(SEXP,
+                                           SEXP,
+                                           int,
+                                           bool,
+                                           int,
+                                           bool,
+                                           bool,
+                                           std::string,
+                                           std::string) {
+  Rcpp::stop(
+    "Direct cuVS float32 IVF-PQ fitted-index search is not available. Reinstall "
+    "faissR with RAPIDS cuVS visible to configure, for example FAISSR_USE_CUVS=1 "
+    "and CUVS_HOME=/path/to/cuvs."
+  );
+}
+
 List cuvs_kmeans_impl(NumericMatrix,
                       int,
                       int,

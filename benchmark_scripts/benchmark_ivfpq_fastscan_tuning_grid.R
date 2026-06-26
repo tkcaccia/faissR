@@ -47,6 +47,31 @@ positive_num <- function(value, default, name) {
   value
 }
 
+positive_int_values <- function(value, default = NULL, name) {
+  if (is.null(value) || length(value) == 0L || is.na(value[[1L]]) || !nzchar(trimws(as.character(value[[1L]])))) {
+    return(default)
+  }
+  values <- suppressWarnings(as.numeric(split_arg(value, "")))
+  values <- values[is.finite(values)]
+  if (!length(values) ||
+      any(values < 1L | abs(values - round(values)) > sqrt(.Machine$double.eps))) {
+    stop("`", name, "` must contain positive integer values.", call. = FALSE)
+  }
+  unique(as.integer(round(values)))
+}
+
+positive_num_values <- function(value, default = NULL, name) {
+  if (is.null(value) || length(value) == 0L || is.na(value[[1L]]) || !nzchar(trimws(as.character(value[[1L]])))) {
+    return(default)
+  }
+  values <- suppressWarnings(as.numeric(split_arg(value, "")))
+  values <- values[is.finite(values)]
+  if (!length(values) || any(values <= 0)) {
+    stop("`", name, "` must contain positive numeric values.", call. = FALSE)
+  }
+  unique(values)
+}
+
 script_path <- function() {
   args <- commandArgs(FALSE)
   file_arg <- grep("^--file=", args, value = TRUE)
@@ -296,8 +321,32 @@ cuvs_byte_aligned_pq_dim <- function(p, pq_dim, pq_bits = 4L) {
   if (effective_dim >= 1L) effective_dim else pq_dim
 }
 
+grid_number_label <- function(prefix, value) {
+  txt <- format(as.numeric(value), trim = TRUE, scientific = FALSE)
+  txt <- gsub("[^0-9A-Za-z]+", "p", txt)
+  paste0(prefix, txt)
+}
+
+cuda_pq_dim_candidates <- function(p, values = NULL) {
+  p <- as.integer(max(1L, p))
+  if (length(values)) {
+    out <- unique(vapply(values, function(value) {
+      cuvs_byte_aligned_pq_dim(p, as.integer(round(value)), pq_bits = 4L)
+    }, integer(1L)))
+  } else {
+    out <- unique(vapply(c(16L, 32L, 64L), function(value) {
+      cuvs_byte_aligned_pq_dim(p, value, pq_bits = 4L)
+    }, integer(1L)))
+  }
+  out <- out[is.finite(out) & out >= 1L & out <= p & (4L * out) %% 8L == 0L]
+  if (length(out)) unique(as.integer(out)) else cuvs_byte_aligned_pq_dim(p, divisor_at_most(p, 32L), pq_bits = 4L)
+}
+
 ivfpq_fastscan_candidates <- function(n, p, k, backend, grid_level = "standard",
-                             cuda_batch_sizes = 8192L) {
+                                      cuda_batch_sizes = c(32768L),
+                                      nlist_multipliers = NULL,
+                                      nprobe_multipliers = NULL,
+                                      cuda_pq_dim_values = NULL) {
   provider <- if (identical(backend, "cuda")) "cuda_cuvs_ivfpq_fastscan" else "faiss_cpu_fastscan"
   auto <- data.frame(
     candidate_id = paste0(provider, "_auto"),
@@ -316,29 +365,51 @@ ivfpq_fastscan_candidates <- function(n, p, k, backend, grid_level = "standard",
     stringsAsFactors = FALSE
   )
   base_nlist <- ivf_list_count_local(n, k)
-  specs <- data.frame(
-    label = c("speed", "speed_plus", "balanced", "balanced_plus", "recall", "recall_plus"),
-    nlist_mult = c(0.5, 1.0, 1.0, 2.0, 2.0, 4.0),
-    nprobe_mult = c(0.5, 0.75, 1.0, 1.5, 2.0, 3.0),
-    pq_mode = c("speed", "speed", "balanced", "balanced", "recall", "recall"),
-    refine_factor = c(1L, 2L, 4L, 8L, 16L, 32L),
-    bbs = c(32L, 32L, 32L, 64L, 64L, 128L),
-    stringsAsFactors = FALSE
-  )
-  if (identical(grid_level, "compact")) specs <- specs[c(1L, 3L, 5L), , drop = FALSE]
-  if (identical(grid_level, "wide")) {
-    specs <- rbind(
-      specs,
-      data.frame(
-        label = c("recall_wide", "recall_max"),
-        nlist_mult = c(4.0, 6.0),
-        nprobe_mult = c(4.0, 6.0),
-        pq_mode = c("recall", "recall"),
-        refine_factor = c(64L, 128L),
-        bbs = c(256L, 512L),
-        stringsAsFactors = FALSE
-      )
+  if (length(nlist_multipliers) || length(nprobe_multipliers)) {
+    nlist_mults <- nlist_multipliers
+    if (!length(nlist_mults)) nlist_mults <- c(0.5, 1, 2, 4)
+    nprobe_mults <- nprobe_multipliers
+    if (!length(nprobe_mults)) nprobe_mults <- c(0.5, 1, 2, 3)
+    specs <- expand.grid(
+      nlist_mult = unique(as.numeric(nlist_mults)),
+      nprobe_mult = unique(as.numeric(nprobe_mults)),
+      KEEP.OUT.ATTRS = FALSE,
+      stringsAsFactors = FALSE
     )
+    specs$label <- paste(
+      grid_number_label("nlx", specs$nlist_mult),
+      grid_number_label("npx", specs$nprobe_mult),
+      sep = "_"
+    )
+    specs$pq_mode <- "balanced"
+    specs$refine_factor <- 4L
+    specs$bbs <- 32L
+    specs <- specs[, c("label", "nlist_mult", "nprobe_mult", "pq_mode", "refine_factor", "bbs"), drop = FALSE]
+  } else {
+    specs <- data.frame(
+      label = c("speed", "speed_plus", "balanced", "balanced_plus", "recall", "recall_plus"),
+      nlist_mult = c(0.5, 1.0, 1.0, 2.0, 2.0, 4.0),
+      nprobe_mult = c(0.5, 0.75, 1.0, 1.5, 2.0, 3.0),
+      pq_mode = c("speed", "speed", "balanced", "balanced", "recall", "recall"),
+      refine_factor = c(1L, 2L, 4L, 8L, 16L, 32L),
+      bbs = c(32L, 32L, 32L, 64L, 64L, 128L),
+      stringsAsFactors = FALSE
+    )
+    if (identical(grid_level, "compact")) specs <- specs[c(1L, 3L, 5L), , drop = FALSE]
+    if (identical(grid_level, "wide")) {
+      specs <- rbind(
+        specs,
+        data.frame(
+          label = c("recall_wide", "recall_max"),
+          nlist_mult = c(4.0, 6.0),
+          nprobe_mult = c(4.0, 6.0),
+          pq_mode = c("recall", "recall"),
+          refine_factor = c(64L, 128L),
+          bbs = c(256L, 512L),
+          stringsAsFactors = FALSE
+        )
+      )
+    }
   }
   manual_rows <- list()
   idx <- 0L
@@ -349,32 +420,38 @@ ivfpq_fastscan_candidates <- function(n, p, k, backend, grid_level = "standard",
     nprobe <- as.integer(max(1L, ceiling(base_probe * specs$nprobe_mult[[i]])))
     nprobe <- as.integer(min(nprobe, nlist))
     if (identical(backend, "cuda")) {
-      pq_dim <- cuvs_byte_aligned_pq_dim(
-        p,
-        pq_dim_for_mode(p, specs$pq_mode[[i]]),
-        pq_bits = 4L
-      )
-      for (batch_size in cuda_batch_sizes) {
-        idx <- idx + 1L
-        manual_rows[[idx]] <- data.frame(
-          candidate_id = sprintf(
-            "%s_%s_nl%d_np%d_pqd%d_bs%d",
-            provider, specs$label[[i]], nlist, nprobe, pq_dim, batch_size
-          ),
-          candidate_kind = "manual",
-          provider = provider,
-          public_backend = backend,
-          public_method = "ivfpq_fastscan",
-          requested_nlist = nlist,
-          requested_nprobe = nprobe,
-          requested_pq_m = NA_integer_,
-          requested_pq_dim = pq_dim,
-          requested_refine_factor = NA_integer_,
-          requested_bbs = NA_integer_,
-          requested_pq_bits = 4L,
-          requested_cuda_batch_size = as.integer(batch_size),
-          stringsAsFactors = FALSE
+      pq_dim_values <- if (length(cuda_pq_dim_values)) {
+        cuda_pq_dim_candidates(p, cuda_pq_dim_values)
+      } else {
+        cuvs_byte_aligned_pq_dim(
+          p,
+          pq_dim_for_mode(p, specs$pq_mode[[i]]),
+          pq_bits = 4L
         )
+      }
+      for (pq_dim in pq_dim_values) {
+        for (batch_size in cuda_batch_sizes) {
+          idx <- idx + 1L
+          manual_rows[[idx]] <- data.frame(
+            candidate_id = sprintf(
+              "%s_%s_nl%d_np%d_pqd%d_bs%d",
+              provider, specs$label[[i]], nlist, nprobe, as.integer(pq_dim), batch_size
+            ),
+            candidate_kind = "manual",
+            provider = provider,
+            public_backend = backend,
+            public_method = "ivfpq_fastscan",
+            requested_nlist = nlist,
+            requested_nprobe = nprobe,
+            requested_pq_m = NA_integer_,
+            requested_pq_dim = as.integer(pq_dim),
+            requested_refine_factor = NA_integer_,
+            requested_bbs = NA_integer_,
+            requested_pq_bits = 4L,
+            requested_cuda_batch_size = as.integer(batch_size),
+            stringsAsFactors = FALSE
+          )
+        }
       }
     } else {
       pq_m <- pq_m_for_mode(p, specs$pq_mode[[i]])
@@ -412,18 +489,29 @@ ivfpq_fastscan_candidates <- function(n, p, k, backend, grid_level = "standard",
   unique(rbind(auto, manual))
 }
 
-candidate_grid <- function(dataset_row, backend, k, grid_level, cuda_batch_sizes) {
+candidate_grid <- function(dataset_row,
+                           backend,
+                           k,
+                           grid_level,
+                           cuda_batch_sizes,
+                           nlist_multipliers = NULL,
+                           nprobe_multipliers = NULL,
+                           cuda_pq_dim_values = NULL) {
   ivfpq_fastscan_candidates(
     n = as.integer(dataset_row$n),
     p = as.integer(dataset_row$p),
     k = as.integer(k),
     backend = backend,
     grid_level = grid_level,
-    cuda_batch_sizes = cuda_batch_sizes
+    cuda_batch_sizes = cuda_batch_sizes,
+    nlist_multipliers = nlist_multipliers,
+    nprobe_multipliers = nprobe_multipliers,
+    cuda_pq_dim_values = cuda_pq_dim_values
   )
 }
 
 apply_candidate_options <- function(candidate, backend) {
+  Sys.unsetenv("FAISSR_CUVS_IVF_BATCH_SIZE")
   opts <- list(
     faissR.faiss_nlist = NULL,
     faissR.ivf_nlist = NULL,
@@ -467,7 +555,7 @@ estimate_working_gb <- function(n, p, k, candidate, backend) {
   centroid_gb <- nlist * p * 4 / 1024^3
   output_gb <- n * (k + 1) * 12 / 1024^3
   if (identical(backend, "cuda")) {
-    batch <- as.numeric(candidate$requested_cuda_batch_size %||% 8192)
+    batch <- as.numeric(candidate$requested_cuda_batch_size %||% 32768)
     batch_gb <- batch * (k + 1) * 12 / 1024^3
     return(2 * data_gb + centroid_gb + output_gb + batch_gb)
   }
@@ -542,6 +630,17 @@ base_row <- function(config, status = "success", error = NA_character_) {
     result_bbs = NA_integer_,
     result_requested_bbs = NA_integer_,
     search_batch_size = NA_integer_,
+    dataset_residency = NA_character_,
+    query_residency = NA_character_,
+    query_uses_index_dataset_buffer = NA,
+    query_device_buffer_cached = NA,
+    query_device_buffer_reused = NA,
+    query_device_cache_status = NA_character_,
+    query_host_to_device_copies = NA_integer_,
+    index_build_host_to_device_copies = NA_integer_,
+    query_upload_count = NA_integer_,
+    query_cache_hit_count = NA_integer_,
+    host_device_traffic_policy = NA_character_,
     ivf_parameters_adjusted = NA,
     pq_parameters_adjusted = NA,
     error = error,
@@ -638,6 +737,36 @@ run_method <- function(config) {
   row$result_bbs <- as.integer(approx$bbs %||% NA_integer_)
   row$result_requested_bbs <- as.integer(approx$requested_bbs %||% NA_integer_)
   row$search_batch_size <- as.integer(approx$search_batch_size %||% NA_integer_)
+  gpu <- attr(res, "gpu_residency", exact = TRUE) %||% list()
+  row$dataset_residency <- as.character(approx$dataset_residency %||% gpu$dataset_residency %||% NA_character_)
+  row$query_residency <- as.character(approx$query_residency %||% gpu$query_residency %||% NA_character_)
+  row$query_uses_index_dataset_buffer <- as.logical(
+    approx$query_uses_index_dataset_buffer %||% gpu$query_uses_index_dataset_buffer %||% NA
+  )
+  row$query_device_buffer_cached <- as.logical(
+    approx$query_device_buffer_cached %||% gpu$query_device_buffer_cached %||% NA
+  )
+  row$query_device_buffer_reused <- as.logical(
+    approx$query_device_buffer_reused %||% gpu$query_device_buffer_reused %||% NA
+  )
+  row$query_device_cache_status <- as.character(
+    approx$query_device_cache_status %||% gpu$query_device_cache_status %||% NA_character_
+  )
+  row$query_host_to_device_copies <- as.integer(
+    approx$query_host_to_device_copies %||% gpu$query_host_to_device_copies %||% NA_integer_
+  )
+  row$index_build_host_to_device_copies <- as.integer(
+    approx$index_build_host_to_device_copies %||% gpu$index_build_host_to_device_copies %||% NA_integer_
+  )
+  row$query_upload_count <- as.integer(
+    approx$query_upload_count %||% gpu$query_upload_count %||% NA_integer_
+  )
+  row$query_cache_hit_count <- as.integer(
+    approx$query_cache_hit_count %||% gpu$query_cache_hit_count %||% NA_integer_
+  )
+  row$host_device_traffic_policy <- as.character(
+    approx$host_device_traffic_policy %||% gpu$host_device_traffic_policy %||% NA_character_
+  )
   row$ivf_parameters_adjusted <- isTRUE(approx$ivf_parameters_adjusted)
   row$pq_parameters_adjusted <- isTRUE(approx$pq_parameters_adjusted)
   row
@@ -878,8 +1007,10 @@ write_report <- function(out_dir, results, recommendations) {
     "- CPU `ivfpq_fastscan_pq_m`: FAISS FastScan PQ subquantizer count; FAISS may adjust it to divide the feature dimension.",
     "- CPU `ivfpq_fastscan_refine_factor`: Flat reranking factor for IndexRefineFlat.",
     "- CPU `ivfpq_fastscan_bbs`: FAISS FastScan block size, rounded down to a multiple of 32 by the C++ backend.",
-    "- CUDA `cuvs_ivfpq_pq_dim`: cuVS IVF-PQ compressed-code dimension; `pq_bits` remains 4 for this IVFPQ FastScan route.",
-    "- CUDA `FAISSR_CUVS_IVF_BATCH_SIZE`: search batch size, affects speed/memory but not recall.",
+    "- CUDA `cuvs_ivfpq_pq_dim`: cuVS IVF-PQ compressed-code dimension; `pq_bits` remains 4 for this IVFPQ FastScan route and `pq_dim` is byte-aligned before the candidate is run.",
+    "- Smaller CUDA `pq_dim` and smaller `nprobe` are expected to improve speed but can reduce recall; `nlist` controls the IVF build/search balance.",
+    "- CUDA `FAISSR_CUVS_IVF_BATCH_SIZE`: search batch size, affects speed/memory but not recall directly; defaults to a large batch and the C++ backend prevents row-by-row search for multi-query calls.",
+    "- CUDA host-device traffic fields (`dataset_residency`, `query_residency`, `query_device_cache_status`, `query_host_to_device_copies`) show whether searches reused GPU-resident buffers or uploaded query data.",
     "",
     "## Backend Notes",
     "",
@@ -926,14 +1057,31 @@ main <- function() {
   k_values <- as.integer(split_arg(args$k_values, "10,15,50,100"))
   target_recalls <- as.numeric(split_arg(args$target_recalls, "0.9,0.95,0.99"))
   n_threads <- positive_int(args$threads, 12, "threads")
-  timeout <- positive_num(args$timeout, 600, "timeout")
+  timeout <- positive_num(args$timeout, 2000, "timeout")
   quality_n <- positive_int(args$quality_n, 256, "quality_n")
   seed <- positive_int(args$seed, 4, "seed")
   output <- args$output %||% if (backend == "cuda") "float" else "double"
   grid_level <- match.arg(args$grid_level %||% "standard", c("compact", "standard", "wide"))
-  cuda_batch_sizes <- as.integer(split_arg(args$cuda_batch_sizes, "8192"))
-  cuda_batch_sizes <- cuda_batch_sizes[is.finite(cuda_batch_sizes) & cuda_batch_sizes > 0L]
-  if (!length(cuda_batch_sizes)) cuda_batch_sizes <- 8192L
+  cuda_batch_sizes <- positive_int_values(
+    args$cuda_batch_sizes,
+    default = 32768L,
+    name = "cuda_batch_sizes"
+  )
+  nlist_multipliers <- positive_num_values(
+    args$nlist_multipliers,
+    default = NULL,
+    name = "nlist_multipliers"
+  )
+  nprobe_multipliers <- positive_num_values(
+    args$nprobe_multipliers,
+    default = NULL,
+    name = "nprobe_multipliers"
+  )
+  cuda_pq_dim_values <- positive_int_values(
+    args$cuda_pq_dim_values,
+    default = NULL,
+    name = "cuda_pq_dim_values"
+  )
   reference_backend <- match.arg(tolower(args$reference_backend %||% backend), c("cpu", "cuda"))
   resume <- logical_arg(args$resume, TRUE)
   max_working_gb <- positive_num(args$max_working_gb, if (backend == "cuda") 40 else 96, "max_working_gb")
@@ -945,7 +1093,12 @@ main <- function() {
   candidate_rows <- do.call(rbind, lapply(seq_len(nrow(manifest)), function(i) {
     ds <- manifest[i, , drop = FALSE]
     rows <- do.call(rbind, lapply(k_values, function(k) {
-      x <- candidate_grid(ds, backend, k, grid_level, cuda_batch_sizes)
+      x <- candidate_grid(
+        ds, backend, k, grid_level, cuda_batch_sizes,
+        nlist_multipliers = nlist_multipliers,
+        nprobe_multipliers = nprobe_multipliers,
+        cuda_pq_dim_values = cuda_pq_dim_values
+      )
       x$dataset <- ds$dataset[[1L]]
       x$n <- as.integer(ds$n)
       x$p <- as.integer(ds$p)
@@ -960,11 +1113,16 @@ main <- function() {
     data.frame(
       key = c("backend", "manifest", "datasets", "k_values", "target_recalls",
               "threads", "timeout", "quality_n", "output", "grid_level",
-              "cuda_batch_sizes", "reference_backend", "max_working_gb"),
+              "cuda_batch_sizes", "nlist_multipliers", "nprobe_multipliers",
+              "cuda_pq_dim_values", "reference_backend", "max_working_gb"),
       value = c(backend, manifest_path, paste(datasets, collapse = ","),
                 paste(k_values, collapse = ","), paste(target_recalls, collapse = ","),
                 n_threads, timeout, quality_n, output, grid_level,
-                paste(cuda_batch_sizes, collapse = ","), reference_backend, max_working_gb)
+                paste(cuda_batch_sizes, collapse = ","),
+                paste(nlist_multipliers %||% NA_character_, collapse = ","),
+                paste(nprobe_multipliers %||% NA_character_, collapse = ","),
+                paste(cuda_pq_dim_values %||% NA_character_, collapse = ","),
+                reference_backend, max_working_gb)
     ),
     file.path(out_dir, "ivfpq_fastscan_tuning_config.csv"),
     row.names = FALSE
@@ -980,7 +1138,12 @@ main <- function() {
           ds,
           backend,
           k,
-          candidate_grid(ds, backend, k, grid_level, cuda_batch_sizes),
+          candidate_grid(
+            ds, backend, k, grid_level, cuda_batch_sizes,
+            nlist_multipliers = nlist_multipliers,
+            nprobe_multipliers = nprobe_multipliers,
+            cuda_pq_dim_values = cuda_pq_dim_values
+          ),
           ds$error[[1L]] %||% "missing dataset",
           results_path
         )
@@ -988,7 +1151,12 @@ main <- function() {
       next
     }
     for (k in k_values) {
-      candidates <- candidate_grid(ds, backend, k, grid_level, cuda_batch_sizes)
+      candidates <- candidate_grid(
+        ds, backend, k, grid_level, cuda_batch_sizes,
+        nlist_multipliers = nlist_multipliers,
+        nprobe_multipliers = nprobe_multipliers,
+        cuda_pq_dim_values = cuda_pq_dim_values
+      )
       ref <- reference_for_dataset(
         ds, backend, k, n_threads, output, quality_n, seed, timeout,
         bench_script, reference_backend

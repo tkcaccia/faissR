@@ -180,7 +180,7 @@ benchmark1_positive_numeric_arg <- function(value, arg, default = NULL) {
   parsed
 }
 
-timeout_sec <- benchmark1_positive_int_arg(args$timeout, "timeout", "600")
+timeout_sec <- benchmark1_positive_int_arg(args$timeout, "timeout", "2000")
 worker <- isTRUE(as.logical(args$worker %||% FALSE))
 quality_eval_max_n <- benchmark1_positive_int_arg(
   args$quality_n %||% Sys.getenv("FAISSR_BENCHMARK1_QUALITY_N", unset = NA_character_),

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <limits>
 #include <cstdlib>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -196,6 +197,7 @@ struct MatrixViewF32 {
   int ncol = 0;
   bool row_major = true;
   bool owns_data = false;
+  bool compatibility_conversion = false;
   std::string layout = "unknown";
   std::vector<float> buffer;
 };
@@ -268,6 +270,7 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
   if (TYPEOF(x) == REALSXP) {
     view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
     view.owns_data = true;
+    view.compatibility_conversion = true;
     view.row_major = true;
     view.layout = "r_double_column_major_to_row_major_float32";
     if (Rf_length(x) != expected_length) {
@@ -323,6 +326,7 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
     } else if (TYPEOF(slot) == REALSXP) {
       view.buffer.assign(static_cast<std::size_t>(expected_length), 0.0f);
       view.owns_data = true;
+      view.compatibility_conversion = true;
       view.row_major = true;
       view.layout = "s4_double_column_major_to_row_major_float32";
       const double* col_major_double = REAL(slot);
@@ -366,6 +370,12 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name) {
 
 bool same_float32_object(SEXP data, SEXP points) {
   return data == points;
+}
+
+void refresh_float32_matrix_view_pointer(MatrixViewF32& view) {
+  if (view.owns_data && !view.buffer.empty()) {
+    view.data = view.buffer.data();
+  }
 }
 
 bool wants_float_distance_storage(const std::string& distance_storage) {
@@ -423,7 +433,9 @@ void annotate_float32_input(List& out,
   out["input_owns_data"] = same_storage ?
     xb.owns_data :
     (xb.owns_data || xq.owns_data);
-  out["float32_compatibility_conversion"] = false;
+  out["float32_compatibility_conversion"] = same_storage ?
+    xb.compatibility_conversion :
+    (xb.compatibility_conversion || xq.compatibility_conversion);
 }
 
 double float32_bytes(const int rows, const int cols) {
@@ -494,6 +506,47 @@ int env_int(const char* name, const int default_value, const int min_value) {
     return default_value;
   }
   return static_cast<int>(value);
+}
+
+struct CuvsIvfBatchSize {
+  int requested = 0;
+  int actual = 1;
+  bool adjusted = false;
+  std::string policy = "batched_cuvs_ivf";
+};
+
+CuvsIvfBatchSize cuvs_ivf_batch_size(const int n_points) {
+  constexpr int default_batch = 32768;
+  CuvsIvfBatchSize info;
+  info.requested = env_int("FAISSR_CUVS_IVF_BATCH_SIZE", default_batch, 1);
+  if (n_points <= 1) {
+    info.actual = 1;
+    info.adjusted = info.requested != 1;
+    info.policy = "single_query";
+    return info;
+  }
+  info.actual = std::min(n_points, info.requested);
+  if (info.actual < 2) {
+    info.actual = std::min(n_points, 2);
+  }
+  info.adjusted = info.actual != info.requested;
+  info.policy = "batched_cuvs_ivf_no_row_by_row";
+  return info;
+}
+
+void annotate_cuvs_ivf_batch_metadata(List& out,
+                                      const CuvsIvfBatchSize& batch_info,
+                                      const int n_points) {
+  out["search_batch_size"] = batch_info.actual;
+  out["requested_search_batch_size"] = batch_info.requested;
+  out["search_batch_env"] = "FAISSR_CUVS_IVF_BATCH_SIZE";
+  out["search_batch_default"] = 32768;
+  out["search_batch_adjusted"] = batch_info.adjusted;
+  out["search_batch_policy"] = batch_info.policy;
+  out["query_call_count"] = static_cast<int>(
+    (n_points + batch_info.actual - 1) / batch_info.actual
+  );
+  out["batch_query"] = n_points > 1;
 }
 
 bool env_flag(const char* name) {
@@ -832,6 +885,38 @@ class IvfPqIndex {
 
  private:
   cuvsIvfPqIndex_t index_ = nullptr;
+};
+
+struct CuvsIvfPqIndexHandle {
+  std::unique_ptr<CuvsResources> res;
+  std::unique_ptr<DeviceBuffer> dataset;
+  std::unique_ptr<DeviceBuffer> query;
+  std::unique_ptr<IvfPqIndex> index;
+  int n = 0;
+  int p = 0;
+  int n_lists = 0;
+  int n_probes = 0;
+  int requested_n_lists = 0;
+  int requested_n_probes = 0;
+  int pq_dim = 0;
+  int pq_bits = 0;
+  int requested_pq_dim = 0;
+  int requested_pq_bits = 0;
+  bool pq_parameters_adjusted = false;
+  bool pq_alignment_adjusted = false;
+  std::string pq_alignment_rule = "none";
+  std::string input_layout = "unknown";
+  bool input_owns_data = false;
+  bool compatibility_conversion = false;
+  std::string query_cache_key;
+  std::string query_input_layout = "unknown";
+  bool query_input_owns_data = false;
+  bool query_compatibility_conversion = false;
+  int query_n = 0;
+  int query_p = 0;
+  std::size_t query_bytes = 0;
+  int query_upload_count = 0;
+  int query_cache_hit_count = 0;
 };
 #endif
 
@@ -2194,10 +2279,8 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix data,
   IvfFlatSearchParams search_params;
   search_params.get()->n_probes = static_cast<uint32_t>(n_probes);
 
-  const int batch_size = std::min(
-    n_points,
-    env_int("FAISSR_CUVS_IVF_BATCH_SIZE", 8192, 1)
-  );
+  const CuvsIvfBatchSize batch_info = cuvs_ivf_batch_size(n_points);
+  const int batch_size = batch_info.actual;
   DeviceBuffer neighbors_d(
     res.get(),
     static_cast<std::size_t>(batch_size) * search_k * sizeof(int64_t)
@@ -2279,7 +2362,7 @@ List cuvs_ivf_flat_knn_impl(NumericMatrix data,
   );
   out["n_lists"] = n_lists;
   out["n_probes"] = n_probes;
-  out["search_batch_size"] = batch_size;
+  annotate_cuvs_ivf_batch_metadata(out, batch_info, n_points);
   out["kmeans_n_iters"] = kmeans_iters;
   out["kmeans_trainset_fraction"] = std::min(100, train_percent) / 100.0;
   out["conservative_memory_allocation"] = true;
@@ -2387,10 +2470,8 @@ List cuvs_ivf_flat_float32_knn_impl(SEXP data,
   IvfFlatSearchParams search_params;
   search_params.get()->n_probes = static_cast<uint32_t>(n_probes);
 
-  const int batch_size = std::min(
-    n_points,
-    env_int("FAISSR_CUVS_IVF_BATCH_SIZE", 8192, 1)
-  );
+  const CuvsIvfBatchSize batch_info = cuvs_ivf_batch_size(n_points);
+  const int batch_size = batch_info.actual;
   DeviceBuffer neighbors_d(
     res.get(),
     static_cast<std::size_t>(batch_size) * search_k * sizeof(int64_t)
@@ -2472,7 +2553,7 @@ List cuvs_ivf_flat_float32_knn_impl(SEXP data,
   );
   out["n_lists"] = n_lists;
   out["n_probes"] = n_probes;
-  out["search_batch_size"] = batch_size;
+  annotate_cuvs_ivf_batch_metadata(out, batch_info, n_points);
   out["kmeans_n_iters"] = kmeans_iters;
   out["kmeans_trainset_fraction"] = std::min(100, train_percent) / 100.0;
   out["conservative_memory_allocation"] = true;
@@ -2572,10 +2653,8 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix data,
   IvfPqSearchParams search_params;
   search_params.get()->n_probes = static_cast<uint32_t>(n_probes);
 
-  const int batch_size = std::min(
-    n_points,
-    env_int("FAISSR_CUVS_IVF_BATCH_SIZE", 8192, 1)
-  );
+  const CuvsIvfBatchSize batch_info = cuvs_ivf_batch_size(n_points);
+  const int batch_size = batch_info.actual;
   DeviceBuffer neighbors_d(
     res.get(),
     static_cast<std::size_t>(batch_size) * search_k * sizeof(int64_t)
@@ -2666,7 +2745,7 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix data,
     requested_pq_bits != static_cast<int>(actual_pq_bits);
   out["pq_alignment_adjusted"] = pq_alignment.adjusted;
   out["pq_alignment_rule"] = std::string(pq_alignment.rule);
-  out["search_batch_size"] = batch_size;
+  annotate_cuvs_ivf_batch_metadata(out, batch_info, n_points);
   annotate_cuvs_gpu_residency(
     out, "gpu_transient", same_storage, n_data, n_points, n_features,
     search_k, true, true
@@ -2766,10 +2845,8 @@ List cuvs_ivf_pq_float32_knn_impl(SEXP data,
   IvfPqSearchParams search_params;
   search_params.get()->n_probes = static_cast<uint32_t>(n_probes);
 
-  const int batch_size = std::min(
-    n_points,
-    env_int("FAISSR_CUVS_IVF_BATCH_SIZE", 8192, 1)
-  );
+  const CuvsIvfBatchSize batch_info = cuvs_ivf_batch_size(n_points);
+  const int batch_size = batch_info.actual;
   DeviceBuffer neighbors_d(
     res.get(),
     static_cast<std::size_t>(batch_size) * search_k * sizeof(int64_t)
@@ -2862,12 +2939,430 @@ List cuvs_ivf_pq_float32_knn_impl(SEXP data,
     requested_pq_bits != static_cast<int>(actual_pq_bits);
   out["pq_alignment_adjusted"] = pq_alignment.adjusted;
   out["pq_alignment_rule"] = std::string(pq_alignment.rule);
-  out["search_batch_size"] = batch_size;
+  annotate_cuvs_ivf_batch_metadata(out, batch_info, n_points);
   annotate_float32_input(out, xb, xq, same_storage);
   annotate_cuvs_gpu_residency(
     out, "gpu_transient", same_storage, n_data, n_points, n_features,
     search_k, true, true
   );
+  return out;
+#endif
+}
+
+SEXP cuvs_ivf_pq_index_build_float32_impl(SEXP data,
+                                          int n_lists,
+                                          int n_probes,
+                                          int pq_dim,
+                                          int pq_bits) {
+#ifndef FAISSR_HAS_CUVS_IVF_PQ
+  (void)data;
+  (void)n_lists;
+  (void)n_probes;
+  (void)pq_dim;
+  (void)pq_bits;
+  Rcpp::stop(
+    "Direct cuVS float32 IVF-PQ fitted indexes are not available. Reinstall "
+    "faissR with RAPIDS cuVS visible to configure, for example "
+    "FAISSR_USE_CUVS=1 and CUVS_HOME=/path/to/cuvs."
+  );
+#else
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  const int n_data = xb.nrow;
+  const int n_features = xb.ncol;
+  const int requested_n_lists = n_lists;
+  const int requested_n_probes = n_probes;
+  const int requested_pq_dim = pq_dim;
+  const int requested_pq_bits = pq_bits;
+
+  n_lists = std::max(1, std::min(n_lists, n_data));
+  n_probes = std::max(1, std::min(n_probes, n_lists));
+  pq_dim = std::max(0, pq_dim);
+  pq_bits = std::max(4, std::min(8, pq_bits));
+  CuvsIvfPqAlignment pq_alignment =
+    repair_cuvs_ivfpq_alignment(n_features, pq_dim, pq_bits);
+  pq_dim = pq_alignment.pq_dim;
+  pq_bits = pq_alignment.pq_bits;
+
+  std::unique_ptr<CuvsIvfPqIndexHandle> handle(new CuvsIvfPqIndexHandle());
+  handle->res.reset(new CuvsResources());
+  const std::size_t data_bytes =
+    static_cast<std::size_t>(n_data) *
+    static_cast<std::size_t>(n_features) *
+    sizeof(float);
+  handle->dataset.reset(new DeviceBuffer(handle->res->get(), data_bytes));
+  cuda_check(
+    cudaMemcpy(handle->dataset->get(), xb.data, data_bytes, cudaMemcpyHostToDevice),
+    "cudaMemcpy(dataset)"
+  );
+
+  int64_t dataset_shape[2] = {n_data, n_features};
+  DLManagedTensor dataset_tensor = make_tensor(
+    handle->dataset->get(), dataset_shape, 2, kDLCUDA, kDLFloat, 32
+  );
+
+  IvfPqIndexParams index_params;
+  index_params.get()->metric = L2Expanded;
+  index_params.get()->add_data_on_build = true;
+  index_params.get()->n_lists = static_cast<uint32_t>(n_lists);
+  index_params.get()->pq_bits = static_cast<uint32_t>(pq_bits);
+  index_params.get()->pq_dim = static_cast<uint32_t>(pq_dim);
+  index_params.get()->conservative_memory_allocation = true;
+
+  handle->index.reset(new IvfPqIndex());
+  cuvs_check(
+    cuvsIvfPqBuild(
+      handle->res->get(),
+      index_params.get(),
+      &dataset_tensor,
+      handle->index->get()
+    ),
+    "cuvsIvfPqBuild"
+  );
+
+  int64_t actual_pq_dim = pq_dim;
+  int64_t actual_pq_bits = pq_bits;
+  cuvsIvfPqIndexGetPqDim(handle->index->get(), &actual_pq_dim);
+  cuvsIvfPqIndexGetPqBits(handle->index->get(), &actual_pq_bits);
+
+  handle->n = n_data;
+  handle->p = n_features;
+  handle->n_lists = n_lists;
+  handle->n_probes = n_probes;
+  handle->requested_n_lists = requested_n_lists;
+  handle->requested_n_probes = requested_n_probes;
+  handle->pq_dim = static_cast<int>(actual_pq_dim);
+  handle->pq_bits = static_cast<int>(actual_pq_bits);
+  handle->requested_pq_dim = requested_pq_dim;
+  handle->requested_pq_bits = requested_pq_bits;
+  handle->pq_parameters_adjusted =
+    requested_pq_dim != handle->pq_dim ||
+    requested_pq_bits != handle->pq_bits;
+  handle->pq_alignment_adjusted = pq_alignment.adjusted;
+  handle->pq_alignment_rule = std::string(pq_alignment.rule);
+  handle->input_layout = xb.layout;
+  handle->input_owns_data = xb.owns_data;
+  handle->compatibility_conversion = xb.compatibility_conversion;
+
+  Rcpp::XPtr<CuvsIvfPqIndexHandle> ptr(handle.release(), true);
+  ptr.attr("class") = Rcpp::CharacterVector::create(
+    "faissR_cuvs_ivfpq_index",
+    "faissR_cuvs_index"
+  );
+  ptr.attr("kind") = "ivfpq_fastscan";
+  ptr.attr("index_type") = "cuVS_IVF_PQExternalPtr";
+  ptr.attr("n") = n_data;
+  ptr.attr("p") = n_features;
+  ptr.attr("n_lists") = n_lists;
+  ptr.attr("nlist") = n_lists;
+  ptr.attr("n_probes") = n_probes;
+  ptr.attr("nprobe") = n_probes;
+  ptr.attr("pq_dim") = static_cast<int>(actual_pq_dim);
+  ptr.attr("pq_bits") = static_cast<int>(actual_pq_bits);
+  ptr.attr("requested_n_lists") = requested_n_lists;
+  ptr.attr("requested_n_probes") = requested_n_probes;
+  ptr.attr("requested_pq_dim") = requested_pq_dim;
+  ptr.attr("requested_pq_bits") = requested_pq_bits;
+  ptr.attr("pq_parameters_adjusted") =
+    requested_pq_dim != static_cast<int>(actual_pq_dim) ||
+    requested_pq_bits != static_cast<int>(actual_pq_bits);
+  ptr.attr("pq_alignment_adjusted") = pq_alignment.adjusted;
+  ptr.attr("pq_alignment_rule") = std::string(pq_alignment.rule);
+  ptr.attr("input_type") = "float32";
+  ptr.attr("input_layout") = xb.layout;
+  ptr.attr("input_owns_data") = xb.owns_data;
+  ptr.attr("float32_compatibility_conversion") = xb.compatibility_conversion;
+  ptr.attr("index_residency") = "gpu_persistent";
+  ptr.attr("gpu_index_persistent") = true;
+  ptr.attr("gpu_resources_persistent") = true;
+  ptr.attr("dataset_residency") = "gpu_device_buffer";
+  return ptr;
+#endif
+}
+
+List cuvs_ivf_pq_index_search_float32_impl(SEXP index_ptr,
+                                           SEXP points,
+                                           int k,
+                                           bool exclude_self,
+                                           int n_probes,
+                                           bool query_is_index_data,
+                                           bool cache_query_device_buffer,
+                                           std::string query_cache_key,
+                                           std::string distance_storage) {
+#ifndef FAISSR_HAS_CUVS_IVF_PQ
+  (void)index_ptr;
+  (void)points;
+  (void)k;
+  (void)exclude_self;
+  (void)n_probes;
+  (void)query_is_index_data;
+  (void)cache_query_device_buffer;
+  (void)query_cache_key;
+  (void)distance_storage;
+  Rcpp::stop(
+    "Direct cuVS float32 IVF-PQ fitted-index search is not available. "
+    "Reinstall faissR with RAPIDS cuVS visible to configure, for example "
+    "FAISSR_USE_CUVS=1 and CUVS_HOME=/path/to/cuvs."
+  );
+#else
+  if (k < 1) {
+    Rcpp::stop("k must be positive");
+  }
+  Rcpp::XPtr<CuvsIvfPqIndexHandle> handle(index_ptr);
+  if (handle.get() == nullptr || handle->index.get() == nullptr ||
+      handle->dataset.get() == nullptr || handle->res.get() == nullptr) {
+    Rcpp::stop("cuVS IVF-PQ index pointer is not valid");
+  }
+  if (k > handle->n) {
+    Rcpp::stop("k must not exceed the fitted cuVS IVF-PQ index size");
+  }
+  if (exclude_self && !query_is_index_data) {
+    Rcpp::stop("self-neighbor exclusion requires points to be the fitted data");
+  }
+
+  MatrixViewF32 xq;
+  void* query_ptr = handle->dataset->get();
+  DeviceBuffer query_d;
+  int n_points = handle->n;
+  bool query_uses_index_dataset_buffer = query_is_index_data;
+  bool query_device_buffer_cached = false;
+  bool query_device_buffer_reused = query_is_index_data;
+  bool query_host_to_device_copy = false;
+  std::string query_device_cache_status = query_is_index_data ? "index_dataset" : "disabled";
+  std::string query_residency = query_is_index_data ?
+    "fitted_dataset_device_buffer" :
+    "transient_gpu_device_buffer";
+  std::string query_input_layout = query_is_index_data ?
+    (handle->input_layout + ";fitted_index_query:dataset_device_buffer") :
+    "unknown";
+  bool query_input_owns_data = false;
+  bool query_compatibility_conversion = query_is_index_data ?
+    handle->compatibility_conversion :
+    false;
+  const bool float_distances = wants_float_distance_storage(distance_storage);
+  if (!query_is_index_data) {
+    Rcpp::IntegerVector query_dims = matrix_dims_from_object(points, "points");
+    n_points = query_dims[0];
+    if (query_dims[1] != handle->p) {
+      Rcpp::stop("points must have the same number of columns as the fitted cuVS IVF-PQ index");
+    }
+    const std::size_t query_bytes =
+      static_cast<std::size_t>(n_points) *
+      static_cast<std::size_t>(handle->p) *
+      sizeof(float);
+    const bool can_reuse_query =
+      cache_query_device_buffer &&
+      !query_cache_key.empty() &&
+      handle->query.get() != nullptr &&
+      handle->query_cache_key == query_cache_key &&
+      handle->query_n == n_points &&
+      handle->query_p == handle->p &&
+      handle->query_bytes == query_bytes;
+    if (can_reuse_query) {
+      query_ptr = handle->query->get();
+      query_device_buffer_cached = true;
+      query_device_buffer_reused = true;
+      query_device_cache_status = "hit";
+      query_residency = "cached_gpu_device_buffer";
+      query_input_layout = handle->input_layout +
+        ";fitted_index_query:" + handle->query_input_layout +
+        ";cached_device_buffer";
+      query_input_owns_data = false;
+      query_compatibility_conversion =
+        handle->compatibility_conversion || handle->query_compatibility_conversion;
+      handle->query_cache_hit_count += 1;
+    } else {
+      xq = make_float32_matrix_view(points, "points");
+      refresh_float32_matrix_view_pointer(xq);
+      query_input_layout = handle->input_layout +
+        ";fitted_index_query:" + xq.layout;
+      query_input_owns_data = xq.owns_data;
+      query_compatibility_conversion =
+        handle->compatibility_conversion || xq.compatibility_conversion;
+      DeviceBuffer* target_query = &query_d;
+      bool store_query_in_handle = false;
+      if (cache_query_device_buffer && !query_cache_key.empty()) {
+        handle->query.reset(new DeviceBuffer());
+        target_query = handle->query.get();
+        store_query_in_handle = true;
+        query_device_buffer_cached = true;
+        query_device_cache_status = "stored";
+        query_residency = "cached_gpu_device_buffer";
+      }
+      target_query->reset(handle->res->get(), query_bytes);
+      cuda_check(
+        cudaMemcpy(target_query->get(), xq.data, query_bytes, cudaMemcpyHostToDevice),
+        "cudaMemcpy(queries)"
+      );
+      query_host_to_device_copy = true;
+      handle->query_upload_count += 1;
+      if (store_query_in_handle) {
+        handle->query_cache_key = query_cache_key;
+        handle->query_input_layout = xq.layout;
+        handle->query_input_owns_data = xq.owns_data;
+        handle->query_compatibility_conversion = xq.compatibility_conversion;
+        handle->query_n = n_points;
+        handle->query_p = handle->p;
+        handle->query_bytes = query_bytes;
+      }
+      query_ptr = target_query->get();
+      if (!query_device_buffer_cached) {
+        query_device_cache_status = "disabled";
+        query_residency = "transient_gpu_device_buffer";
+      }
+    }
+  }
+
+  const bool self_query = query_is_index_data;
+  const int search_k = exclude_self ? std::min(handle->n, k + 1) : k;
+  const int requested_n_probes = n_probes;
+  n_probes = std::max(1, std::min(n_probes, handle->n_lists));
+
+  IvfPqSearchParams search_params;
+  search_params.get()->n_probes = static_cast<uint32_t>(n_probes);
+
+  const CuvsIvfBatchSize batch_info = cuvs_ivf_batch_size(n_points);
+  const int batch_size = batch_info.actual;
+  DeviceBuffer neighbors_d(
+    handle->res->get(),
+    static_cast<std::size_t>(batch_size) * search_k * sizeof(int64_t)
+  );
+  DeviceBuffer distances_d(
+    handle->res->get(),
+    static_cast<std::size_t>(batch_size) * search_k * sizeof(float)
+  );
+
+  std::vector<int64_t> labels(static_cast<std::size_t>(n_points) * search_k);
+  std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
+
+  for (int offset = 0; offset < n_points; offset += batch_size) {
+    const int current_batch = std::min(batch_size, n_points - offset);
+    int64_t query_shape[2] = {current_batch, handle->p};
+    int64_t output_shape[2] = {current_batch, search_k};
+    char* batch_query_ptr = static_cast<char*>(query_ptr) +
+      static_cast<std::size_t>(offset) * handle->p * sizeof(float);
+    DLManagedTensor query_tensor = make_tensor(
+      batch_query_ptr, query_shape, 2, kDLCUDA, kDLFloat, 32
+    );
+    DLManagedTensor neighbors_tensor = make_tensor(
+      neighbors_d.get(), output_shape, 2, kDLCUDA, kDLInt, 64
+    );
+    DLManagedTensor distances_tensor = make_tensor(
+      distances_d.get(), output_shape, 2, kDLCUDA, kDLFloat, 32
+    );
+
+    cuvs_check(
+      cuvsIvfPqSearch(
+        handle->res->get(),
+        search_params.get(),
+        handle->index->get(),
+        &query_tensor,
+        &neighbors_tensor,
+        &distances_tensor
+      ),
+      "cuvsIvfPqSearch"
+    );
+    cuda_sync("cudaDeviceSynchronize");
+
+    const std::size_t batch_values =
+      static_cast<std::size_t>(current_batch) * search_k;
+    const std::size_t out_offset =
+      static_cast<std::size_t>(offset) * search_k;
+    cuda_check(
+      cudaMemcpy(
+        labels.data() + out_offset,
+        neighbors_d.get(),
+        batch_values * sizeof(int64_t),
+        cudaMemcpyDeviceToHost
+      ),
+      "cudaMemcpy(neighbors)"
+    );
+    cuda_check(
+      cudaMemcpy(
+        distances.data() + out_offset,
+        distances_d.get(),
+        batch_values * sizeof(float),
+        cudaMemcpyDeviceToHost
+      ),
+      "cudaMemcpy(distances)"
+    );
+  }
+
+  List out = format_int64_result(
+    labels,
+    distances,
+    n_points,
+    search_k,
+    k,
+    self_query,
+    exclude_self,
+    "cuVS_IVF_PQExternalPtr",
+    false,
+    false,
+    float_distances
+  );
+  out["index_type"] = "cuVS_IVF_PQExternalPtr";
+  out["index_reused"] = true;
+  out["index_n"] = handle->n;
+  out["index_p"] = handle->p;
+  out["index_trained"] = true;
+  out["index_training_reused"] = true;
+  out["centroids_reused"] = true;
+  out["inverted_lists_reused"] = true;
+  out["vectors_reused"] = true;
+  out["pq_codebooks_reused"] = true;
+  out["pq_codes_reused"] = true;
+  out["pq_training_reused"] = true;
+  out["build_train_call_count"] = 1;
+  out["search_train_call_count"] = 0;
+  out["build_pq_train_call_count"] = 1;
+  out["search_pq_train_call_count"] = 0;
+  out["query_n"] = n_points;
+  out["batch_query"] = true;
+  out["query_call_count"] = static_cast<int>(
+    (n_points + batch_size - 1) / batch_size
+  );
+  out["n_lists"] = handle->n_lists;
+  out["nlist"] = handle->n_lists;
+  out["n_probes"] = n_probes;
+  out["nprobe"] = n_probes;
+  out["build_nprobe"] = handle->n_probes;
+  out["search_nprobe"] = n_probes;
+  out["requested_n_lists"] = handle->requested_n_lists;
+  out["requested_nlist"] = handle->requested_n_lists;
+  out["requested_n_probes"] = requested_n_probes;
+  out["requested_nprobe"] = requested_n_probes;
+  out["pq_dim"] = handle->pq_dim;
+  out["pq_bits"] = handle->pq_bits;
+  out["requested_pq_dim"] = handle->requested_pq_dim;
+  out["requested_pq_bits"] = handle->requested_pq_bits;
+  out["pq_parameters_adjusted"] = handle->pq_parameters_adjusted;
+  out["pq_alignment_adjusted"] = handle->pq_alignment_adjusted;
+  out["pq_alignment_rule"] = handle->pq_alignment_rule;
+  annotate_cuvs_ivf_batch_metadata(out, batch_info, n_points);
+  out["input_type"] = "float32";
+  out["input_layout"] = query_input_layout;
+  out["input_owns_data"] = query_input_owns_data;
+  out["index_input_owns_data"] = handle->input_owns_data;
+  out["float32_compatibility_conversion"] = query_compatibility_conversion;
+  annotate_cuvs_gpu_residency(
+    out, "gpu_persistent", query_is_index_data, handle->n, n_points, handle->p,
+    search_k, true, true, 0, true
+  );
+  out["gpu_index_persistent"] = true;
+  out["gpu_resources_reused"] = true;
+  out["gpu_resource_scope"] = "externalptr_cuvs_resources";
+  out["dataset_residency"] = "gpu_device_buffer";
+  out["query_residency"] = query_residency;
+  out["query_uses_index_dataset_buffer"] = query_uses_index_dataset_buffer;
+  out["query_device_buffer_cached"] = query_device_buffer_cached;
+  out["query_device_buffer_reused"] = query_device_buffer_reused;
+  out["query_device_cache_status"] = query_device_cache_status;
+  out["query_host_to_device_copies"] = query_host_to_device_copy ? 1 : 0;
+  out["index_build_host_to_device_copies"] = 1;
+  out["query_upload_count"] = handle->query_upload_count;
+  out["query_cache_hit_count"] = handle->query_cache_hit_count;
+  out["host_device_traffic_policy"] =
+    "persistent_index_dataset_gpu_buffer;cache_repeated_query_gpu_buffer";
   return out;
 #endif
 }
@@ -3068,10 +3563,7 @@ List cuvs_nndescent_self_knn_impl(NumericMatrix data,
   const int n_features = data.ncol();
   graph_degree = std::max(k, graph_degree);
   graph_degree = std::min(graph_degree, n_data - 1);
-  intermediate_graph_degree = std::max(
-    intermediate_graph_degree,
-    std::max(graph_degree, graph_degree * 2)
-  );
+  intermediate_graph_degree = std::max(intermediate_graph_degree, graph_degree);
   intermediate_graph_degree = std::min(intermediate_graph_degree, n_data - 1);
   max_iterations = std::max(1, max_iterations);
 
@@ -3168,10 +3660,7 @@ List cuvs_nndescent_self_float32_knn_impl(SEXP data,
   const int n_features = xb.ncol;
   graph_degree = std::max(k, graph_degree);
   graph_degree = std::min(graph_degree, n_data - 1);
-  intermediate_graph_degree = std::max(
-    intermediate_graph_degree,
-    std::max(graph_degree, graph_degree * 2)
-  );
+  intermediate_graph_degree = std::max(intermediate_graph_degree, graph_degree);
   intermediate_graph_degree = std::min(intermediate_graph_degree, n_data - 1);
   max_iterations = std::max(1, max_iterations);
   const bool float_distances = wants_float_distance_storage(distance_storage);

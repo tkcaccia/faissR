@@ -115,7 +115,9 @@ nn_gpu_residency_metadata <- function(out) {
   if (!is.list(out)) return(NULL)
   fields <- c(
     "accelerator", "gpu_provider", "device_residency", "index_residency",
+    "dataset_residency",
     "gpu_index_resident", "gpu_index_persistent",
+    "gpu_resources_reused", "gpu_resource_scope",
     "host_to_device_transfer_strategy", "host_to_device_copies_known",
     "host_to_device_data_copies", "host_to_device_query_copies",
     "host_to_device_copies", "host_to_device_data_copies_minimum",
@@ -125,6 +127,11 @@ nn_gpu_residency_metadata <- function(out) {
     "host_to_device_query_bytes_minimum", "host_to_device_bytes_minimum",
     "query_reuses_host_data", "query_reuses_device_data",
     "query_residency", "result_residency",
+    "query_uses_index_dataset_buffer", "query_device_buffer_cached",
+    "query_device_buffer_reused", "query_device_cache_status",
+    "query_host_to_device_copies", "index_build_host_to_device_copies",
+    "query_upload_count", "query_cache_hit_count",
+    "host_device_traffic_policy",
     "device_to_host_result_copies_known", "device_to_host_result_copies",
     "device_to_host_result_bytes", "device_to_host_result_bytes_minimum",
     "cpu_fallback", "cpu_side_result_repair"

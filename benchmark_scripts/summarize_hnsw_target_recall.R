@@ -209,7 +209,7 @@ write_report <- function(out_dir, x, completeness, backend_summary, shape_summar
     "- k values: `10`, `15`, `50`, and `100`.",
     "- Input: float32 dataset manifest rows.",
     "- Quality: sampled recall against exact KNN reference rows.",
-    "- Timeout: 600 seconds per row unless the launcher was overridden.",
+    "- Timeout: 2000 seconds per row unless the launcher was overridden.",
     "",
     "## Completeness Audit",
     "",

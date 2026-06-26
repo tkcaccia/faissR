@@ -1517,7 +1517,7 @@ source(helper)
 n_threads <- required_positive_int_arg(args$threads %||% 2L, "threads")
 configure_threads(n_threads)
 seed <- required_positive_int_arg(args$seed %||% 1L, "seed")
-timeout <- required_positive_int_arg(args$timeout %||% 600L, "timeout")
+timeout <- required_positive_int_arg(args$timeout %||% 2000L, "timeout")
 cycles <- required_positive_int_arg(args$cycles %||% default_graph_cycles(), "cycles")
 ari_tolerance <- required_nonnegative_numeric_arg(args$ari_tolerance %||% "0.01", "ari_tolerance")
 k_values <- required_positive_int_values(

@@ -8,7 +8,7 @@ MANIFEST="${MANIFEST:-/mnt/sata_ssd/fastEmbedR_Data/float32_dataset_manifest.csv
 OUT_DIR="${OUT_DIR:?Set OUT_DIR to the existing HNSW target-recall benchmark directory.}"
 
 THREADS="${THREADS:-4}"
-TIMEOUT="${TIMEOUT:-600}"
+TIMEOUT="${TIMEOUT:-2000}"
 QUALITY_N="${QUALITY_N:-128}"
 OUTPUT="${OUTPUT:-float}"
 

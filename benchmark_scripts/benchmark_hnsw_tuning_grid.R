@@ -869,7 +869,7 @@ main <- function() {
     stop("`target_recalls` must contain only 0.9, 0.95, and/or 0.99.", call. = FALSE)
   }
   n_threads <- positive_int(args$threads, 12L, "threads")
-  timeout <- positive_num(args$timeout, 600, "timeout")
+  timeout <- positive_num(args$timeout, 2000, "timeout")
   quality_n <- positive_int(args$quality_n, 256L, "quality_n")
   seed <- positive_int(args$seed, 20260624L, "seed")
   output <- args$output %||% "float"

@@ -766,7 +766,7 @@ main <- function() {
   k_values <- as.integer(split_arg(args$k_values, "10,15,50,100"))
   target_recalls <- as.numeric(split_arg(args$target_recalls, "0.9,0.95,0.99"))
   n_threads <- positive_int(args$threads, 12, "threads")
-  timeout <- positive_num(args$timeout, 600, "timeout")
+  timeout <- positive_num(args$timeout, 2000, "timeout")
   quality_n <- positive_int(args$quality_n, 256, "quality_n")
   seed <- positive_int(args$seed, 4, "seed")
   output <- args$output %||% if (backend == "cuda") "float" else "double"

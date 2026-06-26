@@ -1209,7 +1209,7 @@ List nn_tune_cuvs_nndescent_cpp(int n,
   const int graph_degree = option_int(graph_degree_option, k, k, n_cap);
   const int intermediate = option_int(
     intermediate_graph_degree_option,
-    std::max(graph_degree * 2, graph_degree),
+    std::max(static_cast<int>((3LL * graph_degree + 1) / 2), graph_degree),
     graph_degree,
     n_cap
   );

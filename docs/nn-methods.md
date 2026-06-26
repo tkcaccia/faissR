@@ -43,6 +43,12 @@ The `runtime_reason` labels are machine-readable, for example `available`,
 `unsupported_combination`, `missing_faiss`, `missing_faiss_gpu`,
 `missing_cuda`, `missing_cuda_route`, and `missing_cuvs`.
 
+CUDA result cleanup is deliberately backend-owned. When a CUDA route returns
+`attr(result, "gpu_residency")`, faissR treats the indices/distances as already
+ordered and shaped by C++/CUDA, and does not remove self-neighbours or reshape
+include-self columns in R. CUDA graph routes without compiled include-self
+layout support require `exclude_self = TRUE` and report an error otherwise.
+
 ## Method Summary
 
 | `method` | Exact? | CPU | CUDA | Main references |
@@ -363,11 +369,22 @@ for reranking [6,34].
   requires a linked FAISS build that exposes `faiss/IndexIVFPQFastScan.h`.
 - `backend = "cuda"` maps to `cuda_cuvs_ivfpq_fastscan`, a direct RAPIDS cuVS IVF-PQ
   route with 4-bit compressed codes. This is the CUDA IVFPQ FastScan route in
-  faissR; it does not silently fall back to CPU FAISS FastScan.
+  faissR; it does not silently fall back to CPU FAISS FastScan. Compatible raw
+  `nn()` calls reuse a fitted cuVS IVF-PQ index, dataset device buffer, and cuVS
+  resources so repeated queries do not retrain centroids or rebuild PQ codes.
+  Self-query searches reuse the fitted dataset device buffer directly; repeated
+  searches with the same separate query matrix can reuse one cached query device
+  buffer when `options(faissR.cache_cuda_ivfpq_query_buffers = TRUE)`.
+  Queries are submitted to cuVS in large batches, controlled by
+  `FAISSR_CUVS_IVF_BATCH_SIZE` (default 32768). For multi-query calls, the C++
+  backend clamps invalid tiny values so the search does not degrade into
+  row-by-row cuVS calls.
 - CUDA 4-bit IVF-PQ requires byte-aligned packed PQ codes. faissR therefore
   repairs invalid `pq_dim` values before calling cuVS, for example reducing an
   odd manual value to the nearest valid lower dimension, and reports the
-  requested and actual PQ parameters in metadata.
+  requested and actual PQ parameters in metadata. In CUDA tuning runs, smaller
+  `pq_dim` and smaller `nprobe` generally improve speed but can lower recall;
+  `nlist` controls the IVF build/search balance.
 - The public route currently supports `metric = "euclidean"` only. Cosine,
   correlation, and raw inner product are rejected explicitly rather than being
   transformed through a route whose quality has not been validated for those
@@ -379,9 +396,20 @@ for reranking [6,34].
   `options(faissR.ivfpq_fastscan_pq_m = ..., faissR.ivfpq_fastscan_refine_factor = ...,
   faissR.ivfpq_fastscan_bbs = ...)`; defaults keep 4-bit PQ and a small Flat reranking
   factor for quality.
-- Repeated compatible raw `nn()` calls reuse a session-local fitted FAISS
-  FastScan index, including trained IVF centroids, inverted lists, PQ
-  codebooks/codes, and the optional Flat refinement wrapper.
+- Repeated compatible raw `nn()` calls reuse session-local fitted indexes.
+  CPU reuses the fitted FAISS FastScan index, including trained IVF centroids,
+  inverted lists, PQ codebooks/codes, and the optional Flat refinement wrapper.
+  CUDA reuses the fitted cuVS IVF-PQ index, dataset device buffer, compressed
+  codes, and cuVS resources. CUDA metadata reports `dataset_residency`,
+  `query_residency`, `query_device_cache_status`, and
+  `query_host_to_device_copies` so benchmark runs can separate search-kernel time
+  from host-device traffic.
+- The HPC tuning wrappers expose these FastScan grids through
+  `IVFPQ_FASTSCAN_NLIST_MULTS`, `IVFPQ_FASTSCAN_NPROBE_MULTS`,
+  `IVFPQ_FASTSCAN_PQ_DIMS` for CUDA, and `CUVS_IVF_BATCH_SIZES`. The R driver
+  also accepts `--ivfpq_fastscan_nlist_multipliers`,
+  `--ivfpq_fastscan_nprobe_multipliers`, `--ivfpq_fastscan_pq_dim_values`, and
+  `--cuvs_ivf_batch_sizes`.
 - The CPU route always enters the FAISS FastScan C++ adapter as `float*`.
   `float::fl()`/float32 inputs avoid R double expansion; ordinary R double
   inputs are adapted once to row-major float32. `output = "float"` controls

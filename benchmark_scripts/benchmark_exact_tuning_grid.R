@@ -846,7 +846,7 @@ main <- function() {
   thread_values <- clean_int_values(args$thread_values, if (backend == "cpu") "1,2,4,8,12" else "12")
   if (!length(thread_values)) thread_values <- if (backend == "cpu") c(1L, 2L, 4L, 8L, 12L) else 12L
   n_threads_reference <- positive_int(args$reference_threads, max(thread_values), "reference_threads")
-  timeout <- positive_num(args$timeout, 600, "timeout")
+  timeout <- positive_num(args$timeout, 2000, "timeout")
   quality_n <- positive_int(args$quality_n, 256, "quality_n")
   seed <- positive_int(args$seed, 4, "seed")
   output_values <- clean_output_values(args$output_values, "float,double")

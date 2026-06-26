@@ -114,6 +114,11 @@ distance `0` and a zero-normalized row versus a nonzero row as distance `1`.
 CPU FAISS Flat uses the exact CPU scorer for those rows to preserve
 deterministic small-`k` tie handling; explicit CUDA routes do not perform
 CPU repair and therefore error clearly for those degenerate normalized rows.
+CUDA results that record GPU residency are treated as final backend output:
+faissR does not re-sort rows, remove self-neighbours, or reshape include-self
+columns in R after the CUDA/FAISS/cuVS route returns. CUDA graph routes whose
+compiled path does not yet expose include-self shaping require
+`exclude_self = TRUE` and fail clearly otherwise.
 Direct cuVS IVF/PQ use normalized Euclidean search for cosine/correlation and
 the standard maximum-inner-product-to-L2 extra-dimension transform for raw inner
 product before building the L2 index. Direct cuVS CAGRA and NN-Descent use
@@ -288,11 +293,27 @@ requires FAISS FastScan (`IndexIVFPQFastScan`) and uses 4-bit compressed PQ
 codes with optional Flat reranking. On CUDA it resolves to direct cuVS IVF-PQ
 with 4-bit compressed codes and records `cuda_cuvs_ivfpq_fastscan`; it does not fall
 back to CPU FastScan when CUDA/cuVS is unavailable. This route is Euclidean-only
-until non-Euclidean transforms have separate quality validation [6,34]. cuVS
+until non-Euclidean transforms have separate quality validation [6,34]. Raw
+CUDA `nn()` calls reuse a fitted cuVS IVF-PQ external pointer, the dataset device
+buffer, and cuVS resources through a bounded session cache; repeated queries can
+therefore avoid retraining IVF centroids, rebuilding PQ codebooks/codes, and
+copying the training data to the GPU again. Self-query searches use the fitted
+dataset device buffer directly. For repeated prediction-style calls with a
+separate query matrix, the persistent cuVS handle can retain one query device
+buffer keyed by the query fingerprint, controlled by
+`options(faissR.cache_cuda_ivfpq_query_buffers = TRUE)`, avoiding repeated query
+float conversion and host-to-device upload on cache hits. CUDA FastScan searches
+are submitted as large query batches controlled by `FAISSR_CUVS_IVF_BATCH_SIZE`
+(default 32768); for multi-query calls, faissR clamps invalid tiny values so the
+cuVS search loop does not become row-by-row. cuVS
 requires `pq_bits * pq_dim` to be byte aligned for IVF-PQ; faissR validates and
 repairs invalid CUDA IVFPQ FastScan 4-bit requests before build, preserving both
 requested and actual PQ parameters in result metadata rather than skipping a
 dataset.
+The HPC IVFPQ FastScan tuning scripts sweep `nlist`, `nprobe`, and byte-aligned
+CUDA `pq_dim` values in addition to optional CUDA batch size. Smaller `pq_dim`
+and smaller `nprobe` are expected to be faster but can reduce recall, while
+`nlist` controls the IVF build/search balance.
 FAISS HNSW uses no pilot tuning in the user call. Its default parameters are a
 static shape/k/metric policy implemented in C++ and selected by
 `target_recall`. The public options are `target_recall = 0.9`, `0.95`, and
@@ -321,7 +342,7 @@ public method names map to different concrete functions depending on `backend`.
 | `hnsw` | FAISS CPU HNSW. | RAPIDS cuVS HNSW from CAGRA. | CPU graph-search route with compiled shape/k tiers selected by `target_recall = 0.9`, `0.95`, or `0.99`. CUDA builds a cuVS CAGRA seed graph and converts it with `cuvsHnswFromCagraWithDataset` using the host dataset and cuVS CPU hierarchy; result metadata records `cuda_hnsw_design = "cuvs_hnsw_from_cagra_cpu_hierarchy"` because this is not a pure all-GPU HNSW implementation [5,16,22-23]. |
 | `ivf` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. | Coarse-list approximate route [1-2,16]. |
 | `ivfpq` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. | Compressed approximate route [6,16]. |
-| `ivfpq_fastscan` | FAISS CPU `IndexIVFPQFastScan` with 4-bit PQ and optional Flat refinement. | Direct RAPIDS cuVS IVF-PQ with 4-bit compressed codes. | IVFPQ FastScan compressed-code route for Euclidean/L2 search; CPU requires linked FAISS FastScan support and CUDA requires cuVS, with no CPU fallback for explicit CUDA requests [6,34]. |
+| `ivfpq_fastscan` | FAISS CPU `IndexIVFPQFastScan` with 4-bit PQ and optional Flat refinement. | Direct RAPIDS cuVS IVF-PQ with 4-bit compressed codes and session-local fitted-index/resource reuse. | IVFPQ FastScan compressed-code route for Euclidean/L2 search; CPU requires linked FAISS FastScan support and CUDA requires cuVS, with no CPU fallback for explicit CUDA requests [6,34]. |
 | `vamana` | Native DiskANN/Vamana-style robust-pruned candidate graph with CPU refinement. | Native DiskANN/Vamana-style robust-pruned candidate graph with CUDA row-candidate refinement. | Distinct pruned directed graph route implemented in faissR; large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning, while smaller CPU inputs keep exact seed neighbours. Robust pruning protects the first `k` seed neighbours before applying the Vamana rule; cuVS Vamana currently provides build/serialization rather than KNN search [3,5,24]. |
 | `nsg` | Native CPU NSG-style self-KNN candidate graph for Euclidean, cosine, correlation, and inner product. | Native CUDA NSG-style self-KNN candidate graph for all public metrics. | Optional graph-search baseline; public CPU NSG avoids unsafe linked-FAISS graph construction by using faissR-owned candidate pruning/refinement. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before NSG/MRNG-style pruning; smaller CPU inputs and CUDA keep exact seed neighbours. Native CPU/CUDA NSG protect the first `k` seed neighbours before pruning and use backend-specific auto defaults/options (`faissR.cpu_nsg_*`, `faissR.cuda_nsg_*`) [5,16,21,29]. |
 | `nndescent` | Native CPU NNDescent for Euclidean/L2, cosine, correlation, and raw inner product. | Direct cuVS NN-descent for Euclidean/L2, cosine, and correlation. | Approximate KNN graph construction; cosine/correlation use normalized Euclidean search. CUDA raw inner product is unsupported for NN-descent because direct cuVS NN-descent does not expose raw IP, and FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
@@ -362,6 +383,9 @@ produced untrustworthy recall on raw high-dimensional data.
 It is used internally by graph construction, clustering, and benchmarks. The
 function requests enough neighbours to remove the self-match safely and keeps the
 same `faissR_nn` result shape as `nn()`.
+For CUDA routes, self-neighbour removal is requested from the compiled FAISS,
+cuVS, or native CUDA implementation. The R wrapper does not drop self columns or
+repair final CUDA KNN matrices after the backend returns.
 
 ## `candidate_knn()`
 

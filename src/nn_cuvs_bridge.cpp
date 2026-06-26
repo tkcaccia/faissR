@@ -95,6 +95,20 @@ List cuvs_ivf_pq_float32_knn_impl(SEXP data,
                                   int pq_bits,
                                   bool exclude_self,
                                   std::string distance_storage);
+SEXP cuvs_ivf_pq_index_build_float32_impl(SEXP data,
+                                          int n_lists,
+                                          int n_probes,
+                                          int pq_dim,
+                                          int pq_bits);
+List cuvs_ivf_pq_index_search_float32_impl(SEXP index_ptr,
+                                           SEXP points,
+                                           int k,
+                                           bool exclude_self,
+                                           int n_probes,
+                                           bool query_is_index_data,
+                                           bool cache_query_device_buffer,
+                                           std::string query_cache_key,
+                                           std::string distance_storage);
 List cuvs_kmeans_impl(NumericMatrix data,
                       int centers,
                       int max_iter,
@@ -340,6 +354,44 @@ List nn_cuvs_ivf_pq_float32_cpp(SEXP data,
     pq_dim,
     pq_bits,
     exclude_self,
+    distance_storage
+  );
+}
+
+// [[Rcpp::export]]
+SEXP nn_cuvs_ivf_pq_index_build_float32_cpp(SEXP data,
+                                            int n_lists,
+                                            int n_probes,
+                                            int pq_dim,
+                                            int pq_bits) {
+  return cuvs_ivf_pq_index_build_float32_impl(
+    data,
+    n_lists,
+    n_probes,
+    pq_dim,
+    pq_bits
+  );
+}
+
+// [[Rcpp::export]]
+List nn_cuvs_ivf_pq_index_search_float32_cpp(SEXP index_ptr,
+                                             SEXP points,
+                                             int k,
+                                             bool exclude_self,
+                                             int n_probes,
+                                             bool query_is_index_data,
+                                             bool cache_query_device_buffer,
+                                             std::string query_cache_key,
+                                             std::string distance_storage) {
+  return cuvs_ivf_pq_index_search_float32_impl(
+    index_ptr,
+    points,
+    k,
+    exclude_self,
+    n_probes,
+    query_is_index_data,
+    cache_query_device_buffer,
+    query_cache_key,
     distance_storage
   );
 }

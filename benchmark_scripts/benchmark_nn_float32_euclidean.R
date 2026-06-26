@@ -543,7 +543,7 @@ main <- function() {
   if (!length(backends)) stop("At least one of `cpu` or `cuda` is required.", call. = FALSE)
   k <- positive_int(args$k %||% args$k_values, 50L, "k")
   n_threads <- positive_int(args$threads, 4L, "threads")
-  timeout <- positive_num(args$timeout, 600, "timeout")
+  timeout <- positive_num(args$timeout, 2000, "timeout")
   quality_n <- positive_int(args$quality_n, 128L, "quality_n")
   seed <- positive_int(args$seed, 20260624L, "seed")
   output <- args$output %||% "float"

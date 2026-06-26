@@ -333,6 +333,14 @@ nn_cuvs_ivf_pq_float32_cpp <- function(data, points, k, n_lists, n_probes, pq_di
     .Call(`_faissR_nn_cuvs_ivf_pq_float32_cpp`, data, points, k, n_lists, n_probes, pq_dim, pq_bits, exclude_self, distance_storage)
 }
 
+nn_cuvs_ivf_pq_index_build_float32_cpp <- function(data, n_lists, n_probes, pq_dim, pq_bits) {
+    .Call(`_faissR_nn_cuvs_ivf_pq_index_build_float32_cpp`, data, n_lists, n_probes, pq_dim, pq_bits)
+}
+
+nn_cuvs_ivf_pq_index_search_float32_cpp <- function(index_ptr, points, k, exclude_self, n_probes, query_is_index_data, cache_query_device_buffer, query_cache_key, distance_storage) {
+    .Call(`_faissR_nn_cuvs_ivf_pq_index_search_float32_cpp`, index_ptr, points, k, exclude_self, n_probes, query_is_index_data, cache_query_device_buffer, query_cache_key, distance_storage)
+}
+
 kmeans_cuvs_cpp <- function(data, centers, max_iter, n_init, tol, streaming_batch_size, kmeans_plus_plus) {
     .Call(`_faissR_kmeans_cuvs_cpp`, data, centers, max_iter, n_init, tol, streaming_batch_size, kmeans_plus_plus)
 }
@@ -472,4 +480,3 @@ kmeans_faiss_cpp <- function(data, centers, max_iter, nredo, tol, seed, n_thread
 kmeans_faiss_gpu_cpp <- function(data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus) {
     .Call(`_faissR_kmeans_faiss_gpu_cpp`, data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus)
 }
-

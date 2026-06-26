@@ -24,6 +24,9 @@ set -euo pipefail
 # The job scans float32 .RData files, uses explicit backend="cpu",
 # method="ivfpq_fastscan", Euclidean distance, k=10,15,50,100, and writes
 # recommendation tables for target recall 0.90, 0.95, and 0.99.
+# It sweeps IVF `nlist`, IVF `nprobe`, FAISS FastScan `pq_m`, refinement,
+# and FastScan block size. Use the IVFPQ_FASTSCAN_* variables below to change
+# the grid without editing the script.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 export DATA_ROOT="${DATA_ROOT:-${BASE_DIR}/Data}"
@@ -37,11 +40,12 @@ export METHOD="ivfpq_fastscan"
 export BACKEND="cpu"
 export THREADS_CPU="${THREADS_CPU:-12}"
 export THREAD_VALUES="${THREAD_VALUES:-${THREADS_CPU}}"
-export TIMEOUT="${TIMEOUT:-600}"
+export TIMEOUT="${TIMEOUT:-2000}"
 export QUALITY_N="${QUALITY_N:-256}"
 export SEED="${SEED:-4}"
 export GRID_LEVEL="${GRID_LEVEL:-standard}"
 export IVFPQ_FASTSCAN_REFINE_FACTORS="${IVFPQ_FASTSCAN_REFINE_FACTORS:-1,2,4,8,16,32}"
+export IVFPQ_FASTSCAN_NLIST_MULTS="${IVFPQ_FASTSCAN_NLIST_MULTS:-0.5,1,2,4}"
 export IVFPQ_FASTSCAN_NPROBE_MULTS="${IVFPQ_FASTSCAN_NPROBE_MULTS:-0.5,1,2}"
 export IVFPQ_FASTSCAN_PQ_M_VALUES="${IVFPQ_FASTSCAN_PQ_M_VALUES:-16,32}"
 export IVFPQ_FASTSCAN_BBS_VALUES="${IVFPQ_FASTSCAN_BBS_VALUES:-32,64}"
@@ -110,6 +114,7 @@ fi
   echo "QUALITY_N=${QUALITY_N}"
   echo "SEED=${SEED}"
   echo "IVFPQ_FASTSCAN_REFINE_FACTORS=${IVFPQ_FASTSCAN_REFINE_FACTORS}"
+  echo "IVFPQ_FASTSCAN_NLIST_MULTS=${IVFPQ_FASTSCAN_NLIST_MULTS}"
   echo "IVFPQ_FASTSCAN_NPROBE_MULTS=${IVFPQ_FASTSCAN_NPROBE_MULTS}"
   echo "IVFPQ_FASTSCAN_PQ_M_VALUES=${IVFPQ_FASTSCAN_PQ_M_VALUES}"
   echo "IVFPQ_FASTSCAN_BBS_VALUES=${IVFPQ_FASTSCAN_BBS_VALUES}"
@@ -132,6 +137,7 @@ fi
     --output_values="${OUTPUT_VALUES}" \
     --grid_level="${GRID_LEVEL}" \
     --ivfpq_fastscan_refine_factors="${IVFPQ_FASTSCAN_REFINE_FACTORS}" \
+    --ivfpq_fastscan_nlist_multipliers="${IVFPQ_FASTSCAN_NLIST_MULTS}" \
     --ivfpq_fastscan_nprobe_multipliers="${IVFPQ_FASTSCAN_NPROBE_MULTS}" \
     --ivfpq_fastscan_pq_m_values="${IVFPQ_FASTSCAN_PQ_M_VALUES}" \
     --ivfpq_fastscan_bbs_values="${IVFPQ_FASTSCAN_BBS_VALUES}" \

@@ -25,6 +25,9 @@ set -euo pipefail
 # The job scans float32 .RData files, uses explicit backend="cuda",
 # method="ivfpq_fastscan", Euclidean distance, k=10,15,50,100, and writes
 # recommendation tables for target recall 0.90, 0.95, and 0.99.
+# It sweeps IVF `nlist`, IVF `nprobe`, and byte-aligned cuVS 4-bit `pq_dim`.
+# Use IVFPQ_FASTSCAN_NLIST_MULTS, IVFPQ_FASTSCAN_NPROBE_MULTS,
+# IVFPQ_FASTSCAN_PQ_DIMS, and CUVS_IVF_BATCH_SIZES to change the grid.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 export DATA_ROOT="${DATA_ROOT:-${BASE_DIR}/Data}"
@@ -38,7 +41,7 @@ export METHOD="ivfpq_fastscan"
 export BACKEND="cuda"
 export THREADS_CPU="${THREADS_CPU:-12}"
 export THREAD_VALUES="${THREAD_VALUES:-${THREADS_CPU}}"
-export TIMEOUT="${TIMEOUT:-600}"
+export TIMEOUT="${TIMEOUT:-2000}"
 export QUALITY_N="${QUALITY_N:-256}"
 export SEED="${SEED:-4}"
 export GRID_LEVEL="${GRID_LEVEL:-standard}"
@@ -52,6 +55,10 @@ export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM
 export K_VALUES="${K_VALUES:-10,15,50,100}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
+export IVFPQ_FASTSCAN_NLIST_MULTS="${IVFPQ_FASTSCAN_NLIST_MULTS:-0.5,1,2,4}"
+export IVFPQ_FASTSCAN_NPROBE_MULTS="${IVFPQ_FASTSCAN_NPROBE_MULTS:-0.5,1,2,3}"
+export IVFPQ_FASTSCAN_PQ_DIMS="${IVFPQ_FASTSCAN_PQ_DIMS:-16,32,64}"
+export CUVS_IVF_BATCH_SIZES="${CUVS_IVF_BATCH_SIZES:-32768}"
 
 export OMP_NUM_THREADS="${THREADS_CPU}"
 export OPENBLAS_NUM_THREADS="${THREADS_CPU}"
@@ -104,13 +111,17 @@ fi
   echo "BENCH_SCRIPT=${BENCH_SCRIPT}"
   echo "METHOD=${METHOD}"
   echo "BACKEND=${BACKEND}"
+  echo "IVFPQ_FASTSCAN_NLIST_MULTS=${IVFPQ_FASTSCAN_NLIST_MULTS}"
+  echo "IVFPQ_FASTSCAN_NPROBE_MULTS=${IVFPQ_FASTSCAN_NPROBE_MULTS}"
+  echo "IVFPQ_FASTSCAN_PQ_DIMS=${IVFPQ_FASTSCAN_PQ_DIMS}"
+  echo "CUVS_IVF_BATCH_SIZES=${CUVS_IVF_BATCH_SIZES}"
   echo "QUALITY_N=${QUALITY_N}"
   echo "SEED=${SEED}"
   echo "[$(date --iso-8601=seconds)] building float32 manifest"
   "${RUNNER[@]}" "${R_BIN}" "${MANIFEST_SCRIPT}"     --data_root="${DATA_ROOT}"     --out="${MANIFEST}"     --datasets="${DATASETS}"
 
   echo "[$(date --iso-8601=seconds)] running CUDA IVFPQ_FASTSCAN tuning from precomputed references"
-  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --backend="${BACKEND}"     --k_values="${K_VALUES}"     --target_recalls="${TARGET_RECALLS}"     --threads="${THREADS_CPU}"     --thread_values="${THREAD_VALUES}"     --timeout="${TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --output_values="${OUTPUT_VALUES}"     --grid_level="${GRID_LEVEL}"     --resume=TRUE
+  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --backend="${BACKEND}"     --k_values="${K_VALUES}"     --target_recalls="${TARGET_RECALLS}"     --threads="${THREADS_CPU}"     --thread_values="${THREAD_VALUES}"     --timeout="${TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --output_values="${OUTPUT_VALUES}"     --grid_level="${GRID_LEVEL}"     --ivfpq_fastscan_nlist_multipliers="${IVFPQ_FASTSCAN_NLIST_MULTS}"     --ivfpq_fastscan_nprobe_multipliers="${IVFPQ_FASTSCAN_NPROBE_MULTS}"     --ivfpq_fastscan_pq_dim_values="${IVFPQ_FASTSCAN_PQ_DIMS}"     --cuvs_ivf_batch_sizes="${CUVS_IVF_BATCH_SIZES}"     --resume=TRUE
 
   echo "DONE: ${OUT_DIR}"
 } 2>&1 | tee -a "${OUT_DIR}/ivfpq_fastscan_tuning_cuda.log"

@@ -502,6 +502,200 @@ fitted_nn_index_result <- function(data,
   finish_float32_direct_result(result, out)
 }
 
+.faissR_cuvs_ivfpq_index_cache <- new.env(parent = emptyenv())
+.faissR_cuvs_ivfpq_index_cache$.keys <- character()
+
+cuvs_ivfpq_index_cache_enabled <- function() {
+  isTRUE(faissr_option(
+    "cache_fitted_cuda_ivfpq_indexes",
+    faissr_option("cache_fitted_nn_indexes", TRUE)
+  )) && isTRUE(cuvs_available())
+}
+
+cuvs_ivfpq_index_cache_limit <- function() {
+  value <- suppressWarnings(as.integer(faissr_option(
+    "cache_fitted_cuda_ivfpq_indexes_max_entries",
+    1L
+  )))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) || value < 0L) {
+    return(1L)
+  }
+  value
+}
+
+cuvs_ivfpq_index_cache_prune <- function() {
+  limit <- cuvs_ivfpq_index_cache_limit()
+  keys <- .faissR_cuvs_ivfpq_index_cache$.keys
+  if (limit < 1L) {
+    rm(list = setdiff(ls(.faissR_cuvs_ivfpq_index_cache, all.names = TRUE), ".keys"),
+       envir = .faissR_cuvs_ivfpq_index_cache)
+    .faissR_cuvs_ivfpq_index_cache$.keys <- character()
+    return(invisible(NULL))
+  }
+  while (length(keys) > limit) {
+    old <- keys[[1L]]
+    if (exists(old, envir = .faissR_cuvs_ivfpq_index_cache, inherits = FALSE)) {
+      rm(list = old, envir = .faissR_cuvs_ivfpq_index_cache)
+    }
+    keys <- keys[-1L]
+  }
+  .faissR_cuvs_ivfpq_index_cache$.keys <- keys
+  invisible(NULL)
+}
+
+cuvs_ivfpq_index_cache_drop <- function(key) {
+  if (exists(key, envir = .faissR_cuvs_ivfpq_index_cache, inherits = FALSE)) {
+    rm(list = key, envir = .faissR_cuvs_ivfpq_index_cache)
+  }
+  .faissR_cuvs_ivfpq_index_cache$.keys <- setdiff(
+    .faissR_cuvs_ivfpq_index_cache$.keys,
+    key
+  )
+  invisible(NULL)
+}
+
+cuvs_ivfpq_index_cache_get <- function(key) {
+  if (!exists(key, envir = .faissR_cuvs_ivfpq_index_cache, inherits = FALSE)) {
+    return(NULL)
+  }
+  entry <- get(key, envir = .faissR_cuvs_ivfpq_index_cache, inherits = FALSE)
+  entry$cache_hit <- TRUE
+  keys <- .faissR_cuvs_ivfpq_index_cache$.keys
+  .faissR_cuvs_ivfpq_index_cache$.keys <- c(setdiff(keys, key), key)
+  entry
+}
+
+cuvs_ivfpq_index_cache_set <- function(key, entry) {
+  if (cuvs_ivfpq_index_cache_limit() < 1L) {
+    return(invisible(NULL))
+  }
+  assign(key, entry, envir = .faissR_cuvs_ivfpq_index_cache)
+  keys <- .faissR_cuvs_ivfpq_index_cache$.keys
+  .faissR_cuvs_ivfpq_index_cache$.keys <- c(setdiff(keys, key), key)
+  cuvs_ivfpq_index_cache_prune()
+  invisible(NULL)
+}
+
+cuvs_ivfpq_index_cache_key <- function(data, params) {
+  dims <- fitted_nn_index_dims(data)
+  paste(
+    "cuvs-fitted-ivfpq-fastscan",
+    paste(as.integer(dims), collapse = "x"),
+    matrix_fingerprint_cpp(data),
+    fitted_nn_index_param_text(
+      nlist = as.integer(params$ivf$nlist),
+      pq_dim = as.integer(params$pq$pq_dim),
+      pq_bits = as.integer(params$pq$pq_bits)
+    ),
+    sep = "|"
+  )
+}
+
+cuvs_ivfpq_index_get_or_build <- function(data, params) {
+  key <- cuvs_ivfpq_index_cache_key(data, params)
+  entry <- cuvs_ivfpq_index_cache_get(key)
+  if (!is.null(entry)) {
+    return(entry)
+  }
+  entry <- list(
+    index = nn_cuvs_ivf_pq_index_build_float32_cpp(
+      data,
+      as.integer(params$ivf$nlist),
+      as.integer(params$ivf$nprobe),
+      as.integer(params$pq$pq_dim),
+      as.integer(params$pq$pq_bits)
+    ),
+    params = params,
+    cache_key = key,
+    cache_hit = FALSE
+  )
+  cuvs_ivfpq_index_cache_set(key, entry)
+  entry
+}
+
+cuvs_ivfpq_fitted_search <- function(data,
+                                     points,
+                                     k,
+                                     self_query,
+                                     exclude_self,
+                                     output,
+                                     params) {
+  if (!cuvs_ivfpq_index_cache_enabled()) {
+    return(NULL)
+  }
+  entry <- cuvs_ivfpq_index_get_or_build(data, params)
+  cache_query_device_buffer <- isTRUE(faissr_option("cache_cuda_ivfpq_query_buffers", TRUE))
+  query_cache_key <- ""
+  if (!isTRUE(self_query) && cache_query_device_buffer) {
+    points_dim <- fitted_nn_index_dims(points)
+    query_cache_key <- paste(
+      "cuvs-query",
+      paste(as.integer(points_dim), collapse = "x"),
+      matrix_fingerprint_cpp(points),
+      sep = "|"
+    )
+  }
+  out <- tryCatch({
+    nn_cuvs_ivf_pq_index_search_float32_cpp(
+      entry$index,
+      points,
+      as.integer(k),
+      isTRUE(exclude_self),
+      as.integer(params$ivf$nprobe),
+      isTRUE(self_query),
+      cache_query_device_buffer,
+      query_cache_key,
+      output
+    )
+  }, error = function(e) {
+    msg <- conditionMessage(e)
+    if (grepl("pointer|externalptr|not valid|null", msg, ignore.case = TRUE)) {
+      cuvs_ivfpq_index_cache_drop(entry$cache_key)
+      return(NULL)
+    }
+    stop(e)
+  })
+  if (is.null(out)) {
+    return(NULL)
+  }
+  list(
+    out = out,
+    cache_meta = list(
+      persistent_index_cache = TRUE,
+      index_cache_hit = isTRUE(entry$cache_hit),
+      index_cache_key = entry$cache_key,
+      index_reused = TRUE,
+      gpu_resources_reused = isTRUE(out$gpu_resources_reused),
+      gpu_index_persistent = isTRUE(out$gpu_index_persistent),
+      index_training_reused = isTRUE(out$index_training_reused),
+      centroids_reused = isTRUE(out$centroids_reused),
+      inverted_lists_reused = isTRUE(out$inverted_lists_reused),
+      vectors_reused = isTRUE(out$vectors_reused),
+      pq_codebooks_reused = isTRUE(out$pq_codebooks_reused),
+      pq_codes_reused = isTRUE(out$pq_codes_reused),
+      pq_training_reused = isTRUE(out$pq_training_reused),
+      build_train_call_count = as.integer(out$build_train_call_count %||% NA_integer_),
+      search_train_call_count = as.integer(out$search_train_call_count %||% NA_integer_),
+      build_pq_train_call_count = as.integer(out$build_pq_train_call_count %||% NA_integer_),
+      search_pq_train_call_count = as.integer(out$search_pq_train_call_count %||% NA_integer_),
+      batch_query = isTRUE(out$batch_query),
+      query_n = as.integer(out$query_n %||% fitted_nn_index_dims(points)[[1L]]),
+      query_call_count = as.integer(out$query_call_count %||% 1L),
+      dataset_residency = out$dataset_residency %||% NA_character_,
+      query_residency = out$query_residency %||% NA_character_,
+      query_uses_index_dataset_buffer = isTRUE(out$query_uses_index_dataset_buffer),
+      query_device_buffer_cached = isTRUE(out$query_device_buffer_cached),
+      query_device_buffer_reused = isTRUE(out$query_device_buffer_reused),
+      query_device_cache_status = out$query_device_cache_status %||% NA_character_,
+      query_host_to_device_copies = as.integer(out$query_host_to_device_copies %||% NA_integer_),
+      index_build_host_to_device_copies = as.integer(out$index_build_host_to_device_copies %||% NA_integer_),
+      query_upload_count = as.integer(out$query_upload_count %||% NA_integer_),
+      query_cache_hit_count = as.integer(out$query_cache_hit_count %||% NA_integer_),
+      host_device_traffic_policy = out$host_device_traffic_policy %||% NA_character_
+    )
+  )
+}
+
 nn_compute <- function(data,
                        points,
                        k,
@@ -1266,19 +1460,34 @@ nn_compute <- function(data,
       }
       require_cuvs_backend("CUDA cuVS 4-bit IVF-PQ")
       params <- ivfpq_fastscan_cuda_params(data_dim[[1L]], data_dim[[2L]], k)
-      out <- nn_cuvs_ivf_pq_float32_cpp(
+      cached <- cuvs_ivfpq_fitted_search(
         data,
         points,
-        as.integer(k),
-        as.integer(params$ivf$nlist),
-        as.integer(params$ivf$nprobe),
-        as.integer(params$pq$pq_dim),
-        as.integer(params$pq$pq_bits),
-        isTRUE(exclude_self),
-        output
+        k,
+        self_query,
+        exclude_self,
+        output,
+        params
       )
+      cache_meta <- list()
+      if (is.null(cached)) {
+        out <- nn_cuvs_ivf_pq_float32_cpp(
+          data,
+          points,
+          as.integer(k),
+          as.integer(params$ivf$nlist),
+          as.integer(params$ivf$nprobe),
+          as.integer(params$pq$pq_dim),
+          as.integer(params$pq$pq_bits),
+          isTRUE(exclude_self),
+          output
+        )
+      } else {
+        out <- cached$out
+        cache_meta <- cached$cache_meta
+      }
       result <- finish_nn_result(out, "cuda_cuvs_ivfpq_fastscan", k, self_query, exact = FALSE, metric = metric)
-      attr(result, "approximation") <- list(
+      attr(result, "approximation") <- c(list(
         strategy = "rapids_cuvs_ivf_pq_4bit",
         backend = "cuda_cuvs_ivfpq_fastscan",
         library = "cuvs",
@@ -1305,7 +1514,7 @@ nn_compute <- function(data,
           isTRUE(params$pq$pq_alignment_adjusted),
         pq_alignment_rule = out$pq_alignment_rule %||% params$pq$pq_alignment_rule %||% NA_character_,
         search_batch_size = as.integer(out$search_batch_size)
-      )
+      ), cache_meta)
       result <- append_nn_tuning_metadata(result, params$ivf, params$pq, params$tuning, .prefixes = list(NULL, "pq_", "ivfpq_fastscan_"))
       return(finish_float32_direct_result(result, out))
     }
@@ -1364,6 +1573,7 @@ nn_compute <- function(data,
       if (!isTRUE(self_query)) {
         stop("`backend = \"cuda_cuvs_nndescent\"` is only available for self-KNN searches.", call. = FALSE)
       }
+      reject_cuda_r_side_output_cleanup("cuda_cuvs_nndescent", exclude_self)
       nonself_k <- if (isTRUE(exclude_self)) k else max(0L, k - 1L)
       if (nonself_k < 1L) {
         out <- list(
@@ -1385,9 +1595,6 @@ nn_compute <- function(data,
           as.integer(params$max_iterations),
           output
         )
-        if (!isTRUE(exclude_self)) {
-          out <- prepend_self_neighbor_column(out)
-        }
       }
       result <- finish_nn_result(out, "cuda_cuvs_nndescent", k, self_query, exact = FALSE, metric = metric)
       attr(result, "approximation") <- list(
@@ -1564,6 +1771,9 @@ nn_compute <- function(data,
       if (isTRUE(use_cuda) && !isTRUE(cuda_available())) {
         stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
       }
+      if (isTRUE(use_cuda)) {
+        reject_cuda_r_side_output_cleanup(backend, exclude_self)
+      }
       metric_inputs <- NULL
       search_data <- data
       refine_metric <- "euclidean"
@@ -1613,7 +1823,7 @@ nn_compute <- function(data,
           n_threads = n_threads,
           seed_backend = params$seed_backend %||% "exact"
         )
-        if (!isTRUE(exclude_self)) {
+        if (!isTRUE(use_cuda) && !isTRUE(exclude_self)) {
           out <- prepend_self_neighbor_column(out)
         }
       }
@@ -1656,6 +1866,9 @@ nn_compute <- function(data,
       use_cuda <- identical(backend, "cuda_vamana")
       if (isTRUE(use_cuda) && !isTRUE(cuda_available())) {
         stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
+      }
+      if (isTRUE(use_cuda)) {
+        reject_cuda_r_side_output_cleanup(backend, exclude_self)
       }
       metric_inputs <- NULL
       search_data <- data
@@ -1708,7 +1921,7 @@ nn_compute <- function(data,
           n_threads = n_threads,
           seed_backend = params$seed_backend %||% "exact"
         )
-        if (!isTRUE(exclude_self)) {
+        if (!isTRUE(use_cuda) && !isTRUE(exclude_self)) {
           out <- prepend_self_neighbor_column(out)
         }
       }
@@ -2172,7 +2385,7 @@ nn_compute <- function(data,
       metric = as.character(out$metric),
       input_type = out$input_type %||% NULL
     )
-    if (identical(output, "float")) {
+    if (identical(output, "float") || !is.null(cached)) {
       result <- finish_float32_direct_result(result, out)
     }
     return(result)
@@ -2909,6 +3122,9 @@ nn_compute <- function(data,
     if (isTRUE(use_cuda) && !isTRUE(cuda_available())) {
       stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
     }
+    if (isTRUE(use_cuda)) {
+      reject_cuda_r_side_output_cleanup(backend, exclude_self)
+    }
     metric_inputs <- NULL
     search_data <- data
     refine_metric <- "euclidean"
@@ -2949,7 +3165,7 @@ nn_compute <- function(data,
         n_threads = n_threads,
         seed_backend = params$seed_backend %||% "exact"
       )
-      if (!isTRUE(exclude_self)) {
+      if (!isTRUE(use_cuda) && !isTRUE(exclude_self)) {
         out <- prepend_self_neighbor_column(out)
       }
     }
@@ -2993,6 +3209,9 @@ nn_compute <- function(data,
     if (isTRUE(use_cuda) && !isTRUE(cuda_available())) {
       stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
     }
+    if (isTRUE(use_cuda)) {
+      reject_cuda_r_side_output_cleanup(backend, exclude_self)
+    }
     metric_inputs <- NULL
     search_data <- data
     refine_metric <- metric
@@ -3035,7 +3254,7 @@ nn_compute <- function(data,
         n_threads = n_threads,
         seed_backend = params$seed_backend %||% "exact"
       )
-      if (!isTRUE(exclude_self)) {
+      if (!isTRUE(use_cuda) && !isTRUE(exclude_self)) {
         out <- prepend_self_neighbor_column(out)
       }
     }
@@ -3354,32 +3573,47 @@ nn_compute <- function(data,
     }
     require_cuvs_backend("CUDA cuVS 4-bit IVF-PQ")
     params <- ivfpq_fastscan_cuda_params(nrow(data), ncol(data), k)
-    out <- if (identical(output, "float")) {
-      nn_cuvs_ivf_pq_float32_cpp(
-        data,
-        points,
-        as.integer(k),
-        as.integer(params$ivf$nlist),
-        as.integer(params$ivf$nprobe),
-        as.integer(params$pq$pq_dim),
-        as.integer(params$pq$pq_bits),
-        isTRUE(exclude_self),
-        output
-      )
+    cached <- cuvs_ivfpq_fitted_search(
+      data,
+      points,
+      k,
+      self_query,
+      exclude_self,
+      output,
+      params
+    )
+    cache_meta <- list()
+    if (is.null(cached)) {
+      out <- if (identical(output, "float")) {
+        nn_cuvs_ivf_pq_float32_cpp(
+          data,
+          points,
+          as.integer(k),
+          as.integer(params$ivf$nlist),
+          as.integer(params$ivf$nprobe),
+          as.integer(params$pq$pq_dim),
+          as.integer(params$pq$pq_bits),
+          isTRUE(exclude_self),
+          output
+        )
+      } else {
+        nn_cuvs_ivf_pq_cpp(
+          data,
+          points,
+          as.integer(k),
+          as.integer(params$ivf$nlist),
+          as.integer(params$ivf$nprobe),
+          as.integer(params$pq$pq_dim),
+          as.integer(params$pq$pq_bits),
+          isTRUE(exclude_self)
+        )
+      }
     } else {
-      nn_cuvs_ivf_pq_cpp(
-        data,
-        points,
-        as.integer(k),
-        as.integer(params$ivf$nlist),
-        as.integer(params$ivf$nprobe),
-        as.integer(params$pq$pq_dim),
-        as.integer(params$pq$pq_bits),
-        isTRUE(exclude_self)
-      )
+      out <- cached$out
+      cache_meta <- cached$cache_meta
     }
     result <- finish_nn_result(out, "cuda_cuvs_ivfpq_fastscan", k, self_query, exact = FALSE, metric = metric)
-    attr(result, "approximation") <- list(
+    attr(result, "approximation") <- c(list(
       strategy = "rapids_cuvs_ivf_pq_4bit",
       backend = "cuda_cuvs_ivfpq_fastscan",
       library = "cuvs",
@@ -3405,7 +3639,7 @@ nn_compute <- function(data,
         isTRUE(params$pq$pq_alignment_adjusted),
       pq_alignment_rule = out$pq_alignment_rule %||% params$pq$pq_alignment_rule %||% NA_character_,
       search_batch_size = as.integer(out$search_batch_size)
-    )
+    ), cache_meta)
     result <- append_nn_tuning_metadata(result, params$ivf, params$pq, params$tuning, .prefixes = list(NULL, "pq_", "ivfpq_fastscan_"))
     if (identical(output, "float")) {
       result <- finish_float32_direct_result(result, out)
@@ -3569,6 +3803,7 @@ nn_compute <- function(data,
     if (!isTRUE(self_query)) {
       stop("`backend = \"cuda_cuvs_nndescent\"` is only available for self-KNN searches.", call. = FALSE)
     }
+    reject_cuda_r_side_output_cleanup("cuda_cuvs_nndescent", exclude_self)
     metric_inputs <- NULL
     search_data <- data
     if (metric %in% c("cosine", "correlation")) {
@@ -3602,9 +3837,6 @@ nn_compute <- function(data,
           as.integer(params$intermediate_graph_degree),
           as.integer(params$max_iterations)
         )
-      }
-      if (!isTRUE(exclude_self)) {
-        out <- prepend_self_neighbor_column(out)
       }
     }
     result <- finish_nn_result(out, "cuda_cuvs_nndescent", k, self_query, exact = FALSE, metric = metric)
@@ -3790,18 +4022,55 @@ nn_compute <- function(data,
   }
 
   if (!is.na(selected_gpu)) {
-    gpu_k <- if (isTRUE(exclude_self)) k + 1L else k
-    if (gpu_k > 256L) {
-      stop("Native GPU backends currently support `k <= 256`.", call. = FALSE)
-    }
     if (selected_gpu == "cuda") {
       if (!isTRUE(cuda_available())) {
         stop("No CUDA GPU backend is available on this machine.", call. = FALSE)
       }
-      out <- nn_cuda_cpp(data, points, as.integer(gpu_k), FALSE)
       if (isTRUE(exclude_self)) {
-        out <- drop_self_knn_result(out, k)
+        if (isTRUE(cuvs_available())) {
+          return(nn_compute(
+            data,
+            points,
+            k,
+            backend = "cuda_cuvs_bruteforce",
+            points_missing = points_missing,
+            exclude_self = TRUE,
+            n_threads = n_threads,
+            metric = metric,
+            tuning = tuning,
+            target_recall = target_recall,
+            output = output,
+            auto_selection = auto_selection
+          ))
+        }
+        if (isTRUE(faiss_gpu_available())) {
+          return(nn_compute(
+            data,
+            points,
+            k,
+            backend = "faiss_gpu_flat_l2",
+            points_missing = points_missing,
+            exclude_self = TRUE,
+            n_threads = n_threads,
+            metric = metric,
+            tuning = tuning,
+            target_recall = target_recall,
+            output = output,
+            auto_selection = auto_selection
+          ))
+        }
+        stop(
+          "`backend = \"cuda\"` with `exclude_self = TRUE` requires cuVS ",
+          "brute force or FAISS GPU Flat so self-neighbor removal is handled ",
+          "inside the CUDA/C++ backend.",
+          call. = FALSE
+        )
       }
+      gpu_k <- k
+      if (gpu_k > 256L) {
+        stop("Native GPU backends currently support `k <= 256`.", call. = FALSE)
+      }
+      out <- nn_cuda_cpp(data, points, as.integer(gpu_k), FALSE)
       return(finish_nn_result(out, "cuda", k, self_query, exact = TRUE, metric = metric))
     }
     stop("No CUDA KNN backend is available on this machine.", call. = FALSE)
@@ -5663,6 +5932,24 @@ finalize_graph_metric_result <- function(result, inputs) {
   finalize_normalized_euclidean_metric_result(result, inputs)
 }
 
+knn_result_has_gpu_residency <- function(result) {
+  !is.null(attr(result, "gpu_residency", exact = TRUE)) ||
+    is.list(result$gpu_residency) ||
+    identical(result$accelerator %||% NA_character_, "cuda")
+}
+
+reject_cuda_r_side_output_cleanup <- function(backend,
+                                              exclude_self,
+                                              cleanup = "include_self_output") {
+  if (isTRUE(exclude_self)) return(invisible(FALSE))
+  stop(
+    "`backend = \"", backend, "\"` currently requires `exclude_self = TRUE` ",
+    "for this CUDA graph route because include-self output shaping must be ",
+    "implemented by the CUDA/C++ backend, not by R-side cleanup.",
+    call. = FALSE
+  )
+}
+
 finalize_normalized_euclidean_metric_result <- function(result, inputs) {
   result <- normalized_euclidean_to_similarity_distance(
     result,
@@ -5678,7 +5965,7 @@ finalize_normalized_euclidean_metric_result <- function(result, inputs) {
     approximation$distance_transform <- "normalized_euclidean_squared_over_2_to_1_minus_similarity"
     attr(result, "approximation") <- approximation
   }
-  if (!is.null(attr(result, "gpu_residency", exact = TRUE))) {
+  if (knn_result_has_gpu_residency(result)) {
     return(result)
   }
   sort_knn_rows_by_distance_index(result)
@@ -5700,6 +5987,9 @@ finalize_mips_l2_metric_result <- function(result, inputs) {
     approximation$metric_transform <- inputs$transform
     approximation$distance_transform <- inputs$distance_transform
     attr(result, "approximation") <- approximation
+  }
+  if (knn_result_has_gpu_residency(result)) {
+    return(result)
   }
   sort_knn_rows_by_distance_index(result)
 }
@@ -6494,14 +6784,30 @@ vamana_self_knn <- function(data,
   if (!is.null(ann_seed)) {
     seed <- ann_seed
     seed_backend <- paste0("native_", attr(ann_seed, "seed_backend", exact = TRUE), "_seed")
-  } else if (isTRUE(use_cuda) && identical(metric, "euclidean")) {
-    raw <- if (is_float32_matrix_input(data)) {
-      nn_cuda_float32_cpp(data, data, as.integer(min(search_l + 1L, nrow(data))), FALSE)
-    } else {
-      nn_cuda_cpp(data, data, as.integer(min(search_l + 1L, nrow(data))), FALSE)
-    }
-    seed <- drop_self_knn_result(raw, search_l)
-    seed_backend <- "native_cuda_exact_seed"
+  } else if (isTRUE(use_cuda) && identical(metric, "euclidean") && isTRUE(cuvs_available())) {
+    seed <- nn_compute(
+      data,
+      data,
+      as.integer(search_l),
+      "cuda_cuvs_bruteforce",
+      points_missing = TRUE,
+      exclude_self = TRUE,
+      n_threads = n_threads,
+      metric = metric
+    )
+    seed_backend <- "native_cuda_cuvs_bruteforce_seed"
+  } else if (isTRUE(use_cuda) && identical(metric, "euclidean") && isTRUE(faiss_gpu_available())) {
+    seed <- nn_compute(
+      data,
+      data,
+      as.integer(search_l),
+      "faiss_gpu_flat_l2",
+      points_missing = TRUE,
+      exclude_self = TRUE,
+      n_threads = n_threads,
+      metric = metric
+    )
+    seed_backend <- "native_faiss_gpu_flat_l2_seed"
   } else if (is_float32_matrix_input(data)) {
     seed_backend_name <- if (identical(metric, "inner_product")) "faiss_flat_ip" else "faiss_flat_l2"
     seed <- nn_compute(
@@ -6548,10 +6854,7 @@ vamana_self_knn <- function(data,
     } else {
       row_candidate_knn_cuda_cpp(data, graph, as.integer(k), metric)
     }
-    out <- list(indices = refined$indices, distances = refined$distances)
-    for (field in c("input_type", "input_layout", "input_owns_data", "float32_compatibility_conversion")) {
-      if (!is.null(refined[[field]])) out[[field]] <- refined[[field]]
-    }
+    out <- refined
     attr(out, "cuda_kernel") <- "row_candidate_knn"
   } else {
     out <- if (is_float32_matrix_input(data)) {
@@ -6624,14 +6927,30 @@ native_nsg_self_knn <- function(data,
   if (!is.null(ann_seed)) {
     seed <- ann_seed
     seed_backend <- paste0("native_", attr(ann_seed, "seed_backend", exact = TRUE), "_seed")
-  } else if (isTRUE(use_cuda) && identical(metric, "euclidean")) {
-    raw <- if (is_float32_matrix_input(data)) {
-      nn_cuda_float32_cpp(data, data, as.integer(graph_k + 1L), FALSE)
-    } else {
-      nn_cuda_cpp(data, data, as.integer(graph_k + 1L), FALSE)
-    }
-    seed <- drop_self_knn_result(raw, graph_k)
-    seed_backend <- "native_cuda_exact_seed"
+  } else if (isTRUE(use_cuda) && identical(metric, "euclidean") && isTRUE(cuvs_available())) {
+    seed <- nn_compute(
+      data,
+      data,
+      as.integer(graph_k),
+      "cuda_cuvs_bruteforce",
+      points_missing = TRUE,
+      exclude_self = TRUE,
+      n_threads = n_threads,
+      metric = metric
+    )
+    seed_backend <- "native_cuda_cuvs_bruteforce_seed"
+  } else if (isTRUE(use_cuda) && identical(metric, "euclidean") && isTRUE(faiss_gpu_available())) {
+    seed <- nn_compute(
+      data,
+      data,
+      as.integer(graph_k),
+      "faiss_gpu_flat_l2",
+      points_missing = TRUE,
+      exclude_self = TRUE,
+      n_threads = n_threads,
+      metric = metric
+    )
+    seed_backend <- "native_faiss_gpu_flat_l2_seed"
   } else if (is_float32_matrix_input(data)) {
     seed_backend_name <- if (identical(metric, "inner_product")) "faiss_flat_ip" else "faiss_flat_l2"
     seed <- nn_compute(
@@ -6693,10 +7012,7 @@ native_nsg_self_knn <- function(data,
         metric
       )
     }
-    out <- list(indices = refined$indices, distances = refined$distances)
-    for (field in c("input_type", "input_layout", "input_owns_data", "float32_compatibility_conversion")) {
-      if (!is.null(refined[[field]])) out[[field]] <- refined[[field]]
-    }
+    out <- refined
     attr(out, "cuda_kernel") <- "row_candidate_knn"
   } else {
     out <- if (is_float32_matrix_input(data)) {
@@ -8765,7 +9081,9 @@ grid_self_knn <- function(data,
 #' @param exclude_self Logical; when `TRUE`, remove each query row from its own
 #'   neighbour list. This is valid only for self-query calls where `points` is
 #'   omitted or identical to `data`. Self-neighbour removal is passed to the
-#'   compiled backend path rather than repaired by R-side post-processing.
+#'   compiled backend path rather than repaired by R-side post-processing. CUDA
+#'   graph routes that do not yet expose compiled include-self output shaping
+#'   require `exclude_self = TRUE` and fail clearly instead of reshaping in R.
 #' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
 #'   uses a validated CUDA route only when the requested method/metric
 #'   combination is supported and CUDA/cuVS runtime support is available, and
@@ -8907,10 +9225,19 @@ grid_self_knn <- function(data,
 #'   class, explicit backend/method flags, backend/method decision reasons, and
 #'   does not run pilot tuning. CPU FAISS Flat/HNSW/IVF/IVFPQ/FastScan routes use a
 #'   bounded session-local fitted-index cache for repeated raw `nn()` calls
-#'   with matching data and parameters; metadata reports
-#'   `persistent_index_cache` and `index_cache_hit`. Disable with
-#'   `options(faissR.cache_fitted_nn_indexes = FALSE)` or bound memory with
-#'   `options(faissR.cache_fitted_nn_indexes_max_entries = <n>)`.
+#'   with matching data and parameters. CUDA `method = "ivfpq_fastscan"` also
+#'   reuses a fitted cuVS IVF-PQ index, dataset device buffer, and cuVS resources
+#'   through a separate bounded cache. Self-query uses the fitted dataset device
+#'   buffer directly, and repeated separate-query calls can reuse one cached query
+#'   device buffer with
+#'   `options(faissR.cache_cuda_ivfpq_query_buffers = TRUE)`. Metadata reports
+#'   `persistent_index_cache`, `index_cache_hit`, `dataset_residency`,
+#'   `query_residency`, and `query_host_to_device_copies`. Disable CPU and CUDA
+#'   fitted-index caches with
+#'   `options(faissR.cache_fitted_nn_indexes = FALSE)`, bound CPU memory with
+#'   `options(faissR.cache_fitted_nn_indexes_max_entries = <n>)`, or bound CUDA
+#'   FastScan GPU memory with
+#'   `options(faissR.cache_fitted_cuda_ivfpq_indexes_max_entries = <n>)`.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
 #' knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu")

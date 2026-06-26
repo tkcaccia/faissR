@@ -1331,6 +1331,40 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nn_cuvs_ivf_pq_index_build_float32_cpp
+SEXP nn_cuvs_ivf_pq_index_build_float32_cpp(SEXP data, int n_lists, int n_probes, int pq_dim, int pq_bits);
+RcppExport SEXP _faissR_nn_cuvs_ivf_pq_index_build_float32_cpp(SEXP dataSEXP, SEXP n_listsSEXP, SEXP n_probesSEXP, SEXP pq_dimSEXP, SEXP pq_bitsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< int >::type n_lists(n_listsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_probes(n_probesSEXP);
+    Rcpp::traits::input_parameter< int >::type pq_dim(pq_dimSEXP);
+    Rcpp::traits::input_parameter< int >::type pq_bits(pq_bitsSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_cuvs_ivf_pq_index_build_float32_cpp(data, n_lists, n_probes, pq_dim, pq_bits));
+    return rcpp_result_gen;
+END_RCPP
+}
+// nn_cuvs_ivf_pq_index_search_float32_cpp
+List nn_cuvs_ivf_pq_index_search_float32_cpp(SEXP index_ptr, SEXP points, int k, bool exclude_self, int n_probes, bool query_is_index_data, bool cache_query_device_buffer, std::string query_cache_key, std::string distance_storage);
+RcppExport SEXP _faissR_nn_cuvs_ivf_pq_index_search_float32_cpp(SEXP index_ptrSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP n_probesSEXP, SEXP query_is_index_dataSEXP, SEXP cache_query_device_bufferSEXP, SEXP query_cache_keySEXP, SEXP distance_storageSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type index_ptr(index_ptrSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
+    Rcpp::traits::input_parameter< int >::type n_probes(n_probesSEXP);
+    Rcpp::traits::input_parameter< bool >::type query_is_index_data(query_is_index_dataSEXP);
+    Rcpp::traits::input_parameter< bool >::type cache_query_device_buffer(cache_query_device_bufferSEXP);
+    Rcpp::traits::input_parameter< std::string >::type query_cache_key(query_cache_keySEXP);
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_cuvs_ivf_pq_index_search_float32_cpp(index_ptr, points, k, exclude_self, n_probes, query_is_index_data, cache_query_device_buffer, query_cache_key, distance_storage));
+    return rcpp_result_gen;
+END_RCPP
+}
 // kmeans_cuvs_cpp
 List kmeans_cuvs_cpp(NumericMatrix data, int centers, int max_iter, int n_init, double tol, int streaming_batch_size, bool kmeans_plus_plus);
 RcppExport SEXP _faissR_kmeans_cuvs_cpp(SEXP dataSEXP, SEXP centersSEXP, SEXP max_iterSEXP, SEXP n_initSEXP, SEXP tolSEXP, SEXP streaming_batch_sizeSEXP, SEXP kmeans_plus_plusSEXP) {
@@ -2040,6 +2074,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_cuvs_ivf_flat_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_ivf_flat_float32_cpp, 7},
     {"_faissR_nn_cuvs_ivf_pq_cpp", (DL_FUNC) &_faissR_nn_cuvs_ivf_pq_cpp, 8},
     {"_faissR_nn_cuvs_ivf_pq_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_ivf_pq_float32_cpp, 9},
+    {"_faissR_nn_cuvs_ivf_pq_index_build_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_ivf_pq_index_build_float32_cpp, 5},
+    {"_faissR_nn_cuvs_ivf_pq_index_search_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_ivf_pq_index_search_float32_cpp, 9},
     {"_faissR_kmeans_cuvs_cpp", (DL_FUNC) &_faissR_kmeans_cuvs_cpp, 7},
     {"_faissR_faiss_available_cpp", (DL_FUNC) &_faissR_faiss_available_cpp, 0},
     {"_faissR_faiss_info_json_cpp", (DL_FUNC) &_faissR_faiss_info_json_cpp, 0},

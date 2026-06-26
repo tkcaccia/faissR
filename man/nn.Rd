@@ -41,7 +41,9 @@ is `data`.}
 \item{exclude_self}{Logical; when `TRUE`, remove each query row from its own
 neighbour list. This is valid only for self-query calls where `points` is
 omitted or identical to `data`. Self-neighbour removal is passed to the
-compiled backend path rather than repaired by R-side post-processing.}
+compiled backend path rather than repaired by R-side post-processing. CUDA
+graph routes that do not yet expose compiled include-self output shaping
+require `exclude_self = TRUE` and fail clearly instead of reshaping in R.}
 
 \item{backend}{Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
 uses a validated CUDA route only when the requested method/metric
@@ -194,10 +196,19 @@ A list with integer matrix `indices`, `distances`, and stable
   class, explicit backend/method flags, backend/method decision reasons, and
   does not run pilot tuning. CPU FAISS Flat/HNSW/IVF/IVFPQ/FastScan routes use a
   bounded session-local fitted-index cache for repeated raw `nn()` calls
-  with matching data and parameters; metadata reports
-  `persistent_index_cache` and `index_cache_hit`. Disable with
-  `options(faissR.cache_fitted_nn_indexes = FALSE)` or bound memory with
-  `options(faissR.cache_fitted_nn_indexes_max_entries = <n>)`.
+  with matching data and parameters. CUDA `method = "ivfpq_fastscan"` also
+  reuses a fitted cuVS IVF-PQ index, dataset device buffer, and cuVS resources
+  through a separate bounded cache. Self-query uses the fitted dataset device
+  buffer directly, and repeated separate-query calls can reuse one cached query
+  device buffer with
+  `options(faissR.cache_cuda_ivfpq_query_buffers = TRUE)`. Metadata reports
+  `persistent_index_cache`, `index_cache_hit`, `dataset_residency`,
+  `query_residency`, and `query_host_to_device_copies`. Disable CPU and CUDA
+  fitted-index caches with
+  `options(faissR.cache_fitted_nn_indexes = FALSE)`, bound CPU memory with
+  `options(faissR.cache_fitted_nn_indexes_max_entries = <n>)`, or bound CUDA
+  FastScan GPU memory with
+  `options(faissR.cache_fitted_cuda_ivfpq_indexes_max_entries = <n>)`.
 }
 \description{
 `nn()` provides a package-native nearest-neighbor entry point compatible with

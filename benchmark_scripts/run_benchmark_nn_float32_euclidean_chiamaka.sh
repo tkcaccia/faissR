@@ -29,7 +29,7 @@ Rscript benchmark_scripts/benchmark_nn_float32_euclidean.R \
   --methods=exact,flat,bruteforce,grid,hnsw,ivf,ivfpq,vamana,nsg,nndescent,cagra \
   --k=50 \
   --threads=4 \
-  --timeout=600 \
+  --timeout=2000 \
   --quality_n=128 \
   --output=float \
   "$@" 2>&1 | tee "$OUT_DIR/float32_nn_benchmark.log"

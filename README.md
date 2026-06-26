@@ -31,8 +31,9 @@ headers and libraries discovered by `configure`.
 
 - `nn()` for native CPU references, FAISS CPU indexes, FAISS GPU indexes, and
   optional direct RAPIDS cuVS/CUDA indexes, including an IVFPQ FastScan
-  `method = "ivfpq_fastscan"` route through FAISS FastScan on CPU and cuVS 4-bit IVF-PQ
-  on CUDA [1-6,13-16,22-23,34].
+  `method = "ivfpq_fastscan"` route through FAISS FastScan on CPU and cuVS
+  4-bit IVF-PQ on CUDA. Repeated raw CUDA FastScan calls reuse a fitted cuVS
+  IVF-PQ index and cuVS resources in a bounded session cache [1-6,13-16,22-23,34].
 - Optional float32 KNN data flow: `nn()` accepts
   `float::fl()` matrices. FAISS CPU/GPU and RAPIDS cuVS NN routes consume
   float32 input through direct C++ adapters, and unsupported native routes now
@@ -85,6 +86,10 @@ headers and libraries discovered by `configure`.
   the GPU provider, transient versus persistent index residency, host/device
   transfer strategy, whether a self-query reused the dataset device buffer, and
   whether any CPU fallback or CPU-side result repair occurred.
+- CUDA nearest-neighbour routes return backend-shaped KNN matrices: self-neighbour
+  removal, row ordering, and final output layout are handled in C++/CUDA rather
+  than by R-side cleanup. CUDA graph routes that do not yet expose compiled
+  include-self shaping fail clearly instead of repairing the output in R.
 - `backend_info()`, `faiss_available()`, `faiss_gpu_available()`,
   `cuda_available()`, `cuvs_available()`, and `cugraph_available()` to report
   compiled/runtime backend support.
@@ -171,6 +176,15 @@ See [Installation](docs/installation.md) for CRAN/source-build details.
   `cuda_cuvs_cagra`, `cuda_cuvs_hnsw`, `cuda_cuvs_nndescent`,
   `cuda_cuvs_bruteforce`, `cuda_cuvs_ivf_flat`, `cuda_cuvs_ivfpq`, and
   `cuda_cuvs_ivfpq_fastscan`.
+  `cuda_cuvs_ivfpq_fastscan` keeps the trained cuVS IVF-PQ index, compressed
+  codes, dataset device buffer, and cuVS resources in a bounded session-local
+  cache for compatible repeated `nn()` calls. Self-query searches reuse the
+  fitted dataset device buffer directly, and repeated searches with the same
+  separate query matrix can reuse one cached query device buffer via
+  `options(faissR.cache_cuda_ivfpq_query_buffers = TRUE)`.
+  The CUDA HPC FastScan wrapper tunes `nlist`, `nprobe`, and byte-aligned 4-bit
+  `pq_dim` through `IVFPQ_FASTSCAN_NLIST_MULTS`,
+  `IVFPQ_FASTSCAN_NPROBE_MULTS`, and `IVFPQ_FASTSCAN_PQ_DIMS`.
   The HNSW route builds a CUDA CAGRA seed graph and converts it with
   `cuvsHnswFromCagraWithDataset`, supports `target_recall = 0.9`, `0.95`, or `0.99`
   speed/recall tiers, and records `cuda_hnsw_design =
