@@ -25,9 +25,11 @@ set -euo pipefail
 # The job scans float32 .RData files, uses explicit backend="cuda",
 # method="ivfpq_fastscan", Euclidean distance, k=10,15,50,100, and writes
 # recommendation tables for target recall 0.90, 0.95, and 0.99.
-# It sweeps IVF `nlist`, IVF `nprobe`, and byte-aligned cuVS 4-bit `pq_dim`.
-# Use IVFPQ_FASTSCAN_NLIST_MULTS, IVFPQ_FASTSCAN_NPROBE_MULTS,
-# IVFPQ_FASTSCAN_PQ_DIMS, and CUVS_IVF_BATCH_SIZES to change the grid.
+# It sweeps IVF `nlist`, IVF `nprobe`, byte-aligned cuVS 4-bit `pq_dim`,
+# and cuVS batch size. By default, the R benchmark uses a curated paired
+# speed-to-recall grid. Set IVFPQ_FASTSCAN_NLIST_MULTS,
+# IVFPQ_FASTSCAN_NPROBE_MULTS, IVFPQ_FASTSCAN_PQ_DIMS, and
+# CUVS_IVF_BATCH_SIZES to force a wider manual grid.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 export DATA_ROOT="${DATA_ROOT:-${BASE_DIR}/Data}"
@@ -55,10 +57,10 @@ export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM
 export K_VALUES="${K_VALUES:-10,15,50,100}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
-export IVFPQ_FASTSCAN_NLIST_MULTS="${IVFPQ_FASTSCAN_NLIST_MULTS:-0.5,1,2,4}"
-export IVFPQ_FASTSCAN_NPROBE_MULTS="${IVFPQ_FASTSCAN_NPROBE_MULTS:-0.5,1,2,3}"
-export IVFPQ_FASTSCAN_PQ_DIMS="${IVFPQ_FASTSCAN_PQ_DIMS:-16,32,64}"
-export CUVS_IVF_BATCH_SIZES="${CUVS_IVF_BATCH_SIZES:-32768}"
+export IVFPQ_FASTSCAN_NLIST_MULTS="${IVFPQ_FASTSCAN_NLIST_MULTS:-}"
+export IVFPQ_FASTSCAN_NPROBE_MULTS="${IVFPQ_FASTSCAN_NPROBE_MULTS:-}"
+export IVFPQ_FASTSCAN_PQ_DIMS="${IVFPQ_FASTSCAN_PQ_DIMS:-}"
+export CUVS_IVF_BATCH_SIZES="${CUVS_IVF_BATCH_SIZES:-}"
 
 export OMP_NUM_THREADS="${THREADS_CPU}"
 export OPENBLAS_NUM_THREADS="${THREADS_CPU}"

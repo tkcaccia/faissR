@@ -3398,10 +3398,14 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
     metric = "euclidean"
   )
   expect_equal(speed$policy, "auto_shape_metric")
-  expect_equal(speed$rule, "small_k_speed")
+  expect_equal(speed$rule, "hpc_cpu_hnsw_small_n_k10_recall99")
   expect_equal(speed$m, 24L)
   expect_equal(speed$ef_construction, 120L)
-  expect_equal(speed$ef_search, 80L)
+  expect_equal(speed$ef_search, 150L)
+  expect_equal(speed$shape_group, "small_n")
+  expect_equal(speed$k_bucket, 10L)
+  expect_equal(speed$target_recall_code, 99L)
+  expect_equal(speed$benchmark_source, "hpc_hnsw_cpu_20260625_140709")
 
   recall99_high_dim <- faissR:::faiss_hnsw_params(
     k = 50L,
@@ -3409,13 +3413,15 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
     p = 784L,
     metric = "euclidean"
   )
-  expect_equal(recall99_high_dim$rule, "recall99_large_high_dim_mid_k")
-  expect_equal(recall99_high_dim$m, 16L)
-  expect_equal(recall99_high_dim$ef_construction, 80L)
-  expect_equal(recall99_high_dim$ef_search, 75L)
+  expect_equal(recall99_high_dim$rule, "hpc_cpu_hnsw_large_high_dim_k50_recall99")
+  expect_equal(recall99_high_dim$m, 24L)
+  expect_equal(recall99_high_dim$ef_construction, 120L)
+  expect_equal(recall99_high_dim$ef_search, 150L)
   expect_equal(recall99_high_dim$target_recall, 0.99)
   expect_true(isTRUE(recall99_high_dim$high_dim))
   expect_true(isTRUE(recall99_high_dim$large_n))
+  expect_equal(recall99_high_dim$shape_group, "large_high_dim")
+  expect_equal(recall99_high_dim$benchmark_basis, "hit_all_shape_datasets")
 
   recall90_high_dim <- faissR:::faiss_hnsw_params(
     k = 10L,
@@ -3424,10 +3430,10 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
     metric = "euclidean",
     target_recall = 0.9
   )
-  expect_equal(recall90_high_dim$rule, "recall90_large_high_dim_small_k")
-  expect_equal(recall90_high_dim$m, 8L)
-  expect_equal(recall90_high_dim$ef_construction, 30L)
-  expect_equal(recall90_high_dim$ef_search, 15L)
+  expect_equal(recall90_high_dim$rule, "hpc_cpu_hnsw_large_high_dim_k10_recall90")
+  expect_equal(recall90_high_dim$m, 16L)
+  expect_equal(recall90_high_dim$ef_construction, 80L)
+  expect_equal(recall90_high_dim$ef_search, 100L)
   expect_equal(recall90_high_dim$target_recall, 0.9)
 
   recall95_high_dim <- faissR:::faiss_hnsw_params(
@@ -3437,10 +3443,10 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
     metric = "euclidean",
     target_recall = 0.95
   )
-  expect_equal(recall95_high_dim$rule, "recall95_large_high_dim_mid_k")
-  expect_equal(recall95_high_dim$m, 12L)
-  expect_equal(recall95_high_dim$ef_construction, 60L)
-  expect_equal(recall95_high_dim$ef_search, 50L)
+  expect_equal(recall95_high_dim$rule, "hpc_cpu_hnsw_large_high_dim_k50_recall95")
+  expect_equal(recall95_high_dim$m, 16L)
+  expect_equal(recall95_high_dim$ef_construction, 80L)
+  expect_equal(recall95_high_dim$ef_search, 100L)
   expect_equal(recall95_high_dim$target_recall, 0.95)
 
   small_k_metric <- faissR:::faiss_hnsw_params(
@@ -3480,7 +3486,85 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
   )
   expect_equal(manual$policy, "manual_options")
   expect_equal(manual$m, 40L)
-  expect_equal(manual$rule, "recall99_large_high_dim_mid_k")
+  expect_equal(manual$rule, "hpc_cpu_hnsw_large_high_dim_k50_recall99")
+})
+
+test_that("CUDA cuVS HNSW defaults use HPC shape, k, and recall tiers", {
+  old_options <- options(
+    faissR.cuvs_cagra_graph_degree = NULL,
+    faissR.cuvs_cagra_intermediate_graph_degree = NULL,
+    faissR.cuvs_cagra_search_width = NULL,
+    faissR.cuvs_cagra_itopk_size = NULL,
+    faissR.cuvs_hnsw_ef = NULL
+  )
+  on.exit(options(old_options), add = TRUE)
+
+  tiny <- faissR:::cuvs_hnsw_params(
+    n = 1440L,
+    p = 16384L,
+    k = 10L,
+    n_threads = 12L,
+    target_recall = 0.99
+  )
+  expect_equal(tiny$tuning_rule, "hpc_cuda_hnsw_tiny_n_k10_recall99")
+  expect_equal(tiny$graph_degree, 24L)
+  expect_equal(tiny$intermediate_graph_degree, 64L)
+  expect_equal(tiny$ef, 96L)
+  expect_equal(tiny$tuning_shape_group, "tiny_n")
+  expect_equal(tiny$tuning_benchmark_basis, "hit_all_shape_datasets")
+  expect_equal(tiny$tuning_benchmark_source, "hpc_hnsw_cuda_20260625_150524")
+
+  large_low <- faissR:::cuvs_hnsw_params(
+    n = 1000021L,
+    p = 11L,
+    k = 50L,
+    n_threads = 12L,
+    target_recall = 0.99
+  )
+  expect_equal(large_low$tuning_rule, "hpc_cuda_hnsw_large_low_dim_k50_recall99")
+  expect_equal(large_low$graph_degree, 51L)
+  expect_equal(large_low$intermediate_graph_degree, 128L)
+  expect_equal(large_low$ef, 96L)
+  expect_equal(large_low$tuning_benchmark_basis, "hit_all_shape_datasets")
+
+  medium_high <- faissR:::cuvs_hnsw_params(
+    n = 70000L,
+    p = 784L,
+    k = 50L,
+    n_threads = 12L,
+    target_recall = 0.99
+  )
+  expect_equal(medium_high$tuning_rule, "hpc_cuda_hnsw_medium_high_dim_k50_recall99")
+  expect_equal(medium_high$graph_degree, 64L)
+  expect_equal(medium_high$intermediate_graph_degree, 192L)
+  expect_equal(medium_high$ef, 256L)
+  expect_equal(medium_high$tuning_benchmark_basis, "target_not_reached_best_available")
+
+  imagenet95 <- faissR:::cuvs_hnsw_params(
+    n = 1281167L,
+    p = 1024L,
+    k = 15L,
+    n_threads = 12L,
+    target_recall = 0.95
+  )
+  expect_equal(imagenet95$tuning_rule, "hpc_cuda_hnsw_very_large_high_dim_k15_recall95")
+  expect_equal(imagenet95$graph_degree, 48L)
+  expect_equal(imagenet95$intermediate_graph_degree, 128L)
+  expect_equal(imagenet95$ef, 128L)
+  expect_equal(imagenet95$tuning_benchmark_basis, "hit_all_shape_datasets")
+
+  imagenet99 <- faissR:::cuvs_hnsw_params(
+    n = 1281167L,
+    p = 1024L,
+    k = 15L,
+    n_threads = 12L,
+    target_recall = 0.99
+  )
+  expect_equal(imagenet99$tuning_rule, "hpc_cuda_hnsw_very_large_high_dim_k15_recall99")
+  expect_equal(imagenet99$graph_degree, 48L)
+  expect_equal(imagenet99$intermediate_graph_degree, 128L)
+  expect_equal(imagenet99$ef, 128L)
+  expect_equal(imagenet99$tuning_benchmark_basis, "target_not_reached_best_available")
 })
 
 test_that("approximate NN parameter selectors expose deterministic tuning metadata", {
@@ -4295,7 +4379,10 @@ test_that("FAISS HNSW reports actual and requested parameters", {
     expect_equal(approx$requested_ef_search, 10L)
     expect_true(approx$hnsw_parameters_adjusted)
     expect_equal(approx$tuning_policy, "manual_options")
-    expect_equal(approx$tuning_rule, "small_k_speed")
+    expect_equal(approx$tuning_rule, "hpc_cpu_hnsw_small_n_k10_recall99")
+    expect_equal(approx$tuning_shape_group, "small_n")
+    expect_equal(approx$tuning_k_bucket, 10L)
+    expect_equal(approx$tuning_target_recall_code, 99L)
     expect_false(isTRUE(approx$tuning_high_dim))
     expect_false(isTRUE(approx$tuning_large_n))
     expect_false(isTRUE(approx$tuning_non_euclidean))

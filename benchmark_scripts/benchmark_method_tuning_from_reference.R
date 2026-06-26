@@ -330,7 +330,9 @@ ivfpq_fastscan_pq_dim_candidates <- function(p, values = NULL, backend = "cpu") 
       cuvs_byte_aligned_pq_dim(p, as.integer(round(value)), pq_bits = 4L)
     }, integer(1L)))
   } else {
-    out <- cuvs_byte_aligned_pq_dim(p, divisor_at_most(p, 32L), pq_bits = 4L)
+    out <- unique(vapply(c(8L, 16L, 32L, 64L), function(target) {
+      cuvs_byte_aligned_pq_dim(p, divisor_at_most(p, target), pq_bits = 4L)
+    }, integer(1L)))
   }
   out <- out[is.finite(out) & out >= 1L & out <= p & (4L * out) %% 8L == 0L]
   if (length(out)) unique(as.integer(out)) else cuvs_byte_aligned_pq_dim(p, divisor_at_most(p, 32L), pq_bits = 4L)
@@ -366,17 +368,24 @@ nndescent_cuda_candidate_values <- function(n,
     }
   } else if (n >= 1000000L && k >= 100L) {
     vals <- data.frame(
-      nndescent_graph_degree = as.integer(c(k, k, ceiling(112L * k / 100), ceiling(128L * k / 100))),
-      nndescent_intermediate_graph_degree = as.integer(c(k, ceiling(125L * k / 100), ceiling(150L * k / 100), ceiling(175L * k / 100))),
-      nndescent_max_iterations = c(5L, 8L, 12L, 16L)
+      nndescent_graph_degree = as.integer(c(k, k, ceiling(112L * k / 100), ceiling(128L * k / 100), ceiling(150L * k / 100), ceiling(180L * k / 100))),
+      nndescent_intermediate_graph_degree = as.integer(c(k, ceiling(125L * k / 100), ceiling(150L * k / 100), ceiling(175L * k / 100), ceiling(225L * k / 100), ceiling(275L * k / 100))),
+      nndescent_max_iterations = c(5L, 8L, 12L, 16L, 24L, 32L)
     )
   } else {
     vals <- data.frame(
-      nndescent_graph_degree = c(32L, 48L, 64L, 96L),
-      nndescent_intermediate_graph_degree = c(64L, 96L, 128L, 192L),
-      nndescent_max_iterations = c(5L, 8L, 12L, 16L)
+      nndescent_graph_degree = c(32L, 48L, 64L, 96L, 128L, 160L, 192L),
+      nndescent_intermediate_graph_degree = c(64L, 96L, 128L, 192L, 256L, 320L, 384L),
+      nndescent_max_iterations = c(5L, 8L, 12L, 16L, 24L, 32L, 40L)
     )
-    if (identical(grid_level, "compact")) vals <- vals[c(1L, 2L, 3L), , drop = FALSE]
+    if (identical(grid_level, "compact")) vals <- vals[c(1L, 2L, 3L, 4L), , drop = FALSE]
+  }
+  if (identical(grid_level, "wide")) {
+    vals <- rbind(vals, data.frame(
+      nndescent_graph_degree = c(224L, 256L, 320L),
+      nndescent_intermediate_graph_degree = c(448L, 512L, 640L),
+      nndescent_max_iterations = c(48L, 56L, 64L)
+    ))
   }
   vals$nndescent_graph_degree <- as.integer(pmax(k, vals$nndescent_graph_degree))
   vals$nndescent_intermediate_graph_degree <- as.integer(pmax(vals$nndescent_graph_degree, vals$nndescent_intermediate_graph_degree))
@@ -401,12 +410,29 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
     rows[[length(rows) + 1L]] <<- fill_candidate(x)
   }
   if (method %in% c("exact", "bruteforce")) {
-    add(base_candidates(method, backend, k, thread_values, output_values, method))
+    if (backend == "cpu") {
+      x <- expand.grid(
+        n_threads = thread_values, output = output_values,
+        faiss_query_batch_size = c(2048L, 8192L, 32768L, 65536L, 131072L),
+        cache_fitted_indexes = c(FALSE, TRUE),
+        KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
+      )
+      x$candidate_id <- sprintf("%s_t%d_b%d_%s_cache%s", method, x$n_threads, x$faiss_query_batch_size, x$output, ifelse(x$cache_fitted_indexes, "on", "off"))
+    } else {
+      x <- expand.grid(
+        n_threads = thread_values, output = output_values,
+        faiss_gpu_query_batch_size = c(1024L, 4096L, 16384L, 32768L, 65536L),
+        faiss_gpu_reuse_resources = c(TRUE, FALSE),
+        KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
+      )
+      x$candidate_id <- sprintf("%s_t%d_b%d_%s_reuse%s", method, x$n_threads, x$faiss_gpu_query_batch_size, x$output, ifelse(x$faiss_gpu_reuse_resources, "on", "off"))
+    }
+    x$candidate_kind <- "manual"; x$method <- method; x$backend <- backend; add(x)
   } else if (method == "flat") {
     if (backend == "cpu") {
       x <- expand.grid(
         n_threads = thread_values, output = output_values,
-        faiss_query_batch_size = c(2048L, 8192L, 32768L),
+        faiss_query_batch_size = c(2048L, 8192L, 32768L, 65536L, 131072L),
         cache_fitted_indexes = c(FALSE, TRUE),
         KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
       )
@@ -414,7 +440,7 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
     } else {
       x <- expand.grid(
         n_threads = thread_values, output = output_values,
-        faiss_gpu_query_batch_size = c(1024L, 4096L, 16384L),
+        faiss_gpu_query_batch_size = c(1024L, 4096L, 16384L, 32768L, 65536L),
         faiss_gpu_reuse_resources = c(TRUE, FALSE),
         KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
       )
@@ -425,10 +451,19 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
     x <- base_candidates(method, backend, k, thread_values, output_values, paste0("auto_", target_recalls))
     x$candidate_kind <- "auto"; x$candidate_target_recall <- rep(target_recalls, each = length(thread_values) * length(output_values)); add(x)
     if (backend == "cpu") {
-      manual <- data.frame(hnsw_m = c(8L, 12L, 16L, 24L, 32L), hnsw_ef_construction = c(40L, 60L, 80L, 120L, 160L), hnsw_ef_search = pmax(k, c(25L, 50L, 100L, 150L, 220L)))
+      manual <- data.frame(
+        hnsw_m = c(8L, 12L, 16L, 24L, 32L, 32L, 48L, 64L),
+        hnsw_ef_construction = c(40L, 60L, 80L, 120L, 160L, 240L, 320L, 480L),
+        hnsw_ef_search = pmax(k, c(25L, 50L, 100L, 150L, 220L, 320L, 480L, 720L))
+      )
     } else {
-      manual <- data.frame(cagra_graph_degree = c(16L, 32L, 48L, 64L), cagra_intermediate_graph_degree = c(32L, 64L, 128L, 192L), hnsw_ef_search = pmax(k, c(48L, 96L, 128L, 256L)))
+      manual <- data.frame(
+        cagra_graph_degree = c(16L, 32L, 48L, 64L, 80L, 96L, 128L),
+        cagra_intermediate_graph_degree = c(32L, 64L, 128L, 192L, 256L, 320L, 512L),
+        hnsw_ef_search = pmax(k, c(48L, 96L, 128L, 256L, 320L, 480L, 768L))
+      )
     }
+    if (identical(grid_level, "compact")) manual <- manual[seq_len(min(5L, nrow(manual))), , drop = FALSE]
     for (i in seq_len(nrow(manual))) {
       x <- base_candidates(method, backend, k, thread_values, output_values, paste(names(manual), manual[i, ], sep = "", collapse = "_"))
       for (nm in names(manual)) x[[nm]] <- manual[[nm]][[i]]
@@ -456,13 +491,23 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
       )
       specs <- specs[, c("label", "nlist_mult", "nprobe_mult"), drop = FALSE]
     } else {
-      specs <- data.frame(label = c("speed", "balanced", "recall", "recall_plus"), nlist_mult = c(0.5, 1, 2, 4), nprobe_mult = c(0.5, 1, 2, 3))
+      specs <- data.frame(
+        label = c("speed", "balanced", "recall", "recall_plus", "recall_max", "full_probe"),
+        nlist_mult = c(0.5, 1, 2, 4, 6, 8),
+        nprobe_mult = c(0.5, 1, 2, 3, 4, 1),
+        full_probe = c(FALSE, FALSE, FALSE, FALSE, FALSE, TRUE)
+      )
       if (identical(grid_level, "compact")) specs <- specs[c(1L, 2L, 3L), , drop = FALSE]
     }
+    if (!"full_probe" %in% names(specs)) specs$full_probe <- FALSE
     for (i in seq_len(nrow(specs))) {
       nlist <- as.integer(max(1L, min(n, round(base_nlist * specs$nlist_mult[[i]]))))
       base_probe <- ivf_nprobe(nlist, k)
-      nprobe_values <- as.integer(max(1L, min(nlist, ceiling(base_probe * specs$nprobe_mult[[i]]))))
+      nprobe_values <- if (isTRUE(specs$full_probe[[i]])) {
+        as.integer(nlist)
+      } else {
+        as.integer(max(1L, min(nlist, ceiling(base_probe * specs$nprobe_mult[[i]]))))
+      }
       if (method == "ivfpq_fastscan" && identical(backend, "cpu") &&
           length(ivfpq_fastscan_nprobe_multipliers) && !isTRUE(custom_ivfpq_fastscan_grid)) {
         nprobe_values <- unique(as.integer(pmax(1L, pmin(nlist, ceiling(base_probe * ivfpq_fastscan_nprobe_multipliers)))))
@@ -470,8 +515,19 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
       x <- base_candidates(method, backend, k, thread_values, output_values, sprintf("%s_nl%d_np%d", specs$label[[i]], nlist, nprobe_values[[1L]]))
       x$ivf_nlist <- nlist; x$ivf_nprobe <- nprobe_values[[1L]]
       if (method == "ivfpq") {
-        x$pq_m <- divisor_at_most(p, if (backend == "cuda") 32L else 48L)
-        x$pq_nbits <- 8L
+        pq_m_values <- unique(vapply(if (backend == "cuda") c(16L, 32L, 48L, 64L) else c(16L, 32L, 48L, 64L, 96L), function(target) {
+          divisor_at_most(p, target)
+        }, integer(1L)))
+        pq_m_values <- pq_m_values[is.finite(pq_m_values) & pq_m_values >= 1L]
+        if (!length(pq_m_values)) pq_m_values <- divisor_at_most(p, if (backend == "cuda") 32L else 48L)
+        for (pq_m in pq_m_values) {
+          y <- x
+          y$pq_m <- as.integer(pq_m)
+          y$pq_nbits <- 8L
+          y$candidate_id <- sprintf("%s_nl%d_np%d_m%d_b8", specs$label[[i]], nlist, nprobe_values[[1L]], as.integer(pq_m))
+          add(y)
+        }
+        next
       }
       if (method == "ivfpq_fastscan") {
         pq_m_values <- divisor_at_most(p, 32L)
@@ -511,11 +567,12 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
           }
           next
         }
-        refine_values <- c(2L, 4L, 8L, 12L)[[i]]
+        refine_by_spec <- c(2L, 4L, 8L, 12L, 16L, 24L)
+        refine_values <- refine_by_spec[[min(i, length(refine_by_spec))]]
         if (identical(backend, "cpu") && length(ivfpq_fastscan_refine_factors)) {
           refine_values <- ivfpq_fastscan_refine_factors
         }
-        bbs_values <- 32L
+        bbs_values <- c(32L, 64L)
         if (identical(backend, "cpu") && length(ivfpq_fastscan_bbs_values)) {
           bbs_values <- unique(as.integer(ivfpq_fastscan_bbs_values))
         }
@@ -548,15 +605,16 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
   } else if (method == "cagra") {
     vals <- expand.grid(
       cagra_build_algo = c("auto", "ivf_pq", "nn_descent", "iterative_cagra_search"),
-      setting_id = seq_len(4L),
+      setting_id = seq_len(6L),
       KEEP.OUT.ATTRS = FALSE,
       stringsAsFactors = FALSE
     )
-    vals$cagra_graph_degree <- c(16L, 32L, 48L, 64L)[vals$setting_id]
-    vals$cagra_intermediate_graph_degree <- c(32L, 64L, 128L, 192L)[vals$setting_id]
-    vals$cagra_search_width <- c(1L, 2L, 4L, 8L)[vals$setting_id]
-    vals$cagra_itopk_size <- pmax(k, c(32L, 64L, 128L, 256L)[vals$setting_id])
+    vals$cagra_graph_degree <- c(16L, 32L, 48L, 64L, 96L, 128L)[vals$setting_id]
+    vals$cagra_intermediate_graph_degree <- c(32L, 64L, 128L, 192L, 320L, 512L)[vals$setting_id]
+    vals$cagra_search_width <- c(1L, 2L, 4L, 8L, 12L, 16L)[vals$setting_id]
+    vals$cagra_itopk_size <- pmax(k, c(32L, 64L, 128L, 256L, 512L, 768L)[vals$setting_id])
     vals$setting_id <- NULL
+    if (identical(grid_level, "compact")) vals <- vals[vals$cagra_graph_degree <= 64L, , drop = FALSE]
     for (i in seq_len(nrow(vals))) {
       x <- base_candidates(method, backend, k, thread_values, output_values, sprintf("%s_gd%d_igd%d_sw%d_it%d", vals$cagra_build_algo[[i]], vals$cagra_graph_degree[[i]], vals$cagra_intermediate_graph_degree[[i]], vals$cagra_search_width[[i]], vals$cagra_itopk_size[[i]]))
       for (nm in names(vals)) x[[nm]] <- vals[[nm]][[i]]
@@ -564,7 +622,14 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
     }
   } else if (method == "nndescent") {
     if (backend == "cpu") {
-      vals <- data.frame(nndescent_pool_size = c(20L, 30L, 40L, 60L), nndescent_n_iters = c(5L, 7L, 10L, 12L), nndescent_max_candidates = c(60L, 90L, 120L, 180L), nndescent_n_random_projections = c(4L, 6L, 8L, 12L))
+      vals <- data.frame(
+        nndescent_pool_size = pmax(k, c(20L, 30L, 40L, 60L, 80L, 120L, 160L)),
+        nndescent_n_iters = c(5L, 7L, 10L, 12L, 16L, 20L, 24L),
+        nndescent_max_candidates = c(60L, 90L, 120L, 180L, 240L, 360L, 480L),
+        nndescent_n_random_projections = c(4L, 6L, 8L, 12L, 16L, 24L, 32L)
+      )
+      vals$nndescent_max_candidates <- as.integer(pmax(vals$nndescent_max_candidates, 3L * vals$nndescent_pool_size))
+      if (identical(grid_level, "compact")) vals <- vals[seq_len(min(4L, nrow(vals))), , drop = FALSE]
     } else {
       vals <- nndescent_cuda_candidate_values(
         n = n,
@@ -581,13 +646,22 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
       add(x)
     }
   } else if (method == "nsg") {
-    vals <- data.frame(nsg_r = c(16L, 32L, 48L, 64L), nsg_graph_k = pmax(k, c(40L, 80L, 120L, 160L)))
+    vals <- data.frame(
+      nsg_r = c(8L, 16L, 24L, 32L, 48L, 64L, 96L),
+      nsg_graph_k = pmax(k, c(20L, 40L, 60L, 80L, 120L, 180L, 256L))
+    )
+    if (identical(grid_level, "compact")) vals <- vals[seq_len(min(4L, nrow(vals))), , drop = FALSE]
     for (i in seq_len(nrow(vals))) {
       x <- base_candidates(method, backend, k, thread_values, output_values, sprintf("r%d_gk%d", vals$nsg_r[[i]], vals$nsg_graph_k[[i]]))
       x$nsg_r <- vals$nsg_r[[i]]; x$nsg_graph_k <- vals$nsg_graph_k[[i]]; add(x)
     }
   } else if (method == "vamana") {
-    vals <- data.frame(vamana_r = c(16L, 32L, 48L, 64L), vamana_search_l = pmax(k, c(40L, 80L, 120L, 200L)), vamana_alpha = c(1.0, 1.1, 1.2, 1.4))
+    vals <- data.frame(
+      vamana_r = c(8L, 16L, 24L, 32L, 48L, 64L, 96L),
+      vamana_search_l = pmax(k, c(20L, 40L, 60L, 100L, 160L, 240L, 400L)),
+      vamana_alpha = c(1.0, 1.0, 1.05, 1.1, 1.2, 1.35, 1.5)
+    )
+    if (identical(grid_level, "compact")) vals <- vals[seq_len(min(4L, nrow(vals))), , drop = FALSE]
     for (i in seq_len(nrow(vals))) {
       x <- base_candidates(method, backend, k, thread_values, output_values, sprintf("r%d_l%d_a%s", vals$vamana_r[[i]], vals$vamana_search_l[[i]], vals$vamana_alpha[[i]]))
       x$vamana_r <- vals$vamana_r[[i]]; x$vamana_search_l <- vals$vamana_search_l[[i]]; x$vamana_alpha <- vals$vamana_alpha[[i]]; add(x)

@@ -343,6 +343,11 @@ fitted_nn_index_result <- function(data,
       tuning_small_k = isTRUE(params$small_k),
       tuning_large_k = isTRUE(params$large_k),
       tuning_non_euclidean = isTRUE(params$non_euclidean),
+      tuning_shape_group = params$tuning_shape_group %||% params$shape_group %||% NA_character_,
+      tuning_k_bucket = as.integer(params$tuning_k_bucket %||% params$k_bucket %||% NA_integer_),
+      tuning_target_recall_code = as.integer(params$tuning_target_recall_code %||% params$target_recall_code %||% NA_integer_),
+      tuning_benchmark_basis = params$tuning_benchmark_basis %||% params$benchmark_basis %||% NA_character_,
+      tuning_benchmark_source = params$tuning_benchmark_source %||% params$benchmark_source %||% NA_character_,
       tuning_source = params$tuning_source %||% "cpp"
     ), cache_meta)
     attr(result, "faiss") <- c(list(
@@ -1692,6 +1697,11 @@ nn_compute <- function(data,
         tuning_small_k = isTRUE(params$small_k),
         tuning_large_k = isTRUE(params$large_k),
         tuning_non_euclidean = isTRUE(params$non_euclidean),
+        tuning_shape_group = params$tuning_shape_group %||% params$shape_group %||% NA_character_,
+        tuning_k_bucket = as.integer(params$tuning_k_bucket %||% params$k_bucket %||% NA_integer_),
+        tuning_target_recall_code = as.integer(params$tuning_target_recall_code %||% params$target_recall_code %||% NA_integer_),
+        tuning_benchmark_basis = params$tuning_benchmark_basis %||% params$benchmark_basis %||% NA_character_,
+        tuning_benchmark_source = params$tuning_benchmark_source %||% params$benchmark_source %||% NA_character_,
         tuning_source = params$tuning_source %||% "cpp"
       )
       return(finish_float32_direct_result(result, out))
@@ -3053,6 +3063,11 @@ nn_compute <- function(data,
       tuning_small_k = isTRUE(params$small_k),
       tuning_large_k = isTRUE(params$large_k),
       tuning_non_euclidean = isTRUE(params$non_euclidean),
+      tuning_shape_group = params$tuning_shape_group %||% params$shape_group %||% NA_character_,
+      tuning_k_bucket = as.integer(params$tuning_k_bucket %||% params$k_bucket %||% NA_integer_),
+      tuning_target_recall_code = as.integer(params$tuning_target_recall_code %||% params$target_recall_code %||% NA_integer_),
+      tuning_benchmark_basis = params$tuning_benchmark_basis %||% params$benchmark_basis %||% NA_character_,
+      tuning_benchmark_source = params$tuning_benchmark_source %||% params$benchmark_source %||% NA_character_,
       tuning_source = params$tuning_source %||% "cpp"
     )
     return(result)
@@ -6495,6 +6510,11 @@ faiss_hnsw_normalized_metric_result <- function(data,
     tuning_small_k = isTRUE(params$small_k),
     tuning_large_k = isTRUE(params$large_k),
     tuning_non_euclidean = isTRUE(params$non_euclidean),
+    tuning_shape_group = params$tuning_shape_group %||% params$shape_group %||% NA_character_,
+    tuning_k_bucket = as.integer(params$tuning_k_bucket %||% params$k_bucket %||% NA_integer_),
+    tuning_target_recall_code = as.integer(params$tuning_target_recall_code %||% params$target_recall_code %||% NA_integer_),
+    tuning_benchmark_basis = params$tuning_benchmark_basis %||% params$benchmark_basis %||% NA_character_,
+    tuning_benchmark_source = params$tuning_benchmark_source %||% params$benchmark_source %||% NA_character_,
     tuning_source = params$tuning_source %||% "cpp",
     transform_storage = metric_inputs$transform_storage %||% "double",
     transform_cache = metric_inputs$transform_cache %||% NULL
@@ -6540,7 +6560,10 @@ nn_tuning_metadata <- function(params, prefix = NULL) {
     "tuning_medium_n", "tuning_huge_low_dim", "tuning_runtime_guard",
     "tuning_large_n", "tuning_small_k", "tuning_large_k", "tuning_non_euclidean",
     "tuning_metric", "tuning_metric_aware", "target_recall",
-    "requested_target_recall", "tuning_source"
+    "requested_target_recall", "tuning_shape_group", "tuning_cuda_shape_group",
+    "tuning_k_bucket",
+    "tuning_target_recall_code", "tuning_benchmark_basis",
+    "tuning_benchmark_source", "tuning_source"
   )
   fields <- fields[fields %in% names(params)]
   out <- params[fields]
@@ -7244,6 +7267,11 @@ faiss_self_knn <- function(data,
       tuning_small_k = isTRUE(params$small_k),
       tuning_large_k = isTRUE(params$large_k),
       tuning_non_euclidean = isTRUE(params$non_euclidean),
+      tuning_shape_group = params$tuning_shape_group %||% params$shape_group %||% NA_character_,
+      tuning_k_bucket = as.integer(params$tuning_k_bucket %||% params$k_bucket %||% NA_integer_),
+      tuning_target_recall_code = as.integer(params$tuning_target_recall_code %||% params$target_recall_code %||% NA_integer_),
+      tuning_benchmark_basis = params$tuning_benchmark_basis %||% params$benchmark_basis %||% NA_character_,
+      tuning_benchmark_source = params$tuning_benchmark_source %||% params$benchmark_source %||% NA_character_,
       tuning_source = params$tuning_source %||% "cpp",
       seed = as.integer(seed)
     )
@@ -8216,7 +8244,9 @@ faiss_hnsw_auto_policy <- function(n = NULL, p = NULL, k, metric = "euclidean", 
     FALSE
   )
   out[c("m", "ef_construction", "ef_search", "rule", "high_dim",
-        "large_n", "small_k", "large_k", "non_euclidean", "target_recall")]
+        "large_n", "small_k", "large_k", "non_euclidean", "target_recall",
+        "shape_group", "k_bucket", "target_recall_code",
+        "benchmark_basis", "benchmark_source")]
 }
 
 faiss_hnsw_manual_params <- function() {
@@ -8977,12 +9007,18 @@ grid_self_knn <- function(data,
 #'   converting it with `cuvsHnswFromCagraWithDataset` using the host dataset
 #'   and cuVS CPU hierarchy; result metadata marks this as the cuVS wrapper
 #'   design rather than a pure all-GPU HNSW search implementation.
-#'   Default HNSW parameters are selected by compiled deterministic shape/k/metric
-#'   rules without pilot tuning. CPU FAISS HNSW has separate large
-#'   low-dimensional and large high-dimensional Euclidean tiers and exposes
-#'   `target_recall = 0.9`, `0.95`, or `0.99`. Result approximation metadata
-#'   records the selected `tuning_rule`,
-#'   `target_recall`, `requested_target_recall`, and shape flags used.
+#'   Default HNSW parameters are selected by compiled deterministic rules
+#'   without pilot tuning. Euclidean CPU FAISS HNSW uses an HPC-derived lookup
+#'   table keyed by dataset shape group, `k` bucket, and
+#'   `target_recall = 0.9`, `0.95`, or `0.99`; CUDA cuVS HNSW uses a
+#'   separate HPC-derived shape/k/recall lookup table for its CAGRA seed graph
+#'   and cuVS HNSW conversion route; non-Euclidean routes keep
+#'   conservative metric-aware fallback tiers. Result approximation metadata
+#'   records the selected `tuning_rule`, `target_recall`,
+#'   `tuning_shape_group`, `tuning_k_bucket`, and benchmark source fields.
+#'   When a CUDA HNSW benchmarked shape did not reach the requested target,
+#'   `tuning_benchmark_basis` is recorded as
+#'   `"target_not_reached_best_available"`.
 #'   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
 #'   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
 #'   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records
@@ -9147,14 +9183,17 @@ grid_self_knn <- function(data,
 #'   persisting, `"fixed"` uses fixed defaults with tuning metadata, and
 #'   `"off"`/`"none"` disables tuning.
 #'   FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
-#'   `k`, and `metric`, including separate large low-dimensional Euclidean,
-#'   large high-dimensional Euclidean, small-`k` metric-aware, balanced, and
-#'   high-recall tiers; explicit
+#'   `k`, `metric`, and `target_recall`. Euclidean CPU FAISS HNSW uses a
+#'   compiled HPC-derived lookup table for shape groups and `k` buckets;
+#'   non-Euclidean routes use small-`k` metric-aware, balanced, and
+#'   high-recall fallback tiers. CUDA cuVS HNSW uses its own compiled
+#'   HPC-derived lookup table keyed by CUDA-specific shape group, `k` bucket,
+#'   and `target_recall`; explicit
 #'   `faissR.faiss_hnsw_*` options override those defaults. FAISS IVF/IVFPQ
 #'   use deterministic shape/k/metric-aware `nlist`/`nprobe` defaults; optional
 #'   FAISS GPU IVF `"cache"`/`"pilot"` tuning currently runs only for Euclidean
 #'   IVF, while non-Euclidean IVF routes use deterministic metric-aware
-#'   defaults. FAISS CPU HNSW uses deterministic shape/k tiers for the selected
+#'   defaults. CPU and CUDA HNSW use the selected
 #'   `target_recall` value. The default is the 0.99
 #'   tier where feasible; `target_recall = 0.95` and `0.9` select faster,
 #'   lower-recall HNSW tiers.

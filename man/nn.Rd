@@ -110,14 +110,17 @@ reuses/stores pilot results, `"pilot"` tunes for this call without
 persisting, `"fixed"` uses fixed defaults with tuning metadata, and
 `"off"`/`"none"` disables tuning.
 FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
-`k`, and `metric`, including separate large low-dimensional Euclidean,
-large high-dimensional Euclidean, small-`k` metric-aware, balanced, and
-high-recall tiers; explicit
+`k`, `metric`, and `target_recall`. Euclidean CPU FAISS HNSW uses a
+compiled HPC-derived lookup table for shape groups and `k` buckets;
+non-Euclidean routes use small-`k` metric-aware, balanced, and
+high-recall fallback tiers. CUDA cuVS HNSW uses its own compiled
+HPC-derived lookup table keyed by CUDA-specific shape group, `k` bucket,
+and `target_recall`; explicit
 `faissR.faiss_hnsw_*` options override those defaults. FAISS IVF/IVFPQ
 use deterministic shape/k/metric-aware `nlist`/`nprobe` defaults; optional
 FAISS GPU IVF `"cache"`/`"pilot"` tuning currently runs only for Euclidean
 IVF, while non-Euclidean IVF routes use deterministic metric-aware
-defaults. FAISS CPU HNSW uses deterministic shape/k tiers for the selected
+defaults. CPU and CUDA HNSW use the selected
 `target_recall` value. The default is the 0.99
 tier where feasible; `target_recall = 0.95` and `0.9` select faster,
 lower-recall HNSW tiers.
@@ -262,12 +265,18 @@ Method descriptions:
   otherwise. CUDA uses RAPIDS cuVS HNSW by building a CAGRA seed graph and
   converting it with \code{cuvsHnswFromCagraWithDataset}; result metadata marks this as
   the cuVS wrapper design rather than a pure all-GPU HNSW search implementation.
-  Default HNSW parameters are selected by compiled deterministic shape/k/metric
-  rules without pilot tuning. CPU FAISS HNSW has separate large
-  low-dimensional and large high-dimensional Euclidean tiers and exposes
-  `target_recall = 0.9`, `0.95`, or `0.99`. Result approximation metadata
-  records the selected `tuning_rule`,
-  `target_recall`, `requested_target_recall`, and shape flags used.
+  Default HNSW parameters are selected by compiled deterministic rules
+  without pilot tuning. Euclidean CPU FAISS HNSW uses an HPC-derived lookup
+  table keyed by dataset shape group, `k` bucket, and
+  `target_recall = 0.9`, `0.95`, or `0.99`; CUDA cuVS HNSW uses a
+  separate HPC-derived shape/k/recall lookup table for its CAGRA seed graph
+  and cuVS HNSW conversion route; non-Euclidean routes keep
+  conservative metric-aware fallback tiers. Result approximation metadata
+  records the selected `tuning_rule`, `target_recall`,
+  `tuning_shape_group`, `tuning_k_bucket`, and benchmark source fields.
+  When a CUDA HNSW benchmarked shape did not reach the requested target,
+  `tuning_benchmark_basis` is recorded as
+  `"target_not_reached_best_available"`.
   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
   cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records

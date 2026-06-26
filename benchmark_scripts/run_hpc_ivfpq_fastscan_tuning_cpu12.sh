@@ -25,8 +25,9 @@ set -euo pipefail
 # method="ivfpq_fastscan", Euclidean distance, k=10,15,50,100, and writes
 # recommendation tables for target recall 0.90, 0.95, and 0.99.
 # It sweeps IVF `nlist`, IVF `nprobe`, FAISS FastScan `pq_m`, refinement,
-# and FastScan block size. Use the IVFPQ_FASTSCAN_* variables below to change
-# the grid without editing the script.
+# and FastScan block size. By default, the R benchmark uses a curated paired
+# speed-to-recall grid. Set the IVFPQ_FASTSCAN_* variables below to force a
+# wider manual grid without editing the script.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 export DATA_ROOT="${DATA_ROOT:-${BASE_DIR}/Data}"
@@ -44,11 +45,11 @@ export TIMEOUT="${TIMEOUT:-2000}"
 export QUALITY_N="${QUALITY_N:-256}"
 export SEED="${SEED:-4}"
 export GRID_LEVEL="${GRID_LEVEL:-standard}"
-export IVFPQ_FASTSCAN_REFINE_FACTORS="${IVFPQ_FASTSCAN_REFINE_FACTORS:-1,2,4,8,16,32}"
-export IVFPQ_FASTSCAN_NLIST_MULTS="${IVFPQ_FASTSCAN_NLIST_MULTS:-0.5,1,2,4}"
-export IVFPQ_FASTSCAN_NPROBE_MULTS="${IVFPQ_FASTSCAN_NPROBE_MULTS:-0.5,1,2}"
-export IVFPQ_FASTSCAN_PQ_M_VALUES="${IVFPQ_FASTSCAN_PQ_M_VALUES:-16,32}"
-export IVFPQ_FASTSCAN_BBS_VALUES="${IVFPQ_FASTSCAN_BBS_VALUES:-32,64}"
+export IVFPQ_FASTSCAN_REFINE_FACTORS="${IVFPQ_FASTSCAN_REFINE_FACTORS:-}"
+export IVFPQ_FASTSCAN_NLIST_MULTS="${IVFPQ_FASTSCAN_NLIST_MULTS:-}"
+export IVFPQ_FASTSCAN_NPROBE_MULTS="${IVFPQ_FASTSCAN_NPROBE_MULTS:-}"
+export IVFPQ_FASTSCAN_PQ_M_VALUES="${IVFPQ_FASTSCAN_PQ_M_VALUES:-}"
+export IVFPQ_FASTSCAN_BBS_VALUES="${IVFPQ_FASTSCAN_BBS_VALUES:-}"
 export OUT_DIR="${OUT_DIR:-${BASE_DIR}/faissR_IVFPQ_FASTSCAN_TUNING_CPU12_$(date +%Y%m%d_%H%M%S)}"
 export LOG_DIR="${LOG_DIR:-${BASE_DIR}/benchmark_logs}"
 export SINGULARITY_IMAGE="${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda.sif}"
