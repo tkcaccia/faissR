@@ -42,6 +42,9 @@ export QUALITY_N="${QUALITY_N:-256}"
 export SEED="${SEED:-4}"
 export GRID_LEVEL="${GRID_LEVEL:-standard}"
 export IVFPQ_FASTSCAN_REFINE_FACTORS="${IVFPQ_FASTSCAN_REFINE_FACTORS:-1,2,4,8,16,32}"
+export IVFPQ_FASTSCAN_NPROBE_MULTS="${IVFPQ_FASTSCAN_NPROBE_MULTS:-0.5,1,2}"
+export IVFPQ_FASTSCAN_PQ_M_VALUES="${IVFPQ_FASTSCAN_PQ_M_VALUES:-16,32}"
+export IVFPQ_FASTSCAN_BBS_VALUES="${IVFPQ_FASTSCAN_BBS_VALUES:-32,64}"
 export OUT_DIR="${OUT_DIR:-${BASE_DIR}/faissR_IVFPQ_FASTSCAN_TUNING_CPU12_$(date +%Y%m%d_%H%M%S)}"
 export LOG_DIR="${LOG_DIR:-${BASE_DIR}/benchmark_logs}"
 export SINGULARITY_IMAGE="${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda.sif}"
@@ -107,6 +110,9 @@ fi
   echo "QUALITY_N=${QUALITY_N}"
   echo "SEED=${SEED}"
   echo "IVFPQ_FASTSCAN_REFINE_FACTORS=${IVFPQ_FASTSCAN_REFINE_FACTORS}"
+  echo "IVFPQ_FASTSCAN_NPROBE_MULTS=${IVFPQ_FASTSCAN_NPROBE_MULTS}"
+  echo "IVFPQ_FASTSCAN_PQ_M_VALUES=${IVFPQ_FASTSCAN_PQ_M_VALUES}"
+  echo "IVFPQ_FASTSCAN_BBS_VALUES=${IVFPQ_FASTSCAN_BBS_VALUES}"
   echo "[$(date --iso-8601=seconds)] building float32 manifest"
   "${RUNNER[@]}" "${R_BIN}" "${MANIFEST_SCRIPT}"     --data_root="${DATA_ROOT}"     --out="${MANIFEST}"     --datasets="${DATASETS}"
 
@@ -126,6 +132,9 @@ fi
     --output_values="${OUTPUT_VALUES}" \
     --grid_level="${GRID_LEVEL}" \
     --ivfpq_fastscan_refine_factors="${IVFPQ_FASTSCAN_REFINE_FACTORS}" \
+    --ivfpq_fastscan_nprobe_multipliers="${IVFPQ_FASTSCAN_NPROBE_MULTS}" \
+    --ivfpq_fastscan_pq_m_values="${IVFPQ_FASTSCAN_PQ_M_VALUES}" \
+    --ivfpq_fastscan_bbs_values="${IVFPQ_FASTSCAN_BBS_VALUES}" \
     --resume=TRUE
 
   echo "DONE: ${OUT_DIR}"
