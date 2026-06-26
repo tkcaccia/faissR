@@ -263,6 +263,50 @@ test_that("ordinary double FAISS routes can stay float32 through output", {
   }
 })
 
+test_that("CPU IVFPQ FastScan uses the float32 adapter for double and float32 inputs", {
+  skip_if_not_installed("float")
+  skip_if_not(faiss_available(), "FAISS is required for direct FastScan tests")
+  skip_if_not(faissR:::faiss_fastscan_available(), "FAISS FastScan support is required")
+
+  old_cache <- getOption("faissR.cache_fitted_nn_indexes", NULL)
+  on.exit(options(faissR.cache_fitted_nn_indexes = old_cache), add = TRUE)
+  options(faissR.cache_fitted_nn_indexes = FALSE)
+
+  set.seed(20260626)
+  x <- matrix(rnorm(900 * 12), nrow = 900L)
+
+  out_double <- nn(exclude_self = TRUE,
+    x,
+    k = 5L,
+    backend = "cpu",
+    method = "ivfpq_fastscan",
+    metric = "euclidean",
+    output = "double",
+    n_threads = 2L
+  )
+  expect_false(inherits(out_double$distances, "float32"))
+  expect_equal(out_double$input_type, "float32")
+  expect_equal(out_double$input_layout, "r_double_column_major_to_row_major_float32")
+  expect_true(out_double$input_owns_data)
+  expect_true(out_double$float32_compatibility_conversion)
+  expect_false(any(out_double$indices == row(out_double$indices), na.rm = TRUE))
+
+  out_float_input <- nn(exclude_self = TRUE,
+    float::fl(x),
+    k = 5L,
+    backend = "cpu",
+    method = "ivfpq_fastscan",
+    metric = "euclidean",
+    output = "float",
+    n_threads = 2L
+  )
+  expect_true(inherits(out_float_input$distances, "float32"))
+  expect_equal(out_float_input$distance_type, "float32")
+  expect_equal(out_float_input$input_type, "float32")
+  expect_false(out_float_input$float32_compatibility_conversion)
+  expect_false(any(out_float_input$indices == row(out_float_input$indices), na.rm = TRUE))
+})
+
 test_that("float32 input routes through FAISS Flat when float is installed", {
   skip_if_not_installed("float")
   skip_if_not(faiss_available(), "FAISS is required for float32 input")

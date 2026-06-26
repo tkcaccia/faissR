@@ -709,6 +709,14 @@ intermediate R double distance matrix. Transformed metrics and deterministic
 zero-row correction for cosine/correlation can still repair or convert a double
 distance matrix before returning float32 because those paths need R-side metric
 post-processing.
+
+CPU IVFPQ FastScan is exposed to the R layer only through the float32 adapter:
+FAISS always receives a `float*` matrix. For `float::fl()`/float32 inputs this
+avoids an R double expansion; ordinary R double matrices are adapted once to
+row-major float32 for FAISS. The C++ result formatter removes self-neighbours
+and writes the final column-major R result directly, so the R wrapper does not
+sort or repair FastScan rows after the search.
+
 KNN results also expose stable list fields for downstream packages:
 `index_base`, `metric`, `backend_used`, and, on the float32 route,
 `input_layout`/`input_owns_data`. The `float` package is in `Suggests`; faissR

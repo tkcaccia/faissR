@@ -382,6 +382,10 @@ for reranking [6,34].
 - Repeated compatible raw `nn()` calls reuse a session-local fitted FAISS
   FastScan index, including trained IVF centroids, inverted lists, PQ
   codebooks/codes, and the optional Flat refinement wrapper.
+- The CPU route always enters the FAISS FastScan C++ adapter as `float*`.
+  `float::fl()`/float32 inputs avoid R double expansion; ordinary R double
+  inputs are adapted once to row-major float32. `output = "float"` controls
+  only the returned distance container, and self-neighbour removal stays in C++.
 
 Use this method when you want to test an IVFPQ FastScan compressed-code scan
 separately from general `method = "ivfpq"`. It is approximate, so benchmark

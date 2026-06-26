@@ -2470,34 +2470,19 @@ nn_compute <- function(data,
       target_recall = target_recall
     )
     if (!is.null(cached)) return(cached)
-    out <- if (identical(output, "float")) {
-      nn_faiss_ivfpq_fastscan_float32_cpp(
-        data,
-        points,
-        as.integer(k),
-        as.integer(params$ivf$nlist),
-        as.integer(params$ivf$nprobe),
-        as.integer(params$pq$m),
-        as.integer(params$refine_factor),
-        as.integer(params$bbs),
-        isTRUE(exclude_self),
-        as.integer(n_threads),
-        output
-      )
-    } else {
-      nn_faiss_ivfpq_fastscan_cpp(
-        data,
-        points,
-        as.integer(k),
-        as.integer(params$ivf$nlist),
-        as.integer(params$ivf$nprobe),
-        as.integer(params$pq$m),
-        as.integer(params$refine_factor),
-        as.integer(params$bbs),
-        isTRUE(exclude_self),
-        as.integer(n_threads)
-      )
-    }
+    out <- nn_faiss_ivfpq_fastscan_float32_cpp(
+      data,
+      points,
+      as.integer(k),
+      as.integer(params$ivf$nlist),
+      as.integer(params$ivf$nprobe),
+      as.integer(params$pq$m),
+      as.integer(params$refine_factor),
+      as.integer(params$bbs),
+      isTRUE(exclude_self),
+      as.integer(n_threads),
+      output
+    )
     result <- finish_nn_result(out, "faiss_ivfpq_fastscan", k, self_query, exact = FALSE, metric = metric)
     attr(result, "approximation") <- list(
       strategy = "faiss_IndexIVFPQFastScan_RefineFlat",
@@ -2525,10 +2510,7 @@ nn_compute <- function(data,
       pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted)
     )
     result <- append_nn_tuning_metadata(result, params$ivf, params$pq, params$tuning, .prefixes = list(NULL, "pq_", "ivfpq_fastscan_"))
-    if (identical(output, "float")) {
-      result <- finish_float32_direct_result(result, out)
-    }
-    return(result)
+    return(finish_float32_direct_result(result, out))
   }
 
   if (backend %in% c("faiss_gpu_ivf", "faiss_gpu_ivf_flat", "cuda_faiss_ivf_flat")) {
