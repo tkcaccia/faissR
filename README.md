@@ -49,7 +49,8 @@ headers and libraries discovered by `configure`.
   request the same float32 KNN result format without routing through the R
   wrappers.
 - Raw `nn()` calls reuse a bounded session-local CPU
-  FAISS fitted-index cache for matching Flat, HNSW, IVF, and IVFPQ requests.
+  FAISS fitted-index cache for matching Flat, HNSW, IVF, IVFPQ, and IVFPQ
+  FastScan requests.
   This avoids rebuilding FAISS indexes across repeated calls; result metadata
   reports `persistent_index_cache` and `index_cache_hit`. Use
   `options(faissR.cache_fitted_nn_indexes = FALSE)` to disable the cache or

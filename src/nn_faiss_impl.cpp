@@ -241,6 +241,10 @@ struct FaissFittedIndexHandle {
   int n_iter = NA_INTEGER;
   int requested_n_iter = NA_INTEGER;
   int gk = NA_INTEGER;
+  int refine_factor = NA_INTEGER;
+  int requested_refine_factor = NA_INTEGER;
+  int bbs = NA_INTEGER;
+  int requested_bbs = NA_INTEGER;
   int max_threads = 1;
   DistanceOutput distance_output = DistanceOutput::L2Squared;
   std::string metric = "euclidean";
@@ -2163,6 +2167,7 @@ SEXP faiss_index_build_float32_impl(SEXP data,
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   if (kind == "ivf_flat") kind = "ivf";
   if (kind == "ivf_pq") kind = "ivfpq";
+  if (kind == "fastscan") kind = "ivfpq_fastscan";
   const DistanceOutput output = parse_distance_output(distance_output, "fitted FAISS index");
   MatrixViewF32 xb = make_float32_matrix_view(data, "data");
 
@@ -2176,6 +2181,10 @@ SEXP faiss_index_build_float32_impl(SEXP data,
   const int requested_search_width = search_width;
   const int requested_build_type = build_type;
   const int requested_n_iter = n_iter;
+  int refine_factor = graph_degree;
+  int bbs = search_width;
+  const int requested_refine_factor = refine_factor;
+  const int requested_bbs = bbs;
   int gk = NA_INTEGER;
 
   try {
@@ -2239,6 +2248,50 @@ SEXP faiss_index_build_float32_impl(SEXP data,
       ivfpq->own_fields = true;
       ivfpq->nprobe = nprobe;
       index = std::move(ivfpq);
+    } else if (kind == "ivfpq_fastscan") {
+#ifdef FAISSR_HAS_FAISS_FASTSCAN
+      if (metric != "euclidean") {
+        Rcpp::stop("FAISS fitted IVFPQ FastScan supports metric = 'euclidean' only");
+      }
+      nlist = std::max(1, std::min(nlist, n_data));
+      nprobe = std::max(1, std::min(nprobe, nlist));
+      pq_m = adjust_fastscan_pq_m(pq_m, n_features);
+      pq_nbits = 4;
+      refine_factor = std::max(1, refine_factor);
+      bbs = adjust_fastscan_bbs(bbs);
+      faiss::Index* quantizer = new faiss::IndexFlatL2(n_features);
+      std::unique_ptr<faiss::IndexIVFPQFastScan> base(
+        new faiss::IndexIVFPQFastScan(
+          quantizer,
+          n_features,
+          nlist,
+          pq_m,
+          4,
+          faiss::METRIC_L2,
+          bbs
+        )
+      );
+      base->own_fields = true;
+      base->nprobe = nprobe;
+      if (refine_factor > 1) {
+        faiss::IndexIVFPQFastScan* base_ptr = base.release();
+        std::unique_ptr<faiss::IndexRefineFlat> refine(
+          new faiss::IndexRefineFlat(base_ptr)
+        );
+        refine->own_fields = true;
+        refine->k_factor = static_cast<float>(refine_factor);
+        index_type = "IndexIVFPQFastScanRefineFlatExternalPtr";
+        index = std::move(refine);
+      } else {
+        index_type = "IndexIVFPQFastScanExternalPtr";
+        index = std::move(base);
+      }
+#else
+      Rcpp::stop(
+        "FAISS fitted IVFPQ FastScan is not available in this build. Rebuild "
+        "faissR against a FAISS version that provides faiss/IndexIVFPQFastScan.h."
+      );
+#endif
     } else if (kind == "nsg") {
       if (n_data <= 100) {
         Rcpp::stop("FAISS NSG requires more than 100 training rows in this FAISS build.");
@@ -2321,11 +2374,15 @@ SEXP faiss_index_build_float32_impl(SEXP data,
     handle->n_iter = n_iter;
     handle->requested_n_iter = requested_n_iter;
     handle->gk = gk;
+    handle->refine_factor = refine_factor;
+    handle->requested_refine_factor = requested_refine_factor;
+    handle->bbs = bbs;
+    handle->requested_bbs = requested_bbs;
     handle->index_trained = handle->index->is_trained;
-    handle->centroids_trained = kind == "ivf" || kind == "ivfpq";
-    handle->inverted_lists_built = kind == "ivf" || kind == "ivfpq";
-    handle->pq_codebooks_trained = kind == "ivfpq";
-    handle->pq_codes_built = kind == "ivfpq";
+    handle->centroids_trained = kind == "ivf" || kind == "ivfpq" || kind == "ivfpq_fastscan";
+    handle->inverted_lists_built = kind == "ivf" || kind == "ivfpq" || kind == "ivfpq_fastscan";
+    handle->pq_codebooks_trained = kind == "ivfpq" || kind == "ivfpq_fastscan";
+    handle->pq_codes_built = kind == "ivfpq" || kind == "ivfpq_fastscan";
     handle->build_train_call_count = handle->centroids_trained ? build_train_call_count : 0;
     handle->build_pq_train_call_count = handle->pq_codebooks_trained ? build_train_call_count : 0;
 
@@ -2347,6 +2404,8 @@ SEXP faiss_index_build_float32_impl(SEXP data,
     ptr.attr("search_width") = search_width;
     ptr.attr("build_type") = build_type;
     ptr.attr("n_iter") = n_iter;
+    ptr.attr("refine_factor") = refine_factor;
+    ptr.attr("bbs") = bbs;
     ptr.attr("max_threads") = n_threads;
     ptr.attr("metric") = metric;
     ptr.attr("input_type") = "float32";
@@ -2394,9 +2453,18 @@ List faiss_index_search_float32_impl(SEXP index_ptr,
   if (effective_search_width < 1) {
     effective_search_width = handle->search_width;
   }
-  if (handle->kind == "ivf" || handle->kind == "ivfpq") {
+  if (handle->kind == "ivf" || handle->kind == "ivfpq" ||
+      handle->kind == "ivfpq_fastscan") {
     effective_search_width = std::max(1, std::min(effective_search_width, handle->nlist));
     faiss::IndexIVF* ivf = dynamic_cast<faiss::IndexIVF*>(handle->index.get());
+#ifdef FAISSR_HAS_FAISS_FASTSCAN
+    if (ivf == nullptr && handle->kind == "ivfpq_fastscan") {
+      faiss::IndexRefine* refine = dynamic_cast<faiss::IndexRefine*>(handle->index.get());
+      if (refine != nullptr) {
+        ivf = dynamic_cast<faiss::IndexIVF*>(refine->base_index);
+      }
+    }
+#endif
     if (ivf == nullptr) {
       Rcpp::stop("Stored FAISS IVF index pointer has an unexpected type");
     }
@@ -2434,9 +2502,11 @@ List faiss_index_search_float32_impl(SEXP index_ptr,
     Rcpp::stop("FAISS fitted-index search failed: %s", e.what());
   }
 
-  const int out_nlist = (handle->kind == "ivf" || handle->kind == "ivfpq") ?
+  const int out_nlist = (handle->kind == "ivf" || handle->kind == "ivfpq" ||
+                         handle->kind == "ivfpq_fastscan") ?
     handle->nlist : NA_INTEGER;
-  const int out_nprobe = (handle->kind == "ivf" || handle->kind == "ivfpq") ?
+  const int out_nprobe = (handle->kind == "ivf" || handle->kind == "ivfpq" ||
+                          handle->kind == "ivfpq_fastscan") ?
     effective_search_width : NA_INTEGER;
   const int out_graph_degree = (handle->kind == "nsg" || handle->kind == "nndescent") ?
     handle->graph_degree : NA_INTEGER;
@@ -2479,7 +2549,8 @@ List faiss_index_search_float32_impl(SEXP index_ptr,
   out["float32_compatibility_conversion"] = xq.compatibility_conversion;
   out["kind"] = handle->kind;
 
-  if (handle->kind == "ivf" || handle->kind == "ivfpq") {
+  if (handle->kind == "ivf" || handle->kind == "ivfpq" ||
+      handle->kind == "ivfpq_fastscan") {
     out["nlist"] = handle->nlist;
     out["nprobe"] = effective_search_width;
     out["build_nprobe"] = handle->nprobe;
@@ -2503,6 +2574,25 @@ List faiss_index_search_float32_impl(SEXP index_ptr,
     out["search_pq_train_call_count"] = 0;
     out["pq_parameters_adjusted"] = handle->requested_pq_m != handle->pq_m ||
       handle->requested_pq_nbits != handle->pq_nbits;
+  }
+  if (handle->kind == "ivfpq_fastscan") {
+    out["pq_m"] = handle->pq_m;
+    out["pq_nbits"] = handle->pq_nbits;
+    out["requested_pq_m"] = handle->requested_pq_m;
+    out["requested_pq_nbits"] = handle->requested_pq_nbits;
+    out["pq_codebooks_reused"] = handle->pq_codebooks_trained;
+    out["pq_codes_reused"] = handle->pq_codes_built;
+    out["pq_training_reused"] = handle->pq_codebooks_trained;
+    out["build_pq_train_call_count"] = handle->build_pq_train_call_count;
+    out["search_pq_train_call_count"] = 0;
+    out["pq_parameters_adjusted"] = handle->requested_pq_m != handle->pq_m ||
+      handle->requested_pq_nbits != handle->pq_nbits;
+    out["fastscan"] = true;
+    out["refine"] = handle->refine_factor > 1;
+    out["refine_factor"] = handle->refine_factor;
+    out["requested_refine_factor"] = handle->requested_refine_factor;
+    out["bbs"] = handle->bbs;
+    out["requested_bbs"] = handle->requested_bbs;
   }
   if (handle->kind == "nsg") {
     out["r"] = handle->graph_degree;

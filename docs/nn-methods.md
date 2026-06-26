@@ -379,6 +379,9 @@ for reranking [6,34].
   `options(faissR.ivfpq_fastscan_pq_m = ..., faissR.ivfpq_fastscan_refine_factor = ...,
   faissR.ivfpq_fastscan_bbs = ...)`; defaults keep 4-bit PQ and a small Flat reranking
   factor for quality.
+- Repeated compatible raw `nn()` calls reuse a session-local fitted FAISS
+  FastScan index, including trained IVF centroids, inverted lists, PQ
+  codebooks/codes, and the optional Flat refinement wrapper.
 
 Use this method when you want to test an IVFPQ FastScan compressed-code scan
 separately from general `method = "ivfpq"`. It is approximate, so benchmark

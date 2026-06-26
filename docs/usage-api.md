@@ -100,7 +100,7 @@ stored in
 Use `nn(..., exclude_self = TRUE)` for graph construction and embedding
 workflows where each row should not list itself as its nearest neighbour.
 
-For CPU FAISS Flat/HNSW/IVF/IVFPQ routes, raw `nn()` calls
+For CPU FAISS Flat/HNSW/IVF/IVFPQ/IVFPQ FastScan routes, raw `nn()` calls
 reuse a bounded session-local fitted-index cache when the reference data and
 method parameters match a previous call. This is especially useful for repeated
 self-KNN, graph, and benchmark calls. Metadata reports `persistent_index_cache`

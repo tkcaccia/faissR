@@ -716,11 +716,11 @@ does not require it unless a user supplies a float32 object or requests float32
 distance output.
 
 Raw `nn()` also keeps a bounded session-local fitted-index
-cache for CPU FAISS Flat, HNSW, IVF-Flat, and IVFPQ routes. The cache key includes
+cache for CPU FAISS Flat, HNSW, IVF-Flat, IVFPQ, and IVFPQ FastScan routes. The cache key includes
 the reference matrix fingerprint, dimensions, method, metric, CPU thread count,
 and fitted-index parameters. Repeated compatible calls reuse the FAISS external
 pointer and search it directly, so HNSW graph construction, IVF centroid
-training, inverted-list construction, and IVFPQ codebook/PQ-code training are not
+training, inverted-list construction, and IVFPQ/FastScan codebook/PQ-code training are not
 repeated. `nn(..., exclude_self = TRUE)` removes self-neighbours inside the C++ fitted-index
 search path. Metadata reports `persistent_index_cache`, `index_cache_hit`, and
 the usual FAISS reuse fields. Users can disable the cache with

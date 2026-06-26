@@ -192,7 +192,7 @@ A list with integer matrix `indices`, `distances`, and stable
   `attr(result, "auto_selection")`, a static shape/k/metric decision record
   that records the predicted internal backend, public method class, device
   class, explicit backend/method flags, backend/method decision reasons, and
-  does not run pilot tuning. CPU FAISS Flat/HNSW/IVF/IVFPQ routes use a
+  does not run pilot tuning. CPU FAISS Flat/HNSW/IVF/IVFPQ/FastScan routes use a
   bounded session-local fitted-index cache for repeated raw `nn()` calls
   with matching data and parameters; metadata reports
   `persistent_index_cache` and `index_cache_hit`. Disable with

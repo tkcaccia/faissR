@@ -130,6 +130,9 @@ fitted_nn_index_kind <- function(backend, metric) {
   if (identical(backend, "faiss_ivfpq")) {
     return("ivfpq")
   }
+  if (identical(backend, "faiss_ivfpq_fastscan")) {
+    return("ivfpq_fastscan")
+  }
   NA_character_
 }
 
@@ -148,6 +151,23 @@ fitted_nn_index_build <- function(data,
       as.integer(params$ef_search),
       faiss_metric_search_arg(metric),
       distance_output,
+      as.integer(n_threads)
+    ))
+  }
+  if (identical(kind, "ivfpq_fastscan")) {
+    return(nn_faiss_index_build_float32_cpp(
+      data,
+      kind,
+      as.integer(params$nlist %||% NA_integer_),
+      as.integer(params$nprobe %||% NA_integer_),
+      as.integer(pq$m %||% NA_integer_),
+      as.integer(pq$nbits %||% 4L),
+      as.integer(params$refine_factor %||% NA_integer_),
+      as.integer(params$bbs %||% NA_integer_),
+      NA_integer_,
+      NA_integer_,
+      "euclidean",
+      "euclidean",
       as.integer(n_threads)
     ))
   }
@@ -202,10 +222,23 @@ fitted_nn_index_get_or_build <- function(data,
 }
 
 fitted_nn_index_search_width <- function(kind, params, k) {
-  if (kind %in% c("ivf", "ivfpq")) {
+  if (kind %in% c("ivf", "ivfpq", "ivfpq_fastscan")) {
     return(as.integer(params$nprobe %||% NA_integer_))
   }
   NA_integer_
+}
+
+ivfpq_fastscan_fitted_params <- function(params) {
+  c(
+    params$ivf,
+    list(
+      refine_factor = as.integer(params$refine_factor),
+      requested_refine_factor = as.integer(params$refine_factor),
+      bbs = as.integer(params$bbs),
+      requested_bbs = as.integer(params$bbs)
+    ),
+    params$tuning
+  )
 }
 
 fitted_nn_index_result <- function(data,
@@ -361,6 +394,64 @@ fitted_nn_index_result <- function(data,
       search_train_call_count = as.integer(out$search_train_call_count %||% NA_integer_)
     ), cache_meta)
     result <- append_nn_tuning_metadata(result, params)
+    return(finish_float32_direct_result(result, out))
+  }
+
+  if (identical(kind, "ivfpq_fastscan")) {
+    attr(result, "approximation") <- c(list(
+      strategy = "faiss_IndexIVFPQFastScan_RefineFlat",
+      backend = "faiss_ivfpq_fastscan",
+      library = "faiss",
+      metric = metric,
+      input_type = "float32",
+      fitted_index = TRUE,
+      ivfpq_fastscan = TRUE,
+      fastscan = isTRUE(out$fastscan),
+      nlist = as.integer(out$nlist),
+      nprobe = as.integer(out$nprobe),
+      requested_nlist = as.integer(params$requested_nlist %||% out$requested_nlist),
+      requested_nprobe = as.integer(params$requested_nprobe %||% out$requested_nprobe),
+      index_trained = isTRUE(out$index_trained),
+      index_training_reused = isTRUE(out$index_training_reused),
+      centroids_reused = isTRUE(out$centroids_reused),
+      inverted_lists_reused = isTRUE(out$inverted_lists_reused),
+      vectors_reused = isTRUE(out$vectors_reused),
+      build_train_call_count = as.integer(out$build_train_call_count %||% NA_integer_),
+      search_train_call_count = as.integer(out$search_train_call_count %||% NA_integer_),
+      pq_m = as.integer(out$pq_m),
+      pq_nbits = as.integer(out$pq_nbits),
+      requested_pq_m = as.integer(out$requested_pq_m),
+      requested_pq_nbits = as.integer(out$requested_pq_nbits),
+      pq_codebooks_reused = isTRUE(out$pq_codebooks_reused),
+      pq_codes_reused = isTRUE(out$pq_codes_reused),
+      pq_training_reused = isTRUE(out$pq_training_reused),
+      build_pq_train_call_count = as.integer(out$build_pq_train_call_count %||% NA_integer_),
+      search_pq_train_call_count = as.integer(out$search_pq_train_call_count %||% NA_integer_),
+      refine = isTRUE(out$refine),
+      refine_factor = as.integer(out$refine_factor),
+      requested_refine_factor = as.integer(out$requested_refine_factor),
+      bbs = as.integer(out$bbs),
+      requested_bbs = as.integer(out$requested_bbs),
+      ivf_parameters_adjusted = isTRUE(out$ivf_parameters_adjusted) ||
+        !identical(as.integer(params$requested_nlist %||% out$requested_nlist), as.integer(out$nlist)) ||
+        !identical(as.integer(params$requested_nprobe %||% out$requested_nprobe), as.integer(out$nprobe)),
+      pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted),
+      refine_parameters_adjusted = !identical(as.integer(params$requested_refine_factor %||% out$requested_refine_factor), as.integer(out$refine_factor)) ||
+        !identical(as.integer(params$requested_bbs %||% out$requested_bbs), as.integer(out$bbs))
+    ), cache_meta)
+    attr(result, "faiss") <- c(list(
+      index_type = out$index_type %||% "IndexIVFPQFastScanExternalPtr",
+      library = "faiss",
+      backend = "cpu",
+      metric = metric,
+      exact = FALSE,
+      fastscan = isTRUE(out$fastscan),
+      pq_codebooks_reused = isTRUE(out$pq_codebooks_reused),
+      pq_codes_reused = isTRUE(out$pq_codes_reused),
+      pq_training_reused = isTRUE(out$pq_training_reused),
+      search_pq_train_call_count = as.integer(out$search_pq_train_call_count %||% NA_integer_)
+    ), cache_meta)
+    result <- append_nn_tuning_metadata(result, pq, params, .prefixes = list("pq_", "ivfpq_fastscan_"))
     return(finish_float32_direct_result(result, out))
   }
 
@@ -836,6 +927,22 @@ nn_compute <- function(data,
       }
       validate_faiss_cpu_ivfpq_training_size(data_dim[[1L]])
       params <- ivfpq_fastscan_cpu_params(data_dim[[1L]], data_dim[[2L]], k)
+      cached <- fitted_nn_index_result(
+        data = data,
+        points = points,
+        k = k,
+        backend = "faiss_ivfpq_fastscan",
+        result_backend = "faiss_ivfpq_fastscan",
+        self_query = self_query,
+        exclude_self = isTRUE(exclude_self),
+        metric = metric,
+        n_threads = n_threads,
+        output = output,
+        params = ivfpq_fastscan_fitted_params(params),
+        pq = params$pq,
+        target_recall = target_recall
+      )
+      if (!is.null(cached)) return(cached)
       out <- nn_faiss_ivfpq_fastscan_float32_cpp(
         data,
         points,
@@ -2347,6 +2454,22 @@ nn_compute <- function(data,
     }
     validate_faiss_cpu_ivfpq_training_size(nrow(data))
     params <- ivfpq_fastscan_cpu_params(nrow(data), ncol(data), k)
+    cached <- fitted_nn_index_result(
+      data = data,
+      points = points,
+      k = k,
+      backend = "faiss_ivfpq_fastscan",
+      result_backend = "faiss_ivfpq_fastscan",
+      self_query = self_query,
+      exclude_self = isTRUE(exclude_self),
+      metric = metric,
+      n_threads = n_threads,
+      output = output,
+      params = ivfpq_fastscan_fitted_params(params),
+      pq = params$pq,
+      target_recall = target_recall
+    )
+    if (!is.null(cached)) return(cached)
     out <- if (identical(output, "float")) {
       nn_faiss_ivfpq_fastscan_float32_cpp(
         data,
@@ -8800,7 +8923,7 @@ grid_self_knn <- function(data,
 #'   `attr(result, "auto_selection")`, a static shape/k/metric decision record
 #'   that records the predicted internal backend, public method class, device
 #'   class, explicit backend/method flags, backend/method decision reasons, and
-#'   does not run pilot tuning. CPU FAISS Flat/HNSW/IVF/IVFPQ routes use a
+#'   does not run pilot tuning. CPU FAISS Flat/HNSW/IVF/IVFPQ/FastScan routes use a
 #'   bounded session-local fitted-index cache for repeated raw `nn()` calls
 #'   with matching data and parameters; metadata reports
 #'   `persistent_index_cache` and `index_cache_hit`. Disable with

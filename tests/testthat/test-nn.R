@@ -429,7 +429,11 @@ test_that("raw nn exclude_self reuses fitted CPU FAISS indexes", {
 
   set.seed(981)
   x <- matrix(rnorm(800L * 8L), nrow = 800L)
-  for (method in c("flat", "hnsw", "ivf", "ivfpq")) {
+  methods <- c("flat", "hnsw", "ivf", "ivfpq")
+  if (isTRUE(faiss_fastscan_available())) {
+    methods <- c(methods, "ivfpq_fastscan")
+  }
+  for (method in methods) {
     first <- nn(exclude_self = TRUE, x, k = 10L, backend = "cpu", method = method, n_threads = 2L)
     second <- nn(exclude_self = TRUE, x, k = 10L, backend = "cpu", method = method, n_threads = 2L)
     first_meta <- attr(first, "faiss", exact = TRUE)
@@ -440,6 +444,12 @@ test_that("raw nn exclude_self reuses fitted CPU FAISS indexes", {
     expect_true(isTRUE(second_meta$index_cache_hit), info = method)
     expect_equal(first$indices, second$indices, info = method)
     expect_false(any(row(second$indices) == second$indices), info = method)
+    if (identical(method, "ivfpq_fastscan")) {
+      approx <- attr(second, "approximation", exact = TRUE)
+      expect_true(isTRUE(approx$ivfpq_fastscan))
+      expect_true(isTRUE(approx$fitted_index))
+      expect_match(second_meta$index_type, "IndexIVFPQFastScan")
+    }
   }
 })
 
