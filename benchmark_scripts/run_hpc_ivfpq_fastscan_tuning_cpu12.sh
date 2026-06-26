@@ -41,6 +41,7 @@ export TIMEOUT="${TIMEOUT:-600}"
 export QUALITY_N="${QUALITY_N:-256}"
 export SEED="${SEED:-4}"
 export GRID_LEVEL="${GRID_LEVEL:-standard}"
+export IVFPQ_FASTSCAN_REFINE_FACTORS="${IVFPQ_FASTSCAN_REFINE_FACTORS:-1,2,4,8,16,32}"
 export OUT_DIR="${OUT_DIR:-${BASE_DIR}/faissR_IVFPQ_FASTSCAN_TUNING_CPU12_$(date +%Y%m%d_%H%M%S)}"
 export LOG_DIR="${LOG_DIR:-${BASE_DIR}/benchmark_logs}"
 export SINGULARITY_IMAGE="${SINGULARITY_IMAGE:-${BASE_DIR}/singularity/fastembedr_cuda.sif}"
@@ -105,11 +106,27 @@ fi
   echo "BACKEND=${BACKEND}"
   echo "QUALITY_N=${QUALITY_N}"
   echo "SEED=${SEED}"
+  echo "IVFPQ_FASTSCAN_REFINE_FACTORS=${IVFPQ_FASTSCAN_REFINE_FACTORS}"
   echo "[$(date --iso-8601=seconds)] building float32 manifest"
   "${RUNNER[@]}" "${R_BIN}" "${MANIFEST_SCRIPT}"     --data_root="${DATA_ROOT}"     --out="${MANIFEST}"     --datasets="${DATASETS}"
 
   echo "[$(date --iso-8601=seconds)] running CPU-only IVFPQ_FASTSCAN tuning from precomputed references"
-  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --backend="${BACKEND}"     --k_values="${K_VALUES}"     --target_recalls="${TARGET_RECALLS}"     --threads="${THREADS_CPU}"     --thread_values="${THREAD_VALUES}"     --timeout="${TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --output_values="${OUTPUT_VALUES}"     --grid_level="${GRID_LEVEL}"     --resume=TRUE
+  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}" \
+    --manifest="${MANIFEST}" \
+    --out_dir="${OUT_DIR}" \
+    --datasets="${DATASETS}" \
+    --backend="${BACKEND}" \
+    --k_values="${K_VALUES}" \
+    --target_recalls="${TARGET_RECALLS}" \
+    --threads="${THREADS_CPU}" \
+    --thread_values="${THREAD_VALUES}" \
+    --timeout="${TIMEOUT}" \
+    --quality_n="${QUALITY_N}" \
+    --seed="${SEED}" \
+    --output_values="${OUTPUT_VALUES}" \
+    --grid_level="${GRID_LEVEL}" \
+    --ivfpq_fastscan_refine_factors="${IVFPQ_FASTSCAN_REFINE_FACTORS}" \
+    --resume=TRUE
 
   echo "DONE: ${OUT_DIR}"
 } 2>&1 | tee -a "${OUT_DIR}/ivfpq_fastscan_tuning_cpu12.log"

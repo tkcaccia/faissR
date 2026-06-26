@@ -41,6 +41,19 @@ positive_int <- function(value, default, name) {
   as.integer(round(value))
 }
 
+positive_int_values <- function(value, default = NULL, name) {
+  if (is.null(value) || length(value) == 0L || is.na(value[[1L]]) || !nzchar(trimws(as.character(value[[1L]])))) {
+    return(default)
+  }
+  values <- suppressWarnings(as.numeric(split_arg(value, "")))
+  values <- values[is.finite(values)]
+  if (!length(values) ||
+      any(values < 1L | abs(values - round(values)) > sqrt(.Machine$double.eps))) {
+    stop("`", name, "` must contain positive integer values.", call. = FALSE)
+  }
+  unique(as.integer(round(values)))
+}
+
 script_path <- function() {
   args <- commandArgs(FALSE)
   file_arg <- grep("^--file=", args, value = TRUE)
@@ -266,7 +279,8 @@ cuvs_byte_aligned_pq_dim <- function(p, pq_dim, pq_bits = 4L) {
   if (effective_dim >= 1L) effective_dim else pq_dim
 }
 
-candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_values, output_values, grid_level) {
+candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_values, output_values, grid_level,
+                           ivfpq_fastscan_refine_factors = NULL) {
   rows <- list()
   add <- function(x) {
     rows[[length(rows) + 1L]] <<- fill_candidate(x)
@@ -319,14 +333,29 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
         x$pq_nbits <- 8L
       }
       if (method == "ivfpq_fastscan") {
-        x$pq_m <- divisor_at_most(p, 32L)
-        x$pq_dim <- divisor_at_most(p, if (backend == "cuda") 32L else 16L)
+        pq_m <- divisor_at_most(p, 32L)
+        pq_dim <- divisor_at_most(p, if (backend == "cuda") 32L else 16L)
         if (identical(backend, "cuda")) {
-          x$pq_dim <- cuvs_byte_aligned_pq_dim(p, x$pq_dim, pq_bits = 4L)
+          pq_dim <- cuvs_byte_aligned_pq_dim(p, pq_dim, pq_bits = 4L)
         }
-        x$pq_nbits <- 4L
-        x$ivfpq_fastscan_refine_factor <- c(2L, 4L, 8L, 12L)[[i]]
-        x$ivfpq_fastscan_bbs <- 32L
+        refine_values <- c(2L, 4L, 8L, 12L)[[i]]
+        if (identical(backend, "cpu") && length(ivfpq_fastscan_refine_factors)) {
+          refine_values <- ivfpq_fastscan_refine_factors
+        }
+        for (refine_factor in refine_values) {
+          y <- x
+          y$pq_m <- pq_m
+          y$pq_dim <- pq_dim
+          y$pq_nbits <- 4L
+          y$ivfpq_fastscan_refine_factor <- as.integer(refine_factor)
+          y$ivfpq_fastscan_bbs <- 32L
+          y$candidate_id <- sprintf(
+            "%s_m%d_pqdim%d_rf%d_bbs%d",
+            y$candidate_id, pq_m, pq_dim, as.integer(refine_factor), 32L
+          )
+          add(y)
+        }
+        next
       }
       add(x)
     }
@@ -585,12 +614,21 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   quality_n <- positive_int(args$quality_n, 256L, "quality_n")
   seed <- positive_int(args$seed, 4L, "seed")
   grid_level <- args$grid_level %||% "standard"
+  ivfpq_fastscan_refine_factors <- positive_int_values(
+    args$ivfpq_fastscan_refine_factors,
+    default = NULL,
+    name = "ivfpq_fastscan_refine_factors"
+  )
   resume <- logical_arg(args$resume, TRUE)
   resume_statuses <- split_arg(args$resume_statuses, "success,unsupported,unavailable,timeout")
   all_candidates <- do.call(rbind, lapply(seq_len(nrow(manifest)), function(i) {
     ds <- manifest[i, , drop = FALSE]
     do.call(rbind, lapply(k_values, function(k) {
-      x <- candidate_grid(method, backend, as.integer(ds$n), as.integer(ds$p), k, target_recalls, thread_values, output_values, grid_level)
+      x <- candidate_grid(
+        method, backend, as.integer(ds$n), as.integer(ds$p), k,
+        target_recalls, thread_values, output_values, grid_level,
+        ivfpq_fastscan_refine_factors = ivfpq_fastscan_refine_factors
+      )
       x$dataset <- ds$dataset[[1L]]; x$n <- as.integer(ds$n); x$p <- as.integer(ds$p); x$k <- as.integer(k)
       x
     }))
@@ -602,7 +640,11 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
     dataset_path <- ds[[path_col]][[1L]]
     for (k in k_values) {
       ref <- load_reference(dataset_path, k, reference_k, quality_n, seed)
-      candidates <- candidate_grid(method, backend, as.integer(ds$n), as.integer(ds$p), k, target_recalls, thread_values, output_values, grid_level)
+      candidates <- candidate_grid(
+        method, backend, as.integer(ds$n), as.integer(ds$p), k,
+        target_recalls, thread_values, output_values, grid_level,
+        ivfpq_fastscan_refine_factors = ivfpq_fastscan_refine_factors
+      )
       for (j in seq_len(nrow(candidates))) {
         cand <- candidates[j, , drop = FALSE]
         key <- paste(ds$dataset[[1L]], backend, method, as.integer(k), cand$candidate_id, sep = "\r")
