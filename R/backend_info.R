@@ -25,9 +25,9 @@ backend_info <- function() {
     knn_available = c(TRUE, faiss_knn, faiss$gpu && cuda_knn, cuvs_knn, cuda_knn, FALSE),
     public_call = c(
       "backend = \"cpu\"",
-      "backend = \"cpu\" or \"cuda\", method = \"flat\"/\"ivf\"/\"ivfpq\"/\"hnsw\"/\"scann\"/\"cagra\" as supported",
+      "backend = \"cpu\" or \"cuda\", method = \"flat\"/\"ivf\"/\"ivfpq\"/\"hnsw\"/\"ivfpq_fastscan\"/\"cagra\" as supported",
       "backend = \"cuda\", method = \"ivf\"/\"ivfpq\"/\"cagra\"",
-      "backend = \"cuda\", method = \"bruteforce\"/\"hnsw\"/\"nndescent\"/\"scann\"/\"cagra\"",
+      "backend = \"cuda\", method = \"bruteforce\"/\"hnsw\"/\"nndescent\"/\"ivfpq_fastscan\"/\"cagra\"",
       "backend = \"cuda\"",
       "graph_cluster(..., backend = \"cuda\")"
     ),
@@ -40,11 +40,11 @@ backend_info <- function() {
       "cuda"
     ),
     supported_methods = c(
-      "auto, exact, flat, bruteforce, grid, hnsw, ivf, ivfpq, scann, vamana, nsg, nndescent",
-      "flat, ivf, ivfpq, hnsw, scann, nsg; GPU flat/ivf/ivfpq/cagra when FAISS GPU is available",
+      "auto, exact, flat, bruteforce, grid, hnsw, ivf, ivfpq, ivfpq_fastscan, vamana, nsg, nndescent",
+      "flat, ivf, ivfpq, hnsw, ivfpq_fastscan, nsg; GPU flat/ivf/ivfpq/cagra when FAISS GPU is available",
       "ivf, ivfpq, cagra",
-      "bruteforce, hnsw, nndescent, scann, cagra",
-      "grid, flat, bruteforce, hnsw, ivf, ivfpq, scann, vamana, nsg, nndescent, cagra where compiled",
+      "bruteforce, hnsw, nndescent, ivfpq_fastscan, cagra",
+      "grid, flat, bruteforce, hnsw, ivf, ivfpq, ivfpq_fastscan, vamana, nsg, nndescent, cagra where compiled",
       "graph_cluster louvain, leiden"
     ),
     supported_metrics = c(
@@ -57,9 +57,9 @@ backend_info <- function() {
     ),
     resolved_route = c(
       "implementation label: cpu",
-      "implementation labels include faiss_flat_l2, faiss_ivf, faiss_hnsw, faiss_scann, and faiss_gpu_*",
+      "implementation labels include faiss_flat_l2, faiss_ivf, faiss_hnsw, faiss_ivfpq_fastscan, and faiss_gpu_*",
       "implementation labels include faiss_gpu_ivf_flat, faiss_gpu_ivfpq, and faiss_gpu_cagra",
-      "implementation labels include cuda_cuvs_bruteforce, cuda_cuvs_hnsw, cuda_cuvs_nndescent, cuda_cuvs_scann, and cuda_cuvs_cagra",
+      "implementation labels include cuda_cuvs_bruteforce, cuda_cuvs_hnsw, cuda_cuvs_nndescent, cuda_cuvs_ivfpq_fastscan, and cuda_cuvs_cagra",
       "implementation labels include cuda_grid, cuda_vamana, and cuda_nsg; exact CUDA may report cuda",
       "implementation route: graph_cluster(..., backend = \"cuda\")"
     ),
@@ -86,7 +86,7 @@ backend_info <- function() {
     note = c(
       "Native CPU path is always available.",
       if (faiss_knn) {
-        "Real FAISS C++ KNN is available behind public CPU/CUDA method requests; FastScan/ScaNN-inspired CPU search requires linked FAISS FastScan support."
+        "Real FAISS C++ KNN is available behind public CPU/CUDA method requests; IVFPQ FastScan CPU search requires linked FAISS FastScan support."
       } else {
         "Real FAISS C++ KNN is unavailable; FAISS-backed method requests will fail."
       },

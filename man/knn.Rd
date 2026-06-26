@@ -10,7 +10,7 @@ knn(
   Xtest = NULL,
   backend = c("auto", "cpu", "cuda"),
   method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
-    "vamana", "nsg", "nndescent", "scann", "cagra"),
+    "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   target_recall = 0.99,
@@ -32,7 +32,7 @@ knn(
 \code{"cuda"}. \code{"auto"} follows \code{nn()} backend/method/metric
 resolution, using CUDA only for validated CUDA combinations when CUDA/cuVS
 runtime support is available, and CPU otherwise.}
-\item{method}{Nearest-neighbour algorithm selector passed to \code{nn()}. \code{"auto"} chooses the most appropriate method for the selected backend. See \code{?nn} for descriptions and references for \code{"exact"}, \code{"flat"}, \code{"bruteforce"}, \code{"grid"}, \code{"hnsw"}, \code{"ivf"}, \code{"ivfpq"}, \code{"scann"}, \code{"vamana"}, \code{"nsg"}, \code{"nndescent"}, and \code{"cagra"}.}
+\item{method}{Nearest-neighbour algorithm selector passed to \code{nn()}. \code{"auto"} chooses the most appropriate method for the selected backend. See \code{?nn} for descriptions and references for \code{"exact"}, \code{"flat"}, \code{"bruteforce"}, \code{"grid"}, \code{"hnsw"}, \code{"ivf"}, \code{"ivfpq"}, \code{"ivfpq_fastscan"}, \code{"vamana"}, \code{"nsg"}, \code{"nndescent"}, and \code{"cagra"}.}
 \item{metric}{Distance metric passed to \code{nn()}: \code{"euclidean"},
 \code{"cosine"}, \code{"correlation"}, or \code{"inner_product"}. Aliases such
 as \code{"l2"}, \code{"cor"}/\code{"pearson"}, and \code{"ip"} are accepted and stored as

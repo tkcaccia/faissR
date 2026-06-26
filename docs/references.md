@@ -62,9 +62,8 @@ cuVS C/C++ libraries [3]. RAPIDS cuVS HNSW is cited because its C API documents
 the CAGRA-to-hnswlib wrapper behavior that faissR intentionally does not expose
 as CUDA HNSW [22]. CUHNSW is acknowledged as related Apache-2.0 CUDA HNSW prior
 software, but no CUHNSW source code is vendored or copied into faissR [23]. The
-ScaNN-inspired `method = "scann"` route uses
-FAISS FastScan on CPU and direct RAPIDS cuVS 4-bit IVF-PQ on CUDA; faissR does
-not vendor or copy Google ScaNN source code [3,6,34]. The native Vamana route is inspired by DiskANN/Vamana
+IVFPQ FastScan `method = "ivfpq_fastscan"` route uses
+FAISS FastScan on CPU and direct RAPIDS cuVS 4-bit IVF-PQ on CUDA [3,6,34]. The native Vamana route is inspired by DiskANN/Vamana
 robust-pruned graph construction [24] and uses faissR-owned candidate
 refinement code; GGNN, SONG, BANG, and PilotANN are acknowledged as related GPU
 ANN systems and design references, but their source code is not vendored or

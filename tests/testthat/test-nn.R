@@ -41,7 +41,7 @@ internal_nn_exclude_self <- function(data,
 test_that("public nearest-neighbour wrappers expose one canonical method and metric set", {
   canonical_methods <- c(
     "auto", "exact", "flat", "bruteforce", "grid",
-    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "scann", "cagra"
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"
   )
   canonical_metrics <- c("euclidean", "cosine", "correlation", "inner_product")
   wrappers <- list(
@@ -227,7 +227,7 @@ test_that("ordinary double FAISS routes can stay float32 through output", {
   x <- matrix(rnorm(900 * 12), nrow = 900)
   methods <- c("flat", "ivf", "ivfpq")
   if (isTRUE(faissR:::faiss_fastscan_available())) {
-    methods <- c(methods, "scann")
+    methods <- c(methods, "ivfpq_fastscan")
   }
 
   for (method in methods) {
@@ -982,8 +982,8 @@ test_that("resolved backend labels map to stable auto-selection method and devic
   expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_nndescent"), "nndescent")
   expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_hnsw"), "hnsw")
   expect_equal(faissR:::nn_resolved_backend_public_method("faiss_gpu_cagra"), "cagra")
-  expect_equal(faissR:::nn_resolved_backend_public_method("faiss_scann"), "scann")
-  expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_scann"), "scann")
+  expect_equal(faissR:::nn_resolved_backend_public_method("faiss_ivfpq_fastscan"), "ivfpq_fastscan")
+  expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_ivfpq_fastscan"), "ivfpq_fastscan")
   expect_equal(faissR:::nn_resolved_backend_public_method("cuda_cuvs_bruteforce"), "bruteforce")
   expect_equal(faissR:::nn_resolved_backend_public_method("unknown_backend"), NA_character_)
 
@@ -1038,7 +1038,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
   caps <- nn_capabilities()
   methods <- c(
     "auto", "exact", "flat", "bruteforce", "grid",
-    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "scann", "cagra"
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"
   )
   metrics <- c("euclidean", "cosine", "correlation", "inner_product")
 
@@ -2745,20 +2745,20 @@ test_that("public backend and method resolver maps device plus method", {
     "faiss_gpu_ivfpq"
   )
   expect_equal(
-    faissR:::resolve_public_nn_backend("cpu", "scann", "euclidean"),
-    "faiss_scann"
+    faissR:::resolve_public_nn_backend("cpu", "ivfpq_fastscan", "euclidean"),
+    "faiss_ivfpq_fastscan"
   )
   expect_equal(
-    faissR:::resolve_public_nn_backend("cuda", "scann", "euclidean"),
-    "cuda_cuvs_scann"
+    faissR:::resolve_public_nn_backend("cuda", "ivfpq_fastscan", "euclidean"),
+    "cuda_cuvs_ivfpq_fastscan"
   )
   expect_error(
-    faissR:::resolve_public_nn_backend("cpu", "scann", "cosine"),
-    "scann"
+    faissR:::resolve_public_nn_backend("cpu", "ivfpq_fastscan", "cosine"),
+    "ivfpq_fastscan"
   )
   expect_error(
-    faissR:::resolve_public_nn_backend("cuda", "scann", "inner_product"),
-    "scann"
+    faissR:::resolve_public_nn_backend("cuda", "ivfpq_fastscan", "inner_product"),
+    "ivfpq_fastscan"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "vamana", "euclidean"),
@@ -2909,7 +2909,7 @@ test_that("CPU-supported public method/metric rows execute on smoke data", {
     data <- switch(
       method,
       grid = spatial,
-      scann = pq_dense,
+      ivfpq_fastscan = pq_dense,
       nsg = nsg_dense,
       dense
     )
@@ -3511,6 +3511,26 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   expect_equal(cuvs_manual_pq$pq_bits, 8L)
   expect_equal(cuvs_manual_pq$tuning_policy, "manual_options")
   expect_equal(cuvs_manual_pq$tuning_rule, "high_dim_default_pq")
+  options(
+    faissR.cuvs_ivfpq_pq_dim = 25L,
+    faissR.cuvs_ivfpq_pq_bits = 4L
+  )
+  cuvs_odd_pq <- faissR:::cuvs_ivfpq_params(375L, n = 873L)
+  expect_equal(cuvs_odd_pq$requested_pq_dim, 25L)
+  expect_equal(cuvs_odd_pq$requested_pq_bits, 4L)
+  expect_equal(cuvs_odd_pq$pq_dim, 24L)
+  expect_equal(cuvs_odd_pq$pq_bits, 4L)
+  expect_true(isTRUE(cuvs_odd_pq$pq_alignment_adjusted))
+  expect_equal(cuvs_odd_pq$pq_alignment_rule, "pq_dim_reduced_for_byte_alignment")
+  options(
+    faissR.cuvs_ivfpq_pq_dim = NULL,
+    faissR.cuvs_ivfpq_pq_bits = NULL
+  )
+  ivfpq_fastscan_odd_pq <- faissR:::ivfpq_fastscan_cuda_params(1000021L, 11L, 15L)
+  expect_equal(ivfpq_fastscan_odd_pq$pq$requested_pq_bits, 4L)
+  expect_equal(ivfpq_fastscan_odd_pq$pq$pq_dim, 10L)
+  expect_equal(ivfpq_fastscan_odd_pq$pq$pq_bits, 4L)
+  expect_true(isTRUE(ivfpq_fastscan_odd_pq$pq$pq_alignment_adjusted))
   expect_error(
     faissR:::validate_faiss_cpu_ivfpq_training_size(120L),
     "at least 624 training rows"

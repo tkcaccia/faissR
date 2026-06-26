@@ -397,12 +397,12 @@ nn_faiss_ivfpq_float32_cpp <- function(data, points, k, nlist, nprobe, pq_m, pq_
     .Call(`_faissR_nn_faiss_ivfpq_float32_cpp`, data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self, n_threads, distance_storage)
 }
 
-nn_faiss_scann_cpp <- function(data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self, n_threads) {
-    .Call(`_faissR_nn_faiss_scann_cpp`, data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self, n_threads)
+nn_faiss_ivfpq_fastscan_cpp <- function(data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self, n_threads) {
+    .Call(`_faissR_nn_faiss_ivfpq_fastscan_cpp`, data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self, n_threads)
 }
 
-nn_faiss_scann_float32_cpp <- function(data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self, n_threads, distance_storage) {
-    .Call(`_faissR_nn_faiss_scann_float32_cpp`, data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self, n_threads, distance_storage)
+nn_faiss_ivfpq_fastscan_float32_cpp <- function(data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self, n_threads, distance_storage) {
+    .Call(`_faissR_nn_faiss_ivfpq_fastscan_float32_cpp`, data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self, n_threads, distance_storage)
 }
 
 nn_faiss_hnsw_cpp <- function(data, points, k, m, ef_construction, ef_search, metric, distance_output, exclude_self, n_threads) {

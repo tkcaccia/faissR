@@ -11,7 +11,7 @@ nn(
   exclude_self = FALSE,
   backend = c("auto", "cpu", "cuda"),
   method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
-    "vamana", "nsg", "nndescent", "scann", "cagra"),
+    "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   target_recall = 0.99,
@@ -53,12 +53,12 @@ support or the selected CUDA combination is unavailable.}
 the selected backend. Other values include `"exact"`, `"flat"`,
 `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`,
 `"ivfpq"`, `"vamana"`, `"nsg"`, `"nndescent"`,
-`"scann"`, and `"cagra"`. Use these canonical
+`"ivfpq_fastscan"`, and `"cagra"`. Use these canonical
 lowercase method labels; resolved implementation labels such as
 `"faiss_hnsw"` or `"cuda_cuvs_cagra"` are not public `method` values. Unsupported
 backend/method combinations fail clearly; for example,
 `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only,
-and `method = "scann"` currently accepts only Euclidean/L2 search.}
+and `method = "ivfpq_fastscan"` currently accepts only Euclidean/L2 search.}
 
 \item{metric}{Distance metric. The intentionally small public set is
 `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`;
@@ -163,7 +163,7 @@ float32 adapter now error instead of silently converting the benchmark
 input back to R double. Ordinary R double inputs with `output = "float"`
 also enter float-pointer routes for CPU FAISS Flat/IVF/IVFPQ/FastScan,
 cached CPU FAISS fitted indexes, FAISS GPU Flat/IVF/IVFPQ, and direct
-Euclidean RAPIDS cuVS brute-force/CAGRA/IVF/IVFPQ/ScaNN-style routes.
+Euclidean RAPIDS cuVS brute-force/CAGRA/IVF/IVFPQ/IVFPQ FastScan routes.
 On direct FAISS/cuVS float routes, float distance output is constructed
 directly from backend float results instead of first materializing an R
 double distance matrix, except for routes that need R-side metric

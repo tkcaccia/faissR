@@ -40,7 +40,7 @@ test_that("NN metric benchmark defaults cover full method metric backend and k g
     env$default_nn_method_values(),
     c(
       "auto", "exact", "flat", "bruteforce", "grid",
-      "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "scann", "cagra"
+      "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"
     )
   )
   expect_equal(env$default_nn_k_values(), c(5L, 10L, 15L, 50L, 100L))
@@ -869,7 +869,7 @@ test_that("NN metric benchmark requires canonical public method labels", {
   )
   expect_error(
     env$canonical_method_values(c("HNSW", "faiss_hnsw")),
-    "Valid value\\(s\\): auto, exact, flat, bruteforce, grid, hnsw, ivf, ivfpq, vamana, nsg, nndescent, scann, cagra"
+    "Valid value\\(s\\): auto, exact, flat, bruteforce, grid, hnsw, ivf, ivfpq, vamana, nsg, nndescent, ivfpq_fastscan, cagra"
   )
   expect_error(
     env$canonical_method_values(character()),

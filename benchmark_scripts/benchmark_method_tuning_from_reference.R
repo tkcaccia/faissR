@@ -206,7 +206,7 @@ all_option_columns <- c(
   "faiss_gpu_reuse_resources", "cache_fitted_indexes",
   "hnsw_m", "hnsw_ef_construction", "hnsw_ef_search",
   "ivf_nlist", "ivf_nprobe", "pq_m", "pq_nbits", "pq_dim",
-  "scann_refine_factor", "scann_bbs",
+  "ivfpq_fastscan_refine_factor", "ivfpq_fastscan_bbs",
   "cagra_graph_degree", "cagra_intermediate_graph_degree",
   "cagra_search_width", "cagra_itopk_size", "cagra_build_algo",
   "nndescent_pool_size", "nndescent_n_iters", "nndescent_max_candidates",
@@ -245,6 +245,25 @@ ivf_nprobe <- function(nlist, k) {
 divisor_at_most <- function(p, target) {
   vals <- which(p %% seq_len(p) == 0L)
   vals[max(which(vals <= target))] %||% 1L
+}
+
+cuvs_byte_aligned_pq_dim <- function(p, pq_dim, pq_bits = 4L) {
+  p <- as.integer(max(1L, p))
+  pq_dim <- as.integer(max(0L, min(p, pq_dim)))
+  pq_bits <- as.integer(max(4L, min(8L, pq_bits)))
+  effective_dim <- if (pq_dim > 0L) pq_dim else p
+  if ((pq_bits * effective_dim) %% 8L == 0L) return(pq_dim)
+  gcd_int <- function(a, b) {
+    a <- abs(as.integer(a)); b <- abs(as.integer(b))
+    while (b != 0L) {
+      r <- a %% b; a <- b; b <- r
+    }
+    if (a == 0L) 1L else a
+  }
+  step <- as.integer(8L / gcd_int(pq_bits, 8L))
+  effective_dim <- as.integer(max(1L, min(p, effective_dim)))
+  effective_dim <- as.integer(effective_dim - effective_dim %% step)
+  if (effective_dim >= 1L) effective_dim else pq_dim
 }
 
 candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_values, output_values, grid_level) {
@@ -286,7 +305,7 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
       for (nm in names(manual)) x[[nm]] <- manual[[nm]][[i]]
       add(x)
     }
-  } else if (method %in% c("ivf", "ivfpq", "scann")) {
+  } else if (method %in% c("ivf", "ivfpq", "ivfpq_fastscan")) {
     base_nlist <- ivf_nlist(n, k)
     specs <- data.frame(label = c("speed", "balanced", "recall", "recall_plus"), nlist_mult = c(0.5, 1, 2, 4), nprobe_mult = c(0.5, 1, 2, 3))
     if (identical(grid_level, "compact")) specs <- specs[c(1L, 2L, 3L), , drop = FALSE]
@@ -299,12 +318,15 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
         x$pq_m <- divisor_at_most(p, if (backend == "cuda") 32L else 48L)
         x$pq_nbits <- 8L
       }
-      if (method == "scann") {
+      if (method == "ivfpq_fastscan") {
         x$pq_m <- divisor_at_most(p, 32L)
         x$pq_dim <- divisor_at_most(p, if (backend == "cuda") 32L else 16L)
+        if (identical(backend, "cuda")) {
+          x$pq_dim <- cuvs_byte_aligned_pq_dim(p, x$pq_dim, pq_bits = 4L)
+        }
         x$pq_nbits <- 4L
-        x$scann_refine_factor <- c(2L, 4L, 8L, 12L)[[i]]
-        x$scann_bbs <- 32L
+        x$ivfpq_fastscan_refine_factor <- c(2L, 4L, 8L, 12L)[[i]]
+        x$ivfpq_fastscan_bbs <- 32L
       }
       add(x)
     }
@@ -364,7 +386,7 @@ apply_candidate <- function(candidate) {
     faissR.faiss_pq_m = NULL, faissR.faiss_pq_nbits = NULL,
     faissR.cuvs_ivfpq_pq_dim = NULL, faissR.ivfpq_pq_dim = NULL,
     faissR.cuvs_ivfpq_pq_bits = NULL, faissR.ivfpq_pq_bits = NULL,
-    faissR.scann_pq_m = NULL, faissR.scann_refine_factor = NULL, faissR.scann_bbs = NULL,
+    faissR.ivfpq_fastscan_pq_m = NULL, faissR.ivfpq_fastscan_refine_factor = NULL, faissR.ivfpq_fastscan_bbs = NULL,
     faissR.faiss_hnsw_m = NULL, faissR.faiss_hnsw_ef_construction = NULL, faissR.faiss_hnsw_ef_search = NULL,
     faissR.cuvs_graph_degree = NULL, faissR.cuvs_intermediate_graph_degree = NULL,
     faissR.cuvs_search_width = NULL, faissR.cuvs_itopk_size = NULL, faissR.cuvs_cagra_build_algo = NULL,
@@ -387,7 +409,7 @@ apply_candidate <- function(candidate) {
   set_opt("faiss_pq_m", candidate$pq_m); set_opt("faiss_pq_nbits", candidate$pq_nbits)
   set_opt("cuvs_ivfpq_pq_dim", candidate$pq_dim); set_opt("ivfpq_pq_dim", candidate$pq_dim)
   set_opt("cuvs_ivfpq_pq_bits", candidate$pq_nbits); set_opt("ivfpq_pq_bits", candidate$pq_nbits)
-  set_opt("scann_pq_m", candidate$pq_m); set_opt("scann_refine_factor", candidate$scann_refine_factor); set_opt("scann_bbs", candidate$scann_bbs)
+  set_opt("ivfpq_fastscan_pq_m", candidate$pq_m); set_opt("ivfpq_fastscan_refine_factor", candidate$ivfpq_fastscan_refine_factor); set_opt("ivfpq_fastscan_bbs", candidate$ivfpq_fastscan_bbs)
   set_opt("faiss_hnsw_m", candidate$hnsw_m); set_opt("faiss_hnsw_ef_construction", candidate$hnsw_ef_construction); set_opt("faiss_hnsw_ef_search", candidate$hnsw_ef_search)
   set_opt("cuvs_graph_degree", candidate$cagra_graph_degree); set_opt("cuvs_intermediate_graph_degree", candidate$cagra_intermediate_graph_degree)
   set_opt("cuvs_search_width", candidate$cagra_search_width); set_opt("cuvs_itopk_size", candidate$cagra_itopk_size); set_opt("cuvs_hnsw_ef", candidate$hnsw_ef_search)
@@ -533,6 +555,9 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   if (!is.null(args$child)) return(run_child())
   method <- tolower(args$method %||% Sys.getenv("FAISSR_TUNING_METHOD", unset = ""))
   if (!nzchar(method)) stop("`--method` is required.", call. = FALSE)
+  if (identical(method, "scann")) {
+    stop("Use `--method=ivfpq_fastscan`; `scann` is not a public faissR method.", call. = FALSE)
+  }
   backend <- match.arg(tolower(args$backend %||% "cpu"), c("cpu", "cuda"))
   if (method == "cagra" && backend == "cpu") stop("CAGRA is CUDA-only.", call. = FALSE)
   manifest_path <- normalizePath(args$manifest %||% stop("`--manifest` is required.", call. = FALSE), mustWork = TRUE)

@@ -85,6 +85,61 @@ void cuda_sync(const char* context) {
   cuda_check(cudaDeviceSynchronize(), context);
 }
 
+int gcd_int(int a, int b) {
+  a = std::abs(a);
+  b = std::abs(b);
+  while (b != 0) {
+    const int r = a % b;
+    a = b;
+    b = r;
+  }
+  return a == 0 ? 1 : a;
+}
+
+struct CuvsIvfPqAlignment {
+  int pq_dim;
+  int pq_bits;
+  bool adjusted;
+  const char* rule;
+};
+
+bool cuvs_ivfpq_byte_aligned(int pq_dim, int pq_bits, int p) {
+  const int effective_dim = pq_dim > 0 ? pq_dim : p;
+  return effective_dim > 0 && ((pq_bits * effective_dim) % 8 == 0);
+}
+
+CuvsIvfPqAlignment repair_cuvs_ivfpq_alignment(int p,
+                                               int pq_dim,
+                                               int pq_bits) {
+  if (p < 1) p = 1;
+  const int original_dim = pq_dim;
+  const int original_bits = pq_bits;
+  pq_dim = std::max(0, pq_dim);
+  pq_bits = std::max(4, std::min(8, pq_bits));
+  if (pq_dim > p) pq_dim = p;
+
+  if (cuvs_ivfpq_byte_aligned(pq_dim, pq_bits, p)) {
+    return {pq_dim, pq_bits, original_dim != pq_dim || original_bits != pq_bits,
+            "byte_aligned"};
+  }
+
+  const int step = 8 / gcd_int(pq_bits, 8);
+  int effective_dim = pq_dim > 0 ? pq_dim : p;
+  effective_dim = std::min(std::max(1, effective_dim), p);
+  effective_dim -= effective_dim % step;
+
+  if (effective_dim >= 1) {
+    pq_dim = effective_dim;
+  } else {
+    pq_bits = 8;
+    pq_dim = std::min(std::max(1, pq_dim > 0 ? pq_dim : p), p);
+  }
+
+  return {pq_dim, pq_bits, true,
+          original_bits != pq_bits ? "pq_bits_promoted_for_byte_alignment" :
+                                     "pq_dim_reduced_for_byte_alignment"};
+}
+
 void validate_inputs(const NumericMatrix& data,
                      const NumericMatrix& points,
                      const int k,
@@ -2458,6 +2513,10 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix data,
   n_probes = std::max(1, std::min(n_probes, n_lists));
   pq_dim = std::max(0, pq_dim);
   pq_bits = std::max(4, std::min(8, pq_bits));
+  CuvsIvfPqAlignment pq_alignment =
+    repair_cuvs_ivfpq_alignment(n_features, pq_dim, pq_bits);
+  pq_dim = pq_alignment.pq_dim;
+  pq_bits = pq_alignment.pq_bits;
 
   std::vector<float> xb;
   std::vector<float> xq;
@@ -2605,6 +2664,8 @@ List cuvs_ivf_pq_knn_impl(NumericMatrix data,
   out["requested_pq_bits"] = requested_pq_bits;
   out["pq_parameters_adjusted"] = requested_pq_dim != static_cast<int>(actual_pq_dim) ||
     requested_pq_bits != static_cast<int>(actual_pq_bits);
+  out["pq_alignment_adjusted"] = pq_alignment.adjusted;
+  out["pq_alignment_rule"] = std::string(pq_alignment.rule);
   out["search_batch_size"] = batch_size;
   annotate_cuvs_gpu_residency(
     out, "gpu_transient", same_storage, n_data, n_points, n_features,
@@ -2656,6 +2717,10 @@ List cuvs_ivf_pq_float32_knn_impl(SEXP data,
   n_probes = std::max(1, std::min(n_probes, n_lists));
   pq_dim = std::max(0, pq_dim);
   pq_bits = std::max(4, std::min(8, pq_bits));
+  CuvsIvfPqAlignment pq_alignment =
+    repair_cuvs_ivfpq_alignment(n_features, pq_dim, pq_bits);
+  pq_dim = pq_alignment.pq_dim;
+  pq_bits = pq_alignment.pq_bits;
 
   CuvsResources res;
   const std::size_t data_bytes =
@@ -2795,6 +2860,8 @@ List cuvs_ivf_pq_float32_knn_impl(SEXP data,
   out["requested_pq_bits"] = requested_pq_bits;
   out["pq_parameters_adjusted"] = requested_pq_dim != static_cast<int>(actual_pq_dim) ||
     requested_pq_bits != static_cast<int>(actual_pq_bits);
+  out["pq_alignment_adjusted"] = pq_alignment.adjusted;
+  out["pq_alignment_rule"] = std::string(pq_alignment.rule);
   out["search_batch_size"] = batch_size;
   annotate_float32_input(out, xb, xq, same_storage);
   annotate_cuvs_gpu_residency(

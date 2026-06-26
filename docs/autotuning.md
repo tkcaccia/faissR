@@ -27,9 +27,9 @@ the k grid 5, 10, 15, 50, and 100. Important benchmark artifacts include:
 
 Use these rules for `backend = "auto"` and for explicit backend
 recommendations. Public calls should use canonical method names such as
-`"exact"`, `"flat"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"scann"`,
+`"exact"`, `"flat"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"ivfpq_fastscan"`,
 `"nndescent"`, or `"cagra"`; labels such as `faiss_hnsw`,
-`faiss_scann`, `cuda_cuvs_scann`, or `cuda_cuvs_cagra` are resolved
+`faiss_ivfpq_fastscan`, `cuda_cuvs_ivfpq_fastscan`, or `cuda_cuvs_cagra` are resolved
 implementation routes recorded in benchmark output, not separate public
 `method` values.
 
@@ -110,8 +110,8 @@ that the no-pilot graph-shape rule came from compiled policy.
 | `ivfpq` | `faiss_ivfpq` speed/balanced tiers | CPU memory-pressure tier | Low recall on many datasets; use only when memory reduction is the priority. Requires at least 624 training rows for the CPU FAISS route; auto tuning uses 4-bit PQ for 624-9,983 rows and 8-bit PQ above that unless manually overridden [6]. |
 | `ivfpq` | `faiss_gpu_ivfpq` | CUDA memory-pressure tier | Fast but low recall in this benchmark; explicit opt-in only. |
 | `ivfpq` | `cuda_cuvs_ivfpq` | CUDA memory-pressure tier | Direct benchmark route for Euclidean/L2 plus transformed cosine, correlation, and raw inner product. It uses the same deterministic small-training rule as CPU PQ: below 9,984 training rows, auto tuning requests 4-bit PQ unless the user manually sets `cuvs_ivfpq_pq_bits`/`ivfpq_pq_bits`. Better than FAISS GPU IVFPQ on some datasets but still not an accuracy-first default. |
-| `scann` | `faiss_scann` | CPU ScaNN-inspired compressed-code tier | Uses FAISS FastScan (`IndexIVFPQFastScan`) with 4-bit PQ and optional Flat refinement. It is Euclidean-only and requires a FAISS build exposing FastScan headers [6,34]. |
-| `scann` | `cuda_cuvs_scann` | CUDA ScaNN-inspired compressed-code tier | Uses direct cuVS IVF-PQ with 4-bit compressed codes for Euclidean search. It is kept separate from FAISS GPU IVFPQ and does not fall back to CPU FastScan when CUDA/cuVS is unavailable [3,6,34]. |
+| `ivfpq_fastscan` | `faiss_ivfpq_fastscan` | CPU IVFPQ FastScan compressed-code tier | Uses FAISS FastScan (`IndexIVFPQFastScan`) with 4-bit PQ and optional Flat refinement. It is Euclidean-only and requires a FAISS build exposing FastScan headers [6,34]. |
+| `ivfpq_fastscan` | `cuda_cuvs_ivfpq_fastscan` | CUDA IVFPQ FastScan compressed-code tier | Uses direct cuVS IVF-PQ with 4-bit compressed codes for Euclidean search. The C++ tuner and cuVS wrapper repair invalid 4-bit `pq_dim` values to satisfy byte-aligned packed codes, then record requested versus actual PQ settings. It is kept separate from FAISS GPU IVFPQ and does not fall back to CPU FastScan when CUDA/cuVS is unavailable [3,6,34]. |
 | `nsg` | `cpu_nsg` speed/balanced tiers | CPU graph candidate | Native faissR NSG-style route for all public metrics; avoids linked-FAISS NSG aborts in public calls. Large high-dimensional CPU inputs use deterministic HNSW seeding before NSG/MRNG-style pruning so explicit NSG no longer starts with an all-pairs exact seed on MNIST/FashionMNIST-scale matrices. |
 | `vamana` | `cpu_vamana` speed/balanced tiers | CPU graph candidate | Native DiskANN/Vamana-style robust-pruned candidate graph; large high-dimensional CPU inputs use deterministic HNSW seeding before robust pruning, while smaller inputs keep exact seeding. |
 | `nndescent` | `cpu_nndescent` speed/balanced tiers | CPU graph speed tier | Native faissR NN-descent route; useful as an explicit Euclidean, normalized cosine/correlation, or raw inner-product graph-search candidate, but recall was usually lower than HNSW. |

@@ -10,7 +10,7 @@ knn_graph(
   k = 50L,
   backend = c("auto", "cpu", "cuda"),
   nn_method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
-    "vamana", "nsg", "nndescent", "scann", "cagra"),
+    "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"),
   method = NULL,
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),

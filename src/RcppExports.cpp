@@ -1587,9 +1587,9 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// nn_faiss_scann_cpp
-List nn_faiss_scann_cpp(NumericMatrix data, NumericMatrix points, int k, int nlist, int nprobe, int pq_m, int refine_factor, int bbs, bool exclude_self, int n_threads);
-RcppExport SEXP _faissR_nn_faiss_scann_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP nlistSEXP, SEXP nprobeSEXP, SEXP pq_mSEXP, SEXP refine_factorSEXP, SEXP bbsSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP) {
+// nn_faiss_ivfpq_fastscan_cpp
+List nn_faiss_ivfpq_fastscan_cpp(NumericMatrix data, NumericMatrix points, int k, int nlist, int nprobe, int pq_m, int refine_factor, int bbs, bool exclude_self, int n_threads);
+RcppExport SEXP _faissR_nn_faiss_ivfpq_fastscan_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP nlistSEXP, SEXP nprobeSEXP, SEXP pq_mSEXP, SEXP refine_factorSEXP, SEXP bbsSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -1603,13 +1603,13 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type bbs(bbsSEXP);
     Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_faiss_scann_cpp(data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self, n_threads));
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_ivfpq_fastscan_cpp(data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self, n_threads));
     return rcpp_result_gen;
 END_RCPP
 }
-// nn_faiss_scann_float32_cpp
-List nn_faiss_scann_float32_cpp(SEXP data, SEXP points, int k, int nlist, int nprobe, int pq_m, int refine_factor, int bbs, bool exclude_self, int n_threads, std::string distance_storage);
-RcppExport SEXP _faissR_nn_faiss_scann_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP nlistSEXP, SEXP nprobeSEXP, SEXP pq_mSEXP, SEXP refine_factorSEXP, SEXP bbsSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP, SEXP distance_storageSEXP) {
+// nn_faiss_ivfpq_fastscan_float32_cpp
+List nn_faiss_ivfpq_fastscan_float32_cpp(SEXP data, SEXP points, int k, int nlist, int nprobe, int pq_m, int refine_factor, int bbs, bool exclude_self, int n_threads, std::string distance_storage);
+RcppExport SEXP _faissR_nn_faiss_ivfpq_fastscan_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP nlistSEXP, SEXP nprobeSEXP, SEXP pq_mSEXP, SEXP refine_factorSEXP, SEXP bbsSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP, SEXP distance_storageSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -1624,7 +1624,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
     Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_faiss_scann_float32_cpp(data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self, n_threads, distance_storage));
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_ivfpq_fastscan_float32_cpp(data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self, n_threads, distance_storage));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2076,8 +2076,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_faiss_gpu_flat_normalized_ip_distance_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_flat_normalized_ip_distance_cpp, 4},
     {"_faissR_nn_faiss_ivfpq_cpp", (DL_FUNC) &_faissR_nn_faiss_ivfpq_cpp, 11},
     {"_faissR_nn_faiss_ivfpq_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_ivfpq_float32_cpp, 12},
-    {"_faissR_nn_faiss_scann_cpp", (DL_FUNC) &_faissR_nn_faiss_scann_cpp, 10},
-    {"_faissR_nn_faiss_scann_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_scann_float32_cpp, 11},
+    {"_faissR_nn_faiss_ivfpq_fastscan_cpp", (DL_FUNC) &_faissR_nn_faiss_ivfpq_fastscan_cpp, 10},
+    {"_faissR_nn_faiss_ivfpq_fastscan_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_ivfpq_fastscan_float32_cpp, 11},
     {"_faissR_nn_faiss_hnsw_cpp", (DL_FUNC) &_faissR_nn_faiss_hnsw_cpp, 10},
     {"_faissR_nn_faiss_hnsw_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_hnsw_float32_cpp, 11},
     {"_faissR_nn_faiss_hnsw_index_build_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_hnsw_index_build_float32_cpp, 7},

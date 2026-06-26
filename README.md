@@ -30,8 +30,8 @@ headers and libraries discovered by `configure`.
 ## Main Features
 
 - `nn()` for native CPU references, FAISS CPU indexes, FAISS GPU indexes, and
-  optional direct RAPIDS cuVS/CUDA indexes, including a ScaNN-inspired
-  `method = "scann"` route through FAISS FastScan on CPU and cuVS 4-bit IVF-PQ
+  optional direct RAPIDS cuVS/CUDA indexes, including an IVFPQ FastScan
+  `method = "ivfpq_fastscan"` route through FAISS FastScan on CPU and cuVS 4-bit IVF-PQ
   on CUDA [1-6,13-16,22-23,34].
 - Optional float32 KNN data flow: `nn()` accepts
   `float::fl()` matrices. FAISS CPU/GPU and RAPIDS cuVS NN routes consume
@@ -96,10 +96,10 @@ instead of silently running CPU code and labelling it as GPU.
 
 For public nearest-neighbour APIs, `backend` selects the device family:
 `"auto"`, `"cpu"`, or `"cuda"`. The `method` argument selects the algorithm,
-for example `method = "grid"`, `method = "scann"`, or `method = "cagra"`. Thus
+for example `method = "grid"`, `method = "ivfpq_fastscan"`, or `method = "cagra"`. Thus
 `nn(x, backend = "cuda", method = "grid")` uses the CUDA grid route, while
 `nn(x, backend = "cpu", method = "cagra")` stops because CAGRA is CUDA-only.
-`method = "scann"` is Euclidean-only and resolves to FAISS FastScan on CPU or
+`method = "ivfpq_fastscan"` is Euclidean-only and resolves to FAISS FastScan on CPU or
 direct cuVS 4-bit IVF-PQ on CUDA, with no silent CPU fallback for explicit CUDA
 requests.
 With the default `method = "auto"`, faissR chooses the most appropriate method
@@ -169,7 +169,7 @@ See [Installation](docs/installation.md) for CRAN/source-build details.
 - Direct RAPIDS cuVS calls, exposed through explicit backends such as
   `cuda_cuvs_cagra`, `cuda_cuvs_hnsw`, `cuda_cuvs_nndescent`,
   `cuda_cuvs_bruteforce`, `cuda_cuvs_ivf_flat`, `cuda_cuvs_ivfpq`, and
-  `cuda_cuvs_scann`.
+  `cuda_cuvs_ivfpq_fastscan`.
   The HNSW route builds a CUDA CAGRA seed graph and converts it with
   `cuvsHnswFromCagraWithDataset`, supports `target_recall = 0.9`, `0.95`, or `0.99`
   speed/recall tiers, and records `cuda_hnsw_design =

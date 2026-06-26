@@ -823,20 +823,20 @@ nn_compute <- function(data,
       result <- append_nn_tuning_metadata(result, params)
       return(finish_float32_direct_result(result, out))
     }
-    if (identical(backend, "faiss_scann")) {
+    if (identical(backend, "faiss_ivfpq_fastscan")) {
       if (!identical(metric, "euclidean")) {
-        stop("float32 FAISS FastScan/ScaNN-inspired input currently supports `metric = \"euclidean\"`.", call. = FALSE)
+        stop("float32 FAISS IVFPQ FastScan input currently supports `metric = \"euclidean\"`.", call. = FALSE)
       }
       if (!isTRUE(faiss_fastscan_available())) {
         stop(
-          "float32 FAISS FastScan/ScaNN-inspired input requires faissR to be ",
+          "float32 FAISS IVFPQ FastScan input requires faissR to be ",
           "built with FAISS FastScan support (`faiss/IndexIVFPQFastScan.h`).",
           call. = FALSE
         )
       }
       validate_faiss_cpu_ivfpq_training_size(data_dim[[1L]])
-      params <- scann_cpu_params(data_dim[[1L]], data_dim[[2L]], k)
-      out <- nn_faiss_scann_float32_cpp(
+      params <- ivfpq_fastscan_cpu_params(data_dim[[1L]], data_dim[[2L]], k)
+      out <- nn_faiss_ivfpq_fastscan_float32_cpp(
         data,
         points,
         as.integer(k),
@@ -849,14 +849,14 @@ nn_compute <- function(data,
         as.integer(n_threads),
         output
       )
-      result <- finish_nn_result(out, "faiss_scann", k, self_query, exact = FALSE, metric = metric)
+      result <- finish_nn_result(out, "faiss_ivfpq_fastscan", k, self_query, exact = FALSE, metric = metric)
       attr(result, "approximation") <- list(
         strategy = "faiss_IndexIVFPQFastScan_RefineFlat",
-        backend = "faiss_scann",
+        backend = "faiss_ivfpq_fastscan",
         library = "faiss",
         metric = metric,
         input_type = "float32",
-        scann_inspired = TRUE,
+        ivfpq_fastscan = TRUE,
         fastscan = TRUE,
         nlist = as.integer(out$nlist),
         nprobe = as.integer(out$nprobe),
@@ -875,7 +875,7 @@ nn_compute <- function(data,
           !identical(as.integer(params$ivf$requested_nprobe), as.integer(out$nprobe)),
         pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted)
       )
-      result <- append_nn_tuning_metadata(result, params$ivf, params$pq, params$tuning, .prefixes = list(NULL, "pq_", "scann_"))
+      result <- append_nn_tuning_metadata(result, params$ivf, params$pq, params$tuning, .prefixes = list(NULL, "pq_", "ivfpq_fastscan_"))
       return(finish_float32_direct_result(result, out))
     }
     if (identical(backend, "faiss_ivfpq")) {
@@ -1094,7 +1094,7 @@ nn_compute <- function(data,
       "faiss_flat_l2", "faiss_flat_ip",
       "faiss_flat_cosine", "faiss_flat_correlation",
       "faiss_ivf", "cpu_faiss_index_ivf", "faiss_ivf_flat",
-      "faiss_ivfpq", "faiss_scann", "faiss_hnsw", "faiss_nsg", "faiss_nndescent",
+      "faiss_ivfpq", "faiss_ivfpq_fastscan", "faiss_hnsw", "faiss_nsg", "faiss_nndescent",
       "cpu_nndescent", "cpu_nsg", "cuda_nsg", "cpu_vamana", "cuda_vamana",
       "faiss_gpu_flat", "faiss_gpu_flat_l2", "cuda_faiss_flat_l2",
       "faiss_gpu_flat_ip", "cuda_faiss_flat_ip",
@@ -1107,7 +1107,7 @@ nn_compute <- function(data,
       "cuvs_ivf_flat", "cuda_cuvs_ivf_flat",
       "cuvs_ivfpq", "cuda_cuvs_ivfpq",
       "cuvs_ivf_pq", "cuda_cuvs_ivf_pq",
-      "cuda_cuvs_scann", "cuvs_scann",
+      "cuda_cuvs_ivfpq_fastscan", "cuvs_ivfpq_fastscan",
       "cuda_cuvs_nndescent", "cuvs_nndescent"
     )
     if (!isTRUE(direct_float32_backend)) {
@@ -1153,12 +1153,12 @@ nn_compute <- function(data,
       result <- append_nn_tuning_metadata(result, params)
       return(finish_float32_direct_result(result, out))
     }
-    if (backend %in% c("cuda_cuvs_scann", "cuvs_scann")) {
+    if (backend %in% c("cuda_cuvs_ivfpq_fastscan", "cuvs_ivfpq_fastscan")) {
       if (!identical(metric, "euclidean")) {
-        stop("float32 CUDA ScaNN-inspired cuVS IVF-PQ input currently supports `metric = \"euclidean\"`.", call. = FALSE)
+        stop("float32 CUDA cuVS IVFPQ FastScan-style input currently supports `metric = \"euclidean\"`.", call. = FALSE)
       }
-      require_cuvs_backend("CUDA ScaNN-inspired cuVS IVF-PQ")
-      params <- scann_cuda_params(data_dim[[1L]], data_dim[[2L]], k)
+      require_cuvs_backend("CUDA cuVS 4-bit IVF-PQ")
+      params <- ivfpq_fastscan_cuda_params(data_dim[[1L]], data_dim[[2L]], k)
       out <- nn_cuvs_ivf_pq_float32_cpp(
         data,
         points,
@@ -1170,15 +1170,15 @@ nn_compute <- function(data,
         isTRUE(exclude_self),
         output
       )
-      result <- finish_nn_result(out, "cuda_cuvs_scann", k, self_query, exact = FALSE, metric = metric)
+      result <- finish_nn_result(out, "cuda_cuvs_ivfpq_fastscan", k, self_query, exact = FALSE, metric = metric)
       attr(result, "approximation") <- list(
-        strategy = "rapids_cuvs_ivf_pq_4bit_scann_inspired",
-        backend = "cuda_cuvs_scann",
+        strategy = "rapids_cuvs_ivf_pq_4bit",
+        backend = "cuda_cuvs_ivfpq_fastscan",
         library = "cuvs",
         accelerator = "cuda",
         metric = metric,
         input_type = "float32",
-        scann_inspired = TRUE,
+        ivfpq_fastscan = TRUE,
         fastscan = FALSE,
         note = "CUDA route uses cuVS IVF-PQ with 4-bit compressed codes; FAISS FastScan is CPU-only in this package route.",
         nlist = as.integer(out$n_lists),
@@ -1191,10 +1191,15 @@ nn_compute <- function(data,
         requested_pq_bits = as.integer(params$pq$requested_pq_bits),
         ivf_parameters_adjusted = !identical(as.integer(params$ivf$requested_nlist), as.integer(out$n_lists)) ||
           !identical(as.integer(params$ivf$requested_nprobe), as.integer(out$n_probes)),
-        pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted),
+        pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted) ||
+          !identical(as.integer(params$pq$requested_pq_dim), as.integer(out$pq_dim)) ||
+          !identical(as.integer(params$pq$requested_pq_bits), as.integer(out$pq_bits)),
+        pq_alignment_adjusted = isTRUE(out$pq_alignment_adjusted) ||
+          isTRUE(params$pq$pq_alignment_adjusted),
+        pq_alignment_rule = out$pq_alignment_rule %||% params$pq$pq_alignment_rule %||% NA_character_,
         search_batch_size = as.integer(out$search_batch_size)
       )
-      result <- append_nn_tuning_metadata(result, params$ivf, params$pq, params$tuning, .prefixes = list(NULL, "pq_", "scann_"))
+      result <- append_nn_tuning_metadata(result, params$ivf, params$pq, params$tuning, .prefixes = list(NULL, "pq_", "ivfpq_fastscan_"))
       return(finish_float32_direct_result(result, out))
     }
     if (backend %in% c("cuvs_ivfpq", "cuda_cuvs_ivfpq", "cuvs_ivf_pq", "cuda_cuvs_ivf_pq")) {
@@ -1233,7 +1238,12 @@ nn_compute <- function(data,
         pq_bits = as.integer(out$pq_bits),
         requested_pq_dim = as.integer(pq$requested_pq_dim),
         requested_pq_bits = as.integer(pq$requested_pq_bits),
-        pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted),
+        pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted) ||
+          !identical(as.integer(pq$requested_pq_dim), as.integer(out$pq_dim)) ||
+          !identical(as.integer(pq$requested_pq_bits), as.integer(out$pq_bits)),
+        pq_alignment_adjusted = isTRUE(out$pq_alignment_adjusted) ||
+          isTRUE(pq$pq_alignment_adjusted),
+        pq_alignment_rule = out$pq_alignment_rule %||% pq$pq_alignment_rule %||% NA_character_,
         search_batch_size = as.integer(out$search_batch_size)
       )
       result <- append_nn_tuning_metadata(result, params, pq, .prefixes = list(NULL, "pq_"))
@@ -1787,7 +1797,7 @@ nn_compute <- function(data,
       stop("Grid nearest-neighbour search does not support `metric = \"inner_product\"`.", call. = FALSE)
     } else if (!backend %in% c("auto", "cpu", "cpu_auto", "hnsw", "rcpphnsw", "cpu_hnsw",
                                "faiss_hnsw", "faiss_ivf", "faiss_ivf_flat",
-                               "faiss_ivfpq", "faiss_scann", "faiss_nsg", "faiss_nndescent",
+                               "faiss_ivfpq", "faiss_ivfpq_fastscan", "faiss_nsg", "faiss_nndescent",
                                "cpu_nsg", "cpu_vamana", "cuda_vamana", "cuda_nsg",
                                "cpu_nndescent",
                                "cpu_faiss_index_ivf", "faiss_gpu_ivf",
@@ -1799,7 +1809,7 @@ nn_compute <- function(data,
                                "cuvs_ivf_flat", "cuda_cuvs_ivf_flat",
                                "cuvs_ivfpq", "cuda_cuvs_ivfpq",
                                "cuvs_ivf_pq", "cuda_cuvs_ivf_pq",
-                               "cuda_cuvs_scann", "cuvs_scann",
+                               "cuda_cuvs_ivfpq_fastscan", "cuvs_ivfpq_fastscan",
                                "cuvs_bruteforce", "cuda_cuvs_bruteforce",
                                "cuda_cuvs_exact",
                                "cuda_cuvs_nndescent", "cuvs_nndescent",
@@ -2323,22 +2333,22 @@ nn_compute <- function(data,
     return(result)
   }
 
-  if (identical(backend, "faiss_scann")) {
+  if (identical(backend, "faiss_ivfpq_fastscan")) {
     if (!identical(metric, "euclidean")) {
-      stop("FAISS FastScan/ScaNN-inspired input currently supports `metric = \"euclidean\"`.", call. = FALSE)
+      stop("FAISS IVFPQ FastScan input currently supports `metric = \"euclidean\"`.", call. = FALSE)
     }
     if (!isTRUE(faiss_fastscan_available())) {
       stop(
-        "The FAISS FastScan/ScaNN-inspired backend is not available in this build. ",
+        "The FAISS IVFPQ FastScan backend is not available in this build. ",
         "Reinstall faissR with `FAISS_HOME` pointing to a FAISS installation ",
         "that provides `faiss/IndexIVFPQFastScan.h`.",
         call. = FALSE
       )
     }
     validate_faiss_cpu_ivfpq_training_size(nrow(data))
-    params <- scann_cpu_params(nrow(data), ncol(data), k)
+    params <- ivfpq_fastscan_cpu_params(nrow(data), ncol(data), k)
     out <- if (identical(output, "float")) {
-      nn_faiss_scann_float32_cpp(
+      nn_faiss_ivfpq_fastscan_float32_cpp(
         data,
         points,
         as.integer(k),
@@ -2352,7 +2362,7 @@ nn_compute <- function(data,
         output
       )
     } else {
-      nn_faiss_scann_cpp(
+      nn_faiss_ivfpq_fastscan_cpp(
         data,
         points,
         as.integer(k),
@@ -2365,14 +2375,14 @@ nn_compute <- function(data,
         as.integer(n_threads)
       )
     }
-    result <- finish_nn_result(out, "faiss_scann", k, self_query, exact = FALSE, metric = metric)
+    result <- finish_nn_result(out, "faiss_ivfpq_fastscan", k, self_query, exact = FALSE, metric = metric)
     attr(result, "approximation") <- list(
       strategy = "faiss_IndexIVFPQFastScan_RefineFlat",
-      backend = "faiss_scann",
+      backend = "faiss_ivfpq_fastscan",
       library = "faiss",
       metric = metric,
       input_type = out$input_type %||% NULL,
-      scann_inspired = TRUE,
+      ivfpq_fastscan = TRUE,
       fastscan = TRUE,
       nlist = as.integer(out$nlist),
       nprobe = as.integer(out$nprobe),
@@ -2391,7 +2401,7 @@ nn_compute <- function(data,
         !identical(as.integer(params$ivf$requested_nprobe), as.integer(out$nprobe)),
       pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted)
     )
-    result <- append_nn_tuning_metadata(result, params$ivf, params$pq, params$tuning, .prefixes = list(NULL, "pq_", "scann_"))
+    result <- append_nn_tuning_metadata(result, params$ivf, params$pq, params$tuning, .prefixes = list(NULL, "pq_", "ivfpq_fastscan_"))
     if (identical(output, "float")) {
       result <- finish_float32_direct_result(result, out)
     }
@@ -3233,12 +3243,12 @@ nn_compute <- function(data,
     return(result)
   }
 
-  if (backend %in% c("cuda_cuvs_scann", "cuvs_scann")) {
+  if (backend %in% c("cuda_cuvs_ivfpq_fastscan", "cuvs_ivfpq_fastscan")) {
     if (!identical(metric, "euclidean")) {
-      stop("CUDA ScaNN-inspired cuVS IVF-PQ input currently supports `metric = \"euclidean\"`.", call. = FALSE)
+      stop("CUDA cuVS IVFPQ FastScan-style input currently supports `metric = \"euclidean\"`.", call. = FALSE)
     }
-    require_cuvs_backend("CUDA ScaNN-inspired cuVS IVF-PQ")
-    params <- scann_cuda_params(nrow(data), ncol(data), k)
+    require_cuvs_backend("CUDA cuVS 4-bit IVF-PQ")
+    params <- ivfpq_fastscan_cuda_params(nrow(data), ncol(data), k)
     out <- if (identical(output, "float")) {
       nn_cuvs_ivf_pq_float32_cpp(
         data,
@@ -3263,14 +3273,14 @@ nn_compute <- function(data,
         isTRUE(exclude_self)
       )
     }
-    result <- finish_nn_result(out, "cuda_cuvs_scann", k, self_query, exact = FALSE, metric = metric)
+    result <- finish_nn_result(out, "cuda_cuvs_ivfpq_fastscan", k, self_query, exact = FALSE, metric = metric)
     attr(result, "approximation") <- list(
-      strategy = "rapids_cuvs_ivf_pq_4bit_scann_inspired",
-      backend = "cuda_cuvs_scann",
+      strategy = "rapids_cuvs_ivf_pq_4bit",
+      backend = "cuda_cuvs_ivfpq_fastscan",
       library = "cuvs",
       accelerator = "cuda",
       metric = metric,
-      scann_inspired = TRUE,
+      ivfpq_fastscan = TRUE,
       fastscan = FALSE,
       note = "CUDA route uses cuVS IVF-PQ with 4-bit compressed codes; FAISS FastScan is CPU-only in this package route.",
       nlist = as.integer(out$n_lists),
@@ -3283,10 +3293,15 @@ nn_compute <- function(data,
       requested_pq_bits = as.integer(params$pq$requested_pq_bits),
       ivf_parameters_adjusted = !identical(as.integer(params$ivf$requested_nlist), as.integer(out$n_lists)) ||
         !identical(as.integer(params$ivf$requested_nprobe), as.integer(out$n_probes)),
-      pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted),
+      pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted) ||
+        !identical(as.integer(params$pq$requested_pq_dim), as.integer(out$pq_dim)) ||
+        !identical(as.integer(params$pq$requested_pq_bits), as.integer(out$pq_bits)),
+      pq_alignment_adjusted = isTRUE(out$pq_alignment_adjusted) ||
+        isTRUE(params$pq$pq_alignment_adjusted),
+      pq_alignment_rule = out$pq_alignment_rule %||% params$pq$pq_alignment_rule %||% NA_character_,
       search_batch_size = as.integer(out$search_batch_size)
     )
-    result <- append_nn_tuning_metadata(result, params$ivf, params$pq, params$tuning, .prefixes = list(NULL, "pq_", "scann_"))
+    result <- append_nn_tuning_metadata(result, params$ivf, params$pq, params$tuning, .prefixes = list(NULL, "pq_", "ivfpq_fastscan_"))
     if (identical(output, "float")) {
       result <- finish_float32_direct_result(result, out)
     }
@@ -3369,6 +3384,9 @@ nn_compute <- function(data,
       pq_parameters_adjusted = isTRUE(out$pq_parameters_adjusted) ||
         !identical(as.integer(pq$requested_pq_dim), as.integer(out$pq_dim)) ||
         !identical(as.integer(pq$requested_pq_bits), as.integer(out$pq_bits)),
+      pq_alignment_adjusted = isTRUE(out$pq_alignment_adjusted) ||
+        isTRUE(pq$pq_alignment_adjusted),
+      pq_alignment_rule = out$pq_alignment_rule %||% pq$pq_alignment_rule %||% NA_character_,
       search_batch_size = as.integer(out$search_batch_size),
       transform_storage = metric_inputs$transform_storage %||% "double",
       transform_cache = metric_inputs$transform_cache %||% NULL
@@ -3760,6 +3778,13 @@ normalize_public_backend_arg <- function(backend, arg = "backend") {
 }
 
 normalize_nn_method <- function(method) {
+  if (length(method) == 1L && identical(trimws(as.character(method)), "scann")) {
+    stop(
+      "`method = \"scann\"` is not a public faissR method. ",
+      "Use `method = \"ivfpq_fastscan\"` for the FAISS FastScan/cuVS 4-bit IVF-PQ route.",
+      call. = FALSE
+    )
+  }
   method <- normalize_scalar_choice_arg(
     method,
     arg = "method",
@@ -3773,7 +3798,7 @@ normalize_nn_method <- function(method) {
       stop(
         "`method` must be one of \"auto\", \"exact\", \"flat\", \"bruteforce\", ",
         "\"grid\", \"hnsw\", \"ivf\", \"ivfpq\", \"vamana\", ",
-        "\"nsg\", \"nndescent\", \"scann\", or \"cagra\".",
+        "\"nsg\", \"nndescent\", \"ivfpq_fastscan\", or \"cagra\".",
         " Use these canonical lowercase method labels; internal backend route ",
         "labels such as \"faiss_hnsw\" are not public `method` values.",
         call. = FALSE
@@ -3803,7 +3828,7 @@ nn_metric_labels <- function() {
 nn_method_labels <- function() {
   c(
     "auto", "exact", "flat", "bruteforce", "grid",
-    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "scann", "cagra"
+    "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"
   )
 }
 
@@ -4246,7 +4271,7 @@ nn_resolved_backend_available <- function(backend) {
       }
     ))
   }
-  if (identical(backend, "faiss_scann")) {
+  if (identical(backend, "faiss_ivfpq_fastscan")) {
     ok <- isTRUE(faiss_fastscan_available())
     return(list(
       available = ok,
@@ -4391,7 +4416,7 @@ nn_capability_row <- function(method, backend, metric) {
     } else {
       "FAISS IVFPQ supports Euclidean/L2 and raw inner product; cosine/correlation use row transforms followed by IVFPQ inner-product search."
     }
-  } else if (identical(method, "scann")) {
+  } else if (identical(method, "ivfpq_fastscan")) {
     supported <- euclidean
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) {
@@ -4400,11 +4425,11 @@ nn_capability_row <- function(method, backend, metric) {
       "RAPIDS cuVS CUDA IVF-PQ with 4-bit compressed codes"
     }
     notes <- if (!supported) {
-      "The ScaNN-inspired FastScan route is currently exposed only for Euclidean/L2 search."
+      "The IVFPQ FastScan route is currently exposed only for Euclidean/L2 search."
     } else if (identical(backend, "cpu")) {
-      "Uses FAISS IndexIVFPQFastScan with 4-bit PQ lookup tables and optional Flat reranking; this follows FAISS FastScan, which is documented as heavily inspired by ScaNN."
+      "Uses FAISS IndexIVFPQFastScan with 4-bit PQ lookup tables and optional Flat reranking."
     } else {
-      "Uses direct cuVS IVF-PQ with 4-bit compressed codes as the CUDA ScaNN-inspired route; it does not silently fall back to CPU FAISS FastScan."
+      "Uses direct cuVS IVF-PQ with 4-bit compressed codes; it does not silently fall back to CPU FAISS FastScan."
     }
   } else if (identical(method, "nsg")) {
     supported <- all_metrics
@@ -4571,7 +4596,7 @@ resolve_public_nn_backend <- function(backend,
     return("cpu_auto")
   }
   if (!metric %in% c("euclidean", "inner_product") && identical(device, "cuda") &&
-      !method %in% c("exact", "bruteforce", "flat", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "scann", "cagra")) {
+      !method %in% c("exact", "bruteforce", "flat", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra")) {
     if (identical(requested_device, "auto")) {
       device <- "cpu"
     } else {
@@ -4579,7 +4604,7 @@ resolve_public_nn_backend <- function(backend,
         "CUDA `method = \"", method, "\"` does not support ",
         "`metric = \"", metric, "\"`. Use `method = \"exact\"`, ",
         "`\"bruteforce\"`, `\"flat\"`, `\"grid\"`, `\"ivf\"`, ",
-        "`\"hnsw\"`, `\"ivfpq\"`, `\"nsg\"`, `\"nndescent\"`, `\"scann\"`, or `\"cagra\"` for validated ",
+        "`\"hnsw\"`, `\"ivfpq\"`, `\"nsg\"`, `\"nndescent\"`, `\"ivfpq_fastscan\"`, or `\"cagra\"` for validated ",
         "CUDA cosine/correlation search.",
         call. = FALSE
       )
@@ -4589,8 +4614,8 @@ resolve_public_nn_backend <- function(backend,
     if (identical(method, "grid") && identical(metric, "inner_product")) {
       stop("CPU `method = \"grid\"` does not support `metric = \"inner_product\"`.", call. = FALSE)
     }
-    if (identical(method, "scann") && !identical(metric, "euclidean")) {
-      stop("CPU `method = \"scann\"` currently supports only `metric = \"euclidean\"`.", call. = FALSE)
+    if (identical(method, "ivfpq_fastscan") && !identical(metric, "euclidean")) {
+      stop("CPU `method = \"ivfpq_fastscan\"` currently supports only `metric = \"euclidean\"`.", call. = FALSE)
     }
     switch(
       method,
@@ -4610,7 +4635,7 @@ resolve_public_nn_backend <- function(backend,
       vamana = "cpu_vamana",
       nsg = "cpu_nsg",
       nndescent = "cpu_nndescent",
-      scann = "faiss_scann",
+      ivfpq_fastscan = "faiss_ivfpq_fastscan",
       cagra = stop("`method = \"cagra\"` is only available with `backend = \"cuda\"`.", call. = FALSE),
       stop("Unsupported CPU nearest-neighbour method.", call. = FALSE)
     )
@@ -4635,8 +4660,8 @@ resolve_public_nn_backend <- function(backend,
       }
       return("faiss_gpu_flat_ip")
     }
-    if (identical(method, "scann") && !identical(metric, "euclidean")) {
-      stop("CUDA `method = \"scann\"` currently supports only `metric = \"euclidean\"`.", call. = FALSE)
+    if (identical(method, "ivfpq_fastscan") && !identical(metric, "euclidean")) {
+      stop("CUDA `method = \"ivfpq_fastscan\"` currently supports only `metric = \"euclidean\"`.", call. = FALSE)
     }
     if (identical(metric, "inner_product") && identical(method, "nndescent")) {
       stop("CUDA `method = \"nndescent\"` uses direct cuVS NN-descent, which does not support `metric = \"inner_product\"`.", call. = FALSE)
@@ -4656,7 +4681,7 @@ resolve_public_nn_backend <- function(backend,
       vamana = "cuda_vamana",
       nsg = "cuda_nsg",
       nndescent = "cuda_cuvs_nndescent",
-      scann = "cuda_cuvs_scann",
+      ivfpq_fastscan = "cuda_cuvs_ivfpq_fastscan",
       cagra = resolve_cuda_cagra_backend(
         n = n,
         p = p,
@@ -4681,7 +4706,7 @@ public_nn_method_label <- function(method) {
     vamana = "vamana",
     nsg = "nsg",
     nndescent = "nndescent",
-    scann = "scann",
+    ivfpq_fastscan = "ivfpq_fastscan",
     cagra = "cagra"
   )
   labels[[method]] %||% method
@@ -4716,8 +4741,8 @@ nn_resolved_backend_public_method <- function(backend) {
                      "cuda_faiss_ivfpq", "cuvs_ivfpq",
                      "cuda_cuvs_ivfpq", "cuvs_ivf_pq",
                      "cuda_cuvs_ivf_pq")) return("ivfpq")
-  if (backend %in% c("faiss_scann", "cuda_cuvs_scann",
-                     "cuvs_scann")) return("scann")
+  if (backend %in% c("faiss_ivfpq_fastscan", "cuda_cuvs_ivfpq_fastscan",
+                     "cuvs_ivfpq_fastscan")) return("ivfpq_fastscan")
   if (backend %in% c("cpu_vamana", "cuda_vamana")) return("vamana")
   if (backend %in% c("faiss_nsg", "cpu_nsg", "cuda_nsg")) return("nsg")
   if (backend %in% c("cpu_nndescent", "faiss_nndescent",
@@ -4903,7 +4928,7 @@ public_nn_cpu_route_supported <- function(method, metric) {
     vamana = all_metrics,
     nsg = all_metrics,
     nndescent = all_metrics,
-    scann = euclidean,
+    ivfpq_fastscan = euclidean,
     cagra = FALSE,
     FALSE
   )
@@ -4926,7 +4951,7 @@ public_nn_cuda_route_available <- function(method,
   }
   if (identical(method, "nsg")) return(isTRUE(cuda_available_value))
   if (identical(method, "vamana")) return(isTRUE(cuda_available_value))
-  if (identical(method, "scann")) {
+  if (identical(method, "ivfpq_fastscan")) {
     return(identical(metric, "euclidean") && isTRUE(cuvs_available_value))
   }
   if (identical(metric, "inner_product")) {
@@ -4972,7 +4997,7 @@ public_nn_cuda_route_available <- function(method,
     hnsw = isTRUE(cuvs_available_value),
     ivf = isTRUE(faiss_gpu_available_value),
     ivfpq = isTRUE(faiss_gpu_available_value),
-    scann = isTRUE(cuvs_available_value),
+    ivfpq_fastscan = isTRUE(cuvs_available_value),
     nndescent = isTRUE(cuvs_available_value),
     cagra = cuda_cagra_route_available(
       faiss_gpu_available_value = faiss_gpu_available_value,
@@ -7319,17 +7344,67 @@ cuvs_ivfpq_params <- function(p, n = NULL) {
   )
 }
 
-scann_option_int <- function(name, default, min_value = 1L, max_value = .Machine$integer.max) {
+cuvs_ivfpq_align_params <- function(pq, p) {
+  p <- as.integer(max(1L, p))
+  pq_dim <- suppressWarnings(as.integer(pq$pq_dim %||% 0L))
+  pq_bits <- suppressWarnings(as.integer(pq$pq_bits %||% 8L))
+  if (length(pq_dim) != 1L || is.na(pq_dim)) pq_dim <- 0L
+  if (length(pq_bits) != 1L || is.na(pq_bits)) pq_bits <- 8L
+  original_dim <- pq_dim
+  original_bits <- pq_bits
+  pq_dim <- as.integer(max(0L, min(p, pq_dim)))
+  pq_bits <- as.integer(max(4L, min(8L, pq_bits)))
+  aligned <- function(dim, bits) {
+    effective_dim <- if (dim > 0L) dim else p
+    (bits * effective_dim) %% 8L == 0L
+  }
+  gcd_int <- function(a, b) {
+    a <- abs(as.integer(a))
+    b <- abs(as.integer(b))
+    while (b != 0L) {
+      r <- a %% b
+      a <- b
+      b <- r
+    }
+    if (a == 0L) 1L else a
+  }
+  rule <- "byte_aligned"
+  if (!aligned(pq_dim, pq_bits)) {
+    step <- as.integer(8L / gcd_int(pq_bits, 8L))
+    effective_dim <- as.integer(max(1L, min(p, if (pq_dim > 0L) pq_dim else p)))
+    effective_dim <- as.integer(effective_dim - effective_dim %% step)
+    if (effective_dim >= 1L) {
+      pq_dim <- effective_dim
+      rule <- "pq_dim_reduced_for_byte_alignment"
+    } else {
+      pq_bits <- 8L
+      pq_dim <- as.integer(max(1L, min(p, if (pq_dim > 0L) pq_dim else p)))
+      rule <- "pq_bits_promoted_for_byte_alignment"
+    }
+  }
+  adjusted <- !identical(as.integer(original_dim), as.integer(pq_dim)) ||
+    !identical(as.integer(original_bits), as.integer(pq_bits))
+  pq$pq_dim <- as.integer(pq_dim)
+  pq$pq_bits <- as.integer(pq_bits)
+  pq$pq_alignment_adjusted <- isTRUE(adjusted)
+  pq$pq_alignment_rule <- rule
+  if (isTRUE(adjusted) && !grepl(rule, pq$tuning_rule %||% "", fixed = TRUE)) {
+    pq$tuning_rule <- paste0(pq$tuning_rule %||% "cuvs_ivfpq", "_", rule)
+  }
+  pq
+}
+
+ivfpq_fastscan_option_int <- function(name, default, min_value = 1L, max_value = .Machine$integer.max) {
   value <- faissr_option(name, NULL)
   value <- if (is.null(value)) default else suppressWarnings(as.integer(value))
   if (length(value) != 1L || is.na(value) || !is.finite(value)) value <- default
   as.integer(max(min_value, min(max_value, value)))
 }
 
-scann_cpu_params <- function(n, p, k) {
+ivfpq_fastscan_cpu_params <- function(n, p, k) {
   ivf <- faiss_ivf_params(n, k, metric = "euclidean")
   pq <- faiss_pq_params(p, n = n)
-  pq$m <- scann_option_int("scann_pq_m", pq$m, min_value = 1L, max_value = as.integer(p))
+  pq$m <- ivfpq_fastscan_option_int("ivfpq_fastscan_pq_m", pq$m, min_value = 1L, max_value = as.integer(p))
   pq$requested_m <- as.integer(pq$m)
   pq$nbits <- 4L
   pq$requested_nbits <- 4L
@@ -7338,32 +7413,33 @@ scann_cpu_params <- function(n, p, k) {
   list(
     ivf = ivf,
     pq = pq,
-    refine_factor = scann_option_int("scann_refine_factor", 8L, min_value = 1L, max_value = 128L),
-    bbs = scann_option_int("scann_bbs", 32L, min_value = 32L, max_value = 4096L),
+    refine_factor = ivfpq_fastscan_option_int("ivfpq_fastscan_refine_factor", 8L, min_value = 1L, max_value = 128L),
+    bbs = ivfpq_fastscan_option_int("ivfpq_fastscan_bbs", 32L, min_value = 32L, max_value = 4096L),
     tuning = list(
       tuning_policy = "auto_fastscan",
       tuning_rule = "ivfpq_fastscan_4bit_refine",
       tuning_source = "r",
-      scann_inspired = TRUE
+      ivfpq_fastscan = TRUE
     )
   )
 }
 
-scann_cuda_params <- function(n, p, k) {
+ivfpq_fastscan_cuda_params <- function(n, p, k) {
   ivf <- faiss_ivf_params(n, k, metric = "euclidean")
   pq <- cuvs_ivfpq_params(p, n = n)
   pq$pq_bits <- 4L
   pq$requested_pq_bits <- 4L
-  pq$tuning_policy <- "auto_scann_inspired"
+  pq$tuning_policy <- "auto_ivfpq_fastscan"
   pq$tuning_rule <- "cuvs_ivfpq_4bit_pq"
+  pq <- cuvs_ivfpq_align_params(pq, p)
   list(
     ivf = ivf,
     pq = pq,
     tuning = list(
-      tuning_policy = "auto_scann_inspired",
+      tuning_policy = "auto_ivfpq_fastscan",
       tuning_rule = "cuda_cuvs_ivfpq_4bit",
       tuning_source = "r",
-      scann_inspired = TRUE
+      ivfpq_fastscan = TRUE
     )
   )
 }
@@ -8594,12 +8670,12 @@ grid_self_knn <- function(data,
 #'   the selected backend. Other values include `"exact"`, `"flat"`,
 #'   `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`,
 #'   `"ivfpq"`, `"vamana"`, `"nsg"`, `"nndescent"`,
-#'   `"scann"`, and `"cagra"`. Use these canonical
+#'   `"ivfpq_fastscan"`, and `"cagra"`. Use these canonical
 #'   lowercase method labels; resolved implementation labels such as
 #'   `"faiss_hnsw"` or `"cuda_cuvs_cagra"` are not public `method` values. Unsupported
 #'   backend/method combinations fail clearly; for example,
 #'   `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only,
-#'   and `method = "scann"` currently accepts only Euclidean/L2 search.
+#'   and `method = "ivfpq_fastscan"` currently accepts only Euclidean/L2 search.
 #' @param metric Distance metric. The intentionally small public set is
 #'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`;
 #'   aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and
@@ -8699,7 +8775,7 @@ grid_self_knn <- function(data,
 #'   input back to R double. Ordinary R double inputs with `output = "float"`
 #'   also enter float-pointer routes for CPU FAISS Flat/IVF/IVFPQ/FastScan,
 #'   cached CPU FAISS fitted indexes, FAISS GPU Flat/IVF/IVFPQ, and direct
-#'   Euclidean RAPIDS cuVS brute-force/CAGRA/IVF/IVFPQ/ScaNN-style routes.
+#'   Euclidean RAPIDS cuVS brute-force/CAGRA/IVF/IVFPQ and IVFPQ FastScan routes.
 #'   On direct FAISS/cuVS float routes, float distance output is constructed
 #'   directly from backend float results instead of first materializing an R
 #'   double distance matrix, except for routes that need R-side metric
@@ -8742,7 +8818,7 @@ nn <- function(data,
                k = NULL,
                exclude_self = FALSE,
                backend = c("auto", "cpu", "cuda"),
-               method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "scann", "cagra"),
+               method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"),
                metric = c("euclidean", "cosine", "correlation", "inner_product"),
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
                target_recall = 0.99,

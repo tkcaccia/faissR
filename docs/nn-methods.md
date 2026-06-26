@@ -27,7 +27,7 @@ Distance choices belong in `metric`, not in `method`.
 | Large high-dimensional CPU approximate search | `nn(x, k, backend = "cpu", method = "hnsw")` |
 | Large CUDA graph search | `nn(x, k, backend = "cuda", method = "cagra")` |
 | Memory-pressure approximate search | `nn(x, k, backend = "cpu", method = "ivfpq")` or `nn(x, k, backend = "cuda", method = "ivfpq")` |
-| ScaNN-inspired 4-bit PQ scan | `nn(x, k, backend = "cpu", method = "scann")` or `nn(x, k, backend = "cuda", method = "scann")` |
+| IVFPQ FastScan 4-bit PQ scan | `nn(x, k, backend = "cpu", method = "ivfpq_fastscan")` or `nn(x, k, backend = "cuda", method = "ivfpq_fastscan")` |
 | 2D/3D spatial self-KNN | `nn(x, k, backend = "cpu", method = "grid")` or `nn(x, k, backend = "cuda", method = "grid")` |
 
 Use `backend_info()` to inspect which compiled CPU, FAISS, CUDA, cuVS, and
@@ -55,7 +55,7 @@ The `runtime_reason` labels are machine-readable, for example `available`,
 | `"hnsw"` | approximate | FAISS HNSW for all metrics when FAISS is available; RcppHNSW/hnswlib fallback | cuVS HNSW from CAGRA | HNSW/cuVS API note [5,16,22-23] |
 | `"ivf"` | approximate | FAISS IVF-Flat | FAISS GPU IVF-Flat | FAISS IVF [1-2,16] |
 | `"ivfpq"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
-| `"scann"` | approximate | FAISS IVFPQ FastScan with Flat refinement | cuVS IVF-PQ with 4-bit compressed codes | ScaNN-inspired FastScan/PQ [6,34] |
+| `"ivfpq_fastscan"` | approximate | FAISS IVFPQ FastScan with Flat refinement | cuVS IVF-PQ with 4-bit compressed codes | 4-bit IVFPQ compressed-code scan [6,34] |
 | `"vamana"` | approximate | native Vamana candidate graph | native Vamana candidate graph with CUDA refinement | DiskANN/Vamana [3,24] |
 | `"nsg"` | approximate | native CPU NSG-style candidate graph for all public metrics | native CUDA NSG-style candidate graph for all public metrics | NSG/FAISS [16,21,29] |
 | `"nndescent"` | approximate | native CPU NNDescent | cuVS NN-descent for Euclidean/cosine/correlation; raw inner product unsupported | NN-descent/cuVS [3-4,16] |
@@ -93,7 +93,7 @@ clearly instead of repairing those rows on CPU.
 | `"hnsw"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CPU FAISS HNSW is used for all metrics when available. CUDA uses RAPIDS cuVS HNSW from a CAGRA seed graph with a cuVS CPU hierarchy; metadata marks this as the cuVS wrapper design rather than a pure all-GPU HNSW path. |
 | `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
 | `"ivfpq"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVFPQ supports L2/IP; cosine/correlation use normalized IVFPQ IP. |
-| `"scann"` | euclidean | euclidean | ScaNN-inspired route. CPU uses FAISS `IndexIVFPQFastScan` with 4-bit PQ lookup tables in registers plus optional Flat reranking; CUDA uses direct cuVS IVF-PQ with 4-bit compressed codes. |
+| `"ivfpq_fastscan"` | euclidean | euclidean | IVFPQ FastScan route. CPU uses FAISS `IndexIVFPQFastScan` with 4-bit PQ lookup tables in registers plus optional Flat reranking; CUDA uses direct cuVS IVF-PQ with 4-bit compressed codes. |
 | `"vamana"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native robust-pruned candidate graph inspired by DiskANN/Vamana; CPU/CUDA refine top-k within candidate rows. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning. Cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
 | `"nsg"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Public CPU NSG uses faissR's native NSG-style candidate graph for all metrics. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before NSG/MRNG-style pruning. CUDA NSG is self-KNN only; cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
 | `"nndescent"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation | Native CPU NN-descent supports raw inner-product search; CPU/CUDA cosine and correlation use normalized Euclidean graph search. CUDA uses direct RAPIDS cuVS NN-descent, which does not expose raw inner-product search. FAISS NNDescent is experimental opt-in because linked FAISS builds can abort during graph construction. |
@@ -350,35 +350,37 @@ coarse centroids, inverted lists, PQ codebooks, and compressed codes instead of
 training IVFPQ again; metadata records `pq_codebooks_reused`,
 `pq_codes_reused`, and `search_pq_train_call_count`.
 
-## `"scann"`
+## `"ivfpq_fastscan"`
 
-`method = "scann"` requests a ScaNN-inspired approximate compressed-code scan.
-faissR does not vendor Google ScaNN. The CPU route uses FAISS FastScan, whose
-FAISS documentation describes it as heavily inspired by ScaNN, and whose main
-implementation is `IndexIVFPQFastScan`: 4-bit PQ/AQ codes are scanned using
+`method = "ivfpq_fastscan"` requests an IVFPQ FastScan approximate compressed-code scan.
+On CPU, faissR uses FAISS `IndexIVFPQFastScan`: 4-bit PQ/AQ codes are scanned using
 lookup tables kept in SIMD registers, with optional refinement by a Flat index
 for reranking [6,34].
 
-- `backend = "cpu"` maps to `faiss_scann`, a FAISS
+- `backend = "cpu"` maps to `faiss_ivfpq_fastscan`, a FAISS
   `IndexIVFPQFastScan` route with 4-bit PQ, deterministic IVF
   `nlist`/`nprobe`, and optional `IndexRefineFlat` reranking. The route
   requires a linked FAISS build that exposes `faiss/IndexIVFPQFastScan.h`.
-- `backend = "cuda"` maps to `cuda_cuvs_scann`, a direct RAPIDS cuVS IVF-PQ
-  route with 4-bit compressed codes. This is the CUDA ScaNN-inspired route in
+- `backend = "cuda"` maps to `cuda_cuvs_ivfpq_fastscan`, a direct RAPIDS cuVS IVF-PQ
+  route with 4-bit compressed codes. This is the CUDA IVFPQ FastScan route in
   faissR; it does not silently fall back to CPU FAISS FastScan.
+- CUDA 4-bit IVF-PQ requires byte-aligned packed PQ codes. faissR therefore
+  repairs invalid `pq_dim` values before calling cuVS, for example reducing an
+  odd manual value to the nearest valid lower dimension, and reports the
+  requested and actual PQ parameters in metadata.
 - The public route currently supports `metric = "euclidean"` only. Cosine,
   correlation, and raw inner product are rejected explicitly rather than being
   transformed through a route whose quality has not been validated for those
   metrics.
-- Metadata in `attr(result, "approximation")` records `scann_inspired`,
+- Metadata in `attr(result, "approximation")` records `ivfpq_fastscan`,
   `fastscan`, the IVF/PQ parameters, and whether the CPU route used Flat
   refinement.
 - Users can override CPU FastScan details with
-  `options(faissR.scann_pq_m = ..., faissR.scann_refine_factor = ...,
-  faissR.scann_bbs = ...)`; defaults keep 4-bit PQ and a small Flat reranking
+  `options(faissR.ivfpq_fastscan_pq_m = ..., faissR.ivfpq_fastscan_refine_factor = ...,
+  faissR.ivfpq_fastscan_bbs = ...)`; defaults keep 4-bit PQ and a small Flat reranking
   factor for quality.
 
-Use this method when you want to test a ScaNN-style compressed-code scan
+Use this method when you want to test an IVFPQ FastScan compressed-code scan
 separately from general `method = "ivfpq"`. It is approximate, so benchmark
 reports should include recall or another quality measure.
 

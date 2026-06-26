@@ -53,7 +53,7 @@ script_path <- function() {
   if (length(file_arg)) return(normalizePath(sub("^--file=", "", file_arg[[1L]]), mustWork = TRUE))
   script_args <- args[file.exists(args) & grepl("[.]R$", args)]
   if (length(script_args)) return(normalizePath(script_args[[length(script_args)]], mustWork = TRUE))
-  normalizePath(file.path("benchmark_scripts", "benchmark_scann_tuning_grid.R"), mustWork = FALSE)
+  normalizePath(file.path("benchmark_scripts", "benchmark_ivfpq_fastscan_tuning_grid.R"), mustWork = FALSE)
 }
 
 configure_threads <- function(n_threads) {
@@ -273,15 +273,38 @@ pq_dim_for_mode <- function(p, mode) {
   )
 }
 
-scann_candidates <- function(n, p, k, backend, grid_level = "standard",
+gcd_int <- function(a, b) {
+  a <- abs(as.integer(a))
+  b <- abs(as.integer(b))
+  while (b != 0L) {
+    r <- a %% b
+    a <- b
+    b <- r
+  }
+  if (a == 0L) 1L else a
+}
+
+cuvs_byte_aligned_pq_dim <- function(p, pq_dim, pq_bits = 4L) {
+  p <- as.integer(max(1L, p))
+  pq_dim <- as.integer(max(0L, min(p, pq_dim)))
+  pq_bits <- as.integer(max(4L, min(8L, pq_bits)))
+  effective_dim <- if (pq_dim > 0L) pq_dim else p
+  if ((pq_bits * effective_dim) %% 8L == 0L) return(pq_dim)
+  step <- as.integer(8L / gcd_int(pq_bits, 8L))
+  effective_dim <- as.integer(max(1L, min(p, effective_dim)))
+  effective_dim <- as.integer(effective_dim - effective_dim %% step)
+  if (effective_dim >= 1L) effective_dim else pq_dim
+}
+
+ivfpq_fastscan_candidates <- function(n, p, k, backend, grid_level = "standard",
                              cuda_batch_sizes = 8192L) {
-  provider <- if (identical(backend, "cuda")) "cuda_cuvs_scann" else "faiss_cpu_fastscan"
+  provider <- if (identical(backend, "cuda")) "cuda_cuvs_ivfpq_fastscan" else "faiss_cpu_fastscan"
   auto <- data.frame(
     candidate_id = paste0(provider, "_auto"),
     candidate_kind = "auto",
     provider = provider,
     public_backend = backend,
-    public_method = "scann",
+    public_method = "ivfpq_fastscan",
     requested_nlist = NA_integer_,
     requested_nprobe = NA_integer_,
     requested_pq_m = NA_integer_,
@@ -326,7 +349,11 @@ scann_candidates <- function(n, p, k, backend, grid_level = "standard",
     nprobe <- as.integer(max(1L, ceiling(base_probe * specs$nprobe_mult[[i]])))
     nprobe <- as.integer(min(nprobe, nlist))
     if (identical(backend, "cuda")) {
-      pq_dim <- pq_dim_for_mode(p, specs$pq_mode[[i]])
+      pq_dim <- cuvs_byte_aligned_pq_dim(
+        p,
+        pq_dim_for_mode(p, specs$pq_mode[[i]]),
+        pq_bits = 4L
+      )
       for (batch_size in cuda_batch_sizes) {
         idx <- idx + 1L
         manual_rows[[idx]] <- data.frame(
@@ -337,7 +364,7 @@ scann_candidates <- function(n, p, k, backend, grid_level = "standard",
           candidate_kind = "manual",
           provider = provider,
           public_backend = backend,
-          public_method = "scann",
+          public_method = "ivfpq_fastscan",
           requested_nlist = nlist,
           requested_nprobe = nprobe,
           requested_pq_m = NA_integer_,
@@ -361,7 +388,7 @@ scann_candidates <- function(n, p, k, backend, grid_level = "standard",
         candidate_kind = "manual",
         provider = provider,
         public_backend = backend,
-        public_method = "scann",
+        public_method = "ivfpq_fastscan",
         requested_nlist = nlist,
         requested_nprobe = nprobe,
         requested_pq_m = pq_m,
@@ -386,7 +413,7 @@ scann_candidates <- function(n, p, k, backend, grid_level = "standard",
 }
 
 candidate_grid <- function(dataset_row, backend, k, grid_level, cuda_batch_sizes) {
-  scann_candidates(
+  ivfpq_fastscan_candidates(
     n = as.integer(dataset_row$n),
     p = as.integer(dataset_row$p),
     k = as.integer(k),
@@ -402,9 +429,9 @@ apply_candidate_options <- function(candidate, backend) {
     faissR.ivf_nlist = NULL,
     faissR.faiss_nprobe = NULL,
     faissR.ivf_nprobe = NULL,
-    faissR.scann_pq_m = NULL,
-    faissR.scann_refine_factor = NULL,
-    faissR.scann_bbs = NULL,
+    faissR.ivfpq_fastscan_pq_m = NULL,
+    faissR.ivfpq_fastscan_refine_factor = NULL,
+    faissR.ivfpq_fastscan_bbs = NULL,
     faissR.cuvs_ivfpq_pq_dim = NULL,
     faissR.ivfpq_pq_dim = NULL,
     faissR.cuvs_ivfpq_pq_bits = NULL,
@@ -420,9 +447,9 @@ apply_candidate_options <- function(candidate, backend) {
         Sys.setenv(FAISSR_CUVS_IVF_BATCH_SIZE = as.integer(candidate$requested_cuda_batch_size))
       }
     } else {
-      opts$faissR.scann_pq_m <- as.integer(candidate$requested_pq_m)
-      opts$faissR.scann_refine_factor <- as.integer(candidate$requested_refine_factor)
-      opts$faissR.scann_bbs <- as.integer(candidate$requested_bbs)
+      opts$faissR.ivfpq_fastscan_pq_m <- as.integer(candidate$requested_pq_m)
+      opts$faissR.ivfpq_fastscan_refine_factor <- as.integer(candidate$requested_refine_factor)
+      opts$faissR.ivfpq_fastscan_bbs <- as.integer(candidate$requested_bbs)
     }
   }
   do.call(options, opts)
@@ -456,7 +483,7 @@ base_row <- function(config, status = "success", error = NA_character_) {
     p = as.integer(config$p),
     shape_group = shape_group(config$n, config$p),
     backend = config$backend,
-    method = "scann",
+    method = "ivfpq_fastscan",
     metric = "euclidean",
     k = as.integer(config$k),
     provider = candidate$provider,
@@ -491,7 +518,7 @@ base_row <- function(config, status = "success", error = NA_character_) {
     strategy = NA_character_,
     library = NA_character_,
     accelerator = NA_character_,
-    scann_inspired = NA,
+    ivfpq_fastscan = NA,
     fastscan = NA,
     note = NA_character_,
     tuning_policy = NA_character_,
@@ -563,7 +590,7 @@ run_method <- function(config) {
     k = as.integer(config$k),
     exclude_self = TRUE,
     backend = config$backend,
-    method = "scann",
+    method = "ivfpq_fastscan",
     metric = "euclidean",
     tuning = "fixed",
     output = config$output,
@@ -587,7 +614,7 @@ run_method <- function(config) {
   row$strategy <- approx$strategy %||% NA_character_
   row$library <- approx$library %||% NA_character_
   row$accelerator <- approx$accelerator %||% NA_character_
-  row$scann_inspired <- isTRUE(approx$scann_inspired)
+  row$ivfpq_fastscan <- isTRUE(approx$ivfpq_fastscan)
   row$fastscan <- isTRUE(approx$fastscan)
   row$note <- approx$note %||% NA_character_
   row$tuning_policy <- approx$tuning_policy %||% NA_character_
@@ -633,8 +660,8 @@ run_child_task <- function() {
 }
 
 run_rscript_task <- function(task, config, timeout, bench_script) {
-  config_path <- tempfile("faissR_scann_config_", fileext = ".rds")
-  result_path <- tempfile("faissR_scann_result_", fileext = ".rds")
+  config_path <- tempfile("faissR_ivfpq_fastscan_config_", fileext = ".rds")
+  result_path <- tempfile("faissR_ivfpq_fastscan_result_", fileext = ".rds")
   saveRDS(config, config_path)
   on.exit(unlink(c(config_path, result_path)), add = TRUE)
   rscript <- Sys.getenv("R_BIN", "Rscript")
@@ -737,7 +764,7 @@ write_missing_rows <- function(dataset_row, backend, k, candidates, reason, resu
 }
 
 summarize_results <- function(out_dir, target_recalls) {
-  results_path <- file.path(out_dir, "scann_tuning_results.csv")
+  results_path <- file.path(out_dir, "ivfpq_fastscan_tuning_results.csv")
   if (!file.exists(results_path)) return(invisible(NULL))
   x <- read.csv(results_path, stringsAsFactors = FALSE)
   success <- x[x$status == "success" & is.finite(x$recall_at_k) & is.finite(x$elapsed_sec), , drop = FALSE]
@@ -773,7 +800,7 @@ summarize_results <- function(out_dir, target_recalls) {
     }
   }
   recommendations <- if (length(rec_rows)) do.call(rbind, rec_rows) else data.frame()
-  write.csv(recommendations, file.path(out_dir, "scann_tuning_recommendations.csv"), row.names = FALSE)
+  write.csv(recommendations, file.path(out_dir, "ivfpq_fastscan_tuning_recommendations.csv"), row.names = FALSE)
 
   if (nrow(success)) {
     shape_rows <- list()
@@ -819,13 +846,13 @@ summarize_results <- function(out_dir, target_recalls) {
       shape_candidates$median_elapsed_sec,
       -shape_candidates$min_recall_at_k
     ), , drop = FALSE]
-    write.csv(shape_candidates, file.path(out_dir, "scann_tuning_shape_candidates.csv"), row.names = FALSE)
+    write.csv(shape_candidates, file.path(out_dir, "ivfpq_fastscan_tuning_shape_candidates.csv"), row.names = FALSE)
     shape_best <- do.call(rbind, lapply(
       split(shape_candidates, interaction(shape_candidates[c("shape_group", "provider", "backend", "k", "target_recall_threshold")], drop = TRUE, lex.order = TRUE)),
       function(part) part[1L, , drop = FALSE]
     ))
     row.names(shape_best) <- NULL
-    write.csv(shape_best, file.path(out_dir, "scann_tuning_shape_recommendations.csv"), row.names = FALSE)
+    write.csv(shape_best, file.path(out_dir, "ivfpq_fastscan_tuning_shape_recommendations.csv"), row.names = FALSE)
   }
   write_report(out_dir, x, recommendations)
   invisible(NULL)
@@ -833,11 +860,11 @@ summarize_results <- function(out_dir, target_recalls) {
 
 write_report <- function(out_dir, results, recommendations) {
   lines <- c(
-    "# ScaNN-Inspired Tuning Report",
+    "# IVFPQ FastScan Tuning Report",
     "",
     sprintf("Generated: %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
     "",
-    "This benchmark evaluates explicit `method = \"scann\"` settings for Euclidean self-KNN.",
+    "This benchmark evaluates explicit `method = \"ivfpq_fastscan\"` settings for Euclidean self-KNN.",
     "CPU rows use FAISS IndexIVFPQFastScan with optional Flat refinement. CUDA",
     "rows use RAPIDS cuVS IVF-PQ with 4-bit compressed codes. Recommendation",
     "tables select the fastest successful candidate reaching recall thresholds",
@@ -848,17 +875,17 @@ write_report <- function(out_dir, results, recommendations) {
     "",
     "- `ivf_nlist` / `faiss_nlist`: coarse IVF list count.",
     "- `ivf_nprobe` / `faiss_nprobe`: number of lists probed at search time.",
-    "- CPU `scann_pq_m`: FAISS FastScan PQ subquantizer count; FAISS may adjust it to divide the feature dimension.",
-    "- CPU `scann_refine_factor`: Flat reranking factor for IndexRefineFlat.",
-    "- CPU `scann_bbs`: FAISS FastScan block size, rounded down to a multiple of 32 by the C++ backend.",
-    "- CUDA `cuvs_ivfpq_pq_dim`: cuVS IVF-PQ compressed-code dimension; `pq_bits` remains 4 for this ScaNN-inspired route.",
+    "- CPU `ivfpq_fastscan_pq_m`: FAISS FastScan PQ subquantizer count; FAISS may adjust it to divide the feature dimension.",
+    "- CPU `ivfpq_fastscan_refine_factor`: Flat reranking factor for IndexRefineFlat.",
+    "- CPU `ivfpq_fastscan_bbs`: FAISS FastScan block size, rounded down to a multiple of 32 by the C++ backend.",
+    "- CUDA `cuvs_ivfpq_pq_dim`: cuVS IVF-PQ compressed-code dimension; `pq_bits` remains 4 for this IVFPQ FastScan route.",
     "- CUDA `FAISSR_CUVS_IVF_BATCH_SIZE`: search batch size, affects speed/memory but not recall.",
     "",
     "## Backend Notes",
     "",
-    "- `backend = \"cpu\"`, `method = \"scann\"` resolves to `faiss_scann` and requires FAISS FastScan support.",
-    "- `backend = \"cuda\"`, `method = \"scann\"` resolves to `cuda_cuvs_scann` and requires cuVS IVF-PQ support.",
-    "- ScaNN-inspired routes are Euclidean/L2 only in this package.",
+    "- `backend = \"cpu\"`, `method = \"ivfpq_fastscan\"` resolves to `faiss_ivfpq_fastscan` and requires FAISS FastScan support.",
+    "- `backend = \"cuda\"`, `method = \"ivfpq_fastscan\"` resolves to `cuda_cuvs_ivfpq_fastscan` and requires cuVS IVF-PQ support.",
+    "- IVFPQ FastScan routes are Euclidean/L2 only in this package.",
     "",
     "## Status Counts",
     "",
@@ -866,12 +893,12 @@ write_report <- function(out_dir, results, recommendations) {
     "",
     "## Output Files",
     "",
-    "- `scann_tuning_config.csv`",
-    "- `scann_tuning_candidate_grid.csv`",
-    "- `scann_tuning_results.csv`",
-    "- `scann_tuning_recommendations.csv`",
-    "- `scann_tuning_shape_candidates.csv`",
-    "- `scann_tuning_shape_recommendations.csv`"
+    "- `ivfpq_fastscan_tuning_config.csv`",
+    "- `ivfpq_fastscan_tuning_candidate_grid.csv`",
+    "- `ivfpq_fastscan_tuning_results.csv`",
+    "- `ivfpq_fastscan_tuning_recommendations.csv`",
+    "- `ivfpq_fastscan_tuning_shape_candidates.csv`",
+    "- `ivfpq_fastscan_tuning_shape_recommendations.csv`"
   )
   if (nrow(recommendations)) {
     top <- recommendations[seq_len(min(20L, nrow(recommendations))), c(
@@ -880,7 +907,7 @@ write_report <- function(out_dir, results, recommendations) {
     ), drop = FALSE]
     lines <- c(lines, "", "## First Recommendations", "", paste(capture.output(print(top, row.names = FALSE)), collapse = "\n"))
   }
-  writeLines(lines, file.path(out_dir, "scann_tuning_report.md"))
+  writeLines(lines, file.path(out_dir, "ivfpq_fastscan_tuning_report.md"))
 }
 
 main <- function() {
@@ -890,10 +917,10 @@ main <- function() {
   configure_native_libs()
   backend <- match.arg(tolower(args$backend %||% "cpu"), c("cpu", "cuda"))
   manifest_path <- args$manifest %||% stop("`--manifest` is required.", call. = FALSE)
-  out_dir <- args$out_dir %||% file.path(getwd(), paste0("faissR_SCANN_TUNING_", toupper(backend), "_", format(Sys.time(), "%Y%m%d_%H%M%S")))
+  out_dir <- args$out_dir %||% file.path(getwd(), paste0("faissR_IVFPQ_FASTSCAN_TUNING_", toupper(backend), "_", format(Sys.time(), "%Y%m%d_%H%M%S")))
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-  results_path <- file.path(out_dir, "scann_tuning_results.csv")
-  candidate_path <- file.path(out_dir, "scann_tuning_candidate_grid.csv")
+  results_path <- file.path(out_dir, "ivfpq_fastscan_tuning_results.csv")
+  candidate_path <- file.path(out_dir, "ivfpq_fastscan_tuning_candidate_grid.csv")
   bench_script <- normalizePath(script_path(), mustWork = TRUE)
   datasets <- split_arg(args$datasets, "")
   k_values <- as.integer(split_arg(args$k_values, "10,15,50,100"))
@@ -939,7 +966,7 @@ main <- function() {
                 n_threads, timeout, quality_n, output, grid_level,
                 paste(cuda_batch_sizes, collapse = ","), reference_backend, max_working_gb)
     ),
-    file.path(out_dir, "scann_tuning_config.csv"),
+    file.path(out_dir, "ivfpq_fastscan_tuning_config.csv"),
     row.names = FALSE
   )
 

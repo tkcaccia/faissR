@@ -1700,7 +1700,7 @@ List faiss_ivfpq_float32_knn_impl(SEXP data,
   return out;
 }
 
-List faiss_scann_knn_impl(NumericMatrix data,
+List faiss_ivfpq_fastscan_knn_impl(NumericMatrix data,
                           NumericMatrix points,
                           int k,
                           int nlist,
@@ -1773,7 +1773,7 @@ List faiss_scann_knn_impl(NumericMatrix data,
   out["bbs"] = bbs;
   out["requested_bbs"] = requested_bbs;
   out["fastscan"] = true;
-  out["scann_inspired"] = true;
+  out["ivfpq_fastscan"] = true;
   out["refine"] = refine_factor > 1;
   return out;
 #else
@@ -1794,7 +1794,7 @@ List faiss_scann_knn_impl(NumericMatrix data,
 #endif
 }
 
-List faiss_scann_float32_knn_impl(SEXP data,
+List faiss_ivfpq_fastscan_float32_knn_impl(SEXP data,
                                   SEXP points,
                                   int k,
                                   int nlist,
@@ -1870,7 +1870,7 @@ List faiss_scann_float32_knn_impl(SEXP data,
   out["bbs"] = bbs;
   out["requested_bbs"] = requested_bbs;
   out["fastscan"] = true;
-  out["scann_inspired"] = true;
+  out["ivfpq_fastscan"] = true;
   out["refine"] = refine_factor > 1;
   return out;
 #else

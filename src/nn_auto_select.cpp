@@ -12,6 +12,62 @@ bool finite1(double x) {
   return std::isfinite(x);
 }
 
+int gcd_int(int a, int b) {
+  a = std::abs(a);
+  b = std::abs(b);
+  while (b != 0) {
+    const int r = a % b;
+    a = b;
+    b = r;
+  }
+  return a == 0 ? 1 : a;
+}
+
+struct CuvsIvfPqAlignment {
+  int pq_dim;
+  int pq_bits;
+  bool adjusted;
+  std::string rule;
+};
+
+bool cuvs_ivfpq_byte_aligned(int pq_dim, int pq_bits, int p) {
+  const int effective_dim = pq_dim > 0 ? pq_dim : p;
+  return effective_dim > 0 && ((pq_bits * effective_dim) % 8 == 0);
+}
+
+CuvsIvfPqAlignment repair_cuvs_ivfpq_alignment(int p,
+                                               int pq_dim,
+                                               int pq_bits) {
+  if (p < 1) p = 1;
+  const int original_dim = pq_dim;
+  const int original_bits = pq_bits;
+  pq_dim = std::max(0, pq_dim);
+  pq_bits = std::max(4, std::min(8, pq_bits));
+  if (pq_dim > p) pq_dim = p;
+
+  if (cuvs_ivfpq_byte_aligned(pq_dim, pq_bits, p)) {
+    return {pq_dim, pq_bits, original_dim != pq_dim || original_bits != pq_bits,
+            "byte_aligned"};
+  }
+
+  const int step = 8 / gcd_int(pq_bits, 8);
+  int effective_dim = pq_dim > 0 ? pq_dim : p;
+  effective_dim = std::min(std::max(1, effective_dim), p);
+  effective_dim -= effective_dim % step;
+
+  if (effective_dim >= 1) {
+    pq_dim = effective_dim;
+  } else {
+    // No positive dimension can satisfy the requested packing; use 8-bit PQ.
+    pq_bits = 8;
+    pq_dim = std::min(std::max(1, pq_dim > 0 ? pq_dim : p), p);
+  }
+
+  return {pq_dim, pq_bits, true,
+          original_bits != pq_bits ? "pq_bits_promoted_for_byte_alignment" :
+                                     "pq_dim_reduced_for_byte_alignment"};
+}
+
 bool grid_self_knn(bool self_query,
                    int n,
                    int p,
@@ -116,8 +172,8 @@ std::string public_method_from_backend(const std::string& backend) {
       backend == "cuda_faiss_ivfpq" || backend == "cuvs_ivfpq" ||
       backend == "cuda_cuvs_ivfpq" || backend == "cuvs_ivf_pq" ||
       backend == "cuda_cuvs_ivf_pq") return "ivfpq";
-  if (backend == "faiss_scann" || backend == "cuda_cuvs_scann" ||
-      backend == "cuvs_scann") return "scann";
+  if (backend == "faiss_ivfpq_fastscan" || backend == "cuda_cuvs_ivfpq_fastscan" ||
+      backend == "cuvs_ivfpq_fastscan") return "ivfpq_fastscan";
   if (backend == "cpu_vamana" || backend == "cuda_vamana") return "vamana";
   if (backend == "faiss_nsg" || backend == "cpu_nsg" ||
       backend == "cuda_nsg") return "nsg";
@@ -712,14 +768,23 @@ List nn_tune_cuvs_ivfpq_cpp(int p,
   if (pq_dim < 0) pq_dim = 0;
   const int pq_bits_default = (reduced_codebook_training && !manual_bits) ? 4 : 8;
   const int requested_pq_bits = requested_int(pq_bits_option, pq_bits_default);
-  const int pq_bits = option_int(pq_bits_option, pq_bits_default, 4, 8);
+  int pq_bits = option_int(pq_bits_option, pq_bits_default, 4, 8);
+  CuvsIvfPqAlignment aligned = repair_cuvs_ivfpq_alignment(p, pq_dim, pq_bits);
+  pq_dim = aligned.pq_dim;
+  pq_bits = aligned.pq_bits;
   std::string rule = (reduced_codebook_training && !manual_bits) ? "training_rows_4bit_pq" :
     (high_dim ? "high_dim_default_pq" : "dimension_default_pq");
+  if (aligned.adjusted) {
+    rule += "_";
+    rule += aligned.rule;
+  }
   return List::create(
     _["pq_dim"] = pq_dim,
     _["pq_bits"] = pq_bits,
     _["requested_pq_dim"] = requested_pq_dim,
     _["requested_pq_bits"] = requested_pq_bits,
+    _["pq_alignment_adjusted"] = aligned.adjusted,
+    _["pq_alignment_rule"] = aligned.rule,
     _["tuning_policy"] = manual ? "manual_options" : "auto_shape",
     _["tuning_rule"] = rule,
     _["tuning_high_dim"] = high_dim,

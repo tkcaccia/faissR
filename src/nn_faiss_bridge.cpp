@@ -96,7 +96,7 @@ List faiss_ivfpq_float32_knn_impl(SEXP data,
                                   bool exclude_self,
                                   int n_threads,
                                   std::string distance_storage);
-List faiss_scann_knn_impl(NumericMatrix data,
+List faiss_ivfpq_fastscan_knn_impl(NumericMatrix data,
                           NumericMatrix points,
                           int k,
                           int nlist,
@@ -106,7 +106,7 @@ List faiss_scann_knn_impl(NumericMatrix data,
                           int bbs,
                           bool exclude_self,
                           int n_threads);
-List faiss_scann_float32_knn_impl(SEXP data,
+List faiss_ivfpq_fastscan_float32_knn_impl(SEXP data,
                                   SEXP points,
                                   int k,
                                   int nlist,
@@ -590,7 +590,7 @@ List nn_faiss_ivfpq_float32_cpp(SEXP data,
 }
 
 // [[Rcpp::export]]
-List nn_faiss_scann_cpp(NumericMatrix data,
+List nn_faiss_ivfpq_fastscan_cpp(NumericMatrix data,
                         NumericMatrix points,
                         int k,
                         int nlist,
@@ -600,14 +600,14 @@ List nn_faiss_scann_cpp(NumericMatrix data,
                         int bbs,
                         bool exclude_self,
                         int n_threads) {
-  return faiss_scann_knn_impl(
+  return faiss_ivfpq_fastscan_knn_impl(
     data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self,
     n_threads
   );
 }
 
 // [[Rcpp::export]]
-List nn_faiss_scann_float32_cpp(SEXP data,
+List nn_faiss_ivfpq_fastscan_float32_cpp(SEXP data,
                                 SEXP points,
                                 int k,
                                 int nlist,
@@ -618,7 +618,7 @@ List nn_faiss_scann_float32_cpp(SEXP data,
                                 bool exclude_self,
                                 int n_threads,
                                 std::string distance_storage) {
-  return faiss_scann_float32_knn_impl(
+  return faiss_ivfpq_fastscan_float32_knn_impl(
     data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self,
     n_threads, distance_storage
   );

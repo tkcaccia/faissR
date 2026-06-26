@@ -175,7 +175,7 @@ List faiss_ivfpq_float32_knn_impl(SEXP,
   );
 }
 
-List faiss_scann_knn_impl(NumericMatrix,
+List faiss_ivfpq_fastscan_knn_impl(NumericMatrix,
                           NumericMatrix,
                           int,
                           int,
@@ -186,13 +186,13 @@ List faiss_scann_knn_impl(NumericMatrix,
                           bool,
                           int) {
   Rcpp::stop(
-    "FAISS FastScan/ScaNN-inspired backend is not available. Reinstall "
+    "FAISS IVFPQ FastScan backend is not available. Reinstall "
     "faissR with FAISS_HOME pointing to a FAISS build that provides "
     "faiss/IndexIVFPQFastScan.h."
   );
 }
 
-List faiss_scann_float32_knn_impl(SEXP,
+List faiss_ivfpq_fastscan_float32_knn_impl(SEXP,
                                   SEXP,
                                   int,
                                   int,
@@ -204,7 +204,7 @@ List faiss_scann_float32_knn_impl(SEXP,
                                   int,
                                   std::string) {
   Rcpp::stop(
-    "FAISS float32 FastScan/ScaNN-inspired backend is not available. "
+    "FAISS float32 IVFPQ FastScan backend is not available. "
     "Reinstall faissR with FAISS_HOME pointing to a FAISS build that "
     "provides faiss/IndexIVFPQFastScan.h."
   );

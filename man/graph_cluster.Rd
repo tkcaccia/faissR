@@ -12,7 +12,7 @@ graph_cluster(
   k = 50L,
   graph_backend = "auto",
   graph_method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf",
-    "ivfpq", "vamana", "nsg", "nndescent", "scann", "cagra"),
+    "ivfpq", "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   target_recall = 0.99,
