@@ -13,15 +13,139 @@
 
 These notes summarize empirical `nn()` tuning probes and how they inform the
 current shape-aware defaults. The original tuning pass used k = 50,
-Euclidean/L2 search, raw unscaled data, and the package benchmark datasets; the
-current NN metric benchmark extends that work to all four public metrics and
-the k grid 5, 10, 15, 50, and 100. Important benchmark artifacts include:
+Euclidean/L2 search, raw unscaled data, and the package benchmark datasets. The
+broad NN metric benchmark extends that work to all four public metrics and the
+k grid 5, 10, 15, 50, and 100. The dedicated HPC method-tuning sweeps are more
+focused: they use explicit CPU or CUDA backends, float32 datasets, Euclidean
+distance, target recall tiers of 0.90, 0.95, and 0.99, and the k grid 15, 30,
+50, and 100. Important benchmark artifacts include:
 
 - `autotune_results.csv`: one row per dataset and resolved implementation
   label.
 - `autotune_method_summary.csv`: method-level speed/recall/failure summary.
 - `autotune_recommendations_by_dataset.csv`: fastest method by recall target.
 - `autotune_issues.csv`: low-recall, unavailable, or failed rows.
+
+## How The HPC Tuning Sweeps Become Defaults
+
+The HPC method-tuning scripts are not general timing demos. They are designed
+to create the evidence used to write deterministic C++ tuning rules for each
+method. Each run answers this question: for a fixed method, backend, dataset
+shape, `k`, and recall target, what is the fastest parameter setting that still
+meets the requested nearest-neighbour recall?
+
+The tuning workflow is:
+
+1. Build one exact reference per dataset folder. The reference job computes a
+   high-quality Euclidean `k = 100` self-neighbour table and saves it beside the
+   dataset. Later tuning jobs crop that table to `k = 15`, `30`, `50`, or `100`
+   instead of recomputing exact neighbours for every method and parameter
+   setting. This makes recall comparisons consistent across methods and keeps
+   the expensive exact calculation out of the inner tuning loop.
+2. Load the float32 dataset manifest. The tuning jobs read `*_float32.RData`
+   files and keep the benchmark input in 32-bit form when the method supports
+   it. That measures the path we want faissR to use in practice: float32 input,
+   C++/CUDA processing, and minimal R-side conversion.
+3. Run one method and one backend at a time. CPU and CUDA are benchmarked in
+   separate launchers, and `backend = "auto"` is not used. This separation is
+   essential because a CPU HNSW setting and a CUDA CAGRA setting can both reach
+   recall 0.99 while having completely different bottlenecks, memory traffic,
+   and parameter meanings.
+4. Evaluate a structured parameter grid. Each candidate row stores the method
+   parameters, backend provider, requested output type, thread count, batch
+   size, and shape metadata (`n`, `p`, `k`). The grids deliberately include
+   fast low-effort settings, balanced settings, and high-recall rescue settings
+   so the benchmark can identify both the fastest acceptable point and the
+   settings that are still insufficient.
+5. Keep every failure row. Timeouts, unavailable backends, CUDA launch errors,
+   memory errors, and below-target recall are not discarded. They are guardrails
+   for the automatic policy: a method that is fastest on successful rows should
+   not become a default for a shape where the same route repeatedly fails.
+6. Select recommendations by target recall. For each
+   dataset/backend/method/`k`/target-recall group, the recommendation table
+   chooses the fastest successful candidate with recall at or above the target.
+   If no candidate reaches the target, the table keeps the highest-recall
+   successful candidate and marks the row as below target. This prevents a
+   missing 0.99 setting from being mistaken for a valid high-recall default.
+7. Aggregate by dataset shape. The shape recommendation files group datasets by
+   size and dimension, then summarize which parameter tiers worked for similar
+   shapes. These files are the bridge between individual benchmark datasets and
+   C++ defaults that can generalize to new user matrices.
+8. Encode conservative deterministic rules in C++. The final package defaults
+   are implemented in compiled helpers such as `nn_tune_faiss_hnsw_cpp()`,
+   `nn_tune_faiss_ivf_cpp()`, `nn_tune_cuvs_cagra_cpp()`,
+   `nn_tune_native_nsg_cpp()`, and `nn_tune_vamana_cpp()`. Public calls with
+   `tuning = "auto"` use those rules without running a pilot benchmark. The
+   default target recall is 0.99; users can request 0.90 or 0.95 when they want
+   a faster approximate setting.
+
+The k grid is intentionally `15, 30, 50, 100`. `k = 15` is the common
+embedding/graph-neighbour size, `k = 30` tests a denser graph without jumping
+straight to a large neighbourhood, and `k = 50`/`100` stress high-degree
+search, candidate storage, GPU memory traffic, and self-neighbour filtering.
+The exact reference is saved at `k = 100`, so every smaller k value is a
+consistent crop of the same reference calculation.
+
+The target recall tiers have different roles:
+
+- `target_recall = 0.90`: speed-first approximate settings. These are useful
+  when downstream embedding or graph construction tolerates a small neighbour
+  error and the matrix is large enough that exact search is too expensive.
+- `target_recall = 0.95`: balanced settings. These often become the practical
+  recommendation when 0.99 requires a large increase in graph degree, search
+  breadth, `nprobe`, or refinement cost.
+- `target_recall = 0.99`: accuracy-first approximate settings and the default
+  policy. This tier is used for the public `tuning = "auto"` default unless a
+  method is exact by construction.
+
+Method-specific interpretation of the tuning files:
+
+- `exact`, `flat`, and `bruteforce` do not trade recall for approximation
+  parameters. Their tuning files measure provider choice, CPU threads, batch
+  size, float output, fitted-index reuse, and GPU resource reuse. These methods
+  should reach recall 1.0; failures usually indicate memory, timeout, library,
+  or data-layout issues rather than a recall/parameter tradeoff.
+- `hnsw` uses the sweeps to choose `M`, `efConstruction`, and `efSearch` by
+  backend, shape, `k`, and target recall. CPU HNSW is usually limited by index
+  construction plus graph-search breadth. CUDA HNSW uses the cuVS wrapper route
+  and is reported separately from pure CAGRA because its bottlenecks are not the
+  same as FAISS CPU HNSW.
+- `ivf` uses the sweeps to tune `nlist` and `nprobe`. Lower `nprobe` is faster
+  but may miss clusters; larger `nprobe` improves recall but can approach Flat
+  search cost. The shape recommendations identify where IVF is a speed path and
+  where it is only an explicit accuracy-first option.
+- `ivfpq` uses the sweeps to tune `nlist`, `nprobe`, PQ width, PQ bits, and
+  training limits. It is interpreted primarily as a memory-compression method:
+  a fast row with poor recall should not become an accuracy default.
+- `ivfpq_fastscan` uses the sweeps to tune FastScan-specific compressed-code
+  settings. CPU runs evaluate FAISS `IndexIVFPQFastScan` choices such as
+  `nprobe`, `pq_m`, block size, and refinement factor. CUDA runs evaluate cuVS
+  IVF-PQ choices such as `nlist`, `nprobe`, byte-aligned 4-bit `pq_dim`, and
+  query batch size.
+- `cagra` uses the sweeps to tune provider and graph-search parameters:
+  FAISS GPU CAGRA versus direct cuVS CAGRA, direct-cuVS build algorithm,
+  graph degree, intermediate graph degree, search width, `itopk_size`, and
+  batch size. The result tells the package when CAGRA is a fast high-recall GPU
+  route and when a specific build algorithm causes workspace or recall issues.
+- `nndescent` uses the sweeps to tune iteration count, candidate pool size,
+  graph degree, intermediate graph degree, and related refinement parameters.
+  CPU and CUDA are interpreted separately because the CUDA route depends on
+  cuVS kernels and can expose GPU-launch or shared-memory limits not present in
+  the CPU mathematics.
+- `nsg` and `vamana` use the sweeps to tune seed-neighbour count, graph degree,
+  pruning/search breadth, and Vamana `alpha`. These methods can be fast only if
+  the candidate graph is built with enough neighbours for the requested recall
+  and not so many that construction dominates the timing.
+- `grid` is a specialized exact route for two- and three-dimensional data. It
+  is not part of the general high-dimensional tuning policy.
+
+The rule for updating package defaults is conservative. A new C++ default
+should be added only after the CPU and CUDA recommendation files agree that the
+setting is the fastest successful choice for the relevant shape and target, or
+after failures show that a previously selected route should be avoided for that
+shape. The C++ policy should record the selected target, rule name, and
+parameters in result metadata so benchmark tables can verify which rule was
+used.
 
 ## Default Policy
 
@@ -65,12 +189,12 @@ that the no-pilot graph-shape rule came from compiled policy.
   recall is very high. The resolved routes `faiss_gpu_flat_l2` and
   `cuda_cuvs_bruteforce` were the most reliable high-recall CUDA paths
   [1-3,13-16].
-- For exact CUDA self-KNN routes, `method = "auto"` chooses between FAISS GPU
-  Flat and direct cuVS brute force by shape. Compact high-dimensional shapes
-  such as COIL20 and USPS prefer `cuda_cuvs_bruteforce`; larger exact
-  image-scale shapes such as FashionMNIST prefer `faiss_gpu_flat_l2` when FAISS
-  GPU is available. `cuda_cuvs_bruteforce` remains the explicit cuVS exact
-  method and the fallback exact CUDA route when FAISS GPU Flat is unavailable.
+- For Euclidean CUDA self-KNN, `method = "auto"` chooses between exact
+  Flat/brute force and IVF-Flat by dataset shape, `k`, and `target_recall`.
+  IVF is preferred when the CUDA IVF tuning evidence reaches the requested
+  recall target faster than Flat; Flat is kept for query searches, tiny
+  matrices, very small `k`, and shape/target combinations where the IVF sweep
+  did not meet the target, such as USPS-like `k = 15`, `target_recall = 0.99`.
 - Prefer `method = "hnsw"` for CPU approximate self-KNN. In this benchmark its
   FAISS HNSW implementation route gave a better speed/accuracy balance than
   NN-Descent [4-5].
@@ -96,8 +220,7 @@ that the no-pilot graph-shape rule came from compiled policy.
 | `exact` / `flat` | `faiss_flat_exact`, `faiss_flat_l2` | CPU exact baseline | Use for exact CPU reference on small/medium data [1-2,16]; avoid as default for large high-dimensional self-search because MNIST/FashionMNIST timed out. |
 | `exact` / `flat` | `faiss_gpu_flat_l2` | CUDA exact/high-recall | Explicit FAISS GPU Flat route when requested and available. |
 | `bruteforce` | `cuda_cuvs_bruteforce` | CUDA exact/high-recall | Preferred explicit cuVS exact path; consistently recall 1 in this benchmark and often fastest on compact high-dimensional self-KNN. Also selected by CUDA `method = "auto"` for compact exact self-KNN when cuVS is available, and used as the fallback exact CUDA route when FAISS GPU Flat is unavailable. |
-| `hnsw` | `faiss_hnsw` large low-dimensional Euclidean tiers | CPU target-recall speed tiers | For `n >= 50000`, `p <= 64`, `target_recall` selects separate 0.90, 0.95, or 0.99 M/ef tiers. The 0.99 defaults keep the prior high-recall flow-cytometry settings; the lower targets reduce graph/search effort for speed and record the selected rule in approximation metadata [5]. |
-| `hnsw` | `faiss_hnsw` large high-dimensional Euclidean tiers | CPU target-recall speed tiers | For `n >= 50000`, `p >= 256`, `target_recall` selects separate 0.90, 0.95, or 0.99 M/ef tiers. The 0.90 small-k tier was tightened from the first MNIST/Fashion smoke run to `M = 8`, `efConstruction = 30`, and `efSearch = max(k, 15)`, which kept sampled recall above 0.90 while avoiding the slower 0.95 tier [5]. |
+| `hnsw` | `faiss_hnsw` Euclidean CPU12 tiers | CPU target-recall speed tiers | The compiled table comes from `faissR_HNSW_TUNING_CPU12_20260627_160002`. It has separate settings for small-n, medium low-dimensional, large low-dimensional, and large high-dimensional shapes; `k` buckets are 15, 30, 50, and 100; `target_recall` selects 0.90, 0.95, or 0.99 M/ef tiers. Each stored row reached the requested target on every dataset in that shape group in the CPU12 sweep [5]. |
 | `hnsw` | `faiss_hnsw` small-k metric tier | CPU metric-aware tier | M = 32, efConstruction = 160, efSearch = max(120, 4k); used for cosine, correlation, and inner-product `k <= 10` jobs so normalized metric searches keep more graph-search breadth without paying the full high-recall cost [5]. |
 | `hnsw` | `faiss_hnsw` balanced tier | CPU default tier | M = 32, efConstruction = 200, efSearch = max(150, 3k); default deterministic shape/metric rule for general CPU HNSW. |
 | `hnsw` | `faiss_hnsw` high-recall tier | CPU high-recall tier | M = 48, efConstruction = 240, efSearch = max(220, 3k); used for large-k high-dimensional searches and high-dimensional non-Euclidean searches where normalized IP/correlation routes need extra graph-search breadth. |
@@ -105,21 +228,13 @@ that the no-pilot graph-shape rule came from compiled policy.
 | `ivf` | `faiss_ivf` speed tier | CPU IVF speed tier | nprobe = 4; too low-recall on many datasets, not a default accuracy path. |
 | `ivf` | `faiss_ivf` balanced tier | CPU IVF middle tier | Default `nprobe` now uses at least 16 probes; cosine, correlation, and raw inner-product routes use a deterministic metric-aware probe increase and record `tuning_metric`/`tuning_metric_aware`. Useful when HNSW is not desired. |
 | `ivf` | `faiss_ivf` high-recall tier | CPU IVF high-recall tier | Larger `k` and million-row shapes increase probe breadth through deterministic `n`/`k` rules; non-Euclidean metrics add the metric-aware probe tier. This is often much better recall, but slower on image data. |
-| `ivf` | `faiss_gpu_ivf_flat` | CUDA IVF-Flat | Useful but not consistently faster than exact GPU on these sample sizes. Deterministic `tuning = "auto"` is metric-aware; explicit `tuning = "cache"` or `"pilot"` currently runs only for Euclidean IVF because the pilot reference/candidates are raw-L2. |
-| `ivf` | `cuda_cuvs_ivf_flat` | CUDA cuVS IVF-Flat | Direct benchmark route for Euclidean/L2 plus transformed cosine, correlation, and raw inner product. Fast on low-dimensional flow/simulated data at about 0.99-0.999 recall; not high-recall default. |
+| `ivf` | `faiss_gpu_ivf_flat` | CUDA IVF-Flat | `tuning = "auto"` uses a compiled shape/k/target-recall policy from the CUDA IVF HPC sweep: compact high-dimensional, medium image-like, large low-dimensional flow-like, and large high-dimensional ImageNet-like matrices get different `nlist`/`nprobe` tiers. Explicit `tuning = "cache"` or `"pilot"` still runs only for Euclidean IVF because the pilot reference/candidates are raw-L2. |
+| `ivf` | `cuda_cuvs_ivf_flat` | CUDA cuVS IVF-Flat | Direct benchmark route for Euclidean/L2 plus transformed cosine, correlation, and raw inner product. It uses the same compiled CUDA IVF `nlist`/`nprobe` policy as FAISS GPU IVF, with manual overrides through `options(faissR.cuda_ivf_nlist = ..., faissR.cuda_ivf_nprobe = ...)` or provider-specific options. |
 | `ivfpq` | `faiss_ivfpq` speed/balanced tiers | CPU memory-pressure tier | Low recall on many datasets; use only when memory reduction is the priority. Requires at least 624 training rows for the CPU FAISS route; auto tuning uses 4-bit PQ for 624-9,983 rows and 8-bit PQ above that unless manually overridden [6]. |
 | `ivfpq` | `faiss_gpu_ivfpq` | CUDA memory-pressure tier | Fast but low recall in this benchmark; explicit opt-in only. |
 | `ivfpq` | `cuda_cuvs_ivfpq` | CUDA memory-pressure tier | Direct benchmark route for Euclidean/L2 plus transformed cosine, correlation, and raw inner product. It uses the same deterministic small-training rule as CPU PQ: below 9,984 training rows, auto tuning requests 4-bit PQ unless the user manually sets `cuvs_ivfpq_pq_bits`/`ivfpq_pq_bits`. Better than FAISS GPU IVFPQ on some datasets but still not an accuracy-first default. |
 | `ivfpq_fastscan` | `faiss_ivfpq_fastscan` | CPU IVFPQ FastScan compressed-code tier | Uses FAISS FastScan (`IndexIVFPQFastScan`) with 4-bit PQ and optional Flat refinement. It is Euclidean-only and requires a FAISS build exposing FastScan headers [6,34]. |
 | `ivfpq_fastscan` | `cuda_cuvs_ivfpq_fastscan` | CUDA IVFPQ FastScan compressed-code tier | Uses direct cuVS IVF-PQ with 4-bit compressed codes for Euclidean search. Compatible raw `nn()` calls reuse the fitted cuVS IVF-PQ index, dataset device buffer, compressed codes, and cuVS resources through a bounded session cache; self-query uses the fitted dataset device buffer directly, and repeated separate-query calls can reuse one cached query device buffer. The C++ tuner and cuVS wrapper repair invalid 4-bit `pq_dim` values to satisfy byte-aligned packed codes, then record requested versus actual PQ settings. It is kept separate from FAISS GPU IVFPQ and does not fall back to CPU FastScan when CUDA/cuVS is unavailable [3,6,34]. |
-
-For HPC tuning of `cuda_cuvs_ivfpq_fastscan`, sweep `nlist`, `nprobe`, and
-byte-aligned 4-bit `pq_dim` together. Smaller `pq_dim` and smaller `nprobe`
-usually improve speed but reduce recall; `nlist` shifts work between training,
-coarse assignment, and list scanning. The CUDA wrapper exposes these as
-`IVFPQ_FASTSCAN_NLIST_MULTS`, `IVFPQ_FASTSCAN_NPROBE_MULTS`, and
-`IVFPQ_FASTSCAN_PQ_DIMS`; the R driver records the aligned `pq_dim` actually
-tested in the candidate grid.
 | `nsg` | `cpu_nsg` speed/balanced tiers | CPU graph candidate | Native faissR NSG-style route for all public metrics; avoids linked-FAISS NSG aborts in public calls. Large high-dimensional CPU inputs use deterministic HNSW seeding before NSG/MRNG-style pruning so explicit NSG no longer starts with an all-pairs exact seed on MNIST/FashionMNIST-scale matrices. |
 | `vamana` | `cpu_vamana` speed/balanced tiers | CPU graph candidate | Native DiskANN/Vamana-style robust-pruned candidate graph; large high-dimensional CPU inputs use deterministic HNSW seeding before robust pruning, while smaller inputs keep exact seeding. |
 | `nndescent` | `cpu_nndescent` speed/balanced tiers | CPU graph speed tier | Native faissR NN-descent route; useful as an explicit Euclidean, normalized cosine/correlation, or raw inner-product graph-search candidate, but recall was usually lower than HNSW. |
@@ -130,6 +245,38 @@ tested in the candidate grid.
 | `cagra` | `cuda_cuvs_cagra` with `nn_descent` build | Direct cuVS experimental builder | Direct RAPIDS cuVS CAGRA using cuVS NN-descent graph construction. This inherits the cuVS NN-descent dynamic shared-memory launch issue on affected builds for high-dimensional FP32 inputs, so it should remain an explicit benchmark setting until the linked cuVS contains the upstream fix. |
 | `grid` | `cpu_grid` | Exact 2D/3D spatial path | Best for simulated 2D/3D Euclidean/cosine/correlation data; unavailable by design outside 2D/3D. |
 | `grid` | `cuda_grid` | CUDA 2D/3D spatial path | Correct for 2D/3D, but benchmark speed depends strongly on GPU model and transfer overhead. |
+
+CUDA IVF auto tuning is selected by `nn_tune_cuda_ivf_cpp()`. The current
+policy was derived from the 2026-06-28 float32 CUDA IVF HPC recommendations for
+`k = 15, 30, 50, 100` and `target_recall = 0.90, 0.95, 0.99`. It uses
+`n`, `p`, `k`, and target recall rather than dataset names:
+
+- Small compact high-dimensional matrices (`n < 5000`, `p >= 1024`) use few
+  coarse lists and increase probes mostly for larger `k`.
+- Small high-dimensional matrices (`n < 20000`, `p >= 128`) use more lists for
+  USPS-like shapes; if the 0.99 benchmark did not reach 0.99, metadata records
+  `tuning_benchmark_target_met = FALSE`.
+- Medium high-dimensional matrices (`20000 <= n < 200000`, `p >= 256`) use
+  MNIST/Fashion-like tiers, widening probes and sometimes `nlist` at
+  `target_recall = 0.99`.
+- Large low-dimensional matrices (`n >= 500000`, `p <= 64`) use flow-data
+  tiers with modest probes for 0.90/0.95 and wider probes for 0.99.
+- Large high-dimensional matrices (`n >= 500000`, `p >= 256`) use ImageNet-like
+  tiers with much wider probes at 0.99, especially for `k = 100`.
+
+Result metadata records `tuning_cuda_shape_group`, `tuning_k_bucket`,
+`tuning_target_recall_code`, `tuning_benchmark_basis`, and the actual
+`nlist`/`nprobe`. Non-Euclidean CUDA IVF paths use the same shape policy after
+the package-level metric transform and apply a conservative metric-aware probe
+increase.
+
+For HPC tuning of `cuda_cuvs_ivfpq_fastscan`, sweep `nlist`, `nprobe`, and
+byte-aligned 4-bit `pq_dim` together. Smaller `pq_dim` and smaller `nprobe`
+usually improve speed but reduce recall; `nlist` shifts work between training,
+coarse assignment, and list scanning. The CUDA wrapper exposes these as
+`IVFPQ_FASTSCAN_NLIST_MULTS`, `IVFPQ_FASTSCAN_NPROBE_MULTS`, and
+`IVFPQ_FASTSCAN_PQ_DIMS`; the R driver records the aligned `pq_dim` actually
+tested in the candidate grid.
 
 Public calls use `method = "cagra"` for both CUDA CAGRA providers. The provider
 is selected by `cagra_implementation = NULL`, `"auto"`, `"faiss_gpu"`, or
@@ -162,69 +309,33 @@ host-compatible tensors. faissR therefore records
 for a pure GPU graph-search baseline, and use CUDA `method = "hnsw"` when the
 benchmark should include the cuVS HNSW wrapper route.
 
-All-dataset HNSW target-recall validation can be run from a package checkout
-with the HNSW tuning launchers:
+All-dataset HNSW tuning can be run from a package checkout with the exact
+reference precompute job and the HNSW tuning launchers:
 
 ```bash
+benchmark_scripts/run_hpc_precompute_exact_references_cpu12.sh
 benchmark_scripts/run_hpc_hnsw_tuning_cpu12.sh
 benchmark_scripts/run_hpc_hnsw_tuning_cuda.sh
 ```
 
-They use the float32 manifest, explicit `backend = "cpu"` or
-`backend = "cuda"`, `method = "hnsw"`, Euclidean distance,
-`k = 10, 15, 50, 100`, `target_recall = 0.9, 0.95, 0.99`, and a
-600-second timeout per row. Result rows record the requested target, actual
-target, HNSW parameters, sampled recall, speed, and backend metadata.
-
-The run is accepted only when the full matrix is present: every requested
-dataset, all four `k` values, and all three target recall tiers. The summarizer writes:
-
-- `hnsw_target_recall_completeness.csv`: one expected row per
-  dataset/backend/`k`/target combination, with missing, duplicate, target-met,
-  below-target, and failed/timeout status.
-- `hnsw_target_recall_missing_rows.csv`: combinations that were not produced by
-  the benchmark. A finished launcher calls the summarizer with
-  `--require_complete=TRUE`, so an interrupted or partial sweep is not reported
-  as complete.
-- `hnsw_target_recall_below_target.csv`: successful rows whose sampled recall
-  did not meet the requested tier. These rows are the primary input for
-  tightening the C++ shape/`k` policy.
-- `hnsw_target_recall_recommendations.csv`: for each
-  dataset/backend/`k`/target combination, the fastest successful row that met
-  the target, or the highest-recall successful row when the current tier missed.
-  These recommendation rows are used to decide whether the C++ defaults should
-  move to a wider or narrower HNSW setting.
-
-If a long run is interrupted, resume only the missing combinations with the
-matching resume launcher and the original output directory:
-
-```bash
-OUT_DIR=/path/to/faissR_HNSW_TARGET_RECALL_FLOAT32_YYYYMMDD_HHMMSS \
-  benchmark_scripts/resume_benchmark_hnsw_target_recall_cuda.sh
-```
-
-The resume launcher re-runs the summarizer, reads
-`hnsw_target_recall_missing_rows.csv`, evaluates only those combinations, and
-then requires the final completeness audit to pass.
-
-For new CPU HNSW defaults, use the tuning-grid benchmark rather than only the
-preset target-recall validation. The launcher creates a float32 manifest from
-the configured data directory using `make_hpc_float32_manifest.R`, then runs
-`benchmark_hnsw_tuning_grid.R` with explicit `backend = "cpu"`;
-`backend = "auto"` is not used. The default grid tests the listed float32
-datasets for `k = 10, 15, 50, 100`, with a 600-second timeout per candidate and
-sampled exact-reference recall. It evaluates explicit HNSW parameter candidates
-and recommends the fastest setting that reaches `target_recall = 0.9`,
-`0.95`, or `0.99`. If a dataset has no completed `*_float32.RData` file, the
-manifest marks it as missing and the result table records
-`status = "missing_dataset"` instead of misclassifying the algorithm.
+The precompute job writes exact reference files into the dataset folders. The
+HNSW tuning jobs then create a float32 manifest from the configured data
+directory with `make_hpc_float32_manifest.R` and run
+`benchmark_hnsw_tuning_from_reference.R`. They use explicit `backend = "cpu"`
+or `backend = "cuda"`, `method = "hnsw"`, Euclidean distance,
+`k = 15, 30, 50, 100`, `target_recall = 0.9, 0.95, 0.99`, and a
+2000-second timeout per candidate. `backend = "auto"` is not used. Result rows
+record the requested target, actual target, HNSW parameters, sampled recall,
+speed, memory, output type, and backend metadata. If a dataset has no completed
+`*_float32.RData` file, the manifest marks it as missing and the result table
+records `status = "missing_dataset"` instead of misclassifying the algorithm.
 
 Key outputs are:
 
 - `float32_dataset_manifest.csv`: dataset paths, dimensions, labels flag, and
   readiness status.
 - `hnsw_tuning_candidate_grid.csv`: CPU FAISS HNSW candidate parameters
-  evaluated for each `k`.
+  or CUDA cuVS HNSW candidate parameters evaluated for each `k`.
 - `hnsw_tuning_results.csv`: raw speed, memory, sampled recall, and resolved
   backend metadata for every candidate.
 - `hnsw_tuning_recommendations.csv`: fastest successful candidate per
@@ -327,17 +438,17 @@ Policy summary:
   running a pilot benchmark.
   Flat metric routes when FAISS is available.
 - `backend = "cuda", method = "auto"`: CUDA grid for large 2D/3D
-  Euclidean/cosine/correlation self-KNN; FAISS GPU Flat for small and medium
-  Euclidean or non-Euclidean datasets where exact GPU search is fast; FAISS GPU
-  CAGRA for very large Euclidean self-KNN when available; and FAISS GPU or
-  direct cuVS CAGRA for very large cosine/correlation/inner-product self-KNN.
-  Raw inner-product CAGRA uses the maximum-inner-product-to-L2 graph-search
-  transform and returns shifted inner-product distances. On cuVS-only runtimes,
-  `backend = "auto"` can select direct cuVS CAGRA for large
-  non-Euclidean self-search; smaller non-grid non-Euclidean searches stay on
-  CPU unless FAISS GPU Flat is available.
+  Euclidean/cosine/correlation self-KNN. For Euclidean non-grid self-KNN, the
+  selector chooses Flat/brute force or IVF-Flat from the compiled
+  shape/k/target-recall policy. COIL20-like compact very-high-dimensional
+  matrices, MNIST/Fashion-like image matrices, flow-like low-dimensional
+  million-row matrices, and ImageNet-like large high-dimensional matrices use
+  IVF when the selected target is supported by the tuning evidence. Tiny
+  matrices, query searches, very small `k`, and below-target IVF cases stay on
+  Flat/brute force. Non-grid non-Euclidean auto routes keep the existing exact
+  FAISS GPU Flat or validated graph-search path when available.
 
-Observed examples from the run:
+Historical examples from the earlier auto-policy run:
 
 | Dataset | n x p | CPU auto selected | CPU seconds | CPU recall | CUDA auto selected | CUDA seconds | CUDA recall |
 |---|---:|---|---:|---:|---|---:|---:|
@@ -360,9 +471,10 @@ route.
 FlowRepository remains a CPU stress case. The full 5.2M x 32 matrix timed out
 with `backend = "cpu", method = "auto"`; a follow-up probe with FAISS IVF and
 `nprobe = 4` also failed to return in a practical interactive window. On the
-same dataset, `backend = "cuda", method = "auto"` selected FAISS GPU CAGRA and
-completed, so this shape is currently a GPU-first case rather than a reliable
-CPU-auto default.
+same dataset, the current `backend = "cuda", method = "auto"` policy selects
+CUDA IVF-Flat for Euclidean self-KNN when the requested target-recall tier is
+supported by the CUDA IVF tuning evidence, so this shape is a GPU-first case
+rather than a reliable CPU-auto default.
 
 ## Known Issues From The Run
 

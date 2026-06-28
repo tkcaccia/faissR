@@ -63,6 +63,41 @@ saveRDS(knn, "knn_k100.rds")
 The same object can then feed graph construction, classifier tests, embedding
 pipelines, and recall diagnostics without paying the KNN cost repeatedly.
 
+## Dedicated Method Tuning Sweeps
+
+The HPC tuning scripts are separate from Benchmark #1. They are used to choose
+method-specific `tuning = "auto"` defaults rather than to produce a single
+leaderboard. Each tuning run uses one explicit method and one explicit backend,
+float32 dataset files, Euclidean distance, `k = 15, 30, 50, 100`, target recall
+tiers `0.90`, `0.95`, and `0.99`, and a 2000-second timeout per candidate.
+CPU and CUDA are run separately; `backend = "auto"` is intentionally avoided so
+the resulting tables can define CPU and CUDA policies independently.
+
+Run the exact-reference job once before the method sweeps:
+
+```bash
+benchmark_scripts/run_hpc_precompute_exact_references_cpu12.sh
+```
+
+Then run the method-specific CPU or CUDA launcher, for example:
+
+```bash
+benchmark_scripts/run_hpc_hnsw_tuning_cpu12.sh
+benchmark_scripts/run_hpc_hnsw_tuning_cuda.sh
+benchmark_scripts/run_hpc_cagra_tuning_cuda.sh
+benchmark_scripts/run_hpc_ivfpq_fastscan_tuning_cpu12.sh
+```
+
+Each method writes candidate grids, raw results, target-recall recommendations,
+shape summaries, and a Markdown report. The recommendation table selects the
+fastest successful parameter setting that reaches the requested recall target;
+when no candidate reaches the target, it keeps the best-recall row and marks
+the recommendation as below target. The shape summaries are the evidence used
+to update C++ rules such as HNSW `M`/`efSearch`, IVF `nprobe`, CAGRA graph
+degree/search width, NN-descent candidate breadth, and NSG/Vamana pruning
+settings. See [Autotuning](autotuning.md) for the full explanation of how these
+tables are converted into deterministic package defaults.
+
 ## Benchmark #1
 
 `benchmark_scripts/benchmark1_nn_speed.R` is the broad nearest-neighbour speed

@@ -131,6 +131,9 @@ small-`k` tie handling; explicit CUDA routes do not perform CPU repair and
 therefore error clearly for these degenerate normalized rows.
 The [NN methods guide](docs/nn-methods.md) describes each nearest-neighbour
 method and cites the relevant algorithm/software references.
+The [Autotuning guide](docs/autotuning.md) explains how the HPC target-recall
+sweeps convert speed, recall, failure, and shape-summary tables into
+deterministic C++ defaults for each method and backend.
 
 ## Installation
 
@@ -172,6 +175,8 @@ See [Installation](docs/installation.md) for CRAN/source-build details.
   `faiss_gpu_cagra`. When the linked FAISS library was built with cuVS support,
   these paths report backend labels such as `GpuIndexIVFFlat_cuVS`,
   `GpuIndexIVFPQ_cuVS`, and `GpuIndexCagra_cuVS`.
+  CUDA IVF-Flat auto tuning now selects `nlist`/`nprobe` from a compiled
+  shape/k/target-recall policy derived from the float32 CUDA IVF HPC sweep.
 - Direct RAPIDS cuVS calls, exposed through explicit backends such as
   `cuda_cuvs_cagra`, `cuda_cuvs_hnsw`, `cuda_cuvs_nndescent`,
   `cuda_cuvs_bruteforce`, `cuda_cuvs_ivf_flat`, `cuda_cuvs_ivfpq`, and

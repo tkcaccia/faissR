@@ -867,7 +867,7 @@ nn_compute <- function(data,
         if (!isTRUE(faiss_gpu_available())) {
           stop("float32 normalized FAISS GPU IVF input requires faissR to be built with FAISS GPU.", call. = FALSE)
         }
-        params <- faiss_ivf_params(data_dim[[1L]], k, metric = metric)
+        params <- cuda_ivf_params(data_dim[[1L]], data_dim[[2L]], k, metric = metric, target_recall = target_recall)
         return(faiss_ivf_normalized_metric_result(
           data = data,
           points = points,
@@ -1286,7 +1286,7 @@ nn_compute <- function(data,
       if (!isTRUE(faiss_gpu_available())) {
         stop("float32 FAISS GPU IVF-Flat input requires faissR to be built with FAISS GPU.", call. = FALSE)
       }
-      params <- faiss_ivf_params(data_dim[[1L]], k, metric = metric)
+      params <- cuda_ivf_params(data_dim[[1L]], data_dim[[2L]], k, metric = metric, target_recall = target_recall)
       out <- nn_faiss_gpu_ivf_flat_float32_cpp(
         data,
         points,
@@ -1429,7 +1429,7 @@ nn_compute <- function(data,
         stop("float32 cuVS IVF-Flat input currently supports `metric = \"euclidean\"`.", call. = FALSE)
       }
       require_cuvs_backend("cuVS IVF-Flat")
-      params <- faiss_ivf_params(data_dim[[1L]], k, metric = metric)
+      params <- cuda_ivf_params(data_dim[[1L]], data_dim[[2L]], k, metric = metric, target_recall = target_recall)
       out <- nn_cuvs_ivf_flat_float32_cpp(
         data,
         points,
@@ -2177,7 +2177,8 @@ nn_compute <- function(data,
       work_size = work_size,
       metric = metric,
       exclude_self = isTRUE(exclude_self),
-      tuning = tuning
+      tuning = tuning,
+      target_recall = target_recall
     )
     backend <- nn_auto_selected_backend(route, backend)
   } else if (identical(backend, "cpu_approx")) {
@@ -2745,7 +2746,7 @@ nn_compute <- function(data,
         call. = FALSE
       )
     }
-    params <- faiss_ivf_params(nrow(data), k, metric = metric)
+    params <- cuda_ivf_params(nrow(data), ncol(data), k, metric = metric, target_recall = target_recall)
     tuning_metadata <- NULL
     if (isTRUE(faiss_gpu_ivf_should_tune(data, k, self_query, tuning = tuning, metric = metric))) {
       tuned <- faiss_gpu_ivf_tune_params(data, k, params, tuning = tuning)
@@ -3527,7 +3528,7 @@ nn_compute <- function(data,
     }
     use_float32_transform <- identical(metric_inputs$transform_storage %||% "double", "float32")
     use_float32_output <- identical(output, "float") && is.null(metric_inputs)
-    params <- faiss_ivf_params(nrow(data), k, metric = metric)
+    params <- cuda_ivf_params(nrow(search_data), ncol(search_data), k, metric = metric, target_recall = target_recall)
     out <- if (isTRUE(use_float32_transform) || isTRUE(use_float32_output)) {
       nn_cuvs_ivf_flat_float32_cpp(
         search_data,
@@ -4743,7 +4744,7 @@ nn_capability_row <- function(method, backend, metric) {
       exact <- NA
       implementation <- "shape-aware CUDA selector"
       notes <- if (euclidean) {
-        "Can resolve to CUDA grid, FAISS GPU Flat, cuVS brute force, FAISS GPU CAGRA, or cuVS approximate routes depending on shape and availability."
+        "Can resolve to CUDA grid, exact FAISS GPU Flat/cuVS brute force, or IVF-Flat by shape, k, target_recall, and availability."
       } else if (metric %in% c("cosine", "correlation")) {
         "CUDA auto can resolve to CUDA grid for large 2D/3D self-search, FAISS GPU Flat normalized-IP search for exact small/query workloads, or FAISS GPU/direct cuVS CAGRA graph routes for large self-KNN when available; cuVS-only runtimes are shape-dependent and keep small/query workloads on CPU."
       } else {
@@ -5500,6 +5501,7 @@ nn_auto_select_shape_cpp <- function(resolved_backend,
                                      requested_method = "auto",
                                      shape,
                                      tuning = "auto",
+                                     target_recall = 0.99,
                                      cuda_available_value = cuda_available(),
                                      cuvs_available_value = cuvs_available(),
                                      faiss_available_value = faiss_available(),
@@ -5537,6 +5539,7 @@ nn_auto_select_shape_cpp <- function(resolved_backend,
     cuvs_bruteforce_work_threshold = numeric_option("cuvs_bruteforce_work_threshold", 5e12),
     cpu_exact_work = numeric_option("cpu_auto_exact_work", 2e8),
     cpu_faiss_flat_work = cpu_auto_faiss_flat_work_threshold(),
+    target_recall_option = as.numeric(normalize_hnsw_target_recall(target_recall)),
     tuning = normalize_nn_tuning(tuning)
   )
   for (field in c("selected_backend", "predicted_backend", "predicted_method",
@@ -5557,7 +5560,8 @@ nn_auto_selection_for_backend <- function(backend,
                                           work_size,
                                           metric = "euclidean",
                                           exclude_self = FALSE,
-                                          tuning = "auto") {
+                                          tuning = "auto",
+                                          target_recall = 0.99) {
   requested_backend <- switch(
     backend,
     cpu_auto = "cpu",
@@ -5579,7 +5583,8 @@ nn_auto_selection_for_backend <- function(backend,
       exclude_self = isTRUE(exclude_self),
       work_size = as.double(work_size)
     ),
-    tuning = tuning
+    tuning = tuning,
+    target_recall = target_recall
   )
 }
 
@@ -5614,7 +5619,8 @@ nn_auto_selection_metadata <- function(data,
                                        resolved_backend,
                                        metric = "euclidean",
                                        tuning = "auto",
-                                       exclude_self = FALSE) {
+                                       exclude_self = FALSE,
+                                       target_recall = 0.99) {
   explicit_backend <- !identical(requested_backend, "auto")
   explicit_method <- !identical(requested_method, "auto")
   if (explicit_backend &&
@@ -5635,7 +5641,8 @@ nn_auto_selection_metadata <- function(data,
     requested_backend = requested_backend,
     requested_method = requested_method,
     shape = shape,
-    tuning = tuning
+    tuning = tuning,
+    target_recall = target_recall
   )
 }
 
@@ -6561,9 +6568,9 @@ nn_tuning_metadata <- function(params, prefix = NULL) {
     "tuning_large_n", "tuning_small_k", "tuning_large_k", "tuning_non_euclidean",
     "tuning_metric", "tuning_metric_aware", "target_recall",
     "requested_target_recall", "tuning_shape_group", "tuning_cuda_shape_group",
-    "tuning_k_bucket",
+    "tuning_k_bucket", "tuning_rule_basis",
     "tuning_target_recall_code", "tuning_benchmark_basis",
-    "tuning_benchmark_source", "tuning_source"
+    "tuning_benchmark_target_met", "tuning_benchmark_source", "tuning_source"
   )
   fields <- fields[fields %in% names(params)]
   out <- params[fields]
@@ -7770,11 +7777,53 @@ faiss_ivf_params <- function(n, k, metric = "euclidean") {
   )
 }
 
+cuda_ivf_params <- function(n, p, k, metric = "euclidean", target_recall = 0.99) {
+  metric <- normalize_nn_metric(metric)
+  target_recall <- normalize_hnsw_target_recall(target_recall)
+  nn_tune_cuda_ivf_cpp(
+    as.integer(n),
+    as.integer(p),
+    as.integer(k),
+    metric,
+    as.numeric(target_recall),
+    nn_option_int_or_na(c(
+      "cuda_ivf_nlist",
+      "cuvs_ivf_nlist",
+      "faiss_gpu_ivf_nlist",
+      "faiss_nlist",
+      "ivf_nlist"
+    )),
+    nn_option_int_or_na(c(
+      "cuda_ivf_nprobe",
+      "cuvs_ivf_nprobe",
+      "faiss_gpu_ivf_nprobe",
+      "faiss_nprobe",
+      "ivf_nprobe"
+    )),
+    cuda_ivf_manual_params()
+  )
+}
+
 faiss_ivf_manual_params <- function() {
   any(vapply(
     c("faiss_nlist", "ivf_nlist", "faiss_nprobe", "ivf_nprobe"),
     function(name) !is.null(faissr_option(name, NULL)),
     logical(1)
+  ))
+}
+
+cuda_ivf_manual_params <- function() {
+  nn_any_options(c(
+    "cuda_ivf_nlist",
+    "cuvs_ivf_nlist",
+    "faiss_gpu_ivf_nlist",
+    "faiss_nlist",
+    "ivf_nlist",
+    "cuda_ivf_nprobe",
+    "cuvs_ivf_nprobe",
+    "faiss_gpu_ivf_nprobe",
+    "faiss_nprobe",
+    "ivf_nprobe"
   ))
 }
 
@@ -7928,7 +7977,7 @@ faiss_gpu_ivf_should_tune <- function(data, k, self_query, tuning = "auto", metr
   if (!identical(metric, "euclidean")) return(FALSE)
   if (!isTRUE(self_query)) return(FALSE)
   if (!isTRUE(faiss_gpu_available())) return(FALSE)
-  if (isTRUE(faiss_ivf_manual_params())) return(FALSE)
+  if (isTRUE(cuda_ivf_manual_params())) return(FALSE)
   enabled <- faissr_option("faiss_gpu_ivf_tune", TRUE)
   if (!isTRUE(enabled)) return(FALSE)
   threshold <- faissr_option("faiss_gpu_ivf_tune_threshold", 20000L)
@@ -8971,12 +9020,10 @@ grid_self_knn <- function(data,
 #'   uses exact, grid, FAISS IVF, FAISS HNSW, or native CPU NN-descent fallback
 #'   depending on data shape, size, and available libraries. CUDA auto uses CUDA
 #'   grid for 2D/3D Euclidean/cosine/correlation
-#'   self-KNN, exact FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for
-#'   Euclidean searches when appropriate, FAISS GPU Flat IP routes for exact small/query inner-product
-#'   searches when FAISS GPU Flat is available, transformed FAISS GPU/direct
-#'   cuVS CAGRA for large raw-inner-product self-KNN, and transformed direct
-#'   cuVS brute force for explicit CUDA exact/brute-force non-Euclidean
-#'   searches when cuVS is available
+#'   self-KNN. For Euclidean non-grid self-KNN, CUDA auto chooses between exact
+#'   Flat/brute force and IVF-Flat from dataset shape, `k`, and
+#'   `target_recall`. Non-grid cosine/correlation/IP auto routes stay on exact
+#'   FAISS GPU Flat or validated graph routes when available
 #'   [1-3,5,13-15,22-23]. When `backend = "auto"` is
 #'   combined with an explicit method, faissR first checks whether that exact
 #'   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU
@@ -9009,8 +9056,8 @@ grid_self_knn <- function(data,
 #'   design rather than a pure all-GPU HNSW search implementation.
 #'   Default HNSW parameters are selected by compiled deterministic rules
 #'   without pilot tuning. Euclidean CPU FAISS HNSW uses an HPC-derived lookup
-#'   table keyed by dataset shape group, `k` bucket, and
-#'   `target_recall = 0.9`, `0.95`, or `0.99`; CUDA cuVS HNSW uses a
+#'   table keyed by dataset shape group, `k` bucket (`15`, `30`, `50`, or
+#'   `100`), and `target_recall = 0.9`, `0.95`, or `0.99`; CUDA cuVS HNSW uses a
 #'   separate HPC-derived shape/k/recall lookup table for its CAGRA seed graph
 #'   and cuVS HNSW conversion route; non-Euclidean routes keep
 #'   conservative metric-aware fallback tiers. Result approximation metadata
@@ -9184,7 +9231,8 @@ grid_self_knn <- function(data,
 #'   `"off"`/`"none"` disables tuning.
 #'   FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
 #'   `k`, `metric`, and `target_recall`. Euclidean CPU FAISS HNSW uses a
-#'   compiled HPC-derived lookup table for shape groups and `k` buckets;
+#'   compiled HPC-derived lookup table for shape groups and `k` buckets
+#'   (`15`, `30`, `50`, and `100`);
 #'   non-Euclidean routes use small-`k` metric-aware, balanced, and
 #'   high-recall fallback tiers. CUDA cuVS HNSW uses its own compiled
 #'   HPC-derived lookup table keyed by CUDA-specific shape group, `k` bucket,
@@ -9201,10 +9249,12 @@ grid_self_knn <- function(data,
 #'   `nn_tune_*_cpp()` helpers and record `tuning_source = "cpp"` in
 #'   approximation metadata. Advanced tuning and cache knobs use
 #'   `options(faissR.<name> = ...)`.
-#' @param target_recall HNSW speed/recall tier. Use `0.9`, `0.95`, or `0.99`.
-#'   The value is consumed by FAISS CPU HNSW when `tuning = "auto"` and
-#'   recorded in result metadata. Lower values trade recall for speed;
-#'   non-HNSW methods ignore the value.
+#' @param target_recall Speed/recall tier. Use `0.9`, `0.95`, or `0.99`.
+#'   CUDA `method = "auto"` uses it to choose between Flat/brute force and
+#'   IVF-Flat for Euclidean self-KNN, CUDA `method = "ivf"` uses it for
+#'   `nlist`/`nprobe`, and CPU/CUDA HNSW use it for graph-search tiers.
+#'   Lower values trade recall for speed where the selected method supports a
+#'   recall/speed tier.
 #' @param cagra_implementation CUDA CAGRA provider for this call. `NULL` uses
 #'   the global `options(faissR.cagra_implementation = ...)` value. `"auto"`
 #'   uses a deterministic provider rule: compact high-dimensional self-KNN
@@ -9334,7 +9384,8 @@ nn <- function(data,
     resolved_backend = resolved_backend,
     metric = metric,
     tuning = tuning,
-    exclude_self = exclude_self
+    exclude_self = exclude_self,
+    target_recall = target_recall
   )
   result <- nn_compute(
     data,

@@ -209,11 +209,12 @@ unavailable. If neither FAISS nor RcppHNSW is available, CPU auto can use
 native CPU NSG-style candidate refinement for larger non-Euclidean self-KNN,
 or native CPU NN-descent for other large self-KNN cases, instead of exact brute
 force [1-2,5,21]. On CUDA, it uses CUDA grid search for large 2D/3D
-Euclidean/cosine/correlation self-KNN, exact FAISS GPU Flat or cuVS brute force
-for small and medium Euclidean searches, FAISS GPU CAGRA for very large
-Euclidean self-KNN when FAISS GPU/cuVS integration is available, and FAISS GPU
-Flat inner-product routes for cosine, correlation, and raw inner-product
-searches when FAISS GPU Flat is available [13-15]. If CUDA/cuVS is present but
+Euclidean/cosine/correlation self-KNN, then chooses between exact FAISS GPU
+Flat/cuVS brute force and IVF-Flat for Euclidean self-KNN from dataset shape,
+`k`, and `target_recall`. Non-self Euclidean queries stay on exact Flat/brute
+force. FAISS GPU Flat inner-product routes are used for small/query cosine,
+correlation, and raw inner-product searches when FAISS GPU Flat is available
+[13-15]. If CUDA/cuVS is present but
 FAISS GPU Flat is not, `backend = "auto"` keeps non-grid non-Euclidean searches
 on CPU instead of selecting an unavailable GPU index. The same rule applies
 when `backend = "auto"` is combined with an explicit method such as `"flat"` or
@@ -317,12 +318,13 @@ and smaller `nprobe` are expected to be faster but can reduce recall, while
 FAISS HNSW uses no pilot tuning in the user call. Its default parameters are a
 static shape/k/metric policy implemented in C++ and selected by
 `target_recall`. The public options are `target_recall = 0.9`, `0.95`, and
-`0.99`; lower targets reduce HNSW graph/search effort for speed. Large
-low-dimensional Euclidean matrices (`n >= 50000`, `p <= 64`) use flow
-cytometry-derived tiers; large high-dimensional Euclidean matrices
-(`n >= 50000`, `p >= 256`) use MNIST/FashionMNIST-derived tiers;
-non-Euclidean metrics keep broader metric-aware tiers; and other shapes keep
-the balanced general HNSW defaults.
+`0.99`; lower targets reduce HNSW graph/search effort for speed. Euclidean CPU
+FAISS HNSW uses the CPU12 HPC sweep from
+`faissR_HNSW_TUNING_CPU12_20260627_160002`: shape groups are small-n, medium
+low-dimensional, large low-dimensional, and large high-dimensional; k buckets
+are 15, 30, 50, and 100; and each compiled row reached its requested target on
+all datasets in that shape group. Non-Euclidean metrics keep broader
+metric-aware tiers; and other shapes keep the balanced general HNSW defaults.
 
 ### Method Families
 
@@ -334,7 +336,7 @@ public method names map to different concrete functions depending on `backend`.
 
 | Method | CPU behavior | CUDA behavior | Notes |
 | --- | --- | --- | --- |
-| `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, FAISS GPU Flat/cuVS brute force, FAISS GPU CAGRA/direct cuVS CAGRA selector, FAISS GPU Flat IP for exact small/query raw inner product, or transformed FAISS GPU/direct cuVS CAGRA for large raw-inner-product self-KNN. Explicit CUDA exact/brute-force calls can use transformed cuVS brute force. | Default for general use. |
+| `auto` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid, then Euclidean Flat-vs-IVF selection by shape, `k`, and `target_recall`; non-Euclidean auto uses exact FAISS GPU Flat or validated graph routes where available. Explicit CUDA exact/brute-force calls can use transformed cuVS brute force. | Default for general use. |
 | `exact` | Native exact CPU route. | FAISS GPU Flat when available; otherwise cuVS brute force can provide exact transformed metric search. | Accuracy-first baseline. |
 | `flat` | FAISS Flat L2/IP index; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP; degenerate zero-normalized rows error instead of being repaired on CPU. | Exact FAISS route [1-2,16]. |
 | `bruteforce` | Native exact CPU route. | Direct cuVS brute force when available, with exact transforms for cosine, correlation, and raw inner product. | Useful for comparing direct cuVS against FAISS GPU Flat [1-3,16]. |

@@ -23,7 +23,7 @@ set -euo pipefail
 #   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_ivfpq_fastscan_tuning_cuda.sh
 #
 # The job scans float32 .RData files, uses explicit backend="cuda",
-# method="ivfpq_fastscan", Euclidean distance, k=10,15,50,100, and writes
+# method="ivfpq_fastscan", Euclidean distance, k=15,30,50,100, and writes
 # recommendation tables for target recall 0.90, 0.95, and 0.99.
 # It sweeps IVF `nlist`, IVF `nprobe`, byte-aligned cuVS 4-bit `pq_dim`,
 # and cuVS batch size. By default, the R benchmark uses a curated paired
@@ -54,7 +54,7 @@ export SINGULARITY_GPU_FLAG="${SINGULARITY_GPU_FLAG:---nv}"
 export R_BIN="${R_BIN:-Rscript}"
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
-export K_VALUES="${K_VALUES:-10,15,50,100}"
+export K_VALUES="${K_VALUES:-15,30,50,100}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
 export IVFPQ_FASTSCAN_NLIST_MULTS="${IVFPQ_FASTSCAN_NLIST_MULTS:-}"
@@ -123,7 +123,27 @@ fi
   "${RUNNER[@]}" "${R_BIN}" "${MANIFEST_SCRIPT}"     --data_root="${DATA_ROOT}"     --out="${MANIFEST}"     --datasets="${DATASETS}"
 
   echo "[$(date --iso-8601=seconds)] running CUDA IVFPQ_FASTSCAN tuning from precomputed references"
-  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --backend="${BACKEND}"     --k_values="${K_VALUES}"     --target_recalls="${TARGET_RECALLS}"     --threads="${THREADS_CPU}"     --thread_values="${THREAD_VALUES}"     --timeout="${TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --output_values="${OUTPUT_VALUES}"     --grid_level="${GRID_LEVEL}"     --ivfpq_fastscan_nlist_multipliers="${IVFPQ_FASTSCAN_NLIST_MULTS}"     --ivfpq_fastscan_nprobe_multipliers="${IVFPQ_FASTSCAN_NPROBE_MULTS}"     --ivfpq_fastscan_pq_dim_values="${IVFPQ_FASTSCAN_PQ_DIMS}"     --cuvs_ivf_batch_sizes="${CUVS_IVF_BATCH_SIZES}"     --resume=TRUE
+  BENCH_ARGS=(
+    --manifest="${MANIFEST}"
+    --out_dir="${OUT_DIR}"
+    --datasets="${DATASETS}"
+    --backend="${BACKEND}"
+    --k_values="${K_VALUES}"
+    --target_recalls="${TARGET_RECALLS}"
+    --threads="${THREADS_CPU}"
+    --thread_values="${THREAD_VALUES}"
+    --timeout="${TIMEOUT}"
+    --quality_n="${QUALITY_N}"
+    --seed="${SEED}"
+    --output_values="${OUTPUT_VALUES}"
+    --grid_level="${GRID_LEVEL}"
+    --resume=TRUE
+  )
+  [[ -n "${IVFPQ_FASTSCAN_NLIST_MULTS}" ]] && BENCH_ARGS+=(--ivfpq_fastscan_nlist_multipliers="${IVFPQ_FASTSCAN_NLIST_MULTS}")
+  [[ -n "${IVFPQ_FASTSCAN_NPROBE_MULTS}" ]] && BENCH_ARGS+=(--ivfpq_fastscan_nprobe_multipliers="${IVFPQ_FASTSCAN_NPROBE_MULTS}")
+  [[ -n "${IVFPQ_FASTSCAN_PQ_DIMS}" ]] && BENCH_ARGS+=(--ivfpq_fastscan_pq_dim_values="${IVFPQ_FASTSCAN_PQ_DIMS}")
+  [[ -n "${CUVS_IVF_BATCH_SIZES}" ]] && BENCH_ARGS+=(--cuvs_ivf_batch_sizes="${CUVS_IVF_BATCH_SIZES}")
+  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}" "${BENCH_ARGS[@]}"
 
   echo "DONE: ${OUT_DIR}"
 } 2>&1 | tee -a "${OUT_DIR}/ivfpq_fastscan_tuning_cuda.log"

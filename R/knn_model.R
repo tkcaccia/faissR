@@ -35,11 +35,11 @@
 #'   opt-in where implemented. FAISS GPU IVF pilot/cache tuning is
 #'   Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware
 #'   defaults.
-#' @param target_recall HNSW speed/recall tier passed to \code{\link{nn}()}.
-#'   Use `0.9`, `0.95`, or `0.99`. Lower targets use faster CPU FAISS HNSW
-#'   and CUDA cuVS HNSW defaults; CUDA HNSW metadata records that the available
-#'   cuVS route is a CAGRA-to-HNSW wrapper. Non-HNSW methods ignore this value
-#'   but keep it in metadata for reproducibility.
+#' @param target_recall Speed/recall tier passed to \code{\link{nn}()}.
+#'   Use `0.9`, `0.95`, or `0.99`. CUDA `method = "auto"` uses it for
+#'   Flat-vs-IVF selection, CUDA IVF uses it for probing defaults, and HNSW uses
+#'   it for graph-search tiers. CUDA HNSW metadata records that the available
+#'   cuVS route is a CAGRA-to-HNSW wrapper.
 #' @param cagra_implementation CUDA CAGRA provider passed to \code{\link{nn}()}
 #'   for `method = "cagra"` or CUDA-auto routes that select CAGRA. `NULL` uses
 #'   the global `faissR.cagra_implementation` option; `"auto"` uses the same
@@ -231,9 +231,10 @@ knn_model_fit <- function(Xtrain,
 #'   opt-in where implemented. FAISS GPU IVF pilot/cache tuning is
 #'   Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware
 #'   defaults.
-#' @param target_recall Optional HNSW speed/recall tier for this prediction
-#'   call. `NULL` reuses the fitted model's value; otherwise use `0.9`,
-#'   `0.95`, or `0.99`.
+#' @param target_recall Optional speed/recall tier for this prediction call.
+#'   `NULL` reuses the fitted model's value; otherwise use `0.9`, `0.95`, or
+#'   `0.99`. It affects CUDA auto Flat-vs-IVF selection, CUDA IVF probing, and
+#'   HNSW graph-search tiers when prediction needs a new NN search.
 #' @param cagra_implementation CUDA CAGRA provider for this prediction call.
 #'   `NULL` reuses the fitted model's setting, then the global option.
 #' @param cagra_build_algo Direct RAPIDS cuVS CAGRA graph-build algorithm for

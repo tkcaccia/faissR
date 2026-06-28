@@ -91,7 +91,7 @@ clearly instead of repairing those rows on CPU.
 
 | Method | CPU metrics | CUDA metrics | Notes |
 | --- | --- | --- | --- |
-| `"auto"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA auto uses shape-aware CUDA grid for large 2D/3D Euclidean/cosine/correlation self-KNN, and FAISS GPU Flat for non-grid cosine/correlation/IP when available. |
+| `"auto"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA auto uses shape-aware CUDA grid for large 2D/3D Euclidean/cosine/correlation self-KNN. For Euclidean non-grid self-KNN it chooses Flat or IVF from shape, `k`, and `target_recall`; non-grid cosine/correlation/IP stays on exact FAISS GPU Flat or validated graph routes when available. |
 | `"exact"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA cosine/correlation/IP use FAISS GPU Flat variants when available. |
 | `"flat"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS Flat L2/IP plus normalized Flat IP transforms. |
 | `"bruteforce"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CUDA uses direct cuVS brute force when available; cosine/correlation use normalized Euclidean search and inner product uses a maximum-inner-product-to-L2 transform around the cuVS L2 kernel. |
@@ -135,15 +135,14 @@ arguments and collected runtime capability flags:
   native CPU NN-descent for other large self-KNN cases, instead of exact brute
   force [1-2,5,16,21].
 - CUDA auto uses CUDA grid for large 2D/3D Euclidean/cosine/correlation
-  self-search, direct cuVS brute force for compact very high-dimensional
-  Euclidean self-KNN when cuVS is available, exact FAISS GPU Flat or cuVS brute
-  force for other small/medium Euclidean searches, FAISS GPU CAGRA for very
-  large Euclidean self-search when available, FAISS GPU Flat IP routes for
-  small or query cosine, correlation, and inner-product searches when FAISS GPU
-  Flat is available, and FAISS GPU/direct cuVS CAGRA for very large
-  non-Euclidean self-KNN [1-3,13-16]. On cuVS-only runtimes,
-  `backend = "auto"` can use direct cuVS CAGRA for large non-Euclidean
-  self-search and otherwise keeps those metrics on CPU.
+  self-search. For Euclidean non-grid self-KNN, the compiled selector chooses
+  between exact Flat/brute force and IVF-Flat using dataset shape, `k`, and
+  `target_recall`: IVF is preferred for COIL20-like, MNIST/Fashion-like,
+  flow-like, and ImageNet-like shapes when the tuning evidence reaches the
+  requested recall; Flat is kept for query searches, tiny matrices, very small
+  `k`, and shape/target combinations where IVF did not meet the target.
+  Non-grid cosine, correlation, and inner-product auto routes stay on exact
+  FAISS GPU Flat or validated graph routes when available [1-3,13-16].
 
 `auto` is intended as a balanced default, not a guarantee of the fastest method
 for every dataset. For benchmarking, report the requested backend/method/tuning
@@ -281,8 +280,9 @@ route based on Hierarchical Navigable Small World graphs [5,16].
   the metric transforms described above.
 - HNSW is often a strong default for large high-dimensional CPU self-KNN.
 - Tuning parameters include HNSW `M`, construction effort, and search effort.
-  CPU FAISS HNSW uses compiled shape/k tiers by default. Use
-  `target_recall = 0.9`, `0.95`, or `0.99` to choose the speed/recall tier.
+  Euclidean CPU FAISS HNSW uses compiled CPU12 HPC shape/k tiers by default,
+  with k buckets 15, 30, 50, and 100. Use `target_recall = 0.9`, `0.95`, or
+  `0.99` to choose the speed/recall tier.
 - In `knn()`, explicit CPU FAISS `method = "flat"`, `"hnsw"`, `"ivf"`, and
   `"ivfpq"` models store a session-local FAISS external pointer. Matching
   `predict()` calls reuse that fitted index and report
@@ -304,6 +304,14 @@ should be measured for new datasets when it is used for scientific conclusions.
 - On CUDA, it maps to FAISS GPU IVF-Flat.
 - The main parameters are the number of coarse lists (`nlist`) and searched
   lists (`nprobe`).
+- On CUDA, `tuning = "auto"` chooses `nlist` and `nprobe` from a compiled
+  shape/k/target-recall policy built from the CUDA IVF tuning sweep. The policy
+  separates compact high-dimensional data, medium image-like data, large
+  low-dimensional flow-like data, and large high-dimensional ImageNet-like data.
+  Use `target_recall = 0.9`, `0.95`, or `0.99` to pick the speed/accuracy tier.
+- Manual CUDA IVF overrides are available through `options(faissR.cuda_ivf_nlist
+  = ..., faissR.cuda_ivf_nprobe = ...)`, with provider-specific aliases
+  `cuvs_ivf_*` and `faiss_gpu_ivf_*`.
 - `metric = "inner_product"` uses FAISS IVF-Flat with `METRIC_INNER_PRODUCT`.
 - `metric = "cosine"` uses row L2 normalization followed by IVF inner-product
   search and returns `1 - similarity`.

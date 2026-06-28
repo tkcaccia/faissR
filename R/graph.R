@@ -29,10 +29,10 @@
 #'   convention from \code{\link{nn}()}.
 #' @param tuning Tuning policy passed to \code{\link{nn}()} with
 #'   `exclude_self = TRUE` when `knn` is not supplied.
-#' @param target_recall HNSW speed/recall tier passed to
-#'   \code{\link{nn}()} with `exclude_self = TRUE` when KNN is computed here.
-#'   Use `0.9`, `0.95`, or `0.99`; non-HNSW methods ignore this value but
-#'   retain it in graph metadata.
+#' @param target_recall Speed/recall tier passed to \code{\link{nn}()} with
+#'   `exclude_self = TRUE` when KNN is computed here. Use `0.9`, `0.95`, or
+#'   `0.99`; CUDA `method = "auto"` uses it for Flat-vs-IVF selection, CUDA IVF
+#'   uses it for probing defaults, and HNSW uses it for graph-search tiers.
 #' @param cagra_implementation CUDA CAGRA provider passed to
 #'   \code{\link{nn}()} with `exclude_self = TRUE` when KNN is computed here.
 #'   `NULL` uses the global option; `"auto"` uses the same deterministic
@@ -292,9 +292,11 @@ graph_cluster_backend_selection <- function(backend,
 #'   convention from \code{\link{nn}()}.
 #' @param tuning Tuning policy passed to \code{\link{nn}()} with
 #'   `exclude_self = TRUE` when `graph` is a matrix or embedding.
-#' @param target_recall HNSW speed/recall tier passed to
-#'   \code{\link{nn}()} with `exclude_self = TRUE` when `graph` is a matrix or
-#'   embedding. Use `0.9`, `0.95`, or `0.99`.
+#' @param target_recall Speed/recall tier passed to \code{\link{nn}()} with
+#'   `exclude_self = TRUE` when `graph` is a matrix or embedding. Use `0.9`,
+#'   `0.95`, or `0.99`; CUDA `method = "auto"` uses it for Flat-vs-IVF
+#'   selection, CUDA IVF uses it for probing defaults, and HNSW uses it for
+#'   graph-search tiers.
 #' @param cagra_implementation CUDA CAGRA provider passed to
 #'   \code{\link{nn}()} with `exclude_self = TRUE` when graph KNN is computed
 #'   here. `NULL` uses the global option; `"auto"`, `"faiss_gpu"`, or

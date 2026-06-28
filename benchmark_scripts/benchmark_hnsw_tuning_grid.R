@@ -863,7 +863,7 @@ main <- function() {
       call. = FALSE
     )
   }
-  k_values <- as.integer(split_arg(args$k_values %||% args$k, "10,15,50,100"))
+  k_values <- as.integer(split_arg(args$k_values %||% args$k, "15,30,50,100"))
   target_recalls <- suppressWarnings(as.numeric(split_arg(args$target_recalls, "0.9,0.95,0.99")))
   if (!all(target_recalls %in% c(0.9, 0.95, 0.99))) {
     stop("`target_recalls` must contain only 0.9, 0.95, and/or 0.99.", call. = FALSE)

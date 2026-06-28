@@ -111,7 +111,8 @@ persisting, `"fixed"` uses fixed defaults with tuning metadata, and
 `"off"`/`"none"` disables tuning.
 FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
 `k`, `metric`, and `target_recall`. Euclidean CPU FAISS HNSW uses a
-compiled HPC-derived lookup table for shape groups and `k` buckets;
+compiled HPC-derived lookup table for shape groups and `k` buckets
+(`15`, `30`, `50`, and `100`);
 non-Euclidean routes use small-`k` metric-aware, balanced, and
 high-recall fallback tiers. CUDA cuVS HNSW uses its own compiled
 HPC-derived lookup table keyed by CUDA-specific shape group, `k` bucket,
@@ -129,10 +130,12 @@ Deterministic approximate-method defaults are computed by C++
 approximation metadata. Advanced tuning and cache knobs use
 `options(faissR.<name> = ...)`.}
 
-\item{target_recall}{HNSW speed/recall tier. Use `0.9`, `0.95`, or `0.99`.
-The value is consumed by FAISS CPU HNSW when `tuning = "auto"` and recorded
-in result metadata. Lower values trade recall for speed; non-HNSW methods
-ignore the value.}
+\item{target_recall}{Speed/recall tier. Use `0.9`, `0.95`, or `0.99`.
+CUDA `method = "auto"` uses it to choose between Flat/brute force and
+IVF-Flat for Euclidean self-KNN, CUDA `method = "ivf"` uses it for
+`nlist`/`nprobe`, and CPU/CUDA HNSW use it for graph-search tiers.
+Lower values trade recall for speed where the selected method supports a
+recall/speed tier.}
 
 \item{cagra_implementation}{CUDA CAGRA provider for this call. `NULL` uses
 the global `options(faissR.cagra_implementation = ...)` value. `"auto"`
@@ -229,13 +232,11 @@ Method descriptions:
   \item `"auto"`: shape-aware selector for the selected backend. CPU auto
   uses exact, grid, FAISS IVF, FAISS HNSW, or native CPU NN-descent fallback
   depending on data shape, size, and available libraries. CUDA auto uses CUDA
-  grid for 2D/3D Euclidean/cosine/correlation
-  self-KNN, exact FAISS GPU Flat/cuVS brute force or FAISS GPU CAGRA for
-  Euclidean searches when appropriate, FAISS GPU Flat IP routes for exact small/query inner-product
-  searches when FAISS GPU Flat is available, transformed FAISS GPU/direct
-  cuVS CAGRA for large raw-inner-product self-KNN, and transformed direct
-  cuVS brute force for explicit CUDA exact/brute-force non-Euclidean
-  searches when cuVS is available
+  grid for 2D/3D Euclidean/cosine/correlation self-KNN. For Euclidean
+  non-grid self-KNN, CUDA auto chooses between exact Flat/brute force and
+  IVF-Flat from dataset shape, `k`, and `target_recall`. Non-grid
+  cosine/correlation/IP auto routes stay on exact FAISS GPU Flat or validated
+  graph routes when available
   [1-3,5,13-15,22-23]. When `backend = "auto"` is
   combined with an explicit method, faissR first checks whether that exact
   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU
@@ -267,7 +268,8 @@ Method descriptions:
   the cuVS wrapper design rather than a pure all-GPU HNSW search implementation.
   Default HNSW parameters are selected by compiled deterministic rules
   without pilot tuning. Euclidean CPU FAISS HNSW uses an HPC-derived lookup
-  table keyed by dataset shape group, `k` bucket, and
+  table keyed by dataset shape group, `k` bucket (\code{15}, \code{30},
+  \code{50}, or \code{100}), and
   `target_recall = 0.9`, `0.95`, or `0.99`; CUDA cuVS HNSW uses a
   separate HPC-derived shape/k/recall lookup table for its CAGRA seed graph
   and cuVS HNSW conversion route; non-Euclidean routes keep

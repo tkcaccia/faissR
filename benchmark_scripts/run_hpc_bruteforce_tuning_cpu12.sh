@@ -2,7 +2,8 @@
 
 #SBATCH --account=immunology
 #SBATCH --partition=ada
-#SBATCH --nodes=12
+#SBATCH --nodes=1
+#SBATCH --ntasks=12
 #SBATCH --time=48:00:00
 #SBATCH --job-name="faissR_BRUTEFORCE_CPU12"
 #SBATCH --chdir=/scratch/firenze/NN
@@ -21,7 +22,7 @@ set -euo pipefail
 #   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_bruteforce_tuning_cpu12.sh
 #
 # The job scans float32 .RData files, uses explicit backend="cpu",
-# method="bruteforce", Euclidean distance, k=10,15,50,100, and writes
+# method="bruteforce", Euclidean distance, k=15,30,50,100, and writes
 # recommendation tables for target recall 0.90, 0.95, and 0.99.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
@@ -47,7 +48,7 @@ export SINGULARITY_GPU_FLAG="${SINGULARITY_GPU_FLAG:-}"
 export R_BIN="${R_BIN:-Rscript}"
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
-export K_VALUES="${K_VALUES:-10,15,50,100}"
+export K_VALUES="${K_VALUES:-15,30,50,100}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
 

@@ -37,9 +37,11 @@ opt-in where implemented. FAISS GPU IVF pilot/cache tuning is
 Euclidean-only; non-Euclidean IVF routes use deterministic metric-aware
 defaults.}
 
-\item{target_recall}{Optional HNSW speed/recall tier for this prediction
-call. `NULL` reuses the fitted model's value; otherwise use `0.9`,
-`0.95`, or `0.99`.}
+\item{target_recall}{Optional speed/recall tier for this prediction call.
+\code{NULL} reuses the fitted model's value; otherwise use \code{0.9},
+\code{0.95}, or \code{0.99}. It affects CUDA auto Flat-vs-IVF selection,
+CUDA IVF probing, and HNSW graph-search tiers when prediction needs a new NN
+search.}
 
 \item{cagra_implementation}{CUDA CAGRA provider for this prediction call.
 `NULL` reuses the fitted model's setting, then the global option.}

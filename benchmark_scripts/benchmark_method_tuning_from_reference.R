@@ -143,6 +143,7 @@ read_peak_rss_gb <- function() {
 classify_error <- function(message, timed_out = FALSE) {
   if (isTRUE(timed_out)) return("timeout")
   msg <- tolower(as.character(message %||% ""))
+  if (grepl("cudaerrornokernelimagefordevice|no kernel image is available|invalid device function", msg)) return("unavailable")
   if (grepl("not available|unavailable|not built|requires|without cuda|without faiss|without cuvs", msg)) return("unavailable")
   if (grepl("not support|does not support|only supports|only available", msg)) return("unsupported")
   "failed"
@@ -883,16 +884,30 @@ completed_keys <- function(path, resume_statuses = c("success", "unsupported", "
 summarize_results <- function(out_dir, results_path, target_recalls, method) {
   if (!file.exists(results_path)) return(invisible(NULL))
   x <- read.csv(results_path, stringsAsFactors = FALSE)
+  if ("elapsed_sec" %in% names(x)) x$elapsed_sec <- suppressWarnings(as.numeric(x$elapsed_sec))
+  if ("recall_at_k" %in% names(x)) x$recall_at_k <- suppressWarnings(as.numeric(x$recall_at_k))
   success <- x[x$status == "success" & is.finite(x$recall_at_k) & is.finite(x$elapsed_sec), , drop = FALSE]
   rows <- list(); idx <- 0L
-  groups <- unique(success[c("dataset", "backend", "method", "k")])
+  groups <- unique(x[c("dataset", "backend", "method", "k")])
   for (g in seq_len(nrow(groups))) {
+    part_all <- x[x$dataset == groups$dataset[[g]] & x$backend == groups$backend[[g]] & x$method == groups$method[[g]] & x$k == groups$k[[g]], , drop = FALSE]
     part0 <- success[success$dataset == groups$dataset[[g]] & success$backend == groups$backend[[g]] & success$method == groups$method[[g]] & success$k == groups$k[[g]], , drop = FALSE]
     for (target in target_recalls) {
       ok <- part0[part0$recall_at_k >= target, , drop = FALSE]
-      best <- if (nrow(ok)) ok[order(ok$elapsed_sec, -ok$recall_at_k), , drop = FALSE][1L, , drop = FALSE] else part0[order(-part0$recall_at_k, part0$elapsed_sec), , drop = FALSE][1L, , drop = FALSE]
+      if (nrow(ok)) {
+        best <- ok[order(ok$elapsed_sec, -ok$recall_at_k), , drop = FALSE][1L, , drop = FALSE]
+        basis <- "fastest_meeting_target"
+      } else if (nrow(part0)) {
+        best <- part0[order(-part0$recall_at_k, part0$elapsed_sec), , drop = FALSE][1L, , drop = FALSE]
+        basis <- "best_recall_below_target"
+      } else {
+        status_rank <- match(part_all$status, c("timeout", "unsupported", "unavailable", "failed"))
+        status_rank[is.na(status_rank)] <- length(c("timeout", "unsupported", "unavailable", "failed")) + 1L
+        best <- part_all[order(status_rank, part_all$candidate_id), , drop = FALSE][1L, , drop = FALSE]
+        basis <- "no_successful_candidate"
+      }
       idx <- idx + 1L
-      rows[[idx]] <- cbind(target_recall_threshold = target, recommendation_basis = if (nrow(ok)) "fastest_meeting_target" else "best_recall_below_target", best)
+      rows[[idx]] <- cbind(target_recall_threshold = target, recommendation_basis = basis, best)
     }
   }
   rec <- if (length(rows)) do.call(rbind, rows) else cbind(target_recall_threshold = numeric(0), recommendation_basis = character(0), x[FALSE, , drop = FALSE])
@@ -945,7 +960,7 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   path_col <- dataset_path_column(manifest)
   datasets <- split_arg(args$datasets, paste(manifest$dataset, collapse = ","))
   manifest <- manifest[manifest$dataset %in% datasets, , drop = FALSE]
-  k_values <- as.integer(split_arg(args$k_values, "10,15,50,100"))
+  k_values <- as.integer(split_arg(args$k_values, "15,30,50,100"))
   k_values <- k_values[is.finite(k_values) & k_values > 0L]
   if (!length(k_values)) stop("`--k_values` must contain at least one positive integer.", call. = FALSE)
   reference_k <- positive_int(args$reference_k, max(c(100L, k_values)), "reference_k")

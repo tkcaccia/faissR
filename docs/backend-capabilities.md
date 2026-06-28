@@ -55,12 +55,12 @@ with method-specific parameters.
 
 | `method` | CPU route | CUDA route | Main use |
 | --- | --- | --- | --- |
-| `"auto"` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid for Euclidean/cosine/correlation 2D/3D self-KNN; compact Euclidean self-KNN can select cuVS brute force, larger exact Euclidean routes prefer FAISS GPU Flat when available, and larger graph-style routes use FAISS GPU CAGRA or direct cuVS CAGRA where available; raw inner-product auto uses FAISS GPU Flat IP for exact small/query search and transformed FAISS GPU/direct cuVS CAGRA for large self-KNN when available. Explicit CUDA exact/brute-force calls can use transformed cuVS brute force. | Default general-purpose choice. |
+| `"auto"` | Shape-aware exact/grid/FAISS IVF/FAISS HNSW selector. | Shape-aware CUDA grid for Euclidean/cosine/correlation 2D/3D self-KNN; Euclidean CUDA auto chooses between exact Flat/brute force and IVF-Flat from dataset shape, `k`, and `target_recall`; non-Euclidean auto keeps exact FAISS GPU Flat or the validated graph route where available. Explicit CUDA exact/brute-force calls can use transformed cuVS brute force. | Default general-purpose choice. |
 | `"exact"` | Native exact CPU KNN. | FAISS GPU Flat if available; otherwise direct cuVS brute force for exact metric-aware search when cuVS is available. | Exact/high-recall baseline [1-3,16]. |
 | `"flat"` | FAISS Flat L2/IP; cosine and correlation use normalized Flat IP, with exact CPU fallback for zero-normalized rows. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP; degenerate zero-normalized rows error instead of being repaired on CPU. | Exact FAISS exhaustive search [1-2,16]. |
 | `"bruteforce"` | Native exact CPU KNN. | Direct RAPIDS cuVS brute force when available; cosine/correlation use normalized Euclidean search and inner product uses a maximum-inner-product-to-L2 transform around the cuVS L2 kernel. | Exhaustive route, useful for FAISS/cuVS comparisons [1-3,16]. |
 | `"grid"` | Native exact 2D/3D grid for Euclidean, cosine, and correlation. | Native CUDA 2D/3D grid for Euclidean, cosine, and correlation. | Low-dimensional spatial or simulated data; cosine/correlation use normalized Euclidean grid search; explicit grid requests error outside two or three columns. |
-| `"hnsw"` | FAISS CPU HNSW for all four public metrics when FAISS is available; RcppHNSW/hnswlib fallback otherwise. | RAPIDS cuVS HNSW from CAGRA for all four public metrics when cuVS is available. | CPU HNSW uses compiled shape/k tiers selected by `target_recall = 0.9`, `0.95`, or `0.99`. CUDA HNSW builds a CAGRA seed graph and converts it with `cuvsHnswFromCagraWithDataset` using the host dataset and cuVS CPU hierarchy; metadata records that this is the cuVS wrapper design rather than a pure all-GPU HNSW search implementation [5,16,22-23]. |
+| `"hnsw"` | FAISS CPU HNSW for all four public metrics when FAISS is available; RcppHNSW/hnswlib fallback otherwise. | RAPIDS cuVS HNSW from CAGRA for all four public metrics when cuVS is available. | Euclidean CPU HNSW uses compiled CPU12 HPC shape/k tiers for k buckets 15, 30, 50, and 100, selected by `target_recall = 0.9`, `0.95`, or `0.99`; non-Euclidean CPU HNSW keeps broader metric-aware fallbacks. CUDA HNSW builds a CAGRA seed graph and converts it with `cuvsHnswFromCagraWithDataset` using the host dataset and cuVS CPU hierarchy; metadata records that this is the cuVS wrapper design rather than a pure all-GPU HNSW search implementation [5,16,22-23]. |
 | `"ivf"` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP with metric-aware default probing. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP with metric-aware deterministic defaults. | Large approximate search with coarse-list probing [1-2,16]. |
 | `"ivfpq"` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP with metric-aware IVF probing. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP with metric-aware IVF probing. | Compressed-memory approximate search; CPU IVFPQ requires at least 624 training rows and auto-selects 4-bit PQ below 9,984 rows [6,16]. |
 | `"ivfpq_fastscan"` | FAISS CPU `IndexIVFPQFastScan` with 4-bit PQ and optional Flat refinement. | Direct RAPIDS cuVS IVF-PQ with 4-bit compressed codes and fitted-index/resource/query-buffer reuse. | IVFPQ FastScan compressed-code scan. CPU requires linked FAISS FastScan headers; CUDA requires cuVS and does not silently fall back to CPU. The public route is Euclidean-only [6,34]. |
@@ -166,12 +166,13 @@ dot product in each query row at distance `0`.
 
 The capability table is design-level. Runtime auto-selection can still choose
 CPU when the public CUDA design route needs a missing optional component. For
-example, CUDA cosine and correlation auto routes can use CUDA grid for large
-2D/3D self-KNN. Non-grid CUDA cosine and correlation auto routes use FAISS GPU
-Flat for exact small/query workloads when available, and can select FAISS
-GPU/direct cuVS graph routes for large self-KNN. CUDA inner-product auto uses
-FAISS GPU Flat IP for exact small/query workloads when available, or
-transformed FAISS GPU/direct cuVS CAGRA for large self-KNN when available.
+example, CUDA Euclidean auto routes use CUDA grid for large 2D/3D self-KNN and
+otherwise choose between Flat/brute force and IVF-Flat by shape, `k`, and
+`target_recall`. Non-grid CUDA cosine and correlation auto routes use FAISS GPU
+Flat for exact small/query workloads when available, and can select validated
+graph routes for large self-KNN. CUDA inner-product auto uses FAISS GPU Flat IP
+for exact small/query workloads when available, or a transformed validated graph
+route for large self-KNN when available.
 Explicit CUDA HNSW is routed to the
 cuVS HNSW-from-CAGRA wrapper path and labelled as such in metadata. On a
 cuVS-only runtime, CUDA auto non-Euclidean capability rows are reported as shape-dependent rather than as a

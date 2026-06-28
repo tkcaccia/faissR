@@ -22,7 +22,7 @@ set -euo pipefail
 #   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_hnsw_tuning_cpu12.sh
 #
 # The job scans float32 .RData files, uses explicit backend="cpu",
-# method="hnsw", Euclidean distance, k=10,15,50,100, and writes
+# method="hnsw", Euclidean distance, k=15,30,50,100, and writes
 # recommendation tables for target recall 0.90, 0.95, and 0.99.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
@@ -48,7 +48,7 @@ export SINGULARITY_GPU_FLAG="${SINGULARITY_GPU_FLAG:-}"
 export R_BIN="${R_BIN:-Rscript}"
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
-export K_VALUES="${K_VALUES:-10,15,50,100}"
+export K_VALUES="${K_VALUES:-15,30,50,100}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
 

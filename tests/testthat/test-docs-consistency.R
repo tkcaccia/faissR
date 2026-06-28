@@ -295,7 +295,7 @@ test_that("repository text excludes private benchmark machine details", {
   forbidden <- c(
     "chiamaka",
     "137\\.158\\.",
-    "\\$Life_2025\\$",
+    "\\$Life_[0-9]{4}\\$",
     "/mnt/sata_ssd",
     "fastEmbedR_BENCHMARK",
     "fastEmbedR/Data",

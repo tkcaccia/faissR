@@ -817,7 +817,7 @@ main <- function() {
   candidate_path <- file.path(out_dir, "cagra_tuning_candidate_grid.csv")
   bench_script <- normalizePath(script_path(), mustWork = TRUE)
   datasets <- split_arg(args$datasets, "")
-  k_values <- as.integer(split_arg(args$k_values, "10,15,50,100"))
+  k_values <- as.integer(split_arg(args$k_values, "15,30,50,100"))
   target_recalls <- as.numeric(split_arg(args$target_recalls, "0.9,0.95,0.99"))
   n_threads <- positive_int(args$threads, 12, "threads")
   timeout <- positive_num(args$timeout, 2000, "timeout")

@@ -236,19 +236,68 @@ std::string cuda_non_euclidean_backend(const std::string& metric,
   return "__cuda_non_euclidean_unavailable__";
 }
 
-std::string select_cuvs_auto(bool self_query,
-                             int n,
-                             int p,
-                             int n_points,
-                             int k,
-                             double work_size,
-                             double brute_force_work_threshold) {
-  if (!self_query || work_size <= brute_force_work_threshold ||
-      k <= 8 || n <= 100000 || n_points <= 5000) {
-    return "cuda_cuvs_bruteforce";
+int cuda_auto_k_bucket(int k) {
+  if (k <= 15) return 15;
+  if (k <= 30) return 30;
+  if (k <= 50) return 50;
+  return 100;
+}
+
+std::string cuda_auto_flat_ivf_shape_group(int n, int p) {
+  n = std::max(1, n);
+  p = std::max(1, p);
+  if (n < 5000 && p >= 1024) return "small_n_very_high_dim";
+  if (n < 5000 && p >= 128) return "small_n_high_dim";
+  if (n < 20000 && p >= 128) return "small_high_dim";
+  if (n >= 500000 && p >= 256) return "large_high_dim";
+  if (n >= 500000 && p <= 64) return "large_low_dim";
+  if (n >= 20000 && n < 200000 && p >= 256) return "medium_high_dim";
+  if (n >= 20000 && n < 200000 && p <= 128) return "medium_low_dim";
+  return "general";
+}
+
+std::string cuda_auto_exact_backend(bool faiss_gpu_available,
+                                    bool cuvs_available,
+                                    bool cuda_available) {
+  if (faiss_gpu_available) return "faiss_gpu_flat_l2";
+  if (cuvs_available) return "cuda_cuvs_bruteforce";
+  return cuda_available ? "cuda" : "cuda_auto";
+}
+
+std::string cuda_auto_ivf_backend(bool faiss_gpu_available,
+                                  bool cuvs_available) {
+  if (faiss_gpu_available) return "faiss_gpu_ivf_flat";
+  if (cuvs_available) return "cuda_cuvs_ivf_flat";
+  return "";
+}
+
+bool cuda_auto_prefers_ivf(bool self_query,
+                           int n,
+                           int p,
+                           int n_points,
+                           int k,
+                           double work_size,
+                           int target_recall_code,
+                           const std::string& shape_group) {
+  if (!self_query || n != n_points) return false;
+  if (k <= 8 || n < 1000) return false;
+  const int k_bucket = cuda_auto_k_bucket(k);
+  if (target_recall_code >= 99 &&
+      shape_group == "small_high_dim" && k_bucket <= 15) {
+    return false;
   }
-  if (p <= 64) return "cuda_cuvs_ivf_flat";
-  return "cuda_cuvs_nndescent";
+  if (shape_group == "small_n_high_dim") return false;
+  if (shape_group == "small_n_very_high_dim") return true;
+  if (shape_group == "small_high_dim") return true;
+  if (shape_group == "medium_high_dim" || shape_group == "medium_low_dim" ||
+      shape_group == "large_low_dim" || shape_group == "large_high_dim") {
+    return true;
+  }
+  if (target_recall_code <= 95 && n >= 5000 &&
+      finite1(work_size) && work_size >= 5e8) {
+    return true;
+  }
+  return n >= 100000 && finite1(work_size) && work_size >= 1e10;
 }
 
 std::string select_cuda(bool self_query,
@@ -271,16 +320,24 @@ std::string select_cuda(bool self_query,
                         int cagra_high_dim_p,
                         int cagra_compact_max_k,
                         double cuvs_bruteforce_work_threshold,
+                        int target_recall_code,
+                        std::string& auto_rule,
+                        std::string& auto_shape_group,
                         std::string& error) {
+  (void)cuvs_bruteforce_work_threshold;
   if (k > 256) {
+    auto_rule = "cuda_auto_k_limit";
     error = "CUDA auto backends currently support `k <= 256`.";
     return "cuda_auto";
   }
   if (!cuda_available && !cuvs_available) {
+    auto_rule = "cuda_auto_unavailable";
     error = "No CUDA GPU backend is available on this machine.";
     return "cuda_auto";
   }
   if (grid_self_knn(self_query, n, p, k, false, metric) && cuda_available) {
+    auto_rule = "cuda_auto_grid";
+    auto_shape_group = "grid_2d3d";
     return "cuda_grid";
   }
   const std::string metric_backend = cuda_non_euclidean_backend(
@@ -290,40 +347,42 @@ std::string select_cuda(bool self_query,
     cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k
   );
   if (metric_backend == "__cuda_non_euclidean_unavailable__") {
+    auto_rule = "cuda_auto_non_euclidean_unavailable";
     error = "CUDA auto for non-Euclidean metrics requires FAISS GPU Flat support "
       "for exact routes or CAGRA/cuVS support for large self-KNN graph routes. "
       "Use `backend = \"auto\"` to fall back to CPU, or rebuild faissR with "
       "FAISS GPU/cuVS support.";
     return "cuda_auto";
   }
-  if (!metric_backend.empty()) return metric_backend;
+  if (!metric_backend.empty()) {
+    auto_rule = "cuda_auto_non_euclidean_metric_route";
+    auto_shape_group = cuda_auto_flat_ivf_shape_group(n, p);
+    return metric_backend;
+  }
   if (!self_query) {
-    if (faiss_gpu_available) return "faiss_gpu_flat_l2";
-    if (cuvs_available) return "cuda_cuvs_bruteforce";
-    return "cuda";
+    auto_rule = "cuda_auto_query_flat";
+    auto_shape_group = cuda_auto_flat_ivf_shape_group(n, p);
+    return cuda_auto_exact_backend(faiss_gpu_available, cuvs_available, cuda_available);
   }
-  const bool compact_high_dim_self =
-    cuvs_available && n == n_points && n <= cagra_compact_n &&
-    p >= cagra_high_dim_p && k <= cagra_compact_max_k;
-  if (compact_high_dim_self) return "cuda_cuvs_bruteforce";
-  const int cuvs_exact_high_dim_p = std::min(cagra_high_dim_p, 128);
-  const bool compact_exact_self =
-    cuvs_available && n == n_points && n <= cagra_compact_n &&
-    p >= cuvs_exact_high_dim_p && k <= cagra_compact_max_k;
-  if (compact_exact_self) return "cuda_cuvs_bruteforce";
-  if (n <= cuda_exact_n || work_size <= cuda_exact_work || k <= 8) {
-    if (faiss_gpu_available) return "faiss_gpu_flat_l2";
-    if (cuvs_available) return "cuda_cuvs_bruteforce";
-    return "cuda";
+  auto_shape_group = cuda_auto_flat_ivf_shape_group(n, p);
+  const std::string ivf_backend = cuda_auto_ivf_backend(faiss_gpu_available, cuvs_available);
+  const bool prefer_ivf = !ivf_backend.empty() && cuda_auto_prefers_ivf(
+    self_query, n, p, n_points, k, work_size, target_recall_code, auto_shape_group
+  );
+  if (prefer_ivf) {
+    auto_rule = "cuda_auto_flat_vs_ivf_select_ivf";
+    return ivf_backend;
   }
-  if (faiss_gpu_available) return "faiss_gpu_cagra";
-  if (cuvs_available) {
-    return select_cuvs_auto(
-      self_query, n, p, n_points, k, work_size,
-      cuvs_bruteforce_work_threshold
-    );
+  if (target_recall_code >= 99 &&
+      auto_shape_group == "small_high_dim" &&
+      cuda_auto_k_bucket(k) <= 15) {
+    auto_rule = "cuda_auto_flat_vs_ivf_flat_ivf_below_target";
+  } else if (k <= 8 || n <= cuda_exact_n || work_size <= cuda_exact_work) {
+    auto_rule = "cuda_auto_flat_vs_ivf_select_flat_small_or_exact";
+  } else {
+    auto_rule = "cuda_auto_flat_vs_ivf_select_flat_no_ivf_route";
   }
-  return "cuda";
+  return cuda_auto_exact_backend(faiss_gpu_available, cuvs_available, cuda_available);
 }
 
 std::string select_cpu(bool self_query,
@@ -405,15 +464,6 @@ int requested_int(int value, int fallback) {
   return valid_int(value) ? value : fallback;
 }
 
-double option_double(double value,
-                     double fallback,
-                     double min_value,
-                     double max_value) {
-  if (!valid_double(value)) value = fallback;
-  value = std::max(min_value, std::min(max_value, value));
-  return value;
-}
-
 int safe_n(int n) {
   return valid_int(n) ? std::max(1, n) : 1;
 }
@@ -455,6 +505,14 @@ std::string hnsw_shape_group_cpp(int n, int p) {
   return "other";
 }
 
+int hnsw_cpu_k_bucket_cpp(int k) {
+  k = safe_k(k);
+  if (k <= 15) return 15;
+  if (k <= 30) return 30;
+  if (k <= 50) return 50;
+  return 100;
+}
+
 int hnsw_k_bucket_cpp(int k) {
   k = safe_k(k);
   if (k <= 10) return 10;
@@ -477,57 +535,57 @@ const HnswCpuTuningSpec* hnsw_cpu_benchmark_spec(const std::string& shape_group,
                                                  int k_bucket,
                                                  int target_code) {
   static const HnswCpuTuningSpec specs[] = {
-    {"large_high_dim", 10, 90, 16, 80, 100, "hit_all_shape_datasets"},
-    {"large_high_dim", 10, 95, 16, 80, 100, "hit_all_shape_datasets"},
-    {"large_high_dim", 10, 99, 24, 120, 150, "hit_all_shape_datasets"},
-    {"large_high_dim", 15, 90, 16, 80, 100, "hit_all_shape_datasets"},
-    {"large_high_dim", 15, 95, 16, 80, 100, "hit_all_shape_datasets"},
-    {"large_high_dim", 15, 99, 24, 120, 150, "hit_all_shape_datasets"},
-    {"large_high_dim", 50, 90, 16, 80, 100, "hit_all_shape_datasets"},
-    {"large_high_dim", 50, 95, 16, 80, 100, "hit_all_shape_datasets"},
-    {"large_high_dim", 50, 99, 24, 120, 150, "hit_all_shape_datasets"},
-    {"large_high_dim", 100, 90, 16, 80, 100, "hit_all_shape_datasets"},
-    {"large_high_dim", 100, 95, 16, 80, 100, "hit_all_shape_datasets"},
-    {"large_high_dim", 100, 99, 32, 160, 220, "hit_all_shape_datasets"},
+    {"large_high_dim", 15, 90, 12, 60, 45, "hit_all_shape_datasets"},
+    {"large_high_dim", 15, 95, 16, 100, 80, "hit_all_shape_datasets"},
+    {"large_high_dim", 15, 99, 24, 160, 120, "hit_all_shape_datasets"},
+    {"large_high_dim", 30, 90, 16, 100, 80, "hit_all_shape_datasets"},
+    {"large_high_dim", 30, 95, 16, 100, 80, "hit_all_shape_datasets"},
+    {"large_high_dim", 30, 99, 24, 160, 120, "hit_all_shape_datasets"},
+    {"large_high_dim", 50, 90, 12, 80, 60, "hit_all_shape_datasets"},
+    {"large_high_dim", 50, 95, 16, 100, 80, "hit_all_shape_datasets"},
+    {"large_high_dim", 50, 99, 24, 160, 120, "hit_all_shape_datasets"},
+    {"large_high_dim", 100, 90, 12, 60, 100, "hit_all_shape_datasets"},
+    {"large_high_dim", 100, 95, 16, 100, 100, "hit_all_shape_datasets"},
+    {"large_high_dim", 100, 99, 24, 160, 120, "hit_all_shape_datasets"},
 
-    {"large_low_dim", 10, 90, 12, 60, 50, "hit_all_shape_datasets"},
-    {"large_low_dim", 10, 95, 12, 60, 50, "hit_all_shape_datasets"},
-    {"large_low_dim", 10, 99, 32, 160, 220, "miss_best_manual_coverage"},
-    {"large_low_dim", 15, 90, 12, 60, 50, "hit_all_shape_datasets"},
-    {"large_low_dim", 15, 95, 16, 80, 100, "hit_all_shape_datasets"},
-    {"large_low_dim", 15, 99, 24, 120, 150, "miss_best_manual_coverage"},
-    {"large_low_dim", 50, 90, 16, 80, 100, "hit_all_shape_datasets"},
-    {"large_low_dim", 50, 95, 16, 80, 100, "hit_all_shape_datasets"},
-    {"large_low_dim", 50, 99, 32, 160, 220, "miss_best_manual_coverage"},
-    {"large_low_dim", 100, 90, 16, 80, 100, "hit_all_shape_datasets"},
-    {"large_low_dim", 100, 95, 32, 160, 220, "miss_best_manual_coverage"},
-    {"large_low_dim", 100, 99, 32, 160, 220, "miss_best_manual_coverage"},
+    {"large_low_dim", 15, 90, 12, 60, 45, "hit_all_shape_datasets"},
+    {"large_low_dim", 15, 95, 12, 80, 60, "hit_all_shape_datasets"},
+    {"large_low_dim", 15, 99, 24, 160, 120, "hit_all_shape_datasets"},
+    {"large_low_dim", 30, 90, 12, 80, 60, "hit_all_shape_datasets"},
+    {"large_low_dim", 30, 95, 16, 100, 80, "hit_all_shape_datasets"},
+    {"large_low_dim", 30, 99, 24, 160, 120, "hit_all_shape_datasets"},
+    {"large_low_dim", 50, 90, 12, 80, 60, "hit_all_shape_datasets"},
+    {"large_low_dim", 50, 95, 16, 100, 80, "hit_all_shape_datasets"},
+    {"large_low_dim", 50, 99, 32, 240, 220, "hit_all_shape_datasets"},
+    {"large_low_dim", 100, 90, 12, 80, 100, "hit_all_shape_datasets"},
+    {"large_low_dim", 100, 95, 24, 160, 120, "hit_all_shape_datasets"},
+    {"large_low_dim", 100, 99, 32, 240, 220, "hit_all_shape_datasets"},
 
-    {"medium_low_dim", 10, 90, 8, 40, 25, "hit_all_shape_datasets"},
-    {"medium_low_dim", 10, 95, 8, 40, 25, "hit_all_shape_datasets"},
-    {"medium_low_dim", 10, 99, 12, 60, 50, "hit_all_shape_datasets"},
-    {"medium_low_dim", 15, 90, 8, 40, 25, "hit_all_shape_datasets"},
+    {"medium_low_dim", 15, 90, 8, 30, 20, "hit_all_shape_datasets"},
     {"medium_low_dim", 15, 95, 8, 40, 25, "hit_all_shape_datasets"},
-    {"medium_low_dim", 15, 99, 16, 80, 100, "hit_all_shape_datasets"},
-    {"medium_low_dim", 50, 90, 8, 40, 50, "hit_all_shape_datasets"},
-    {"medium_low_dim", 50, 95, 8, 40, 50, "hit_all_shape_datasets"},
-    {"medium_low_dim", 50, 99, 16, 80, 100, "hit_all_shape_datasets"},
-    {"medium_low_dim", 100, 90, 8, 40, 100, "hit_all_shape_datasets"},
-    {"medium_low_dim", 100, 95, 8, 40, 100, "hit_all_shape_datasets"},
+    {"medium_low_dim", 15, 99, 12, 60, 45, "hit_all_shape_datasets"},
+    {"medium_low_dim", 30, 90, 8, 30, 30, "hit_all_shape_datasets"},
+    {"medium_low_dim", 30, 95, 10, 50, 35, "hit_all_shape_datasets"},
+    {"medium_low_dim", 30, 99, 12, 80, 60, "hit_all_shape_datasets"},
+    {"medium_low_dim", 50, 90, 8, 30, 50, "hit_all_shape_datasets"},
+    {"medium_low_dim", 50, 95, 8, 30, 50, "hit_all_shape_datasets"},
+    {"medium_low_dim", 50, 99, 16, 100, 80, "hit_all_shape_datasets"},
+    {"medium_low_dim", 100, 90, 12, 60, 100, "hit_all_shape_datasets"},
+    {"medium_low_dim", 100, 95, 12, 60, 100, "hit_all_shape_datasets"},
     {"medium_low_dim", 100, 99, 12, 60, 100, "hit_all_shape_datasets"},
 
-    {"small_n", 10, 90, 8, 40, 25, "hit_all_shape_datasets"},
-    {"small_n", 10, 95, 8, 40, 25, "hit_all_shape_datasets"},
-    {"small_n", 10, 99, 24, 120, 150, "hit_all_shape_datasets"},
-    {"small_n", 15, 90, 12, 60, 50, "hit_all_shape_datasets"},
-    {"small_n", 15, 95, 12, 60, 50, "hit_all_shape_datasets"},
-    {"small_n", 15, 99, 12, 60, 50, "hit_all_shape_datasets"},
-    {"small_n", 50, 90, 8, 40, 50, "hit_all_shape_datasets"},
-    {"small_n", 50, 95, 8, 40, 50, "hit_all_shape_datasets"},
-    {"small_n", 50, 99, 16, 80, 100, "hit_all_shape_datasets"},
-    {"small_n", 100, 90, 8, 40, 100, "hit_all_shape_datasets"},
-    {"small_n", 100, 95, 8, 40, 100, "hit_all_shape_datasets"},
-    {"small_n", 100, 99, 16, 80, 100, "hit_all_shape_datasets"}
+    {"small_n", 15, 90, 8, 30, 20, "hit_all_shape_datasets"},
+    {"small_n", 15, 95, 8, 40, 25, "hit_all_shape_datasets"},
+    {"small_n", 15, 99, 12, 60, 45, "hit_all_shape_datasets"},
+    {"small_n", 30, 90, 6, 30, 30, "hit_all_shape_datasets"},
+    {"small_n", 30, 95, 8, 40, 30, "hit_all_shape_datasets"},
+    {"small_n", 30, 99, 12, 80, 60, "hit_all_shape_datasets"},
+    {"small_n", 50, 90, 8, 30, 50, "hit_all_shape_datasets"},
+    {"small_n", 50, 95, 8, 30, 50, "hit_all_shape_datasets"},
+    {"small_n", 50, 99, 12, 80, 60, "hit_all_shape_datasets"},
+    {"small_n", 100, 90, 8, 30, 100, "hit_all_shape_datasets"},
+    {"small_n", 100, 95, 8, 30, 100, "hit_all_shape_datasets"},
+    {"small_n", 100, 99, 12, 80, 100, "hit_all_shape_datasets"}
   };
   for (const auto& spec : specs) {
     if (shape_group == spec.shape_group &&
@@ -801,16 +859,23 @@ List nn_auto_select_backend_cpp(std::string resolved_backend,
                                 double cuvs_bruteforce_work_threshold,
                                 double cpu_exact_work,
                                 double cpu_faiss_flat_work,
+                                double target_recall_option,
                                 std::string tuning) {
   const double work_size = static_cast<double>(n) *
     static_cast<double>(n_points) * static_cast<double>(p);
+  const double target_recall = hnsw_target_recall_cpp(target_recall_option);
+  const int target_recall_code = hnsw_target_code_cpp(target_recall);
   std::string selected = resolved_backend;
   std::string reason = "explicit_route";
   std::string error;
+  std::string cuda_auto_rule;
+  std::string cuda_auto_shape_group;
 
   if (resolved_backend == "auto") {
     std::string cuda_error;
     std::string gpu;
+    std::string gpu_rule;
+    std::string gpu_shape_group;
     if (self_query && k <= 256 && work_size >= 5e8 &&
         (cuda_available || cuvs_available)) {
       gpu = select_cuda(
@@ -819,12 +884,15 @@ List nn_auto_select_backend_cpp(std::string resolved_backend,
         cagra_preference, cuda_exact_n, cuda_exact_work,
         metric_graph_n, metric_graph_min_k, metric_graph_work,
         cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k,
-        cuvs_bruteforce_work_threshold, cuda_error
+        cuvs_bruteforce_work_threshold, target_recall_code,
+        gpu_rule, gpu_shape_group, cuda_error
       );
     }
     if (!gpu.empty() && cuda_error.empty() && gpu != "cpu_auto") {
       selected = gpu;
       reason = "auto_cuda_preselector";
+      cuda_auto_rule = gpu_rule;
+      cuda_auto_shape_group = gpu_shape_group;
     } else {
       selected = select_cpu(
         self_query, n, p, n_points, k, work_size, metric,
@@ -848,10 +916,11 @@ List nn_auto_select_backend_cpp(std::string resolved_backend,
       cagra_preference, cuda_exact_n, cuda_exact_work,
       metric_graph_n, metric_graph_min_k, metric_graph_work,
       cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k,
-      cuvs_bruteforce_work_threshold, cuda_error
+      cuvs_bruteforce_work_threshold, target_recall_code,
+      cuda_auto_rule, cuda_auto_shape_group, cuda_error
     );
     if (cuda_error.empty()) {
-      reason = "cuda_auto_shape_selector";
+      reason = cuda_auto_rule.empty() ? "cuda_auto_shape_selector" : cuda_auto_rule;
     } else {
       reason = "cuda_auto_unavailable";
       error = cuda_error;
@@ -890,6 +959,12 @@ List nn_auto_select_backend_cpp(std::string resolved_backend,
     _["self_query"] = self_query,
     _["exclude_self"] = exclude_self,
     _["work_size"] = work_size,
+    _["target_recall"] = target_recall,
+    _["requested_target_recall"] = target_recall_option,
+    _["target_recall_code"] = target_recall_code,
+    _["cuda_auto_rule"] = cuda_auto_rule,
+    _["cuda_auto_shape_group"] = cuda_auto_shape_group,
+    _["auto_method_policy"] = cuda_auto_rule.empty() ? "" : "cuda_flat_ivf_shape_k_target_recall",
     _["tuning"] = tuning
   );
 }
@@ -930,6 +1005,239 @@ List nn_tune_faiss_ivf_cpp(int n,
     _["tuning_large_n"] = large_n,
     _["tuning_small_k"] = small_k,
     _["tuning_large_k"] = large_k,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_cuda_ivf_cpp(int n,
+                          int p,
+                          int k,
+                          std::string metric,
+                          double target_recall_option = NA_REAL,
+                          int nlist_option = NA_INTEGER,
+                          int nprobe_option = NA_INTEGER,
+                          bool manual = false) {
+  n = safe_n(n);
+  p = safe_p(p);
+  k = safe_k(k);
+
+  const double target_recall = hnsw_target_recall_cpp(target_recall_option);
+  const int target_code = hnsw_target_code_cpp(target_recall);
+  const bool metric_aware = metric != "euclidean";
+  const int k_bucket = k <= 15 ? 15 : (k <= 30 ? 30 : (k <= 50 ? 50 : 100));
+  const int root = std::max(1, static_cast<int>(std::ceil(std::sqrt(static_cast<double>(n)))));
+  const int half_root = std::max(16, static_cast<int>(std::floor(static_cast<double>(root) / 2.0)));
+
+  std::string shape = "general";
+  if (n < 5000 && p >= 1024) {
+    shape = "small_n_very_high_dim";
+  } else if (n < 5000 && p >= 128) {
+    shape = "small_n_high_dim";
+  } else if (n < 20000 && p >= 128) {
+    shape = "small_high_dim";
+  } else if (n >= 500000 && p >= 256) {
+    shape = "large_high_dim";
+  } else if (n >= 500000 && p <= 64) {
+    shape = "large_low_dim";
+  } else if (n >= 20000 && n < 200000 && p >= 256) {
+    shape = "medium_high_dim";
+  } else if (n >= 20000 && n < 200000 && p <= 128) {
+    shape = "medium_low_dim";
+  }
+
+  int default_nlist = ivf_list_count_cpp(n, k);
+  int default_nprobe = ivf_probe_count_cpp(default_nlist, k, metric);
+  std::string basis = "hpc_cuda_ivf_float32_euclidean_20260628";
+  std::string rule_basis = "shape_k_target_recall";
+  bool benchmark_target_met = true;
+
+  if (shape == "small_n_very_high_dim") {
+    default_nlist = half_root;
+    if (k_bucket <= 15) {
+      default_nprobe = 8;
+    } else if (k_bucket <= 30) {
+      default_nprobe = 4;
+    } else if (k_bucket <= 50) {
+      default_nprobe = 9;
+    } else {
+      default_nprobe = target_code >= 99 ? 10 : 5;
+    }
+  } else if (shape == "small_n_high_dim") {
+    if (k_bucket <= 15) {
+      default_nlist = root * 6;
+      default_nprobe = 64;
+    } else if (k_bucket <= 30) {
+      default_nlist = root * 4;
+      default_nprobe = 48;
+    } else if (k_bucket <= 50) {
+      default_nlist = root;
+      default_nprobe = 17;
+    } else {
+      default_nlist = root;
+      default_nprobe = root;
+    }
+  } else if (shape == "small_high_dim") {
+    if (k_bucket <= 15) {
+      default_nlist = target_code >= 99 ? root : root * 2;
+      default_nprobe = target_code >= 99 ? 16 : 24;
+      benchmark_target_met = target_code < 99;
+      if (target_code >= 99) basis += "_best_available_below_target_for_small_high_dim_k15";
+    } else if (k_bucket <= 30) {
+      default_nlist = root * 4;
+      default_nprobe = 63;
+    } else if (k_bucket <= 50) {
+      default_nlist = root;
+      default_nprobe = 17;
+    } else {
+      default_nlist = root * 6;
+      default_nprobe = 136;
+    }
+  } else if (shape == "medium_high_dim") {
+    default_nlist = half_root;
+    if (target_code >= 99) {
+      if (k_bucket <= 15) {
+        default_nprobe = 8;
+      } else if (k_bucket <= 30) {
+        default_nlist = half_root * 2;
+        default_nprobe = 17;
+      } else if (k_bucket <= 50) {
+        default_nlist = half_root * 4;
+        default_nprobe = 36;
+      } else {
+        default_nprobe = 17;
+      }
+    } else if (target_code >= 95) {
+      if (k_bucket <= 15) {
+        default_nprobe = 4;
+      } else if (k_bucket <= 30) {
+        default_nprobe = 8;
+      } else if (k_bucket <= 50) {
+        default_nprobe = 5;
+      } else {
+        default_nprobe = 9;
+      }
+    } else {
+      if (k_bucket <= 30) {
+        default_nprobe = 4;
+      } else if (k_bucket <= 50) {
+        default_nprobe = 5;
+      } else {
+        default_nprobe = 9;
+      }
+    }
+  } else if (shape == "medium_low_dim") {
+    if (k_bucket <= 15) {
+      default_nlist = root;
+      default_nprobe = 9;
+    } else if (k_bucket <= 30) {
+      default_nlist = root * 4;
+      default_nprobe = 99;
+    } else if (k_bucket <= 50) {
+      default_nlist = half_root;
+      default_nprobe = 9;
+    } else {
+      default_nlist = root;
+      default_nprobe = 17;
+    }
+  } else if (shape == "large_low_dim") {
+    if (target_code >= 99) {
+      if (k_bucket <= 15) {
+        default_nlist = n >= 1000000 ? 1024 : 512;
+        default_nprobe = n >= 1000000 ? 16 : 12;
+      } else if (k_bucket <= 30) {
+        default_nlist = n >= 1000000 ? 512 : 1024;
+        default_nprobe = n >= 1000000 ? 12 : 32;
+      } else if (k_bucket <= 50) {
+        if (n > 2000000) {
+          default_nlist = 512;
+          default_nprobe = 12;
+        } else if (n >= 1000000) {
+          default_nlist = root;
+          default_nprobe = 16;
+        } else {
+          default_nlist = root;
+          default_nprobe = 32;
+        }
+      } else {
+        default_nlist = n > 2000000 ? 512 : (n >= 1000000 ? root : std::max(512, half_root));
+        default_nprobe = 17;
+      }
+    } else if (target_code >= 95) {
+      if (k_bucket <= 15) {
+        default_nlist = 512;
+        default_nprobe = 6;
+      } else if (k_bucket <= 30) {
+        default_nlist = 512;
+        default_nprobe = n < 1000000 ? 12 : 6;
+      } else if (k_bucket <= 50) {
+        default_nlist = n < 1000000 ? root : 512;
+        default_nprobe = n < 1000000 ? 16 : 6;
+      } else {
+        default_nlist = n > 2000000 ? 512 :
+          (p <= 12 ? std::max(500, static_cast<int>(std::floor(static_cast<double>(root) / 2.0))) : root);
+        default_nprobe = n < 1000000 ? 17 : 9;
+      }
+    } else {
+      if (k_bucket >= 100) {
+        default_nlist = n < 1000000 ? root :
+          (p <= 12 ? std::max(500, static_cast<int>(std::floor(static_cast<double>(root) / 2.0))) : 512);
+        default_nprobe = n < 1000000 ? 17 : 9;
+      } else if (k_bucket >= 50 && n >= 1000000 && p <= 12) {
+        default_nlist = std::max(500, static_cast<int>(std::floor(static_cast<double>(root) / 2.0)));
+        default_nprobe = 6;
+      } else {
+        default_nlist = 512;
+        default_nprobe = 6;
+      }
+    }
+  } else if (shape == "large_high_dim") {
+    if (target_code >= 99) {
+      if (k_bucket >= 100) {
+        default_nlist = 4096;
+        default_nprobe = 192;
+      } else {
+        default_nlist = 2048;
+        default_nprobe = 69;
+      }
+    } else {
+      default_nlist = 1024;
+      default_nprobe = k_bucket >= 100 ? 17 : 16;
+    }
+  }
+
+  if (metric_aware && !manual) {
+    default_nprobe = std::max(default_nprobe,
+                              static_cast<int>(std::ceil(static_cast<double>(default_nprobe) * 1.25)));
+    rule_basis += "_metric_probe_increase";
+  }
+
+  default_nlist = clamp_int(default_nlist, 1, n);
+  const int requested_nlist = requested_int(nlist_option, default_nlist);
+  const int nlist = option_int(nlist_option, default_nlist, 1, n);
+  default_nprobe = clamp_int(default_nprobe, 1, nlist);
+  const int requested_nprobe = requested_int(nprobe_option, default_nprobe);
+  const int nprobe = option_int(nprobe_option, default_nprobe, 1, nlist);
+
+  return List::create(
+    _["nlist"] = nlist,
+    _["nprobe"] = nprobe,
+    _["requested_nlist"] = requested_nlist,
+    _["requested_nprobe"] = requested_nprobe,
+    _["target_recall"] = target_recall,
+    _["requested_target_recall"] = target_recall_option,
+    _["tuning_policy"] = manual ? "manual_options" : "cuda_ivf_shape_k_target_recall",
+    _["tuning_rule"] = "cuda_ivf_" + shape + "_k" + std::to_string(k_bucket) +
+      "_recall" + std::to_string(target_code),
+    _["tuning_rule_basis"] = rule_basis,
+    _["tuning_metric"] = metric,
+    _["tuning_metric_aware"] = metric_aware,
+    _["tuning_shape_group"] = shape,
+    _["tuning_cuda_shape_group"] = shape,
+    _["tuning_k_bucket"] = k_bucket,
+    _["tuning_target_recall_code"] = target_code,
+    _["tuning_benchmark_basis"] = basis,
+    _["tuning_benchmark_target_met"] = benchmark_target_met,
     _["tuning_source"] = "cpp"
   );
 }
@@ -1036,13 +1344,13 @@ List nn_tune_faiss_hnsw_cpp(int n,
   const bool large_k = k >= 100;
   const bool non_euclidean = !euclidean;
   const std::string shape_group = hnsw_shape_group_cpp(n, p);
-  const int k_bucket = hnsw_k_bucket_cpp(k);
+  const int k_bucket = hnsw_cpu_k_bucket_cpp(k);
   const int target_code = hnsw_target_code_cpp(target_recall);
   const HnswCpuTuningSpec* benchmark_spec = euclidean ?
     hnsw_cpu_benchmark_spec(shape_group, k_bucket, target_code) : nullptr;
   const std::string benchmark_basis = benchmark_spec ? benchmark_spec->benchmark_basis : "";
   const std::string benchmark_source = benchmark_spec ?
-    "hpc_hnsw_cpu_20260625_140709" : "heuristic_fallback";
+    "hpc_hnsw_cpu12_20260627_160002" : "heuristic_fallback";
 
   std::string rule;
   int default_m;

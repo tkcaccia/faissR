@@ -841,7 +841,7 @@ main <- function() {
   candidate_path <- file.path(out_dir, "exact_tuning_candidate_grid.csv")
   bench_script <- normalizePath(script_path(), mustWork = TRUE)
   datasets <- split_arg(args$datasets, "")
-  k_values <- as.integer(split_arg(args$k_values, "10,15,50,100"))
+  k_values <- as.integer(split_arg(args$k_values, "15,30,50,100"))
   target_recalls <- as.numeric(split_arg(args$target_recalls, "0.9,0.95,0.99"))
   thread_values <- clean_int_values(args$thread_values, if (backend == "cpu") "1,2,4,8,12" else "12")
   if (!length(thread_values)) thread_values <- if (backend == "cpu") c(1L, 2L, 4L, 8L, 12L) else 12L

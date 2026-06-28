@@ -3,7 +3,7 @@
 #SBATCH --account=immunology
 #SBATCH --partition=ada
 #SBATCH --nodes=1
-#SBATCH --ntasks=40
+#SBATCH --ntasks=12
 #SBATCH --time=48:00:00
 #SBATCH --job-name="faissR_REF_CPU12"
 #SBATCH --chdir=/scratch/firenze/NN
@@ -38,7 +38,7 @@ export SINGULARITY_GPU_FLAG="${SINGULARITY_GPU_FLAG:-}"
 export R_BIN="${R_BIN:-Rscript}"
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
-export K_VALUES="${K_VALUES:-10,15,50,100}"
+export K_VALUES="${K_VALUES:-15,30,50,100}"
 
 export OMP_NUM_THREADS="${THREADS_CPU}"
 export OPENBLAS_NUM_THREADS="${THREADS_CPU}"

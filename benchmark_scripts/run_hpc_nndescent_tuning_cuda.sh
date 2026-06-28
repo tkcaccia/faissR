@@ -23,7 +23,7 @@ set -euo pipefail
 #   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_nndescent_tuning_cuda.sh
 #
 # The job scans float32 .RData files, uses explicit backend="cuda",
-# method="nndescent", Euclidean distance, k=10,15,50,100, and writes
+# method="nndescent", Euclidean distance, k=15,30,50,100, and writes
 # recommendation tables for target recall 0.90, 0.95, and 0.99.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
@@ -49,7 +49,7 @@ export SINGULARITY_GPU_FLAG="${SINGULARITY_GPU_FLAG:---nv}"
 export R_BIN="${R_BIN:-Rscript}"
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
-export K_VALUES="${K_VALUES:-10,15,50,100}"
+export K_VALUES="${K_VALUES:-15,30,50,100}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
 export NNDESCENT_CUDA_GRAPH_DEGREES="${NNDESCENT_CUDA_GRAPH_DEGREES:-}"
@@ -116,7 +116,26 @@ fi
   "${RUNNER[@]}" "${R_BIN}" "${MANIFEST_SCRIPT}"     --data_root="${DATA_ROOT}"     --out="${MANIFEST}"     --datasets="${DATASETS}"
 
   echo "[$(date --iso-8601=seconds)] running CUDA NNDESCENT tuning from precomputed references"
-  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --backend="${BACKEND}"     --k_values="${K_VALUES}"     --target_recalls="${TARGET_RECALLS}"     --threads="${THREADS_CPU}"     --thread_values="${THREAD_VALUES}"     --timeout="${TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --output_values="${OUTPUT_VALUES}"     --grid_level="${GRID_LEVEL}"     --nndescent_cuda_graph_degrees="${NNDESCENT_CUDA_GRAPH_DEGREES}"     --nndescent_cuda_intermediate_graph_degrees="${NNDESCENT_CUDA_INTERMEDIATE_GRAPH_DEGREES}"     --nndescent_cuda_max_iterations="${NNDESCENT_CUDA_MAX_ITERATIONS}"     --resume=TRUE
+  BENCH_ARGS=(
+    --manifest="${MANIFEST}"
+    --out_dir="${OUT_DIR}"
+    --datasets="${DATASETS}"
+    --backend="${BACKEND}"
+    --k_values="${K_VALUES}"
+    --target_recalls="${TARGET_RECALLS}"
+    --threads="${THREADS_CPU}"
+    --thread_values="${THREAD_VALUES}"
+    --timeout="${TIMEOUT}"
+    --quality_n="${QUALITY_N}"
+    --seed="${SEED}"
+    --output_values="${OUTPUT_VALUES}"
+    --grid_level="${GRID_LEVEL}"
+    --resume=TRUE
+  )
+  [[ -n "${NNDESCENT_CUDA_GRAPH_DEGREES}" ]] && BENCH_ARGS+=(--nndescent_cuda_graph_degrees="${NNDESCENT_CUDA_GRAPH_DEGREES}")
+  [[ -n "${NNDESCENT_CUDA_INTERMEDIATE_GRAPH_DEGREES}" ]] && BENCH_ARGS+=(--nndescent_cuda_intermediate_graph_degrees="${NNDESCENT_CUDA_INTERMEDIATE_GRAPH_DEGREES}")
+  [[ -n "${NNDESCENT_CUDA_MAX_ITERATIONS}" ]] && BENCH_ARGS+=(--nndescent_cuda_max_iterations="${NNDESCENT_CUDA_MAX_ITERATIONS}")
+  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}" "${BENCH_ARGS[@]}"
 
   echo "DONE: ${OUT_DIR}"
 } 2>&1 | tee -a "${OUT_DIR}/nndescent_tuning_cuda.log"

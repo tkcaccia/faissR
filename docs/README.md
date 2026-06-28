@@ -25,7 +25,8 @@ backends [3,12-15].
 - [Examples](examples.md): compact examples based on iris.
 - [Benchmarks](benchmarks.md): benchmark design for speed, recall, memory, and
   downstream embedding checks.
-- [Autotuning](autotuning.md): empirical backend roles, defaults, and guardrails.
+- [Autotuning](autotuning.md): empirical backend roles, target-recall tuning
+  workflow, defaults, and guardrails.
 - [API](usage-api.md): function and argument reference.
 - [NN Methods](nn-methods.md): detailed descriptions and literature for every
   `nn()` method, including the `nn_capabilities()` method/backend/metric

@@ -348,7 +348,7 @@ main <- function() {
   path_col <- dataset_path_column(manifest)
   datasets <- split_arg(args$datasets, paste(manifest$dataset, collapse = ","))
   manifest <- manifest[manifest$dataset %in% datasets, , drop = FALSE]
-  k_values <- unique(as.integer(split_arg(args$k_values, "10,15,50,100")))
+  k_values <- unique(as.integer(split_arg(args$k_values, "15,30,50,100")))
   k_values <- k_values[is.finite(k_values) & k_values > 0L]
   if (!length(k_values)) stop("`--k_values` must contain at least one positive integer.", call. = FALSE)
   reference_k_default <- max(c(100L, k_values))
