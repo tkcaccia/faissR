@@ -743,6 +743,51 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nn_tune_cuda_exact_cpp
+List nn_tune_cuda_exact_cpp(int n, int p, int k, std::string metric, double target_recall_option);
+RcppExport SEXP _faissR_nn_tune_cuda_exact_cpp(SEXP nSEXP, SEXP pSEXP, SEXP kSEXP, SEXP metricSEXP, SEXP target_recall_optionSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< int >::type p(pSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< double >::type target_recall_option(target_recall_optionSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_tune_cuda_exact_cpp(n, p, k, metric, target_recall_option));
+    return rcpp_result_gen;
+END_RCPP
+}
+// nn_tune_cuda_flat_cpp
+List nn_tune_cuda_flat_cpp(int n, int p, int k, std::string metric, double target_recall_option);
+RcppExport SEXP _faissR_nn_tune_cuda_flat_cpp(SEXP nSEXP, SEXP pSEXP, SEXP kSEXP, SEXP metricSEXP, SEXP target_recall_optionSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< int >::type p(pSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< double >::type target_recall_option(target_recall_optionSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_tune_cuda_flat_cpp(n, p, k, metric, target_recall_option));
+    return rcpp_result_gen;
+END_RCPP
+}
+// nn_tune_cuda_bruteforce_cpp
+List nn_tune_cuda_bruteforce_cpp(int n, int p, int k, std::string metric, double target_recall_option);
+RcppExport SEXP _faissR_nn_tune_cuda_bruteforce_cpp(SEXP nSEXP, SEXP pSEXP, SEXP kSEXP, SEXP metricSEXP, SEXP target_recall_optionSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< int >::type p(pSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< double >::type target_recall_option(target_recall_optionSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_tune_cuda_bruteforce_cpp(n, p, k, metric, target_recall_option));
+    return rcpp_result_gen;
+END_RCPP
+}
 // nn_tune_cpu_flat_cpp
 List nn_tune_cpu_flat_cpp(int n, int p, int k, std::string metric, double target_recall_option);
 RcppExport SEXP _faissR_nn_tune_cpu_flat_cpp(SEXP nSEXP, SEXP pSEXP, SEXP kSEXP, SEXP metricSEXP, SEXP target_recall_optionSEXP) {
@@ -956,8 +1001,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // nn_tune_cuvs_hnsw_cpp
-List nn_tune_cuvs_hnsw_cpp(int n, int p, int k, int n_threads, std::string build_algo_preference, double target_recall_option, int graph_degree_option, int intermediate_graph_degree_option, int search_width_option, int itopk_size_option, int ef_option, bool manual_cagra);
-RcppExport SEXP _faissR_nn_tune_cuvs_hnsw_cpp(SEXP nSEXP, SEXP pSEXP, SEXP kSEXP, SEXP n_threadsSEXP, SEXP build_algo_preferenceSEXP, SEXP target_recall_optionSEXP, SEXP graph_degree_optionSEXP, SEXP intermediate_graph_degree_optionSEXP, SEXP search_width_optionSEXP, SEXP itopk_size_optionSEXP, SEXP ef_optionSEXP, SEXP manual_cagraSEXP) {
+List nn_tune_cuvs_hnsw_cpp(int n, int p, int k, int n_threads, std::string build_algo_preference, double target_recall_option, int graph_degree_option, int intermediate_graph_degree_option, int search_width_option, int itopk_size_option, int ef_option, bool manual_cagra, std::string metric);
+RcppExport SEXP _faissR_nn_tune_cuvs_hnsw_cpp(SEXP nSEXP, SEXP pSEXP, SEXP kSEXP, SEXP n_threadsSEXP, SEXP build_algo_preferenceSEXP, SEXP target_recall_optionSEXP, SEXP graph_degree_optionSEXP, SEXP intermediate_graph_degree_optionSEXP, SEXP search_width_optionSEXP, SEXP itopk_size_optionSEXP, SEXP ef_optionSEXP, SEXP manual_cagraSEXP, SEXP metricSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -973,23 +1018,27 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type itopk_size_option(itopk_size_optionSEXP);
     Rcpp::traits::input_parameter< int >::type ef_option(ef_optionSEXP);
     Rcpp::traits::input_parameter< bool >::type manual_cagra(manual_cagraSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_tune_cuvs_hnsw_cpp(n, p, k, n_threads, build_algo_preference, target_recall_option, graph_degree_option, intermediate_graph_degree_option, search_width_option, itopk_size_option, ef_option, manual_cagra));
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_tune_cuvs_hnsw_cpp(n, p, k, n_threads, build_algo_preference, target_recall_option, graph_degree_option, intermediate_graph_degree_option, search_width_option, itopk_size_option, ef_option, manual_cagra, metric));
     return rcpp_result_gen;
 END_RCPP
 }
 // nn_tune_cuvs_nndescent_cpp
-List nn_tune_cuvs_nndescent_cpp(int n, int k, int graph_degree_option, int intermediate_graph_degree_option, int max_iterations_option, bool manual);
-RcppExport SEXP _faissR_nn_tune_cuvs_nndescent_cpp(SEXP nSEXP, SEXP kSEXP, SEXP graph_degree_optionSEXP, SEXP intermediate_graph_degree_optionSEXP, SEXP max_iterations_optionSEXP, SEXP manualSEXP) {
+List nn_tune_cuvs_nndescent_cpp(int n, int p, int k, std::string metric, double target_recall_option, int graph_degree_option, int intermediate_graph_degree_option, int max_iterations_option, bool manual);
+RcppExport SEXP _faissR_nn_tune_cuvs_nndescent_cpp(SEXP nSEXP, SEXP pSEXP, SEXP kSEXP, SEXP metricSEXP, SEXP target_recall_optionSEXP, SEXP graph_degree_optionSEXP, SEXP intermediate_graph_degree_optionSEXP, SEXP max_iterations_optionSEXP, SEXP manualSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< int >::type p(pSEXP);
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< double >::type target_recall_option(target_recall_optionSEXP);
     Rcpp::traits::input_parameter< int >::type graph_degree_option(graph_degree_optionSEXP);
     Rcpp::traits::input_parameter< int >::type intermediate_graph_degree_option(intermediate_graph_degree_optionSEXP);
     Rcpp::traits::input_parameter< int >::type max_iterations_option(max_iterations_optionSEXP);
     Rcpp::traits::input_parameter< bool >::type manual(manualSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_tune_cuvs_nndescent_cpp(n, k, graph_degree_option, intermediate_graph_degree_option, max_iterations_option, manual));
+    rcpp_result_gen = Rcpp::wrap(nn_tune_cuvs_nndescent_cpp(n, p, k, metric, target_recall_option, graph_degree_option, intermediate_graph_degree_option, max_iterations_option, manual));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2142,6 +2191,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_candidate_knn_float32_cpp", (DL_FUNC) &_faissR_candidate_knn_float32_cpp, 9},
     {"_faissR_nn_auto_select_backend_cpp", (DL_FUNC) &_faissR_nn_auto_select_backend_cpp, 29},
     {"_faissR_nn_tune_cpu_exact_cpp", (DL_FUNC) &_faissR_nn_tune_cpu_exact_cpp, 5},
+    {"_faissR_nn_tune_cuda_exact_cpp", (DL_FUNC) &_faissR_nn_tune_cuda_exact_cpp, 5},
+    {"_faissR_nn_tune_cuda_flat_cpp", (DL_FUNC) &_faissR_nn_tune_cuda_flat_cpp, 5},
+    {"_faissR_nn_tune_cuda_bruteforce_cpp", (DL_FUNC) &_faissR_nn_tune_cuda_bruteforce_cpp, 5},
     {"_faissR_nn_tune_cpu_flat_cpp", (DL_FUNC) &_faissR_nn_tune_cpu_flat_cpp, 5},
     {"_faissR_nn_tune_cpu_bruteforce_cpp", (DL_FUNC) &_faissR_nn_tune_cpu_bruteforce_cpp, 5},
     {"_faissR_nn_tune_faiss_ivf_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_ivf_cpp, 10},
@@ -2155,8 +2207,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_tune_cpu_nndescent_cpp", (DL_FUNC) &_faissR_nn_tune_cpu_nndescent_cpp, 5},
     {"_faissR_nn_tune_cuvs_cagra_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_cagra_cpp, 9},
     {"_faissR_nn_tune_cuvs_cagra_build_algo_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_cagra_build_algo_cpp, 6},
-    {"_faissR_nn_tune_cuvs_hnsw_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_hnsw_cpp, 12},
-    {"_faissR_nn_tune_cuvs_nndescent_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_nndescent_cpp, 6},
+    {"_faissR_nn_tune_cuvs_hnsw_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_hnsw_cpp, 13},
+    {"_faissR_nn_tune_cuvs_nndescent_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_nndescent_cpp, 9},
     {"_faissR_nn_tune_native_nsg_cpp", (DL_FUNC) &_faissR_nn_tune_native_nsg_cpp, 8},
     {"_faissR_nn_tune_vamana_cpp", (DL_FUNC) &_faissR_nn_tune_vamana_cpp, 9},
     {"_faissR_kmeans_auto_params_cpp", (DL_FUNC) &_faissR_kmeans_auto_params_cpp, 4},

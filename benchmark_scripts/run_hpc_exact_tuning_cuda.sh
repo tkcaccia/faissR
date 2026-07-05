@@ -23,8 +23,11 @@ set -euo pipefail
 #   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_exact_tuning_cuda.sh
 #
 # The job scans float32 .RData files, uses explicit backend="cuda",
-# method="exact", Euclidean distance, k=15,30,50,100, and writes
+# method="exact", the selected metric set, k=15,30,50,100, and writes
 # recommendation tables for target recall 0.90, 0.95, and 0.99.
+# Use run_hpc_exact_tuning_cuda_euclidean.sh or
+# run_hpc_exact_tuning_cuda_cosine.sh for the metric-specific grids used
+# by the default CUDA exact tuning policy.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 export DATA_ROOT="${DATA_ROOT:-${BASE_DIR}/Data}"

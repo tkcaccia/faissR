@@ -185,6 +185,18 @@ nn_tune_cpu_exact_cpp <- function(n, p, k, metric = "euclidean", target_recall_o
     .Call(`_faissR_nn_tune_cpu_exact_cpp`, n, p, k, metric, target_recall_option)
 }
 
+nn_tune_cuda_exact_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_) {
+    .Call(`_faissR_nn_tune_cuda_exact_cpp`, n, p, k, metric, target_recall_option)
+}
+
+nn_tune_cuda_flat_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_) {
+    .Call(`_faissR_nn_tune_cuda_flat_cpp`, n, p, k, metric, target_recall_option)
+}
+
+nn_tune_cuda_bruteforce_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_) {
+    .Call(`_faissR_nn_tune_cuda_bruteforce_cpp`, n, p, k, metric, target_recall_option)
+}
+
 nn_tune_cpu_flat_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_) {
     .Call(`_faissR_nn_tune_cpu_flat_cpp`, n, p, k, metric, target_recall_option)
 }
@@ -237,12 +249,12 @@ nn_tune_cuvs_cagra_build_algo_cpp <- function(n, p, k, self_query, compact, requ
     .Call(`_faissR_nn_tune_cuvs_cagra_build_algo_cpp`, n, p, k, self_query, compact, requested)
 }
 
-nn_tune_cuvs_hnsw_cpp <- function(n, p, k, n_threads, build_algo_preference = "auto", target_recall_option = 0.99, graph_degree_option = NA_integer_, intermediate_graph_degree_option = NA_integer_, search_width_option = NA_integer_, itopk_size_option = NA_integer_, ef_option = NA_integer_, manual_cagra = FALSE) {
-    .Call(`_faissR_nn_tune_cuvs_hnsw_cpp`, n, p, k, n_threads, build_algo_preference, target_recall_option, graph_degree_option, intermediate_graph_degree_option, search_width_option, itopk_size_option, ef_option, manual_cagra)
+nn_tune_cuvs_hnsw_cpp <- function(n, p, k, n_threads, build_algo_preference = "auto", target_recall_option = 0.99, graph_degree_option = NA_integer_, intermediate_graph_degree_option = NA_integer_, search_width_option = NA_integer_, itopk_size_option = NA_integer_, ef_option = NA_integer_, manual_cagra = FALSE, metric = "euclidean") {
+    .Call(`_faissR_nn_tune_cuvs_hnsw_cpp`, n, p, k, n_threads, build_algo_preference, target_recall_option, graph_degree_option, intermediate_graph_degree_option, search_width_option, itopk_size_option, ef_option, manual_cagra, metric)
 }
 
-nn_tune_cuvs_nndescent_cpp <- function(n, k, graph_degree_option = NA_integer_, intermediate_graph_degree_option = NA_integer_, max_iterations_option = NA_integer_, manual = FALSE) {
-    .Call(`_faissR_nn_tune_cuvs_nndescent_cpp`, n, k, graph_degree_option, intermediate_graph_degree_option, max_iterations_option, manual)
+nn_tune_cuvs_nndescent_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_, graph_degree_option = NA_integer_, intermediate_graph_degree_option = NA_integer_, max_iterations_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_cuvs_nndescent_cpp`, n, p, k, metric, target_recall_option, graph_degree_option, intermediate_graph_degree_option, max_iterations_option, manual)
 }
 
 nn_tune_native_nsg_cpp <- function(n, p, k, metric, backend, target_recall_option = NA_real_, r_option = NA_integer_, graph_k_option = NA_integer_) {

@@ -289,18 +289,18 @@ cuda_candidates <- function(k, target_recalls, build_algos = "auto", grid_level 
     stringsAsFactors = FALSE
   )
   manual <- data.frame(
-    graph_degree = c(16L, 24L, 32L, 32L, 48L, 48L, 64L, 64L),
-    intermediate_graph_degree = c(32L, 48L, 64L, 96L, 96L, 128L, 128L, 192L),
-    ef = pmax(as.integer(k), c(32L, 48L, 64L, 96L, 96L, 128L, 160L, 256L))
+    graph_degree = c(8L, 12L, 16L, 24L, 32L, 48L, 64L, 96L, 128L),
+    intermediate_graph_degree = c(16L, 24L, 32L, 48L, 64L, 128L, 192L, 320L, 512L),
+    ef = pmax(as.integer(k), c(24L, 32L, 48L, 64L, 96L, 128L, 256L, 480L, 768L))
   )
-  if (identical(grid_level, "compact")) manual <- manual[c(1L, 3L, 5L, 7L), , drop = FALSE]
+  if (identical(grid_level, "compact")) manual <- manual[c(1L, 3L, 5L, 8L), , drop = FALSE]
   if (identical(grid_level, "wide")) {
     manual <- unique(rbind(
       manual,
       data.frame(
-        graph_degree = c(80L, 96L),
-        intermediate_graph_degree = c(192L, 256L),
-        ef = pmax(as.integer(k), c(320L, 400L))
+        graph_degree = c(160L, 192L),
+        intermediate_graph_degree = c(640L, 768L),
+        ef = pmax(as.integer(k), c(1024L, 1536L))
       )
     ))
   }

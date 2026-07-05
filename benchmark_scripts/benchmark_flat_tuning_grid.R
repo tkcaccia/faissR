@@ -824,7 +824,7 @@ main <- function() {
   seed <- positive_int(args$seed, 4, "seed")
   output_values <- clean_output_values(args$output_values, "float,double")
   cpu_batches <- clean_int_values(args$cpu_faiss_batches, "2048,8192,16384,32768")
-  gpu_batches <- clean_int_values(args$gpu_faiss_batches, "1024,4096,8192,16384")
+  gpu_batches <- clean_int_values(args$gpu_faiss_batches, "1024,4096,8192,16384,32768,65536")
   cache_modes <- clean_bool_values(args$cache_modes, "false,true")
   gpu_reuse_values <- clean_bool_values(args$gpu_reuse_resources, "true,false")
   reference_backend <- match.arg(tolower(args$reference_backend %||% backend), c("cpu", "cuda"))

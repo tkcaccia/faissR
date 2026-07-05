@@ -23,8 +23,9 @@ set -euo pipefail
 #   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_ivfpq_fastscan_tuning_cuda.sh
 #
 # The job scans float32 .RData files, uses explicit backend="cuda",
-# method="ivfpq_fastscan", Euclidean distance, k=15,30,50,100, and writes
-# recommendation tables for target recall 0.90, 0.95, and 0.99.
+# method="ivfpq_fastscan", the metric(s) selected by METRICS
+# (default: euclidean), k=15,30,50,100, and writes recommendation
+# tables for target recall 0.90, 0.95, and 0.99.
 # It sweeps IVF `nlist`, IVF `nprobe`, byte-aligned cuVS 4-bit `pq_dim`,
 # and cuVS batch size. By default, the R benchmark uses a curated paired
 # speed-to-recall grid. Set IVFPQ_FASTSCAN_NLIST_MULTS,
@@ -55,7 +56,7 @@ export R_BIN="${R_BIN:-Rscript}"
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
 export K_VALUES="${K_VALUES:-15,30,50,100}"
-export METRICS="${METRICS:-euclidean,cosine,correlation,inner_product}"
+export METRICS="${METRICS:-euclidean}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
 export SKIP_PREVIOUS_TIMEOUTS="${SKIP_PREVIOUS_TIMEOUTS:-TRUE}"

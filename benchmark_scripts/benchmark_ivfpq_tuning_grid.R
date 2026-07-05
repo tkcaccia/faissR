@@ -301,21 +301,23 @@ ivfpq_candidates <- function(n, p, k, backend, grid_level = "standard",
   )
   base_nlist <- ivf_list_count_local(n, k)
   specs <- data.frame(
-    label = c("speed", "speed_plus", "balanced", "balanced_plus", "recall", "recall_plus"),
-    nlist_mult = c(0.5, 1.0, 1.0, 2.0, 2.0, 4.0),
-    nprobe_mult = c(0.5, 0.75, 1.0, 1.5, 2.0, 3.0),
-    pq_mode = c("speed", "speed", "balanced", "balanced", "recall", "recall_plus"),
+    label = c("ultra_speed", "speed", "speed_plus", "balanced", "balanced_plus", "recall", "recall_plus", "recall_max", "full_probe"),
+    nlist_mult = c(0.5, 0.5, 1.0, 1.0, 2.0, 2.0, 4.0, 6.0, 8.0),
+    nprobe_mult = c(0.25, 0.5, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 1.0),
+    pq_mode = c("speed", "speed", "speed", "balanced", "balanced", "recall", "recall_plus", "recall_plus", "recall_plus"),
+    full_probe = c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE),
     stringsAsFactors = FALSE
   )
-  if (identical(grid_level, "compact")) specs <- specs[c(1L, 3L, 5L), , drop = FALSE]
+  if (identical(grid_level, "compact")) specs <- specs[c(1L, 2L, 4L, 6L), , drop = FALSE]
   if (identical(grid_level, "wide")) {
     specs <- rbind(
       specs,
       data.frame(
-        label = c("recall_wide", "recall_max"),
-        nlist_mult = c(4.0, 6.0),
+        label = c("recall_wide", "recall_extra"),
+        nlist_mult = c(4.0, 8.0),
         nprobe_mult = c(4.0, 6.0),
         pq_mode = c("recall_plus", "recall_plus"),
+        full_probe = c(FALSE, FALSE),
         stringsAsFactors = FALSE
       )
     )
@@ -326,7 +328,11 @@ ivfpq_candidates <- function(n, p, k, backend, grid_level = "standard",
     nlist <- as.integer(max(1L, round(base_nlist * specs$nlist_mult[[i]])))
     nlist <- as.integer(min(nlist, max(1L, n)))
     base_probe <- ivf_probe_count_local(nlist, k)
-    nprobe <- as.integer(max(1L, ceiling(base_probe * specs$nprobe_mult[[i]])))
+    nprobe <- if (isTRUE(specs$full_probe[[i]])) {
+      as.integer(nlist)
+    } else {
+      as.integer(max(1L, ceiling(base_probe * specs$nprobe_mult[[i]])))
+    }
     nprobe <- as.integer(min(nprobe, nlist))
     pq_m <- pq_m_for_mode(p, specs$pq_mode[[i]], backend)
     for (nbits in pq_bits_values) {

@@ -22,9 +22,10 @@ set -euo pipefail
 # Then submit this script with:
 #   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_hnsw_tuning_cuda.sh
 #
-# The job scans float32 .RData files, uses explicit backend="cuda",
-# method="hnsw", Euclidean distance, k=15,30,50,100, and writes
-# recommendation tables for target recall 0.90, 0.95, and 0.99.
+# The job scans float32 .RData files and uses explicit backend="cuda",
+# method="hnsw". Set METRICS to run one or more supported metrics;
+# metric-specific wrappers include run_hpc_hnsw_tuning_cuda_euclidean.sh
+# and run_hpc_hnsw_tuning_cuda_cosine.sh.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 export DATA_ROOT="${DATA_ROOT:-${BASE_DIR}/Data}"

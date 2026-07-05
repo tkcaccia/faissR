@@ -808,14 +808,7 @@ const HnswCpuTuningSpec* hnsw_cpu_inner_product_benchmark_spec(const std::string
 }
 
 std::string hnsw_cuda_shape_group_cpp(int n, int p) {
-  if (!valid_int(n) || !valid_int(p)) return "other";
-  if (n < 5000) return "tiny_n";
-  if (n < 50000) return "small_mid_n";
-  if (n >= 50000 && n < 500000 && p <= 64) return "medium_low_dim";
-  if (n >= 500000 && p <= 64) return "large_low_dim";
-  if (n >= 50000 && n < 500000 && p >= 256) return "medium_high_dim";
-  if (n >= 500000 && p >= 256) return "very_large_high_dim";
-  return "other";
+  return hnsw_shape_group_cpp(n, p);
 }
 
 struct HnswCudaTuningSpec {
@@ -828,87 +821,62 @@ struct HnswCudaTuningSpec {
   const char* benchmark_basis;
 };
 
-const HnswCudaTuningSpec* hnsw_cuda_benchmark_spec(const std::string& shape_group,
-                                                   int k_bucket,
-                                                   int target_code) {
+const HnswCudaTuningSpec* hnsw_cuda_euclidean_benchmark_spec(const std::string& shape_group,
+                                                             int k_bucket,
+                                                             int target_code) {
+  // Source: benchmark_scripts/cuda_hnsw_euclidean_shape_tuning_defaults_from_uploaded_results.csv.
   static const HnswCudaTuningSpec specs[] = {
-    {"large_low_dim", 10, 90, 48, 128, 96, "hit_all_shape_datasets"},
-    {"large_low_dim", 10, 95, 48, 128, 96, "hit_all_shape_datasets"},
-    {"large_low_dim", 10, 99, 48, 128, 96, "hit_all_shape_datasets"},
-    {"large_low_dim", 15, 90, 32, 64, 96, "hit_all_shape_datasets"},
-    {"large_low_dim", 15, 95, 32, 64, 96, "hit_all_shape_datasets"},
-    {"large_low_dim", 15, 99, 32, 64, 96, "hit_all_shape_datasets"},
-    {"large_low_dim", 50, 90, 51, 128, 96, "hit_all_shape_datasets"},
-    {"large_low_dim", 50, 95, 51, 128, 96, "hit_all_shape_datasets"},
-    {"large_low_dim", 50, 99, 51, 128, 96, "hit_all_shape_datasets"},
-    {"large_low_dim", 100, 90, 101, 128, 128, "miss_best_manual_coverage"},
-    {"large_low_dim", 100, 95, 101, 128, 128, "miss_best_manual_coverage"},
-    {"large_low_dim", 100, 99, 101, 128, 128, "miss_best_manual_coverage"},
+    {"large_high_dim", 15, 90, 96, 320, 480, "best_available_all_shape_datasets"},
+    {"large_high_dim", 15, 95, 96, 320, 480, "best_available_all_shape_datasets"},
+    {"large_high_dim", 15, 99, 96, 320, 480, "best_available_all_shape_datasets"},
+    {"large_high_dim", 30, 90, 96, 320, 480, "best_available_all_shape_datasets"},
+    {"large_high_dim", 30, 95, 96, 320, 480, "best_available_all_shape_datasets"},
+    {"large_high_dim", 30, 99, 96, 320, 480, "best_available_all_shape_datasets"},
+    {"large_high_dim", 50, 90, 96, 320, 480, "best_available_all_shape_datasets"},
+    {"large_high_dim", 50, 95, 96, 320, 480, "best_available_all_shape_datasets"},
+    {"large_high_dim", 50, 99, 96, 320, 480, "best_available_all_shape_datasets"},
+    {"large_high_dim", 100, 90, 96, 320, 480, "best_available_all_shape_datasets"},
+    {"large_high_dim", 100, 95, 96, 320, 480, "best_available_all_shape_datasets"},
+    {"large_high_dim", 100, 99, 96, 320, 480, "best_available_all_shape_datasets"},
 
-    {"medium_high_dim", 10, 90, 16, 128, 64, "target_not_reached_best_available"},
-    {"medium_high_dim", 10, 95, 16, 128, 64, "target_not_reached_best_available"},
-    {"medium_high_dim", 10, 99, 16, 128, 64, "target_not_reached_best_available"},
-    {"medium_high_dim", 15, 90, 24, 128, 96, "target_not_reached_best_available"},
-    {"medium_high_dim", 15, 95, 24, 128, 96, "target_not_reached_best_available"},
-    {"medium_high_dim", 15, 99, 24, 128, 96, "target_not_reached_best_available"},
-    {"medium_high_dim", 50, 90, 64, 192, 256, "target_not_reached_best_available"},
-    {"medium_high_dim", 50, 95, 64, 192, 256, "target_not_reached_best_available"},
-    {"medium_high_dim", 50, 99, 64, 192, 256, "target_not_reached_best_available"},
-    {"medium_high_dim", 100, 90, 101, 202, 250, "target_not_reached_best_available"},
-    {"medium_high_dim", 100, 95, 101, 202, 250, "target_not_reached_best_available"},
-    {"medium_high_dim", 100, 99, 101, 202, 250, "target_not_reached_best_available"},
+    {"large_low_dim", 15, 90, 8, 16, 24, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 15, 95, 24, 48, 64, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 15, 99, 32, 64, 96, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 30, 90, 8, 16, 30, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 30, 95, 12, 24, 32, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 30, 99, 32, 64, 96, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 50, 90, 16, 32, 50, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 50, 95, 16, 32, 50, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 50, 99, 32, 64, 96, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 100, 90, 12, 24, 100, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 100, 95, 12, 24, 100, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 100, 99, 12, 24, 100, "fastest_meeting_target_all_shape_datasets"},
 
-    {"medium_low_dim", 10, 90, 24, 128, 64, "hit_all_shape_datasets"},
-    {"medium_low_dim", 10, 95, 24, 128, 64, "hit_all_shape_datasets"},
-    {"medium_low_dim", 10, 99, 24, 128, 64, "hit_all_shape_datasets"},
-    {"medium_low_dim", 15, 90, 48, 128, 96, "hit_all_shape_datasets"},
-    {"medium_low_dim", 15, 95, 48, 128, 96, "hit_all_shape_datasets"},
-    {"medium_low_dim", 15, 99, 48, 128, 96, "hit_all_shape_datasets"},
-    {"medium_low_dim", 50, 90, 51, 64, 96, "hit_all_shape_datasets"},
-    {"medium_low_dim", 50, 95, 51, 64, 96, "hit_all_shape_datasets"},
-    {"medium_low_dim", 50, 99, 51, 64, 96, "hit_all_shape_datasets"},
-    {"medium_low_dim", 100, 90, 101, 101, 100, "hit_all_shape_datasets"},
-    {"medium_low_dim", 100, 95, 101, 101, 100, "hit_all_shape_datasets"},
-    {"medium_low_dim", 100, 99, 101, 101, 100, "hit_all_shape_datasets"},
+    {"medium_low_dim", 15, 90, 8, 16, 24, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 15, 95, 8, 16, 24, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 15, 99, 24, 48, 64, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 30, 90, 8, 16, 30, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 30, 95, 8, 16, 30, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 30, 99, 16, 32, 48, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 50, 90, 16, 32, 50, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 50, 95, 16, 32, 50, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 50, 99, 16, 32, 50, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 100, 90, 8, 16, 100, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 100, 95, 8, 16, 100, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 100, 99, 8, 16, 100, "fastest_meeting_target_all_shape_datasets"},
 
-    {"small_mid_n", 10, 90, 32, 128, 150, "target_not_reached_best_available"},
-    {"small_mid_n", 10, 95, 32, 128, 150, "target_not_reached_best_available"},
-    {"small_mid_n", 10, 99, 32, 128, 150, "target_not_reached_best_available"},
-    {"small_mid_n", 15, 90, 64, 192, 256, "target_not_reached_best_available"},
-    {"small_mid_n", 15, 95, 64, 192, 256, "target_not_reached_best_available"},
-    {"small_mid_n", 15, 99, 64, 192, 256, "target_not_reached_best_available"},
-    {"small_mid_n", 50, 90, 64, 192, 256, "target_not_reached_best_available"},
-    {"small_mid_n", 50, 95, 64, 192, 256, "target_not_reached_best_available"},
-    {"small_mid_n", 50, 99, 64, 192, 256, "target_not_reached_best_available"},
-    {"small_mid_n", 100, 90, 101, 192, 256, "target_not_reached_best_available"},
-    {"small_mid_n", 100, 95, 101, 192, 256, "target_not_reached_best_available"},
-    {"small_mid_n", 100, 99, 101, 192, 256, "target_not_reached_best_available"},
-
-    {"tiny_n", 10, 90, 24, 64, 96, "hit_all_shape_datasets"},
-    {"tiny_n", 10, 95, 24, 64, 96, "hit_all_shape_datasets"},
-    {"tiny_n", 10, 99, 24, 64, 96, "hit_all_shape_datasets"},
-    {"tiny_n", 15, 90, 24, 128, 96, "hit_all_shape_datasets"},
-    {"tiny_n", 15, 95, 24, 128, 96, "hit_all_shape_datasets"},
-    {"tiny_n", 15, 99, 24, 128, 96, "hit_all_shape_datasets"},
-    {"tiny_n", 50, 90, 51, 51, 50, "hit_all_shape_datasets"},
-    {"tiny_n", 50, 95, 51, 51, 50, "hit_all_shape_datasets"},
-    {"tiny_n", 50, 99, 51, 51, 50, "hit_all_shape_datasets"},
-    {"tiny_n", 100, 90, 101, 101, 100, "hit_all_shape_datasets"},
-    {"tiny_n", 100, 95, 101, 101, 100, "hit_all_shape_datasets"},
-    {"tiny_n", 100, 99, 101, 101, 100, "hit_all_shape_datasets"},
-
-    {"very_large_high_dim", 10, 90, 32, 64, 150, "hit_all_shape_datasets"},
-    {"very_large_high_dim", 10, 95, 32, 64, 150, "hit_all_shape_datasets"},
-    {"very_large_high_dim", 10, 99, 32, 64, 150, "target_not_reached_best_available"},
-    {"very_large_high_dim", 15, 90, 48, 128, 128, "hit_all_shape_datasets"},
-    {"very_large_high_dim", 15, 95, 48, 128, 128, "hit_all_shape_datasets"},
-    {"very_large_high_dim", 15, 99, 48, 128, 128, "target_not_reached_best_available"},
-    {"very_large_high_dim", 50, 90, 51, 128, 150, "hit_all_shape_datasets"},
-    {"very_large_high_dim", 50, 95, 51, 128, 150, "hit_all_shape_datasets"},
-    {"very_large_high_dim", 50, 99, 51, 128, 150, "target_not_reached_best_available"},
-    {"very_large_high_dim", 100, 90, 101, 101, 100, "hit_all_shape_datasets"},
-    {"very_large_high_dim", 100, 95, 101, 101, 100, "hit_all_shape_datasets"},
-    {"very_large_high_dim", 100, 99, 101, 101, 100, "target_not_reached_best_available"}
+    {"small_n", 15, 90, 128, 512, 768, "best_available_all_shape_datasets"},
+    {"small_n", 15, 95, 128, 512, 768, "best_available_all_shape_datasets"},
+    {"small_n", 15, 99, 128, 512, 768, "best_available_all_shape_datasets"},
+    {"small_n", 30, 90, 128, 512, 768, "best_available_all_shape_datasets"},
+    {"small_n", 30, 95, 128, 512, 768, "best_available_all_shape_datasets"},
+    {"small_n", 30, 99, 128, 512, 768, "best_available_all_shape_datasets"},
+    {"small_n", 50, 90, 128, 512, 768, "best_available_all_shape_datasets"},
+    {"small_n", 50, 95, 128, 512, 768, "best_available_all_shape_datasets"},
+    {"small_n", 50, 99, 128, 512, 768, "best_available_all_shape_datasets"},
+    {"small_n", 100, 90, 128, 512, 768, "best_available_all_shape_datasets"},
+    {"small_n", 100, 95, 128, 512, 768, "best_available_all_shape_datasets"},
+    {"small_n", 100, 99, 128, 512, 768, "best_available_all_shape_datasets"}
   };
   for (const auto& spec : specs) {
     if (shape_group == spec.shape_group &&
@@ -918,6 +886,83 @@ const HnswCudaTuningSpec* hnsw_cuda_benchmark_spec(const std::string& shape_grou
     }
   }
   return nullptr;
+}
+
+const HnswCudaTuningSpec* hnsw_cuda_cosine_benchmark_spec(const std::string& shape_group,
+                                                         int k_bucket,
+                                                         int target_code) {
+  // Source: benchmark_scripts/cuda_hnsw_cosine_shape_tuning_defaults_from_uploaded_results.csv.
+  static const HnswCudaTuningSpec specs[] = {
+    {"large_high_dim", 15, 90, 48, 128, 128, "fastest_meeting_target_all_shape_datasets"},
+    {"large_high_dim", 15, 95, 64, 192, 256, "fastest_meeting_target_all_shape_datasets"},
+    {"large_high_dim", 15, 99, 12, 24, 32, "best_available_all_shape_datasets"},
+    {"large_high_dim", 30, 90, 48, 128, 128, "fastest_meeting_target_all_shape_datasets"},
+    {"large_high_dim", 30, 95, 64, 192, 256, "fastest_meeting_target_all_shape_datasets"},
+    {"large_high_dim", 30, 99, 64, 192, 256, "fastest_meeting_target_all_shape_datasets"},
+    {"large_high_dim", 50, 90, 32, 64, 96, "fastest_meeting_target_all_shape_datasets"},
+    {"large_high_dim", 50, 95, 64, 192, 256, "fastest_meeting_target_all_shape_datasets"},
+    {"large_high_dim", 50, 99, 96, 320, 480, "fastest_meeting_target_all_shape_datasets"},
+    {"large_high_dim", 100, 90, 24, 48, 100, "fastest_meeting_target_all_shape_datasets"},
+    {"large_high_dim", 100, 95, 64, 192, 256, "fastest_meeting_target_all_shape_datasets"},
+    {"large_high_dim", 100, 99, 96, 320, 480, "fastest_meeting_target_all_shape_datasets"},
+
+    {"large_low_dim", 15, 90, 8, 16, 24, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 15, 95, 24, 48, 64, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 15, 99, 64, 192, 256, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 30, 90, 8, 16, 30, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 30, 95, 8, 16, 30, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 30, 99, 32, 64, 96, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 50, 90, 12, 24, 50, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 50, 95, 12, 24, 50, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 50, 99, 48, 128, 128, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 100, 90, 12, 24, 100, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 100, 95, 12, 24, 100, "fastest_meeting_target_all_shape_datasets"},
+    {"large_low_dim", 100, 99, 8, 16, 100, "fastest_meeting_target_all_shape_datasets"},
+
+    {"medium_low_dim", 15, 90, 8, 16, 24, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 15, 95, 8, 16, 24, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 15, 99, 24, 48, 64, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 30, 90, 8, 16, 30, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 30, 95, 8, 16, 30, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 30, 99, 8, 16, 30, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 50, 90, 8, 16, 50, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 50, 95, 8, 16, 50, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 50, 99, 8, 16, 50, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 100, 90, 8, 16, 100, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 100, 95, 8, 16, 100, "fastest_meeting_target_all_shape_datasets"},
+    {"medium_low_dim", 100, 99, 8, 16, 100, "fastest_meeting_target_all_shape_datasets"},
+
+    {"small_n", 15, 90, 12, 24, 32, "fastest_meeting_target_all_shape_datasets"},
+    {"small_n", 15, 95, 12, 24, 32, "fastest_meeting_target_all_shape_datasets"},
+    {"small_n", 15, 99, 32, 64, 96, "best_available_all_shape_datasets"},
+    {"small_n", 30, 90, 16, 32, 48, "fastest_meeting_target_all_shape_datasets"},
+    {"small_n", 30, 95, 16, 32, 48, "fastest_meeting_target_all_shape_datasets"},
+    {"small_n", 30, 99, 16, 32, 48, "fastest_meeting_target_all_shape_datasets"},
+    {"small_n", 50, 90, 16, 32, 50, "fastest_meeting_target_all_shape_datasets"},
+    {"small_n", 50, 95, 16, 32, 50, "fastest_meeting_target_all_shape_datasets"},
+    {"small_n", 50, 99, 16, 32, 50, "fastest_meeting_target_all_shape_datasets"},
+    {"small_n", 100, 90, 16, 32, 100, "fastest_meeting_target_all_shape_datasets"},
+    {"small_n", 100, 95, 16, 32, 100, "fastest_meeting_target_all_shape_datasets"},
+    {"small_n", 100, 99, 16, 32, 100, "fastest_meeting_target_all_shape_datasets"}
+  };
+  for (const auto& spec : specs) {
+    if (shape_group == spec.shape_group &&
+        k_bucket == spec.k_bucket &&
+        target_code == spec.target_code) {
+      return &spec;
+    }
+  }
+  return nullptr;
+}
+
+const HnswCudaTuningSpec* hnsw_cuda_benchmark_spec(const std::string& metric,
+                                                   const std::string& shape_group,
+                                                   int k_bucket,
+                                                   int target_code) {
+  if (metric == "cosine") {
+    return hnsw_cuda_cosine_benchmark_spec(shape_group, k_bucket, target_code);
+  }
+  return hnsw_cuda_euclidean_benchmark_spec(shape_group, k_bucket, target_code);
 }
 
 int ivf_list_count_cpp(int n, int k) {
@@ -1315,6 +1360,302 @@ List nn_tune_cpu_exact_cpp(int n,
 }
 
 // [[Rcpp::export]]
+List nn_tune_cuda_exact_cpp(int n,
+                            int p,
+                            int k,
+                            std::string metric = "euclidean",
+                            double target_recall_option = NA_REAL) {
+  n = safe_n(n);
+  p = valid_int(p) ? p : NA_INTEGER;
+  k = safe_k(k);
+  const double target_recall = hnsw_target_recall_cpp(target_recall_option);
+  const int target_code = hnsw_target_code_cpp(target_recall);
+  const int k_bucket = hnsw_cpu_k_bucket_cpp(k);
+  const std::string shape_group = hnsw_shape_group_cpp(n, p);
+  const bool euclidean = metric == "euclidean";
+  const bool cosine = metric == "cosine";
+  const bool correlation = metric == "correlation";
+  const bool inner_product = metric == "inner_product";
+  const HpcCudaExactSpec* spec = euclidean ?
+    hpc_cuda_exact_euclidean_spec("cuda", shape_group, k_bucket, target_code) :
+    (cosine ?
+     hpc_cuda_exact_cosine_spec("cuda", shape_group, k_bucket, target_code) :
+     nullptr);
+
+  int recommended_n_threads = 12;
+  int faiss_gpu_query_batch_size = 8192;
+  bool faiss_gpu_reuse_resources = true;
+  std::string recommended_output = "float";
+  std::string result_backend = euclidean ? "faiss_gpu_flat_l2" :
+    (cosine ? "faiss_gpu_flat_cosine" :
+     (correlation ? "faiss_gpu_flat_correlation" :
+      (inner_product ? "faiss_gpu_flat_ip" : "faiss_gpu_flat_l2")));
+  std::string resolved_backend = result_backend;
+  std::string distance_type = "float32";
+  std::string input_type = "float32";
+  std::string input_layout = "float32_column_major_payload_to_row_major";
+  std::string benchmark_basis;
+  std::string benchmark_source = "heuristic_fallback";
+  std::string rule = (euclidean || cosine || correlation || inner_product) ?
+    ("cuda_exact_" + shape_group + "_k" + std::to_string(k_bucket) + "_" +
+     hnsw_target_label_cpp(target_code)) :
+    "cuda_exact_metric_fallback";
+  bool benchmark_target_met = false;
+
+  if (spec != nullptr) {
+    recommended_n_threads = spec->n_threads;
+    faiss_gpu_query_batch_size = spec->faiss_gpu_query_batch_size;
+    faiss_gpu_reuse_resources = spec->faiss_gpu_reuse_resources;
+    recommended_output = spec->output;
+    result_backend = spec->result_backend;
+    resolved_backend = spec->resolved_backend;
+    distance_type = spec->distance_type;
+    input_type = spec->input_type;
+    input_layout = spec->input_layout;
+    benchmark_basis = spec->basis;
+    benchmark_source = euclidean ? "hpc_exact_cuda_euclidean_20260701_014100" :
+      "hpc_exact_cuda_cosine_20260702_110455";
+    rule = std::string("hpc_cuda_exact_") + metric + "_" + shape_group +
+      "_k" + std::to_string(k_bucket) + "_" +
+      hnsw_target_label_cpp(target_code);
+    benchmark_target_met =
+      benchmark_basis.find("fastest_meeting_target") != std::string::npos;
+  }
+
+  faiss_gpu_query_batch_size =
+    clamp_int(faiss_gpu_query_batch_size, 1, std::max(1, n));
+
+  return List::create(
+    _["target_recall"] = target_recall,
+    _["requested_target_recall"] = target_recall_option,
+    _["expected_recall_at_k"] = 1.0,
+    _["exact_recall_by_construction"] = true,
+    _["tuning_policy"] = "auto_shape_k_metric_target_recall_cuda_exact",
+    _["tuning_rule"] = rule,
+    _["tuning_metric"] = metric,
+    _["tuning_metric_aware"] = !euclidean,
+    _["tuning_backend"] = "cuda",
+    _["tuning_method"] = "exact",
+    _["tuning_shape_group"] = shape_group,
+    _["tuning_k_bucket"] = k_bucket,
+    _["tuning_target_recall_code"] = target_code,
+    _["tuning_benchmark_basis"] = benchmark_basis,
+    _["tuning_benchmark_target_met"] = benchmark_target_met,
+    _["tuning_benchmark_source"] = benchmark_source,
+    _["recommended_n_threads"] = recommended_n_threads,
+    _["faiss_gpu_query_batch_size"] = faiss_gpu_query_batch_size,
+    _["faiss_gpu_reuse_resources"] = faiss_gpu_reuse_resources,
+    _["cache_fitted_indexes"] = false,
+    _["recommended_output"] = recommended_output,
+    _["result_backend"] = result_backend,
+    _["resolved_backend"] = resolved_backend,
+    _["distance_type"] = distance_type,
+    _["input_type"] = input_type,
+    _["input_layout"] = input_layout,
+    _["tuning_large_n"] = n >= 50000,
+    _["tuning_small_k"] = k <= 15,
+    _["tuning_large_k"] = k >= 100,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_cuda_flat_cpp(int n,
+                           int p,
+                           int k,
+                           std::string metric = "euclidean",
+                           double target_recall_option = NA_REAL) {
+  n = safe_n(n);
+  p = valid_int(p) ? p : NA_INTEGER;
+  k = safe_k(k);
+  const double target_recall = hnsw_target_recall_cpp(target_recall_option);
+  const int target_code = hnsw_target_code_cpp(target_recall);
+  const int k_bucket = hnsw_cpu_k_bucket_cpp(k);
+  const std::string shape_group = hnsw_shape_group_cpp(n, p);
+  const bool euclidean = metric == "euclidean";
+  const bool cosine = metric == "cosine";
+  const HpcCudaFlatSpec* spec = euclidean ?
+    hpc_cuda_flat_euclidean_spec("cuda", shape_group, k_bucket, target_code) :
+    (cosine ?
+     hpc_cuda_flat_cosine_spec("cuda", shape_group, k_bucket, target_code) :
+     nullptr);
+
+  int recommended_n_threads = 12;
+  int faiss_gpu_query_batch_size = 8192;
+  bool faiss_gpu_reuse_resources = true;
+  std::string recommended_output = "float";
+  std::string result_backend = cosine ? "faiss_gpu_flat_cosine" : "faiss_gpu_flat_l2";
+  std::string resolved_backend = result_backend;
+  std::string distance_type = "float32";
+  std::string input_type = "float32";
+  std::string input_layout = cosine ? "float32_payload_direct_row_major" :
+    "float32_column_major_payload_to_row_major";
+  std::string benchmark_basis;
+  std::string benchmark_source = "heuristic_fallback";
+  std::string rule = (euclidean || cosine) ?
+    ("cuda_flat_" + shape_group + "_k" + std::to_string(k_bucket) + "_" +
+     hnsw_target_label_cpp(target_code)) :
+    "cuda_flat_metric_fallback";
+  bool benchmark_target_met = false;
+
+  if (spec != nullptr) {
+    recommended_n_threads = spec->n_threads;
+    faiss_gpu_query_batch_size = spec->faiss_gpu_query_batch_size;
+    faiss_gpu_reuse_resources = spec->faiss_gpu_reuse_resources;
+    recommended_output = spec->output;
+    result_backend = spec->result_backend;
+    resolved_backend = spec->resolved_backend;
+    distance_type = spec->distance_type;
+    input_type = spec->input_type;
+    input_layout = spec->input_layout;
+    benchmark_basis = spec->basis;
+    benchmark_source = euclidean ? "hpc_flat_cuda_euclidean_20260701_031219" :
+      "hpc_flat_cuda_cosine_20260702_120850";
+    rule = std::string("hpc_cuda_flat_") + metric + "_" + shape_group +
+      "_k" + std::to_string(k_bucket) + "_" +
+      hnsw_target_label_cpp(target_code);
+    benchmark_target_met =
+      benchmark_basis.find("fastest_meeting_target") != std::string::npos;
+  }
+
+  faiss_gpu_query_batch_size =
+    clamp_int(faiss_gpu_query_batch_size, 1, std::max(1, n));
+
+  return List::create(
+    _["target_recall"] = target_recall,
+    _["requested_target_recall"] = target_recall_option,
+    _["expected_recall_at_k"] = 1.0,
+    _["exact_recall_by_construction"] = true,
+    _["tuning_policy"] = "auto_shape_k_metric_target_recall_cuda_flat",
+    _["tuning_rule"] = rule,
+    _["tuning_metric"] = metric,
+    _["tuning_metric_aware"] = !euclidean,
+    _["tuning_backend"] = "cuda",
+    _["tuning_method"] = "flat",
+    _["tuning_shape_group"] = shape_group,
+    _["tuning_k_bucket"] = k_bucket,
+    _["tuning_target_recall_code"] = target_code,
+    _["tuning_benchmark_basis"] = benchmark_basis,
+    _["tuning_benchmark_target_met"] = benchmark_target_met,
+    _["tuning_benchmark_source"] = benchmark_source,
+    _["recommended_n_threads"] = recommended_n_threads,
+    _["faiss_gpu_query_batch_size"] = faiss_gpu_query_batch_size,
+    _["faiss_gpu_reuse_resources"] = faiss_gpu_reuse_resources,
+    _["cache_fitted_indexes"] = false,
+    _["recommended_output"] = recommended_output,
+    _["result_backend"] = result_backend,
+    _["resolved_backend"] = resolved_backend,
+    _["distance_type"] = distance_type,
+    _["input_type"] = input_type,
+    _["input_layout"] = input_layout,
+    _["tuning_large_n"] = n >= 50000,
+    _["tuning_small_k"] = k <= 15,
+    _["tuning_large_k"] = k >= 100,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
+List nn_tune_cuda_bruteforce_cpp(int n,
+                                 int p,
+                                 int k,
+                                 std::string metric = "euclidean",
+                                 double target_recall_option = NA_REAL) {
+  n = safe_n(n);
+  p = valid_int(p) ? p : NA_INTEGER;
+  k = safe_k(k);
+  const double target_recall = hnsw_target_recall_cpp(target_recall_option);
+  const int target_code = hnsw_target_code_cpp(target_recall);
+  const int k_bucket = hnsw_cpu_k_bucket_cpp(k);
+  const std::string shape_group = hnsw_shape_group_cpp(n, p);
+  const bool euclidean = metric == "euclidean";
+  const bool cosine = metric == "cosine";
+  const HpcCudaBruteforceSpec* spec = nullptr;
+  if (euclidean) {
+    spec = hpc_cuda_bruteforce_euclidean_spec("cuda", shape_group, k_bucket, target_code);
+  } else if (cosine) {
+    spec = hpc_cuda_bruteforce_cosine_spec("cuda", shape_group, k_bucket, target_code);
+  }
+
+  int recommended_n_threads = 12;
+  int faiss_gpu_query_batch_size = 8192;
+  bool faiss_gpu_reuse_resources = true;
+  std::string recommended_output = "float";
+  std::string result_backend = "cuda_cuvs_bruteforce";
+  std::string resolved_backend = result_backend;
+  std::string distance_type = "float32";
+  std::string input_type = "float32";
+  std::string input_layout = cosine ?
+    "float32_payload_direct_row_major" :
+    "float32_column_major_payload_to_row_major";
+  std::string benchmark_basis;
+  std::string benchmark_source = "heuristic_fallback";
+  std::string rule = (euclidean || cosine) ?
+    ("cuda_bruteforce_" + metric + "_" + shape_group +
+     "_k" + std::to_string(k_bucket) + "_" +
+     hnsw_target_label_cpp(target_code)) :
+    "cuda_bruteforce_metric_fallback";
+  bool benchmark_target_met = false;
+
+  if (spec != nullptr) {
+    recommended_n_threads = spec->n_threads;
+    faiss_gpu_query_batch_size = spec->faiss_gpu_query_batch_size;
+    faiss_gpu_reuse_resources = spec->faiss_gpu_reuse_resources;
+    recommended_output = spec->output;
+    result_backend = spec->result_backend;
+    resolved_backend = spec->resolved_backend;
+    distance_type = spec->distance_type;
+    input_type = spec->input_type;
+    input_layout = spec->input_layout;
+    benchmark_basis = spec->basis;
+    benchmark_source = euclidean ?
+      "hpc_bruteforce_cuda_euclidean_20260630_181030" :
+      "hpc_bruteforce_cuda_cosine_proxy_from_euclidean_20260630_181030";
+    rule = std::string("hpc_cuda_bruteforce_") + metric + "_" + shape_group +
+      "_k" + std::to_string(k_bucket) + "_" +
+      hnsw_target_label_cpp(target_code);
+    benchmark_target_met =
+      benchmark_basis.find("fastest_meeting_target") != std::string::npos;
+  }
+
+  faiss_gpu_query_batch_size =
+    clamp_int(faiss_gpu_query_batch_size, 1, std::max(1, n));
+
+  return List::create(
+    _["target_recall"] = target_recall,
+    _["requested_target_recall"] = target_recall_option,
+    _["expected_recall_at_k"] = 1.0,
+    _["exact_recall_by_construction"] = true,
+    _["tuning_policy"] = "auto_shape_k_metric_target_recall_cuda_bruteforce",
+    _["tuning_rule"] = rule,
+    _["tuning_metric"] = metric,
+    _["tuning_metric_aware"] = !euclidean,
+    _["tuning_backend"] = "cuda",
+    _["tuning_method"] = "bruteforce",
+    _["tuning_shape_group"] = shape_group,
+    _["tuning_k_bucket"] = k_bucket,
+    _["tuning_target_recall_code"] = target_code,
+    _["tuning_benchmark_basis"] = benchmark_basis,
+    _["tuning_benchmark_target_met"] = benchmark_target_met,
+    _["tuning_benchmark_source"] = benchmark_source,
+    _["recommended_n_threads"] = recommended_n_threads,
+    _["faiss_gpu_query_batch_size"] = faiss_gpu_query_batch_size,
+    _["faiss_gpu_reuse_resources"] = faiss_gpu_reuse_resources,
+    _["cache_fitted_indexes"] = false,
+    _["recommended_output"] = recommended_output,
+    _["result_backend"] = result_backend,
+    _["resolved_backend"] = resolved_backend,
+    _["distance_type"] = distance_type,
+    _["input_type"] = input_type,
+    _["input_layout"] = input_layout,
+    _["tuning_large_n"] = n >= 50000,
+    _["tuning_small_k"] = k <= 15,
+    _["tuning_large_k"] = k >= 100,
+    _["tuning_source"] = "cpp"
+  );
+}
+
+// [[Rcpp::export]]
 List nn_tune_cpu_flat_cpp(int n,
                           int p,
                           int k,
@@ -1553,6 +1894,7 @@ List nn_tune_faiss_ivf_cpp(int n,
   int default_pq_nbits = NA_INTEGER;
   int default_fastscan_refine_factor = NA_INTEGER;
   int default_fastscan_bbs = NA_INTEGER;
+  int default_cuvs_ivf_batch_size = NA_INTEGER;
   std::string benchmark_basis;
   std::string benchmark_source = "heuristic_fallback";
   bool benchmark_target_met = false;
@@ -1569,9 +1911,13 @@ List nn_tune_faiss_ivf_cpp(int n,
         benchmark_basis = spec->basis;
         benchmark_target_met =
           benchmark_basis.find("fastest_meeting_target") != std::string::npos;
+        if (const HpcIvfpqFastscanBatchSpec* batch_spec =
+              hpc_ivfpq_fastscan_batch_spec(backend, shape_group, k_bucket, target_code)) {
+          default_cuvs_ivf_batch_size = batch_spec->cuvs_ivf_batch_size;
+        }
         benchmark_source = backend == "cpu" ?
           "hpc_ivfpq_fastscan_cpu12_euclidean_20260630_161409" :
-          "hpc_ivfpq_fastscan_euclidean_shape_defaults";
+          "hpc_ivfpq_fastscan_cuda_euclidean_20260701_100837";
         rule = "hpc_" + backend + "_ivfpq_fastscan_" + shape_group +
           "_k" + std::to_string(k_bucket) + "_" +
           hnsw_target_label_cpp(target_code);
@@ -1588,7 +1934,7 @@ List nn_tune_faiss_ivf_cpp(int n,
           benchmark_basis.find("fastest_meeting_target") != std::string::npos;
         benchmark_source = backend == "cpu" ?
           "hpc_ivfpq_cpu12_euclidean_shape_defaults_20260630_161409" :
-          "hpc_ivfpq_euclidean_shape_defaults_20260627_20260628";
+          "hpc_ivfpq_cuda_euclidean_20260701_194051";
         rule = "hpc_" + backend + "_ivfpq_" + shape_group +
           "_k" + std::to_string(k_bucket) + "_" +
           hnsw_target_label_cpp(target_code);
@@ -1600,26 +1946,35 @@ List nn_tune_faiss_ivf_cpp(int n,
       benchmark_basis = spec->basis;
       benchmark_target_met =
         benchmark_basis.find("fastest_meeting_target") != std::string::npos;
-      benchmark_source = backend == "cpu" ?
-        "hpc_ivf_cpu12_euclidean_20260630_161409" :
-        "hpc_ivf_euclidean_shape_defaults_20260627_20260628";
+        benchmark_source = backend == "cpu" ?
+          "hpc_ivf_cpu12_euclidean_20260630_161409" :
+          "hpc_ivf_cuda_euclidean_20260702_001853";
       rule = "hpc_" + backend + "_ivf_" + shape_group +
         "_k" + std::to_string(k_bucket) + "_" +
         hnsw_target_label_cpp(target_code);
     }
-  } else if (!manual && cosine && method == "ivfpq_fastscan" && backend == "cpu") {
+  } else if (!manual && cosine && method == "ivfpq_fastscan" &&
+             (backend == "cpu" || backend == "cuda")) {
     if (const HpcIvfpqFastscanSpec* spec =
           hpc_ivfpq_fastscan_cosine_seed_spec(backend, shape_group, k_bucket, target_code)) {
       default_nlist = spec->nlist;
       default_nprobe = spec->nprobe;
       default_pq_m = spec->pq_m;
       default_pq_nbits = spec->pq_nbits;
-      benchmark_basis = "cosine_validation_pending_seeded_from_euclidean_fastscan";
+      benchmark_basis = backend == "cuda" ?
+        "cosine_validation_pending_seeded_from_cuda_euclidean_fastscan" :
+        "cosine_validation_pending_seeded_from_euclidean_fastscan";
       benchmark_target_met = false;
-      benchmark_source = "hpc_ivfpq_fastscan_cpu12_cosine_20260701_090337_failed_before_backend_seeded_from_euclidean_20260630_161409";
+      benchmark_source = backend == "cuda" ?
+        "hpc_ivfpq_fastscan_cuda_cosine_20260702_133619_failed_before_backend_seeded_from_euclidean_20260701_100837" :
+        "hpc_ivfpq_fastscan_cpu12_cosine_20260701_090337_failed_before_backend_seeded_from_euclidean_20260630_161409";
       default_fastscan_refine_factor = spec->refine_factor;
       default_fastscan_bbs = spec->bbs;
-      rule = "hpc_cpu_ivfpq_fastscan_cosine_" + shape_group +
+      if (const HpcIvfpqFastscanBatchSpec* batch_spec =
+            hpc_ivfpq_fastscan_batch_spec(backend, shape_group, k_bucket, target_code)) {
+        default_cuvs_ivf_batch_size = batch_spec->cuvs_ivf_batch_size;
+      }
+      rule = "hpc_" + backend + "_ivfpq_fastscan_cosine_" + shape_group +
         "_k" + std::to_string(k_bucket) + "_" +
         hnsw_target_label_cpp(target_code);
     }
@@ -1747,7 +2102,6 @@ List nn_tune_faiss_ivf_cpp(int n,
   default_nprobe = clamp_int(default_nprobe, 1, nlist);
   const int requested_nprobe = requested_int(nprobe_option, default_nprobe);
   const int nprobe = option_int(nprobe_option, default_nprobe, 1, nlist);
-
   return List::create(
     _["nlist"] = nlist,
     _["nprobe"] = nprobe,
@@ -1757,6 +2111,7 @@ List nn_tune_faiss_ivf_cpp(int n,
     _["pq_nbits"] = default_pq_nbits,
     _["ivfpq_fastscan_refine_factor"] = default_fastscan_refine_factor,
     _["ivfpq_fastscan_bbs"] = default_fastscan_bbs,
+    _["cuvs_ivf_batch_size"] = default_cuvs_ivf_batch_size,
     _["target_recall"] = target_recall,
     _["requested_target_recall"] = target_recall_option,
     _["tuning_policy"] = manual ? "manual_options" : "auto_shape_k_target_recall",
@@ -1794,10 +2149,11 @@ List nn_tune_cuda_ivf_cpp(int n,
   const double target_recall = hnsw_target_recall_cpp(target_recall_option);
   const int target_code = hnsw_target_code_cpp(target_recall);
   const bool metric_aware = metric != "euclidean";
-  const int k_bucket = k <= 15 ? 15 : (k <= 30 ? 30 : (k <= 50 ? 50 : 100));
+  const int k_bucket = hnsw_cpu_k_bucket_cpp(k);
   const int root = std::max(1, static_cast<int>(std::ceil(std::sqrt(static_cast<double>(n)))));
   const int half_root = std::max(16, static_cast<int>(std::floor(static_cast<double>(root) / 2.0)));
 
+  const std::string hpc_shape = hnsw_shape_group_cpp(n, p);
   std::string shape = "general";
   if (n < 5000 && p >= 1024) {
     shape = "small_n_very_high_dim";
@@ -1819,7 +2175,9 @@ List nn_tune_cuda_ivf_cpp(int n,
   int default_nprobe = ivf_probe_count_cpp(default_nlist, k, metric);
   std::string basis = "hpc_cuda_ivf_float32_euclidean_20260628";
   std::string rule_basis = "shape_k_target_recall";
+  std::string benchmark_source = "heuristic_fallback";
   bool benchmark_target_met = true;
+  bool hpc_metric_spec_used = false;
 
   if (shape == "small_n_very_high_dim") {
     default_nlist = half_root;
@@ -1975,7 +2333,29 @@ List nn_tune_cuda_ivf_cpp(int n,
     }
   }
 
-  if (metric_aware && !manual) {
+  if (!manual) {
+    const HpcIvfSpec* spec = nullptr;
+    if (metric == "euclidean") {
+      spec = hpc_ivf_spec("cuda", hpc_shape, k_bucket, target_code);
+    } else if (metric == "cosine") {
+      spec = hpc_ivf_cosine_spec("cuda", hpc_shape, k_bucket, target_code);
+    }
+    if (spec != nullptr) {
+      default_nlist = spec->nlist;
+      default_nprobe = spec->nprobe;
+      basis = spec->basis;
+      benchmark_target_met =
+        basis.find("fastest_meeting_target") != std::string::npos;
+      benchmark_source = metric == "cosine" ?
+        "hpc_ivf_cuda_cosine_20260702_192200" :
+        "hpc_ivf_cuda_euclidean_20260702_001853";
+      rule_basis = "hpc_shape_k_target_recall";
+      shape = hpc_shape;
+      hpc_metric_spec_used = true;
+    }
+  }
+
+  if (metric_aware && !manual && !hpc_metric_spec_used) {
     default_nprobe = std::max(default_nprobe,
                               static_cast<int>(std::ceil(static_cast<double>(default_nprobe) * 1.25)));
     rule_basis += "_metric_probe_increase";
@@ -1987,6 +2367,8 @@ List nn_tune_cuda_ivf_cpp(int n,
   default_nprobe = clamp_int(default_nprobe, 1, nlist);
   const int requested_nprobe = requested_int(nprobe_option, default_nprobe);
   const int nprobe = option_int(nprobe_option, default_nprobe, 1, nlist);
+  const std::string tuning_rule_prefix = metric == "euclidean" ?
+    "cuda_ivf_" : ("cuda_ivf_" + metric + "_");
 
   return List::create(
     _["nlist"] = nlist,
@@ -1996,7 +2378,7 @@ List nn_tune_cuda_ivf_cpp(int n,
     _["target_recall"] = target_recall,
     _["requested_target_recall"] = target_recall_option,
     _["tuning_policy"] = manual ? "manual_options" : "cuda_ivf_shape_k_target_recall",
-    _["tuning_rule"] = "cuda_ivf_" + shape + "_k" + std::to_string(k_bucket) +
+    _["tuning_rule"] = tuning_rule_prefix + shape + "_k" + std::to_string(k_bucket) +
       "_recall" + std::to_string(target_code),
     _["tuning_rule_basis"] = rule_basis,
     _["tuning_metric"] = metric,
@@ -2007,6 +2389,7 @@ List nn_tune_cuda_ivf_cpp(int n,
     _["tuning_target_recall_code"] = target_code,
     _["tuning_benchmark_basis"] = basis,
     _["tuning_benchmark_target_met"] = benchmark_target_met,
+    _["tuning_benchmark_source"] = benchmark_source,
     _["tuning_source"] = "cpp"
   );
 }
@@ -2527,7 +2910,8 @@ List nn_tune_cuvs_hnsw_cpp(int n,
                            int search_width_option = NA_INTEGER,
                            int itopk_size_option = NA_INTEGER,
                            int ef_option = NA_INTEGER,
-                           bool manual_cagra = false) {
+                           bool manual_cagra = false,
+                           std::string metric = "euclidean") {
   List base = cuvs_cagra_params_core(
     n, p, k, target_recall_option,
     graph_degree_option, intermediate_graph_degree_option,
@@ -2542,15 +2926,20 @@ List nn_tune_cuvs_hnsw_cpp(int n,
   const bool large_n = n >= 50000;
   const bool large_k = k >= 100;
   const int n_cap = std::max(1, n - 1);
-  const int min_degree = std::min(n_cap, std::max(2, k + 1));
+  const int min_degree = std::min(n_cap, 2);
   const std::string cuda_shape_group = hnsw_cuda_shape_group_cpp(n, p);
-  const int k_bucket = hnsw_k_bucket_cpp(k);
+  const int k_bucket = hnsw_cpu_k_bucket_cpp(k);
   const int target_code = hnsw_target_code_cpp(target_recall);
   const HnswCudaTuningSpec* benchmark_spec =
-    hnsw_cuda_benchmark_spec(cuda_shape_group, k_bucket, target_code);
+    hnsw_cuda_benchmark_spec(metric, cuda_shape_group, k_bucket, target_code);
   const std::string benchmark_basis = benchmark_spec ? benchmark_spec->benchmark_basis : "";
   const std::string benchmark_source = benchmark_spec ?
-    "hpc_hnsw_cuda_20260625_150524" : "heuristic_fallback";
+    (metric == "cosine" ?
+      "hpc_hnsw_cuda_cosine_20260702_123021" :
+      "hpc_hnsw_cuda_euclidean_20260701_083355") :
+    "heuristic_fallback";
+  const bool benchmark_target_met =
+    benchmark_basis.find("fastest_meeting_target") != std::string::npos;
 
   int default_graph_degree = as<int>(base["graph_degree"]);
   int default_ef = std::max(k, 50);
@@ -2558,7 +2947,10 @@ List nn_tune_cuvs_hnsw_cpp(int n,
   if (benchmark_spec != nullptr) {
     default_graph_degree = benchmark_spec->graph_degree;
     default_ef = benchmark_spec->ef;
-    rule = std::string("hpc_cuda_hnsw_") + cuda_shape_group +
+    const std::string rule_prefix = metric == "cosine" ?
+      "hpc_cuda_hnsw_cosine_" :
+      "hpc_cuda_hnsw_";
+    rule = rule_prefix + cuda_shape_group +
       "_k" + std::to_string(k_bucket) + "_" +
       hnsw_target_label_cpp(target_code);
   } else if (target_recall <= 0.90) {
@@ -2633,6 +3025,7 @@ List nn_tune_cuvs_hnsw_cpp(int n,
     _["cuda_shape_group"] = cuda_shape_group,
     _["k_bucket"] = k_bucket,
     _["target_recall_code"] = target_code,
+    _["tuning_metric"] = metric,
     _["benchmark_basis"] = benchmark_basis,
     _["benchmark_source"] = benchmark_source,
     _["tuning_shape_group"] = cuda_shape_group,
@@ -2641,6 +3034,7 @@ List nn_tune_cuvs_hnsw_cpp(int n,
     _["tuning_target_recall_code"] = target_code,
     _["tuning_benchmark_basis"] = benchmark_basis,
     _["tuning_benchmark_source"] = benchmark_source,
+    _["tuning_benchmark_target_met"] = benchmark_target_met,
     _["tuning_source"] = "cpp",
     _["cuda_hnsw_design"] = "cuvs_hnsw_from_cagra_cpu_hierarchy",
     _["cuda_hnsw_pure_gpu"] = false
@@ -2649,32 +3043,89 @@ List nn_tune_cuvs_hnsw_cpp(int n,
 
 // [[Rcpp::export]]
 List nn_tune_cuvs_nndescent_cpp(int n,
+                                int p,
                                 int k,
+                                std::string metric = "euclidean",
+                                double target_recall_option = NA_REAL,
                                 int graph_degree_option = NA_INTEGER,
                                 int intermediate_graph_degree_option = NA_INTEGER,
                                 int max_iterations_option = NA_INTEGER,
                                 bool manual = false) {
   n = safe_n(n);
+  p = valid_int(p) ? p : NA_INTEGER;
   k = safe_k(k);
+  const double target_recall = hnsw_target_recall_cpp(target_recall_option);
+  const int target_code = hnsw_target_code_cpp(target_recall);
+  const int k_bucket = hnsw_cpu_k_bucket_cpp(k);
+  const std::string shape_group = hnsw_shape_group_cpp(n, p);
   const bool small_k = k <= 10;
   const bool large_k = k >= 100;
   const bool large_n = n >= 1000000;
   const int n_cap = std::max(1, n - 1);
-  const int graph_degree = option_int(graph_degree_option, k, k, n_cap);
+  int default_graph_degree = k;
+  int default_intermediate = std::max(
+    static_cast<int>((3LL * default_graph_degree + 1) / 2),
+    default_graph_degree
+  );
+  int default_max_iterations = 20;
+  std::string benchmark_basis;
+  std::string benchmark_source = "heuristic_fallback";
+  bool benchmark_target_met = false;
+  std::string rule = (large_n || large_k) ? "large_graph_search" :
+    (small_k ? "small_k_speed" : "balanced_graph_search");
+  if (!manual && metric == "euclidean") {
+    if (const HpcCudaNndescentSpec* spec =
+          hpc_cuda_nndescent_spec(shape_group, k_bucket, target_code)) {
+      default_graph_degree = spec->graph_degree;
+      default_intermediate = spec->intermediate_graph_degree;
+      default_max_iterations = spec->max_iterations;
+      benchmark_basis = spec->basis;
+      benchmark_target_met =
+        benchmark_basis.find("fastest_meeting_target") != std::string::npos;
+      benchmark_source = "hpc_nndescent_cuda_euclidean_20260630_173056";
+      rule = "hpc_cuda_nndescent_" + shape_group +
+        "_k" + std::to_string(k_bucket) + "_" +
+        hnsw_target_label_cpp(target_code);
+    }
+  }
+  const int requested_graph_degree = requested_int(graph_degree_option, default_graph_degree);
+  const int graph_degree = option_int(graph_degree_option, default_graph_degree, k, n_cap);
+  default_intermediate = std::max(default_intermediate, graph_degree);
+  const int requested_intermediate = requested_int(
+    intermediate_graph_degree_option,
+    default_intermediate
+  );
   const int intermediate = option_int(
     intermediate_graph_degree_option,
-    std::max(static_cast<int>((3LL * graph_degree + 1) / 2), graph_degree),
+    default_intermediate,
     graph_degree,
     n_cap
   );
-  const int max_iterations = option_int(max_iterations_option, 20, 1, 200);
+  const int requested_max_iterations = requested_int(
+    max_iterations_option,
+    default_max_iterations
+  );
+  const int max_iterations = option_int(max_iterations_option, default_max_iterations, 1, 200);
   return List::create(
     _["graph_degree"] = graph_degree,
     _["intermediate_graph_degree"] = intermediate,
     _["max_iterations"] = max_iterations,
-    _["tuning_policy"] = manual ? "manual_options" : "auto_shape_k",
-    _["tuning_rule"] = (large_n || large_k) ? "large_graph_search" :
-      (small_k ? "small_k_speed" : "balanced_graph_search"),
+    _["requested_graph_degree"] = requested_graph_degree,
+    _["requested_intermediate_graph_degree"] = requested_intermediate,
+    _["requested_max_iterations"] = requested_max_iterations,
+    _["target_recall"] = target_recall,
+    _["requested_target_recall"] = target_recall_option,
+    _["tuning_policy"] = manual ? "manual_options" : "auto_shape_k_target_recall",
+    _["tuning_rule"] = rule,
+    _["tuning_metric"] = metric,
+    _["tuning_backend"] = "cuda",
+    _["tuning_method"] = "nndescent",
+    _["tuning_shape_group"] = shape_group,
+    _["tuning_k_bucket"] = k_bucket,
+    _["tuning_target_recall_code"] = target_code,
+    _["tuning_benchmark_basis"] = benchmark_basis,
+    _["tuning_benchmark_source"] = benchmark_source,
+    _["tuning_benchmark_target_met"] = benchmark_target_met,
     _["tuning_large_n"] = large_n,
     _["tuning_small_k"] = small_k,
     _["tuning_large_k"] = large_k,
@@ -2848,7 +3299,7 @@ List nn_tune_vamana_cpp(int n,
       benchmark_basis = spec->basis;
       benchmark_target_met =
         !manual && benchmark_basis.find("fastest_meeting_target") != std::string::npos;
-      benchmark_source = backend == "cuda" ? "hpc_vamana_cuda_20260628_020349" :
+      benchmark_source = backend == "cuda" ? "hpc_vamana_cuda_euclidean_20260702_042943" :
         "hpc_vamana_cpu12_euclidean_20260630_161409";
       rule = "hpc_" + backend + "_vamana_" + shape_group +
         "_k" + std::to_string(k_bucket) + "_" +

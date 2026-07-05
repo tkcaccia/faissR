@@ -100,7 +100,7 @@ clearly instead of repairing those rows on CPU.
 | `"hnsw"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | CPU FAISS HNSW is used for all metrics when available. CUDA uses RAPIDS cuVS HNSW from a CAGRA seed graph with a cuVS CPU hierarchy; metadata marks this as the cuVS wrapper design rather than a pure all-GPU HNSW path. |
 | `"ivf"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVF-Flat supports L2/IP; cosine/correlation use normalized IVF IP. |
 | `"ivfpq"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | FAISS IVFPQ supports L2/IP; cosine/correlation use normalized IVFPQ IP. |
-| `"ivfpq_fastscan"` | euclidean, cosine, correlation, inner_product | euclidean | IVFPQ FastScan route. CPU uses FAISS `IndexIVFPQFastScan` with 4-bit PQ lookup tables in registers plus optional Flat reranking; raw inner product uses FastScan IP, while cosine uses row L2 normalization and correlation uses row centering plus L2 normalization before FastScan L2 search. CUDA uses direct cuVS IVF-PQ with 4-bit compressed codes and remains Euclidean-only. |
+| `"ivfpq_fastscan"` | euclidean, cosine, correlation, inner_product | euclidean, cosine | IVFPQ FastScan route. CPU uses FAISS `IndexIVFPQFastScan` with 4-bit PQ lookup tables in registers plus optional Flat reranking; raw inner product uses FastScan IP, while cosine uses row L2 normalization and correlation uses row centering plus L2 normalization before FastScan L2 search. CUDA uses direct cuVS IVF-PQ with 4-bit compressed codes; cosine row-normalizes to float32 before cuVS L2 search and distance conversion. |
 | `"vamana"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native robust-pruned candidate graph inspired by DiskANN/Vamana; CPU/CUDA refine top-k within candidate rows. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning. Cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
 | `"nsg"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Public CPU NSG uses faissR's native NSG-style candidate graph for all metrics. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before NSG/MRNG-style pruning. CUDA NSG is self-KNN only; cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. |
 | `"nndescent"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation | Native CPU NN-descent supports raw inner-product search; CPU/CUDA cosine and correlation use normalized Euclidean graph search. CUDA uses direct RAPIDS cuVS NN-descent, which does not expose raw inner-product search. FAISS NNDescent is experimental opt-in because linked FAISS builds can abort during graph construction. |
@@ -344,11 +344,15 @@ should be measured for new datasets when it is used for scientific conclusions.
   `tuning_benchmark_target_met`, so best-available partial or below-target rows
   are visible in result metadata rather than being presented as guaranteed
   recall.
-- On CUDA, `tuning = "auto"` chooses `nlist` and `nprobe` from a compiled
-  shape/k/target-recall policy built from the CUDA IVF tuning sweep. The policy
-  separates compact high-dimensional data, medium image-like data, large
-  low-dimensional flow-like data, and large high-dimensional ImageNet-like data.
-  Use `target_recall = 0.9`, `0.95`, or `0.99` to pick the speed/accuracy tier.
+- On CUDA, `tuning = "auto"` chooses `nlist` and `nprobe` from compiled
+  shape/k/target-recall policies for Euclidean and cosine IVF. Euclidean rows
+  come from `faissR_IVF_TUNING_CUDA_euclidean_20260702_001853`; cosine rows
+  come from `faissR_IVF_TUNING_CUDA_cosine_20260702_192200` after row
+  normalization. The policy separates compact high-dimensional data, medium
+  image-like data, large low-dimensional flow-like data, and large
+  high-dimensional ImageNet-like data. Use `target_recall = 0.9`, `0.95`, or
+  `0.99` to pick the speed/accuracy tier; partial shape rows report
+  `tuning_benchmark_target_met = FALSE`.
 - Manual CUDA IVF overrides are available through `options(faissR.cuda_ivf_nlist
   = ..., faissR.cuda_ivf_nprobe = ...)`, with provider-specific aliases
   `cuvs_ivf_*` and `faiss_gpu_ivf_*`.
@@ -444,18 +448,24 @@ for reranking [6,34].
   vectors with FastScan L2, and converts squared normalized Euclidean distances
   to `1 - cosine`; correlation subtracts each row mean before the same
   normalized-L2 FastScan route. CPU raw inner product uses FAISS FastScan IP.
-  Non-Euclidean CUDA FastScan is rejected explicitly rather than being
-  transformed through unvalidated routes.
+- The CUDA public route supports `metric = "euclidean"` and `metric = "cosine"`.
+  Cosine normalizes rows to float32, searches with cuVS IVF-PQ L2, and converts
+  normalized Euclidean distances back to cosine distance. CUDA correlation and
+  raw inner product are rejected explicitly rather than being transformed
+  through unvalidated routes.
 - Metadata in `attr(result, "approximation")` records `ivfpq_fastscan`,
   `fastscan`, the IVF/PQ parameters, and whether the CPU route used Flat
   refinement.
 - With `tuning = "auto"`, CPU Euclidean, cosine, correlation, and raw
   inner-product FastScan use compiled
   shape/k/target policies keyed by dataset shape, `k`, and `target_recall`.
-  The Euclidean table is HPC-derived. The cosine, correlation, and inner-product tables are
-  currently seed policies using the Euclidean FastScan settings because the
-  uploaded metric-specific sweeps failed before reaching the backend; those
-  rows therefore record `tuning_benchmark_target_met = FALSE` until the
+  The Euclidean table is HPC-derived. CUDA cosine uses a separate seeded policy
+  file, `cuda_ivfpq_fastscan_cosine_shape_tuning_defaults_from_seeded_euclidean_results.csv`,
+  because the uploaded CUDA cosine sweep failed under the old Euclidean-only
+  guard before reaching cuVS. CPU cosine/correlation/inner-product tables are
+  also seed policies using the Euclidean FastScan settings where the uploaded
+  metric-specific sweeps failed before reaching the backend; those rows
+  therefore record `tuning_benchmark_target_met = FALSE` until the
   corrected benchmarks are rerun.
   The table separates small high-dimensional data from small lower-dimensional
   data because COIL20 and USPS required different `nlist`/`nprobe` settings.

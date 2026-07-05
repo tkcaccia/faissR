@@ -241,27 +241,57 @@ clean_output_values <- function(values, default = "float,double") {
   unique(out)
 }
 
-candidate_grid <- function(backend, k, thread_values, output_values) {
-  grid <- expand.grid(
+clean_bool_values <- function(values, default = "true,false") {
+  raw <- tolower(split_arg(values, default))
+  raw <- raw[raw %in% c("true", "false", "1", "0", "yes", "no", "on", "off")]
+  unique(vapply(raw, logical_arg, logical(1)))
+}
+
+candidate_grid <- function(backend,
+                           k,
+                           thread_values,
+                           output_values,
+                           gpu_batches,
+                           gpu_reuse_values) {
+  grid_args <- list(
     n_threads = thread_values,
-    output = output_values,
-    KEEP.OUT.ATTRS = FALSE,
-    stringsAsFactors = FALSE
+    output = output_values
   )
+  if (identical(backend, "cuda")) {
+    grid_args$faiss_gpu_query_batch_size <- gpu_batches
+    grid_args$faiss_gpu_reuse_resources <- gpu_reuse_values
+  }
+  grid <- do.call(expand.grid, c(
+    grid_args,
+    list(KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
+  ))
   grid$device <- backend
   grid$provider <- if (identical(backend, "cuda")) "cuda_bruteforce" else "cpu_bruteforce"
   grid$public_backend <- backend
   grid$public_method <- "bruteforce"
   grid$faiss_query_batch_size <- NA_integer_
-  grid$faiss_gpu_query_batch_size <- NA_integer_
-  grid$faiss_gpu_reuse_resources <- NA
+  if (!identical(backend, "cuda")) {
+    grid$faiss_gpu_query_batch_size <- NA_integer_
+    grid$faiss_gpu_reuse_resources <- NA
+  }
   grid$cache_fitted_indexes <- NA
-  grid$candidate_id <- sprintf(
-    "%s_t%d_%s",
-    grid$provider,
-    grid$n_threads,
-    grid$output
-  )
+  if (identical(backend, "cuda")) {
+    grid$candidate_id <- sprintf(
+      "%s_t%d_b%d_%s_reuse%s",
+      grid$provider,
+      grid$n_threads,
+      grid$faiss_gpu_query_batch_size,
+      grid$output,
+      ifelse(grid$faiss_gpu_reuse_resources, "on", "off")
+    )
+  } else {
+    grid$candidate_id <- sprintf(
+      "%s_t%d_%s",
+      grid$provider,
+      grid$n_threads,
+      grid$output
+    )
+  }
   grid$candidate_kind <- "manual"
   grid$k <- as.integer(k)
   grid
@@ -773,6 +803,8 @@ main <- function() {
   quality_n <- positive_int(args$quality_n, 256, "quality_n")
   seed <- positive_int(args$seed, 4, "seed")
   output_values <- clean_output_values(args$output_values, "float,double")
+  gpu_batches <- clean_int_values(args$gpu_faiss_batches, "1024,4096,8192,16384,32768,65536")
+  gpu_reuse_values <- clean_bool_values(args$gpu_reuse_resources, "true,false")
   reference_backend <- match.arg(tolower(args$reference_backend %||% backend), c("cpu", "cuda"))
   quality_mode <- match.arg(tolower(args$quality_mode %||% "sample_or_assume"), c("assume", "sample", "sample_or_assume"))
   assume_exact_recall <- quality_mode %in% c("assume", "sample_or_assume")
@@ -788,7 +820,9 @@ main <- function() {
       backend,
       k,
       thread_values,
-      output_values
+      output_values,
+      gpu_batches,
+      gpu_reuse_values
     )
   }))
   write.csv(candidate_rows, candidate_path, row.names = FALSE)
@@ -796,12 +830,14 @@ main <- function() {
     data.frame(
       key = c("backend", "manifest", "datasets", "k_values", "target_recalls",
               "thread_values", "reference_threads", "timeout", "quality_n",
-              "quality_mode", "output_values", "reference_backend",
-              "max_working_gb"),
+              "quality_mode", "output_values", "gpu_faiss_batches",
+              "gpu_reuse_resources", "reference_backend", "max_working_gb"),
       value = c(backend, manifest_path, paste(datasets, collapse = ","),
                 paste(k_values, collapse = ","), paste(target_recalls, collapse = ","),
                 paste(thread_values, collapse = ","), n_threads_reference,
                 timeout, quality_n, quality_mode, paste(output_values, collapse = ","),
+                paste(gpu_batches, collapse = ","),
+                paste(gpu_reuse_values, collapse = ","),
                 reference_backend, max_working_gb)
     ),
     file.path(out_dir, "bruteforce_tuning_config.csv"),
@@ -814,13 +850,15 @@ main <- function() {
     dataset <- ds$dataset[[1L]]
     if (!manifest_success(ds$status[[1L]]) || !file.exists(ds$path[[1L]])) {
       for (k in k_values) {
-        candidates <- candidate_grid(backend, k, thread_values, output_values)
+        candidates <- candidate_grid(backend, k, thread_values, output_values,
+                                     gpu_batches, gpu_reuse_values)
         write_missing_rows(ds, k, candidates, ds$error[[1L]] %||% "missing dataset", results_path)
       }
       next
     }
     for (k in k_values) {
-      candidates <- candidate_grid(backend, k, thread_values, output_values)
+      candidates <- candidate_grid(backend, k, thread_values, output_values,
+                                   gpu_batches, gpu_reuse_values)
       ref <- reference_for_dataset(
         ds, k, n_threads_reference, output_values[[1L]], quality_n, seed,
         timeout, bench_script, reference_backend, quality_mode

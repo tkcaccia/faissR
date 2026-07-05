@@ -256,28 +256,34 @@ ivf_candidates <- function(n, k, backend, grid_level = "standard") {
   )
   base_nlist <- ivf_list_count_local(n, k)
   specs <- data.frame(
-    label = c("speed", "speed_plus", "balanced", "balanced_plus", "recall", "recall_plus"),
-    nlist_mult = c(0.5, 1.0, 1.0, 2.0, 2.0, 4.0),
-    nprobe_mult = c(0.5, 0.75, 1.0, 1.5, 2.0, 3.0),
+    label = c(
+      "ultra_speed", "speed", "speed_plus", "balanced", "balanced_plus",
+      "recall", "recall_plus", "recall_max", "full_probe"
+    ),
+    nlist_mult = c(0.5, 0.5, 1.0, 1.0, 2.0, 2.0, 4.0, 6.0, 8.0),
+    nprobe_mult = c(0.25, 0.5, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 1.0),
+    full_probe = c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE),
     stringsAsFactors = FALSE
   )
-  if (identical(grid_level, "compact")) specs <- specs[c(1L, 3L, 5L), , drop = FALSE]
+  if (identical(grid_level, "compact")) specs <- specs[c(1L, 2L, 4L, 6L), , drop = FALSE]
   if (identical(grid_level, "wide")) {
     specs <- rbind(
       specs,
       data.frame(
-        label = c("recall_wide", "recall_max", "almost_exact"),
-        nlist_mult = c(4.0, 6.0, 1.0),
+        label = c("recall_wide", "recall_extra", "almost_exact"),
+        nlist_mult = c(4.0, 8.0, 1.0),
         nprobe_mult = c(4.0, 6.0, 999.0),
+        full_probe = c(FALSE, FALSE, TRUE),
         stringsAsFactors = FALSE
       )
     )
   }
+  if (!"full_probe" %in% names(specs)) specs$full_probe <- FALSE
   manual <- do.call(rbind, lapply(seq_len(nrow(specs)), function(i) {
     nlist <- as.integer(max(1L, round(base_nlist * specs$nlist_mult[[i]])))
     nlist <- as.integer(min(nlist, max(1L, n)))
     base_probe <- ivf_probe_count_local(nlist, k)
-    if (identical(specs$label[[i]], "almost_exact")) {
+    if (isTRUE(specs$full_probe[[i]]) || identical(specs$label[[i]], "almost_exact")) {
       nprobe <- nlist
     } else {
       nprobe <- as.integer(max(1L, ceiling(base_probe * specs$nprobe_mult[[i]])))

@@ -1,4 +1,18 @@
 // Generated from benchmark_scripts/euclidean_shape_tuning_defaults_from_uploaded_results.csv,
+// benchmark_scripts/cuda_exact_euclidean_shape_tuning_defaults_from_uploaded_results.csv,
+// benchmark_scripts/cuda_exact_cosine_shape_tuning_defaults_from_uploaded_results.csv,
+// benchmark_scripts/cuda_flat_euclidean_shape_tuning_defaults_from_uploaded_results.csv,
+// benchmark_scripts/cuda_flat_cosine_shape_tuning_defaults_from_uploaded_results.csv,
+// benchmark_scripts/cuda_bruteforce_euclidean_shape_tuning_defaults_from_uploaded_results.csv,
+// benchmark_scripts/cuda_bruteforce_cosine_shape_tuning_defaults_from_proxy_results.csv,
+// benchmark_scripts/cuda_ivf_euclidean_shape_tuning_defaults_from_uploaded_results.csv,
+// benchmark_scripts/cuda_ivf_cosine_shape_tuning_defaults_from_uploaded_results.csv,
+// benchmark_scripts/cuda_ivfpq_euclidean_shape_tuning_defaults_from_uploaded_results.csv,
+// benchmark_scripts/cuda_ivfpq_fastscan_euclidean_shape_tuning_defaults_from_uploaded_results.csv,
+// benchmark_scripts/cuda_ivfpq_fastscan_cosine_shape_tuning_defaults_from_seeded_euclidean_results.csv,
+// benchmark_scripts/cuda_nndescent_euclidean_shape_tuning_defaults_from_uploaded_results.csv,
+// benchmark_scripts/cuda_nsg_euclidean_shape_tuning_defaults_from_uploaded_results.csv,
+// benchmark_scripts/cuda_vamana_euclidean_shape_tuning_defaults_from_uploaded_results.csv,
 // benchmark_scripts/cosine_shape_tuning_defaults_from_uploaded_results.csv,
 // benchmark_scripts/correlation_exact_shape_tuning_defaults_from_uploaded_results.csv,
 // benchmark_scripts/inner_product_exact_shape_tuning_defaults_from_uploaded_results.csv,
@@ -63,6 +77,14 @@ struct HpcIvfpqFastscanSpec {
   const char* basis;
 };
 
+struct HpcIvfpqFastscanBatchSpec {
+  const char* backend;
+  const char* shape_group;
+  int k_bucket;
+  int target_code;
+  int cuvs_ivf_batch_size;
+};
+
 struct HpcNndescentSpec {
   const char* shape_group;
   int k_bucket;
@@ -71,6 +93,16 @@ struct HpcNndescentSpec {
   int n_iters;
   int max_candidates;
   int n_random_projections;
+  const char* basis;
+};
+
+struct HpcCudaNndescentSpec {
+  const char* shape_group;
+  int k_bucket;
+  int target_code;
+  int graph_degree;
+  int intermediate_graph_degree;
+  int max_iterations;
   const char* basis;
 };
 
@@ -115,6 +147,57 @@ struct HpcExactSpec {
   int n_threads;
   int faiss_query_batch_size;
   bool cache_fitted_indexes;
+  const char* output;
+  const char* result_backend;
+  const char* resolved_backend;
+  const char* distance_type;
+  const char* input_type;
+  const char* input_layout;
+  const char* basis;
+};
+
+struct HpcCudaExactSpec {
+  const char* backend;
+  const char* shape_group;
+  int k_bucket;
+  int target_code;
+  int n_threads;
+  int faiss_gpu_query_batch_size;
+  bool faiss_gpu_reuse_resources;
+  const char* output;
+  const char* result_backend;
+  const char* resolved_backend;
+  const char* distance_type;
+  const char* input_type;
+  const char* input_layout;
+  const char* basis;
+};
+
+struct HpcCudaFlatSpec {
+  const char* backend;
+  const char* shape_group;
+  int k_bucket;
+  int target_code;
+  int n_threads;
+  int faiss_gpu_query_batch_size;
+  bool faiss_gpu_reuse_resources;
+  const char* output;
+  const char* result_backend;
+  const char* resolved_backend;
+  const char* distance_type;
+  const char* input_type;
+  const char* input_layout;
+  const char* basis;
+};
+
+struct HpcCudaBruteforceSpec {
+  const char* backend;
+  const char* shape_group;
+  int k_bucket;
+  int target_code;
+  int n_threads;
+  int faiss_gpu_query_batch_size;
+  bool faiss_gpu_reuse_resources;
   const char* output;
   const char* result_backend;
   const char* resolved_backend;
@@ -173,6 +256,108 @@ static const HpcExactSpec hpc_exact_specs[] = {
   {"cpu", "small_n", 100, 90, 12, 2048, false, "float", "faiss_flat_l2", "faiss_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1_coverage_1of3"},
   {"cpu", "small_n", 100, 95, 12, 2048, false, "float", "faiss_flat_l2", "faiss_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1_coverage_1of3"},
   {"cpu", "small_n", 100, 99, 12, 2048, false, "float", "faiss_flat_l2", "faiss_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1_coverage_1of3"},
+};
+
+static const HpcCudaExactSpec hpc_cuda_exact_euclidean_specs[] = {
+  {"cuda", "large_high_dim", 15, 90, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 15, 95, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 15, 99, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 30, 90, 12, 4096, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 30, 95, 12, 4096, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 30, 99, 12, 4096, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 50, 90, 12, 4096, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 50, 95, 12, 4096, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 50, 99, 12, 4096, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 100, 90, 12, 65536, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 100, 95, 12, 65536, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 100, 99, 12, 65536, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 15, 90, 12, 32768, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 15, 95, 12, 32768, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 15, 99, 12, 32768, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 30, 90, 12, 16384, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 30, 95, 12, 16384, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 30, 99, 12, 16384, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 50, 90, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 50, 95, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 50, 99, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 100, 90, 12, 4096, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 100, 95, 12, 4096, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 100, 99, 12, 4096, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 15, 90, 12, 65536, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 15, 95, 12, 65536, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 15, 99, 12, 65536, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 30, 90, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 30, 95, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 30, 99, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 50, 90, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 50, 95, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 50, 99, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 100, 90, 12, 65536, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 100, 95, 12, 65536, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 100, 99, 12, 65536, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 15, 90, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 15, 95, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 15, 99, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "best_available_partial_shape_datasets_exact_recall1"},
+  {"cuda", "small_n", 30, 90, 12, 16384, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 30, 95, 12, 16384, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 30, 99, 12, 16384, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 50, 90, 12, 16384, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 50, 95, 12, 16384, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 50, 99, 12, 16384, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 100, 90, 12, 16384, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 100, 95, 12, 16384, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 100, 99, 12, 16384, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_exact_recall1"},
+};
+
+static const HpcCudaExactSpec hpc_cuda_exact_cosine_specs[] = {
+  {"cuda", "large_high_dim", 15, 90, 12, 65536, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 15, 95, 12, 65536, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 15, 99, 12, 65536, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 30, 90, 12, 4096, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 30, 95, 12, 4096, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 30, 99, 12, 4096, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 50, 90, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 50, 95, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 50, 99, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 100, 90, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 100, 95, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_high_dim", 100, 99, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 15, 90, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 15, 95, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 15, 99, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 30, 90, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 30, 95, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 30, 99, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 50, 90, 12, 1024, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 50, 95, 12, 1024, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 50, 99, 12, 1024, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 100, 90, 12, 32768, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 100, 95, 12, 32768, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "large_low_dim", 100, 99, 12, 32768, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 15, 90, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 15, 95, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 15, 99, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 30, 90, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 30, 95, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 30, 99, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 50, 90, 12, 1024, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 50, 95, 12, 1024, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 50, 99, 12, 1024, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 100, 90, 12, 16384, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 100, 95, 12, 16384, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "medium_low_dim", 100, 99, 12, 16384, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 15, 90, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 15, 95, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 15, 99, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "best_available_all_shape_datasets_exact_recall1"},
+  {"cuda", "small_n", 30, 90, 12, 4096, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 30, 95, 12, 4096, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 30, 99, 12, 4096, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 50, 90, 12, 65536, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 50, 95, 12, 65536, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 50, 99, 12, 65536, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 100, 90, 12, 65536, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 100, 95, 12, 65536, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
+  {"cuda", "small_n", 100, 99, 12, 65536, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_exact_recall1"},
 };
 
 static const HpcExactSpec hpc_exact_cosine_specs[] = {
@@ -377,6 +562,210 @@ static const HpcExactSpec hpc_flat_specs[] = {
   {"cpu", "small_n", 100, 90, 12, 131072, false, "float", "faiss_flat_l2", "faiss_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_flat_recall1_coverage_1of3"},
   {"cpu", "small_n", 100, 95, 12, 131072, false, "float", "faiss_flat_l2", "faiss_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_flat_recall1_coverage_1of3"},
   {"cpu", "small_n", 100, 99, 12, 131072, false, "float", "faiss_flat_l2", "faiss_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_flat_recall1_coverage_1of3"},
+};
+
+static const HpcCudaFlatSpec hpc_cuda_flat_euclidean_specs[] = {
+  {"cuda", "large_high_dim", 15, 90, 12, 32768, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 15, 95, 12, 32768, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 15, 99, 12, 32768, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 30, 90, 12, 1024, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 30, 95, 12, 1024, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 30, 99, 12, 1024, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 50, 90, 12, 32768, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 50, 95, 12, 32768, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 50, 99, 12, 32768, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 90, 12, 4096, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 95, 12, 4096, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 99, 12, 4096, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 15, 90, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 15, 95, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 15, 99, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 90, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 95, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 99, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 90, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 95, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 99, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 90, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 95, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 99, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 90, 12, 16384, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 95, 12, 16384, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 99, 12, 16384, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 90, 12, 4096, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 95, 12, 4096, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 99, 12, 4096, true, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 90, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 95, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 99, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 100, 90, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 100, 95, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 100, 99, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 90, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 95, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 99, 12, 1024, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "best_available_all_shape_datasets"},
+  {"cuda", "small_n", 30, 90, 12, 32768, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 30, 95, 12, 32768, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 30, 99, 12, 32768, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 50, 90, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 50, 95, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 50, 99, 12, 16384, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 100, 90, 12, 32768, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 100, 95, 12, 32768, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 100, 99, 12, 32768, false, "float", "faiss_gpu_flat_l2", "faiss_gpu_flat_l2", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+};
+
+static const HpcCudaFlatSpec hpc_cuda_flat_cosine_specs[] = {
+  {"cuda", "large_high_dim", 15, 90, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 15, 95, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 15, 99, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 30, 90, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 30, 95, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 30, 99, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 50, 90, 12, 32768, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 50, 95, 12, 32768, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 50, 99, 12, 32768, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 90, 12, 16384, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 95, 12, 16384, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 99, 12, 16384, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 15, 90, 12, 1024, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 15, 95, 12, 1024, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 15, 99, 12, 1024, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 90, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 95, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 99, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 90, 12, 1024, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 95, 12, 1024, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 99, 12, 1024, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 90, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 95, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 99, 12, 16384, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 90, 12, 4096, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 95, 12, 4096, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 99, 12, 4096, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 90, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 95, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 99, 12, 1024, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 90, 12, 65536, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 95, 12, 65536, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 99, 12, 65536, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 100, 90, 12, 65536, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 100, 95, 12, 65536, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 100, 99, 12, 65536, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 90, 12, 32768, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 95, 12, 32768, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 99, 12, 32768, true, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "best_available_all_shape_datasets"},
+  {"cuda", "small_n", 30, 90, 12, 65536, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 30, 95, 12, 65536, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 30, 99, 12, 65536, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 50, 90, 12, 32768, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 50, 95, 12, 32768, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 50, 99, 12, 32768, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 100, 90, 12, 65536, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 100, 95, 12, 65536, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 100, 99, 12, 65536, false, "float", "faiss_gpu_flat_cosine", "faiss_gpu_flat_cosine", "float32", "float32", "float32_payload_direct_row_major", "fastest_meeting_target_all_shape_datasets"},
+};
+
+static const HpcCudaBruteforceSpec hpc_cuda_bruteforce_euclidean_specs[] = {
+  {"cuda", "large_high_dim", 15, 90, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 15, 95, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 15, 99, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 30, 90, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 30, 95, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 30, 99, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 50, 90, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 50, 95, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 50, 99, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 90, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 95, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 99, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 15, 90, 12, 16384, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 15, 95, 12, 16384, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 15, 99, 12, 16384, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 90, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 95, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 99, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 90, 12, 65536, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 95, 12, 65536, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 99, 12, 65536, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 90, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 95, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 99, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 90, 12, 1024, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 95, 12, 1024, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 99, 12, 1024, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 90, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 95, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 99, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 90, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 95, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 99, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 100, 90, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 100, 95, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 100, 99, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 90, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 95, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 99, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 30, 90, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 30, 95, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 30, 99, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 50, 90, 12, 1024, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 50, 95, 12, 1024, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 50, 99, 12, 1024, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 100, 90, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 100, 95, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 100, 99, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_column_major_payload_to_row_major", "fastest_meeting_target_all_shape_datasets"},
+};
+
+static const HpcCudaBruteforceSpec hpc_cuda_bruteforce_cosine_specs[] = {
+  {"cuda", "large_high_dim", 15, 90, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_high_dim", 15, 95, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_high_dim", 15, 99, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_high_dim", 30, 90, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_high_dim", 30, 95, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_high_dim", 30, 99, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_high_dim", 50, 90, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_high_dim", 50, 95, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_high_dim", 50, 99, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_high_dim", 100, 90, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_high_dim", 100, 95, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_high_dim", 100, 99, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_low_dim", 15, 90, 12, 16384, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_low_dim", 15, 95, 12, 16384, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_low_dim", 15, 99, 12, 16384, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_low_dim", 30, 90, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_low_dim", 30, 95, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_low_dim", 30, 99, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_low_dim", 50, 90, 12, 65536, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_low_dim", 50, 95, 12, 65536, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_low_dim", 50, 99, 12, 65536, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_low_dim", 100, 90, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_low_dim", 100, 95, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "large_low_dim", 100, 99, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "medium_low_dim", 15, 90, 12, 1024, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "medium_low_dim", 15, 95, 12, 1024, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "medium_low_dim", 15, 99, 12, 1024, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "medium_low_dim", 30, 90, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "medium_low_dim", 30, 95, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "medium_low_dim", 30, 99, 12, 32768, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "medium_low_dim", 50, 90, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "medium_low_dim", 50, 95, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "medium_low_dim", 50, 99, 12, 4096, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "medium_low_dim", 100, 90, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "medium_low_dim", 100, 95, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "medium_low_dim", 100, 99, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "small_n", 15, 90, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "small_n", 15, 95, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "small_n", 15, 99, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "small_n", 30, 90, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "small_n", 30, 95, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "small_n", 30, 99, 12, 1024, false, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "small_n", 50, 90, 12, 1024, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "small_n", 50, 95, 12, 1024, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "small_n", 50, 99, 12, 1024, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "small_n", 100, 90, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "small_n", 100, 95, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"},
+  {"cuda", "small_n", 100, 99, 12, 65536, true, "float", "cuda_cuvs_bruteforce", "cuda_cuvs_bruteforce", "float32", "float32", "float32_payload_direct_row_major", "proxy_from_euclidean_cuvs_bruteforce_shape_k_batch_defaults"}
 };
 
 static const HpcExactSpec hpc_flat_cosine_specs[] = {
@@ -884,6 +1273,54 @@ static const HpcIvfSpec hpc_ivf_cosine_specs[] = {
   {"cpu", "small_n", 100, 90, 30, 15, "best_available_partial_shape_datasets_ivf_recall90_coverage_1of3"},
   {"cpu", "small_n", 100, 95, 60, 60, "best_available_partial_shape_datasets_ivf_recall95_coverage_1of3"},
   {"cpu", "small_n", 100, 99, 60, 60, "best_available_partial_shape_datasets_ivf_recall99_coverage_1of3"},
+  {"cuda", "large_high_dim", 15, 90, 1590, 160, "best_available_partial_shape_datasets"},
+  {"cuda", "large_high_dim", 15, 95, 1590, 160, "best_available_partial_shape_datasets"},
+  {"cuda", "large_high_dim", 15, 99, 1590, 160, "best_available_partial_shape_datasets"},
+  {"cuda", "large_high_dim", 30, 90, 1590, 160, "best_available_partial_shape_datasets"},
+  {"cuda", "large_high_dim", 30, 95, 1590, 160, "best_available_partial_shape_datasets"},
+  {"cuda", "large_high_dim", 30, 99, 1590, 160, "best_available_partial_shape_datasets"},
+  {"cuda", "large_high_dim", 50, 90, 1590, 160, "best_available_partial_shape_datasets"},
+  {"cuda", "large_high_dim", 50, 95, 1590, 160, "best_available_partial_shape_datasets"},
+  {"cuda", "large_high_dim", 50, 99, 1590, 160, "best_available_partial_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 90, 1590, 160, "best_available_partial_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 95, 1590, 160, "best_available_partial_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 99, 1590, 160, "best_available_partial_shape_datasets"},
+  {"cuda", "large_low_dim", 15, 90, 512, 6, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 15, 95, 512, 6, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 15, 99, 512, 12, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 90, 512, 6, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 95, 1024, 16, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 99, 1024, 32, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 90, 5898, 308, "best_available_partial_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 95, 5898, 308, "best_available_partial_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 99, 5898, 308, "best_available_partial_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 90, 5898, 308, "best_available_partial_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 95, 5898, 308, "best_available_partial_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 99, 5898, 308, "best_available_partial_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 90, 132, 8, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 95, 132, 8, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 99, 132, 8, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 90, 265, 17, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 95, 265, 17, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 99, 265, 17, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 90, 265, 9, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 95, 265, 9, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 99, 265, 9, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 100, 90, 132, 17, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 100, 95, 132, 17, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 100, 99, 132, 17, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 90, 240, 240, "best_available_partial_shape_datasets"},
+  {"cuda", "small_n", 15, 95, 240, 240, "best_available_partial_shape_datasets"},
+  {"cuda", "small_n", 15, 99, 240, 240, "best_available_partial_shape_datasets"},
+  {"cuda", "small_n", 30, 90, 240, 240, "best_available_partial_shape_datasets"},
+  {"cuda", "small_n", 30, 95, 240, 240, "best_available_partial_shape_datasets"},
+  {"cuda", "small_n", 30, 99, 240, 240, "best_available_partial_shape_datasets"},
+  {"cuda", "small_n", 50, 90, 240, 240, "best_available_partial_shape_datasets"},
+  {"cuda", "small_n", 50, 95, 240, 240, "best_available_partial_shape_datasets"},
+  {"cuda", "small_n", 50, 99, 240, 240, "best_available_partial_shape_datasets"},
+  {"cuda", "small_n", 100, 90, 240, 240, "best_available_partial_shape_datasets"},
+  {"cuda", "small_n", 100, 95, 240, 240, "best_available_partial_shape_datasets"},
+  {"cuda", "small_n", 100, 99, 240, 240, "best_available_partial_shape_datasets"},
 };
 
 static const HpcIvfSpec hpc_ivf_correlation_specs[] = {
@@ -1289,6 +1726,129 @@ static const HpcIvfpqFastscanSpec hpc_ivfpq_fastscan_specs[] = {
   {"cpu", "large_low_dim", 100, 90, 1024, 16, 32, 4, 4, 64, "best_available_large_low_dim_no_k100_run"},
   {"cpu", "large_low_dim", 100, 95, 1024, 16, 32, 4, 4, 64, "best_available_large_low_dim_no_k100_run"},
   {"cpu", "large_low_dim", 100, 99, 1024, 16, 32, 4, 4, 64, "best_available_large_low_dim_no_k100_run"},
+  {"cuda", "small_high_dim", 15, 90, 19, 8, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_COIL20"},
+  {"cuda", "small_high_dim", 15, 95, 19, 8, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_COIL20"},
+  {"cuda", "small_high_dim", 15, 99, 19, 8, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_COIL20"},
+  {"cuda", "small_high_dim", 30, 90, 228, 64, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_COIL20"},
+  {"cuda", "small_high_dim", 30, 95, 228, 64, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_COIL20"},
+  {"cuda", "small_high_dim", 30, 99, 228, 64, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_COIL20"},
+  {"cuda", "small_high_dim", 50, 90, 304, 304, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_COIL20"},
+  {"cuda", "small_high_dim", 50, 95, 304, 304, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_COIL20"},
+  {"cuda", "small_high_dim", 50, 99, 304, 304, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_COIL20"},
+  {"cuda", "small_high_dim", 100, 90, 304, 304, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_COIL20"},
+  {"cuda", "small_high_dim", 100, 95, 304, 304, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_COIL20"},
+  {"cuda", "small_high_dim", 100, 99, 304, 304, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_COIL20"},
+  {"cuda", "small_low_dim", 15, 90, 210, 32, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_USPS"},
+  {"cuda", "small_low_dim", 15, 95, 210, 32, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_USPS"},
+  {"cuda", "small_low_dim", 15, 99, 210, 32, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_USPS"},
+  {"cuda", "small_low_dim", 30, 90, 420, 63, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_USPS"},
+  {"cuda", "small_low_dim", 30, 95, 420, 63, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_USPS"},
+  {"cuda", "small_low_dim", 30, 99, 420, 63, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_USPS"},
+  {"cuda", "small_low_dim", 50, 90, 840, 840, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_USPS"},
+  {"cuda", "small_low_dim", 50, 95, 840, 840, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_USPS"},
+  {"cuda", "small_low_dim", 50, 99, 840, 840, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_USPS"},
+  {"cuda", "small_low_dim", 100, 90, 840, 840, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_USPS"},
+  {"cuda", "small_low_dim", 100, 95, 840, 840, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_USPS"},
+  {"cuda", "small_low_dim", 100, 99, 840, 840, 64, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_USPS"},
+  {"cuda", "medium_low_dim", 15, 90, 2120, 2120, 50, 4, 0, 0, "fastest_meeting_target_cuda_dataset_TabulaMuris"},
+  {"cuda", "medium_low_dim", 15, 95, 2120, 2120, 50, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_TabulaMuris"},
+  {"cuda", "medium_low_dim", 15, 99, 2120, 2120, 50, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_TabulaMuris"},
+  {"cuda", "medium_low_dim", 30, 90, 530, 36, 50, 4, 0, 0, "fastest_meeting_target_cuda_dataset_TabulaMuris"},
+  {"cuda", "medium_low_dim", 30, 95, 2120, 2120, 50, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_TabulaMuris"},
+  {"cuda", "medium_low_dim", 30, 99, 2120, 2120, 50, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_TabulaMuris"},
+  {"cuda", "medium_low_dim", 50, 90, 530, 36, 50, 4, 0, 0, "fastest_meeting_target_cuda_dataset_TabulaMuris"},
+  {"cuda", "medium_low_dim", 50, 95, 2120, 2120, 50, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_TabulaMuris"},
+  {"cuda", "medium_low_dim", 50, 99, 2120, 2120, 50, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_TabulaMuris"},
+  {"cuda", "medium_low_dim", 100, 90, 265, 34, 50, 4, 0, 0, "fastest_meeting_target_cuda_dataset_TabulaMuris"},
+  {"cuda", "medium_low_dim", 100, 95, 2120, 2120, 50, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_TabulaMuris"},
+  {"cuda", "medium_low_dim", 100, 99, 2120, 2120, 50, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_TabulaMuris"},
+  {"cuda", "large_low_dim", 15, 90, 8192, 8192, 14, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_mass41"},
+  {"cuda", "large_low_dim", 15, 95, 8192, 8192, 14, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_mass41"},
+  {"cuda", "large_low_dim", 15, 99, 8192, 8192, 14, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_mass41"},
+  {"cuda", "large_low_dim", 30, 90, 8192, 8192, 14, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_mass41"},
+  {"cuda", "large_low_dim", 30, 95, 8192, 8192, 14, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_mass41"},
+  {"cuda", "large_low_dim", 30, 99, 8192, 8192, 14, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_mass41"},
+  {"cuda", "large_low_dim", 50, 90, 7864, 7864, 14, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_mass41"},
+  {"cuda", "large_low_dim", 50, 95, 7864, 7864, 14, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_mass41"},
+  {"cuda", "large_low_dim", 50, 99, 7864, 7864, 14, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_mass41"},
+  {"cuda", "large_low_dim", 100, 90, 7864, 7864, 14, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_mass41"},
+  {"cuda", "large_low_dim", 100, 95, 7864, 7864, 14, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_mass41"},
+  {"cuda", "large_low_dim", 100, 99, 7864, 7864, 14, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_mass41"},
+  {"cuda", "large_high_dim", 15, 90, 1590, 160, 56, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_MNIST"},
+  {"cuda", "large_high_dim", 15, 95, 1590, 160, 56, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_MNIST"},
+  {"cuda", "large_high_dim", 15, 99, 1590, 160, 56, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_MNIST"},
+  {"cuda", "large_high_dim", 30, 90, 1590, 160, 56, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_MNIST"},
+  {"cuda", "large_high_dim", 30, 95, 1590, 160, 56, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_MNIST"},
+  {"cuda", "large_high_dim", 30, 99, 1590, 160, 56, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_MNIST"},
+  {"cuda", "large_high_dim", 50, 90, 1590, 160, 56, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_MNIST"},
+  {"cuda", "large_high_dim", 50, 95, 1590, 160, 56, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_MNIST"},
+  {"cuda", "large_high_dim", 50, 99, 1590, 160, 56, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_MNIST"},
+  {"cuda", "large_high_dim", 100, 90, 2120, 2120, 56, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_MNIST"},
+  {"cuda", "large_high_dim", 100, 95, 2120, 2120, 56, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_MNIST"},
+  {"cuda", "large_high_dim", 100, 99, 2120, 2120, 56, 4, 0, 0, "target_not_reached_best_available_cuda_dataset_MNIST"},
+};
+
+static const HpcIvfpqFastscanBatchSpec hpc_ivfpq_fastscan_batch_specs[] = {
+  {"cuda", "small_high_dim", 15, 90, 8192},
+  {"cuda", "small_high_dim", 15, 95, 8192},
+  {"cuda", "small_high_dim", 15, 99, 8192},
+  {"cuda", "small_high_dim", 30, 90, 16384},
+  {"cuda", "small_high_dim", 30, 95, 16384},
+  {"cuda", "small_high_dim", 30, 99, 16384},
+  {"cuda", "small_high_dim", 50, 90, 32768},
+  {"cuda", "small_high_dim", 50, 95, 32768},
+  {"cuda", "small_high_dim", 50, 99, 32768},
+  {"cuda", "small_high_dim", 100, 90, 8192},
+  {"cuda", "small_high_dim", 100, 95, 8192},
+  {"cuda", "small_high_dim", 100, 99, 8192},
+  {"cuda", "small_low_dim", 15, 90, 8192},
+  {"cuda", "small_low_dim", 15, 95, 8192},
+  {"cuda", "small_low_dim", 15, 99, 8192},
+  {"cuda", "small_low_dim", 30, 90, 32768},
+  {"cuda", "small_low_dim", 30, 95, 32768},
+  {"cuda", "small_low_dim", 30, 99, 32768},
+  {"cuda", "small_low_dim", 50, 90, 32768},
+  {"cuda", "small_low_dim", 50, 95, 32768},
+  {"cuda", "small_low_dim", 50, 99, 32768},
+  {"cuda", "small_low_dim", 100, 90, 65536},
+  {"cuda", "small_low_dim", 100, 95, 65536},
+  {"cuda", "small_low_dim", 100, 99, 65536},
+  {"cuda", "medium_low_dim", 15, 90, 32768},
+  {"cuda", "medium_low_dim", 15, 95, 32768},
+  {"cuda", "medium_low_dim", 15, 99, 32768},
+  {"cuda", "medium_low_dim", 30, 90, 16384},
+  {"cuda", "medium_low_dim", 30, 95, 16384},
+  {"cuda", "medium_low_dim", 30, 99, 16384},
+  {"cuda", "medium_low_dim", 50, 90, 8192},
+  {"cuda", "medium_low_dim", 50, 95, 8192},
+  {"cuda", "medium_low_dim", 50, 99, 8192},
+  {"cuda", "medium_low_dim", 100, 90, 8192},
+  {"cuda", "medium_low_dim", 100, 95, 16384},
+  {"cuda", "medium_low_dim", 100, 99, 16384},
+  {"cuda", "large_low_dim", 15, 90, 32768},
+  {"cuda", "large_low_dim", 15, 95, 32768},
+  {"cuda", "large_low_dim", 15, 99, 32768},
+  {"cuda", "large_low_dim", 30, 90, 16384},
+  {"cuda", "large_low_dim", 30, 95, 16384},
+  {"cuda", "large_low_dim", 30, 99, 16384},
+  {"cuda", "large_low_dim", 50, 90, 8192},
+  {"cuda", "large_low_dim", 50, 95, 8192},
+  {"cuda", "large_low_dim", 50, 99, 8192},
+  {"cuda", "large_low_dim", 100, 90, 65536},
+  {"cuda", "large_low_dim", 100, 95, 65536},
+  {"cuda", "large_low_dim", 100, 99, 65536},
+  {"cuda", "large_high_dim", 15, 90, 65536},
+  {"cuda", "large_high_dim", 15, 95, 65536},
+  {"cuda", "large_high_dim", 15, 99, 65536},
+  {"cuda", "large_high_dim", 30, 90, 16384},
+  {"cuda", "large_high_dim", 30, 95, 16384},
+  {"cuda", "large_high_dim", 30, 99, 16384},
+  {"cuda", "large_high_dim", 50, 90, 65536},
+  {"cuda", "large_high_dim", 50, 95, 65536},
+  {"cuda", "large_high_dim", 50, 99, 65536},
+  {"cuda", "large_high_dim", 100, 90, 65536},
+  {"cuda", "large_high_dim", 100, 95, 65536},
+  {"cuda", "large_high_dim", 100, 99, 65536},
 };
 
 static const HpcNndescentSpec hpc_cpu_nndescent_specs[] = {
@@ -1495,6 +2055,42 @@ static const HpcNndescentSpec hpc_cpu_nndescent_inner_product_specs[] = {
   {"small_n", 100, 99, 220, 32, 660, 40, "fastest_meeting_target_all_shape_datasets"},
 };
 
+static const HpcCudaNndescentSpec hpc_cuda_nndescent_specs[] = {
+  {"large_high_dim", 15, 90, 24, 48, 5, "fastest_meeting_target_all_shape_datasets"},
+  {"large_high_dim", 15, 95, 24, 48, 5, "fastest_meeting_target_all_shape_datasets"},
+  {"large_high_dim", 15, 99, 32, 64, 8, "fastest_meeting_target_all_shape_datasets"},
+  {"large_high_dim", 30, 90, 32, 64, 8, "fastest_meeting_target_all_shape_datasets"},
+  {"large_high_dim", 30, 95, 32, 64, 8, "fastest_meeting_target_all_shape_datasets"},
+  {"large_high_dim", 30, 99, 48, 96, 12, "fastest_meeting_target_all_shape_datasets"},
+  {"large_high_dim", 50, 90, 50, 64, 8, "fastest_meeting_target_all_shape_datasets"},
+  {"large_high_dim", 50, 95, 50, 96, 12, "fastest_meeting_target_all_shape_datasets"},
+  {"large_high_dim", 50, 99, 96, 192, 24, "fastest_meeting_target_all_shape_datasets"},
+  {"large_high_dim", 100, 90, 128, 256, 32, "fastest_meeting_target_all_shape_datasets"},
+  {"large_high_dim", 100, 95, 160, 320, 40, "fastest_meeting_target_all_shape_datasets"},
+  {"large_high_dim", 100, 99, 192, 384, 48, "best_available_all_shape_datasets"},
+  {"large_low_dim", 15, 90, 24, 48, 5, "fastest_meeting_target_all_shape_datasets"},
+  {"large_low_dim", 15, 95, 32, 64, 8, "fastest_meeting_target_all_shape_datasets"},
+  {"large_low_dim", 15, 99, 64, 128, 16, "best_available_all_shape_datasets"},
+  {"large_low_dim", 30, 90, 32, 64, 8, "fastest_meeting_target_all_shape_datasets"},
+  {"large_low_dim", 30, 95, 32, 64, 8, "fastest_meeting_target_all_shape_datasets"},
+  {"large_low_dim", 30, 99, 96, 192, 24, "best_available_all_shape_datasets"},
+  {"large_low_dim", 50, 90, 50, 64, 8, "fastest_meeting_target_all_shape_datasets"},
+  {"large_low_dim", 50, 95, 50, 96, 12, "fastest_meeting_target_all_shape_datasets"},
+  {"large_low_dim", 50, 99, 96, 192, 24, "best_available_all_shape_datasets"},
+  {"small_n", 15, 90, 16, 32, 4, "fastest_meeting_target_all_shape_datasets"},
+  {"small_n", 15, 95, 16, 32, 4, "fastest_meeting_target_all_shape_datasets"},
+  {"small_n", 15, 99, 24, 48, 5, "fastest_meeting_target_all_shape_datasets"},
+  {"small_n", 30, 90, 30, 32, 4, "fastest_meeting_target_all_shape_datasets"},
+  {"small_n", 30, 95, 48, 96, 12, "fastest_meeting_target_all_shape_datasets"},
+  {"small_n", 30, 99, 48, 96, 12, "fastest_meeting_target_all_shape_datasets"},
+  {"small_n", 50, 90, 96, 192, 24, "fastest_meeting_target_all_shape_datasets"},
+  {"small_n", 50, 95, 96, 192, 24, "fastest_meeting_target_all_shape_datasets"},
+  {"small_n", 50, 99, 96, 192, 24, "best_available_all_shape_datasets"},
+  {"small_n", 100, 90, 160, 320, 40, "fastest_meeting_target_all_shape_datasets"},
+  {"small_n", 100, 95, 192, 384, 48, "best_available_all_shape_datasets"},
+  {"small_n", 100, 99, 192, 384, 48, "best_available_all_shape_datasets"},
+};
+
 static const HpcNsgSpec hpc_nsg_specs[] = {
   {"cpu", "large_high_dim", 15, 90, 4, 15, "fastest_meeting_target_all_shape_datasets"},
   {"cpu", "large_high_dim", 15, 95, 4, 15, "fastest_meeting_target_all_shape_datasets"},
@@ -1550,48 +2146,48 @@ static const HpcNsgSpec hpc_nsg_specs[] = {
   {"cuda", "large_high_dim", 30, 90, 32, 80, "fastest_meeting_target_all_shape_datasets"},
   {"cuda", "large_high_dim", 30, 95, 32, 80, "fastest_meeting_target_all_shape_datasets"},
   {"cuda", "large_high_dim", 30, 99, 32, 80, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_high_dim", 50, 90, 48, 120, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_high_dim", 50, 95, 48, 120, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_high_dim", 50, 99, 48, 120, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_high_dim", 100, 90, 16, 100, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_high_dim", 100, 95, 16, 100, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_high_dim", 100, 99, 16, 100, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 15, 90, 4, 15, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 15, 95, 4, 15, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 15, 99, 4, 15, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 30, 90, 8, 30, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 30, 95, 8, 30, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 30, 99, 8, 30, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 50, 90, 8, 50, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 50, 95, 8, 50, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 50, 99, 8, 50, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 100, 90, 16, 100, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 100, 95, 16, 100, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 100, 99, 16, 100, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 15, 90, 12, 30, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 15, 95, 12, 30, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 15, 99, 12, 30, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 30, 90, 8, 30, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 30, 95, 8, 30, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 30, 99, 8, 30, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 50, 90, 6, 50, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 50, 95, 6, 50, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 50, 99, 6, 50, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 100, 90, 4, 100, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 100, 95, 4, 100, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 100, 99, 4, 100, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 15, 90, 16, 40, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 15, 95, 16, 40, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 15, 99, 16, 40, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 30, 90, 6, 30, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 30, 95, 6, 30, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 30, 99, 6, 30, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 50, 90, 4, 50, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 50, 95, 4, 50, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 50, 99, 4, 50, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 100, 90, 32, 100, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 100, 95, 32, 100, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 100, 99, 32, 100, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 50, 90, 32, 80, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 50, 95, 32, 80, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 50, 99, 32, 80, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 90, 24, 100, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 95, 24, 100, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 99, 24, 100, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 15, 90, 6, 16, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 15, 95, 6, 16, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 15, 99, 6, 16, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 90, 6, 30, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 95, 6, 30, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 99, 6, 30, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 90, 12, 50, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 95, 12, 50, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 99, 12, 50, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 90, 32, 100, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 95, 32, 100, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 99, 32, 100, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 90, 4, 15, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 95, 4, 15, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 99, 4, 15, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 90, 6, 30, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 95, 6, 30, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 99, 6, 30, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 90, 8, 50, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 95, 8, 50, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 99, 8, 50, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 100, 90, 16, 100, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 100, 95, 16, 100, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 100, 99, 16, 100, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 90, 12, 30, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 95, 12, 30, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 99, 12, 30, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 30, 90, 8, 30, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 30, 95, 8, 30, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 30, 99, 8, 30, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 50, 90, 12, 50, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 50, 95, 12, 50, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 50, 99, 12, 50, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 100, 90, 12, 100, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 100, 95, 12, 100, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 100, 99, 12, 100, "fastest_meeting_target_all_shape_datasets"},
 };
 
 static const HpcNsgSpec hpc_nsg_cosine_specs[] = {
@@ -1805,45 +2401,45 @@ static const HpcVamanaSpec hpc_vamana_specs[] = {
   {"cuda", "large_high_dim", 50, 90, 32, 100, 1.10, "fastest_meeting_target_all_shape_datasets"},
   {"cuda", "large_high_dim", 50, 95, 32, 100, 1.10, "fastest_meeting_target_all_shape_datasets"},
   {"cuda", "large_high_dim", 50, 99, 32, 100, 1.10, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_high_dim", 100, 90, 8, 100, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_high_dim", 100, 95, 8, 100, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_high_dim", 100, 99, 8, 100, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 90, 24, 100, 1.05, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 95, 24, 100, 1.05, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_high_dim", 100, 99, 24, 100, 1.05, "fastest_meeting_target_all_shape_datasets"},
   {"cuda", "large_low_dim", 15, 90, 6, 16, 1.00, "fastest_meeting_target_all_shape_datasets"},
   {"cuda", "large_low_dim", 15, 95, 6, 16, 1.00, "fastest_meeting_target_all_shape_datasets"},
   {"cuda", "large_low_dim", 15, 99, 6, 16, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 30, 90, 12, 30, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 30, 95, 12, 30, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 30, 99, 12, 30, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 50, 90, 6, 50, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 50, 95, 6, 50, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 50, 99, 6, 50, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 100, 90, 24, 100, 1.05, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 100, 95, 24, 100, 1.05, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "large_low_dim", 100, 99, 24, 100, 1.05, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 15, 90, 4, 15, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 15, 95, 4, 15, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 15, 99, 4, 15, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 30, 90, 4, 30, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 30, 95, 4, 30, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 30, 99, 4, 30, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 50, 90, 12, 50, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 50, 95, 12, 50, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "medium_low_dim", 50, 99, 12, 50, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 90, 6, 30, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 95, 6, 30, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 30, 99, 6, 30, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 90, 12, 50, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 95, 12, 50, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 50, 99, 12, 50, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 90, 6, 100, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 95, 6, 100, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "large_low_dim", 100, 99, 6, 100, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 90, 6, 16, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 95, 6, 16, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 15, 99, 6, 16, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 90, 16, 40, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 95, 16, 40, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 30, 99, 16, 40, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 90, 4, 50, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 95, 4, 50, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "medium_low_dim", 50, 99, 4, 50, 1.00, "fastest_meeting_target_all_shape_datasets"},
   {"cuda", "medium_low_dim", 100, 90, 24, 100, 1.05, "fastest_meeting_target_all_shape_datasets"},
   {"cuda", "medium_low_dim", 100, 95, 24, 100, 1.05, "fastest_meeting_target_all_shape_datasets"},
   {"cuda", "medium_low_dim", 100, 99, 24, 100, 1.05, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 15, 90, 6, 16, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 15, 95, 6, 16, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 15, 99, 6, 16, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 30, 90, 16, 40, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 30, 95, 16, 40, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 30, 99, 16, 40, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 50, 90, 8, 50, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 50, 95, 8, 50, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 50, 99, 8, 50, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 100, 90, 16, 100, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 100, 95, 16, 100, 1.00, "fastest_meeting_target_all_shape_datasets"},
-  {"cuda", "small_n", 100, 99, 16, 100, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 90, 16, 40, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 95, 16, 40, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 15, 99, 16, 40, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 30, 90, 24, 60, 1.05, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 30, 95, 24, 60, 1.05, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 30, 99, 24, 60, 1.05, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 50, 90, 24, 60, 1.05, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 50, 95, 24, 60, 1.05, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 50, 99, 24, 60, 1.05, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 100, 90, 6, 100, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 100, 95, 6, 100, 1.00, "fastest_meeting_target_all_shape_datasets"},
+  {"cuda", "small_n", 100, 99, 6, 100, 1.00, "fastest_meeting_target_all_shape_datasets"},
 };
 
 static const HpcVamanaSpec hpc_vamana_cosine_specs[] = {
@@ -2079,6 +2675,36 @@ inline const HpcExactSpec* hpc_exact_spec(const std::string& backend, const std:
   return nullptr;
 }
 
+inline const HpcCudaExactSpec* hpc_cuda_exact_euclidean_spec(const std::string& backend, const std::string& shape_group, int k_bucket, int target_code) {
+  for (const auto& spec : hpc_cuda_exact_euclidean_specs) if (hpc_match(spec.backend, backend) && hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
+  return nullptr;
+}
+
+inline const HpcCudaExactSpec* hpc_cuda_exact_cosine_spec(const std::string& backend, const std::string& shape_group, int k_bucket, int target_code) {
+  for (const auto& spec : hpc_cuda_exact_cosine_specs) if (hpc_match(spec.backend, backend) && hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
+  return nullptr;
+}
+
+inline const HpcCudaFlatSpec* hpc_cuda_flat_euclidean_spec(const std::string& backend, const std::string& shape_group, int k_bucket, int target_code) {
+  for (const auto& spec : hpc_cuda_flat_euclidean_specs) if (hpc_match(spec.backend, backend) && hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
+  return nullptr;
+}
+
+inline const HpcCudaFlatSpec* hpc_cuda_flat_cosine_spec(const std::string& backend, const std::string& shape_group, int k_bucket, int target_code) {
+  for (const auto& spec : hpc_cuda_flat_cosine_specs) if (hpc_match(spec.backend, backend) && hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
+  return nullptr;
+}
+
+inline const HpcCudaBruteforceSpec* hpc_cuda_bruteforce_euclidean_spec(const std::string& backend, const std::string& shape_group, int k_bucket, int target_code) {
+  for (const auto& spec : hpc_cuda_bruteforce_euclidean_specs) if (hpc_match(spec.backend, backend) && hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
+  return nullptr;
+}
+
+inline const HpcCudaBruteforceSpec* hpc_cuda_bruteforce_cosine_spec(const std::string& backend, const std::string& shape_group, int k_bucket, int target_code) {
+  for (const auto& spec : hpc_cuda_bruteforce_cosine_specs) if (hpc_match(spec.backend, backend) && hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
+  return nullptr;
+}
+
 inline const HpcExactSpec* hpc_exact_cosine_spec(const std::string& backend, const std::string& shape_group, int k_bucket, int target_code) {
   for (const auto& spec : hpc_exact_cosine_specs) if (hpc_match(spec.backend, backend) && hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
   return nullptr;
@@ -2159,6 +2785,11 @@ inline const HpcIvfpqFastscanSpec* hpc_ivfpq_fastscan_spec(const std::string& ba
   return nullptr;
 }
 
+inline const HpcIvfpqFastscanBatchSpec* hpc_ivfpq_fastscan_batch_spec(const std::string& backend, const std::string& shape_group, int k_bucket, int target_code) {
+  for (const auto& spec : hpc_ivfpq_fastscan_batch_specs) if (hpc_match(spec.backend, backend) && hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
+  return nullptr;
+}
+
 inline const HpcIvfpqFastscanSpec* hpc_ivfpq_fastscan_cosine_seed_spec(const std::string& backend, const std::string& shape_group, int k_bucket, int target_code) {
   return hpc_ivfpq_fastscan_spec(backend, shape_group, k_bucket, target_code);
 }
@@ -2188,6 +2819,11 @@ inline const HpcNndescentSpec* hpc_cpu_nndescent_correlation_spec(const std::str
 
 inline const HpcNndescentSpec* hpc_cpu_nndescent_inner_product_spec(const std::string& shape_group, int k_bucket, int target_code) {
   for (const auto& spec : hpc_cpu_nndescent_inner_product_specs) if (hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
+  return nullptr;
+}
+
+inline const HpcCudaNndescentSpec* hpc_cuda_nndescent_spec(const std::string& shape_group, int k_bucket, int target_code) {
+  for (const auto& spec : hpc_cuda_nndescent_specs) if (hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
   return nullptr;
 }
 

@@ -446,7 +446,7 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
     } else {
       x <- expand.grid(
         n_threads = thread_values, output = output_values,
-        faiss_gpu_query_batch_size = c(1024L, 4096L, 16384L, 32768L, 65536L),
+        faiss_gpu_query_batch_size = c(1024L, 4096L, 8192L, 16384L, 32768L, 65536L),
         faiss_gpu_reuse_resources = c(TRUE, FALSE),
         KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
       )
@@ -465,7 +465,7 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
     } else {
       x <- expand.grid(
         n_threads = thread_values, output = output_values,
-        faiss_gpu_query_batch_size = c(1024L, 4096L, 16384L, 32768L, 65536L),
+        faiss_gpu_query_batch_size = c(1024L, 4096L, 8192L, 16384L, 32768L, 65536L),
         faiss_gpu_reuse_resources = c(TRUE, FALSE),
         KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
       )
@@ -959,6 +959,17 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
   rec <- if (length(rows)) do.call(rbind, rows) else cbind(target_recall_threshold = numeric(0), recommendation_basis = character(0), x[FALSE, , drop = FALSE])
   write.csv(rec, file.path(out_dir, sprintf("%s_tuning_recommendations.csv", method)), row.names = FALSE)
   method_notes <- character()
+  if (identical(method, "ivfpq")) {
+    method_notes <- c(
+      "",
+      "## IVFPQ Notes",
+      "",
+      "- Rows tune FAISS IVF-PQ `ivf_nlist`, `ivf_nprobe`, `pq_m`, and fixed 8-bit PQ codes; Euclidean and raw inner product use native FAISS IVF-PQ L2/IP, while cosine/correlation use normalized L2 transforms.",
+      "- CUDA rows exercise the public `backend = \"cuda\", method = \"ivfpq\"` route, which resolves to FAISS GPU IVF-PQ with cuVS-enabled FAISS builds when available.",
+      "- Shape-level defaults for `tuning = \"auto\"` are selected from the fastest candidate that reaches the requested recall target when available; otherwise the highest-recall candidate below target is recorded as a best-available setting.",
+      "- `nlist` controls the number of coarse IVF lists, `nprobe` controls how many lists are searched, and `pq_m` controls product-quantizer subdivision. Larger `nprobe` and larger feasible `pq_m` generally improve recall but can increase build/search time and GPU memory traffic."
+    )
+  }
   if (identical(method, "ivfpq_fastscan")) {
     method_notes <- c(
       "",
@@ -966,6 +977,7 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
       "",
       "- CPU rows tune FAISS `IndexIVFPQFastScan` `ivf_nlist`, `ivf_nprobe`, `pq_m`, fixed 4-bit PQ, `ivfpq_fastscan_refine_factor`, and `ivfpq_fastscan_bbs`; Euclidean and raw inner product use native FastScan L2/IP, while cosine/correlation use normalized L2 transforms.",
       "- CUDA rows tune `ivf_nlist`, `ivf_nprobe`, byte-aligned 4-bit `cuvs_ivfpq_pq_dim`, and `FAISSR_CUVS_IVF_BATCH_SIZE`.",
+      "- CUDA cosine rows call the public `backend = \"cuda\", method = \"ivfpq_fastscan\", metric = \"cosine\"` route, which row-normalizes to float32 before cuVS IVF-PQ L2 search and converts distances back to cosine distance.",
       "- For cuVS 4-bit IVF-PQ, `pq_dim` is repaired to a byte-aligned value when needed; smaller `pq_dim` and smaller `nprobe` are expected to be faster but can reduce recall.",
       "- `nlist` controls the IVF build/search balance; too few lists can hurt recall, while too many lists can increase build and coarse-search overhead.",
       "- `FAISSR_CUVS_IVF_BATCH_SIZE` changes query batching and GPU memory use, not the IVF-PQ recall target directly.",

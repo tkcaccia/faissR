@@ -23,7 +23,7 @@ set -euo pipefail
 #   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_ivf_tuning_cuda.sh
 #
 # The job scans float32 .RData files, uses explicit backend="cuda",
-# method="ivf", Euclidean distance, k=15,30,50,100, and writes
+# method="ivf", the metrics listed in METRICS, k=15,30,50,100, and writes
 # recommendation tables for target recall 0.90, 0.95, and 0.99.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"

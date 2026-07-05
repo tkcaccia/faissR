@@ -117,9 +117,11 @@ For public nearest-neighbour APIs, `backend` selects the device family:
 for example `method = "grid"`, `method = "ivfpq_fastscan"`, or `method = "cagra"`. Thus
 `nn(x, backend = "cuda", method = "grid")` uses the CUDA grid route, while
 `nn(x, backend = "cpu", method = "cagra")` stops because CAGRA is CUDA-only.
-`method = "ivfpq_fastscan"` is Euclidean-only and resolves to FAISS FastScan on CPU or
-direct cuVS 4-bit IVF-PQ on CUDA, with no silent CPU fallback for explicit CUDA
-requests.
+`method = "ivfpq_fastscan"` resolves to FAISS FastScan on CPU and direct cuVS
+4-bit IVF-PQ on CUDA. CPU supports Euclidean, cosine, correlation, and raw
+inner product; CUDA supports Euclidean and cosine, with cosine handled by
+row-normalized float32 L2 search and distance conversion. Explicit CUDA
+requests never silently fall back to CPU.
 With the default `method = "auto"`, faissR chooses the most appropriate method
 for the selected backend. With `tuning = "auto"`, approximate methods use
 deterministic defaults identified for the resolved method; pilot/cache tuning is
@@ -202,6 +204,9 @@ See [Installation](docs/installation.md) for CRAN/source-build details.
   The CUDA HPC FastScan wrapper tunes `nlist`, `nprobe`, and byte-aligned 4-bit
   `pq_dim` through `IVFPQ_FASTSCAN_NLIST_MULTS`,
   `IVFPQ_FASTSCAN_NPROBE_MULTS`, and `IVFPQ_FASTSCAN_PQ_DIMS`.
+  CUDA cosine `tuning = "auto"` currently uses a policy seeded from the CUDA
+  Euclidean FastScan sweep and marks `tuning_benchmark_target_met = FALSE`
+  until the corrected cosine sweep is rerun.
   The HNSW route builds a CUDA CAGRA seed graph and converts it with
   `cuvsHnswFromCagraWithDataset`, supports `target_recall = 0.9`, `0.95`, or `0.99`
   speed/recall tiers, and records `cuda_hnsw_design =
