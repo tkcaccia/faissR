@@ -60,7 +60,11 @@ lowercase method labels; resolved implementation labels such as
 `"faiss_hnsw"` or `"cuda_cuvs_cagra"` are not public `method` values. Unsupported
 backend/method combinations fail clearly; for example,
 `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only,
-and `method = "ivfpq_fastscan"` currently accepts only Euclidean/L2 search.}
+and CUDA `method = "ivfpq_fastscan"` currently accepts only Euclidean/L2
+search. CPU FastScan accepts Euclidean, cosine, correlation, and raw inner
+product; cosine is implemented by row L2 normalization, correlation by row
+centering plus L2 normalization followed by FastScan L2 search, and raw inner
+product by FAISS FastScan IP.}
 
 \item{metric}{Distance metric. The intentionally small public set is
 `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`;
@@ -76,7 +80,8 @@ distance `0`, and lower dot products have larger shifted distances.
 `"euclidean"` is the validated high-performance default. `"cosine"` and
 `"correlation"` are implemented for exact CPU KNN, native 2D/3D grid
 search, FAISS CPU/GPU Flat,
-FAISS CPU/GPU IVF-Flat, FAISS CPU/GPU IVFPQ, FAISS CPU HNSW,
+FAISS CPU/GPU IVF-Flat, FAISS CPU/GPU IVFPQ, FAISS CPU FastScan,
+FAISS CPU HNSW,
 and RcppHNSW. FAISS approximate IP-capable routes use row L2 normalization
 for cosine and row centering plus L2 normalization for correlation before
 inner-product search; distances are returned as `1 - similarity`.
@@ -104,36 +109,65 @@ that wrapper design in metadata.
 Unsupported backend combinations fail clearly instead of returning neighbours
 computed under a different metric.}
 
-\item{tuning}{Tuning policy for approximate methods. `"auto"` uses
+\item{tuning}{Tuning policy. `"auto"` uses
 deterministic no-pilot defaults for the resolved method, `"cache"`
 reuses/stores pilot results, `"pilot"` tunes for this call without
 persisting, `"fixed"` uses fixed defaults with tuning metadata, and
 `"off"`/`"none"` disables tuning.
+CPU Euclidean/cosine/correlation/inner-product \code{method = "exact"} uses compiled C++ policies for
+FAISS Flat query batch size metadata; it records
+\code{exact_recall_by_construction = TRUE} because exact search has no recall
+approximation parameter.
+CPU Euclidean/cosine/correlation/inner-product \code{method = "flat"} uses separate compiled C++ policies
+for FAISS Flat query batch size and fitted-index reuse, derived from the Flat
+CPU12 HPC tuning sweeps; it records the selected policy in
+\code{attr(result, "flat_tuning")} and also remains exact by construction.
+CPU Euclidean/cosine/correlation/inner-product \code{method = "bruteforce"} uses its own compiled C++
+policy for FAISS Flat query batch size and fitted-index reuse, derived from
+the bruteforce CPU12 HPC tuning sweeps; it records the selected policy in
+\code{attr(result, "bruteforce_tuning")} and also remains exact by construction.
 FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
-`k`, `metric`, and `target_recall`. Euclidean CPU FAISS HNSW uses a
-compiled HPC-derived lookup table for shape groups and `k` buckets
-(`15`, `30`, `50`, and `100`);
-non-Euclidean routes use small-`k` metric-aware, balanced, and
-high-recall fallback tiers. CUDA cuVS HNSW uses its own compiled
+`k`, `metric`, and `target_recall`. Euclidean, cosine, correlation, and raw inner-product CPU FAISS HNSW
+use compiled HPC-derived lookup tables for shape groups, `k` buckets
+(`15`, `30`, `50`, and `100`), and target recall; rows that did not meet
+the target on all shape-group datasets report
+`tuning_benchmark_target_met = FALSE`. CUDA cuVS HNSW uses its own compiled
 HPC-derived lookup table keyed by CUDA-specific shape group, `k` bucket,
 and `target_recall`; explicit
-`faissR.faiss_hnsw_*` options override those defaults. FAISS IVF/IVFPQ
-use deterministic shape/k/metric-aware `nlist`/`nprobe` defaults; optional
-FAISS GPU IVF `"cache"`/`"pilot"` tuning currently runs only for Euclidean
-IVF, while non-Euclidean IVF routes use deterministic metric-aware
-defaults. CPU and CUDA HNSW use the selected
+`faissR.faiss_hnsw_*` options override those defaults. CPU Euclidean,
+cosine, correlation, and raw inner-product FAISS IVF use compiled
+shape/k/target-recall tables for `nlist` and `nprobe`, and record
+`tuning_benchmark_target_met` so
+best-available partial rows are not confused with guaranteed recall. CPU
+Euclidean, cosine, correlation, and raw inner-product FAISS IVFPQ use compiled
+shape/k/target-recall tables for `nlist`, `nprobe`, `pq_m`, and `pq_nbits`;
+CPU Euclidean, cosine, correlation, and raw inner-product native NSG uses
+compiled shape/k/target-recall tables for `r` and `graph_k`; CPU Euclidean,
+cosine, correlation, and raw inner-product native Vamana uses compiled
+shape/k/target-recall tables for `r`, `search_l`, and `alpha`; optional FAISS GPU IVF
+`"cache"`/`"pilot"` tuning currently runs only for Euclidean IVF. CPU and
+CUDA HNSW use the selected
 `target_recall` value. The default is the 0.99
 tier where feasible; `target_recall = 0.95` and `0.9` select faster,
 lower-recall HNSW tiers.
-Deterministic approximate-method defaults are computed by C++
-`nn_tune_*_cpp()` helpers and record `tuning_source = "cpp"` in
-approximation metadata. Advanced tuning and cache knobs use
-`options(faissR.<name> = ...)`.}
+Deterministic method defaults are computed by C++ `nn_tune_*_cpp()`
+helpers and record `tuning_source = "cpp"` in result metadata. Advanced
+tuning and cache knobs use `options(faissR.<name> = ...)`.}
 
 \item{target_recall}{Speed/recall tier. Use `0.9`, `0.95`, or `0.99`.
 CUDA `method = "auto"` uses it to choose between Flat/brute force and
-IVF-Flat for Euclidean self-KNN, CUDA `method = "ivf"` uses it for
-`nlist`/`nprobe`, and CPU/CUDA HNSW use it for graph-search tiers.
+IVF-Flat for Euclidean self-KNN. CPU Euclidean/cosine/correlation/inner-product
+`method = "ivf"` and CPU Euclidean/cosine/correlation/inner-product `method = "ivfpq"`
+use it for compiled `nlist`/`nprobe` or `nlist`/`nprobe`/`pq_m`/`pq_nbits`
+tiers; CUDA `method = "ivf"` uses it for `nlist`/`nprobe`, CPU Euclidean/cosine/correlation/inner-product
+`method = "nsg"` uses it for compiled `r`/`graph_k` tiers, CPU Euclidean/cosine/correlation/inner-product
+`method = "vamana"` uses it for compiled `r`/`search_l`/`alpha` tiers, and CPU/CUDA HNSW
+use it for graph-search tiers. CPU IVF/IVFPQ metadata records
+`tuning_benchmark_target_met` for benchmark-derived rows.
+CPU Euclidean/cosine/correlation/inner-product \code{method = "exact"} records the requested tier in exact
+tuning metadata, CPU Euclidean/cosine/correlation/inner-product \code{method = "flat"} records it in
+flat-tuning metadata, and CPU Euclidean/cosine/correlation/inner-product \code{method = "bruteforce"} records it in
+bruteforce-tuning metadata, while recall remains 1.0 by construction.
 Lower values trade recall for speed where the selected method supports a
 recall/speed tier.}
 
@@ -215,6 +249,14 @@ A list with integer matrix `indices`, `distances`, and stable
   `options(faissR.cache_fitted_nn_indexes_max_entries = <n>)`, or bound CUDA
   FastScan GPU memory with
   `options(faissR.cache_fitted_cuda_ivfpq_indexes_max_entries = <n>)`.
+  CPU Euclidean, cosine, correlation, and raw inner-product
+  `method = "ivfpq_fastscan"` resolve `tuning = "auto"` in C++ from
+  shape/k/target-recall defaults for `nlist`, `nprobe`, `pq_m`,
+  `refine_factor`, and FastScan block size. Cosine uses row L2 normalization
+  and correlation uses row centering plus L2 normalization before FastScan L2;
+  raw inner product uses FastScan IP. Until the cosine/correlation/inner-product
+  HPC sweeps are rerun after this implementation fix, those rows report
+  `tuning_benchmark_target_met = FALSE`.
 }
 \description{
 `nn()` provides a package-native nearest-neighbor entry point compatible with
@@ -241,20 +283,31 @@ Method descriptions:
   combined with an explicit method, faissR first checks whether that exact
   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU
   route when that method/metric is supported on CPU.
-  \item `"exact"`: exact nearest-neighbour search. CPU uses faissR's native
-  exact route; CUDA uses FAISS GPU Flat when the linked FAISS build reports
-  GPU support. CUDA exact search can otherwise use direct cuVS brute force
-  when available: Euclidean uses cuVS L2 directly, cosine/correlation use
-  normalized Euclidean search, and inner product uses an exact
-  maximum-inner-product-to-L2 transform [1-3,16].
+  \item `"exact"`: exact nearest-neighbour search. CPU Euclidean exact uses
+  FAISS Flat L2, CPU cosine exact uses normalized FAISS Flat cosine, and CPU
+  correlation exact uses centered/normalized FAISS Flat correlation when
+  FAISS is available; these routes apply compiled exact tuning metadata for
+  query batching, and the native exact CPU scorer remains the no-FAISS fallback.
+  CUDA uses FAISS GPU Flat when the linked
+  FAISS build reports GPU support. CUDA exact search can otherwise use direct
+  cuVS brute force when available: Euclidean uses cuVS L2 directly,
+  cosine/correlation use normalized Euclidean search, and inner product uses
+  an exact maximum-inner-product-to-L2 transform [1-3,16].
   \item `"flat"`: FAISS Flat exhaustive index. CPU and FAISS GPU support
   L2, IP, and normalized-IP cosine/correlation routes when available
-  [1-2,16].
-  \item `"bruteforce"`: exhaustive brute-force search. CPU maps to exact
-  CPU search. On CUDA, RAPIDS cuVS brute force is preferred when available;
-  cosine/correlation use normalized Euclidean search and inner product uses
-  an exact maximum-inner-product-to-L2 transform around the cuVS L2 kernel
-  [1-3,16].
+  [1-2,16]. CPU Euclidean/cosine/correlation/inner-product Flat uses compiled metric/shape/k/target-recall
+  policies for query batching and fitted-index reuse; result metadata stores
+  the selected table row in \code{attr(result, "flat_tuning")}.
+  \item `"bruteforce"`: exhaustive brute-force search. CPU Euclidean
+  brute force uses FAISS Flat L2, CPU cosine brute force uses normalized
+  FAISS Flat cosine, and CPU correlation brute force uses centered/normalized
+  FAISS Flat correlation when FAISS is available, with native exact CPU as the
+  no-FAISS fallback. It has its own compiled metric/shape/k/target tuning
+  policy for FAISS query batching and fitted-index reuse, stored in
+  \code{attr(result, "bruteforce_tuning")}. On CUDA, RAPIDS cuVS brute force
+  is preferred when available; cosine/correlation use normalized Euclidean
+  search and inner product uses an exact maximum-inner-product-to-L2
+  transform around the cuVS L2 kernel [1-3,16].
   \item `"grid"`: native exact 2D/3D spatial grid search for Euclidean,
   cosine, and correlation self-KNN. Cosine/correlation use normalized
   Euclidean grid search. Include-self output is finalized in compiled
@@ -267,33 +320,35 @@ Method descriptions:
   converting it with \code{cuvsHnswFromCagraWithDataset}; result metadata marks this as
   the cuVS wrapper design rather than a pure all-GPU HNSW search implementation.
   Default HNSW parameters are selected by compiled deterministic rules
-  without pilot tuning. Euclidean CPU FAISS HNSW uses an HPC-derived lookup
-  table keyed by dataset shape group, `k` bucket (\code{15}, \code{30},
-  \code{50}, or \code{100}), and
+  without pilot tuning. Euclidean, cosine, correlation, and raw inner-product CPU FAISS HNSW use
+  HPC-derived lookup tables keyed by dataset shape group, `k` bucket
+  (\code{15}, \code{30}, \code{50}, or \code{100}), and
   `target_recall = 0.9`, `0.95`, or `0.99`; CUDA cuVS HNSW uses a
   separate HPC-derived shape/k/recall lookup table for its CAGRA seed graph
-  and cuVS HNSW conversion route; non-Euclidean routes keep
-  conservative metric-aware fallback tiers. Result approximation metadata
-  records the selected `tuning_rule`, `target_recall`,
-  `tuning_shape_group`, `tuning_k_bucket`, and benchmark source fields.
+  and cuVS HNSW conversion route. Raw inner-product CPU HNSW rows that did
+  not reach the requested benchmark target report
+  `tuning_benchmark_target_met = FALSE`. Result approximation
+  metadata records the selected `tuning_rule`, `target_recall`,
+  `tuning_shape_group`, `tuning_k_bucket`, benchmark source fields, and
+  `tuning_benchmark_target_met`.
   When a CUDA HNSW benchmarked shape did not reach the requested target,
   `tuning_benchmark_basis` is recorded as
   `"target_not_reached_best_available"`.
   \item `"ivf"`: FAISS IVF-Flat inverted-file index, trading exhaustive
   search for coarse-list probing. It supports L2, raw IP, and normalized-IP
-  cosine/correlation routes on CPU and FAISS GPU [1-2,16]. IVF records
-  deterministic no-pilot `tuning_policy`, `tuning_rule`, shape/k flags,
-  `tuning_metric`, and `tuning_metric_aware` in approximation metadata.
+  cosine/correlation routes on CPU and FAISS GPU [1-2,16]. CPU Euclidean,
+cosine, correlation, and raw inner-product IVF record compiled
+shape/k/target `nlist`/`nprobe` tiers and `tuning_benchmark_target_met` in
+approximation metadata.
   \item `"ivfpq"`: FAISS inverted-file index with product quantization,
   mainly for compressed-memory approximate search. It supports L2, raw IP,
   and normalized-IP cosine/correlation routes on CPU and FAISS GPU [1-2,6,16].
-  It reuses the metric-aware IVF probing defaults. IVF and PQ parameter
-  selectors record deterministic tuning metadata; PQ fields use
-  `pq_tuning_*` names. CPU IVFPQ requires at least 624 training rows; for
-  624-9,983 rows, CPU auto tuning uses 4-bit PQ rather than the 8-bit
-  default. Direct cuVS IVF-PQ applies the same 4-bit small-training rule
-  below 9,984 rows unless cuVS PQ bits are manually set; FAISS GPU IVFPQ is
-  an explicit 8-bit route.
+  CPU Euclidean, cosine, correlation, and raw inner-product IVFPQ record
+  compiled shape/k/target `nlist`, `nprobe`, `pq_m`, and `pq_nbits` tiers plus
+  `tuning_benchmark_target_met` in approximation metadata. IVFPQ is still a
+  compression-first route, so best-available or target-not-reached rows
+  should not be read as accuracy guarantees. CUDA IVFPQ routes keep
+  CUDA-oriented defaults.
   \item `"vamana"`: DiskANN/Vamana-style robust-pruned candidate graph
   implemented in faissR [24]. CPU refines top-k within candidate rows
   using native CPU scoring; CUDA refines candidates with faissR's native
@@ -304,7 +359,13 @@ Method descriptions:
   generator. Robust pruning runs in compiled C++ over compact candidate
   storage before CPU or CUDA candidate refinement. cuVS Vamana is
   acknowledged for GPU build/serialization, but current cuVS documentation
-  does not expose KNN search for this index.
+  does not expose KNN search for this index. CPU Euclidean, cosine,
+  correlation, and raw inner-product `tuning = "auto"` select Vamana `r`, `search_l`, and `alpha` from compiled
+  shape/k/target-recall tables and record whether the benchmark row reached
+  the requested target. Cosine uses row-normalized Euclidean Vamana refinement
+  and correlation uses row-centered, normalized Euclidean Vamana refinement;
+  raw inner product uses shifted dot-product ordering. All keep
+  metric-specific tuning tables.
   \item `"nsg"`: Navigating Spreading-out Graph style approximate search
   [16,21,29]. CPU uses faissR's native NSG-style self-KNN candidate graph for
   all public metrics to avoid unsafe linked-FAISS graph construction. CUDA
@@ -314,14 +375,19 @@ Method descriptions:
   inputs use a deterministic FAISS HNSW seed before NSG/MRNG-style pruning;
   smaller inputs keep the exact seed. The first `k` seed neighbours are
   protected before compiled C++ NSG/MRNG-style pruning over compact
-  candidate storage.
+  candidate storage. CPU Euclidean, cosine, correlation, and raw inner-product \code{tuning = "auto"} select NSG
+  \code{r} and \code{graph_k} from compiled shape/k/target-recall tables and record
+  whether the benchmark row reached the requested target.
   \item `"nndescent"`: NN-descent approximate graph construction via
   faissR's native CPU route, or direct cuVS on CUDA for Euclidean/L2 plus
   normalized cosine/correlation. Raw inner-product CUDA NN-descent is
   unsupported because direct cuVS NN-descent does not expose raw IP. The native
   CPU route uses
   random-projection window seeds, flat row-major graph buffers, and
-  fixed-width reverse-neighbour candidate storage in C++. FAISS NNDescent is
+  fixed-width reverse-neighbour candidate storage in C++. CPU Euclidean,
+  cosine, correlation, and raw inner-product \code{tuning = "auto"} select pool
+  size, iterations, maximum candidates, and random projections from compiled
+  shape/k/target-recall tables. FAISS NNDescent is
   experimental opt-in because linked FAISS builds can abort during graph
   construction [3-4,16].
   \item `"cagra"`: CUDA-only graph-search method via FAISS GPU CAGRA/cuVS

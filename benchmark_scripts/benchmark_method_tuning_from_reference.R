@@ -24,6 +24,39 @@ split_arg <- function(value, default) {
   out[nzchar(out)]
 }
 
+normalize_metric_arg <- function(value) {
+  key <- tolower(trimws(as.character(value %||% "euclidean")[[1L]]))
+  key <- gsub("[[:space:]-]+", "_", key)
+  aliases <- c(
+    euclidean = "euclidean",
+    l2 = "euclidean",
+    cosine = "cosine",
+    cos = "cosine",
+    correlation = "correlation",
+    correlations = "correlation",
+    cor = "correlation",
+    pearson = "correlation",
+    inner_product = "inner_product",
+    inner_produce = "inner_product",
+    innerproduct = "inner_product",
+    ip = "inner_product",
+    dot = "inner_product",
+    dot_product = "inner_product",
+    dotproduct = "inner_product"
+  )
+  if (!key %in% names(aliases)) {
+    stop(
+      "`metrics` must contain only euclidean, cosine, correlation, or inner_product.",
+      call. = FALSE
+    )
+  }
+  unname(aliases[[key]])
+}
+
+metric_values_arg <- function(value) {
+  unique(vapply(split_arg(value, "euclidean"), normalize_metric_arg, character(1L)))
+}
+
 logical_arg <- function(value, default = FALSE) {
   if (is.null(value) || length(value) == 0L || is.na(value[[1L]])) return(isTRUE(default))
   key <- tolower(trimws(as.character(value[[1L]])))
@@ -143,7 +176,6 @@ read_peak_rss_gb <- function() {
 classify_error <- function(message, timed_out = FALSE) {
   if (isTRUE(timed_out)) return("timeout")
   msg <- tolower(as.character(message %||% ""))
-  if (grepl("cudaerrornokernelimagefordevice|no kernel image is available|invalid device function", msg)) return("unavailable")
   if (grepl("not available|unavailable|not built|requires|without cuda|without faiss|without cuvs", msg)) return("unavailable")
   if (grepl("not support|does not support|only supports|only available", msg)) return("unsupported")
   "failed"
@@ -173,17 +205,26 @@ load_dataset_matrix <- function(path) {
   stop("Dataset file must contain a matrix or list with `$data`: ", path, call. = FALSE)
 }
 
-reference_file <- function(dataset_path, k, quality_n, seed) {
+reference_file <- function(dataset_path, k, quality_n, seed, metric = "euclidean") {
+  metric <- normalize_metric_arg(metric)
   file.path(dirname(dataset_path), sprintf(
-    "faissR_exact_reference_euclidean_k%d_q%d_seed%d.RData",
-    as.integer(k), as.integer(quality_n), as.integer(seed)
+    "faissR_exact_reference_%s_k%d_q%d_seed%d.RData",
+    metric, as.integer(k), as.integer(quality_n), as.integer(seed)
   ))
 }
 
-load_reference <- function(dataset_path, k, reference_k, quality_n, seed) {
-  paths <- reference_file(dataset_path, reference_k, quality_n, seed)
+load_reference <- function(dataset_path, k, reference_k, quality_n, seed, metric = "euclidean") {
+  metric <- normalize_metric_arg(metric)
+  paths <- reference_file(dataset_path, reference_k, quality_n, seed, metric = metric)
   if (!identical(as.integer(k), as.integer(reference_k))) {
-    paths <- c(paths, reference_file(dataset_path, k, quality_n, seed))
+    paths <- c(paths, reference_file(dataset_path, k, quality_n, seed, metric = metric))
+  }
+  if (identical(metric, "euclidean")) {
+    legacy <- file.path(dirname(dataset_path), sprintf(
+      "faissR_exact_reference_euclidean_k%d_q%d_seed%d.RData",
+      as.integer(reference_k), as.integer(quality_n), as.integer(seed)
+    ))
+    paths <- unique(c(paths, legacy))
   }
   existing <- paths[file.exists(paths)]
   path <- if (length(existing)) existing[[1L]] else paths[[1L]]
@@ -375,17 +416,17 @@ nndescent_cuda_candidate_values <- function(n,
     )
   } else {
     vals <- data.frame(
-      nndescent_graph_degree = c(32L, 48L, 64L, 96L, 128L, 160L, 192L),
-      nndescent_intermediate_graph_degree = c(64L, 96L, 128L, 192L, 256L, 320L, 384L),
-      nndescent_max_iterations = c(5L, 8L, 12L, 16L, 24L, 32L, 40L)
+      nndescent_graph_degree = c(16L, 24L, 32L, 48L, 64L, 96L, 128L, 160L, 192L),
+      nndescent_intermediate_graph_degree = c(32L, 48L, 64L, 96L, 128L, 192L, 256L, 320L, 384L),
+      nndescent_max_iterations = c(4L, 5L, 8L, 12L, 16L, 24L, 32L, 40L, 48L)
     )
     if (identical(grid_level, "compact")) vals <- vals[c(1L, 2L, 3L, 4L), , drop = FALSE]
   }
   if (identical(grid_level, "wide")) {
     vals <- rbind(vals, data.frame(
-      nndescent_graph_degree = c(224L, 256L, 320L),
-      nndescent_intermediate_graph_degree = c(448L, 512L, 640L),
-      nndescent_max_iterations = c(48L, 56L, 64L)
+      nndescent_graph_degree = c(224L, 256L, 320L, 384L),
+      nndescent_intermediate_graph_degree = c(448L, 512L, 640L, 768L),
+      nndescent_max_iterations = c(56L, 64L, 72L, 80L)
     ))
   }
   vals$nndescent_graph_degree <- as.integer(pmax(k, vals$nndescent_graph_degree))
@@ -453,15 +494,15 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
     x$candidate_kind <- "auto"; x$candidate_target_recall <- rep(target_recalls, each = length(thread_values) * length(output_values)); add(x)
     if (backend == "cpu") {
       manual <- data.frame(
-        hnsw_m = c(8L, 12L, 16L, 24L, 32L, 32L, 48L, 64L),
-        hnsw_ef_construction = c(40L, 60L, 80L, 120L, 160L, 240L, 320L, 480L),
-        hnsw_ef_search = pmax(k, c(25L, 50L, 100L, 150L, 220L, 320L, 480L, 720L))
+        hnsw_m = c(6L, 8L, 8L, 10L, 12L, 12L, 16L, 24L, 32L, 48L, 64L),
+        hnsw_ef_construction = c(30L, 30L, 40L, 50L, 60L, 80L, 100L, 160L, 240L, 320L, 480L),
+        hnsw_ef_search = pmax(k, c(15L, 20L, 25L, 35L, 45L, 60L, 80L, 120L, 220L, 400L, 720L))
       )
     } else {
       manual <- data.frame(
-        cagra_graph_degree = c(16L, 32L, 48L, 64L, 80L, 96L, 128L),
-        cagra_intermediate_graph_degree = c(32L, 64L, 128L, 192L, 256L, 320L, 512L),
-        hnsw_ef_search = pmax(k, c(48L, 96L, 128L, 256L, 320L, 480L, 768L))
+        cagra_graph_degree = c(8L, 12L, 16L, 24L, 32L, 48L, 64L, 96L, 128L),
+        cagra_intermediate_graph_degree = c(16L, 24L, 32L, 48L, 64L, 128L, 192L, 320L, 512L),
+        hnsw_ef_search = pmax(k, c(24L, 32L, 48L, 64L, 96L, 128L, 256L, 480L, 768L))
       )
     }
     if (identical(grid_level, "compact")) manual <- manual[seq_len(min(5L, nrow(manual))), , drop = FALSE]
@@ -493,12 +534,12 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
       specs <- specs[, c("label", "nlist_mult", "nprobe_mult"), drop = FALSE]
     } else {
       specs <- data.frame(
-        label = c("speed", "balanced", "recall", "recall_plus", "recall_max", "full_probe"),
-        nlist_mult = c(0.5, 1, 2, 4, 6, 8),
-        nprobe_mult = c(0.5, 1, 2, 3, 4, 1),
-        full_probe = c(FALSE, FALSE, FALSE, FALSE, FALSE, TRUE)
+        label = c("ultra_speed", "speed", "speed_plus", "balanced", "balanced_plus", "recall", "recall_plus", "recall_max", "full_probe"),
+        nlist_mult = c(0.5, 0.5, 1, 1, 2, 2, 4, 6, 8),
+        nprobe_mult = c(0.25, 0.5, 0.5, 1, 1.5, 2, 3, 4, 1),
+        full_probe = c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE)
       )
-      if (identical(grid_level, "compact")) specs <- specs[c(1L, 2L, 3L), , drop = FALSE]
+      if (identical(grid_level, "compact")) specs <- specs[c(1L, 2L, 4L, 6L), , drop = FALSE]
     }
     if (!"full_probe" %in% names(specs)) specs$full_probe <- FALSE
     for (i in seq_len(nrow(specs))) {
@@ -568,7 +609,7 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
           }
           next
         }
-        refine_by_spec <- c(2L, 4L, 8L, 12L, 16L, 24L)
+        refine_by_spec <- c(1L, 2L, 4L, 4L, 8L, 12L, 16L, 24L, 48L)
         refine_values <- refine_by_spec[[min(i, length(refine_by_spec))]]
         if (identical(backend, "cpu") && length(ivfpq_fastscan_refine_factors)) {
           refine_values <- ivfpq_fastscan_refine_factors
@@ -606,14 +647,14 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
   } else if (method == "cagra") {
     vals <- expand.grid(
       cagra_build_algo = c("auto", "ivf_pq", "nn_descent", "iterative_cagra_search"),
-      setting_id = seq_len(6L),
+      setting_id = seq_len(8L),
       KEEP.OUT.ATTRS = FALSE,
       stringsAsFactors = FALSE
     )
-    vals$cagra_graph_degree <- c(16L, 32L, 48L, 64L, 96L, 128L)[vals$setting_id]
-    vals$cagra_intermediate_graph_degree <- c(32L, 64L, 128L, 192L, 320L, 512L)[vals$setting_id]
-    vals$cagra_search_width <- c(1L, 2L, 4L, 8L, 12L, 16L)[vals$setting_id]
-    vals$cagra_itopk_size <- pmax(k, c(32L, 64L, 128L, 256L, 512L, 768L)[vals$setting_id])
+    vals$cagra_graph_degree <- c(8L, 16L, 24L, 32L, 48L, 64L, 96L, 128L)[vals$setting_id]
+    vals$cagra_intermediate_graph_degree <- c(16L, 32L, 48L, 64L, 128L, 192L, 320L, 512L)[vals$setting_id]
+    vals$cagra_search_width <- c(1L, 1L, 2L, 2L, 4L, 8L, 12L, 16L)[vals$setting_id]
+    vals$cagra_itopk_size <- pmax(k, c(16L, 32L, 64L, 64L, 128L, 256L, 512L, 768L)[vals$setting_id])
     vals$setting_id <- NULL
     if (identical(grid_level, "compact")) vals <- vals[vals$cagra_graph_degree <= 64L, , drop = FALSE]
     for (i in seq_len(nrow(vals))) {
@@ -624,10 +665,10 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
   } else if (method == "nndescent") {
     if (backend == "cpu") {
       vals <- data.frame(
-        nndescent_pool_size = pmax(k, c(20L, 30L, 40L, 60L, 80L, 120L, 160L)),
-        nndescent_n_iters = c(5L, 7L, 10L, 12L, 16L, 20L, 24L),
-        nndescent_max_candidates = c(60L, 90L, 120L, 180L, 240L, 360L, 480L),
-        nndescent_n_random_projections = c(4L, 6L, 8L, 12L, 16L, 24L, 32L)
+        nndescent_pool_size = pmax(k, c(16L, 20L, 30L, 40L, 50L, 60L, 80L, 120L, 160L, 220L)),
+        nndescent_n_iters = c(4L, 5L, 7L, 10L, 10L, 12L, 16L, 20L, 24L, 32L),
+        nndescent_max_candidates = c(48L, 60L, 90L, 120L, 150L, 180L, 240L, 360L, 480L, 660L),
+        nndescent_n_random_projections = c(3L, 4L, 6L, 8L, 10L, 12L, 16L, 24L, 32L, 40L)
       )
       vals$nndescent_max_candidates <- as.integer(pmax(vals$nndescent_max_candidates, 3L * vals$nndescent_pool_size))
       if (identical(grid_level, "compact")) vals <- vals[seq_len(min(4L, nrow(vals))), , drop = FALSE]
@@ -648,8 +689,8 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
     }
   } else if (method == "nsg") {
     vals <- data.frame(
-      nsg_r = c(8L, 16L, 24L, 32L, 48L, 64L, 96L),
-      nsg_graph_k = pmax(k, c(20L, 40L, 60L, 80L, 120L, 180L, 256L))
+      nsg_r = c(4L, 6L, 8L, 12L, 16L, 24L, 32L, 48L, 64L, 96L),
+      nsg_graph_k = pmax(k, c(12L, 16L, 20L, 30L, 40L, 60L, 80L, 120L, 180L, 256L))
     )
     if (identical(grid_level, "compact")) vals <- vals[seq_len(min(4L, nrow(vals))), , drop = FALSE]
     for (i in seq_len(nrow(vals))) {
@@ -658,9 +699,9 @@ candidate_grid <- function(method, backend, n, p, k, target_recalls, thread_valu
     }
   } else if (method == "vamana") {
     vals <- data.frame(
-      vamana_r = c(8L, 16L, 24L, 32L, 48L, 64L, 96L),
-      vamana_search_l = pmax(k, c(20L, 40L, 60L, 100L, 160L, 240L, 400L)),
-      vamana_alpha = c(1.0, 1.0, 1.05, 1.1, 1.2, 1.35, 1.5)
+      vamana_r = c(4L, 6L, 8L, 12L, 16L, 24L, 32L, 48L, 64L, 96L),
+      vamana_search_l = pmax(k, c(12L, 16L, 20L, 30L, 40L, 60L, 100L, 160L, 240L, 400L)),
+      vamana_alpha = c(1.0, 1.0, 1.0, 1.0, 1.0, 1.05, 1.1, 1.2, 1.35, 1.5)
     )
     if (identical(grid_level, "compact")) vals <- vals[seq_len(min(4L, nrow(vals))), , drop = FALSE]
     for (i in seq_len(nrow(vals))) {
@@ -728,7 +769,7 @@ base_row <- function(config, status = "success", error = NA_character_) {
   out <- data.frame(
     dataset = config$dataset, n = as.integer(config$n), p = as.integer(config$p),
     shape_group = shape_group(config$n, config$p), backend = config$backend,
-    method = config$method, metric = "euclidean", k = as.integer(config$k),
+    method = config$method, metric = config$metric, k = as.integer(config$k),
     candidate_id = candidate$candidate_id, candidate_kind = candidate$candidate_kind,
     n_threads = as.integer(candidate$n_threads), output = candidate$output,
     status = status, elapsed_sec = NA_real_, peak_rss_gb = NA_real_,
@@ -764,7 +805,7 @@ run_method <- function(config) {
   run_nn <- function(input) {
     faissR::nn(
       input, k = as.integer(config$k), exclude_self = TRUE,
-      backend = config$backend, method = config$method, metric = "euclidean",
+      backend = config$backend, method = config$method, metric = config$metric,
       tuning = if (identical(config$candidate$candidate_kind, "auto")) "auto" else "fixed",
       target_recall = target, output = as.character(config$candidate$output),
       n_threads = as.integer(config$candidate$n_threads)
@@ -878,36 +919,58 @@ completed_keys <- function(path, resume_statuses = c("success", "unsupported", "
     x <- x[x$status %in% resume_statuses, , drop = FALSE]
   }
   if (!nrow(x)) return(character())
-  paste(x$dataset, x$backend, x$method, x$k, x$candidate_id, sep = "\r")
+  metric <- if ("metric" %in% names(x)) x$metric else rep("euclidean", nrow(x))
+  paste(x$dataset, x$backend, x$method, metric, x$k, x$candidate_id, sep = "\r")
+}
+
+timeout_skip_keys <- function(paths) {
+  paths <- unique(paths[nzchar(paths)])
+  if (!length(paths)) return(character())
+  files <- character()
+  for (path in paths) {
+    if (dir.exists(path)) {
+      files <- c(files, list.files(path, pattern = "_tuning_results[.]csv$", recursive = TRUE, full.names = TRUE))
+    } else if (file.exists(path)) {
+      files <- c(files, path)
+    }
+  }
+  files <- unique(files[file.exists(files)])
+  if (!length(files)) return(character())
+  keys <- character()
+  for (file in files) {
+    x <- tryCatch(read.csv(file, stringsAsFactors = FALSE), error = function(e) NULL)
+    if (is.null(x) || !nrow(x)) next
+    status_col <- if ("status" %in% names(x)) "status" else if ("previous_status" %in% names(x)) "previous_status" else NA_character_
+    if (is.na(status_col)) next
+    needed <- c("dataset", "backend", "method", "k", "candidate_id")
+    if (!all(needed %in% names(x))) next
+    x <- x[x[[status_col]] == "timeout", , drop = FALSE]
+    if (!nrow(x)) next
+    keys <- c(keys, paste(x$dataset, x$backend, x$method, x$k, x$candidate_id, sep = "\r"))
+  }
+  unique(keys)
 }
 
 summarize_results <- function(out_dir, results_path, target_recalls, method) {
   if (!file.exists(results_path)) return(invisible(NULL))
   x <- read.csv(results_path, stringsAsFactors = FALSE)
-  if ("elapsed_sec" %in% names(x)) x$elapsed_sec <- suppressWarnings(as.numeric(x$elapsed_sec))
-  if ("recall_at_k" %in% names(x)) x$recall_at_k <- suppressWarnings(as.numeric(x$recall_at_k))
   success <- x[x$status == "success" & is.finite(x$recall_at_k) & is.finite(x$elapsed_sec), , drop = FALSE]
   rows <- list(); idx <- 0L
-  groups <- unique(x[c("dataset", "backend", "method", "k")])
+  groups <- unique(success[c("dataset", "backend", "method", "metric", "k")])
   for (g in seq_len(nrow(groups))) {
-    part_all <- x[x$dataset == groups$dataset[[g]] & x$backend == groups$backend[[g]] & x$method == groups$method[[g]] & x$k == groups$k[[g]], , drop = FALSE]
-    part0 <- success[success$dataset == groups$dataset[[g]] & success$backend == groups$backend[[g]] & success$method == groups$method[[g]] & success$k == groups$k[[g]], , drop = FALSE]
+    part0 <- success[
+      success$dataset == groups$dataset[[g]] &
+        success$backend == groups$backend[[g]] &
+        success$method == groups$method[[g]] &
+        success$metric == groups$metric[[g]] &
+        success$k == groups$k[[g]],
+      , drop = FALSE
+    ]
     for (target in target_recalls) {
       ok <- part0[part0$recall_at_k >= target, , drop = FALSE]
-      if (nrow(ok)) {
-        best <- ok[order(ok$elapsed_sec, -ok$recall_at_k), , drop = FALSE][1L, , drop = FALSE]
-        basis <- "fastest_meeting_target"
-      } else if (nrow(part0)) {
-        best <- part0[order(-part0$recall_at_k, part0$elapsed_sec), , drop = FALSE][1L, , drop = FALSE]
-        basis <- "best_recall_below_target"
-      } else {
-        status_rank <- match(part_all$status, c("timeout", "unsupported", "unavailable", "failed"))
-        status_rank[is.na(status_rank)] <- length(c("timeout", "unsupported", "unavailable", "failed")) + 1L
-        best <- part_all[order(status_rank, part_all$candidate_id), , drop = FALSE][1L, , drop = FALSE]
-        basis <- "no_successful_candidate"
-      }
+      best <- if (nrow(ok)) ok[order(ok$elapsed_sec, -ok$recall_at_k), , drop = FALSE][1L, , drop = FALSE] else part0[order(-part0$recall_at_k, part0$elapsed_sec), , drop = FALSE][1L, , drop = FALSE]
       idx <- idx + 1L
-      rows[[idx]] <- cbind(target_recall_threshold = target, recommendation_basis = basis, best)
+      rows[[idx]] <- cbind(target_recall_threshold = target, recommendation_basis = if (nrow(ok)) "fastest_meeting_target" else "best_recall_below_target", best)
     }
   }
   rec <- if (length(rows)) do.call(rbind, rows) else cbind(target_recall_threshold = numeric(0), recommendation_basis = character(0), x[FALSE, , drop = FALSE])
@@ -918,6 +981,7 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
       "",
       "## IVFPQ FastScan Notes",
       "",
+      "- CPU rows tune FAISS `IndexIVFPQFastScan` `ivf_nlist`, `ivf_nprobe`, `pq_m`, fixed 4-bit PQ, `ivfpq_fastscan_refine_factor`, and `ivfpq_fastscan_bbs`; Euclidean and raw inner product use native FastScan L2/IP, while cosine/correlation use normalized L2 transforms.",
       "- CUDA rows tune `ivf_nlist`, `ivf_nprobe`, byte-aligned 4-bit `cuvs_ivfpq_pq_dim`, and `FAISSR_CUVS_IVF_BATCH_SIZE`.",
       "- For cuVS 4-bit IVF-PQ, `pq_dim` is repaired to a byte-aligned value when needed; smaller `pq_dim` and smaller `nprobe` are expected to be faster but can reduce recall.",
       "- `nlist` controls the IVF build/search balance; too few lists can hurt recall, while too many lists can increase build and coarse-search overhead.",
@@ -931,7 +995,7 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
     "",
     sprintf("Generated: %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
     "",
-    "References are loaded from max-k dataset-folder files created by benchmark_precompute_exact_references.R and cropped to the requested k.",
+    "References are loaded from max-k dataset-folder files created by benchmark_precompute_exact_references.R for each metric and cropped to the requested k.",
     method_notes,
     "",
     "## Status Counts",
@@ -968,6 +1032,7 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
     stop("`--reference_k` must be at least as large as every value in `--k_values`.", call. = FALSE)
   }
   target_recalls <- as.numeric(split_arg(args$target_recalls, "0.9,0.95,0.99"))
+  metrics <- metric_values_arg(args$metrics %||% args$metric %||% "euclidean")
   threads <- positive_int(args$threads, 12L, "threads")
   thread_values <- as.integer(split_arg(args$thread_values, if (backend == "cpu") "12" else "12"))
   output_values <- split_arg(args$output_values, args$output %||% "float")
@@ -1030,7 +1095,10 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
     name = "nndescent_cuda_max_iterations"
   )
   resume <- logical_arg(args$resume, TRUE)
-  resume_statuses <- split_arg(args$resume_statuses, "success,unsupported,unavailable,timeout")
+  resume_statuses <- split_arg(args$resume_statuses, "success,unsupported,unavailable,timeout,skipped_previous_timeout")
+  skip_previous_timeouts <- logical_arg(args$skip_previous_timeouts, FALSE)
+  skip_timeouts_from <- split_arg(args$skip_timeouts_from, "")
+  timeout_keys <- if (isTRUE(skip_previous_timeouts)) timeout_skip_keys(skip_timeouts_from) else character()
   all_candidates <- do.call(rbind, lapply(seq_len(nrow(manifest)), function(i) {
     ds <- manifest[i, , drop = FALSE]
     do.call(rbind, lapply(k_values, function(k) {
@@ -1048,8 +1116,15 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
         nndescent_cuda_intermediate_graph_degrees = nndescent_cuda_intermediate_graph_degrees,
         nndescent_cuda_max_iterations = nndescent_cuda_max_iterations
       )
-      x$dataset <- ds$dataset[[1L]]; x$n <- as.integer(ds$n); x$p <- as.integer(ds$p); x$k <- as.integer(k)
-      x
+      do.call(rbind, lapply(metrics, function(metric) {
+        y <- x
+        y$dataset <- ds$dataset[[1L]]
+        y$n <- as.integer(ds$n)
+        y$p <- as.integer(ds$p)
+        y$metric <- metric
+        y$k <- as.integer(k)
+        y
+      }))
     }))
   }))
   write.csv(all_candidates, candidate_path, row.names = FALSE)
@@ -1058,44 +1133,50 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
     ds <- manifest[i, , drop = FALSE]
     dataset_path <- ds[[path_col]][[1L]]
     for (k in k_values) {
-      ref <- load_reference(dataset_path, k, reference_k, quality_n, seed)
-      candidates <- candidate_grid(
-        method, backend, as.integer(ds$n), as.integer(ds$p), k,
-        target_recalls, thread_values, output_values, grid_level,
-        ivfpq_fastscan_refine_factors = ivfpq_fastscan_refine_factors,
-        ivfpq_fastscan_nlist_multipliers = ivfpq_fastscan_nlist_multipliers,
-        ivfpq_fastscan_nprobe_multipliers = ivfpq_fastscan_nprobe_multipliers,
-        ivfpq_fastscan_pq_dim_values = ivfpq_fastscan_pq_dim_values,
-        ivfpq_fastscan_pq_m_values = ivfpq_fastscan_pq_m_values,
-        ivfpq_fastscan_bbs_values = ivfpq_fastscan_bbs_values,
-        cuvs_ivf_batch_sizes = cuvs_ivf_batch_sizes,
-        nndescent_cuda_graph_degrees = nndescent_cuda_graph_degrees,
-        nndescent_cuda_intermediate_graph_degrees = nndescent_cuda_intermediate_graph_degrees,
-        nndescent_cuda_max_iterations = nndescent_cuda_max_iterations
-      )
-      for (j in seq_len(nrow(candidates))) {
-        cand <- candidates[j, , drop = FALSE]
-        key <- paste(ds$dataset[[1L]], backend, method, as.integer(k), cand$candidate_id, sep = "\r")
-        if (key %in% done) next
-        cfg <- list(
-          dataset = ds$dataset[[1L]], dataset_path = dataset_path,
-          n = as.integer(ds$n), p = as.integer(ds$p), backend = backend,
-          method = method, k = as.integer(k), target_recalls = target_recalls,
-          reference_rows = ref$rows, reference_indices = ref$indices,
-          reference_status = ref$status %||% NA_character_,
-          reference_path = ref$path %||% NA_character_,
-          reference_query_n = length(ref$rows %||% integer()),
-          candidate = cand
+      for (metric in metrics) {
+        ref <- load_reference(dataset_path, k, reference_k, quality_n, seed, metric = metric)
+        candidates <- candidate_grid(
+          method, backend, as.integer(ds$n), as.integer(ds$p), k,
+          target_recalls, thread_values, output_values, grid_level,
+          ivfpq_fastscan_refine_factors = ivfpq_fastscan_refine_factors,
+          ivfpq_fastscan_nlist_multipliers = ivfpq_fastscan_nlist_multipliers,
+          ivfpq_fastscan_nprobe_multipliers = ivfpq_fastscan_nprobe_multipliers,
+          ivfpq_fastscan_pq_dim_values = ivfpq_fastscan_pq_dim_values,
+          ivfpq_fastscan_pq_m_values = ivfpq_fastscan_pq_m_values,
+          ivfpq_fastscan_bbs_values = ivfpq_fastscan_bbs_values,
+          cuvs_ivf_batch_sizes = cuvs_ivf_batch_sizes,
+          nndescent_cuda_graph_degrees = nndescent_cuda_graph_degrees,
+          nndescent_cuda_intermediate_graph_degrees = nndescent_cuda_intermediate_graph_degrees,
+          nndescent_cuda_max_iterations = nndescent_cuda_max_iterations
         )
-        row <- if (identical(ref$status, "success")) {
-          run_task(cfg, timeout, bench_script)
-        } else {
-          base_row(cfg, "missing_reference", ref$error %||% "missing reference")
+        for (j in seq_len(nrow(candidates))) {
+          cand <- candidates[j, , drop = FALSE]
+          key <- paste(ds$dataset[[1L]], backend, method, metric, as.integer(k), cand$candidate_id, sep = "\r")
+          timeout_key <- paste(ds$dataset[[1L]], backend, method, as.integer(k), cand$candidate_id, sep = "\r")
+          if (key %in% done) next
+          cfg <- list(
+            dataset = ds$dataset[[1L]], dataset_path = dataset_path,
+            n = as.integer(ds$n), p = as.integer(ds$p), backend = backend,
+            method = method, metric = metric, k = as.integer(k),
+            target_recalls = target_recalls,
+            reference_rows = ref$rows, reference_indices = ref$indices,
+            reference_status = ref$status %||% NA_character_,
+            reference_path = ref$path %||% NA_character_,
+            reference_query_n = length(ref$rows %||% integer()),
+            candidate = cand
+          )
+          row <- if (timeout_key %in% timeout_keys) {
+            base_row(cfg, "skipped_previous_timeout", "Skipped because this method/dataset/k/candidate timed out in an earlier tuning run.")
+          } else if (identical(ref$status, "success")) {
+            run_task(cfg, timeout, bench_script)
+          } else {
+            base_row(cfg, "missing_reference", ref$error %||% "missing reference")
+          }
+          append_csv(row, results_path)
+          done <- c(done, key)
         }
-        append_csv(row, results_path)
-        done <- c(done, key)
+        summarize_results(out_dir, results_path, target_recalls, method)
       }
-      summarize_results(out_dir, results_path, target_recalls, method)
     }
   }
   summarize_results(out_dir, results_path, target_recalls, method)

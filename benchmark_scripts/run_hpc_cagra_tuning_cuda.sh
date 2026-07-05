@@ -59,9 +59,12 @@ fi
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
 export K_VALUES="${K_VALUES:-15,30,50,100}"
+export METRICS="${METRICS:-euclidean,cosine,correlation,inner_product}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
-export RESUME_STATUSES="${RESUME_STATUSES:-success,unsupported,unavailable,timeout}"
+export SKIP_PREVIOUS_TIMEOUTS="${SKIP_PREVIOUS_TIMEOUTS:-TRUE}"
+export SKIP_TIMEOUTS_FROM="${SKIP_TIMEOUTS_FROM:-${SCRIPT_DIR}/previous_tuning_timeouts.csv}"
+export RESUME_STATUSES="${RESUME_STATUSES:-success,unsupported,unavailable,timeout,skipped_previous_timeout}"
 
 export OMP_NUM_THREADS="${THREADS_CPU}"
 export OPENBLAS_NUM_THREADS="${THREADS_CPU}"
@@ -116,6 +119,9 @@ fi
   echo "BACKEND=${BACKEND}"
   echo "QUALITY_N=${QUALITY_N}"
   echo "SEED=${SEED}"
+  echo "METRICS=${METRICS}"
+  echo "SKIP_PREVIOUS_TIMEOUTS=${SKIP_PREVIOUS_TIMEOUTS}"
+  echo "SKIP_TIMEOUTS_FROM=${SKIP_TIMEOUTS_FROM}"
   echo "TIMEOUT=${TIMEOUT}"
   echo "FAISSR_TIMEOUT_BIN=${FAISSR_TIMEOUT_BIN}"
   echo "RESUME_STATUSES=${RESUME_STATUSES}"
@@ -123,7 +129,7 @@ fi
   "${RUNNER[@]}" "${R_BIN}" "${MANIFEST_SCRIPT}"     --data_root="${DATA_ROOT}"     --out="${MANIFEST}"     --datasets="${DATASETS}"
 
   echo "[$(date --iso-8601=seconds)] running CUDA CAGRA tuning from precomputed references"
-  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --backend="${BACKEND}"     --k_values="${K_VALUES}"     --target_recalls="${TARGET_RECALLS}"     --threads="${THREADS_CPU}"     --thread_values="${THREAD_VALUES}"     --timeout="${TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --output_values="${OUTPUT_VALUES}"     --grid_level="${GRID_LEVEL}"     --resume=TRUE     --resume_statuses="${RESUME_STATUSES}"
+  "${RUNNER[@]}" "${R_BIN}" "${BENCH_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --backend="${BACKEND}"     --k_values="${K_VALUES}"     --target_recalls="${TARGET_RECALLS}"     --metrics="${METRICS}"     --threads="${THREADS_CPU}"     --thread_values="${THREAD_VALUES}"     --timeout="${TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --output_values="${OUTPUT_VALUES}"     --grid_level="${GRID_LEVEL}"     --resume=TRUE     --skip_previous_timeouts="${SKIP_PREVIOUS_TIMEOUTS}"     --skip_timeouts_from="${SKIP_TIMEOUTS_FROM}"     --resume_statuses="${RESUME_STATUSES}"
 
   echo "DONE: ${OUT_DIR}"
 } 2>&1 | tee -a "${OUT_DIR}/cagra_tuning_cuda.log"

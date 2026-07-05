@@ -22,6 +22,33 @@ split_arg <- function(value, default) {
   out[nzchar(out)]
 }
 
+normalize_metric_arg <- function(value) {
+  key <- tolower(trimws(as.character(value %||% "euclidean")[[1L]]))
+  key <- gsub("[[:space:]-]+", "_", key)
+  aliases <- c(
+    euclidean = "euclidean",
+    l2 = "euclidean",
+    cosine = "cosine",
+    cos = "cosine",
+    correlation = "correlation",
+    correlations = "correlation",
+    cor = "correlation",
+    pearson = "correlation",
+    inner_product = "inner_product",
+    innerproduct = "inner_product",
+    ip = "inner_product",
+    dot = "inner_product",
+    dot_product = "inner_product"
+  )
+  if (!key %in% names(aliases)) {
+    stop(
+      "`--metric` must be one of euclidean, cosine, correlation, or inner_product.",
+      call. = FALSE
+    )
+  }
+  unname(aliases[[key]])
+}
+
 logical_arg <- function(value, default = FALSE) {
   if (is.null(value) || length(value) == 0L || is.na(value[[1L]])) return(isTRUE(default))
   key <- tolower(trimws(as.character(value[[1L]])))
@@ -411,7 +438,7 @@ base_row <- function(config, status = "success", error = NA_character_) {
     public_backend = candidate$public_backend,
     public_method = candidate$public_method,
     method_family = "exact",
-    metric = "euclidean",
+    metric = config$metric %||% "euclidean",
     k = as.integer(config$k),
     candidate_id = candidate$candidate_id,
     candidate_kind = candidate$candidate_kind,
@@ -468,7 +495,7 @@ run_reference <- function(config) {
     k = min(k + 1L, nrow(x)),
     backend = config$reference_backend,
     method = "exact",
-    metric = "euclidean",
+    metric = config$metric %||% "euclidean",
     output = config$output,
     n_threads = config$n_threads
   )
@@ -497,7 +524,7 @@ run_method <- function(config) {
     exclude_self = TRUE,
     backend = as.character(candidate$public_backend),
     method = as.character(candidate$public_method),
-    metric = "euclidean",
+    metric = config$metric %||% "euclidean",
     output = as.character(candidate$output),
     n_threads = as.integer(candidate$n_threads),
     tuning = "fixed"
@@ -597,7 +624,8 @@ run_rscript_task <- function(task, config, timeout, bench_script) {
 
 reference_for_dataset <- function(dataset_row, k, n_threads, output,
                                   quality_n, seed, timeout, bench_script,
-                                  reference_backend, quality_mode) {
+                                  reference_backend, quality_mode,
+                                  metric = "euclidean") {
   n <- as.integer(dataset_row$n)
   set.seed(seed + k + nchar(dataset_row$dataset))
   rows <- sort(sample(seq_len(n), min(quality_n, n)))
@@ -614,6 +642,7 @@ reference_for_dataset <- function(dataset_row, k, n_threads, output,
   cfg <- list(
     dataset = dataset_row$dataset,
     path = dataset_row$path,
+    metric = metric,
     n = n,
     p = as.integer(dataset_row$p),
     reference_backend = reference_backend,
@@ -643,8 +672,8 @@ reference_for_dataset <- function(dataset_row, k, n_threads, output,
   ref
 }
 
-row_key <- function(dataset, device, provider, k, candidate_id) {
-  paste(dataset, device, provider, as.integer(k), candidate_id, sep = "\r")
+row_key <- function(dataset, device, provider, metric, k, candidate_id) {
+  paste(dataset, device, provider, metric, as.integer(k), candidate_id, sep = "\r")
 }
 
 completed_keys <- function(path) {
@@ -654,15 +683,17 @@ completed_keys <- function(path) {
   if (is.null(x) || !nrow(x) || !all(required %in% names(x))) {
     return(character())
   }
-  row_key(x$dataset, x$device, x$provider, x$k, x$candidate_id)
+  metric <- if ("metric" %in% names(x)) x$metric else rep("euclidean", nrow(x))
+  row_key(x$dataset, x$device, x$provider, metric, x$k, x$candidate_id)
 }
 
-write_missing_rows <- function(dataset_row, k, candidates, reason, results_path) {
+write_missing_rows <- function(dataset_row, k, candidates, reason, results_path, metric = "euclidean") {
   for (i in seq_len(nrow(candidates))) {
     cfg <- list(
       dataset = dataset_row$dataset,
       n = as.integer(dataset_row$n %||% NA_integer_),
       p = as.integer(dataset_row$p %||% NA_integer_),
+      metric = metric,
       k = as.integer(k),
       candidate = candidates[i, , drop = FALSE],
       reference_status = "missing_dataset",
@@ -783,8 +814,8 @@ write_report <- function(out_dir, results, recommendations, provider_recommendat
     "",
     sprintf("Generated: %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
     "",
-    "This benchmark evaluates exhaustive nearest-neighbour routes for Euclidean",
-    "self-KNN. Exact methods have no approximation recall parameter; recall",
+    "This benchmark evaluates exhaustive nearest-neighbour routes for the selected",
+    "metric. Exact methods have no approximation recall parameter; recall",
     "thresholds 0.90, 0.95, and 0.99 are used as correctness gates. Rows either",
     "measure recall against sampled exact references or mark recall as",
     "`exact_assumed` when the row reports `exact = TRUE` and reference sampling",
@@ -841,6 +872,7 @@ main <- function() {
   candidate_path <- file.path(out_dir, "exact_tuning_candidate_grid.csv")
   bench_script <- normalizePath(script_path(), mustWork = TRUE)
   datasets <- split_arg(args$datasets, "")
+  metric <- normalize_metric_arg(args$metric %||% Sys.getenv("FAISSR_SINGLE_METRIC", "euclidean"))
   k_values <- as.integer(split_arg(args$k_values, "15,30,50,100"))
   target_recalls <- as.numeric(split_arg(args$target_recalls, "0.9,0.95,0.99"))
   thread_values <- clean_int_values(args$thread_values, if (backend == "cpu") "1,2,4,8,12" else "12")
@@ -886,12 +918,14 @@ main <- function() {
   write.csv(
     data.frame(
       key = c("backend", "manifest", "datasets", "k_values", "target_recalls",
+              "metric",
               "thread_values", "reference_threads", "timeout", "quality_n",
               "quality_mode", "output_values", "cpu_faiss_batches",
               "gpu_faiss_batches", "cache_modes", "gpu_reuse_resources",
               "cuda_providers", "reference_backend", "max_working_gb"),
       value = c(backend, manifest_path, paste(datasets, collapse = ","),
                 paste(k_values, collapse = ","), paste(target_recalls, collapse = ","),
+                metric,
                 paste(thread_values, collapse = ","), n_threads_reference,
                 timeout, quality_n, quality_mode, paste(output_values, collapse = ","),
                 paste(cpu_batches, collapse = ","), paste(gpu_batches, collapse = ","),
@@ -909,7 +943,7 @@ main <- function() {
     if (!manifest_success(ds$status[[1L]]) || !file.exists(ds$path[[1L]])) {
       for (k in k_values) {
         candidates <- candidate_grid(backend, k, thread_values, output_values, cpu_batches, gpu_batches, cache_modes, gpu_reuse_values, cuda_providers)
-        write_missing_rows(ds, k, candidates, ds$error[[1L]] %||% "missing dataset", results_path)
+        write_missing_rows(ds, k, candidates, ds$error[[1L]] %||% "missing dataset", results_path, metric = metric)
       }
       next
     }
@@ -917,13 +951,14 @@ main <- function() {
       candidates <- candidate_grid(backend, k, thread_values, output_values, cpu_batches, gpu_batches, cache_modes, gpu_reuse_values, cuda_providers)
       ref <- reference_for_dataset(
         ds, k, n_threads_reference, output_values[[1L]], quality_n, seed,
-        timeout, bench_script, reference_backend, quality_mode
+        timeout, bench_script, reference_backend, quality_mode,
+        metric = metric
       )
       reference_indices <- if (identical(ref$status, "success")) ref$indices else NULL
       reference_status <- ref$status %||% "not_run"
       for (j in seq_len(nrow(candidates))) {
         candidate <- candidates[j, , drop = FALSE]
-        key <- row_key(dataset, candidate$device, candidate$provider, k, candidate$candidate_id)
+        key <- row_key(dataset, candidate$device, candidate$provider, metric, k, candidate$candidate_id)
         if (key %in% keys_done) {
           message(sprintf("[%s] skip completed dataset=%s device=%s k=%s candidate=%s",
                           Sys.time(), dataset, backend, k, candidate$candidate_id))
@@ -935,6 +970,7 @@ main <- function() {
           path = ds$path[[1L]],
           n = as.integer(ds$n),
           p = as.integer(ds$p),
+          metric = metric,
           k = as.integer(k),
           quality_rows = ref$rows,
           reference_indices = reference_indices,

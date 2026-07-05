@@ -13,6 +13,13 @@
 
 set -euo pipefail
 
+if [[ "${ALLOW_CUDA_NNDESCENT_TUNING:-FALSE}" != "TRUE" ]]; then
+  echo "CUDA NN-descent tuning is disabled for the current all-metric tuning plan."
+  echo "Use run_hpc_nndescent_tuning_cpu12.sh for NN-descent."
+  echo "To run the experimental CUDA/cuVS NN-descent grid anyway, resubmit with ALLOW_CUDA_NNDESCENT_TUNING=TRUE."
+  exit 0
+fi
+
 
 # CUDA faissR NNDESCENT tuning benchmark using precomputed exact references.
 #
@@ -50,8 +57,11 @@ export R_BIN="${R_BIN:-Rscript}"
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
 export K_VALUES="${K_VALUES:-15,30,50,100}"
+export METRICS="${METRICS:-euclidean,cosine,correlation,inner_product}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
+export SKIP_PREVIOUS_TIMEOUTS="${SKIP_PREVIOUS_TIMEOUTS:-TRUE}"
+export SKIP_TIMEOUTS_FROM="${SKIP_TIMEOUTS_FROM:-${SCRIPT_DIR}/previous_tuning_timeouts.csv}"
 export NNDESCENT_CUDA_GRAPH_DEGREES="${NNDESCENT_CUDA_GRAPH_DEGREES:-}"
 export NNDESCENT_CUDA_INTERMEDIATE_GRAPH_DEGREES="${NNDESCENT_CUDA_INTERMEDIATE_GRAPH_DEGREES:-}"
 export NNDESCENT_CUDA_MAX_ITERATIONS="${NNDESCENT_CUDA_MAX_ITERATIONS:-}"
@@ -109,6 +119,9 @@ fi
   echo "BACKEND=${BACKEND}"
   echo "QUALITY_N=${QUALITY_N}"
   echo "SEED=${SEED}"
+  echo "METRICS=${METRICS}"
+  echo "SKIP_PREVIOUS_TIMEOUTS=${SKIP_PREVIOUS_TIMEOUTS}"
+  echo "SKIP_TIMEOUTS_FROM=${SKIP_TIMEOUTS_FROM}"
   echo "NNDESCENT_CUDA_GRAPH_DEGREES=${NNDESCENT_CUDA_GRAPH_DEGREES}"
   echo "NNDESCENT_CUDA_INTERMEDIATE_GRAPH_DEGREES=${NNDESCENT_CUDA_INTERMEDIATE_GRAPH_DEGREES}"
   echo "NNDESCENT_CUDA_MAX_ITERATIONS=${NNDESCENT_CUDA_MAX_ITERATIONS}"
@@ -122,7 +135,7 @@ fi
     --datasets="${DATASETS}"
     --backend="${BACKEND}"
     --k_values="${K_VALUES}"
-    --target_recalls="${TARGET_RECALLS}"
+    --target_recalls="${TARGET_RECALLS}"     --metrics="${METRICS}"
     --threads="${THREADS_CPU}"
     --thread_values="${THREAD_VALUES}"
     --timeout="${TIMEOUT}"
@@ -130,7 +143,7 @@ fi
     --seed="${SEED}"
     --output_values="${OUTPUT_VALUES}"
     --grid_level="${GRID_LEVEL}"
-    --resume=TRUE
+    --resume=TRUE     --skip_previous_timeouts="${SKIP_PREVIOUS_TIMEOUTS}"     --skip_timeouts_from="${SKIP_TIMEOUTS_FROM}"
   )
   [[ -n "${NNDESCENT_CUDA_GRAPH_DEGREES}" ]] && BENCH_ARGS+=(--nndescent_cuda_graph_degrees="${NNDESCENT_CUDA_GRAPH_DEGREES}")
   [[ -n "${NNDESCENT_CUDA_INTERMEDIATE_GRAPH_DEGREES}" ]] && BENCH_ARGS+=(--nndescent_cuda_intermediate_graph_degrees="${NNDESCENT_CUDA_INTERMEDIATE_GRAPH_DEGREES}")

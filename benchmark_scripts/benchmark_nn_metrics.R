@@ -25,6 +25,7 @@ canonical_metric_key <- function(metric) {
     cosine = "cosine",
     cos = "cosine",
     correlation = "correlation",
+    correlations = "correlation",
     cor = "correlation",
     pearson = "correlation",
     inner_product = "inner_product",

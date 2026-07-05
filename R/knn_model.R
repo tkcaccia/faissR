@@ -541,7 +541,13 @@ knn_build_fitted_nn_index <- function(x,
   }
 
   if (identical(resolved_backend, "faiss_ivf")) {
-    params <- faiss_ivf_params(dims[[1L]], k, metric = metric)
+    params <- faiss_ivf_params(
+      dims[[1L]],
+      k,
+      metric = metric,
+      p = dims[[2L]],
+      target_recall = target_recall
+    )
     index <- nn_faiss_index_build_float32_cpp(
       x,
       "ivf",
@@ -570,7 +576,14 @@ knn_build_fitted_nn_index <- function(x,
 
   if (identical(resolved_backend, "faiss_ivfpq")) {
     validate_faiss_cpu_ivfpq_training_size(dims[[1L]])
-    params <- faiss_ivf_params(dims[[1L]], k, metric = metric)
+    params <- faiss_ivf_params(
+      dims[[1L]],
+      k,
+      metric = metric,
+      p = dims[[2L]],
+      method = "ivfpq",
+      target_recall = target_recall
+    )
     pq <- faiss_pq_params(dims[[2L]], n = dims[[1L]])
     index <- nn_faiss_index_build_float32_cpp(
       x,
@@ -687,7 +700,14 @@ knn_fitted_faiss_search_params <- function(object, stored_backend, params, k) {
     index_n <- knn_fitted_index_attr_int(object$nn_index, "n", nrow(model_Xtrain(object)))
     index_nlist <- knn_fitted_index_attr_int(object$nn_index, "nlist", params$nlist %||% NA_integer_)
     query_params <- tryCatch(
-      faiss_ivf_params(index_n, k, metric = object$metric %||% "euclidean"),
+      faiss_ivf_params(
+        index_n,
+        k,
+        metric = object$metric %||% "euclidean",
+        p = ncol(model_Xtrain(object)),
+        method = if (identical(stored_backend, "faiss_ivfpq")) "ivfpq" else "ivf",
+        target_recall = object$target_recall %||% 0.99
+      ),
       error = function(e) NULL
     )
     query_nprobe <- knn_scalar_int(query_params$nprobe %||% params$nprobe, default = params$nprobe %||% NA_integer_)

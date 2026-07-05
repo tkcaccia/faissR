@@ -1710,6 +1710,8 @@ List faiss_ivfpq_fastscan_float32_knn_impl(SEXP data,
                                   int nlist,
                                   int nprobe,
                                   int pq_m,
+                                  std::string metric,
+                                  std::string distance_output,
                                   int refine_factor,
                                   int bbs,
                                   bool exclude_self,
@@ -1730,7 +1732,17 @@ List faiss_ivfpq_fastscan_float32_knn_impl(SEXP data,
   refine_factor = std::max(1, refine_factor);
   bbs = adjust_fastscan_bbs(bbs);
 
-  std::unique_ptr<faiss::Index> quantizer(new faiss::IndexFlatL2(n_features));
+  faiss::MetricType faiss_metric = faiss::METRIC_L2;
+  std::unique_ptr<faiss::Index> quantizer;
+  if (metric == "inner_product") {
+    faiss_metric = faiss::METRIC_INNER_PRODUCT;
+    quantizer.reset(new faiss::IndexFlatIP(n_features));
+  } else if (metric == "euclidean") {
+    quantizer.reset(new faiss::IndexFlatL2(n_features));
+  } else {
+    Rcpp::stop("FAISS IVFPQ FastScan float32 supports metric = 'euclidean' or 'inner_product'");
+  }
+  const DistanceOutput output = parse_distance_output(distance_output, "IVFPQ FastScan");
   std::unique_ptr<faiss::IndexIVFPQFastScan> base(
     new faiss::IndexIVFPQFastScan(
       quantizer.get(),
@@ -1738,14 +1750,15 @@ List faiss_ivfpq_fastscan_float32_knn_impl(SEXP data,
       nlist,
       pq_m,
       4,
-      faiss::METRIC_L2,
+      faiss_metric,
       bbs
     )
   );
   base->nprobe = nprobe;
 
   std::unique_ptr<faiss::Index> index;
-  const char* index_type = "IndexIVFPQFastScan";
+  const char* index_type = metric == "inner_product" ?
+    "IndexIVFPQFastScanIP" : "IndexIVFPQFastScan";
   if (refine_factor > 1) {
     faiss::IndexIVFPQFastScan* base_ptr = base.release();
     std::unique_ptr<faiss::IndexRefineFlat> refine(
@@ -1754,7 +1767,8 @@ List faiss_ivfpq_fastscan_float32_knn_impl(SEXP data,
     refine->own_fields = true;
     refine->k_factor = static_cast<float>(refine_factor);
     index = std::move(refine);
-    index_type = "IndexIVFPQFastScanRefineFlat";
+    index_type = metric == "inner_product" ?
+      "IndexIVFPQFastScanIPRefineFlat" : "IndexIVFPQFastScanRefineFlat";
   } else {
     index = std::move(base);
   }
@@ -1763,7 +1777,7 @@ List faiss_ivfpq_fastscan_float32_knn_impl(SEXP data,
     *index, data, points, k, exclude_self, n_threads,
     index_type,
     false,
-    DistanceOutput::L2Squared,
+    output,
     distance_storage,
     nlist,
     nprobe
@@ -1790,6 +1804,8 @@ List faiss_ivfpq_fastscan_float32_knn_impl(SEXP data,
   (void)nlist;
   (void)nprobe;
   (void)pq_m;
+  (void)metric;
+  (void)distance_output;
   (void)refine_factor;
   (void)bbs;
   (void)exclude_self;
@@ -2156,16 +2172,24 @@ SEXP faiss_index_build_float32_impl(SEXP data,
       index = std::move(ivfpq);
     } else if (kind == "ivfpq_fastscan") {
 #ifdef FAISSR_HAS_FAISS_FASTSCAN
-      if (metric != "euclidean") {
-        Rcpp::stop("FAISS fitted IVFPQ FastScan supports metric = 'euclidean' only");
-      }
       nlist = std::max(1, std::min(nlist, n_data));
       nprobe = std::max(1, std::min(nprobe, nlist));
       pq_m = adjust_fastscan_pq_m(pq_m, n_features);
       pq_nbits = 4;
       refine_factor = std::max(1, refine_factor);
       bbs = adjust_fastscan_bbs(bbs);
-      faiss::Index* quantizer = new faiss::IndexFlatL2(n_features);
+      faiss::MetricType faiss_metric = faiss::METRIC_L2;
+      faiss::Index* quantizer = nullptr;
+      if (metric == "inner_product") {
+        faiss_metric = faiss::METRIC_INNER_PRODUCT;
+        quantizer = new faiss::IndexFlatIP(n_features);
+        index_type = "IndexIVFPQFastScanIPExternalPtr";
+      } else if (metric == "euclidean") {
+        quantizer = new faiss::IndexFlatL2(n_features);
+        index_type = "IndexIVFPQFastScanExternalPtr";
+      } else {
+        Rcpp::stop("FAISS fitted IVFPQ FastScan supports metric = 'euclidean' or 'inner_product'");
+      }
       std::unique_ptr<faiss::IndexIVFPQFastScan> base(
         new faiss::IndexIVFPQFastScan(
           quantizer,
@@ -2173,7 +2197,7 @@ SEXP faiss_index_build_float32_impl(SEXP data,
           nlist,
           pq_m,
           4,
-          faiss::METRIC_L2,
+          faiss_metric,
           bbs
         )
       );
@@ -2186,10 +2210,10 @@ SEXP faiss_index_build_float32_impl(SEXP data,
         );
         refine->own_fields = true;
         refine->k_factor = static_cast<float>(refine_factor);
-        index_type = "IndexIVFPQFastScanRefineFlatExternalPtr";
+        index_type = metric == "inner_product" ?
+          "IndexIVFPQFastScanIPRefineFlatExternalPtr" : "IndexIVFPQFastScanRefineFlatExternalPtr";
         index = std::move(refine);
       } else {
-        index_type = "IndexIVFPQFastScanExternalPtr";
         index = std::move(base);
       }
 #else

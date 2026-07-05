@@ -55,8 +55,11 @@ export R_BIN="${R_BIN:-Rscript}"
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
 export K_VALUES="${K_VALUES:-15,30,50,100}"
+export METRICS="${METRICS:-euclidean,cosine,correlation,inner_product}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
+export SKIP_PREVIOUS_TIMEOUTS="${SKIP_PREVIOUS_TIMEOUTS:-TRUE}"
+export SKIP_TIMEOUTS_FROM="${SKIP_TIMEOUTS_FROM:-${SCRIPT_DIR}/previous_tuning_timeouts.csv}"
 export IVFPQ_FASTSCAN_NLIST_MULTS="${IVFPQ_FASTSCAN_NLIST_MULTS:-}"
 export IVFPQ_FASTSCAN_NPROBE_MULTS="${IVFPQ_FASTSCAN_NPROBE_MULTS:-}"
 export IVFPQ_FASTSCAN_PQ_DIMS="${IVFPQ_FASTSCAN_PQ_DIMS:-}"
@@ -119,6 +122,9 @@ fi
   echo "CUVS_IVF_BATCH_SIZES=${CUVS_IVF_BATCH_SIZES}"
   echo "QUALITY_N=${QUALITY_N}"
   echo "SEED=${SEED}"
+  echo "METRICS=${METRICS}"
+  echo "SKIP_PREVIOUS_TIMEOUTS=${SKIP_PREVIOUS_TIMEOUTS}"
+  echo "SKIP_TIMEOUTS_FROM=${SKIP_TIMEOUTS_FROM}"
   echo "[$(date --iso-8601=seconds)] building float32 manifest"
   "${RUNNER[@]}" "${R_BIN}" "${MANIFEST_SCRIPT}"     --data_root="${DATA_ROOT}"     --out="${MANIFEST}"     --datasets="${DATASETS}"
 
@@ -129,7 +135,7 @@ fi
     --datasets="${DATASETS}"
     --backend="${BACKEND}"
     --k_values="${K_VALUES}"
-    --target_recalls="${TARGET_RECALLS}"
+    --target_recalls="${TARGET_RECALLS}"     --metrics="${METRICS}"
     --threads="${THREADS_CPU}"
     --thread_values="${THREAD_VALUES}"
     --timeout="${TIMEOUT}"
@@ -137,7 +143,7 @@ fi
     --seed="${SEED}"
     --output_values="${OUTPUT_VALUES}"
     --grid_level="${GRID_LEVEL}"
-    --resume=TRUE
+    --resume=TRUE     --skip_previous_timeouts="${SKIP_PREVIOUS_TIMEOUTS}"     --skip_timeouts_from="${SKIP_TIMEOUTS_FROM}"
   )
   [[ -n "${IVFPQ_FASTSCAN_NLIST_MULTS}" ]] && BENCH_ARGS+=(--ivfpq_fastscan_nlist_multipliers="${IVFPQ_FASTSCAN_NLIST_MULTS}")
   [[ -n "${IVFPQ_FASTSCAN_NPROBE_MULTS}" ]] && BENCH_ARGS+=(--ivfpq_fastscan_nprobe_multipliers="${IVFPQ_FASTSCAN_NPROBE_MULTS}")

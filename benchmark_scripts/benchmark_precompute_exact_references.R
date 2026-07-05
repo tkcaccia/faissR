@@ -24,6 +24,39 @@ split_arg <- function(value, default) {
   out[nzchar(out)]
 }
 
+normalize_metric_arg <- function(value) {
+  key <- tolower(trimws(as.character(value %||% "euclidean")[[1L]]))
+  key <- gsub("[[:space:]-]+", "_", key)
+  aliases <- c(
+    euclidean = "euclidean",
+    l2 = "euclidean",
+    cosine = "cosine",
+    cos = "cosine",
+    correlation = "correlation",
+    correlations = "correlation",
+    cor = "correlation",
+    pearson = "correlation",
+    inner_product = "inner_product",
+    inner_produce = "inner_product",
+    innerproduct = "inner_product",
+    ip = "inner_product",
+    dot = "inner_product",
+    dot_product = "inner_product",
+    dotproduct = "inner_product"
+  )
+  if (!key %in% names(aliases)) {
+    stop(
+      "`metrics` must contain only euclidean, cosine, correlation, or inner_product.",
+      call. = FALSE
+    )
+  }
+  unname(aliases[[key]])
+}
+
+metric_values_arg <- function(value) {
+  unique(vapply(split_arg(value, "euclidean"), normalize_metric_arg, character(1L)))
+}
+
 logical_arg <- function(value, default = FALSE) {
   if (is.null(value) || length(value) == 0L || is.na(value[[1L]])) return(isTRUE(default))
   key <- tolower(trimws(as.character(value[[1L]])))
@@ -138,10 +171,14 @@ dataset_path_column <- function(manifest) {
   candidates[[1L]]
 }
 
-reference_file <- function(dataset_path, k, quality_n, seed) {
+reference_file <- function(dataset_path, k, quality_n, seed, metric = "euclidean") {
+  metric <- normalize_metric_arg(metric)
   file.path(
     dirname(dataset_path),
-    sprintf("faissR_exact_reference_euclidean_k%d_q%d_seed%d.RData", as.integer(k), as.integer(quality_n), as.integer(seed))
+    sprintf(
+      "faissR_exact_reference_%s_k%d_q%d_seed%d.RData",
+      metric, as.integer(k), as.integer(quality_n), as.integer(seed)
+    )
   )
 }
 
@@ -192,7 +229,7 @@ reference_methods_arg <- function(value) {
   unique(methods)
 }
 
-compute_reference_nn <- function(x, rows, k, threads, methods) {
+compute_reference_nn <- function(x, rows, k, threads, methods, metric) {
   errors <- character()
   for (method in methods) {
     result <- tryCatch(
@@ -203,7 +240,7 @@ compute_reference_nn <- function(x, rows, k, threads, methods) {
         exclude_self = FALSE,
         backend = "cpu",
         method = method,
-        metric = "euclidean",
+        metric = metric,
         output = "double",
         n_threads = threads
       ),
@@ -240,7 +277,8 @@ compute_reference <- function(config) {
     rows = rows,
     k = min(reference_k + 1L, n),
     threads = config$threads,
-    methods = methods
+    methods = methods,
+    metric = config$metric
   )
   ref <- ref_run$result
   elapsed <- proc.time()[["elapsed"]] - started
@@ -250,7 +288,7 @@ compute_reference <- function(config) {
     dataset_path = config$dataset_path,
     n = as.integer(n),
     p = as.integer(p),
-    metric = "euclidean",
+    metric = config$metric,
     backend = "cpu",
     method = ref_run$method,
     exact = TRUE,
@@ -272,6 +310,7 @@ compute_reference <- function(config) {
   save(faissR_reference, file = config$output_path, compress = "xz")
   data.frame(
     dataset = config$dataset,
+    metric = config$metric,
     k = reference_k,
     status = "success",
     reference_path = config$output_path,
@@ -293,6 +332,7 @@ run_child <- function() {
     error = function(e) {
       data.frame(
         dataset = config$dataset,
+        metric = config$metric,
         k = as.integer(config$k),
         status = classify_error(conditionMessage(e)),
         reference_path = config$output_path,
@@ -323,6 +363,7 @@ run_task <- function(config, timeout, bench_script) {
   if (file.exists(out) && !identical(as.integer(exit_status), 124L)) return(readRDS(out))
   data.frame(
     dataset = config$dataset,
+    metric = config$metric,
     k = as.integer(config$k),
     status = if (identical(as.integer(exit_status), 124L)) "timeout" else classify_error(paste(status, collapse = "\n")),
     reference_path = config$output_path,
@@ -361,39 +402,44 @@ main <- function() {
   quality_n <- positive_int(args$quality_n, 256L, "quality_n")
   seed <- positive_int(args$seed, 4L, "seed")
   reference_methods <- reference_methods_arg(args$reference_methods)
+  metrics <- metric_values_arg(args$metrics %||% args$metric %||% "euclidean")
   resume <- logical_arg(args$resume, TRUE)
   bench_script <- normalizePath(script_path(), mustWork = TRUE)
 
   for (i in seq_len(nrow(manifest))) {
     ds <- manifest[i, , drop = FALSE]
     dataset_path <- ds[[path_col]][[1L]]
-    ref_path <- reference_file(dataset_path, reference_k, quality_n, seed)
-    if (isTRUE(resume) && reference_is_valid(ref_path, reference_k)) {
-      append_csv(data.frame(
-        dataset = ds$dataset[[1L]], k = as.integer(reference_k), status = "already_exists",
-        reference_path = ref_path,
-        reference_method = NA_character_, reference_backend_used = NA_character_,
-        query_n = NA_integer_, elapsed_sec = NA_real_,
-        peak_rss_gb = NA_real_, error = NA_character_, stringsAsFactors = FALSE
-      ), results_path)
-      next
-    }
-    message(sprintf(
-      "[%s] reference dataset=%s reference_k=%s requested_k_values=%s",
-      Sys.time(), ds$dataset[[1L]], reference_k, paste(k_values, collapse = ",")
-    ))
-    row <- run_task(list(
-      dataset = ds$dataset[[1L]],
-      dataset_path = dataset_path,
-      k = as.integer(reference_k),
-      requested_k_values = k_values,
-      quality_n = quality_n,
-      seed = seed,
-      threads = threads,
-      reference_methods = reference_methods,
-      output_path = ref_path
-    ), timeout, bench_script)
+    for (metric in metrics) {
+      ref_path <- reference_file(dataset_path, reference_k, quality_n, seed, metric = metric)
+      if (isTRUE(resume) && reference_is_valid(ref_path, reference_k)) {
+        append_csv(data.frame(
+          dataset = ds$dataset[[1L]], metric = metric, k = as.integer(reference_k),
+          status = "already_exists",
+          reference_path = ref_path,
+          reference_method = NA_character_, reference_backend_used = NA_character_,
+          query_n = NA_integer_, elapsed_sec = NA_real_,
+          peak_rss_gb = NA_real_, error = NA_character_, stringsAsFactors = FALSE
+        ), results_path)
+        next
+      }
+      message(sprintf(
+        "[%s] reference dataset=%s metric=%s reference_k=%s requested_k_values=%s",
+        Sys.time(), ds$dataset[[1L]], metric, reference_k, paste(k_values, collapse = ",")
+      ))
+      row <- run_task(list(
+        dataset = ds$dataset[[1L]],
+        dataset_path = dataset_path,
+        metric = metric,
+        k = as.integer(reference_k),
+        requested_k_values = k_values,
+        quality_n = quality_n,
+        seed = seed,
+        threads = threads,
+        reference_methods = reference_methods,
+        output_path = ref_path
+      ), timeout, bench_script)
       append_csv(row, results_path)
+    }
   }
   message("DONE: ", results_path)
 }

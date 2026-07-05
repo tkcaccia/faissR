@@ -14,8 +14,8 @@ set -euo pipefail
 
 # CPU-only exact-reference precompute for faissR tuning benchmarks.
 #
-# This writes one reference file into each dataset folder:
-#   faissR_exact_reference_euclidean_k<K>_q<QUALITY_N>_seed<SEED>.RData
+# This writes one reference file per metric into each dataset folder:
+#   faissR_exact_reference_<metric>_k<K>_q<QUALITY_N>_seed<SEED>.RData
 #
 # Run this once before method-specific tuning jobs.
 
@@ -39,6 +39,7 @@ export R_BIN="${R_BIN:-Rscript}"
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
 export K_VALUES="${K_VALUES:-15,30,50,100}"
+export METRICS="${METRICS:-euclidean,cosine,correlation,inner_product}"
 
 export OMP_NUM_THREADS="${THREADS_CPU}"
 export OPENBLAS_NUM_THREADS="${THREADS_CPU}"
@@ -91,11 +92,12 @@ fi
   echo "REF_SCRIPT=${REF_SCRIPT}"
   echo "QUALITY_N=${QUALITY_N}"
   echo "SEED=${SEED}"
+  echo "METRICS=${METRICS}"
   echo "[$(date --iso-8601=seconds)] building float32 manifest"
   "${RUNNER[@]}" "${R_BIN}" "${MANIFEST_SCRIPT}"     --data_root="${DATA_ROOT}"     --out="${MANIFEST}"     --datasets="${DATASETS}"
 
   echo "[$(date --iso-8601=seconds)] precomputing exact CPU references"
-  "${RUNNER[@]}" "${R_BIN}" "${REF_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --k_values="${K_VALUES}"     --threads="${THREADS_CPU}"     --timeout="${REFERENCE_TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --resume=TRUE
+  "${RUNNER[@]}" "${R_BIN}" "${REF_SCRIPT}"     --manifest="${MANIFEST}"     --out_dir="${OUT_DIR}"     --datasets="${DATASETS}"     --k_values="${K_VALUES}"     --metrics="${METRICS}"     --threads="${THREADS_CPU}"     --timeout="${REFERENCE_TIMEOUT}"     --quality_n="${QUALITY_N}"     --seed="${SEED}"     --resume=TRUE
 
   echo "DONE: ${OUT_DIR}"
 } 2>&1 | tee -a "${OUT_DIR}/exact_reference_precompute_cpu12.log"

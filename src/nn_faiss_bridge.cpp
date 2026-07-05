@@ -102,6 +102,8 @@ List faiss_ivfpq_fastscan_float32_knn_impl(SEXP data,
                                   int nlist,
                                   int nprobe,
                                   int pq_m,
+                                  std::string metric,
+                                  std::string distance_output,
                                   int refine_factor,
                                   int bbs,
                                   bool exclude_self,
@@ -586,14 +588,16 @@ List nn_faiss_ivfpq_fastscan_float32_cpp(SEXP data,
                                 int nlist,
                                 int nprobe,
                                 int pq_m,
+                                std::string metric,
+                                std::string distance_output,
                                 int refine_factor,
                                 int bbs,
                                 bool exclude_self,
                                 int n_threads,
                                 std::string distance_storage) {
   return faiss_ivfpq_fastscan_float32_knn_impl(
-    data, points, k, nlist, nprobe, pq_m, refine_factor, bbs, exclude_self,
-    n_threads, distance_storage
+    data, points, k, nlist, nprobe, pq_m, metric, distance_output,
+    refine_factor, bbs, exclude_self, n_threads, distance_storage
   );
 }
 

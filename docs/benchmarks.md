@@ -98,6 +98,215 @@ degree/search width, NN-descent candidate breadth, and NSG/Vamana pruning
 settings. See [Autotuning](autotuning.md) for the full explanation of how these
 tables are converted into deterministic package defaults.
 
+Uploaded Euclidean tuning results are consolidated into two review artifacts:
+`benchmark_scripts/euclidean_tuning_settings_from_uploaded_results.csv` keeps
+dataset-level fastest settings, while
+`benchmark_scripts/euclidean_shape_tuning_defaults_from_uploaded_results.csv`
+aggregates those settings by method, backend, dataset shape, `k`, and target
+recall. The package embeds the shape-level approximate-method defaults in
+`src/nn_hpc_tuning_tables.hpp` so `tuning = "auto"` can choose deterministic
+C++ parameters without running a pilot benchmark during ordinary `nn()` calls.
+Exact, Flat, and brute-force rows remain in the tuning artifacts for provider,
+thread, batch, float32, and reuse decisions, but they do not need approximate
+recall-target parameters.
+Metric-specific artifacts extend the same process when enough data are
+available. For example,
+`benchmark_scripts/correlation_hnsw_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes the CPU12 correlation HNSW sweep and feeds the compiled correlation
+HNSW `tuning = "auto"` table. Correlation HNSW uses centered and normalized
+vectors before FAISS HNSW search, so its best `M`, `efConstruction`, and
+`efSearch` values are stored separately from Euclidean and cosine. The
+small-n/k=15/0.99 row is marked below target because the best concrete manual
+candidate did not reach 0.99 minimum recall across all small-n datasets.
+For HNSW raw inner-product search,
+`benchmark_scripts/inner_product_hnsw_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes the CPU12 FAISS HNSW IP sweep from
+`faissR_HNSW_TUNING_CPU12_inner_product_20260701_090337`. The table stores
+`M`, `efConstruction`, and `efSearch` by shape group, `k` bucket, and target
+recall. Several raw inner-product HNSW rows, especially large-shape and 0.99
+targets, are marked `best_recall_below_target`; those rows are still exposed
+as the best tested defaults, but result metadata reports
+`tuning_benchmark_target_met = FALSE`.
+For IVF correlation search,
+`benchmark_scripts/correlation_ivf_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes the CPU12 correlation IVF sweep and feeds the compiled correlation
+IVF `tuning = "auto"` table. The table stores `nlist` and `nprobe` by shape
+group, `k` bucket, and target recall. Rows with ImageNet missing successful
+CPU IVF correlation candidates or with small-n shape-scaled candidates are
+kept as `best_available_partial_shape_datasets`, so result metadata reports
+`tuning_benchmark_target_met = FALSE` for those partial rows.
+For IVF raw inner-product search,
+`benchmark_scripts/inner_product_ivf_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes the CPU12 FAISS IVF IP sweep from
+`faissR_IVF_TUNING_CPU12_inner_product_20260701_090337`. The table stores
+`nlist` and `nprobe` by shape group, `k` bucket, and target recall. Rows with
+ImageNet missing successful CPU IVF IP candidates, small-n partial coverage, or
+large low-dimensional candidates below the requested recall are still exposed as
+the best tested defaults, but result metadata reports
+`tuning_benchmark_target_met = FALSE`.
+For IVFPQ raw inner-product search,
+`benchmark_scripts/inner_product_ivfpq_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes the CPU12 FAISS IVFPQ IP sweep from
+`faissR_IVFPQ_TUNING_CPU12_inner_product_20260701_090337`. The table stores
+`nlist`, `nprobe`, `pq_m`, and `pq_nbits` by shape group, `k` bucket, and target
+recall. Because product quantization frequently did not reach the requested
+raw-inner-product recall target in the uploaded sweep, many rows are deliberately
+marked `target_not_reached_best_available` or
+`best_available_partial_shape_datasets`; result metadata reports
+`tuning_benchmark_target_met = FALSE` for those rows.
+For IVFPQ FastScan raw inner-product search,
+`benchmark_scripts/inner_product_ivfpq_fastscan_shape_tuning_defaults_from_uploaded_results.csv`
+currently stores seeded CPU defaults from the validated Euclidean FastScan
+shape/k/target table. The uploaded
+`faissR_IVFPQ_FASTSCAN_TUNING_CPU12_inner_product_20260701_090337` run failed
+before backend execution because the old package rejected CPU FastScan raw
+inner product. After that guard was removed and FastScan IP was wired through
+FAISS, the seeded rows deliberately report `tuning_benchmark_target_met = FALSE`
+until the corrected CPU12 inner-product sweep is rerun.
+`benchmark_scripts/cosine_nndescent_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes the CPU12 cosine NN-descent sweep and feeds the compiled cosine
+NN-descent `tuning = "auto"` table. This matters because cosine search is
+implemented through normalized Euclidean NN-descent, but the best candidate
+pool and iteration settings can differ from raw Euclidean search.
+`benchmark_scripts/correlation_nndescent_shape_tuning_defaults_from_uploaded_results.csv`
+does the same for the CPU12 correlation NN-descent sweep, where rows are
+centered and normalized before Euclidean graph search but keep a
+correlation-specific tuning table.
+`benchmark_scripts/inner_product_nndescent_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes the CPU12 raw inner-product NN-descent sweep from
+`faissR_NNDESCENT_TUNING_CPU12_inner_product_20260701_090337`. The compiled
+auto selector uses these rows for `backend = "cpu"`, `method = "nndescent"`,
+and `metric = "inner_product"`, selecting candidate pool size, iteration count,
+candidate breadth, and random-projection count by shape, `k`, and target
+recall. Rows that did not reach the requested target across every dataset in a
+shape are preserved as best-available rows and report
+`tuning_benchmark_target_met = FALSE`.
+Likewise, `benchmark_scripts/cosine_nsg_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes the CPU12 cosine NSG sweep and feeds the compiled cosine NSG
+`tuning = "auto"` table; large-low-dimensional rows are marked as partial
+coverage when FlowRepository did not complete trusted rows.
+`benchmark_scripts/correlation_nsg_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes the CPU12 correlation NSG sweep in the same way; correlation rows
+are centered and normalized before Euclidean NSG refinement and keep their own
+shape/k/target table.
+`benchmark_scripts/inner_product_nsg_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes the CPU12 raw inner-product NSG sweep from
+`faissR_NSG_TUNING_CPU12_inner_product_20260701_090337`. These rows now feed
+the compiled CPU NSG `tuning = "auto"` table for `metric = "inner_product"`.
+Rows marked `best_available_all_shape_datasets` or
+`best_available_partial_shape_datasets` are exposed as best-available settings
+and report `tuning_benchmark_target_met = FALSE` rather than claiming that the
+target recall was verified.
+The same pattern is used for
+`benchmark_scripts/cosine_vamana_shape_tuning_defaults_from_uploaded_results.csv`,
+which summarizes CPU12 cosine Vamana `r`, `search_l`, and `alpha` settings for
+the compiled Vamana `tuning = "auto"` table.
+`benchmark_scripts/correlation_vamana_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes the CPU12 correlation Vamana sweep in the same way; correlation rows
+are centered and normalized before Euclidean Vamana refinement and keep their
+own shape/k/target table.
+`benchmark_scripts/inner_product_vamana_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes the CPU12 raw inner-product Vamana sweep from
+`faissR_VAMANA_TUNING_CPU12_inner_product_20260701_090337`. These rows feed
+the compiled CPU Vamana `tuning = "auto"` table for
+`metric = "inner_product"`. Rows marked `best_available_all_shape_datasets`
+or `best_available_partial_shape_datasets` report
+`tuning_benchmark_target_met = FALSE`, because they are exposed as
+best-available settings rather than verified target-recall hits.
+For exact correlation search,
+`benchmark_scripts/correlation_exact_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes CPU12 FAISS Flat correlation query-batch and fitted-index reuse
+settings from `faissR_EXACT_TUNING_CPU12_correlation_20260701_090337`. Exact
+correlation has recall 1 by construction, so these rows tune memory/layout and
+batching rather than approximation parameters; partial shape coverage and the
+small-n/k=15/0.99 below-target validation row are preserved in metadata.
+For exact raw inner-product search,
+`benchmark_scripts/inner_product_exact_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes CPU12 FAISS Flat IP query-batch and fitted-index reuse settings from
+`faissR_EXACT_TUNING_CPU12_inner_product_20260630_161530`. Exact inner product
+also has recall 1 by construction, so the compiled rows tune execution metadata
+only; large high-dimensional and large low-dimensional rows preserve partial
+shape coverage where one dataset did not complete trusted rows.
+For Flat correlation search,
+`benchmark_scripts/correlation_flat_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes CPU12 FAISS Flat correlation query-batch and fitted-index reuse
+settings from `faissR_FLAT_TUNING_CPU12_correlation_20260701_090337`. The
+shape-level rows are selected from successful raw candidates across the covered
+datasets in each shape group; partial coverage and the small-n/k=15/0.99
+below-target validation row are preserved in metadata.
+For Flat raw inner-product search,
+`benchmark_scripts/inner_product_flat_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes CPU12 FAISS Flat IP query-batch and fitted-index reuse settings from
+`faissR_FLAT_TUNING_CPU12_inner_product_20260630_161530`. Flat inner product is
+exact by construction, so these rows tune execution metadata only; large
+high-dimensional and large low-dimensional rows preserve partial shape coverage
+where one dataset did not complete trusted rows.
+For bruteforce correlation search,
+`benchmark_scripts/correlation_bruteforce_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes CPU12 FAISS Flat correlation query-batch and fitted-index reuse
+settings from `faissR_BRUTEFORCE_TUNING_CPU12_correlation_20260701_090337`.
+As with exact and Flat correlation, the search is exact by construction and
+the tuning rows control batch/cache behavior; partial shape coverage and the
+small-n/k=15/0.99 below-target validation row are preserved in metadata.
+For bruteforce raw inner-product search,
+`benchmark_scripts/inner_product_bruteforce_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes CPU12 FAISS Flat IP query-batch and fitted-index reuse settings from
+`faissR_BRUTEFORCE_TUNING_CPU12_inner_product_20260630_161530`. The search is
+also exact by construction; large high-dimensional and large low-dimensional
+rows keep their partial-coverage labels because not every large dataset
+completed trusted rows in the uploaded run.
+
+The base method-tuning launchers can rerun the refined grids across all public
+metrics. Set `METRICS` if you want a subset; otherwise the default is
+`euclidean,cosine,correlation,inner_product`. For HPC submission, prefer the
+metric-specific wrapper files when you want independent jobs and log/output
+directories for each metric. The wrapper naming pattern is:
+
+```bash
+benchmark_scripts/run_hpc_<method>_tuning_<cpu12-or-cuda>_<metric>.sh
+```
+
+For example:
+
+```bash
+benchmark_scripts/run_hpc_bruteforce_tuning_cpu12_euclidean.sh
+benchmark_scripts/run_hpc_bruteforce_tuning_cpu12_cosine.sh
+benchmark_scripts/run_hpc_bruteforce_tuning_cpu12_correlation.sh
+benchmark_scripts/run_hpc_bruteforce_tuning_cpu12_inner_product.sh
+benchmark_scripts/run_hpc_bruteforce_tuning_cuda_euclidean.sh
+benchmark_scripts/run_hpc_bruteforce_tuning_cuda_cosine.sh
+benchmark_scripts/run_hpc_bruteforce_tuning_cuda_correlation.sh
+benchmark_scripts/run_hpc_bruteforce_tuning_cuda_inner_product.sh
+```
+
+Each wrapper has its own Slurm header, exports exactly one `METRICS` value, and
+sets a metric-specific default `OUT_DIR` before executing the tested base
+launcher. Because Slurm runs submitted scripts from a spool copy, the wrappers
+resolve the base launcher from `SCRIPT_DIR`, then
+`SLURM_SUBMIT_DIR/benchmark_scripts`, then `BASE_DIR/benchmark_scripts`, before
+falling back to their own directory. When submitting from `/scratch/firenze/NN`,
+this makes a wrapper such as
+`run_hpc_bruteforce_tuning_cpu12_inner_product.sh` execute
+`/scratch/firenze/NN/benchmark_scripts/run_hpc_bruteforce_tuning_cpu12.sh`.
+NN-descent has CPU metric wrappers only in this tuning cycle; CAGRA has CUDA
+metric wrappers only. The exact-reference job also has one wrapper per metric,
+for example
+`run_hpc_precompute_exact_references_cpu12_euclidean.sh`.
+
+Exact references are metric specific and are saved in each dataset folder as
+`faissR_exact_reference_<metric>_k<K>_q<QUALITY_N>_seed<SEED>.RData`.
+The command-line parser also accepts `inner_produce` as a compatibility typo
+and records it as canonical `inner_product`.
+The file `benchmark_scripts/euclidean_tuning_settings_from_uploaded_results.csv`
+collects the fastest Euclidean settings from the uploaded tuning results, and
+`benchmark_scripts/previous_tuning_timeouts.csv` prevents the all-metric rerun
+from repeating candidate/dataset/k combinations that already timed out in the
+Euclidean sweeps. To disable that guard for a diagnostic rerun, submit with
+`SKIP_PREVIOUS_TIMEOUTS=FALSE`.
+For this tuning cycle, NN-descent is treated as a CPU-only method; the legacy
+CUDA NN-descent launcher exits unless explicitly submitted with
+`ALLOW_CUDA_NNDESCENT_TUNING=TRUE`.
+
 ## Benchmark #1
 
 `benchmark_scripts/benchmark1_nn_speed.R` is the broad nearest-neighbour speed
@@ -200,6 +409,14 @@ the same reason. Direct cuVS IVF-PQ follows the same small-training 4-bit rule
 below 9,984 rows when the direct cuVS route is benchmarked. FAISS GPU IVFPQ is
 kept as the explicit FAISS GPU implementation and may still train 8-bit
 codebooks on compact datasets because that FAISS GPU index requires 8-bit PQ.
+CPU IVFPQ correlation rows are promoted from
+`faissR_IVFPQ_TUNING_CPU12_correlation_20260701_090337` into
+`benchmark_scripts/correlation_ivfpq_shape_tuning_defaults_from_uploaded_results.csv`.
+Those rows tune `nlist`, `nprobe`, `pq_m`, and `pq_nbits` by shape, `k`, and
+target recall. Because product quantization can reduce recall substantially,
+rows that did not reach the requested target are labelled
+`target_not_reached_best_available_*` and return
+`tuning_benchmark_target_met = FALSE`.
 Unsupported method/backend/metric combinations are preflighted with
 `nn_capabilities()` and the public backend resolver, then written as expected
 skips. Runtime expected skips also record when a resolved route requires

@@ -22,7 +22,7 @@ set -euo pipefail
 #   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_ivfpq_fastscan_tuning_cpu12.sh
 #
 # The job scans float32 .RData files, uses explicit backend="cpu",
-# method="ivfpq_fastscan", Euclidean distance, k=15,30,50,100, and writes
+# method="ivfpq_fastscan", the metrics listed in METRICS, k=15,30,50,100, and writes
 # recommendation tables for target recall 0.90, 0.95, and 0.99.
 # It sweeps IVF `nlist`, IVF `nprobe`, FAISS FastScan `pq_m`, refinement,
 # and FastScan block size. By default, the R benchmark uses a curated paired
@@ -58,8 +58,11 @@ export R_BIN="${R_BIN:-Rscript}"
 
 export DATASETS="${DATASETS:-COIL20,USPS,FashionMNIST,FlowRepository_FR-FCM-ZYRM_files,flow18,MNIST,imagenet,MetRef,mass41,TabulaMuris}"
 export K_VALUES="${K_VALUES:-15,30,50,100}"
+export METRICS="${METRICS:-euclidean,cosine,correlation,inner_product}"
 export TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
 export OUTPUT_VALUES="${OUTPUT_VALUES:-float}"
+export SKIP_PREVIOUS_TIMEOUTS="${SKIP_PREVIOUS_TIMEOUTS:-TRUE}"
+export SKIP_TIMEOUTS_FROM="${SKIP_TIMEOUTS_FROM:-${SCRIPT_DIR}/previous_tuning_timeouts.csv}"
 
 export OMP_NUM_THREADS="${THREADS_CPU}"
 export OPENBLAS_NUM_THREADS="${THREADS_CPU}"
@@ -114,6 +117,9 @@ fi
   echo "BACKEND=${BACKEND}"
   echo "QUALITY_N=${QUALITY_N}"
   echo "SEED=${SEED}"
+  echo "METRICS=${METRICS}"
+  echo "SKIP_PREVIOUS_TIMEOUTS=${SKIP_PREVIOUS_TIMEOUTS}"
+  echo "SKIP_TIMEOUTS_FROM=${SKIP_TIMEOUTS_FROM}"
   echo "IVFPQ_FASTSCAN_REFINE_FACTORS=${IVFPQ_FASTSCAN_REFINE_FACTORS}"
   echo "IVFPQ_FASTSCAN_NLIST_MULTS=${IVFPQ_FASTSCAN_NLIST_MULTS}"
   echo "IVFPQ_FASTSCAN_NPROBE_MULTS=${IVFPQ_FASTSCAN_NPROBE_MULTS}"
@@ -129,7 +135,7 @@ fi
     --datasets="${DATASETS}"
     --backend="${BACKEND}"
     --k_values="${K_VALUES}"
-    --target_recalls="${TARGET_RECALLS}"
+    --target_recalls="${TARGET_RECALLS}"     --metrics="${METRICS}"
     --threads="${THREADS_CPU}"
     --thread_values="${THREAD_VALUES}"
     --timeout="${TIMEOUT}"
@@ -137,7 +143,7 @@ fi
     --seed="${SEED}"
     --output_values="${OUTPUT_VALUES}"
     --grid_level="${GRID_LEVEL}"
-    --resume=TRUE
+    --resume=TRUE     --skip_previous_timeouts="${SKIP_PREVIOUS_TIMEOUTS}"     --skip_timeouts_from="${SKIP_TIMEOUTS_FROM}"
   )
   [[ -n "${IVFPQ_FASTSCAN_REFINE_FACTORS}" ]] && BENCH_ARGS+=(--ivfpq_fastscan_refine_factors="${IVFPQ_FASTSCAN_REFINE_FACTORS}")
   [[ -n "${IVFPQ_FASTSCAN_NLIST_MULTS}" ]] && BENCH_ARGS+=(--ivfpq_fastscan_nlist_multipliers="${IVFPQ_FASTSCAN_NLIST_MULTS}")

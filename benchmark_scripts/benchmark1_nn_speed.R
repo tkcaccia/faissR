@@ -96,8 +96,8 @@ benchmark1_metric_value <- function(metric = NULL, arg_name = "metric") {
   }
   value <- tolower(trimws(raw))
   if (value %in% c("euclidean", "l2")) return("l2")
-  if (value %in% c("ip", "innerproduct", "inner_product")) return("inner_product")
-  if (value %in% c("cor", "pearson")) return("correlation")
+  if (value %in% c("ip", "innerproduct", "inner_product", "inner_produce")) return("inner_product")
+  if (value %in% c("cor", "pearson", "correlations")) return("correlation")
   if (value %in% c("cosine", "correlation")) return(value)
   stop(
     "`", arg_name, "` must be one of: l2, cosine, correlation, inner_product. ",
