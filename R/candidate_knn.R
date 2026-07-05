@@ -17,9 +17,9 @@
 #'   `"cuda"` for the native CUDA row-candidate kernel. GPU backends currently
 #'   require self-query candidates with `exclude_self = TRUE`.
 #' @param metric `"euclidean"`, `"cosine"`, `"correlation"`, or
-#'   `"inner_product"`. Aliases such as `"l2"`, `"cor"`/`"pearson"`, and
-#'   `"ip"` are accepted. Correlation is centered cosine similarity, not raw
-#'   inner product. CPU inner-product scoring ranks by larger raw dot product,
+#'   `"inner_product"`. Legacy metric aliases such as `"l2"`, `"cor"`,
+#'   `"pearson"`, and `"ip"` are rejected. Correlation is centered cosine
+#'   similarity, not raw inner product. CPU inner-product scoring ranks by larger raw dot product,
 #'   while returned `distances` are shifted within each query so the best
 #'   returned dot product has distance `0`. CUDA candidate scoring supports
 #'   Euclidean directly, cosine/correlation through normalized Euclidean

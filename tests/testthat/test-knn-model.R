@@ -366,7 +366,7 @@ test_that("knn supports regression", {
   expect_error(predict(fit, x, type = "prob"), "classification")
 })
 
-test_that("knn stores canonical metric labels for aliases", {
+test_that("knn stores canonical metric labels and rejects legacy metric aliases", {
   x <- matrix(c(
     1, 0,
     0, 1,
@@ -375,11 +375,12 @@ test_that("knn stores canonical metric labels for aliases", {
   ), ncol = 2, byrow = TRUE)
   y <- factor(c("a", "b", "a", "b"))
 
-  fit <- knn(x, y, backend = "cpu", metric = "ip", k = 2L)
+  fit <- knn(x, y, backend = "cpu", metric = "inner_product", k = 2L)
   pred <- predict(fit, x[1:2, , drop = FALSE])
 
   expect_equal(fit$metric, "inner_product")
   expect_s3_class(pred, "factor")
+  expect_error(knn(x, y, backend = "cpu", metric = "ip", k = 2L), "metric")
 })
 
 test_that("knn validates method and tuning before returning a model", {

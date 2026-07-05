@@ -21,11 +21,12 @@
 #'   `nn()` and `knn()`. If both `method` and `nn_method` are supplied they must
 #'   resolve to the same public method label.
 #' @param metric Distance metric passed to \code{\link{nn}()} with
-#'   `exclude_self = TRUE` when `knn` is not supplied. Aliases such as `"l2"`,
-#'   `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as canonical
-#'   metric labels. Correlation is centered cosine similarity, not raw inner
-#'   product. Inner-product graph construction ranks neighbours by larger raw
-#'   dot product while reusing faissR's shifted smaller-is-better distance
+#'   `exclude_self = TRUE` when `knn` is not supplied: `"euclidean"`,
+#'   `"cosine"`, `"correlation"`, or `"inner_product"`. Legacy metric aliases
+#'   such as `"l2"`, `"cor"`, `"pearson"`, and `"ip"` are rejected.
+#'   Correlation is centered cosine similarity, not raw inner product.
+#'   Inner-product graph construction ranks neighbours by larger raw dot
+#'   product while reusing faissR's shifted smaller-is-better distance
 #'   convention from \code{\link{nn}()}.
 #' @param tuning Tuning policy passed to \code{\link{nn}()} with
 #'   `exclude_self = TRUE` when `knn` is not supplied.
@@ -283,10 +284,10 @@ graph_cluster_backend_selection <- function(backend,
 #'   \code{\link{nn}()} with `exclude_self = TRUE` when `graph` is a matrix or
 #'   embedding.
 #' @param metric Distance metric passed to \code{\link{nn}()} with
-#'   `exclude_self = TRUE` when `graph` is a matrix or embedding. Aliases such
-#'   as `"l2"`,
-#'   `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as canonical
-#'   metric labels. Correlation is centered cosine similarity, not raw inner
+#'   `exclude_self = TRUE` when `graph` is a matrix or embedding:
+#'   `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`.
+#'   Legacy metric aliases such as `"l2"`, `"cor"`, `"pearson"`, and `"ip"`
+#'   are rejected. Correlation is centered cosine similarity, not raw inner
 #'   product. Inner-product graph construction ranks neighbours by larger raw
 #'   dot product while reusing faissR's shifted smaller-is-better distance
 #'   convention from \code{\link{nn}()}.

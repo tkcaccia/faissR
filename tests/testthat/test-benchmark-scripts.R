@@ -49,8 +49,12 @@ test_that("NN metric benchmark defaults cover full method metric backend and k g
   expect_null(env$nn_k_values_arg(list()))
   expect_equal(env$default_nn_cycles(), 10L)
   expect_equal(
-    env$validate_metric_values(c("l2", "pearson", "ip", "dot-product")),
+    env$validate_metric_values(c("euclidean", "correlation", "inner_product")),
     c("euclidean", "correlation", "inner_product")
+  )
+  expect_error(
+    env$validate_metric_values(c("l2", "pearson", "ip", "dot-product")),
+    "Invalid value"
   )
   expect_error(
     env$validate_metric_values("manhattan"),
@@ -803,20 +807,17 @@ test_that("NN metric best rows use threshold-aware speed and recall rules", {
   expect_equal(best_cycle$method, c("fast_good", "higher_recall_slow", "fast_missing_recall", "cycle1_fast_good", "cycle2_fast_good"))
 })
 
-test_that("NN metric benchmark canonicalizes metric aliases before preflight", {
+test_that("NN metric benchmark rejects legacy metric aliases before preflight", {
   env <- source_benchmark_helpers(
     test_path("../../benchmark_scripts/benchmark_nn_metrics.R"),
     "args <- parse_args()"
   )
   caps <- nn_capabilities()
 
-  expect_equal(
-    env$canonical_metric_values(c("l2", "pearson", "ip", "dot-product", "unknown")),
-    c("euclidean", "correlation", "inner_product")
-  )
-  expect_equal(
+  expect_equal(env$canonical_metric_values(c("l2", "pearson", "ip", "dot-product", "unknown")), character())
+  expect_error(
     env$validate_metric_values(c("l2", "pearson", "ip", "dot-product")),
-    c("euclidean", "correlation", "inner_product")
+    "Invalid value"
   )
   expect_error(
     env$validate_metric_values(c("euclidean", "manhattan")),
@@ -826,10 +827,10 @@ test_that("NN metric benchmark canonicalizes metric aliases before preflight", {
     env$validate_metric_values(character()),
     "at least one metric"
   )
-  expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "l2")$supported))
-  expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "pearson")$supported))
-  expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "ip")$supported))
-  expect_true(isTRUE(env$capability_status(caps, "cpu", "nsg", "ip")$supported))
+  expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "euclidean")$supported))
+  expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "correlation")$supported))
+  expect_true(isTRUE(env$capability_status(caps, "cpu", "flat", "inner_product")$supported))
+  expect_true(isTRUE(env$capability_status(caps, "cpu", "nsg", "inner_product")$supported))
 })
 
 test_that("NN metric benchmark validates public backend labels", {
@@ -1555,14 +1556,14 @@ test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
   expect_false(isTRUE(env$method_metric_applicable("RcppHNSW_hnsw", "correlation")$ok))
   expect_true(isTRUE(env$method_is_exact("faissR_faiss_flat_l2", "inner_product")))
   expect_true(isTRUE(env$method_is_exact("faissR_faiss_gpu_flat_l2", "inner_product")))
-  expect_true(isTRUE(env$method_is_exact("faissR_cuda_cuvs_bruteforce", "l2")))
+  expect_true(isTRUE(env$method_is_exact("faissR_cuda_cuvs_bruteforce", "euclidean")))
   expect_true(isTRUE(env$method_is_exact("faissR_cuda_cuvs_bruteforce", "inner_product")))
   expect_false(isTRUE(env$method_is_exact("faissR_cuda_cuvs_ivf_flat", "inner_product")))
   cuvs_bruteforce_route <- env$faissr_benchmark_route("faissR_cuda_cuvs_bruteforce")
   expect_equal(cuvs_bruteforce_route$execution_backend, "cuda_cuvs_bruteforce")
   expect_equal(cuvs_bruteforce_route$public_backend, "cuda")
   expect_equal(cuvs_bruteforce_route$public_method, "bruteforce")
-  expect_equal(env$rcpphnsw_distance_arg("l2"), "euclidean")
+  expect_equal(env$rcpphnsw_distance_arg("euclidean"), "euclidean")
   expect_equal(env$rcpphnsw_distance_arg("cosine"), "cosine")
   expect_equal(env$rcpphnsw_distance_arg("inner_product"), "ip")
 
@@ -1638,7 +1639,7 @@ test_that("legacy Benchmark #1 records faissR runtime capability preflight", {
     "if (worker)"
   )
   methods <- env$method_table()
-  caps <- env$benchmark1_runtime_capabilities(methods, c("l2", "inner_product"))
+  caps <- env$benchmark1_runtime_capabilities(methods, c("euclidean", "inner_product"))
 
   expect_s3_class(caps, "data.frame")
   expect_true(all(c(
@@ -1649,7 +1650,7 @@ test_that("legacy Benchmark #1 records faissR runtime capability preflight", {
   expect_true("faissR_faiss_gpu_flat_l2" %in% caps$method)
 
   cpu_flat <- caps[
-    caps$method == "faissR_faiss_flat_l2" & caps$metric == "l2",
+    caps$method == "faissR_faiss_flat_l2" & caps$metric == "euclidean",
     ,
     drop = FALSE
   ]
@@ -1698,7 +1699,7 @@ test_that("legacy Benchmark #1 records faissR runtime capability preflight", {
   expect_equal(direct_cuvs_ivf_ip$public_metric, "inner_product")
   expect_true(isTRUE(direct_cuvs_ivf_ip$metric_supported))
 
-  gpu_skip <- env$benchmark1_runtime_skip("faissR_faiss_gpu_flat_l2", "l2")
+  gpu_skip <- env$benchmark1_runtime_skip("faissR_faiss_gpu_flat_l2", "euclidean")
   if (isTRUE(faiss_gpu_available())) {
     expect_null(gpu_skip)
   } else {
@@ -1728,22 +1729,22 @@ test_that("legacy Benchmark #1 defaults to all four public metrics", {
 
   expect_equal(
     env$benchmark1_metric_values(metrics = NULL, env_metrics = NA_character_),
-    c("l2", "cosine", "correlation", "inner_product")
+    c("euclidean", "cosine", "correlation", "inner_product")
   )
-  expect_equal(env$benchmark1_metric_value("euclidean"), "l2")
-  expect_equal(env$benchmark1_metric_value("pearson"), "correlation")
-  expect_equal(env$benchmark1_metric_value("ip"), "inner_product")
+  expect_equal(env$benchmark1_metric_value("euclidean"), "euclidean")
+  expect_error(env$benchmark1_metric_value("pearson"), "Invalid value")
+  expect_error(env$benchmark1_metric_value("ip"), "Invalid value")
   expect_error(
     env$benchmark1_metric_value("manhattan"),
     "Invalid value\\(s\\): manhattan"
   )
   expect_equal(
-    env$benchmark1_metric_values("euclidean,pearson,ip", env_metrics = NA_character_),
-    c("l2", "correlation", "inner_product")
+    env$benchmark1_metric_values("euclidean,correlation,inner_product", env_metrics = NA_character_),
+    c("euclidean", "correlation", "inner_product")
   )
-  expect_equal(
+  expect_error(
     env$benchmark1_metric_values(metrics = NULL, env_metrics = "cosine,innerproduct"),
-    c("cosine", "inner_product")
+    "Invalid value"
   )
   expect_error(
     env$benchmark1_metric_values("unknown", env_metrics = NA_character_),
@@ -1842,13 +1843,13 @@ test_that("legacy Benchmark #1 exposes faissR NNDescent metric support", {
   )
 
   for (method in c("faissR_cpu_nndescent", "faissR_cuda_cuvs_nndescent")) {
-    expect_true(isTRUE(env$method_metric_applicable(method, "l2")$ok))
+    expect_true(isTRUE(env$method_metric_applicable(method, "euclidean")$ok))
     expect_true(isTRUE(env$method_metric_applicable(method, "cosine")$ok))
     expect_true(isTRUE(env$method_metric_applicable(method, "correlation")$ok))
   }
   expect_true(isTRUE(env$method_metric_applicable("faissR_cpu_nndescent", "inner_product")$ok))
   expect_false(isTRUE(env$method_metric_applicable("faissR_cuda_cuvs_nndescent", "inner_product")$ok))
-  for (metric in c("l2", "cosine", "correlation", "inner_product")) {
+  for (metric in c("euclidean", "cosine", "correlation", "inner_product")) {
     expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_nsg", metric)$ok), info = metric)
     expect_true(isTRUE(env$method_metric_applicable("faissR_cpu_vamana", metric)$ok), info = metric)
     expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_vamana", metric)$ok), info = metric)
@@ -1888,7 +1889,7 @@ test_that("legacy Benchmark #1 best ranking is quality-aware before speed", {
 
   success <- data.frame(
     dataset = c("A", "A", "A", "B", "B"),
-    metric = c("l2", "l2", "l2", "cosine", "cosine"),
+    metric = c("euclidean", "euclidean", "euclidean", "cosine", "cosine"),
     k = c(15L, 15L, 15L, 50L, 50L),
     method = c(
       "fast_low_recall",
@@ -2010,7 +2011,7 @@ test_that("legacy Benchmark #1 quality evaluation handles short KNN outputs", {
     distances = matrix(rep(1, 5), ncol = 1)
   )
 
-  out <- env$evaluate_knn_quality(x, obj, k = 3L, metric = "l2", exact = FALSE)
+  out <- env$evaluate_knn_quality(x, obj, k = 3L, metric = "euclidean", exact = FALSE)
 
   expect_equal(out$quality_status, "success")
   expect_equal(out$quality_eval_n, nrow(x))
@@ -3004,12 +3005,12 @@ test_that("graph benchmark target cluster mode is explicit", {
     c("euclidean", "cosine")
   )
   expect_equal(
-    env$canonical_metric_key(c("l2", "pearson", "ip", "dot-product")),
-    c("euclidean", "correlation", "inner_product", "inner_product")
+    env$canonical_metric_key(c("euclidean", "cosine", "correlation", "inner_product")),
+    c("euclidean", "cosine", "correlation", "inner_product")
   )
-  expect_equal(
+  expect_error(
     env$validate_metric_values(c("l2", "pearson", "ip", "dot-product")),
-    c("euclidean", "correlation", "inner_product")
+    "Invalid value"
   )
   expect_error(
     env$validate_metric_values("manhattan"),

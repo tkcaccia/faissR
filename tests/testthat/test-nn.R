@@ -844,7 +844,7 @@ test_that("native exact KNN only accepts the documented metrics", {
   )
 })
 
-test_that("public NN APIs canonicalize common metric aliases", {
+test_that("public NN APIs reject legacy metric aliases", {
   x <- matrix(c(
     1, 0,
     0, 1,
@@ -852,15 +852,13 @@ test_that("public NN APIs canonicalize common metric aliases", {
     2, 0
   ), ncol = 2, byrow = TRUE)
 
-  l2 <- nn(x, k = 2L, backend = "cpu", metric = "l2")
-  cor <- nn(x, k = 2L, backend = "cpu", metric = "pearson")
-  ip <- nn(x, k = 2L, backend = "cpu", metric = "ip")
-  without_self <- nn(exclude_self = TRUE, x, k = 1L, backend = "cpu", metric = "cor")
-
-  expect_equal(attr(l2, "metric"), "euclidean")
-  expect_equal(attr(cor, "metric"), "correlation")
-  expect_equal(attr(ip, "metric"), "inner_product")
-  expect_equal(attr(without_self, "metric"), "correlation")
+  expect_equal(attr(nn(x, k = 2L, backend = "cpu", metric = "euclidean"), "metric"), "euclidean")
+  expect_equal(attr(nn(x, k = 2L, backend = "cpu", metric = "correlation"), "metric"), "correlation")
+  expect_equal(attr(nn(x, k = 2L, backend = "cpu", metric = "inner_product"), "metric"), "inner_product")
+  expect_error(nn(x, k = 2L, backend = "cpu", metric = "l2"), "metric")
+  expect_error(nn(x, k = 2L, backend = "cpu", metric = "pearson"), "metric")
+  expect_error(nn(x, k = 2L, backend = "cpu", metric = "ip"), "metric")
+  expect_error(nn(exclude_self = TRUE, x, k = 1L, backend = "cpu", metric = "cor"), "metric")
   expect_error(nn(x, k = 2L, backend = "cpu", metric = "manhattan"), "metric")
 })
 
@@ -873,7 +871,7 @@ test_that("public NN results preserve requested and resolved routing metadata", 
     k = 3L,
     backend = "auto",
     method = "exact",
-    metric = "l2",
+    metric = "euclidean",
     tuning = "off",
     n_threads = 2L
   )
@@ -882,7 +880,7 @@ test_that("public NN results preserve requested and resolved routing metadata", 
     k = 3L,
     backend = "auto",
     method = "exact",
-    metric = "cos",
+    metric = "cosine",
     tuning = "off",
     n_threads = 2L
   )
@@ -3750,9 +3748,19 @@ test_that("CPU auto selector native fallback is decided by C++ route policy", {
   expect_equal(route(TRUE, 5L)$selected_backend, "cpu")
 })
 
-test_that("CPU auto selector canonicalizes metric aliases", {
+test_that("CPU auto selector rejects legacy metric aliases", {
   work_size <- as.double(70000L) * as.double(70000L) * as.double(784L)
-  expect_equal(
+  canonical <- faissR:::select_cpu_auto_backend(
+    self_query = TRUE,
+    n = 70000L,
+    p = 784L,
+    n_points = 70000L,
+    k = 5L,
+    work_size = work_size,
+    metric = "correlation"
+  )
+  expect_type(canonical, "character")
+  expect_error(
     faissR:::select_cpu_auto_backend(
       self_query = TRUE,
       n = 70000L,
@@ -3762,17 +3770,9 @@ test_that("CPU auto selector canonicalizes metric aliases", {
       work_size = work_size,
       metric = "pearson"
     ),
-    faissR:::select_cpu_auto_backend(
-      self_query = TRUE,
-      n = 70000L,
-      p = 784L,
-      n_points = 70000L,
-      k = 5L,
-      work_size = work_size,
-      metric = "correlation"
-    )
+    "`metric` must be one of"
   )
-  expect_equal(
+  expect_error(
     faissR:::select_cpu_auto_backend(
       self_query = TRUE,
       n = 70000L,
@@ -3782,15 +3782,7 @@ test_that("CPU auto selector canonicalizes metric aliases", {
       work_size = work_size,
       metric = "dot-product"
     ),
-    faissR:::select_cpu_auto_backend(
-      self_query = TRUE,
-      n = 70000L,
-      p = 784L,
-      n_points = 70000L,
-      k = 5L,
-      work_size = work_size,
-      metric = "inner_product"
-    )
+    "`metric` must be one of"
   )
   expect_error(
     faissR:::select_cpu_auto_backend(

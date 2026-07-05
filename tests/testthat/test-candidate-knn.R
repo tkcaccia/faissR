@@ -85,7 +85,7 @@ test_that("candidate_knn supports CPU cosine candidates", {
   expect_equal(out$distances[1, ], c(0, 1 - 1 / sqrt(2)), tolerance = 1e-12)
 })
 
-test_that("candidate_knn canonicalizes metric aliases", {
+test_that("candidate_knn rejects legacy metric aliases", {
   x <- matrix(c(
     1, 0,
     0, 1,
@@ -93,10 +93,11 @@ test_that("candidate_knn canonicalizes metric aliases", {
   ), ncol = 2, byrow = TRUE)
   candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
 
-  out <- candidate_knn(x, candidates, k = 2L, backend = "cpu", metric = "ip")
+  out <- candidate_knn(x, candidates, k = 2L, backend = "cpu", metric = "inner_product")
 
   expect_s3_class(out, "faissR_nn")
   expect_equal(attr(out, "metric"), "inner_product")
+  expect_error(candidate_knn(x, candidates, k = 2L, backend = "cpu", metric = "ip"), "metric")
 })
 
 test_that("candidate_knn uses strict public backend labels", {

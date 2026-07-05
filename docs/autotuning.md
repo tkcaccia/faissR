@@ -90,10 +90,10 @@ The exact reference is saved at `k = 100`, so every smaller k value is a
 consistent crop of the same reference calculation.
 
 The current all-metric rerun uses the same method-specific launchers with
-`METRICS=euclidean,cosine,correlation,inner_product`. The scripts also accept
-the misspelling `inner_produce` and canonicalize it to `inner_product` before
-submitting work. The exact-reference precompute writes one reference per metric
-in each dataset directory, while the tuning runner groups recommendations by
+`METRICS=euclidean,cosine,correlation,inner_product`. The scripts reject
+legacy metric aliases and typo compatibility labels, so use only the canonical
+metric names when submitting work. The exact-reference precompute writes one
+reference per metric in each dataset directory, while the tuning runner groups recommendations by
 dataset, backend, method, metric, `k`, and target recall. The Euclidean
 recommendation table from the uploaded results is consolidated in
 `benchmark_scripts/euclidean_tuning_settings_from_uploaded_results.csv`; the

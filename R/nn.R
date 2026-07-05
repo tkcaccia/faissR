@@ -5965,38 +5965,22 @@ normalize_nn_positive_integer <- function(x, arg, message) {
 }
 
 normalize_nn_metric <- function(metric) {
-  aliases <- c(
-    euclidean = "euclidean",
-    l2 = "euclidean",
-    cosine = "cosine",
-    cos = "cosine",
-    correlation = "correlation",
-    correlations = "correlation",
-    cor = "correlation",
-    pearson = "correlation",
-    inner_product = "inner_product",
-    innerproduct = "inner_product",
-    ip = "inner_product",
-    dot = "inner_product",
-    dot_product = "inner_product",
-    dotproduct = "inner_product"
-  )
+  valid <- nn_metric_labels()
   metric <- normalize_scalar_choice_arg(
     metric,
     arg = "metric",
     default = "euclidean",
-    formal_choices = nn_metric_labels()
+    formal_choices = valid
   )
   key <- tolower(trimws(metric))
-  key <- gsub("[[:space:]-]+", "_", key)
-  if (!key %in% names(aliases)) {
+  if (!key %in% valid) {
     stop(
       "`metric` must be one of \"euclidean\", \"cosine\", ",
       "\"correlation\", or \"inner_product\".",
       call. = FALSE
     )
   }
-  unname(aliases[[key]])
+  key
 }
 
 faiss_metric_search_arg <- function(metric) {
@@ -9795,9 +9779,10 @@ grid_self_knn <- function(data,
 #'   centering plus L2 normalization followed by FastScan L2 search, and raw
 #'   inner product by FAISS FastScan IP.
 #' @param metric Distance metric. The intentionally small public set is
-#'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`;
-#'   aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and
-#'   stored as canonical metric labels.
+#'   `"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
+#'   Legacy metric aliases such as `"l2"`, `"cor"`, `"pearson"`, `"ip"`,
+#'   `"dot"`, and `"innerproduct"` are rejected; use the canonical metric
+#'   names.
 #'   `"inner_product"` is the raw dot product, `"cosine"` is the dot product
 #'   after row L2 normalization, and `"correlation"` is centered cosine
 #'   similarity after subtracting each row mean and L2-normalizing each row.

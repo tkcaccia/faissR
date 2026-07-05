@@ -25,11 +25,11 @@
 #' @param method Nearest-neighbour algorithm selector passed to
 #'   \code{\link{nn}()}. See \code{\link{nn}()} for method descriptions and
 #'   references.
-#' @param metric Distance metric passed to \code{\link{nn}()}. Aliases such as
-#'   `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and stored as
-#'   canonical metric labels. Correlation is centered cosine similarity, not
-#'   raw inner product; see \code{\link{nn}()} for the metric transforms and
-#'   backend support matrix.
+#' @param metric Distance metric passed to \code{\link{nn}()}: `"euclidean"`,
+#'   `"cosine"`, `"correlation"`, or `"inner_product"`. Legacy metric aliases
+#'   such as `"l2"`, `"cor"`, `"pearson"`, and `"ip"` are rejected.
+#'   Correlation is centered cosine similarity, not raw inner product; see
+#'   \code{\link{nn}()} for the metric transforms and backend support matrix.
 #' @param tuning Tuning policy passed to \code{\link{nn}()}. `"auto"` uses the
 #'   deterministic default for the resolved method; pilot/cache tuning is
 #'   opt-in where implemented. FAISS GPU IVF pilot/cache tuning is

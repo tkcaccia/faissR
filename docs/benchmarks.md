@@ -295,8 +295,8 @@ for example
 
 Exact references are metric specific and are saved in each dataset folder as
 `faissR_exact_reference_<metric>_k<K>_q<QUALITY_N>_seed<SEED>.RData`.
-The command-line parser also accepts `inner_produce` as a compatibility typo
-and records it as canonical `inner_product`.
+The command-line parser accepts only `euclidean`, `cosine`, `correlation`, and
+`inner_product`; legacy aliases and typo compatibility labels are rejected.
 The file `benchmark_scripts/euclidean_tuning_settings_from_uploaded_results.csv`
 collects the fastest Euclidean settings from the uploaded tuning results, and
 `benchmark_scripts/previous_tuning_timeouts.csv` prevents the all-metric rerun
@@ -312,7 +312,7 @@ CUDA NN-descent launcher exits unless explicitly submitted with
 `benchmark_scripts/benchmark1_nn_speed.R` is the broad nearest-neighbour speed
 benchmark that includes faissR implementation labels, external R KNN packages,
 and selected KNN consumers. It defaults to `k = 5, 10, 15, 50, 100` and the
-four public metrics L2/Euclidean, cosine, correlation, and inner product.
+four public metrics Euclidean, cosine, correlation, and inner product.
 Correlation is centered cosine similarity, while inner product is the raw dot
 product, so benchmark rows for these metrics are not interchangeable. Flat
 inner-product searches are reported under the same public `method = "flat"` row
@@ -356,9 +356,10 @@ starts; setting it after `library(faissR)` is too late for this class of dynamic
 linker failure. CPU worker threads are controlled with environment variables
 such as `OMP_NUM_THREADS`; the benchmark worker avoids loading optional
 thread-control helper packages before FAISS/cuVS.
-Benchmark #1 accepts the public metric aliases `euclidean`, `pearson`, `cor`,
-`ip`, and `innerproduct`, but unknown metric labels now stop the launcher before
-workers are submitted. Numeric controls that define the timing and quality
+Benchmark #1 accepts only the canonical metric labels `euclidean`, `cosine`,
+`correlation`, and `inner_product`; legacy aliases such as `l2`, `pearson`,
+`cor`, `ip`, and `innerproduct` stop the launcher before workers are submitted.
+Numeric controls that define the timing and quality
 envelope, including `--threads`, `--timeout`, `--quality_n`, and
 `--quality_max_ops`, are validated before workers are submitted.
 
@@ -385,9 +386,9 @@ method matrix. It benchmarks `backend = "auto"`, `"cpu"`, and `"cuda"` across
 the public methods, the four public metrics (`"euclidean"`, `"cosine"`,
 `"correlation"`, and `"inner_product"`), and `k = 5, 10, 15, 50, 100` by
 default. Correlation and inner product keep their distinct public meanings:
-centered cosine similarity versus raw dot product. Metric aliases accepted by the API, such as `"l2"`, `"cor"`,
-`"pearson"`, and `"ip"`, are canonicalized before preflight and reporting.
-Unknown metric names now stop the script instead of silently falling back to
+centered cosine similarity versus raw dot product. Only the canonical metric
+labels are accepted before preflight and reporting. Unknown or legacy metric
+names now stop the script instead of silently falling back to
 the default metric set, so command-line typos cannot contaminate timing tables.
 `--k_values` must contain one or more positive integers; malformed entries stop
 the script before datasets are loaded.
@@ -724,10 +725,9 @@ cluster count, so faissR uses the shape-seeded target-count grid.
 seed explicitly. Method, graph-backend, and
 cluster-backend selectors are also validated against the public benchmark
 choices before any dataset is loaded. `--graph_methods` accepts the same public
-NN method labels as `nn()` and `knn_graph()`, while `--metrics` accepts the four
-public NN metrics and the same aliases as `nn()`, such as `l2`, `pearson`,
-`cor`, `ip`, and `dot-product`; aliases are canonicalized before preflight and
-reporting. Unsupported graph method/backend/metric combinations are
+NN method labels as `nn()` and `knn_graph()`, while `--metrics` accepts only
+`euclidean`, `cosine`, `correlation`, and `inner_product`; legacy aliases are
+rejected before preflight and reporting. Unsupported graph method/backend/metric combinations are
 recorded as expected skips using `nn_capabilities(runtime = TRUE)` plus
 data-shape checks such as the 2D/3D requirement for `method = "grid"`.
 The runtime capability table is written to

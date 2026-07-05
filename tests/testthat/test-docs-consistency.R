@@ -926,7 +926,7 @@ test_that("backend docs describe shape-dependent CUDA auto non-Euclidean capabil
   expect_true(grepl("Explicit CUDA HNSW is routed to the", prose, fixed = TRUE))
 })
 
-test_that("benchmark documentation describes canonical metric aliases once", {
+test_that("benchmark documentation describes canonical-only metric labels", {
   docs_file <- test_path("../../docs/benchmarks.md")
   if (!file.exists(docs_file)) {
     skip("GitHub documentation files are not available in this installed-package test context.")
@@ -937,9 +937,10 @@ test_that("benchmark documentation describes canonical metric aliases once", {
   expect_length(grep("^## NN Metric Cycles$", lines), 1L)
   expect_length(grep("^## NN Metrics File Layout$", lines), 1L)
   prose <- paste(lines, collapse = " ")
-  expect_true(grepl('"l2".*"cor".*"pearson".*"ip"', prose))
+  expect_true(grepl("legacy aliases such as `l2`, `pearson`,", prose, fixed = TRUE))
+  expect_true(grepl("legacy aliases are rejected", prose, fixed = TRUE))
   expect_false(grepl("non-inner-product metrics", prose, fixed = TRUE))
-  expect_true(grepl("four public metrics L2/Euclidean, cosine, correlation, and inner product", prose, fixed = TRUE))
+  expect_true(grepl("four public metrics Euclidean, cosine, correlation, and inner product", prose, fixed = TRUE))
   expect_true(grepl("--metrics=euclidean,cosine,correlation,inner_product", prose, fixed = TRUE))
 })
 

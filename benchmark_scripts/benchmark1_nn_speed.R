@@ -90,17 +90,14 @@ benchmark_env <- function() {
 }
 
 benchmark1_metric_value <- function(metric = NULL, arg_name = "metric") {
-  raw <- metric %||% "l2"
+  raw <- metric %||% "euclidean"
   if (length(raw) != 1L || is.na(raw) || !nzchar(raw)) {
     stop("`", arg_name, "` must contain exactly one metric.", call. = FALSE)
   }
   value <- tolower(trimws(raw))
-  if (value %in% c("euclidean", "l2")) return("l2")
-  if (value %in% c("ip", "innerproduct", "inner_product", "inner_produce")) return("inner_product")
-  if (value %in% c("cor", "pearson", "correlations")) return("correlation")
-  if (value %in% c("cosine", "correlation")) return(value)
+  if (value %in% c("euclidean", "cosine", "correlation", "inner_product")) return(value)
   stop(
-    "`", arg_name, "` must be one of: l2, cosine, correlation, inner_product. ",
+    "`", arg_name, "` must be one of: euclidean, cosine, correlation, inner_product. ",
     "Invalid value(s): ", value, ".",
     call. = FALSE
   )
@@ -110,7 +107,7 @@ benchmark1_metric_values <- function(metrics = NULL,
                                      env_metrics = Sys.getenv("FAISSR_BENCHMARK1_METRICS", unset = NA_character_)) {
   raw <- metrics %||% env_metrics
   if (length(raw) != 1L || is.na(raw)) {
-    raw <- "l2,cosine,correlation,inner_product"
+    raw <- "euclidean,cosine,correlation,inner_product"
   }
   if (!nzchar(raw)) {
     stop("`metrics` must contain at least one metric.", call. = FALSE)
@@ -129,7 +126,7 @@ out_dir <- args$out_dir %||% Sys.getenv(
   "FAISSR_BENCHMARK_OUT",
   file.path(getwd(), paste0("faissR_BENCHMARK1_", format(Sys.time(), "%Y%m%d_%H%M%S")))
 )
-metric <- benchmark1_metric_value(args$metric %||% "l2")
+metric <- benchmark1_metric_value(args$metric %||% "euclidean")
 
 benchmark1_k_values <- function(k_values = NULL,
                                 env_k_values = Sys.getenv("FAISSR_BENCHMARK1_K_VALUES", unset = NA_character_)) {
@@ -275,7 +272,7 @@ available_pkg <- function(pkg) requireNamespace(pkg, quietly = TRUE)
 metric_arg_for_label <- function(metric) {
   switch(
     metric,
-    l2 = "euclidean",
+    euclidean = "euclidean",
     cosine = "cosine",
     correlation = "correlation",
     inner_product = "inner_product",
@@ -316,7 +313,7 @@ method_metric_applicable <- function(method, metric) {
   if (grepl("_ip$", method) && !identical(metric, "inner_product")) {
     return(list(ok = FALSE, reason = "inner-product FAISS Flat methods are benchmarked only with `metric = inner_product`"))
   }
-  if (identical(metric, "l2")) return(list(ok = TRUE, reason = ""))
+  if (identical(metric, "euclidean")) return(list(ok = TRUE, reason = ""))
   if (identical(metric, "inner_product")) {
     if (method %in% ip_methods) return(list(ok = TRUE, reason = ""))
     return(list(ok = FALSE, reason = "inner-product search is benchmarked only with exact/IP-capable methods"))
@@ -764,7 +761,7 @@ benchmark1_execution_backend_status <- function(execution_backend) {
   list(runtime_available = TRUE, runtime_reason = "available", runtime_notes = "No faissR runtime dependency detected.")
 }
 
-benchmark1_runtime_capabilities <- function(methods, metrics = c("l2", "cosine", "correlation", "inner_product")) {
+benchmark1_runtime_capabilities <- function(methods, metrics = c("euclidean", "cosine", "correlation", "inner_product")) {
   metrics <- benchmark1_metric_values(paste(metrics, collapse = ","))
   rows <- vector("list", nrow(methods) * length(metrics))
   r <- 0L
@@ -844,7 +841,7 @@ run_method <- function(method, x, k, n_threads, dataset, out_dir, metric) {
       metric = metric_arg_for_label(metric),
       tuning = "auto"
     )
-    if (identical(method, "faissR_cuda_cuvs_nndescent") && identical(metric, "l2")) {
+    if (identical(method, "faissR_cuda_cuvs_nndescent") && identical(metric, "euclidean")) {
       save_cuvs_knn(obj, dataset, out_dir)
     }
     return(obj)

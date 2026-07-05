@@ -19,27 +19,7 @@ split_arg <- function(x, default) {
 }
 
 canonical_metric_key <- function(metric) {
-  aliases <- c(
-    euclidean = "euclidean",
-    l2 = "euclidean",
-    cosine = "cosine",
-    cos = "cosine",
-    correlation = "correlation",
-    correlations = "correlation",
-    cor = "correlation",
-    pearson = "correlation",
-    inner_product = "inner_product",
-    innerproduct = "inner_product",
-    ip = "inner_product",
-    dot = "inner_product",
-    dot_product = "inner_product",
-    dotproduct = "inner_product"
-  )
-  key <- tolower(trimws(as.character(metric)))
-  key <- gsub("[[:space:]-]+", "_", key)
-  out <- unname(aliases[key])
-  out[is.na(out)] <- key[is.na(out)]
-  out
+  tolower(trimws(as.character(metric)))
 }
 
 canonical_metric_values <- function(metrics) {

@@ -79,9 +79,10 @@ For `metric = "inner_product"`, neighbours are ranked by larger raw dot
 product, but returned `distances` keep the package-wide smaller-is-better
 contract: the best returned dot product in each query row has distance `0`, and
 lower dot products have larger shifted distances.
-Common aliases are accepted at the API boundary and canonicalized in result
-attributes: `"l2"` maps to `"euclidean"`, `"cor"`/`"pearson"` map to
-`"correlation"`, and `"ip"` maps to `"inner_product"`.
+The API accepts only the canonical metric labels `"euclidean"`, `"cosine"`,
+`"correlation"`, and `"inner_product"`. Legacy shortcuts such as `"l2"`,
+`"cor"`, `"pearson"`, `"ip"`, and dot-product variants are rejected before
+dispatch.
 For normalized cosine and correlation routes, all-zero cosine rows and constant
 correlation rows are zero-normalized edge cases. faissR treats two
 zero-normalized rows as distance `0` and a zero-normalized row versus a nonzero

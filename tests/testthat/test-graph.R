@@ -211,7 +211,7 @@ test_that("knn_graph passes method metric and tuning to internal KNN", {
     k = 6L,
     backend = "cpu",
     nn_method = "exact",
-    metric = "cor",
+    metric = "correlation",
     tuning = "off",
     n_threads = 2L
   )

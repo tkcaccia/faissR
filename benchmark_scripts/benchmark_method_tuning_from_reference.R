@@ -26,31 +26,14 @@ split_arg <- function(value, default) {
 
 normalize_metric_arg <- function(value) {
   key <- tolower(trimws(as.character(value %||% "euclidean")[[1L]]))
-  key <- gsub("[[:space:]-]+", "_", key)
-  aliases <- c(
-    euclidean = "euclidean",
-    l2 = "euclidean",
-    cosine = "cosine",
-    cos = "cosine",
-    correlation = "correlation",
-    correlations = "correlation",
-    cor = "correlation",
-    pearson = "correlation",
-    inner_product = "inner_product",
-    inner_produce = "inner_product",
-    innerproduct = "inner_product",
-    ip = "inner_product",
-    dot = "inner_product",
-    dot_product = "inner_product",
-    dotproduct = "inner_product"
-  )
-  if (!key %in% names(aliases)) {
+  valid <- c("euclidean", "cosine", "correlation", "inner_product")
+  if (!key %in% valid) {
     stop(
       "`metrics` must contain only euclidean, cosine, correlation, or inner_product.",
       call. = FALSE
     )
   }
-  unname(aliases[[key]])
+  key
 }
 
 metric_values_arg <- function(value) {

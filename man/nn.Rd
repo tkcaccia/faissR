@@ -67,9 +67,9 @@ centering plus L2 normalization followed by FastScan L2 search, and raw inner
 product by FAISS FastScan IP.}
 
 \item{metric}{Distance metric. The intentionally small public set is
-`"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`;
-aliases such as `"l2"`, `"cor"`/`"pearson"`, and `"ip"` are accepted and
-stored as canonical metric labels.
+`"euclidean"`, `"cosine"`, `"correlation"`, and `"inner_product"`.
+Legacy metric aliases such as `"l2"`, `"cor"`, `"pearson"`, `"ip"`,
+`"dot"`, and `"innerproduct"` are rejected; use the canonical metric names.
 `"inner_product"` is the raw dot product, `"cosine"` is the dot product
 after row L2 normalization, and `"correlation"` is centered cosine
 similarity after subtracting each row mean and L2-normalizing each row.
