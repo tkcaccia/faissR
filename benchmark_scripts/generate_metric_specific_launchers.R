@@ -65,6 +65,10 @@ base_header <- function(path, metric) {
 wrapper_body <- function(base_file, metric) {
   base_path <- file.path(script_dir_global(), base_file)
   prefix <- default_out_prefix(base_path)
+  extra_exports <- character()
+  if (identical(base_file, "run_hpc_nndescent_tuning_cuda.sh")) {
+    extra_exports <- 'export ALLOW_CUDA_NNDESCENT_TUNING="${ALLOW_CUDA_NNDESCENT_TUNING:-TRUE}"'
+  }
   c(
     "",
     "set -euo pipefail",
@@ -73,6 +77,7 @@ wrapper_body <- function(base_file, metric) {
     "# Submit this file directly with sbatch to run exactly one metric.",
     sprintf('export METRICS="%s"', metric),
     sprintf('export FAISSR_SINGLE_METRIC="%s"', metric),
+    extra_exports,
     'export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"',
     'if [[ -z "${OUT_DIR:-}" ]]; then',
     sprintf('  export OUT_DIR="${BASE_DIR}/%s_%s_$(date +%%Y%%m%%d_%%H%%M%%S)"', prefix, metric),
@@ -140,7 +145,6 @@ main <- function() {
     full.names = FALSE
   )
   launchers <- sort(launchers)
-  launchers <- setdiff(launchers, "run_hpc_nndescent_tuning_cuda.sh")
 
   reference_launcher <- "run_hpc_precompute_exact_references_cpu12.sh"
   if (file.exists(file.path(script_dir, reference_launcher))) {
@@ -149,7 +153,12 @@ main <- function() {
 
   written <- character()
   for (base_file in launchers) {
-    for (metric in metrics) {
+    launcher_metrics <- if (identical(base_file, "run_hpc_nndescent_tuning_cuda.sh")) {
+      c("euclidean", "cosine", "correlation")
+    } else {
+      metrics
+    }
+    for (metric in launcher_metrics) {
       written <- c(written, write_wrapper(script_dir, base_file, metric))
     }
   }

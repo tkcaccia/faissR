@@ -1412,29 +1412,61 @@ nn_compute <- function(data,
       return(result)
     }
     if (backend %in% c("cuda_cuvs_cagra", "cuda_cagra", "gpu_cagra")) {
-      if (!identical(metric, "euclidean")) {
-        stop("float32 cuVS CAGRA input currently supports `metric = \"euclidean\"`.", call. = FALSE)
-      }
       require_cuvs_backend("cuVS CAGRA")
-      params <- cuvs_cagra_params(data_dim[[1L]], k, p = data_dim[[2L]], target_recall = target_recall)
-      build_algo <- cuvs_cagra_build_algo_for_shape(data_dim[[1L]], data_dim[[2L]], k, self_query, params)
-      out <- nn_cuvs_cagra_float32_cpp(
-        data,
-        points,
-        as.integer(k),
-        isTRUE(exclude_self),
-        as.integer(params$graph_degree),
-        as.integer(params$intermediate_graph_degree),
-        as.integer(params$search_width),
-        as.integer(params$itopk_size),
-        build_algo,
-        output
-      )
+      metric_inputs <- NULL
+      search_data <- data
+      search_points <- points
+      if (metric %in% c("cosine", "correlation")) {
+        metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric, storage = "float")
+        search_data <- metric_inputs$data
+        search_points <- metric_inputs$points
+      } else if (identical(metric, "inner_product")) {
+        metric_inputs <- mips_l2_metric_inputs(data, points, self_query)
+        search_data <- metric_inputs$data
+        search_points <- metric_inputs$points
+      }
+      use_float32_transform <- identical(metric_inputs$transform_storage %||% "double", "float32")
+      use_float32_input <- is.null(metric_inputs) || isTRUE(use_float32_transform)
+      distance_output <- if (is.null(metric_inputs)) output else "double"
+      params <- cuvs_cagra_params(data_dim[[1L]], k, p = data_dim[[2L]], metric = metric, target_recall = target_recall)
+      build_algo <- cuvs_cagra_build_algo_for(search_data, k, self_query, params)
+      out <- if (isTRUE(use_float32_input)) {
+        nn_cuvs_cagra_float32_cpp(
+          search_data,
+          search_points,
+          as.integer(k),
+          isTRUE(exclude_self),
+          as.integer(params$graph_degree),
+          as.integer(params$intermediate_graph_degree),
+          as.integer(params$search_width),
+          as.integer(params$itopk_size),
+          build_algo,
+          distance_output
+        )
+      } else {
+        nn_cuvs_cagra_cpp(
+          search_data,
+          search_points,
+          as.integer(k),
+          isTRUE(exclude_self),
+          as.integer(params$graph_degree),
+          as.integer(params$intermediate_graph_degree),
+          as.integer(params$search_width),
+          as.integer(params$itopk_size),
+          build_algo
+        )
+      }
       resolved_backend <- "cuda_cuvs_cagra"
       result_backend <- if (requested_backend %in% c("cuda", "gpu")) requested_backend else resolved_backend
       result <- finish_nn_result(out, result_backend, k, self_query, exact = FALSE, metric = metric)
       if (!identical(result_backend, resolved_backend)) {
         attr(result, "resolved_backend") <- resolved_backend
+      }
+      if (!is.null(metric_inputs)) {
+        result <- finalize_graph_metric_result(result, metric_inputs)
+      }
+      if (isTRUE(use_float32_input)) {
+        result <- finish_float32_direct_result(result, out)
       }
       attr(result, "approximation") <- list(
         strategy = "rapids_cuvs_cagra",
@@ -1442,17 +1474,25 @@ nn_compute <- function(data,
         library = "cuvs",
         accelerator = "cuda",
         cagra_provider = "cuvs",
+        cagra_provider_option = cagra_implementation_preference(),
         metric = metric,
-        input_type = "float32",
+        transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
+        distance_transform = if (is.null(metric_inputs)) NA_character_ else (
+          metric_inputs$distance_transform %||%
+            "normalized_euclidean_squared_over_2_to_1_minus_similarity"
+        ),
+        input_type = out$input_type %||% if (isTRUE(use_float32_input)) "float32" else "double",
         graph_degree = as.integer(out$graph_degree),
         intermediate_graph_degree = as.integer(out$intermediate_graph_degree),
         search_width = as.integer(out$search_width),
         itopk_size = as.integer(out$itopk_size),
         cagra_build_algo = out$build_algo %||% build_algo,
-        search_batch_size = as.integer(out$search_batch_size)
+        search_batch_size = as.integer(out$search_batch_size),
+        transform_storage = metric_inputs$transform_storage %||% if (isTRUE(use_float32_input)) "float32" else "double",
+        transform_cache = metric_inputs$transform_cache %||% NULL
       )
       result <- append_nn_tuning_metadata(result, params)
-      return(finish_float32_direct_result(result, out))
+      return(result)
     }
     if (identical(backend, "faiss_ivfpq_fastscan")) {
       if (!metric %in% c("euclidean", "cosine", "correlation", "inner_product")) {
@@ -1733,40 +1773,80 @@ nn_compute <- function(data,
       return(finish_float32_direct_result(result, out))
     }
     if (backend %in% c("faiss_gpu_cagra", "cuda_faiss_cagra")) {
-      if (!identical(metric, "euclidean")) {
-        stop("float32 FAISS GPU CAGRA input currently supports `metric = \"euclidean\"`.", call. = FALSE)
-      }
       if (!isTRUE(faiss_gpu_available())) {
         stop("float32 FAISS GPU CAGRA input requires faissR to be built with FAISS GPU.", call. = FALSE)
       }
-      params <- cuvs_cagra_params(data_dim[[1L]], k, p = data_dim[[2L]], target_recall = target_recall)
-      out <- nn_faiss_gpu_cagra_float32_cpp(
-        data,
-        points,
-        as.integer(k),
-        as.integer(params$graph_degree),
-        as.integer(params$intermediate_graph_degree),
-        as.integer(params$search_width),
-        as.integer(params$itopk_size),
-        isTRUE(exclude_self),
-        output
-      )
+      metric_inputs <- NULL
+      search_data <- data
+      search_points <- points
+      if (metric %in% c("cosine", "correlation")) {
+        metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric, storage = "float")
+        search_data <- metric_inputs$data
+        search_points <- metric_inputs$points
+      } else if (identical(metric, "inner_product")) {
+        metric_inputs <- mips_l2_metric_inputs(data, points, self_query)
+        search_data <- metric_inputs$data
+        search_points <- metric_inputs$points
+      }
+      use_float32_transform <- identical(metric_inputs$transform_storage %||% "double", "float32")
+      use_float32_input <- is.null(metric_inputs) || isTRUE(use_float32_transform)
+      distance_output <- if (is.null(metric_inputs)) output else "double"
+      params <- cuvs_cagra_params(data_dim[[1L]], k, p = data_dim[[2L]], metric = metric, target_recall = target_recall)
+      out <- if (isTRUE(use_float32_input)) {
+        nn_faiss_gpu_cagra_float32_cpp(
+          search_data,
+          search_points,
+          as.integer(k),
+          as.integer(params$graph_degree),
+          as.integer(params$intermediate_graph_degree),
+          as.integer(params$search_width),
+          as.integer(params$itopk_size),
+          isTRUE(exclude_self),
+          distance_output
+        )
+      } else {
+        nn_faiss_gpu_cagra_cpp(
+          search_data,
+          search_points,
+          as.integer(k),
+          as.integer(params$graph_degree),
+          as.integer(params$intermediate_graph_degree),
+          as.integer(params$search_width),
+          as.integer(params$itopk_size),
+          isTRUE(exclude_self)
+        )
+      }
       result <- finish_nn_result(out, "faiss_gpu_cagra", k, self_query, exact = FALSE, metric = metric)
+      if (!is.null(metric_inputs)) {
+        result <- finalize_graph_metric_result(result, metric_inputs)
+      }
+      if (isTRUE(use_float32_input)) {
+        result <- finish_float32_direct_result(result, out)
+      }
       attr(result, "approximation") <- list(
         strategy = "faiss_gpu_GpuIndexCagra_cuVS",
         backend = "faiss_gpu_cagra",
         library = "faiss",
         accelerator = "cuda",
         cagra_provider = "faiss_gpu",
+        cagra_provider_option = cagra_implementation_preference(),
         metric = metric,
-        input_type = "float32",
+        transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
+        metric_transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
+        distance_transform = if (is.null(metric_inputs)) NA_character_ else (
+          metric_inputs$distance_transform %||%
+            "normalized_euclidean_squared_over_2_to_1_minus_similarity"
+        ),
+        input_type = out$input_type %||% if (isTRUE(use_float32_input)) "float32" else "double",
         graph_degree = as.integer(out$graph_degree),
         intermediate_graph_degree = as.integer(out$intermediate_graph_degree),
         search_width = as.integer(out$search_width),
-        itopk_size = as.integer(out$itopk_size)
+        itopk_size = as.integer(out$itopk_size),
+        transform_storage = metric_inputs$transform_storage %||% if (isTRUE(use_float32_input)) "float32" else "double",
+        transform_cache = metric_inputs$transform_cache %||% NULL
       )
       result <- append_nn_tuning_metadata(result, params)
-      return(finish_float32_direct_result(result, out))
+      return(result)
     }
     direct_float32_backend <- backend %in% c(
       "faiss", "cpu_faiss", "cpu_faiss_flat", "faiss_flat",
@@ -1833,14 +1913,14 @@ nn_compute <- function(data,
       return(finish_float32_direct_result(result, out))
     }
     if (backend %in% c("cuda_cuvs_ivfpq_fastscan", "cuvs_ivfpq_fastscan")) {
-      if (!metric %in% c("euclidean", "cosine")) {
-        stop("float32 CUDA cuVS IVFPQ FastScan-style input currently supports `metric = \"euclidean\"` or `\"cosine\"`.", call. = FALSE)
+      if (!metric %in% c("euclidean", "cosine", "correlation")) {
+        stop("float32 CUDA cuVS IVFPQ FastScan-style input currently supports `metric = \"euclidean\"`, `\"cosine\"`, or `\"correlation\"`.", call. = FALSE)
       }
       require_cuvs_backend("CUDA cuVS 4-bit IVF-PQ")
       metric_inputs <- NULL
       search_data <- data
       search_points <- points
-      if (identical(metric, "cosine")) {
+      if (metric %in% c("cosine", "correlation")) {
         metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric, storage = "float")
         search_data <- metric_inputs$data
         search_points <- metric_inputs$points
@@ -1900,6 +1980,8 @@ nn_compute <- function(data,
         fastscan = FALSE,
         note = if (identical(metric, "cosine")) {
           "CUDA cosine FastScan route row-normalizes to float32, then uses cuVS IVF-PQ with 4-bit compressed codes."
+        } else if (identical(metric, "correlation")) {
+          "CUDA correlation FastScan route row-centers and row-normalizes to float32, then uses cuVS IVF-PQ with 4-bit compressed codes."
         } else {
           "CUDA route uses cuVS IVF-PQ with 4-bit compressed codes; FAISS FastScan is CPU-only in this package route."
         },
@@ -1976,19 +2058,29 @@ nn_compute <- function(data,
       return(finish_float32_direct_result(result, out))
     }
     if (backend %in% c("cuvs_nndescent", "cuda_cuvs_nndescent")) {
-      if (!identical(metric, "euclidean")) {
-        stop("float32 cuVS NN-descent input currently supports `metric = \"euclidean\"`.", call. = FALSE)
+      if (identical(metric, "inner_product")) {
+        stop("cuVS NN-descent does not support `metric = \"inner_product\"`.", call. = FALSE)
       }
       require_cuvs_backend("cuVS NN-descent")
       if (!isTRUE(self_query)) {
         stop("`backend = \"cuda_cuvs_nndescent\"` is only available for self-KNN searches.", call. = FALSE)
       }
       reject_cuda_r_side_output_cleanup("cuda_cuvs_nndescent", exclude_self)
+      metric_inputs <- NULL
+      search_data <- data
+      if (metric %in% c("cosine", "correlation")) {
+        metric_inputs <- normalized_euclidean_metric_inputs(
+          data, points, self_query, metric, storage = "float"
+        )
+        search_data <- metric_inputs$data
+      }
+      search_dim <- dim(search_data)
       nonself_k <- if (isTRUE(exclude_self)) k else max(0L, k - 1L)
+      distance_storage <- if (is.null(metric_inputs)) output else "double"
       if (nonself_k < 1L) {
         out <- list(
-          indices = matrix(seq_len(data_dim[[1L]]), data_dim[[1L]], 1L),
-          distances = matrix(0, data_dim[[1L]], 1L),
+          indices = matrix(seq_len(search_dim[[1L]]), search_dim[[1L]], 1L),
+          distances = matrix(0, search_dim[[1L]], 1L),
           input_type = "float32",
           input_layout = "trivial_self",
           input_owns_data = FALSE,
@@ -1997,26 +2089,38 @@ nn_compute <- function(data,
         params <- NULL
       } else {
         params <- cuvs_nndescent_params(
-          data_dim[[1L]], data_dim[[2L]], nonself_k,
+          search_dim[[1L]], search_dim[[2L]], nonself_k,
           metric = metric,
           target_recall = target_recall
         )
         out <- nn_cuvs_nndescent_self_float32_cpp(
-          data,
+          search_data,
           as.integer(nonself_k),
           as.integer(params$graph_degree),
           as.integer(params$intermediate_graph_degree),
           as.integer(params$max_iterations),
-          output
+          distance_storage
         )
       }
       result <- finish_nn_result(out, "cuda_cuvs_nndescent", k, self_query, exact = FALSE, metric = metric)
+      if (!is.null(metric_inputs)) {
+        result <- finalize_graph_metric_result(result, metric_inputs)
+      }
       attr(result, "approximation") <- list(
         strategy = "rapids_cuvs_nndescent",
         backend = "cuda_cuvs_nndescent",
         library = "cuvs",
         accelerator = "cuda",
         metric = metric,
+        transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
+        distance_transform = if (is.null(metric_inputs)) NA_character_ else (
+          metric_inputs$distance_transform %||%
+            "normalized_euclidean_squared_over_2_to_1_minus_similarity"
+        ),
+        transform_storage = if (is.null(metric_inputs)) "float32" else (
+          metric_inputs$transform_storage %||% "float32"
+        ),
+        transform_cache = if (is.null(metric_inputs)) NULL else (metric_inputs$transform_cache %||% NULL),
         input_type = "float32",
         graph_degree = as.integer(out$graph_degree %||% NA_integer_),
         intermediate_graph_degree = as.integer(out$intermediate_graph_degree %||% NA_integer_),
@@ -2876,7 +2980,7 @@ nn_compute <- function(data,
       metric = as.character(out$metric),
       input_type = out$input_type %||% NULL
     )
-    if (identical(output, "float") || !is.null(cached)) {
+    if (identical(output, "float")) {
       result <- finish_float32_direct_result(result, out)
     }
     result <- attach_cuda_exact_tuning(result, flatlike_params, output, n_threads)
@@ -3422,7 +3526,7 @@ nn_compute <- function(data,
       search_data <- metric_inputs$data
       search_points <- metric_inputs$points
     }
-    params <- cuvs_cagra_params(nrow(data), k, p = ncol(data), target_recall = target_recall)
+    params <- cuvs_cagra_params(nrow(data), k, p = ncol(data), metric = metric, target_recall = target_recall)
     use_float32_transform <- identical(metric_inputs$transform_storage %||% "double", "float32")
     out <- if (isTRUE(use_float32_transform)) {
       nn_faiss_gpu_cagra_float32_cpp(
@@ -3914,7 +4018,7 @@ nn_compute <- function(data,
     }
     use_float32_transform <- identical(metric_inputs$transform_storage %||% "double", "float32")
     use_float32_output <- identical(output, "float") && is.null(metric_inputs)
-    params <- cuvs_cagra_params(nrow(data), k, p = ncol(data), target_recall = target_recall)
+    params <- cuvs_cagra_params(nrow(data), k, p = ncol(data), metric = metric, target_recall = target_recall)
     build_algo <- cuvs_cagra_build_algo_for(search_data, k, self_query, params)
     tuning_metadata <- NULL
     if (isTRUE(cuvs_cagra_should_tune(search_data, k, self_query, tuning = tuning))) {
@@ -4108,14 +4212,14 @@ nn_compute <- function(data,
   }
 
   if (backend %in% c("cuda_cuvs_ivfpq_fastscan", "cuvs_ivfpq_fastscan")) {
-    if (!metric %in% c("euclidean", "cosine")) {
-      stop("CUDA cuVS IVFPQ FastScan-style input currently supports `metric = \"euclidean\"` or `\"cosine\"`.", call. = FALSE)
+    if (!metric %in% c("euclidean", "cosine", "correlation")) {
+      stop("CUDA cuVS IVFPQ FastScan-style input currently supports `metric = \"euclidean\"`, `\"cosine\"`, or `\"correlation\"`.", call. = FALSE)
     }
     require_cuvs_backend("CUDA cuVS 4-bit IVF-PQ")
     metric_inputs <- NULL
     search_data <- data
     search_points <- points
-    if (identical(metric, "cosine")) {
+    if (metric %in% c("cosine", "correlation")) {
       metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric, storage = "float")
       search_data <- metric_inputs$data
       search_points <- metric_inputs$points
@@ -4187,6 +4291,8 @@ nn_compute <- function(data,
       fastscan = FALSE,
       note = if (identical(metric, "cosine")) {
         "CUDA cosine FastScan route row-normalizes to float32, then uses cuVS IVF-PQ with 4-bit compressed codes."
+      } else if (identical(metric, "correlation")) {
+        "CUDA correlation FastScan route row-centers and row-normalizes to float32, then uses cuVS IVF-PQ with 4-bit compressed codes."
       } else {
         "CUDA route uses cuVS IVF-PQ with 4-bit compressed codes; FAISS FastScan is CPU-only in this package route."
       },
@@ -4311,7 +4417,7 @@ nn_compute <- function(data,
     metric_inputs <- NULL
     search_data <- data
     search_points <- points
-    brute_params <- if (metric %in% c("euclidean", "cosine")) {
+    brute_params <- if (metric %in% c("euclidean", "cosine", "correlation")) {
       cuda_bruteforce_params(nrow(data), ncol(data), k,
                              metric = metric,
                              target_recall = target_recall)
@@ -5391,7 +5497,7 @@ nn_capability_row <- function(method, backend, metric) {
     supported <- if (identical(backend, "cpu")) {
       metric %in% c("euclidean", "cosine", "correlation", "inner_product")
     } else {
-      euclidean
+      metric %in% c("euclidean", "cosine", "correlation")
     }
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) {
@@ -5403,12 +5509,12 @@ nn_capability_row <- function(method, backend, metric) {
       if (identical(backend, "cpu")) {
         "CPU IVFPQ FastScan supports Euclidean/L2, cosine, correlation, and raw inner product."
       } else {
-        "CUDA IVFPQ FastScan currently supports Euclidean/L2 and cosine search."
+        "CUDA IVFPQ FastScan currently supports Euclidean/L2, cosine, and correlation search."
       }
     } else if (identical(backend, "cpu")) {
       "Uses FAISS IndexIVFPQFastScan with 4-bit PQ lookup tables and optional Flat reranking; cosine normalizes rows and correlation centers/normalizes rows before FastScan L2, while raw inner product uses FastScan IP."
     } else {
-      "Uses direct cuVS IVF-PQ with 4-bit compressed codes; cosine row-normalizes to float32 before cuVS L2 search and distance conversion, and the route does not silently fall back to CPU FAISS FastScan."
+      "Uses direct cuVS IVF-PQ with 4-bit compressed codes; cosine row-normalizes and correlation row-centers plus row-normalizes to float32 before cuVS L2 search and distance conversion, and the route does not silently fall back to CPU FAISS FastScan."
     }
   } else if (identical(method, "nsg")) {
     supported <- all_metrics
@@ -5655,8 +5761,8 @@ resolve_public_nn_backend <- function(backend,
       }
       return("faiss_gpu_flat_ip")
     }
-    if (identical(method, "ivfpq_fastscan") && !metric %in% c("euclidean", "cosine")) {
-      stop("CUDA `method = \"ivfpq_fastscan\"` currently supports only `metric = \"euclidean\"` or `\"cosine\"`.", call. = FALSE)
+    if (identical(method, "ivfpq_fastscan") && !metric %in% c("euclidean", "cosine", "correlation")) {
+      stop("CUDA `method = \"ivfpq_fastscan\"` currently supports only `metric = \"euclidean\"`, `\"cosine\"`, or `\"correlation\"`.", call. = FALSE)
     }
     if (identical(metric, "inner_product") && identical(method, "nndescent")) {
       stop("CUDA `method = \"nndescent\"` uses direct cuVS NN-descent, which does not support `metric = \"inner_product\"`.", call. = FALSE)
@@ -8767,8 +8873,8 @@ ivfpq_fastscan_cpu_params <- function(n, p, k, target_recall = 0.99,
 ivfpq_fastscan_cuda_params <- function(n, p, k, target_recall = 0.99,
                                        metric = "euclidean") {
   metric <- normalize_nn_metric(metric)
-  if (!metric %in% c("euclidean", "cosine")) {
-    stop("CUDA IVFPQ FastScan tuning currently supports Euclidean and cosine metrics.", call. = FALSE)
+  if (!metric %in% c("euclidean", "cosine", "correlation")) {
+    stop("CUDA IVFPQ FastScan tuning currently supports Euclidean, cosine, and correlation metrics.", call. = FALSE)
   }
   ivf <- faiss_ivf_params(
     n, k, metric = metric, p = p, backend = "cuda",
@@ -9284,12 +9390,14 @@ cuvs_requested_option_int <- function(name, default) {
   as.integer(value)
 }
 
-cuvs_cagra_params <- function(n, k, p = NA_integer_, target_recall = 0.99) {
+cuvs_cagra_params <- function(n, k, p = NA_integer_, metric = "euclidean", target_recall = 0.99) {
   target_recall <- normalize_hnsw_target_recall(target_recall)
+  metric <- normalize_nn_metric(metric)
   nn_tune_cuvs_cagra_cpp(
     as.integer(n),
     suppressWarnings(as.integer(p)),
     as.integer(k),
+    metric,
     as.numeric(target_recall),
     nn_option_int_or_na("cuvs_graph_degree"),
     nn_option_int_or_na("cuvs_intermediate_graph_degree"),
@@ -9972,15 +10080,18 @@ grid_self_knn <- function(data,
 #'   FAISS is available; these routes apply compiled exact tuning metadata for
 #'   query batching, and the native exact CPU scorer remains the no-FAISS fallback.
 #'   CUDA uses FAISS GPU Flat when the linked
-#'   FAISS build reports GPU support. CUDA exact search can otherwise use direct
+#'   FAISS build reports GPU support; Euclidean, cosine, and correlation exact
+#'   CUDA routes use compiled shape/k/target policies for GPU query batching.
+#'   CUDA exact search can otherwise use direct
 #'   cuVS brute force when available: Euclidean uses cuVS L2 directly,
 #'   cosine/correlation use normalized Euclidean search, and inner product uses
 #'   an exact maximum-inner-product-to-L2 transform [1-3,16].
 #'   \item `"flat"`: FAISS Flat exhaustive index. CPU and FAISS GPU support
 #'   L2, IP, and normalized-IP cosine/correlation routes when available
 #'   [1-2,16]. CPU Euclidean/cosine/correlation/inner-product Flat uses compiled metric/shape/k/target-recall
-#'   policies for query batching and fitted-index reuse; result metadata stores
-#'   the selected table row in `attr(result, "flat_tuning")`.
+#'   policies for query batching and fitted-index reuse; CUDA Euclidean/cosine/correlation
+#'   Flat uses compiled FAISS GPU Flat query-batch/resource policies. Result
+#'   metadata stores the selected table row in `attr(result, "flat_tuning")`.
 #'   \item `"bruteforce"`: exhaustive brute-force search. CPU Euclidean
 #'   brute force uses FAISS Flat L2, CPU cosine brute force uses normalized
 #'   FAISS Flat cosine, and CPU correlation brute force uses centered/normalized
@@ -10046,9 +10157,13 @@ grid_self_knn <- function(data,
 #'   storage before CPU or CUDA candidate refinement. cuVS Vamana is
 #'   acknowledged for GPU build/serialization, but current cuVS documentation
 #'   does not expose KNN search for this index. CPU Euclidean, cosine,
-#'   correlation, and raw inner-product `tuning = "auto"` select Vamana `r`, `search_l`, and `alpha` from compiled
+#'   correlation, and raw inner-product plus CUDA Euclidean/cosine/correlation
+#'   `tuning = "auto"` select Vamana `r`, `search_l`, and `alpha` from compiled
 #'   shape/k/target-recall tables and record whether the benchmark row reached
-#'   the requested target. Cosine uses row-normalized Euclidean Vamana refinement
+#'   the requested target. CUDA cosine rows come from measured normalized
+#'   float32 Vamana sweeps; CUDA correlation rows are seeded from those cosine
+#'   rows and report `tuning_benchmark_target_met = FALSE` until the dedicated
+#'   sweep is rerun. Cosine uses row-normalized Euclidean Vamana refinement
 #'   and correlation uses row-centered, normalized Euclidean Vamana refinement;
 #'   raw inner product uses shifted dot-product ordering. All keep
 #'   metric-specific tuning tables.
@@ -10085,7 +10200,16 @@ grid_self_knn <- function(data,
 #'   cosine/correlation through normalized Euclidean graph search, and raw
 #'   inner product through a maximum-inner-product-to-L2 extra-dimension
 #'   transform whose returned distances are converted back to faissR's shifted
-#'   inner-product convention [3,13-16].
+#'   inner-product convention. CUDA Euclidean CAGRA `tuning = "auto"` uses
+#'   measured shape/k/target rows from
+#'   `benchmark_scripts/cuda_cagra_euclidean_shape_tuning_defaults_from_uploaded_results.csv`;
+#'   CUDA cosine normalizes rows to float32 and CUDA correlation row-centers
+#'   then row-normalizes rows to float32; both use validation-pending tables
+#'   seeded from the measured Euclidean CAGRA sweep until the corrected
+#'   metric-specific sweeps are rerun. The correlation seed table is
+#'   `benchmark_scripts/cuda_cagra_correlation_shape_tuning_defaults_from_seeded_euclidean_results.csv`.
+#'   Those seeded rows report
+#'   `tuning_benchmark_target_met = FALSE` [3,13-16].
 #' }
 #'
 #' References are numbered as in `docs/references.md` in the GitHub
@@ -10146,8 +10270,8 @@ grid_self_knn <- function(data,
 #'   `"faiss_hnsw"` or `"cuda_cuvs_cagra"` are not public `method` values. Unsupported
 #'   backend/method combinations fail clearly; for example,
 #'   `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only,
-#'   and CUDA `method = "ivfpq_fastscan"` currently accepts Euclidean/L2 and
-#'   cosine search. CPU FastScan accepts Euclidean, cosine, correlation, and raw inner
+#'   and CUDA `method = "ivfpq_fastscan"` currently accepts Euclidean/L2,
+#'   cosine, and correlation search. CPU FastScan accepts Euclidean, cosine, correlation, and raw inner
 #'   product; cosine is implemented by row L2 normalization, correlation by row
 #'   centering plus L2 normalization followed by FastScan L2 search, and raw
 #'   inner product by FAISS FastScan IP.
@@ -10167,7 +10291,7 @@ grid_self_knn <- function(data,
 #'   `"correlation"` are implemented for exact CPU KNN, native 2D/3D grid
 #'   search, FAISS CPU/GPU Flat,
 #'   FAISS CPU/GPU IVF-Flat, FAISS CPU/GPU IVFPQ, FAISS CPU FastScan,
-#'   CUDA cuVS IVFPQ FastScan for cosine,
+#'   CUDA cuVS IVFPQ FastScan for cosine and correlation,
 #'   FAISS CPU HNSW,
 #'   and RcppHNSW. FAISS approximate IP-capable routes use row L2 normalization
 #'   for cosine and row centering plus L2 normalization for correlation before
@@ -10213,24 +10337,37 @@ grid_self_knn <- function(data,
 #'   policy for FAISS Flat query batch size and fitted-index reuse, derived
 #'   from the bruteforce CPU12 HPC tuning sweeps; it records the selected policy in
 #'   `attr(result, "bruteforce_tuning")` and also remains exact by construction.
-#'   CUDA Euclidean and cosine `method = "bruteforce"` use separate compiled C++
+#'   CUDA Euclidean/cosine/correlation `method = "exact"` uses compiled C++
+#'   policies for FAISS GPU Flat query batch size and GPU resource reuse,
+#'   including the correlation summary in
+#'   `benchmark_scripts/cuda_exact_correlation_shape_tuning_defaults_from_uploaded_results.csv`;
+#'   it records the selected policy in `attr(result, "exact_tuning")`.
+#'   CUDA Euclidean/cosine/correlation `method = "flat"` uses separate compiled
+#'   policies for FAISS GPU Flat query batch size and GPU resource reuse,
+#'   including the correlation summary in
+#'   `benchmark_scripts/cuda_flat_correlation_shape_tuning_defaults_from_uploaded_results.csv`;
+#'   it records the selected policy in `attr(result, "flat_tuning")`.
+#'   CUDA Euclidean/cosine/correlation `method = "bruteforce"` use separate compiled C++
 #'   policies for cuVS brute-force GPU query batch size and GPU resource reuse.
 #'   Euclidean rows are derived from CUDA bruteforce HPC tuning sweeps; cosine
-#'   rows initially reuse those batch/resource choices as a normalized-vector
-#'   proxy until empirical cosine sweeps replace them. The selected policy is
-#'   recorded in `attr(result, "bruteforce_tuning")`.
+#'   and correlation rows initially reuse those batch/resource choices as
+#'   normalized-vector proxies until empirical metric-specific sweeps replace
+#'   them. Correlation uses row-centering plus row normalization before cuVS L2
+#'   brute-force search. The selected policy is recorded in
+#'   `attr(result, "bruteforce_tuning")`.
 #'   FAISS CPU HNSW uses deterministic no-pilot defaults based on `n`, `p`,
 #'   `k`, `metric`, and `target_recall`. Euclidean, cosine, correlation, and raw inner-product CPU FAISS HNSW
 #'   use compiled HPC-derived lookup tables for shape groups, `k` buckets
 #'   (`15`, `30`, `50`, and `100`), and target recall; rows that did not meet
 #'   the target on all shape-group datasets report
 #'   `tuning_benchmark_target_met = FALSE`.
-#'   CUDA cuVS HNSW Euclidean and cosine use separate compiled
+#'   CUDA cuVS HNSW Euclidean, cosine, and correlation use separate compiled
 #'   HPC-derived lookup tables keyed by dataset shape group, `k` bucket
 #'   (`15`, `30`, `50`, and `100`), and `target_recall`; rows that did not
 #'   meet the target report `tuning_benchmark_target_met = FALSE`. Cosine uses
-#'   row-normalized float32 Euclidean graph search before converting distances
-#'   back to cosine distance. Explicit `faissR.cuvs_*` HNSW/CAGRA options
+#'   row-normalized float32 Euclidean graph search, and correlation uses centered
+#'   row-normalized float32 Euclidean graph search, before converting distances
+#'   back to the public metric. Explicit `faissR.cuvs_*` HNSW/CAGRA options
 #'   override those defaults. CPU Euclidean,
 #'   cosine, correlation, and raw inner-product FAISS IVF use compiled
 #'   shape/k/target-recall tables for `nlist` and `nprobe`, and record
@@ -10240,9 +10377,21 @@ grid_self_knn <- function(data,
 #'   shape/k/target-recall tables for `nlist`, `nprobe`, `pq_m`, and
 #'   `pq_nbits`; CPU Euclidean, cosine, correlation, and raw inner-product
 #'   native NSG uses compiled shape/k/target-recall tables for `r` and
-#'   `graph_k`; CPU Euclidean, cosine, correlation, and raw inner-product
-#'   native Vamana uses compiled shape/k/target-recall tables for `r`,
-#'   `search_l`, and `alpha`; optional FAISS GPU IVF `"cache"`/`"pilot"` tuning
+#'   `graph_k`; CUDA Euclidean/cosine/correlation native NSG uses compiled
+#'   shape/k/target-recall tables for the same parameters. CUDA Euclidean/cosine
+#'   rows are measured, while CUDA correlation rows are validation-pending
+#'   defaults seeded from measured CUDA cosine rows until the dedicated
+#'   correlation sweep is rerun; CPU
+#'   Euclidean, cosine, correlation, and raw inner-product
+#'   native Vamana and CUDA Euclidean/cosine/correlation native Vamana use
+#'   compiled shape/k/target-recall tables for `r`, `search_l`, and `alpha`.
+#'   CUDA Vamana correlation rows are validation-pending defaults seeded from
+#'   measured CUDA cosine rows until the dedicated correlation sweep is rerun;
+#'   CUDA CAGRA cosine/correlation rows use validation-pending defaults seeded
+#'   from the measured CUDA Euclidean CAGRA sweep until the metric-specific
+#'   sweeps are rerun;
+#'   optional
+#'   FAISS GPU IVF `"cache"`/`"pilot"` tuning
 #'   currently runs only for Euclidean IVF. CPU and
 #'   CUDA HNSW use the selected
 #'   `target_recall` value. CUDA cosine `method = "ivfpq_fastscan"` uses a
@@ -10260,16 +10409,21 @@ grid_self_knn <- function(data,
 #'   IVF-Flat for Euclidean self-KNN. CPU Euclidean/cosine/correlation/inner-product
 #'   `method = "ivf"` and CPU Euclidean/cosine/correlation/inner-product
 #'   `method = "ivfpq"` use it for compiled `nlist`/`nprobe` or
-#'   `nlist`/`nprobe`/`pq_m`/`pq_nbits` tiers; CUDA Euclidean/cosine
-#'   `method = "ivf"` uses it for compiled `nlist`/`nprobe`, CPU Euclidean/cosine/correlation/inner-product
-#'   `method = "nsg"` uses it for compiled `r`/`graph_k` tiers, CPU
-#'   Euclidean/cosine/correlation/inner-product `method = "vamana"` uses it
-#'   for compiled `r`/`search_l`/`alpha` tiers, and CPU/CUDA HNSW use it for
-#'   graph-search tiers.
-#'   CPU IVF/IVFPQ and CUDA IVF metadata records `tuning_benchmark_target_met` for
+#'   `nlist`/`nprobe`/`pq_m`/`pq_nbits` tiers; CUDA Euclidean/cosine/correlation
+#'   `method = "ivf"` uses it for compiled `nlist`/`nprobe`, CUDA Euclidean/correlation
+#'   `method = "ivfpq"` uses it for compiled `nlist`/`nprobe`/`pq_m`/`pq_nbits`, CPU Euclidean/cosine/correlation/inner-product
+#'   `method = "nsg"` uses it for compiled `r`/`graph_k` tiers, CUDA
+#'   Euclidean/cosine/correlation `method = "nsg"` uses it for compiled
+#'   `r`/`graph_k` tiers, CPU Euclidean/cosine/correlation/inner-product `method = "vamana"`
+#'   and CUDA Euclidean/cosine/correlation `method = "vamana"` use it for
+#'   compiled `r`/`search_l`/`alpha` tiers, and CPU/CUDA HNSW use it for graph-search
+#'   tiers.
+#'   CPU IVF/IVFPQ and CUDA IVF/IVFPQ metadata records `tuning_benchmark_target_met` for
 #'   benchmark-derived rows.
-#'   CPU Euclidean/cosine/correlation/inner-product `method = "exact"` records the requested tier in exact
-#'   tuning metadata, CPU Euclidean/cosine/correlation/inner-product `method = "flat"` records it in
+#'   CPU Euclidean/cosine/correlation/inner-product and CUDA Euclidean/cosine/correlation
+#'   `method = "exact"` record the requested tier in exact
+#'   tuning metadata, CPU Euclidean/cosine/correlation/inner-product and CUDA
+#'   Euclidean/cosine/correlation `method = "flat"` record it in
 #'   flat-tuning metadata, and CPU Euclidean/cosine/correlation/inner-product `method = "bruteforce"` records it in
 #'   bruteforce-tuning metadata, while recall remains 1.0 by construction.
 #'   Lower values trade recall for speed where the selected method supports a
@@ -10446,15 +10600,18 @@ nn <- function(data,
 #' KNN output on the CUDA device.
 #'
 #' @details
-#' This is intentionally narrower than `nn()`: the first GPU-resident route is
-#' exact CUDA search for public `method` values `"auto"`, `"exact"`, `"flat"`,
-#' and `"bruteforce"`. The exact route accepts all public metrics. Cosine and
-#' correlation are transformed to normalized squared L2 on the C++ side and
-#' stored as `1 - similarity`; raw inner product uses the standard
-#' maximum-inner-product-to-L2 transform and stores faissR's shifted
-#' smaller-is-better distance. Approximate cuVS/FAISS GPU methods currently
-#' fail clearly here because those provider result buffers still need
-#' provider-specific persistent GPU ownership.
+#' This is intentionally narrower than `nn()`: for Euclidean
+#' `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`, `nn_gpu()`
+#' uses a FAISS GPU direct `bfKnn` route and keeps the result buffers on the
+#' CUDA device. When FAISS was built with cuVS support, FAISS may dispatch the
+#' brute-force GPU distance primitive through cuVS internally. Cosine,
+#' correlation, and inner-product currently keep using the native CUDA
+#' GPU-resident exact route; cosine and correlation are transformed to
+#' normalized squared L2 on the C++ side and stored as `1 - similarity`, while
+#' raw inner product uses the standard maximum-inner-product-to-L2 transform
+#' and stores faissR's shifted smaller-is-better distance. Approximate
+#' cuVS/FAISS GPU methods currently fail clearly here because those provider
+#' result buffers still need provider-specific persistent GPU ownership.
 #'
 #' @param data Numeric matrix/data frame or optional `float::fl()`/`float32`
 #'   reference matrix.
@@ -10540,15 +10697,28 @@ nn_gpu <- function(data,
     stop("`nn_gpu()` requires faissR to be built with CUDA support and a CUDA device.", call. = FALSE)
   }
 
-  out <- nn_cuda_float32_gpu_cpp(
-    data,
-    points,
-    as.integer(k),
-    isTRUE(exclude_self),
-    metric,
-    "cuda_native_exact_gpu",
-    if (identical(method, "auto")) "exact" else method
-  )
+  resolved_method <- if (identical(method, "auto")) "exact" else method
+  out <- if (identical(metric, "euclidean") && isTRUE(faiss_gpu_available())) {
+    nn_faiss_gpu_bfknn_float32_gpu_cpp(
+      data,
+      points,
+      as.integer(k),
+      isTRUE(exclude_self),
+      metric,
+      "faiss_gpu_bfknn_l2",
+      resolved_method
+    )
+  } else {
+    nn_cuda_float32_gpu_cpp(
+      data,
+      points,
+      as.integer(k),
+      isTRUE(exclude_self),
+      metric,
+      "cuda_native_exact_gpu",
+      resolved_method
+    )
+  }
   out$requested_backend <- "cuda"
   out$requested_method <- public_nn_method_label(method)
   out$tuning <- tuning

@@ -42,6 +42,14 @@
 #include <faiss/gpu/GpuIndexIVFPQ.h>
 #endif
 
+#if defined(FAISSR_HAS_FAISS_GPU) && defined(FAISSR_HAS_CUDA) && \
+    __has_include(<faiss/gpu/GpuDistance.h>) && \
+    __has_include(<cuda_runtime_api.h>)
+#define FAISSR_HAS_FAISS_GPU_BFKNN 1
+#include <faiss/gpu/GpuDistance.h>
+#include <cuda_runtime_api.h>
+#endif
+
 #if defined(FAISSR_HAS_FAISS_GPU) && __has_include(<faiss/gpu/GpuIndexCagra.h>)
 #define FAISSR_HAS_FAISS_GPU_CAGRA 1
 #include <faiss/gpu/GpuIndexCagra.h>
@@ -497,6 +505,157 @@ std::vector<char> normalize_float32_view(MatrixViewF32& view,
 bool same_float32_object(SEXP data, SEXP points) {
   return data == points;
 }
+
+#ifdef FAISSR_HAS_FAISS_GPU_BFKNN
+extern "C" int faissr_cuda_convert_faiss_knn_gpu_result(const int64_t* in_indices,
+                                                        const float* in_distances,
+                                                        int n_points,
+                                                        int search_k,
+                                                        int out_k,
+                                                        int exclude_self,
+                                                        int sqrt_l2,
+                                                        int* out_indices,
+                                                        float* out_distances);
+extern "C" const char* faissr_cuda_last_error();
+
+struct FaissGpuKnnHandle {
+  int* indices = nullptr;
+  float* distances = nullptr;
+  int n_points = 0;
+  int k = 0;
+  int device = 0;
+};
+
+const char* faiss_cuda_error_message() {
+  const char* msg = faissr_cuda_last_error();
+  return msg == nullptr ? "unknown CUDA error" : msg;
+}
+
+void faiss_gpu_knn_handle_finalizer(SEXP ptr) {
+  if (TYPEOF(ptr) != EXTPTRSXP) return;
+  FaissGpuKnnHandle* handle =
+    static_cast<FaissGpuKnnHandle*>(R_ExternalPtrAddr(ptr));
+  if (handle == nullptr) return;
+  cudaFree(handle->indices);
+  cudaFree(handle->distances);
+  handle->indices = nullptr;
+  handle->distances = nullptr;
+  delete handle;
+  R_ClearExternalPtr(ptr);
+}
+
+void cuda_runtime_check(cudaError_t code, const char* where) {
+  if (code != cudaSuccess) {
+    Rcpp::stop("%s failed: %s", where, cudaGetErrorString(code));
+  }
+}
+
+void* cuda_malloc_bytes(const std::size_t bytes, const char* label) {
+  void* ptr = nullptr;
+  cuda_runtime_check(cudaMalloc(&ptr, bytes), label);
+  return ptr;
+}
+
+struct CudaDeviceAllocation {
+  void* ptr = nullptr;
+
+  CudaDeviceAllocation() = default;
+  CudaDeviceAllocation(const std::size_t bytes, const char* label) {
+    ptr = cuda_malloc_bytes(bytes, label);
+  }
+  CudaDeviceAllocation(const CudaDeviceAllocation&) = delete;
+  CudaDeviceAllocation& operator=(const CudaDeviceAllocation&) = delete;
+  CudaDeviceAllocation(CudaDeviceAllocation&& other) noexcept : ptr(other.ptr) {
+    other.ptr = nullptr;
+  }
+  CudaDeviceAllocation& operator=(CudaDeviceAllocation&& other) noexcept {
+    if (this != &other) {
+      cudaFree(ptr);
+      ptr = other.ptr;
+      other.ptr = nullptr;
+    }
+    return *this;
+  }
+  ~CudaDeviceAllocation() {
+    cudaFree(ptr);
+  }
+
+  template <typename T>
+  T* as() const {
+    return static_cast<T*>(ptr);
+  }
+
+  void* release() {
+    void* out = ptr;
+    ptr = nullptr;
+    return out;
+  }
+};
+
+Rcpp::List make_faiss_gpu_knn_result(FaissGpuKnnHandle* handle,
+                                     const std::string& metric,
+                                     const std::string& backend_used,
+                                     const std::string& method,
+                                     const bool exclude_self,
+                                     const bool exact,
+                                     const int search_k,
+                                     const MatrixViewF32& data_view,
+                                     const MatrixViewF32& points_view,
+                                     const bool same_storage,
+                                     const bool used_cuvs) {
+  SEXP owner = PROTECT(R_MakeExternalPtr(handle, R_NilValue, R_NilValue));
+  R_RegisterCFinalizerEx(owner, faiss_gpu_knn_handle_finalizer, TRUE);
+  SEXP indices_ptr = PROTECT(R_MakeExternalPtr(handle->indices, R_NilValue, owner));
+  SEXP distances_ptr = PROTECT(R_MakeExternalPtr(handle->distances, R_NilValue, owner));
+  Rcpp::List out = Rcpp::List::create(
+    Rcpp::Named("handle") = owner,
+    Rcpp::Named("indices_ptr") = indices_ptr,
+    Rcpp::Named("distances_ptr") = distances_ptr,
+    Rcpp::Named("n_query") = handle->n_points,
+    Rcpp::Named("k") = handle->k,
+    Rcpp::Named("index_base") = 1,
+    Rcpp::Named("indices_type") = "int32",
+    Rcpp::Named("distance_type") = "float32",
+    Rcpp::Named("distance_residency") = "cuda_device",
+    Rcpp::Named("indices_residency") = "cuda_device",
+    Rcpp::Named("result_residency") = "cuda",
+    Rcpp::Named("layout") = "column_major_query_by_k",
+    Rcpp::Named("metric") = metric,
+    Rcpp::Named("backend_used") = backend_used,
+    Rcpp::Named("method") = method,
+    Rcpp::Named("accelerator") = "cuda",
+    Rcpp::Named("gpu_provider") = used_cuvs ? "faiss_gpu_cuvs" : "faiss_gpu",
+    Rcpp::Named("gpu_algorithm") = "faiss::gpu::bfKnn",
+    Rcpp::Named("device") = handle->device,
+    Rcpp::Named("exact") = exact,
+    Rcpp::Named("exclude_self") = exclude_self,
+    Rcpp::Named("search_k") = search_k,
+    Rcpp::Named("max_query_batch_size") = handle->n_points,
+    Rcpp::Named("input_type") = "float32",
+    Rcpp::Named("data_input_layout") = data_view.layout,
+    Rcpp::Named("points_input_layout") = points_view.layout,
+    Rcpp::Named("input_owns_data") = data_view.owns_data || points_view.owns_data,
+    Rcpp::Named("float32_compatibility_conversion") =
+      data_view.compatibility_conversion || points_view.compatibility_conversion,
+    Rcpp::Named("device_to_host_result_copies") = 0,
+    Rcpp::Named("device_to_host_result_copies_known") = true,
+    Rcpp::Named("host_to_device_data_copies") = 1,
+    Rcpp::Named("host_to_device_query_copies") = same_storage ? 0 : 1,
+    Rcpp::Named("host_to_device_copies_known") = true,
+    Rcpp::Named("query_residency") = same_storage ?
+      "dataset_device_buffer" : "transient_cuda_query_buffer",
+    Rcpp::Named("index_residency") = "faiss_gpu_transient_exact",
+    Rcpp::Named("cpu_fallback") = false
+  );
+  out.attr("class") = Rcpp::CharacterVector::create("faissR_gpu_knn", "list");
+  out.attr("metric") = metric;
+  out.attr("backend_used") = backend_used;
+  out.attr("resolved_backend") = backend_used;
+  out.attr("result_residency") = "cuda";
+  UNPROTECT(3);
+  return out;
+}
+#endif
 
 class OmpThreadScope {
  public:
@@ -1265,6 +1424,14 @@ bool faiss_is_available_impl() {
   return true;
 }
 
+bool faiss_gpu_bfknn_float32_gpu_available_impl() {
+#ifdef FAISSR_HAS_FAISS_GPU_BFKNN
+  return true;
+#else
+  return false;
+#endif
+}
+
 std::string faiss_info_json_impl() {
 #ifdef FAISSR_HAS_FAISS_GPU
   const char* gpu = "true";
@@ -1462,6 +1629,157 @@ List faiss_gpu_flat_float32_knn_impl(SEXP data,
   Rcpp::stop(
     "FAISS GPU Flat backend is not available in this build. "
     "Install FAISS GPU/cuVS headers and rebuild faissR with FAISS_HOME set."
+  );
+#endif
+}
+
+List faiss_gpu_bfknn_float32_gpu_impl(SEXP data,
+                                      SEXP points,
+                                      int k,
+                                      bool exclude_self,
+                                      std::string metric,
+                                      std::string backend_used,
+                                      std::string method) {
+#ifdef FAISSR_HAS_FAISS_GPU_BFKNN
+  if (metric != "euclidean") {
+    Rcpp::stop("FAISS GPU-resident exact route currently supports metric = 'euclidean'");
+  }
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  const bool same_storage = same_float32_object(data, points);
+  MatrixViewF32 xq = same_storage ? MatrixViewF32() :
+    make_float32_matrix_view(points, "points");
+  if (same_storage) {
+    xq.nrow = xb.nrow;
+    xq.ncol = xb.ncol;
+    xq.data = xb.data;
+    xq.layout = xb.layout;
+  }
+  if (xb.nrow < 1 || xb.ncol < 1 || xq.nrow < 1) {
+    Rcpp::stop("data and points must have at least one row and one column");
+  }
+  if (xq.ncol != xb.ncol) {
+    Rcpp::stop("data and points must have the same number of columns");
+  }
+  if (k < 1 || k > xb.nrow || (exclude_self && k >= xb.nrow)) {
+    Rcpp::stop("k is not compatible with the requested FAISS GPU-resident KNN shape");
+  }
+  if (exclude_self && !same_storage) {
+    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  }
+  static_assert(sizeof(faiss::idx_t) == sizeof(int64_t),
+                "faissR GPU-result conversion expects 64-bit FAISS indices");
+
+  int device = 0;
+  cuda_runtime_check(cudaGetDevice(&device), "cudaGetDevice");
+  const int n_data = xb.nrow;
+  const int n_points = same_storage ? xb.nrow : xq.nrow;
+  const int n_features = xb.ncol;
+  const int search_k = exclude_self ? std::min(n_data, k + 1) : k;
+  const std::size_t data_items =
+    static_cast<std::size_t>(n_data) * n_features;
+  const std::size_t query_items =
+    static_cast<std::size_t>(n_points) * n_features;
+  const std::size_t raw_items =
+    static_cast<std::size_t>(n_points) * search_k;
+  const std::size_t out_items =
+    static_cast<std::size_t>(n_points) * k;
+
+  CudaDeviceAllocation d_data(data_items * sizeof(float), "cudaMalloc(FAISS GPU data)");
+  cuda_runtime_check(
+    cudaMemcpy(d_data.ptr, xb.data, data_items * sizeof(float), cudaMemcpyHostToDevice),
+    "cudaMemcpy(FAISS GPU data)"
+  );
+
+  CudaDeviceAllocation d_query;
+  void* query_ptr = d_data.ptr;
+  if (!same_storage) {
+    d_query = CudaDeviceAllocation(query_items * sizeof(float), "cudaMalloc(FAISS GPU query)");
+    cuda_runtime_check(
+      cudaMemcpy(d_query.ptr, xq.data, query_items * sizeof(float), cudaMemcpyHostToDevice),
+      "cudaMemcpy(FAISS GPU query)"
+    );
+    query_ptr = d_query.ptr;
+  }
+
+  CudaDeviceAllocation d_raw_indices(raw_items * sizeof(faiss::idx_t),
+                                     "cudaMalloc(FAISS GPU raw indices)");
+  CudaDeviceAllocation d_raw_distances(raw_items * sizeof(float),
+                                       "cudaMalloc(FAISS GPU raw distances)");
+  CudaDeviceAllocation d_out_indices(out_items * sizeof(int),
+                                     "cudaMalloc(FAISS GPU output indices)");
+  CudaDeviceAllocation d_out_distances(out_items * sizeof(float),
+                                       "cudaMalloc(FAISS GPU output distances)");
+
+  faiss::gpu::GpuDistanceParams args;
+  args.metric = faiss::METRIC_L2;
+  args.k = search_k;
+  args.dims = n_features;
+  args.vectors = d_data.ptr;
+  args.vectorType = faiss::gpu::DistanceDataType::F32;
+  args.vectorsRowMajor = true;
+  args.numVectors = n_data;
+  args.queries = query_ptr;
+  args.queryType = faiss::gpu::DistanceDataType::F32;
+  args.queriesRowMajor = true;
+  args.numQueries = n_points;
+  args.outDistances = d_raw_distances.as<float>();
+  args.outIndicesType = faiss::gpu::IndicesDataType::I64;
+  args.outIndices = d_raw_indices.ptr;
+  args.device = device;
+#ifdef FAISSR_HAS_CUVS
+  args.use_cuvs = true;
+#endif
+
+  faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
+  faiss::gpu::bfKnn(&resources, args);
+  cuda_runtime_check(cudaDeviceSynchronize(), "cudaDeviceSynchronize(FAISS GPU bfKnn)");
+
+  const int conversion_status = faissr_cuda_convert_faiss_knn_gpu_result(
+    d_raw_indices.as<int64_t>(),
+    d_raw_distances.as<float>(),
+    n_points,
+    search_k,
+    k,
+    exclude_self ? 1 : 0,
+    1,
+    d_out_indices.as<int>(),
+    d_out_distances.as<float>()
+  );
+  if (conversion_status != 0) {
+    Rcpp::stop("FAISS GPU-result conversion failed: %s", faiss_cuda_error_message());
+  }
+
+  FaissGpuKnnHandle* handle = new FaissGpuKnnHandle();
+  handle->indices = static_cast<int*>(d_out_indices.release());
+  handle->distances = static_cast<float*>(d_out_distances.release());
+  handle->n_points = n_points;
+  handle->k = k;
+  handle->device = device;
+
+  return make_faiss_gpu_knn_result(
+    handle,
+    metric,
+    backend_used,
+    method,
+    exclude_self,
+    true,
+    search_k,
+    xb,
+    xq,
+    same_storage,
+    args.use_cuvs
+  );
+#else
+  (void)data;
+  (void)points;
+  (void)k;
+  (void)exclude_self;
+  (void)metric;
+  (void)backend_used;
+  (void)method;
+  Rcpp::stop(
+    "FAISS GPU-resident exact route is not available in this build. "
+    "Install FAISS GPU and CUDA headers, then rebuild faissR with CUDA enabled."
   );
 #endif
 }

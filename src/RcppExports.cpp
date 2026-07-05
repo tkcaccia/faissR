@@ -966,21 +966,22 @@ BEGIN_RCPP
 END_RCPP
 }
 // nn_tune_cuvs_cagra_cpp
-List nn_tune_cuvs_cagra_cpp(int n, int p, int k, double target_recall_option, int graph_degree_option, int intermediate_graph_degree_option, int search_width_option, int itopk_size_option, bool manual);
-RcppExport SEXP _faissR_nn_tune_cuvs_cagra_cpp(SEXP nSEXP, SEXP pSEXP, SEXP kSEXP, SEXP target_recall_optionSEXP, SEXP graph_degree_optionSEXP, SEXP intermediate_graph_degree_optionSEXP, SEXP search_width_optionSEXP, SEXP itopk_size_optionSEXP, SEXP manualSEXP) {
+List nn_tune_cuvs_cagra_cpp(int n, int p, int k, std::string metric, double target_recall_option, int graph_degree_option, int intermediate_graph_degree_option, int search_width_option, int itopk_size_option, bool manual);
+RcppExport SEXP _faissR_nn_tune_cuvs_cagra_cpp(SEXP nSEXP, SEXP pSEXP, SEXP kSEXP, SEXP metricSEXP, SEXP target_recall_optionSEXP, SEXP graph_degree_optionSEXP, SEXP intermediate_graph_degree_optionSEXP, SEXP search_width_optionSEXP, SEXP itopk_size_optionSEXP, SEXP manualSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< int >::type n(nSEXP);
     Rcpp::traits::input_parameter< int >::type p(pSEXP);
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
     Rcpp::traits::input_parameter< double >::type target_recall_option(target_recall_optionSEXP);
     Rcpp::traits::input_parameter< int >::type graph_degree_option(graph_degree_optionSEXP);
     Rcpp::traits::input_parameter< int >::type intermediate_graph_degree_option(intermediate_graph_degree_optionSEXP);
     Rcpp::traits::input_parameter< int >::type search_width_option(search_width_optionSEXP);
     Rcpp::traits::input_parameter< int >::type itopk_size_option(itopk_size_optionSEXP);
     Rcpp::traits::input_parameter< bool >::type manual(manualSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_tune_cuvs_cagra_cpp(n, p, k, target_recall_option, graph_degree_option, intermediate_graph_degree_option, search_width_option, itopk_size_option, manual));
+    rcpp_result_gen = Rcpp::wrap(nn_tune_cuvs_cagra_cpp(n, p, k, metric, target_recall_option, graph_degree_option, intermediate_graph_degree_option, search_width_option, itopk_size_option, manual));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1702,6 +1703,23 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nn_faiss_gpu_bfknn_float32_gpu_cpp
+List nn_faiss_gpu_bfknn_float32_gpu_cpp(SEXP data, SEXP points, int k, bool exclude_self, std::string metric, std::string backend_used, std::string method);
+RcppExport SEXP _faissR_nn_faiss_gpu_bfknn_float32_gpu_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP metricSEXP, SEXP backend_usedSEXP, SEXP methodSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< std::string >::type backend_used(backend_usedSEXP);
+    Rcpp::traits::input_parameter< std::string >::type method(methodSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_gpu_bfknn_float32_gpu_cpp(data, points, k, exclude_self, metric, backend_used, method));
+    return rcpp_result_gen;
+END_RCPP
+}
 // nn_faiss_gpu_flat_ip_cpp
 List nn_faiss_gpu_flat_ip_cpp(NumericMatrix data, NumericMatrix points, int k, bool exclude_self);
 RcppExport SEXP _faissR_nn_faiss_gpu_flat_ip_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP) {
@@ -2205,7 +2223,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_tune_faiss_nsg_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_nsg_cpp, 5},
     {"_faissR_nn_tune_faiss_nndescent_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_nndescent_cpp, 5},
     {"_faissR_nn_tune_cpu_nndescent_cpp", (DL_FUNC) &_faissR_nn_tune_cpu_nndescent_cpp, 5},
-    {"_faissR_nn_tune_cuvs_cagra_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_cagra_cpp, 9},
+    {"_faissR_nn_tune_cuvs_cagra_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_cagra_cpp, 10},
     {"_faissR_nn_tune_cuvs_cagra_build_algo_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_cagra_build_algo_cpp, 6},
     {"_faissR_nn_tune_cuvs_hnsw_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_hnsw_cpp, 13},
     {"_faissR_nn_tune_cuvs_nndescent_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_nndescent_cpp, 9},
@@ -2251,6 +2269,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_faiss_flat_normalized_ip_distance_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_normalized_ip_distance_cpp, 5},
     {"_faissR_nn_faiss_gpu_flat_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_flat_cpp, 4},
     {"_faissR_nn_faiss_gpu_flat_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_flat_float32_cpp, 7},
+    {"_faissR_nn_faiss_gpu_bfknn_float32_gpu_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_bfknn_float32_gpu_cpp, 7},
     {"_faissR_nn_faiss_gpu_flat_ip_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_flat_ip_cpp, 4},
     {"_faissR_nn_faiss_gpu_flat_normalized_ip_distance_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_flat_normalized_ip_distance_cpp, 4},
     {"_faissR_nn_faiss_ivfpq_cpp", (DL_FUNC) &_faissR_nn_faiss_ivfpq_cpp, 11},

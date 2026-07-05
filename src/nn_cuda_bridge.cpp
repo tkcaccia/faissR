@@ -23,6 +23,14 @@ List cuda_nn_float32_gpu_impl(SEXP data,
                               std::string metric,
                               std::string backend_used,
                               std::string method);
+bool faiss_gpu_bfknn_float32_gpu_available_impl();
+List faiss_gpu_bfknn_float32_gpu_impl(SEXP data,
+                                      SEXP points,
+                                      int k,
+                                      bool exclude_self,
+                                      std::string metric,
+                                      std::string backend_used,
+                                      std::string method);
 List cuda_gpu_knn_to_host_impl(SEXP result);
 List cuda_row_candidate_knn_impl(NumericMatrix data,
                                  IntegerMatrix candidate_indices,
@@ -109,15 +117,31 @@ extern "C" SEXP faissR_nn_cuda_tuned_gpu_call(SEXP x,
       "provider-specific GPU-result route for this method."
     );
   }
-  Rcpp::List out = cuda_nn_float32_gpu_impl(
-    x,
-    x,
-    kk,
-    !include_self_value,
-    metric_value,
-    "cuda_native_exact_gpu",
-    method_value == "auto" ? "exact" : method_value
-  );
+  const std::string resolved_method =
+    method_value == "auto" ? "exact" : method_value;
+  Rcpp::List out;
+  if (metric_value == "euclidean" &&
+      faiss_gpu_bfknn_float32_gpu_available_impl()) {
+    out = faiss_gpu_bfknn_float32_gpu_impl(
+      x,
+      x,
+      kk,
+      !include_self_value,
+      metric_value,
+      "faiss_gpu_bfknn_l2",
+      resolved_method
+    );
+  } else {
+    out = cuda_nn_float32_gpu_impl(
+      x,
+      x,
+      kk,
+      !include_self_value,
+      metric_value,
+      "cuda_native_exact_gpu",
+      resolved_method
+    );
+  }
   out["target_recall"] = target_recall_value;
   out["tuning"] = "auto";
   out["tuning_note"] =

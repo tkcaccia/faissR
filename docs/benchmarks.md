@@ -88,6 +88,13 @@ benchmark_scripts/run_hpc_cagra_tuning_cuda.sh
 benchmark_scripts/run_hpc_ivfpq_fastscan_tuning_cpu12.sh
 ```
 
+Metric-specific CAGRA wrappers submit one metric at a time. For example,
+`benchmark_scripts/run_hpc_cagra_tuning_cuda_correlation.sh` runs
+`backend = "cuda"`, `method = "cagra"`, `metric = "correlation"` on the
+float32 datasets and writes rows that can replace the current validation-pending
+seed table
+`benchmark_scripts/cuda_cagra_correlation_shape_tuning_defaults_from_seeded_euclidean_results.csv`.
+
 Each method writes candidate grids, raw results, target-recall recommendations,
 shape summaries, and a Markdown report. The recommendation table selects the
 fastest successful parameter setting that reaches the requested recall target;
@@ -189,6 +196,10 @@ coverage when FlowRepository did not complete trusted rows.
 summarizes the CPU12 correlation NSG sweep in the same way; correlation rows
 are centered and normalized before Euclidean NSG refinement and keep their own
 shape/k/target table.
+`benchmark_scripts/cuda_nsg_correlation_shape_tuning_defaults_from_seeded_cosine_results.csv`
+records the current CUDA correlation NSG defaults, seeded from the measured CUDA
+cosine NSG sweep until the dedicated CUDA correlation run replaces them; these
+rows report `tuning_benchmark_target_met = FALSE`.
 `benchmark_scripts/inner_product_nsg_shape_tuning_defaults_from_uploaded_results.csv`
 summarizes the CPU12 raw inner-product NSG sweep from
 `faissR_NSG_TUNING_CPU12_inner_product_20260701_090337`. These rows now feed
@@ -205,6 +216,10 @@ the compiled Vamana `tuning = "auto"` table.
 summarizes the CPU12 correlation Vamana sweep in the same way; correlation rows
 are centered and normalized before Euclidean Vamana refinement and keep their
 own shape/k/target table.
+`benchmark_scripts/cuda_vamana_correlation_shape_tuning_defaults_from_seeded_cosine_results.csv`
+records the current CUDA correlation Vamana defaults, seeded from the measured
+CUDA cosine Vamana sweep until the dedicated CUDA correlation run replaces
+them; these rows report `tuning_benchmark_target_met = FALSE`.
 `benchmark_scripts/inner_product_vamana_shape_tuning_defaults_from_uploaded_results.csv`
 summarizes the CPU12 raw inner-product Vamana sweep from
 `faissR_VAMANA_TUNING_CPU12_inner_product_20260701_090337`. These rows feed
@@ -220,6 +235,21 @@ settings from `faissR_EXACT_TUNING_CPU12_correlation_20260701_090337`. Exact
 correlation has recall 1 by construction, so these rows tune memory/layout and
 batching rather than approximation parameters; partial shape coverage and the
 small-n/k=15/0.99 below-target validation row are preserved in metadata.
+For CUDA exact correlation search,
+`benchmark_scripts/cuda_exact_correlation_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes FAISS GPU Flat correlation query-batch/resource settings from
+`faissR_EXACT_TUNING_CUDA_correlation_20260703_023519`. These rows feed the
+compiled CUDA exact `tuning = "auto"` table for `metric = "correlation"`.
+Exact CUDA correlation is searched after centering and L2-normalizing float32
+rows; recall is exact by construction, while below-target validation rows are
+still preserved with `tuning_benchmark_target_met = FALSE`.
+For CUDA Flat correlation search,
+`benchmark_scripts/cuda_flat_correlation_shape_tuning_defaults_from_uploaded_results.csv`
+summarizes FAISS GPU Flat correlation query-batch/resource settings from
+`faissR_FLAT_TUNING_CUDA_correlation_20260703_062359`. These rows feed the
+compiled CUDA Flat `tuning = "auto"` table for `metric = "correlation"` and
+are stored in `attr(result, "flat_tuning")`; below-target validation rows are
+preserved with `tuning_benchmark_target_met = FALSE`.
 For exact raw inner-product search,
 `benchmark_scripts/inner_product_exact_shape_tuning_defaults_from_uploaded_results.csv`
 summarizes CPU12 FAISS Flat IP query-batch and fitted-index reuse settings from
@@ -248,6 +278,14 @@ settings from `faissR_BRUTEFORCE_TUNING_CPU12_correlation_20260701_090337`.
 As with exact and Flat correlation, the search is exact by construction and
 the tuning rows control batch/cache behavior; partial shape coverage and the
 small-n/k=15/0.99 below-target validation row are preserved in metadata.
+For CUDA bruteforce correlation search,
+`benchmark_scripts/cuda_bruteforce_correlation_shape_tuning_defaults_from_proxy_results.csv`
+summarizes the cuVS brute-force query-batch and GPU resource reuse policy for
+the centered/normalized correlation transform. The first table is seeded from
+the measured CUDA Euclidean cuVS brute-force sweep because the earlier uploaded
+correlation run failed before reaching the backend; the metric-specific wrapper
+`run_hpc_bruteforce_tuning_cuda_correlation.sh` reruns the corrected path and
+can replace those proxy rows with measured correlation timings.
 For bruteforce raw inner-product search,
 `benchmark_scripts/inner_product_bruteforce_shape_tuning_defaults_from_uploaded_results.csv`
 summarizes CPU12 FAISS Flat IP query-batch and fitted-index reuse settings from
@@ -303,9 +341,10 @@ collects the fastest Euclidean settings from the uploaded tuning results, and
 from repeating candidate/dataset/k combinations that already timed out in the
 Euclidean sweeps. To disable that guard for a diagnostic rerun, submit with
 `SKIP_PREVIOUS_TIMEOUTS=FALSE`.
-For this tuning cycle, NN-descent is treated as a CPU-only method; the legacy
-CUDA NN-descent launcher exits unless explicitly submitted with
-`ALLOW_CUDA_NNDESCENT_TUNING=TRUE`.
+CUDA NN-descent tuning is available through explicit metric-specific wrappers
+such as `run_hpc_nndescent_tuning_cuda_correlation.sh`. The CUDA launcher still
+requires `ALLOW_CUDA_NNDESCENT_TUNING=TRUE` so accidental all-metric submissions
+do not start a large cuVS grid unintentionally.
 
 ## Benchmark #1
 
@@ -413,6 +452,9 @@ codebooks on compact datasets because that FAISS GPU index requires 8-bit PQ.
 CPU IVFPQ correlation rows are promoted from
 `faissR_IVFPQ_TUNING_CPU12_correlation_20260701_090337` into
 `benchmark_scripts/correlation_ivfpq_shape_tuning_defaults_from_uploaded_results.csv`.
+CUDA IVFPQ correlation rows are promoted from
+`faissR_IVFPQ_TUNING_CUDA_correlation_20260703_095008` into
+`benchmark_scripts/cuda_ivfpq_correlation_shape_tuning_defaults_from_uploaded_results.csv`.
 Those rows tune `nlist`, `nprobe`, `pq_m`, and `pq_nbits` by shape, `k`, and
 target recall. Because product quantization can reduce recall substantially,
 rows that did not reach the requested target are labelled

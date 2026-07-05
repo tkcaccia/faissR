@@ -241,8 +241,8 @@ nn_tune_cpu_nndescent_cpp <- function(n, p, k, metric = "euclidean", target_reca
     .Call(`_faissR_nn_tune_cpu_nndescent_cpp`, n, p, k, metric, target_recall_option)
 }
 
-nn_tune_cuvs_cagra_cpp <- function(n, p, k, target_recall_option = NA_real_, graph_degree_option = NA_integer_, intermediate_graph_degree_option = NA_integer_, search_width_option = NA_integer_, itopk_size_option = NA_integer_, manual = FALSE) {
-    .Call(`_faissR_nn_tune_cuvs_cagra_cpp`, n, p, k, target_recall_option, graph_degree_option, intermediate_graph_degree_option, search_width_option, itopk_size_option, manual)
+nn_tune_cuvs_cagra_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_, graph_degree_option = NA_integer_, intermediate_graph_degree_option = NA_integer_, search_width_option = NA_integer_, itopk_size_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_cuvs_cagra_cpp`, n, p, k, metric, target_recall_option, graph_degree_option, intermediate_graph_degree_option, search_width_option, itopk_size_option, manual)
 }
 
 nn_tune_cuvs_cagra_build_algo_cpp <- function(n, p, k, self_query, compact, requested = "auto") {
@@ -425,6 +425,10 @@ nn_faiss_gpu_flat_float32_cpp <- function(data, points, k, exclude_self, metric,
     .Call(`_faissR_nn_faiss_gpu_flat_float32_cpp`, data, points, k, exclude_self, metric, distance_output, distance_storage)
 }
 
+nn_faiss_gpu_bfknn_float32_gpu_cpp <- function(data, points, k, exclude_self, metric, backend_used, method) {
+    .Call(`_faissR_nn_faiss_gpu_bfknn_float32_gpu_cpp`, data, points, k, exclude_self, metric, backend_used, method)
+}
+
 nn_faiss_gpu_flat_ip_cpp <- function(data, points, k, exclude_self) {
     .Call(`_faissR_nn_faiss_gpu_flat_ip_cpp`, data, points, k, exclude_self)
 }
@@ -516,3 +520,4 @@ kmeans_faiss_cpp <- function(data, centers, max_iter, nredo, tol, seed, n_thread
 kmeans_faiss_gpu_cpp <- function(data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus) {
     .Call(`_faissR_kmeans_faiss_gpu_cpp`, data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus)
 }
+

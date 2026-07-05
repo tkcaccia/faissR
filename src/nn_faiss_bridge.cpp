@@ -65,6 +65,13 @@ List faiss_gpu_flat_float32_knn_impl(SEXP data,
                                      std::string metric,
                                      std::string distance_output,
                                      std::string distance_storage);
+List faiss_gpu_bfknn_float32_gpu_impl(SEXP data,
+                                      SEXP points,
+                                      int k,
+                                      bool exclude_self,
+                                      std::string metric,
+                                      std::string backend_used,
+                                      std::string method);
 List faiss_gpu_flat_ip_knn_impl(NumericMatrix data,
                                 NumericMatrix points,
                                 int k,
@@ -535,6 +542,19 @@ List nn_faiss_gpu_flat_float32_cpp(SEXP data,
                                    std::string distance_storage) {
   return faiss_gpu_flat_float32_knn_impl(
     data, points, k, exclude_self, metric, distance_output, distance_storage
+  );
+}
+
+// [[Rcpp::export]]
+List nn_faiss_gpu_bfknn_float32_gpu_cpp(SEXP data,
+                                        SEXP points,
+                                        int k,
+                                        bool exclude_self,
+                                        std::string metric,
+                                        std::string backend_used,
+                                        std::string method) {
+  return faiss_gpu_bfknn_float32_gpu_impl(
+    data, points, k, exclude_self, metric, backend_used, method
   );
 }
 

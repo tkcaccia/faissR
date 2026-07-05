@@ -5,6 +5,7 @@
 #include <climits>
 #include <cstddef>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <sstream>
 #include <string>
@@ -512,6 +513,41 @@ __global__ void knn_distance_linear_transform_kernel(float* distances,
     float value = (distances[offset] - base) * scale;
     if (value < 0.0f && value > -1e-5f) value = 0.0f;
     distances[offset] = fmaxf(value, 0.0f);
+  }
+}
+
+__global__ void faiss_knn_rowmajor_to_column_kernel(const int64_t* in_idx,
+                                                    const float* in_dist,
+                                                    int n_points,
+                                                    int search_k,
+                                                    int out_k,
+                                                    int exclude_self,
+                                                    int sqrt_l2,
+                                                    int* out_idx,
+                                                    float* out_dist) {
+  const int q = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (q >= n_points) return;
+
+  int written = 0;
+  const std::size_t row = static_cast<std::size_t>(q) * search_k;
+  for (int j = 0; j < search_k && written < out_k; ++j) {
+    const int64_t label = in_idx[row + j];
+    if (label < 0) continue;
+    if (exclude_self && label == static_cast<int64_t>(q)) continue;
+
+    const std::size_t out_offset =
+      static_cast<std::size_t>(written) * n_points + q;
+    out_idx[out_offset] = static_cast<int>(label) + 1;
+    const float raw = in_dist[row + j];
+    out_dist[out_offset] = sqrt_l2 ? sqrtf(fmaxf(raw, 0.0f)) : raw;
+    ++written;
+  }
+
+  for (; written < out_k; ++written) {
+    const std::size_t out_offset =
+      static_cast<std::size_t>(written) * n_points + q;
+    out_idx[out_offset] = INT_MAX;
+    out_dist[out_offset] = kCudaLargeDistance;
   }
 }
 
@@ -1362,6 +1398,44 @@ extern "C" int faissr_cuda_knn_gpu_postprocess_distances(float* distances,
     return 1;
   }
   if (check_cuda(cudaDeviceSynchronize(), "knn_distance_linear_transform_kernel synchronize")) {
+    return 1;
+  }
+  return 0;
+}
+
+extern "C" int faissr_cuda_convert_faiss_knn_gpu_result(const int64_t* in_indices,
+                                                        const float* in_distances,
+                                                        int n_points,
+                                                        int search_k,
+                                                        int out_k,
+                                                        int exclude_self,
+                                                        int sqrt_l2,
+                                                        int* out_indices,
+                                                        float* out_distances) {
+  last_error.clear();
+  if (in_indices == nullptr || in_distances == nullptr ||
+      out_indices == nullptr || out_distances == nullptr ||
+      n_points < 1 || search_k < 1 || out_k < 1 || search_k < out_k) {
+    set_error("invalid FAISS GPU-result conversion arguments");
+    return 1;
+  }
+  const int threads = 128;
+  const int blocks = (n_points + threads - 1) / threads;
+  faiss_knn_rowmajor_to_column_kernel<<<blocks, threads>>>(
+    in_indices,
+    in_distances,
+    n_points,
+    search_k,
+    out_k,
+    exclude_self,
+    sqrt_l2,
+    out_indices,
+    out_distances
+  );
+  if (check_cuda(cudaGetLastError(), "faiss_knn_rowmajor_to_column_kernel launch")) {
+    return 1;
+  }
+  if (check_cuda(cudaDeviceSynchronize(), "faiss_knn_rowmajor_to_column_kernel synchronize")) {
     return 1;
   }
   return 0;

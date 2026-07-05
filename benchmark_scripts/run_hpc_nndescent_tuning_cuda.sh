@@ -30,8 +30,11 @@ fi
 #   sbatch /scratch/firenze/NN/benchmark_scripts/run_hpc_nndescent_tuning_cuda.sh
 #
 # The job scans float32 .RData files, uses explicit backend="cuda",
-# method="nndescent", Euclidean distance, k=15,30,50,100, and writes
-# recommendation tables for target recall 0.90, 0.95, and 0.99.
+# method="nndescent", metric(s) selected by METRICS (default: euclidean),
+# k=15,30,50,100, and writes recommendation tables for target recall
+# 0.90, 0.95, and 0.99.
+# Use run_hpc_nndescent_tuning_cuda_correlation.sh to run only the
+# centered-normalized correlation sweep.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 export DATA_ROOT="${DATA_ROOT:-${BASE_DIR}/Data}"

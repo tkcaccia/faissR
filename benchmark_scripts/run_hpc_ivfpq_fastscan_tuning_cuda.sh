@@ -26,6 +26,8 @@ set -euo pipefail
 # method="ivfpq_fastscan", the metric(s) selected by METRICS
 # (default: euclidean), k=15,30,50,100, and writes recommendation
 # tables for target recall 0.90, 0.95, and 0.99.
+# Use the metric-specific wrapper
+# run_hpc_ivfpq_fastscan_tuning_cuda_correlation.sh for the correlation sweep.
 # It sweeps IVF `nlist`, IVF `nprobe`, byte-aligned cuVS 4-bit `pq_dim`,
 # and cuVS batch size. By default, the R benchmark uses a curated paired
 # speed-to-recall grid. Set IVFPQ_FASTSCAN_NLIST_MULTS,

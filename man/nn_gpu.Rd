@@ -53,13 +53,16 @@ stores owning and non-owning external pointers so downstream C/C++ packages can
 consume the KNN output on the CUDA device.
 }
 \details{
-This is intentionally narrower than \code{nn()}: the first GPU-resident route
-is exact CUDA search for public \code{method} values \code{"auto"},
-\code{"exact"}, \code{"flat"}, and \code{"bruteforce"}. The exact route accepts
-all public metrics. Cosine and correlation are transformed to normalized
-squared L2 on the C++ side and stored as \code{1 - similarity}; raw inner
-product uses the standard maximum-inner-product-to-L2 transform and stores
-faissR's shifted smaller-is-better distance. Approximate cuVS/FAISS GPU methods
-currently fail clearly here because those provider result buffers still need
-provider-specific persistent GPU ownership.
+This is intentionally narrower than \code{nn()}: for Euclidean
+\code{method = "auto"}, \code{"exact"}, \code{"flat"}, or \code{"bruteforce"},
+\code{nn_gpu()} uses a FAISS GPU direct \code{bfKnn} route and keeps the
+result buffers on the CUDA device. When FAISS was built with cuVS support,
+FAISS may dispatch the brute-force GPU distance primitive through cuVS
+internally. Cosine, correlation, and inner-product currently keep using the
+native CUDA GPU-resident exact route; cosine and correlation are transformed to
+normalized squared L2 on the C++ side and stored as \code{1 - similarity},
+while raw inner product uses the standard maximum-inner-product-to-L2
+transform and stores faissR's shifted smaller-is-better distance. Approximate
+cuVS/FAISS GPU methods currently fail clearly here because those provider
+result buffers still need provider-specific persistent GPU ownership.
 }
