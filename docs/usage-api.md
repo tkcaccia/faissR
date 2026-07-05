@@ -26,9 +26,31 @@ expected to set. For the full R help page after installation, use
 | `graph_cluster()` | Run native random-walking, Louvain, or Leiden graph clustering [9-12]. |
 | `fast_kmeans()` | CPU/FAISS/CUDA/cuVS k-means where available [7-8]. |
 | `knn()` | Fit a reusable kNN classifier/regressor or fit and predict immediately. |
-| `predict()` | Predict labels, numeric responses, or class probabilities from `knn()`. |
+| `predict()` | S3 method for `faissR_knn_model`; predicts labels, numeric responses, or class probabilities from `knn()`. |
 | `backend_info()` | Report available CPU, FAISS, CUDA, cuVS, and cuGraph capabilities. |
 | `nn_capabilities()` | Report supported nearest-neighbour method/backend/metric combinations for preflight checks; `runtime = TRUE` adds current-build availability columns. |
+| `faiss_available()` | Logical check for compiled/linked FAISS CPU support. |
+| `faiss_gpu_available()` | Logical check for FAISS GPU support in the linked FAISS build. |
+| `cuda_available()` | Logical check for native CUDA support and an available CUDA runtime/device. |
+| `cuvs_available()` | Logical check for direct RAPIDS cuVS support. |
+| `cugraph_available()` | Logical check for RAPIDS libcugraph graph clustering support. |
+
+## C/C++ Callable API
+
+faissR registers a small stable ABI for downstream R packages that need to call
+nearest-neighbour code from C/C++ without going through the R wrapper layer.
+Retrieve the function pointer with `R_GetCCallable("faissR", "<name>")`.
+
+| Name | Signature | Description |
+| --- | --- | --- |
+| `faissR_nn_float32_call` | `(SEXP x, SEXP k, SEXP backend, SEXP metric, SEXP include_self, SEXP n_threads)` | CPU FAISS Flat float32 KNN. Accepts ordinary R double matrices or optional `float::fl()`/float32 matrices. Returns the stable host KNN list with double distances. |
+| `faissR_nn_float32_call_output` | `(SEXP x, SEXP k, SEXP backend, SEXP metric, SEXP include_self, SEXP n_threads, SEXP distances)` | Same CPU FAISS Flat float32 route, with `distances = "double"` or `"float"` for the returned host distance matrix. |
+| `faissR_nn_cuda_tuned_gpu_call` | `(SEXP x, SEXP k, SEXP method, SEXP metric, SEXP include_self, SEXP target_recall)` | CUDA self-KNN route for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. Returns a `faissR_gpu_knn` object with CUDA-device `indices_ptr` and `distances_ptr`, `result_residency = "cuda"`, and `device_to_host_result_copies = 0`. |
+
+The GPU-resident ABI is intentionally exact-family only at present. Approximate
+CUDA methods such as IVF, CAGRA, HNSW, NN-descent, NSG, Vamana, and IVFPQ
+FastScan are available through `nn()` where supported, but their provider result
+buffers are not yet exposed through persistent GPU-resident ownership.
 
 ## `nn()`
 

@@ -138,6 +138,44 @@ headers and libraries discovered by `configure`.
 - `nn_capabilities()` to report supported nearest-neighbour
   method/backend/metric combinations for benchmark preflight checks.
 
+## Available Functions
+
+The table below summarizes the public R functions shown on GitHub. Full
+argument-level details are in the [API reference](docs/usage-api.md), and the
+method/backend/metric matrix is in the
+[backend-capabilities page](docs/backend-capabilities.md).
+
+| Function | Main use | Backends | Return |
+| --- | --- | --- | --- |
+| `nn()` | General nearest-neighbour search over reference/query matrices. Supports `backend = "auto"`, `"cpu"`, or `"cuda"`; `method = "auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"ivfpq_fastscan"`, `"nndescent"`, `"nsg"`, `"vamana"`, or `"cagra"`; and `metric = "euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. `exclude_self = TRUE` removes self-neighbours in compiled code for self-KNN. `tuning = "auto"` uses C++ shape/k/target-recall policies. | CPU, FAISS CPU, FAISS GPU, native CUDA, direct RAPIDS cuVS where compiled. | A `faissR_nn` list with 1-based `indices`, `distances`, `index_base`, `distance_type`, `metric`, `backend_used`, and route/tuning metadata. `output = "float"` can return float32 distances when the optional `float` package is available. |
+| `nn_gpu()` | GPU-resident exact-family KNN for downstream CUDA packages. It is narrower than `nn()` and is intended when another package needs device pointers instead of R matrices. | CUDA exact-family routes for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. Euclidean uses FAISS GPU direct `bfKnn` when available; cosine/correlation/IP use native CUDA exact transforms. | A `faissR_gpu_knn` object with an owning `handle`, CUDA-device `indices_ptr` and `distances_ptr`, `result_residency = "cuda"`, `indices_type = "int32"`, `distance_type = "float32"`, and `device_to_host_result_copies = 0`. |
+| `gpu_knn_to_host()` | Explicit diagnostic conversion of a GPU-resident KNN result to ordinary R matrices. It is never called automatically by `nn_gpu()`. | Uses the CUDA result handle returned by `nn_gpu()` or the C-callable GPU API. | A host-side `faissR_nn` list with copied integer indices and numeric distances. |
+| `candidate_knn()` | Exact top-k reranking inside a user-supplied candidate-neighbour matrix. This is useful when another algorithm proposes candidates and faissR should compute the final ordered neighbours. | CPU compiled scorer with the public metrics. | A `faissR_nn` list restricted to the supplied candidates. |
+| `knn_graph()` | Build weighted nearest-neighbour graphs from data, an embedding, or an existing `faissR_nn` result. It can compute KNN internally through `nn(..., exclude_self = TRUE)`. | CPU and CUDA KNN backends through `nn()`, then native graph construction. | A `faissR_graph` object with edge indices, weights, graph parameters, and KNN metadata. |
+| `graph_cluster()` | Cluster a graph or data-derived KNN graph with random-walking, Louvain, or Leiden-style algorithms. `n_clusters` is an alternative target to `resolution` for Louvain/Leiden. | Native CPU/OpenMP clustering; optional RAPIDS libcugraph CUDA Louvain/Leiden when compiled. | A `faissR_graph_cluster` object with `membership`, modularity/quality fields, method/backend metadata, and graph-building metadata when applicable. |
+| `fast_kmeans()` | Fast k-means-style clustering with CPU, FAISS, FAISS GPU, or cuVS routes. `tuning = "auto"` selects deterministic shape-aware defaults for iteration count, starts, and tolerances. | CPU/statistics, FAISS CPU/GPU, direct cuVS where compiled. | A `faissR_kmeans` object with cluster assignments, centers, within-cluster summaries, backend/tuning metadata, and convergence diagnostics. |
+| `knn()` | Fit a reusable kNN classifier/regressor, or fit and predict immediately with `knn(Xtrain, Ytrain, Xtest)`. It reuses `nn()` for neighbour search and can preserve float32 training/query data for supported routes. | Same device and method family as `nn()` for the selected training/prediction route. | Without `Xtest`, a `faissR_knn_model`; with `Xtest`, predictions or probabilities depending on `type`. |
+| `predict()` | S3 method for `faissR_knn_model` objects. It predicts labels, numeric responses, or class probabilities with `type = "response"` or `"prob"`. Prediction sends the full query matrix in one batched NN call. | Same fitted route where compatible; otherwise rebuilds the same requested route rather than silently switching algorithms. | A vector/data frame of predictions or a probability matrix, with the underlying `nn()` metadata attached. |
+| `backend_info()` | Inspect compiled/runtime backend support and implementation notes. | All compiled backend families. | A data frame of public backend names, implementation labels, runtime availability, and notes. |
+| `nn_capabilities()` | Preflight check for supported public `method`/`backend`/`metric` combinations. `runtime = TRUE` adds current-machine availability information. | CPU, CUDA, FAISS, cuVS, and cuGraph capability checks. | A data frame suitable for benchmark filtering before a large run. |
+| `faiss_available()` | Check whether faissR was compiled and linked against FAISS. | FAISS CPU. | A single logical value. |
+| `faiss_gpu_available()` | Check whether the linked FAISS build reports GPU support. | FAISS GPU. | A single logical value. |
+| `cuda_available()` | Check whether native CUDA support was compiled and a CUDA device/runtime is available. | Native CUDA. | A single logical value. |
+| `cuvs_available()` | Check whether direct RAPIDS cuVS support was compiled and can be loaded. | RAPIDS cuVS. | A single logical value. |
+| `cugraph_available()` | Check whether RAPIDS libcugraph graph clustering support was compiled and can be loaded. | RAPIDS libcugraph. | A single logical value. |
+
+### C/C++ Callable Entry Points
+
+faissR also registers stable C-callable entry points with
+`R_RegisterCCallable()`. These are for downstream R packages with C/C++ code and
+are retrieved with `R_GetCCallable("faissR", "<name>")`.
+
+| C-callable name | ABI | Purpose |
+| --- | --- | --- |
+| `faissR_nn_float32_call` | `(x, k, backend, metric, include_self, n_threads)` | CPU FAISS Flat float32 KNN route. It accepts ordinary R double matrices or optional `float::fl()`/float32 matrices and returns the stable host `faissR_nn` list with double distances. |
+| `faissR_nn_float32_call_output` | `(x, k, backend, metric, include_self, n_threads, distances)` | Same CPU FAISS Flat float32 route, with `distances = "double"` or `"float"` to request host distance storage type. |
+| `faissR_nn_cuda_tuned_gpu_call` | `(x, k, method, metric, include_self, target_recall)` | CUDA self-KNN route that keeps result buffers on the GPU for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. It returns the same `faissR_gpu_knn` object shape as `nn_gpu()`, including CUDA device pointers and `device_to_host_result_copies = 0`. |
+
 Explicit GPU requests are honest: if a CUDA/cuVS/cuGraph backend is requested
 and was not compiled or is not available at runtime, faissR reports an error
 instead of silently running CPU code and labelling it as GPU.
