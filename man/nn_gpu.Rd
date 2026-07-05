@@ -27,7 +27,9 @@ reference matrix.}
 self-query calls.}
 
 \item{method}{\code{"auto"}, \code{"exact"}, \code{"flat"}, or
-\code{"bruteforce"}.}
+\code{"bruteforce"}. \code{"auto"} consults the compiled
+shape/k/metric/target-recall selector but currently returns GPU-resident
+exact-family buffers.}
 
 \item{metric}{\code{"euclidean"}, \code{"cosine"}, \code{"correlation"}, or
 \code{"inner_product"}.}
@@ -65,4 +67,10 @@ while raw inner product uses the standard maximum-inner-product-to-L2
 transform and stores faissR's shifted smaller-is-better distance. Approximate
 cuVS/FAISS GPU methods currently fail clearly here because those provider
 result buffers still need provider-specific persistent GPU ownership.
+For \code{method = "auto"}, \code{nn_gpu()} records the same C++ auto-selection
+metadata used by \code{nn()}. If that policy would prefer an approximate CUDA
+method whose result buffers are not yet exposed as persistent GPU-resident
+objects, \code{nn_gpu()} keeps the exact-family GPU-resident route and records
+\code{auto_preferred_backend}, \code{auto_preferred_method}, and
+\code{auto_residency_constraint}.
 }

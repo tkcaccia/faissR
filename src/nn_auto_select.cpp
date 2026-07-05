@@ -113,27 +113,6 @@ bool native_nndescent_fallback(bool self_query,
   return auto_cpu_approx_self(self_query, n, p, k, work_size);
 }
 
-std::string cagra_backend(bool faiss_gpu_available,
-                          bool cuvs_available,
-                          const std::string& preference,
-                          int n,
-                          int p,
-                          int k,
-                          bool self_query,
-                          int compact_n,
-                          int high_dim_p,
-                          int compact_max_k) {
-  if (preference == "faiss_gpu") return "faiss_gpu_cagra";
-  if (preference == "cuvs") return "cuda_cuvs_cagra";
-  const bool compact_high_dim = self_query &&
-    n <= compact_n && p >= high_dim_p && k <= compact_max_k;
-  if (faiss_gpu_available && cuvs_available && compact_high_dim) {
-    return "cuda_cuvs_cagra";
-  }
-  if (faiss_gpu_available) return "faiss_gpu_cagra";
-  return "cuda_cuvs_cagra";
-}
-
 std::string cpu_metric_flat_backend(const std::string& metric) {
   if (metric == "cosine") return "faiss_flat_cosine";
   if (metric == "correlation") return "faiss_flat_correlation";
@@ -218,22 +197,26 @@ std::string cuda_non_euclidean_backend(const std::string& metric,
                                        int cagra_high_dim_p,
                                        int cagra_compact_max_k) {
   if (metric == "euclidean") return "";
+  (void)self_query;
+  (void)n;
+  (void)p;
+  (void)n_points;
+  (void)k;
+  (void)work_size;
+  (void)cuda_available;
+  (void)graph_n;
+  (void)graph_min_k;
+  (void)graph_work;
+  (void)cagra_preference;
+  (void)cagra_compact_n;
+  (void)cagra_high_dim_p;
+  (void)cagra_compact_max_k;
   const std::string flat_backend =
     metric == "cosine" ? "faiss_gpu_flat_cosine" :
     metric == "correlation" ? "faiss_gpu_flat_correlation" :
     "faiss_gpu_flat_ip";
-  const bool cagra_available = faiss_gpu_available || cuvs_available;
-  const bool large_self_graph = self_query &&
-    n >= graph_n && n_points >= graph_n && k >= graph_min_k &&
-    finite1(work_size) && work_size >= graph_work;
-  if (large_self_graph && cagra_available) {
-    return cagra_backend(
-      faiss_gpu_available, cuvs_available, cagra_preference,
-      n, p, k, self_query,
-      cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k
-    );
-  }
   if (faiss_gpu_available) return flat_backend;
+  if (cuvs_available) return "cuda_cuvs_bruteforce";
   if (requested_device == "auto") return "cpu_auto";
   return "__cuda_non_euclidean_unavailable__";
 }
@@ -284,16 +267,16 @@ bool cuda_auto_prefers_ivf(bool self_query,
   if (!self_query || n != n_points) return false;
   if (k <= 8 || n < 1000) return false;
   const int k_bucket = cuda_auto_k_bucket(k);
-  if (target_recall_code >= 99 &&
-      shape_group == "small_high_dim" && k_bucket <= 15) {
+  (void)k_bucket;
+  if (shape_group == "large_low_dim") return true;
+  if (shape_group == "large_high_dim" && target_recall_code <= 95) return true;
+  if (shape_group == "small_n_very_high_dim" ||
+      shape_group == "small_n_high_dim" ||
+      shape_group == "small_high_dim" ||
+      shape_group == "medium_high_dim" ||
+      shape_group == "medium_low_dim" ||
+      shape_group == "large_high_dim") {
     return false;
-  }
-  if (shape_group == "small_n_high_dim") return false;
-  if (shape_group == "small_n_very_high_dim") return true;
-  if (shape_group == "small_high_dim") return true;
-  if (shape_group == "medium_high_dim" || shape_group == "medium_low_dim" ||
-      shape_group == "large_low_dim" || shape_group == "large_high_dim") {
-    return true;
   }
   if (target_recall_code <= 95 && n >= 5000 &&
       finite1(work_size) && work_size >= 5e8) {
@@ -372,13 +355,19 @@ std::string select_cuda(bool self_query,
     self_query, n, p, n_points, k, work_size, target_recall_code, auto_shape_group
   );
   if (prefer_ivf) {
-    auto_rule = "cuda_auto_flat_vs_ivf_select_ivf";
+    auto_rule = auto_shape_group == "large_low_dim" ?
+      "cuda_auto_ivf_large_low_dim_measured_fastest" :
+      "cuda_auto_ivf_large_high_dim_lower_recall_tier";
     return ivf_backend;
   }
-  if (target_recall_code >= 99 &&
-      auto_shape_group == "small_high_dim" &&
-      cuda_auto_k_bucket(k) <= 15) {
-    auto_rule = "cuda_auto_flat_vs_ivf_flat_ivf_below_target";
+  if (target_recall_code >= 99 && auto_shape_group == "large_high_dim") {
+    auto_rule = "cuda_auto_exact_large_high_dim_accuracy_tier";
+  } else if (auto_shape_group == "small_n_very_high_dim" ||
+             auto_shape_group == "small_n_high_dim" ||
+             auto_shape_group == "small_high_dim" ||
+             auto_shape_group == "medium_high_dim" ||
+             auto_shape_group == "medium_low_dim") {
+    auto_rule = "cuda_auto_exact_measured_shape_fastest";
   } else if (k <= 8 || n <= cuda_exact_n || work_size <= cuda_exact_work) {
     auto_rule = "cuda_auto_flat_vs_ivf_select_flat_small_or_exact";
   } else {
@@ -397,7 +386,8 @@ std::string select_cpu(bool self_query,
                        bool faiss_available,
                        bool rcpphnsw_available,
                        double cpu_exact_work,
-                       double cpu_faiss_flat_work) {
+                       double cpu_faiss_flat_work,
+                       int target_recall_code) {
   if (metric != "euclidean") {
     if ((metric == "cosine" || metric == "correlation") &&
         grid_self_knn(true, n, p, k, false, metric)) {
@@ -432,7 +422,10 @@ std::string select_cpu(bool self_query,
   if (work_size <= cpu_exact_work || n < 5000 || p < 2) {
     return "cpu";
   }
-  if (self_query && n >= 1000000 && faiss_available) return "faiss_ivf";
+  if (self_query && n >= 500000 && p <= 64 && faiss_available) {
+    if (n >= 2000000 && target_recall_code >= 95) return "faiss_hnsw";
+    return "faiss_ivf";
+  }
   if (faiss_available) return "faiss_hnsw";
   if (rcpphnsw_available) return "hnsw";
   if (native_nsg_fallback(self_query, n, p, k, work_size, metric)) {
@@ -521,14 +514,6 @@ int hnsw_cpu_k_bucket_cpp(int k) {
   k = safe_k(k);
   if (k <= 15) return 15;
   if (k <= 30) return 30;
-  if (k <= 50) return 50;
-  return 100;
-}
-
-int hnsw_k_bucket_cpp(int k) {
-  k = safe_k(k);
-  if (k <= 10) return 10;
-  if (k <= 15) return 15;
   if (k <= 50) return 50;
   return 100;
 }
@@ -1298,7 +1283,7 @@ List nn_auto_select_backend_cpp(std::string resolved_backend,
       selected = select_cpu(
         self_query, n, p, n_points, k, work_size, metric,
         faiss_available, rcpphnsw_available,
-        cpu_exact_work, cpu_faiss_flat_work
+        cpu_exact_work, cpu_faiss_flat_work, target_recall_code
       );
       reason = "auto_cpu_fallback";
     }
@@ -1306,7 +1291,7 @@ List nn_auto_select_backend_cpp(std::string resolved_backend,
     selected = select_cpu(
       self_query, n, p, n_points, k, work_size, metric,
       faiss_available, rcpphnsw_available,
-      cpu_exact_work, cpu_faiss_flat_work
+      cpu_exact_work, cpu_faiss_flat_work, target_recall_code
     );
     reason = "cpu_auto_shape_selector";
   } else if (resolved_backend == "cuda_auto" || resolved_backend == "gpu_auto") {

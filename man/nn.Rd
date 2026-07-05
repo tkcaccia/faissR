@@ -319,10 +319,12 @@ Method descriptions:
   uses exact, grid, FAISS IVF, FAISS HNSW, or native CPU NN-descent fallback
   depending on data shape, size, and available libraries. CUDA auto uses CUDA
   grid for 2D/3D Euclidean/cosine/correlation self-KNN. For Euclidean
-  non-grid self-KNN, CUDA auto chooses between exact Flat/brute force and
-  IVF-Flat from dataset shape, `k`, and `target_recall`. Non-grid
-  cosine/correlation/IP auto routes stay on exact FAISS GPU Flat or validated
-  graph routes when available
+  non-grid self-KNN, CUDA auto uses benchmark-derived shape/k/target-recall
+  rules: large low-dimensional datasets use IVF-Flat, very large
+  high-dimensional datasets use IVF only for lower recall tiers, and the
+  high-recall default keeps exact FAISS GPU Flat/brute force for the other
+  measured shapes. Non-grid cosine/correlation/IP auto routes stay on exact
+  FAISS GPU Flat/cuVS brute force when available
   [1-3,5,13-15,22-23]. When `backend = "auto"` is
   combined with an explicit method, faissR first checks whether that exact
   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU

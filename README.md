@@ -160,6 +160,13 @@ opt-in with `tuning = "cache"` or `tuning = "pilot"`. The route selector and
 deterministic approximate-method tuning rules live in C++; R reads user options
 and passes them to the compiled policy layer, and results report
 `tuning_source = "cpp"` when those rules set method parameters.
+For CUDA Euclidean self-KNN, the current benchmark-derived auto policy uses IVF
+for large low-dimensional data, exact FAISS GPU Flat/brute force for the
+measured small, medium, and high-dimensional accuracy-first shapes, and IVF for
+very large high-dimensional data only at lower target-recall tiers. CPU
+Euclidean auto uses exact search for tiny data, FAISS HNSW for most medium and
+high-dimensional self-KNN, and FAISS IVF for selected large low-dimensional
+datasets where the tuning sweep showed better speed at the requested recall.
 The public nearest-neighbour metrics are `"euclidean"`, `"cosine"`,
 `"correlation"`, and `"inner_product"`. Correlation is centered cosine
 similarity, whereas inner product is the raw dot product; distance choices
@@ -341,6 +348,12 @@ The current GPU-resident route supports exact KNN for
 uses FAISS GPU direct `bfKnn` and requests FAISS/cuVS dispatch when faissR was
 built with cuVS; cosine, correlation, and raw inner-product use the native CUDA
 GPU-resident exact route with the same output contract.
+With `method = "auto"`, `nn_gpu()` records the same compiled auto-selection
+metadata as `nn()`. If that policy would prefer an approximate method such as
+IVF for ordinary `nn()` but that provider cannot yet expose persistent
+GPU-resident result buffers, `nn_gpu()` keeps the exact-family GPU-resident
+route and records `auto_preferred_backend`, `auto_preferred_method`, and
+`auto_residency_constraint`.
 Approximate FAISS GPU/cuVS methods still use `nn()` and return host objects
 until those provider result buffers are exposed as persistent GPU-resident
 objects.

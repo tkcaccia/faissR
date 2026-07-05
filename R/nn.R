@@ -10066,10 +10066,12 @@ grid_self_knn <- function(data,
 #'   uses exact, grid, FAISS IVF, FAISS HNSW, or native CPU NN-descent fallback
 #'   depending on data shape, size, and available libraries. CUDA auto uses CUDA
 #'   grid for 2D/3D Euclidean/cosine/correlation
-#'   self-KNN. For Euclidean non-grid self-KNN, CUDA auto chooses between exact
-#'   Flat/brute force and IVF-Flat from dataset shape, `k`, and
-#'   `target_recall`. Non-grid cosine/correlation/IP auto routes stay on exact
-#'   FAISS GPU Flat or validated graph routes when available
+#'   self-KNN. For Euclidean non-grid self-KNN, CUDA auto uses benchmark-derived
+#'   shape/k/target-recall rules: large low-dimensional datasets use IVF-Flat,
+#'   very large high-dimensional datasets use IVF only for lower recall tiers,
+#'   and the high-recall default keeps exact FAISS GPU Flat/brute force for the
+#'   other measured shapes. Non-grid cosine/correlation/IP auto routes stay on
+#'   exact FAISS GPU Flat/cuVS brute force when available
 #'   [1-3,5,13-15,22-23]. When `backend = "auto"` is
 #'   combined with an explicit method, faissR first checks whether that exact
 #'   method/metric has a runtime-capable CUDA route; otherwise it uses the CPU
@@ -10612,6 +10614,12 @@ nn <- function(data,
 #' and stores faissR's shifted smaller-is-better distance. Approximate
 #' cuVS/FAISS GPU methods currently fail clearly here because those provider
 #' result buffers still need provider-specific persistent GPU ownership.
+#' For `method = "auto"`, `nn_gpu()` records the same C++ auto-selection metadata
+#' used by `nn()`. If that policy would prefer an approximate CUDA method whose
+#' result buffers are not yet exposed as persistent GPU-resident objects,
+#' `nn_gpu()` keeps the exact-family GPU-resident route and records
+#' `auto_preferred_backend`, `auto_preferred_method`, and
+#' `auto_residency_constraint`.
 #'
 #' @param data Numeric matrix/data frame or optional `float::fl()`/`float32`
 #'   reference matrix.
@@ -10619,7 +10627,9 @@ nn <- function(data,
 #' @param k Number of neighbours.
 #' @param exclude_self Logical; remove each row from its own neighbour list for
 #'   self-query calls.
-#' @param method `"auto"`, `"exact"`, `"flat"`, or `"bruteforce"`.
+#' @param method `"auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. `"auto"`
+#'   consults the compiled shape/k/metric/target-recall selector but currently
+#'   returns GPU-resident exact-family buffers.
 #' @param metric `"euclidean"`, `"cosine"`, `"correlation"`, or
 #'   `"inner_product"`.
 #' @param tuning Tuning label to record. The current GPU-resident route is exact,
@@ -10697,7 +10707,43 @@ nn_gpu <- function(data,
     stop("`nn_gpu()` requires faissR to be built with CUDA support and a CUDA device.", call. = FALSE)
   }
 
+  auto_selection <- NULL
+  auto_preferred_backend <- NA_character_
+  auto_preferred_method <- NA_character_
+  auto_residency_constraint <- NA_character_
   resolved_method <- if (identical(method, "auto")) "exact" else method
+  if (identical(method, "auto")) {
+    auto_selection <- nn_auto_select_shape_cpp(
+      resolved_backend = "cuda_auto",
+      requested_backend = "cuda",
+      requested_method = "auto",
+      shape = list(
+        n = as.integer(data_dim[[1L]]),
+        p = as.integer(data_dim[[2L]]),
+        n_points = as.integer(points_dim[[1L]]),
+        k = as.integer(k),
+        metric = metric,
+        self_query = isTRUE(self_query),
+        exclude_self = isTRUE(exclude_self),
+        work_size = as.double(data_dim[[1L]]) * as.double(points_dim[[1L]]) * as.double(data_dim[[2L]])
+      ),
+      tuning = tuning,
+      target_recall = target_recall
+    )
+    auto_preferred_backend <- nn_auto_selected_backend(auto_selection, "faiss_gpu_flat_l2")
+    auto_preferred_method <- nn_resolved_backend_public_method(auto_preferred_backend) %||% "exact"
+    if (length(auto_preferred_method) != 1L ||
+        is.na(auto_preferred_method) ||
+        !nzchar(auto_preferred_method)) {
+      auto_preferred_method <- "exact"
+    }
+    if (auto_preferred_method %in% c("exact", "flat", "bruteforce")) {
+      resolved_method <- auto_preferred_method
+    } else {
+      auto_residency_constraint <- "gpu_resident_output_currently_exact_family_only"
+      resolved_method <- "exact"
+    }
+  }
   out <- if (identical(metric, "euclidean") && isTRUE(faiss_gpu_available())) {
     nn_faiss_gpu_bfknn_float32_gpu_cpp(
       data,
@@ -10724,11 +10770,23 @@ nn_gpu <- function(data,
   out$tuning <- tuning
   out$target_recall <- target_recall
   out$self_query <- isTRUE(self_query)
+  if (!is.null(auto_selection)) {
+    out$auto_selection <- auto_selection
+    out$auto_preferred_backend <- auto_preferred_backend
+    out$auto_preferred_method <- auto_preferred_method
+    out$auto_residency_constraint <- auto_residency_constraint
+  }
   attr(out, "requested_backend") <- "cuda"
   attr(out, "requested_method") <- public_nn_method_label(method)
   attr(out, "tuning") <- tuning
   attr(out, "target_recall") <- target_recall
   attr(out, "self_query") <- isTRUE(self_query)
+  if (!is.null(auto_selection)) {
+    attr(out, "auto_selection") <- auto_selection
+    attr(out, "auto_preferred_backend") <- auto_preferred_backend
+    attr(out, "auto_preferred_method") <- auto_preferred_method
+    attr(out, "auto_residency_constraint") <- auto_residency_constraint
+  }
   out
 }
 

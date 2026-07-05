@@ -393,12 +393,14 @@ that the no-pilot graph-shape rule came from compiled policy.
   recall is very high. The resolved routes `faiss_gpu_flat_l2` and
   `cuda_cuvs_bruteforce` were the most reliable high-recall CUDA paths
   [1-3,13-16].
-- For Euclidean CUDA self-KNN, `method = "auto"` chooses between exact
-  Flat/brute force and IVF-Flat by dataset shape, `k`, and `target_recall`.
-  IVF is preferred when the CUDA IVF tuning evidence reaches the requested
-  recall target faster than Flat; Flat is kept for query searches, tiny
-  matrices, very small `k`, and shape/target combinations where the IVF sweep
-  did not meet the target, such as USPS-like `k = 15`, `target_recall = 0.99`.
+- For Euclidean CUDA self-KNN, `method = "auto"` uses the compiled
+  shape/k/target-recall selector derived from the tuning sweeps. It chooses
+  IVF-Flat for large low-dimensional data, keeps exact Flat/brute force for
+  measured small, medium, and high-dimensional accuracy-first shapes, and uses
+  IVF for very large high-dimensional data only at lower target-recall tiers.
+  This avoids treating IVF as a generic "large data" rule when exact FAISS GPU
+  Flat was faster on MNIST/FashionMNIST-like and ImageNet-like high-dimensional
+  rows.
 - Prefer `method = "hnsw"` for CPU approximate self-KNN. In this benchmark its
   FAISS HNSW implementation route gave a better speed/accuracy balance than
   NN-Descent [4-5].
