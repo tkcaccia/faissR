@@ -49,16 +49,18 @@ headers and libraries discovered by `configure`.
   C-callable entry point is also registered so downstream C++ packages can
   request the same float32 KNN result format without routing through the R
   wrappers.
-- GPU-resident exact KNN output for downstream CUDA consumers: `nn_gpu()`
-  returns a `faissR_gpu_knn` object whose `indices_ptr` and `distances_ptr`
-  remain on the CUDA device as int32 and float32 buffers. This is separate from
-  `nn(..., output = "float")`, which still returns an R object on the host.
-  The registered C-callable `faissR_nn_cuda_tuned_gpu_call` exposes the same
-  self-KNN route to downstream C/C++ packages. The first GPU-resident route is
-  exact CUDA search for `method = "auto"`, `"exact"`, `"flat"`, or
-  `"bruteforce"` across Euclidean, cosine, correlation, and raw inner-product
-  metrics; approximate FAISS GPU/cuVS provider routes still return host objects
-  until their provider result buffers are made persistent.
+- GPU-resident exact KNN output for downstream CUDA consumers:
+  `nn_gpu()` returns a `faissR_gpu_knn` object whose `indices_ptr` and
+  `distances_ptr` remain on the CUDA device as int32 and float32 buffers.
+  This is separate from `nn(..., output = "float")`, which still returns an R
+  object on the host. `gpu_knn_to_host()` is the explicit diagnostic helper for
+  copying a GPU-resident result back to ordinary R matrices. The registered
+  C-callable `faissR_nn_cuda_tuned_gpu_call` exposes the same self-KNN route to
+  downstream C/C++ packages. The first GPU-resident route is exact CUDA search
+  for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"` across
+  Euclidean, cosine, correlation, and raw inner-product metrics; approximate
+  FAISS GPU/cuVS provider routes still return host objects until their provider
+  result buffers are made persistent.
 - Raw `nn()` calls reuse a bounded session-local CPU
   FAISS fitted-index cache for matching Flat, HNSW, IVF, IVFPQ, and IVFPQ
   FastScan requests.
@@ -210,6 +212,63 @@ Use `backend_info()` and the attributes returned by `nn()` to confirm which
 route and parameters a result used.
 Use `nn_capabilities()` to inspect which public `method`, `backend`, and
 `metric` combinations are supported before launching a large benchmark.
+
+## GPU-Resident Output For Downstream Packages
+
+Most R users should call `nn()`, which returns ordinary R matrices. Packages
+that already run CUDA code can instead call `nn_gpu()` when the KNN output must
+stay on the GPU:
+
+```r
+res <- nn_gpu(
+  x,
+  k = 15,
+  exclude_self = TRUE,
+  method = "auto",
+  metric = "euclidean",
+  target_recall = 0.99
+)
+```
+
+The returned `faissR_gpu_knn` object owns CUDA device buffers through an
+external pointer and reports:
+
+- `indices_ptr`: CUDA device pointer to a column-major `n_query x k` int32
+  neighbour matrix using 1-based R indices.
+- `distances_ptr`: CUDA device pointer to a column-major `n_query x k` float32
+  distance matrix.
+- `result_residency = "cuda"`, `index_base = 1L`,
+  `indices_type = "int32"`, `distance_type = "float32"`, `metric`, and
+  `backend_used` metadata.
+
+The object is intentionally not converted to host memory by default. Use
+`gpu_knn_to_host(res)` only when explicitly inspecting or testing the result in
+R.
+
+Other packages can also bypass the R wrapper and retrieve the C-callable entry
+point registered by faissR:
+
+```cpp
+typedef SEXP (*faissR_nn_cuda_tuned_gpu_fun)(
+  SEXP x,
+  SEXP k,
+  SEXP method,
+  SEXP metric,
+  SEXP include_self,
+  SEXP target_recall
+);
+
+auto fn = reinterpret_cast<faissR_nn_cuda_tuned_gpu_fun>(
+  R_GetCCallable("faissR", "faissR_nn_cuda_tuned_gpu_call")
+);
+```
+
+The current GPU-resident route supports exact native CUDA KNN for
+`method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"` with
+`metric = "euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`.
+Approximate FAISS GPU/cuVS methods still use `nn()` and return host objects
+until those provider result buffers are exposed as persistent GPU-resident
+objects.
 
 ### cuVS NN-Descent Shared-Memory Note
 
