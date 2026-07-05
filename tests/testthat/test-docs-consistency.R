@@ -159,9 +159,11 @@ test_that("public API excludes retired wrapper and platform-specific helper name
     "faiss_gpu_available",
     "fast_kmeans",
     "graph_cluster",
+    "gpu_knn_to_host",
     "knn",
     "knn_graph",
     "nn",
+    "nn_gpu",
     "nn_capabilities"
   )
   retired_exports <- c(
@@ -655,6 +657,8 @@ test_that("usage API includes all exported public workflow sections", {
   lines <- readLines(docs_file, warn = FALSE)
   expected_sections <- paste0("## `", c(
     "nn",
+    "nn_gpu",
+    "gpu_knn_to_host",
     "candidate_knn",
     "knn_graph",
     "graph_cluster",
@@ -706,6 +710,8 @@ test_that("usage API argument tables document live function formals", {
   lines <- readLines(docs_file, warn = FALSE)
   sections <- list(
     "## `nn()`" = names(formals(nn)),
+    "## `nn_gpu()`" = names(formals(nn_gpu)),
+    "## `gpu_knn_to_host()`" = names(formals(gpu_knn_to_host)),
     "## `candidate_knn()`" = names(formals(candidate_knn)),
     "## `knn_graph()`" = names(formals(knn_graph)),
     "## `graph_cluster()`" = names(formals(graph_cluster)),

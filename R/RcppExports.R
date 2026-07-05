@@ -281,6 +281,14 @@ nn_cuda_float32_cpp <- function(data, points, k, square) {
     .Call(`_faissR_nn_cuda_float32_cpp`, data, points, k, square)
 }
 
+nn_cuda_float32_gpu_cpp <- function(data, points, k, exclude_self, metric, backend_used, method) {
+    .Call(`_faissR_nn_cuda_float32_gpu_cpp`, data, points, k, exclude_self, metric, backend_used, method)
+}
+
+gpu_knn_to_host_cpp <- function(result) {
+    .Call(`_faissR_gpu_knn_to_host_cpp`, result)
+}
+
 row_candidate_knn_cuda_cpp <- function(data, candidate_indices, k, metric) {
     .Call(`_faissR_row_candidate_knn_cuda_cpp`, data, candidate_indices, k, metric)
 }

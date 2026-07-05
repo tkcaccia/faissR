@@ -19,6 +19,8 @@ expected to set. For the full R help page after installation, use
 | Function | Purpose |
 | --- | --- |
 | `nn()` | Low-level nearest-neighbour search for reference/query matrices, including self-excluding search with `exclude_self = TRUE` [1-6,13-16,22-23]. |
+| `nn_gpu()` | CUDA exact KNN with GPU-resident output buffers for downstream C/C++ packages. |
+| `gpu_knn_to_host()` | Explicitly copy a `faissR_gpu_knn` result back to R matrices for inspection. |
 | `candidate_knn()` | Exact top-k ranking inside a supplied candidate-neighbour matrix. |
 | `knn_graph()` | Build a native weighted graph from data, an embedding, or KNN output. |
 | `graph_cluster()` | Run native random-walking, Louvain, or Leiden graph clustering [9-12]. |
@@ -78,6 +80,56 @@ stored in
 `attr(result, "tuning")`; the implementation-facing route is stored in
 `attr(result, "backend")` and, when it differs from the public label,
 `attr(result, "resolved_backend")`.
+
+## `nn_gpu()`
+
+```r
+nn_gpu(data, points = data, k = NULL, exclude_self = FALSE,
+       method = "auto", metric = "euclidean",
+       tuning = "auto", target_recall = 0.99)
+```
+
+| Argument | Description |
+| --- | --- |
+| `data` | Numeric matrix, data frame, or optional `float::fl()`/float32 reference matrix. |
+| `points` | Optional query matrix/data frame/float32 matrix with the same number of columns as `data`; defaults to `data` for self-search. |
+| `k` | Number of neighbours. If `NULL`, faissR chooses an automatic neighbourhood size. |
+| `exclude_self` | Logical; if `TRUE`, remove each query row from its own neighbour list in the CUDA kernel. This is valid only for self-query calls. |
+| `method` | GPU-resident method selector. Currently `"auto"`, `"exact"`, `"flat"`, and `"bruteforce"` all use the exact native CUDA route. |
+| `metric` | `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Cosine/correlation are normalized in C++; raw inner product uses a MIPS-to-L2 transform and device-side shifted-distance conversion. |
+| `tuning` | Tuning label to record. The current GPU-resident route is exact, so this does not change approximation parameters. |
+| `target_recall` | Target-recall label to record for API symmetry; exact search has recall 1 by construction. |
+
+`nn_gpu()` is for downstream CUDA consumers that need the KNN output to stay on
+the GPU. It returns a `faissR_gpu_knn` object with an owning `handle` plus
+non-owning `indices_ptr` and `distances_ptr` external pointers. The device
+layout is column-major `n_query x k`, with 1-based int32 indices and float32
+distances. Keep `handle` alive for as long as another package uses either
+pointer.
+
+The current GPU-resident route is exact native CUDA search for `method =
+"auto"`, `"exact"`, `"flat"`, or `"bruteforce"` across Euclidean, cosine,
+correlation, and raw inner-product metrics. `target_recall` is recorded for API
+symmetry but exact search has recall 1 by construction. Approximate FAISS
+GPU/cuVS methods still return host objects through `nn()` until their provider
+result buffers are exposed with persistent GPU ownership.
+
+Use `gpu_knn_to_host(x)` only when you explicitly want to inspect or test a
+GPU-resident result in R; it copies both result buffers to host matrices.
+
+## `gpu_knn_to_host()`
+
+```r
+gpu_knn_to_host(x)
+```
+
+| Argument | Description |
+| --- | --- |
+| `x` | A `faissR_gpu_knn` object returned by `nn_gpu()` or the C-callable GPU-result API. |
+
+This helper explicitly copies a GPU-resident KNN result back to ordinary R
+matrices. It is intended for diagnostics, tests, or handoff to code that cannot
+consume CUDA device pointers. It is never called automatically by `nn_gpu()`.
 
 ### Nearest-Neighbour Methods
 
@@ -451,6 +503,8 @@ table(leiden$membership)
 For CUDA benchmarking on a GPU build:
 
 ```r
-nn_gpu <- nn(x, k = 15, exclude_self = TRUE,
-             backend = "cuda", method = "auto")
+cuda_res <- nn(x, k = 15, exclude_self = TRUE,
+               backend = "cuda", method = "auto")
+cuda_device_res <- nn_gpu(x, k = 15, exclude_self = TRUE,
+                          method = "exact")
 ```

@@ -830,6 +830,41 @@ zero-row correction for cosine/correlation can still repair or convert a double
 distance matrix before returning float32 because those paths need R-side metric
 post-processing.
 
+For downstream CUDA packages that need to avoid the final device-to-host copy,
+`nn_gpu()` returns a separate GPU-resident object rather than overloading
+`nn(..., output = "float")`. The returned `faissR_gpu_knn` list owns a CUDA
+result handle and exposes non-owning `indices_ptr` and `distances_ptr` external
+pointers. The buffers are column-major with shape `n_query x k`,
+`indices_type = "int32"`, `distance_type = "float32"`, and `index_base = 1L`.
+The owning `handle` must be kept alive by downstream code for as long as either
+device pointer is used. `gpu_knn_to_host()` is an explicit diagnostic helper
+that copies those buffers back to R matrices; it is never called automatically
+by `nn_gpu()`.
+
+The first GPU-resident implementation is the exact native CUDA route for
+`method = "auto"`, `"exact"`, `"flat"`, and `"bruteforce"`. It accepts all four
+public metrics. Euclidean uses direct L2 search, cosine and correlation are
+prepared in C++ by row normalization or row-centering plus normalization and
+then stored as squared L2 divided by two (`1 - similarity`), and raw
+inner-product search uses the maximum-inner-product-to-L2 extra-dimension
+transform followed by a device-side shifted-distance conversion. Self-neighbour
+exclusion is handled inside the CUDA kernel through `exclude_self`, so the
+returned GPU buffers do not require R-side row filtering. Zero-normalized
+cosine rows and constant correlation rows stop clearly for this GPU-resident
+path because repairing them on CPU would violate the no-copy contract.
+
+faissR also registers the C-callable
+`faissR_nn_cuda_tuned_gpu_call`. Downstream packages can retrieve it with
+`R_GetCCallable("faissR", "faissR_nn_cuda_tuned_gpu_call")`. Its current ABI is
+self-KNN oriented and accepts `(x, k, method, metric, include_self,
+target_recall)`. The current implementation keeps output on the GPU only for
+exact CUDA method labels (`"auto"`, `"exact"`, `"flat"`, and `"bruteforce"`).
+The `target_recall` value is recorded for API symmetry with the tuned NN
+interface, but recall is exact by construction. Provider-specific GPU-resident
+outputs for FAISS GPU IVF/CAGRA and direct cuVS IVF/CAGRA/NN-descent require
+separate persistent ownership of those libraries' result buffers and therefore
+fail clearly instead of silently returning host matrices.
+
 CPU IVFPQ FastScan is exposed to the R layer only through the float32 adapter:
 FAISS always receives a `float*` matrix. For `float::fl()`/float32 inputs this
 avoids an R double expansion; ordinary R double matrices are adapted once to

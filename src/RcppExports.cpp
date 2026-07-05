@@ -728,26 +728,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// nn_tune_faiss_ivf_cpp
-List nn_tune_faiss_ivf_cpp(int n, int p, int k, std::string metric, double target_recall_option, std::string backend, std::string method, int nlist_option, int nprobe_option, bool manual);
-RcppExport SEXP _faissR_nn_tune_faiss_ivf_cpp(SEXP nSEXP, SEXP pSEXP, SEXP kSEXP, SEXP metricSEXP, SEXP target_recall_optionSEXP, SEXP backendSEXP, SEXP methodSEXP, SEXP nlist_optionSEXP, SEXP nprobe_optionSEXP, SEXP manualSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< int >::type n(nSEXP);
-    Rcpp::traits::input_parameter< int >::type p(pSEXP);
-    Rcpp::traits::input_parameter< int >::type k(kSEXP);
-    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
-    Rcpp::traits::input_parameter< double >::type target_recall_option(target_recall_optionSEXP);
-    Rcpp::traits::input_parameter< std::string >::type backend(backendSEXP);
-    Rcpp::traits::input_parameter< std::string >::type method(methodSEXP);
-    Rcpp::traits::input_parameter< int >::type nlist_option(nlist_optionSEXP);
-    Rcpp::traits::input_parameter< int >::type nprobe_option(nprobe_optionSEXP);
-    Rcpp::traits::input_parameter< bool >::type manual(manualSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_tune_faiss_ivf_cpp(n, p, k, metric, target_recall_option, backend, method, nlist_option, nprobe_option, manual));
-    return rcpp_result_gen;
-END_RCPP
-}
 // nn_tune_cpu_exact_cpp
 List nn_tune_cpu_exact_cpp(int n, int p, int k, std::string metric, double target_recall_option);
 RcppExport SEXP _faissR_nn_tune_cpu_exact_cpp(SEXP nSEXP, SEXP pSEXP, SEXP kSEXP, SEXP metricSEXP, SEXP target_recall_optionSEXP) {
@@ -790,6 +770,26 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
     Rcpp::traits::input_parameter< double >::type target_recall_option(target_recall_optionSEXP);
     rcpp_result_gen = Rcpp::wrap(nn_tune_cpu_bruteforce_cpp(n, p, k, metric, target_recall_option));
+    return rcpp_result_gen;
+END_RCPP
+}
+// nn_tune_faiss_ivf_cpp
+List nn_tune_faiss_ivf_cpp(int n, int p, int k, std::string metric, double target_recall_option, std::string backend, std::string method, int nlist_option, int nprobe_option, bool manual);
+RcppExport SEXP _faissR_nn_tune_faiss_ivf_cpp(SEXP nSEXP, SEXP pSEXP, SEXP kSEXP, SEXP metricSEXP, SEXP target_recall_optionSEXP, SEXP backendSEXP, SEXP methodSEXP, SEXP nlist_optionSEXP, SEXP nprobe_optionSEXP, SEXP manualSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< int >::type p(pSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< double >::type target_recall_option(target_recall_optionSEXP);
+    Rcpp::traits::input_parameter< std::string >::type backend(backendSEXP);
+    Rcpp::traits::input_parameter< std::string >::type method(methodSEXP);
+    Rcpp::traits::input_parameter< int >::type nlist_option(nlist_optionSEXP);
+    Rcpp::traits::input_parameter< int >::type nprobe_option(nprobe_optionSEXP);
+    Rcpp::traits::input_parameter< bool >::type manual(manualSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_tune_faiss_ivf_cpp(n, p, k, metric, target_recall_option, backend, method, nlist_option, nprobe_option, manual));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1133,6 +1133,34 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
     Rcpp::traits::input_parameter< bool >::type square(squareSEXP);
     rcpp_result_gen = Rcpp::wrap(nn_cuda_float32_cpp(data, points, k, square));
+    return rcpp_result_gen;
+END_RCPP
+}
+// nn_cuda_float32_gpu_cpp
+List nn_cuda_float32_gpu_cpp(SEXP data, SEXP points, int k, bool exclude_self, std::string metric, std::string backend_used, std::string method);
+RcppExport SEXP _faissR_nn_cuda_float32_gpu_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP exclude_selfSEXP, SEXP metricSEXP, SEXP backend_usedSEXP, SEXP methodSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_self(exclude_selfSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< std::string >::type backend_used(backend_usedSEXP);
+    Rcpp::traits::input_parameter< std::string >::type method(methodSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_cuda_float32_gpu_cpp(data, points, k, exclude_self, metric, backend_used, method));
+    return rcpp_result_gen;
+END_RCPP
+}
+// gpu_knn_to_host_cpp
+List gpu_knn_to_host_cpp(SEXP result);
+RcppExport SEXP _faissR_gpu_knn_to_host_cpp(SEXP resultSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type result(resultSEXP);
+    rcpp_result_gen = Rcpp::wrap(gpu_knn_to_host_cpp(result));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2138,6 +2166,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_cuda_device_info_json_cpp", (DL_FUNC) &_faissR_cuda_device_info_json_cpp, 0},
     {"_faissR_nn_cuda_cpp", (DL_FUNC) &_faissR_nn_cuda_cpp, 4},
     {"_faissR_nn_cuda_float32_cpp", (DL_FUNC) &_faissR_nn_cuda_float32_cpp, 4},
+    {"_faissR_nn_cuda_float32_gpu_cpp", (DL_FUNC) &_faissR_nn_cuda_float32_gpu_cpp, 7},
+    {"_faissR_gpu_knn_to_host_cpp", (DL_FUNC) &_faissR_gpu_knn_to_host_cpp, 1},
     {"_faissR_row_candidate_knn_cuda_cpp", (DL_FUNC) &_faissR_row_candidate_knn_cuda_cpp, 4},
     {"_faissR_row_candidate_knn_cuda_float32_cpp", (DL_FUNC) &_faissR_row_candidate_knn_cuda_float32_cpp, 4},
     {"_faissR_cuda_grid_self_knn_cpp", (DL_FUNC) &_faissR_cuda_grid_self_knn_cpp, 4},

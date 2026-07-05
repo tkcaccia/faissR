@@ -175,9 +175,12 @@ for exact small/query workloads when available, or a transformed validated graph
 route for large self-KNN when available.
 Explicit CUDA HNSW is routed to the
 cuVS HNSW-from-CAGRA wrapper path and labelled as such in metadata. On a
-cuVS-only runtime, CUDA auto non-Euclidean capability rows are reported as shape-dependent rather than as a
-promise that every metric/method has a CUDA route. The same check is applied to explicit
-methods such as `"flat"`, `"ivf"`, and `"ivfpq"` under `backend = "auto"`.
+cuVS-only runtime, CUDA auto non-Euclidean capability rows are reported as
+shape-dependent rather than as a promise that every metric/method has a CUDA
+route. In mixed FAISS/cuVS builds, the shape-dependent route can choose
+transformed FAISS GPU/direct cuVS CAGRA for large self-KNN when those compiled
+routes are available. The same check is applied to explicit methods such as
+`"flat"`, `"ivf"`, and `"ivfpq"` under `backend = "auto"`.
 FAISS CPU and FAISS GPU availability are checked separately at execution time:
 explicit FAISS GPU Flat, IVF, IVFPQ, and CAGRA routes require a FAISS build
 that reports GPU support, not only a CPU FAISS installation.

@@ -49,6 +49,16 @@ headers and libraries discovered by `configure`.
   C-callable entry point is also registered so downstream C++ packages can
   request the same float32 KNN result format without routing through the R
   wrappers.
+- GPU-resident exact KNN output for downstream CUDA consumers: `nn_gpu()`
+  returns a `faissR_gpu_knn` object whose `indices_ptr` and `distances_ptr`
+  remain on the CUDA device as int32 and float32 buffers. This is separate from
+  `nn(..., output = "float")`, which still returns an R object on the host.
+  The registered C-callable `faissR_nn_cuda_tuned_gpu_call` exposes the same
+  self-KNN route to downstream C/C++ packages. The first GPU-resident route is
+  exact CUDA search for `method = "auto"`, `"exact"`, `"flat"`, or
+  `"bruteforce"` across Euclidean, cosine, correlation, and raw inner-product
+  metrics; approximate FAISS GPU/cuVS provider routes still return host objects
+  until their provider result buffers are made persistent.
 - Raw `nn()` calls reuse a bounded session-local CPU
   FAISS fitted-index cache for matching Flat, HNSW, IVF, IVFPQ, and IVFPQ
   FastScan requests.

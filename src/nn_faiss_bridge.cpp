@@ -437,6 +437,13 @@ extern "C" SEXP faissR_nn_float32_call_output(SEXP x,
   END_RCPP
 }
 
+extern "C" SEXP faissR_nn_cuda_tuned_gpu_call(SEXP x,
+                                              SEXP k,
+                                              SEXP method,
+                                              SEXP metric,
+                                              SEXP include_self,
+                                              SEXP target_recall);
+
 // [[Rcpp::init]]
 void register_faissR_ccallables(DllInfo *dll) {
   (void) dll;
@@ -449,6 +456,11 @@ void register_faissR_ccallables(DllInfo *dll) {
     "faissR",
     "faissR_nn_float32_call_output",
     (DL_FUNC) &faissR_nn_float32_call_output
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_nn_cuda_tuned_gpu_call",
+    (DL_FUNC) &faissR_nn_cuda_tuned_gpu_call
   );
 }
 

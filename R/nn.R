@@ -10050,6 +10050,159 @@ nn <- function(data,
   finalize_nn_output(result, output)
 }
 
+#' GPU-resident tuned nearest-neighbour search
+#'
+#' `nn_gpu()` runs a CUDA nearest-neighbour search and returns a
+#' GPU-resident result object. Unlike `nn()`, the `indices` and `distances`
+#' are not copied back into R matrices. The returned object stores owning and
+#' non-owning external pointers so downstream C/C++ packages can consume the
+#' KNN output on the CUDA device.
+#'
+#' @details
+#' This is intentionally narrower than `nn()`: the first GPU-resident route is
+#' exact CUDA search for public `method` values `"auto"`, `"exact"`, `"flat"`,
+#' and `"bruteforce"`. The exact route accepts all public metrics. Cosine and
+#' correlation are transformed to normalized squared L2 on the C++ side and
+#' stored as `1 - similarity`; raw inner product uses the standard
+#' maximum-inner-product-to-L2 transform and stores faissR's shifted
+#' smaller-is-better distance. Approximate cuVS/FAISS GPU methods currently
+#' fail clearly here because those provider result buffers still need
+#' provider-specific persistent GPU ownership.
+#'
+#' @param data Numeric matrix/data frame or optional `float::fl()`/`float32`
+#'   reference matrix.
+#' @param points Optional query matrix. Defaults to `data`.
+#' @param k Number of neighbours.
+#' @param exclude_self Logical; remove each row from its own neighbour list for
+#'   self-query calls.
+#' @param method `"auto"`, `"exact"`, `"flat"`, or `"bruteforce"`.
+#' @param metric `"euclidean"`, `"cosine"`, `"correlation"`, or
+#'   `"inner_product"`.
+#' @param tuning Tuning label to record. The current GPU-resident route is exact,
+#'   so `target_recall` is metadata rather than an approximation knob.
+#' @param target_recall Target recall label to record; use `0.9`, `0.95`, or
+#'   `0.99`.
+#' @return A `faissR_gpu_knn` list. It contains an owning `handle`, non-owning
+#'   `indices_ptr` and `distances_ptr`, `n_query`, `k`, `index_base = 1L`,
+#'   `indices_type = "int32"`, `distance_type = "float32"`, `layout`, `metric`,
+#'   and `backend_used`.
+#' @export
+nn_gpu <- function(data,
+                   points = data,
+                   k = NULL,
+                   exclude_self = FALSE,
+                   method = c("auto", "exact", "flat", "bruteforce"),
+                   metric = c("euclidean", "cosine", "correlation", "inner_product"),
+                   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
+                   target_recall = 0.99) {
+  points_missing <- missing(points)
+  method <- normalize_scalar_choice_arg(
+    method,
+    arg = "method",
+    default = "auto",
+    formal_choices = c("auto", "exact", "flat", "bruteforce")
+  )
+  method <- normalize_nn_method(method)
+  if (!method %in% c("auto", "exact", "flat", "bruteforce")) {
+    stop(
+      "`nn_gpu()` currently supports GPU-resident output only for ",
+      "`method = \"auto\"`, `\"exact\"`, `\"flat\"`, or `\"bruteforce\"`.",
+      call. = FALSE
+    )
+  }
+  metric <- normalize_nn_metric(metric)
+  tuning <- normalize_nn_tuning(tuning)
+  target_recall <- normalize_hnsw_target_recall(target_recall)
+  exclude_self <- normalize_scalar_logical_arg(exclude_self, "exclude_self", default = FALSE)
+
+  data_dim <- if (is_float32_matrix_input(data)) {
+    float32_matrix_dims(data, "data")
+  } else {
+    dim(as.matrix(data))
+  }
+  points_dim <- if (isTRUE(points_missing)) {
+    data_dim
+  } else if (is_float32_matrix_input(points)) {
+    float32_matrix_dims(points, "points")
+  } else {
+    dim(as.matrix(points))
+  }
+  if (!identical(data_dim[[2L]], points_dim[[2L]])) {
+    stop("`data` and `points` must have the same number of columns.", call. = FALSE)
+  }
+  self_query <- isTRUE(points_missing) || identical(data, points)
+  if (isTRUE(exclude_self) && !isTRUE(self_query)) {
+    stop("Self-neighbor exclusion is only valid when `points` is `data`.", call. = FALSE)
+  }
+  if (is.null(k)) {
+    k <- if (data_dim[[1L]] == 1L) {
+      1L
+    } else {
+      min(
+        data_dim[[1L]],
+        auto_k(data_dim[[1L]], include_self = isTRUE(self_query) && !isTRUE(exclude_self))
+      )
+    }
+  }
+  k <- normalize_nn_positive_integer(k, "k", "`k` must be NULL or a positive integer.")
+  max_k <- if (isTRUE(exclude_self)) data_dim[[1L]] - 1L else data_dim[[1L]]
+  if (k > max_k) {
+    stop("`k` cannot be larger than the available neighbor count.", call. = FALSE)
+  }
+  if (!isTRUE(cuda_available())) {
+    stop("`nn_gpu()` requires faissR to be built with CUDA support and a CUDA device.", call. = FALSE)
+  }
+
+  out <- nn_cuda_float32_gpu_cpp(
+    data,
+    points,
+    as.integer(k),
+    isTRUE(exclude_self),
+    metric,
+    "cuda_native_exact_gpu",
+    if (identical(method, "auto")) "exact" else method
+  )
+  out$requested_backend <- "cuda"
+  out$requested_method <- public_nn_method_label(method)
+  out$tuning <- tuning
+  out$target_recall <- target_recall
+  out$self_query <- isTRUE(self_query)
+  attr(out, "requested_backend") <- "cuda"
+  attr(out, "requested_method") <- public_nn_method_label(method)
+  attr(out, "tuning") <- tuning
+  attr(out, "target_recall") <- target_recall
+  attr(out, "self_query") <- isTRUE(self_query)
+  out
+}
+
+#' Copy a GPU-resident KNN result to host matrices
+#'
+#' `gpu_knn_to_host()` is an explicit diagnostic/conversion helper for
+#' `faissR_gpu_knn` objects. It copies device `indices` and `distances` into
+#' ordinary R matrices. It is never called automatically by `nn_gpu()`.
+#'
+#' @param x A `faissR_gpu_knn` object.
+#' @return A host `faissR_nn` list with integer `indices` and numeric
+#'   `distances`.
+#' @export
+gpu_knn_to_host <- function(x) {
+  if (!inherits(x, "faissR_gpu_knn")) {
+    stop("`x` must be a `faissR_gpu_knn` object.", call. = FALSE)
+  }
+  gpu_knn_to_host_cpp(x)
+}
+
+#' @export
+print.faissR_gpu_knn <- function(x, ...) {
+  cat("<faissR_gpu_knn>\n")
+  cat("  backend: ", x$backend_used %||% NA_character_, "\n", sep = "")
+  cat("  metric:  ", x$metric %||% NA_character_, "\n", sep = "")
+  cat("  shape:   ", as.integer(x$n_query %||% NA_integer_), " x ",
+      as.integer(x$k %||% NA_integer_), "\n", sep = "")
+  cat("  result:  CUDA device pointers (indices int32, distances float32)\n")
+  invisible(x)
+}
+
 .knn_recall_summary <- function(approx, exact, k = NULL) {
   approx_idx <- if (is.list(approx)) approx$indices else approx
   exact_idx <- if (is.list(exact)) exact$indices else exact

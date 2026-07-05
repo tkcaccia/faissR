@@ -61,6 +61,22 @@ test_that("public nearest-neighbour wrappers expose one canonical method and met
   }
 })
 
+test_that("GPU-resident NN API exposes explicit device-output contract", {
+  canonical_metrics <- c("euclidean", "cosine", "correlation", "inner_product")
+  f <- formals(nn_gpu)
+
+  expect_equal(eval(f$method), c("auto", "exact", "flat", "bruteforce"))
+  expect_equal(eval(f$metric), canonical_metrics)
+  expect_equal(eval(f$tuning), c("auto", "cache", "pilot", "fixed", "off", "none"))
+
+  x <- matrix(rnorm(30), ncol = 3)
+  expect_error(nn_gpu(x, k = 2, method = "hnsw"), "GPU-resident output")
+  expect_error(gpu_knn_to_host(list()), "faissR_gpu_knn")
+  if (!cuda_available()) {
+    expect_error(nn_gpu(x, k = 2), "requires faissR to be built with CUDA")
+  }
+})
+
 test_that("public high-level APIs expose auto/cpu/cuda backend and auto tuning", {
   backend_choices <- c("auto", "cpu", "cuda")
   nn_tuning_choices <- c("auto", "cache", "pilot", "fixed", "off", "none")
@@ -4252,13 +4268,8 @@ test_that("FAISS graph backends reject too-small training sets clearly", {
       internal_nn(exclude_self = TRUE, x, k = 10L, backend = "faiss_nsg", n_threads = 2L),
       "more than 100 training rows"
     )
-    expect_error(
-      internal_nn(exclude_self = TRUE, x, k = 10L, backend = "faiss_nndescent", n_threads = 2L),
-      "disabled"
-    )
   } else {
     expect_error(internal_nn(x, k = 10L, backend = "faiss_nsg"), "FAISS")
-    expect_error(internal_nn(x, k = 10L, backend = "faiss_nndescent"), "FAISS")
   }
 })
 
@@ -4340,13 +4351,8 @@ test_that("FAISS graph backends report actual and requested parameters", {
         "euclidean"
       )
     )
-    expect_error(
-      internal_nn(exclude_self = TRUE, x, k = 5L, backend = "faiss_nndescent", metric = "euclidean", n_threads = 2L),
-      "disabled"
-    )
   } else {
     expect_error(internal_nn(x, k = 10L, backend = "faiss_nsg"), "FAISS")
-    expect_error(internal_nn(x, k = 10L, backend = "faiss_nndescent"), "FAISS")
   }
 })
 

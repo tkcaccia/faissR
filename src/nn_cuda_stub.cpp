@@ -28,6 +28,20 @@ List cuda_nn_float32_impl(SEXP,
   Rcpp::stop("CUDA GPU backend is available only when the package is built with CUDA support.");
 }
 
+List cuda_nn_float32_gpu_impl(SEXP,
+                              SEXP,
+                              int,
+                              bool,
+                              std::string,
+                              std::string,
+                              std::string) {
+  Rcpp::stop("GPU-resident CUDA KNN output is available only when the package is built with CUDA support.");
+}
+
+List cuda_gpu_knn_to_host_impl(SEXP) {
+  Rcpp::stop("GPU-resident CUDA KNN output is available only when the package is built with CUDA support.");
+}
+
 List cuda_row_candidate_knn_impl(NumericMatrix,
                                  IntegerMatrix,
                                  int,

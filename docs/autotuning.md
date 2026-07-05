@@ -596,8 +596,12 @@ Policy summary:
   million-row matrices, and ImageNet-like large high-dimensional matrices use
   IVF when the selected target is supported by the tuning evidence. Tiny
   matrices, query searches, very small `k`, and below-target IVF cases stay on
-  Flat/brute force. Non-grid non-Euclidean auto routes keep the existing exact
-  FAISS GPU Flat or validated graph-search path when available.
+  Flat/brute force. In cuVS-only runtimes, CUDA auto non-Euclidean capability
+  rows are reported as shape-dependent instead of promising a route for every
+  metric/method pair. The smaller non-grid non-Euclidean searches keep the existing
+  exact FAISS GPU Flat path when available, while larger self-KNN routes can use
+  transformed FAISS GPU/direct cuVS CAGRA or another validated graph-search path
+  when available.
 
 Historical examples from the earlier auto-policy run:
 
