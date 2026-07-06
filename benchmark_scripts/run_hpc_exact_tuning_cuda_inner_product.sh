@@ -15,6 +15,8 @@ set -euo pipefail
 
 # Generated metric-specific wrapper for run_hpc_exact_tuning_cuda.sh.
 # Submit this file directly with sbatch to run exactly one metric.
+# The resulting shape/k/target summary replaces the current Euclidean-seeded
+# CUDA exact inner-product defaults used by tuning="auto".
 export METRICS="inner_product"
 export FAISSR_SINGLE_METRIC="inner_product"
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"

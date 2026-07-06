@@ -61,36 +61,58 @@ headers and libraries discovered by `configure`.
   Euclidean, cosine, correlation, and raw inner-product metrics; approximate
   FAISS GPU/cuVS provider routes still return host objects until their provider
   result buffers are made persistent.
-- CUDA exact correlation tuning:
-  `method = "exact", backend = "cuda", metric = "correlation"` uses the
-  measured FAISS GPU Flat query-batch/resource table from
-  `benchmark_scripts/cuda_exact_correlation_shape_tuning_defaults_from_uploaded_results.csv`
-  when `tuning = "auto"`. The source sweep is
-  `faissR_EXACT_TUNING_CUDA_correlation_20260703_023519`; exact recall is
-  recorded by construction, and any below-target validation row is still exposed
-  through `tuning_benchmark_target_met`.
-- CUDA Flat correlation tuning:
-  `method = "flat", backend = "cuda", metric = "correlation"` uses the measured
-  FAISS GPU Flat query-batch/resource table from
-  `benchmark_scripts/cuda_flat_correlation_shape_tuning_defaults_from_uploaded_results.csv`
-  when `tuning = "auto"`. The source sweep is
-  `faissR_FLAT_TUNING_CUDA_correlation_20260703_062359`; the selected row is
-  stored in `attr(result, "flat_tuning")`.
-- CUDA bruteforce correlation tuning:
-  `method = "bruteforce", backend = "cuda", metric = "correlation"` uses cuVS
-  brute-force search on centered and row-normalized float32 data. Its first
-  `tuning = "auto"` table,
-  `benchmark_scripts/cuda_bruteforce_correlation_shape_tuning_defaults_from_proxy_results.csv`,
-  reuses the measured Euclidean cuVS brute-force query-batch/resource defaults
-  until the corrected metric-specific HPC sweep replaces those proxy rows.
-- CUDA HNSW correlation tuning:
-  `method = "hnsw", backend = "cuda", metric = "correlation"` uses RAPIDS
-  cuVS HNSW from a CAGRA seed graph on centered and row-normalized float32
-  data. `tuning = "auto"` uses the measured shape/k/target table in
-  `benchmark_scripts/cuda_hnsw_correlation_shape_tuning_defaults_from_uploaded_results.csv`,
-  derived from `faissR_HNSW_TUNING_CUDA_correlation_20260703_070901`; rows
-  that did not meet the requested recall target across every dataset in a
-  shape group report `tuning_benchmark_target_met = FALSE`.
+- CUDA exact metric tuning:
+  `method = "exact", backend = "cuda"` uses FAISS GPU Flat query-batch/resource
+  policies for Euclidean, cosine, correlation, and raw inner product when
+  `tuning = "auto"`. The correlation table is measured in
+  `benchmark_scripts/cuda_exact_correlation_shape_tuning_defaults_from_uploaded_results.csv`.
+  The inner-product table is currently
+  `benchmark_scripts/cuda_exact_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`,
+  seeded from the measured CUDA exact Euclidean sweep and marked
+  validation-pending until `run_hpc_exact_tuning_cuda_inner_product.sh` replaces
+  it with measured IP rows. Exact recall is recorded by construction, and
+  benchmark provenance remains visible through `tuning_benchmark_target_met`.
+- CUDA Flat metric tuning:
+  `method = "flat", backend = "cuda"` uses FAISS GPU Flat query-batch/resource
+  policies for Euclidean, cosine, correlation, and raw inner product when
+  `tuning = "auto"`. The correlation table is measured in
+  `benchmark_scripts/cuda_flat_correlation_shape_tuning_defaults_from_uploaded_results.csv`.
+  The inner-product table is currently
+  `benchmark_scripts/cuda_flat_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`,
+  seeded from the measured CUDA Flat Euclidean sweep and marked
+  validation-pending until `run_hpc_flat_tuning_cuda_inner_product.sh` replaces
+  it with measured IP rows. The selected row is stored in
+  `attr(result, "flat_tuning")`.
+- CUDA bruteforce metric tuning:
+  `method = "bruteforce", backend = "cuda"` uses direct cuVS brute-force search
+  for Euclidean and transformed exact routes for cosine, correlation, and raw
+  inner product. Its `tuning = "auto"` tables store cuVS query-batch/resource
+  defaults by shape, `k`, and target recall. Correlation uses
+  `benchmark_scripts/cuda_bruteforce_correlation_shape_tuning_defaults_from_proxy_results.csv`;
+  raw inner product currently uses
+  `benchmark_scripts/cuda_bruteforce_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`,
+  seeded from measured CUDA bruteforce Euclidean rows until
+  `run_hpc_bruteforce_tuning_cuda_inner_product.sh` replaces it with measured
+  IP rows.
+- CUDA HNSW metric tuning:
+  `method = "hnsw", backend = "cuda"` uses RAPIDS cuVS HNSW from a CAGRA seed
+  graph. Correlation is searched on centered and row-normalized float32 data;
+  raw inner product is searched through the same maximum-inner-product-to-L2
+  transform used by the CUDA exact/brute-force routes. `tuning = "auto"` uses
+  measured Euclidean/cosine/correlation shape/k/target tables. Raw inner
+  product currently uses
+  `benchmark_scripts/cuda_hnsw_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`,
+  seeded from the measured CUDA HNSW Euclidean table and marked
+  validation-pending until `run_hpc_hnsw_tuning_cuda_inner_product.sh`
+  replaces it with measured IP rows.
+- CUDA IVF metric tuning:
+  `method = "ivf", backend = "cuda"` resolves to FAISS GPU IVF-Flat L2/IP.
+  Euclidean, cosine, and correlation use measured CUDA IVF shape/k/target
+  `nlist`/`nprobe` tables; raw inner product currently uses
+  `benchmark_scripts/cuda_ivf_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`,
+  seeded from the measured CUDA IVF Euclidean table and marked
+  validation-pending until `run_hpc_ivf_tuning_cuda_inner_product.sh` replaces
+  it with measured IP rows.
 - Raw `nn()` calls reuse a bounded session-local CPU
   FAISS fitted-index cache for matching Flat, HNSW, IVF, IVFPQ, and IVFPQ
   FastScan requests.
@@ -137,6 +159,13 @@ headers and libraries discovered by `configure`.
   compiled/runtime backend support.
 - `nn_capabilities()` to report supported nearest-neighbour
   method/backend/metric combinations for benchmark preflight checks.
+- Benchmark #1 comparison launchers for Euclidean speed tests are split into
+  CPU and CUDA runs:
+  `benchmark_scripts/run_benchmark1_compare_cpu_euclidean.sh` compares faissR
+  CPU methods with CPU external R KNN packages, while
+  `benchmark_scripts/run_benchmark1_compare_cuda_euclidean.sh` compares faissR
+  CUDA/FAISS-GPU/cuVS methods with CUDA-capable external packages such as
+  `cuda.ml` when available.
 
 ## Available Functions
 
@@ -148,7 +177,7 @@ method/backend/metric matrix is in the
 | Function | Main use | Backends | Return |
 | --- | --- | --- | --- |
 | `nn()` | General nearest-neighbour search over reference/query matrices. Supports `backend = "auto"`, `"cpu"`, or `"cuda"`; `method = "auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"ivfpq_fastscan"`, `"nndescent"`, `"nsg"`, `"vamana"`, or `"cagra"`; and `metric = "euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. `exclude_self = TRUE` removes self-neighbours in compiled code for self-KNN. `tuning = "auto"` uses C++ shape/k/target-recall policies. | CPU, FAISS CPU, FAISS GPU, native CUDA, direct RAPIDS cuVS where compiled. | A `faissR_nn` list with 1-based `indices`, `distances`, `index_base`, `distance_type`, `metric`, `backend_used`, and route/tuning metadata. `output = "float"` can return float32 distances when the optional `float` package is available. |
-| `nn_gpu()` | GPU-resident exact-family KNN for downstream CUDA packages. It is narrower than `nn()` and is intended when another package needs device pointers instead of R matrices. | CUDA exact-family routes for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. Euclidean uses FAISS GPU direct `bfKnn` when available; cosine/correlation/IP use native CUDA exact transforms. | A `faissR_gpu_knn` object with an owning `handle`, CUDA-device `indices_ptr` and `distances_ptr`, `result_residency = "cuda"`, `indices_type = "int32"`, `distance_type = "float32"`, and `device_to_host_result_copies = 0`. |
+| `nn_gpu()` | GPU-resident exact-family KNN for downstream CUDA packages. It is narrower than `nn()` and is intended when another package needs device pointers instead of R matrices. | CUDA exact-family routes for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. Euclidean and raw inner product use FAISS GPU direct `bfKnn` when available; cosine/correlation use native CUDA exact transforms. | A `faissR_gpu_knn` object with an owning `handle`, CUDA-device `indices_ptr` and `distances_ptr`, `result_residency = "cuda"`, `indices_type = "int32"`, `distance_type = "float32"`, `device_to_host_result_copies = 0`, plus exact-family `execution_tuning` and, for `method = "auto"`, the compiled-policy `auto_preferred_tuning` when applicable. |
 | `gpu_knn_to_host()` | Explicit diagnostic conversion of a GPU-resident KNN result to ordinary R matrices. It is never called automatically by `nn_gpu()`. | Uses the CUDA result handle returned by `nn_gpu()` or the C-callable GPU API. | A host-side `faissR_nn` list with copied integer indices and numeric distances. |
 | `candidate_knn()` | Exact top-k reranking inside a user-supplied candidate-neighbour matrix. This is useful when another algorithm proposes candidates and faissR should compute the final ordered neighbours. | CPU compiled scorer with the public metrics. | A `faissR_nn` list restricted to the supplied candidates. |
 | `knn_graph()` | Build weighted nearest-neighbour graphs from data, an embedding, or an existing `faissR_nn` result. It can compute KNN internally through `nn(..., exclude_self = TRUE)`. | CPU and CUDA KNN backends through `nn()`, then native graph construction. | A `faissR_graph` object with edge indices, weights, graph parameters, and KNN metadata. |
@@ -267,24 +296,31 @@ See [Installation](docs/installation.md) for CRAN/source-build details.
   `GpuIndexIVFPQ_cuVS`, and `GpuIndexCagra_cuVS`.
   CUDA IVF-Flat auto tuning now selects `nlist`/`nprobe` from a compiled
   shape/k/target-recall policy derived from the float32 CUDA IVF HPC sweeps
-  for Euclidean, cosine, and correlation metrics.
+  for Euclidean, cosine, and correlation metrics. Raw inner product uses the
+  same compiled selector with a validation-pending seed table until the
+  dedicated IP sweep replaces it.
   CUDA IVFPQ auto tuning likewise uses compiled `nlist`/`nprobe`/`pq_m`/`pq_nbits`
-  policies for Euclidean and correlation FAISS GPU IVF-PQ sweeps; rows that
-  stayed below the requested target record `tuning_benchmark_target_met = FALSE`.
+  policies for Euclidean, correlation, and raw-inner-product FAISS GPU IVF-PQ
+  searches. Raw inner product uses
+  `benchmark_scripts/cuda_ivfpq_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`,
+  seeded from measured CUDA Euclidean IVFPQ rows until the dedicated IP sweep
+  replaces it; seeded or below-target rows record
+  `tuning_benchmark_target_met = FALSE`.
 - Direct RAPIDS cuVS calls, exposed through explicit backends such as
   `cuda_cuvs_cagra`, `cuda_cuvs_hnsw`, `cuda_cuvs_nndescent`,
   `cuda_cuvs_bruteforce`, `cuda_cuvs_ivf_flat`, `cuda_cuvs_ivfpq`, and
   `cuda_cuvs_ivfpq_fastscan`.
-  CUDA CAGRA supports cosine by row-normalizing float32 input and correlation
-  by row-centering plus row-normalizing float32 input before Euclidean CAGRA
-  search, then converting distances back to the public metric. Euclidean
+  CUDA CAGRA supports cosine by row-normalizing float32 input, correlation by
+  row-centering plus row-normalizing float32 input, and raw inner product by a
+  maximum-inner-product-to-L2 extra-dimension transform before CAGRA search,
+  then converting distances back to the public metric convention. Euclidean
   CAGRA `tuning = "auto"` uses measured shape/k/target rows from
   `benchmark_scripts/cuda_cagra_euclidean_shape_tuning_defaults_from_uploaded_results.csv`;
-  cosine and correlation currently use validation-pending tables seeded from
-  those Euclidean rows and record `tuning_benchmark_target_met = FALSE` until
-  the corrected metric-specific tuning sweeps are rerun. The correlation seed
-  table is
-  `benchmark_scripts/cuda_cagra_correlation_shape_tuning_defaults_from_seeded_euclidean_results.csv`.
+  cosine, correlation, and raw inner product currently use validation-pending
+  tables seeded from those Euclidean rows and record
+  `tuning_benchmark_target_met = FALSE` until the corrected metric-specific
+  tuning sweeps are rerun. The raw inner-product seed table is
+  `benchmark_scripts/cuda_cagra_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`.
   `cuda_cuvs_ivfpq_fastscan` keeps the trained cuVS IVF-PQ index, compressed
   codes, dataset device buffer, and cuVS resources in a bounded session-local
   cache for compatible repeated `nn()` calls. Self-query searches reuse the
@@ -294,12 +330,15 @@ See [Installation](docs/installation.md) for CRAN/source-build details.
   The CUDA HPC FastScan wrapper tunes `nlist`, `nprobe`, and byte-aligned 4-bit
   `pq_dim` through `IVFPQ_FASTSCAN_NLIST_MULTS`,
   `IVFPQ_FASTSCAN_NPROBE_MULTS`, and `IVFPQ_FASTSCAN_PQ_DIMS`.
-  CUDA cosine and correlation `tuning = "auto"` currently use policies seeded
+  CUDA cosine, correlation, and raw-inner-product `tuning = "auto"` currently use policies seeded
   from the CUDA Euclidean FastScan sweep and mark
   `tuning_benchmark_target_met = FALSE` until the corrected metric-specific
   sweeps are rerun. The seeded correlation table is
   `benchmark_scripts/cuda_ivfpq_fastscan_correlation_shape_tuning_defaults_from_seeded_euclidean_results.csv`
-  after the uploaded correlation sweep
+  and the seeded raw-inner-product table is
+  `benchmark_scripts/cuda_ivfpq_fastscan_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`.
+  Raw inner product applies the maximum-inner-product-to-L2 extra-dimension
+  transform before the same cuVS 4-bit IVF-PQ search. The uploaded correlation sweep
   `faissR_IVFPQ_FASTSCAN_TUNING_CUDA_correlation_20260703_083505` failed
   before reaching cuVS under the old Euclidean-only guard.
   `cuda_cuvs_nndescent` supports Euclidean/L2 and normalized cosine/correlation
@@ -311,20 +350,23 @@ See [Installation](docs/installation.md) for CRAN/source-build details.
   `benchmark_scripts/cuda_nndescent_correlation_shape_tuning_defaults_from_seeded_euclidean_results.csv`.
   The HNSW route builds a CUDA CAGRA seed graph and converts it with
   `cuvsHnswFromCagraWithDataset`, supports `target_recall = 0.9`, `0.95`, or `0.99`
-  speed/recall tiers, and records `cuda_hnsw_design =
+  speed/recall tiers for Euclidean/cosine/correlation/inner-product requests,
+  and records `cuda_hnsw_design =
   "cuvs_hnsw_from_cagra_cpu_hierarchy"` because this is a cuVS wrapper route,
   not vendored CUDA code or a pure all-GPU HNSW implementation [3,22-23].
 - Native CUDA graph routes such as `method = "nsg"` and `method = "vamana"`
   use faissR-owned candidate pruning plus CUDA row-candidate refinement. CUDA
-  Euclidean/cosine/correlation NSG and Vamana
+  Euclidean/cosine/correlation/inner-product NSG and Euclidean/cosine/correlation Vamana
   `tuning = "auto"` now select graph parameters from compiled
   shape/k/target-recall tables; cosine is searched as
   row-normalized float32 Euclidean graph refinement and converted back to
-  cosine distance. CUDA NSG/correlation and Vamana/correlation use the same
-  centered-normalized CUDA graph routes and currently seed their graph
-  parameters from the corresponding measured CUDA cosine tables, reporting
-  `tuning_benchmark_target_met = FALSE` until the dedicated correlation sweeps
-  are rerun [16,21,24,29].
+  cosine distance. CUDA NSG correlation and Vamana correlation use the same
+  centered-normalized CUDA graph routes, and CUDA NSG/Vamana raw inner product
+  uses shifted dot-product ordering. CUDA NSG correlation/raw-inner-product and
+  Vamana correlation/raw-inner-product currently seed their graph parameters
+  from the corresponding measured CUDA cosine tables, reporting
+  `tuning_benchmark_target_met = FALSE` until the dedicated metric sweeps are
+  rerun [16,21,24,29].
 
 Use `backend_info()` and the attributes returned by `nn()` to confirm which
 route and parameters a result used.
@@ -382,16 +424,22 @@ auto fn = reinterpret_cast<faissR_nn_cuda_tuned_gpu_fun>(
 ```
 
 The current GPU-resident route supports exact KNN for
-`method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. Euclidean search
-uses FAISS GPU direct `bfKnn` and requests FAISS/cuVS dispatch when faissR was
-built with cuVS; cosine, correlation, and raw inner-product use the native CUDA
+`method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. Euclidean and raw
+inner-product search use FAISS GPU direct `bfKnn` when available and request
+FAISS/cuVS dispatch when faissR was built with cuVS; raw inner-product
+similarities are converted on the CUDA device to faissR's shifted
+smaller-is-better distance. Cosine and correlation use the native CUDA
 GPU-resident exact route with the same output contract.
 With `method = "auto"`, `nn_gpu()` records the same compiled auto-selection
 metadata as `nn()`. If that policy would prefer an approximate method such as
 IVF for ordinary `nn()` but that provider cannot yet expose persistent
 GPU-resident result buffers, `nn_gpu()` keeps the exact-family GPU-resident
 route and records `auto_preferred_backend`, `auto_preferred_method`, and
-`auto_residency_constraint`.
+`auto_residency_constraint`. It also records the exact-family
+`execution_tuning` used by the GPU-resident route and the
+`auto_preferred_tuning` row for the preferred approximate CUDA method,
+including the raw inner-product CAGRA/IVF/graph settings when those rows are
+available.
 Approximate FAISS GPU/cuVS methods still use `nn()` and return host objects
 until those provider result buffers are exposed as persistent GPU-resident
 objects.

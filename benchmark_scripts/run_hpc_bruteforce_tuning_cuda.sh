@@ -24,9 +24,10 @@ set -euo pipefail
 #
 # The job scans float32 .RData files and uses explicit backend="cuda",
 # method="bruteforce". Set METRICS to run one or more supported metrics;
-# metric-specific wrappers include run_hpc_bruteforce_tuning_cuda_euclidean.sh
-# run_hpc_bruteforce_tuning_cuda_cosine.sh, and
-# run_hpc_bruteforce_tuning_cuda_correlation.sh.
+# metric-specific wrappers include run_hpc_bruteforce_tuning_cuda_euclidean.sh,
+# run_hpc_bruteforce_tuning_cuda_cosine.sh,
+# run_hpc_bruteforce_tuning_cuda_correlation.sh, and
+# run_hpc_bruteforce_tuning_cuda_inner_product.sh.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"
 export DATA_ROOT="${DATA_ROOT:-${BASE_DIR}/Data}"

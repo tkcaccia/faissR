@@ -522,7 +522,7 @@ __global__ void faiss_knn_rowmajor_to_column_kernel(const int64_t* in_idx,
                                                     int search_k,
                                                     int out_k,
                                                     int exclude_self,
-                                                    int sqrt_l2,
+                                                    int distance_mode,
                                                     int* out_idx,
                                                     float* out_dist) {
   const int q = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
@@ -530,6 +530,19 @@ __global__ void faiss_knn_rowmajor_to_column_kernel(const int64_t* in_idx,
 
   int written = 0;
   const std::size_t row = static_cast<std::size_t>(q) * search_k;
+  float row_best_ip = 0.0f;
+  if (distance_mode == 2) {
+    bool found = false;
+    for (int j = 0; j < search_k; ++j) {
+      const int64_t label = in_idx[row + j];
+      if (label < 0) continue;
+      if (exclude_self && label == static_cast<int64_t>(q)) continue;
+      const float raw = in_dist[row + j];
+      row_best_ip = found ? fmaxf(row_best_ip, raw) : raw;
+      found = true;
+    }
+  }
+
   for (int j = 0; j < search_k && written < out_k; ++j) {
     const int64_t label = in_idx[row + j];
     if (label < 0) continue;
@@ -539,7 +552,13 @@ __global__ void faiss_knn_rowmajor_to_column_kernel(const int64_t* in_idx,
       static_cast<std::size_t>(written) * n_points + q;
     out_idx[out_offset] = static_cast<int>(label) + 1;
     const float raw = in_dist[row + j];
-    out_dist[out_offset] = sqrt_l2 ? sqrtf(fmaxf(raw, 0.0f)) : raw;
+    if (distance_mode == 1) {
+      out_dist[out_offset] = sqrtf(fmaxf(raw, 0.0f));
+    } else if (distance_mode == 2) {
+      out_dist[out_offset] = fmaxf(row_best_ip - raw, 0.0f);
+    } else {
+      out_dist[out_offset] = raw;
+    }
     ++written;
   }
 
@@ -1409,7 +1428,7 @@ extern "C" int faissr_cuda_convert_faiss_knn_gpu_result(const int64_t* in_indice
                                                         int search_k,
                                                         int out_k,
                                                         int exclude_self,
-                                                        int sqrt_l2,
+                                                        int distance_mode,
                                                         int* out_indices,
                                                         float* out_distances) {
   last_error.clear();
@@ -1428,7 +1447,7 @@ extern "C" int faissr_cuda_convert_faiss_knn_gpu_result(const int64_t* in_indice
     search_k,
     out_k,
     exclude_self,
-    sqrt_l2,
+    distance_mode,
     out_indices,
     out_distances
   );

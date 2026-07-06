@@ -513,7 +513,7 @@ extern "C" int faissr_cuda_convert_faiss_knn_gpu_result(const int64_t* in_indice
                                                         int search_k,
                                                         int out_k,
                                                         int exclude_self,
-                                                        int sqrt_l2,
+                                                        int distance_mode,
                                                         int* out_indices,
                                                         float* out_distances);
 extern "C" const char* faissr_cuda_last_error();
@@ -647,6 +647,10 @@ Rcpp::List make_faiss_gpu_knn_result(FaissGpuKnnHandle* handle,
     Rcpp::Named("index_residency") = "faiss_gpu_transient_exact",
     Rcpp::Named("cpu_fallback") = false
   );
+  if (metric == "inner_product") {
+    out["metric_transform"] = "maximum_inner_product_search_then_row_best_shifted_distance";
+    out["distance_transform"] = "inner_product_similarity_shifted_to_distance";
+  }
   out.attr("class") = Rcpp::CharacterVector::create("faissR_gpu_knn", "list");
   out.attr("metric") = metric;
   out.attr("backend_used") = backend_used;
@@ -1641,8 +1645,8 @@ List faiss_gpu_bfknn_float32_gpu_impl(SEXP data,
                                       std::string backend_used,
                                       std::string method) {
 #ifdef FAISSR_HAS_FAISS_GPU_BFKNN
-  if (metric != "euclidean") {
-    Rcpp::stop("FAISS GPU-resident exact route currently supports metric = 'euclidean'");
+  if (metric != "euclidean" && metric != "inner_product") {
+    Rcpp::stop("FAISS GPU-resident exact route currently supports metric = 'euclidean' or 'inner_product'");
   }
   MatrixViewF32 xb = make_float32_matrix_view(data, "data");
   const bool same_storage = same_float32_object(data, points);
@@ -1711,7 +1715,8 @@ List faiss_gpu_bfknn_float32_gpu_impl(SEXP data,
                                        "cudaMalloc(FAISS GPU output distances)");
 
   faiss::gpu::GpuDistanceParams args;
-  args.metric = faiss::METRIC_L2;
+  args.metric = metric == "inner_product" ?
+    faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
   args.k = search_k;
   args.dims = n_features;
   args.vectors = d_data.ptr;
@@ -1741,7 +1746,7 @@ List faiss_gpu_bfknn_float32_gpu_impl(SEXP data,
     search_k,
     k,
     exclude_self ? 1 : 0,
-    1,
+    metric == "inner_product" ? 2 : 1,
     d_out_indices.as<int>(),
     d_out_distances.as<float>()
   );

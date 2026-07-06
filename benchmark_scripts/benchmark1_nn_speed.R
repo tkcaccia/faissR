@@ -297,11 +297,14 @@ method_metric_applicable <- function(method, metric) {
     "faissR_faiss_gpu_flat_l2",
     "faissR_faiss_ivf",
     "faissR_faiss_ivfpq",
+    "faissR_faiss_ivfpq_fastscan",
     "faissR_faiss_gpu_ivf_flat",
     "faissR_faiss_gpu_ivfpq",
     "faissR_faiss_hnsw",
+    "faissR_cuda_cuvs_hnsw",
     "faissR_cuda_cuvs_ivf_flat",
     "faissR_cuda_cuvs_ivfpq",
+    "faissR_cuda_cuvs_ivfpq_fastscan",
     "faissR_cuda_cuvs_bruteforce",
     "faissR_cpu_vamana",
     "faissR_cuda_vamana",
@@ -325,9 +328,12 @@ method_metric_applicable <- function(method, metric) {
     "faissR_faiss_gpu_flat_l2",
     "faissR_faiss_ivf",
     "faissR_faiss_ivfpq",
+    "faissR_faiss_ivfpq_fastscan",
     "faissR_faiss_gpu_ivf_flat",
     "faissR_faiss_gpu_ivfpq",
     "faissR_faiss_hnsw",
+    "faissR_cuda_cuvs_hnsw",
+    "faissR_cuda_cuvs_ivfpq_fastscan",
     "faissR_cpu_vamana",
     "faissR_cuda_vamana",
     "faissR_cpu_nsg",
@@ -350,9 +356,12 @@ method_metric_applicable <- function(method, metric) {
       "faissR_faiss_gpu_flat_l2",
       "faissR_faiss_ivf",
       "faissR_faiss_ivfpq",
+      "faissR_faiss_ivfpq_fastscan",
       "faissR_faiss_gpu_ivf_flat",
       "faissR_faiss_gpu_ivfpq",
       "faissR_faiss_hnsw",
+      "faissR_cuda_cuvs_hnsw",
+      "faissR_cuda_cuvs_ivfpq_fastscan",
       "faissR_cpu_vamana",
       "faissR_cuda_vamana",
       "faissR_cpu_nsg",
@@ -367,12 +376,6 @@ method_metric_applicable <- function(method, metric) {
 
 method_dataset_applicable <- function(method, dataset) {
   validation_pending <- c(
-    "cuda_ml_knn",
-    "RANN_bd",
-    "rnndescent_rpf",
-    "rnndescent_rnnd",
-    "rnndescent_nnd",
-    "rnndescent_bruteforce",
     "uwot_similarity_graph_fnn",
     "uwot_similarity_graph_annoy",
     "uwot_similarity_graph_hnsw",
@@ -687,6 +690,7 @@ faissr_benchmark_route <- function(method) {
     faiss_gpu_ivfpq = list(execution_backend = "faiss_gpu_ivfpq", public_backend = "cuda", public_method = "ivfpq"),
     faiss_gpu_cagra = list(execution_backend = "faiss_gpu_cagra", public_backend = "cuda", public_method = "cagra"),
     faiss_hnsw = list(execution_backend = "faiss_hnsw", public_backend = "cpu", public_method = "hnsw"),
+    faiss_ivfpq_fastscan = list(execution_backend = "faiss_ivfpq_fastscan", public_backend = "cpu", public_method = "ivfpq_fastscan"),
     cpu_vamana = list(execution_backend = "cpu_vamana", public_backend = "cpu", public_method = "vamana"),
     cuda_vamana = list(execution_backend = "cuda_vamana", public_backend = "cuda", public_method = "vamana"),
     faiss_nsg = list(execution_backend = "faiss_nsg", public_backend = "cpu", public_method = "nsg"),
@@ -697,8 +701,10 @@ faissr_benchmark_route <- function(method) {
     cuda_exact = list(execution_backend = "cuda_cuvs_bruteforce", public_backend = "cuda", public_method = "bruteforce"),
     cuda_ivf = list(execution_backend = "cuda_ivf", public_backend = "cuda", public_method = "ivf"),
     cuda_grid_auto = list(execution_backend = "cuda_grid_auto", public_backend = "cuda", public_method = "grid"),
+    cuda_cuvs_hnsw = list(execution_backend = "cuda_cuvs_hnsw", public_backend = "cuda", public_method = "hnsw"),
     cuda_cuvs_ivf_flat = list(execution_backend = "cuda_cuvs_ivf_flat", public_backend = "cuda", public_method = "ivf"),
     cuda_cuvs_ivfpq = list(execution_backend = "cuda_cuvs_ivfpq", public_backend = "cuda", public_method = "ivfpq"),
+    cuda_cuvs_ivfpq_fastscan = list(execution_backend = "cuda_cuvs_ivfpq_fastscan", public_backend = "cuda", public_method = "ivfpq_fastscan"),
     cuda_cuvs_bruteforce = list(execution_backend = "cuda_cuvs_bruteforce", public_backend = "cuda", public_method = "bruteforce"),
     cuda_cuvs_cagra = list(execution_backend = "cuda_cuvs_cagra", public_backend = "cuda", public_method = "cagra"),
     cuda_cuvs_nndescent = list(execution_backend = "cuda_cuvs_nndescent", public_backend = "cuda", public_method = "nndescent"),
@@ -724,6 +730,14 @@ benchmark1_execution_backend_status <- function(execution_backend) {
       runtime_available = ok,
       runtime_reason = if (ok) "available" else "missing_rcpphnsw",
       runtime_notes = if (ok) "RcppHNSW fallback route is available." else "RcppHNSW is not installed."
+    ))
+  }
+  if (identical(backend, "faiss_ivfpq_fastscan")) {
+    ok <- isTRUE(tryCatch(getFromNamespace("faiss_fastscan_available", "faissR")(), error = function(e) FALSE))
+    return(list(
+      runtime_available = ok,
+      runtime_reason = if (ok) "available" else "missing_faiss_fastscan",
+      runtime_notes = if (ok) "FAISS CPU IVFPQ FastScan route is available." else "FAISS FastScan support is not available in this build."
     ))
   }
   if (startsWith(backend, "faiss_gpu")) {
@@ -892,6 +906,15 @@ run_method <- function(method, x, k, n_threads, dataset, out_dir, metric) {
       RcppHNSW::hnsw_knn(x, k = k, distance = rcpphnsw_distance_arg(metric), M = 16, ef_construction = 200, ef = max(50, 3 * k), n_threads = n_threads, progress = "none")
     },
     RcppAnnoy_euclidean = annoy_knn(x, k, n_threads = n_threads),
+    BiocNeighbors_exhaustive = {
+      if (!available_pkg("BiocNeighbors")) stop("BiocNeighbors unavailable")
+      BiocNeighbors::findKNN(
+        x,
+        k = k,
+        BNPARAM = BiocNeighbors::ExhaustiveParam(distance = if (identical(metric, "cosine")) "Cosine" else "Euclidean"),
+        num.threads = n_threads
+      )
+    },
     BiocNeighbors_hnsw = {
       if (!available_pkg("BiocNeighbors")) stop("BiocNeighbors unavailable")
       BiocNeighbors::findKNN(x, k = k, BNPARAM = BiocNeighbors::HnswParam(distance = if (identical(metric, "cosine")) "Cosine" else "Euclidean", nlinks = 16, ef.construction = 200, ef.search = max(50, 3 * k)), num.threads = n_threads)
@@ -950,86 +973,77 @@ run_method <- function(method, x, k, n_threads, dataset, out_dir, metric) {
 }
 
 method_table <- function() {
-  methods <- data.frame(
-    method = c(
-      "faissR_cpu_exact",
-      "faissR_rcpphnsw",
-      "faissR_faiss_flat_l2",
-      "faissR_faiss_gpu_flat_l2",
-      "faissR_faiss_ivf",
-      "faissR_faiss_ivfpq",
-      "faissR_faiss_gpu_ivf_flat",
-      "faissR_faiss_gpu_ivfpq",
-      "faissR_faiss_gpu_cagra",
-      "faissR_faiss_hnsw",
-      "faissR_cpu_vamana",
-      "faissR_cuda_vamana",
-      "faissR_faiss_nsg",
-      "faissR_cpu_nsg",
-      "faissR_cuda_nsg",
-      "faissR_cpu_nndescent",
-      "faissR_cpu_grid",
-      "faissR_cuda_exact",
-      "faissR_cuda_grid_auto",
-      "faissR_cuda_cuvs_ivf_flat",
-      "faissR_cuda_cuvs_ivfpq",
-      "faissR_cuda_cuvs_bruteforce",
-      "faissR_cuda_cuvs_cagra",
-      "faissR_cuda_cuvs_nndescent",
-      "Rnanoflann_standard",
-      "RANN_kd",
-      "RANN_bd",
-      "rnndescent_rpf",
-      "rnndescent_rnnd",
-      "rnndescent_nnd",
-      "rnndescent_bruteforce",
-      "RcppHNSW_hnsw",
-      "RcppAnnoy_euclidean",
-      "BiocNeighbors_hnsw",
-      "BiocNeighbors_annoy",
-      "uwot_similarity_graph_fnn",
-      "uwot_similarity_graph_annoy",
-      "uwot_similarity_graph_hnsw",
-      "uwot_similarity_graph_nndescent",
-      "cuda_ml_knn",
-      "umap_umap_knn_from_cuvs",
-      "Rtsne_neighbors"
-    ),
-    implementation = c(
-      rep("faissR", 24),
-      "Rnanoflann", "RANN", "RANN",
-      "rnndescent", "rnndescent", "rnndescent", "rnndescent",
-      "RcppHNSW", "RcppAnnoy",
-      "BiocNeighbors", "BiocNeighbors",
-      "uwot", "uwot", "uwot", "uwot",
-      "cuda.ml",
-      "umap", "Rtsne"
-    ),
-    backend = c(
-      "CPU", "CPU", "CPU", "CUDA", "CPU", "CPU", "CUDA", "CUDA", "CUDA", "CPU", "CPU", "CUDA", "CPU", "CPU", "CUDA",
-      "CPU", "CPU", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA", "CUDA",
-      rep("CPU", 15),
-      "CUDA",
-      "CPU", "CPU"
-    ),
-    kind = c(
-      rep("knn_search", 40),
-      "knn_consumer",
-      "not_applicable"
-    ),
-    stringsAsFactors = FALSE
-  )
+  row <- function(method, implementation, backend, kind = "knn_search") {
+    data.frame(
+      method = method,
+      implementation = implementation,
+      backend = backend,
+      kind = kind,
+      stringsAsFactors = FALSE
+    )
+  }
+  methods <- do.call(rbind, list(
+    row("faissR_cpu_exact", "faissR", "CPU"),
+    row("faissR_rcpphnsw", "faissR", "CPU"),
+    row("faissR_faiss_flat_l2", "faissR", "CPU"),
+    row("faissR_faiss_ivf", "faissR", "CPU"),
+    row("faissR_faiss_ivfpq", "faissR", "CPU"),
+    row("faissR_faiss_ivfpq_fastscan", "faissR", "CPU"),
+    row("faissR_faiss_hnsw", "faissR", "CPU"),
+    row("faissR_cpu_vamana", "faissR", "CPU"),
+    row("faissR_faiss_nsg", "faissR", "CPU"),
+    row("faissR_cpu_nsg", "faissR", "CPU"),
+    row("faissR_cpu_nndescent", "faissR", "CPU"),
+    row("faissR_cpu_grid", "faissR", "CPU"),
+    row("faissR_faiss_gpu_flat_l2", "faissR", "CUDA"),
+    row("faissR_faiss_gpu_ivf_flat", "faissR", "CUDA"),
+    row("faissR_faiss_gpu_ivfpq", "faissR", "CUDA"),
+    row("faissR_faiss_gpu_cagra", "faissR", "CUDA"),
+    row("faissR_cuda_exact", "faissR", "CUDA"),
+    row("faissR_cuda_grid_auto", "faissR", "CUDA"),
+    row("faissR_cuda_cuvs_bruteforce", "faissR", "CUDA"),
+    row("faissR_cuda_cuvs_hnsw", "faissR", "CUDA"),
+    row("faissR_cuda_cuvs_ivf_flat", "faissR", "CUDA"),
+    row("faissR_cuda_cuvs_ivfpq", "faissR", "CUDA"),
+    row("faissR_cuda_cuvs_ivfpq_fastscan", "faissR", "CUDA"),
+    row("faissR_cuda_cuvs_cagra", "faissR", "CUDA"),
+    row("faissR_cuda_cuvs_nndescent", "faissR", "CUDA"),
+    row("faissR_cuda_vamana", "faissR", "CUDA"),
+    row("faissR_cuda_nsg", "faissR", "CUDA"),
+    row("Rnanoflann_standard", "Rnanoflann", "CPU"),
+    row("RANN_kd", "RANN", "CPU"),
+    row("RANN_bd", "RANN", "CPU"),
+    row("rnndescent_rpf", "rnndescent", "CPU"),
+    row("rnndescent_rnnd", "rnndescent", "CPU"),
+    row("rnndescent_nnd", "rnndescent", "CPU"),
+    row("rnndescent_bruteforce", "rnndescent", "CPU"),
+    row("RcppHNSW_hnsw", "RcppHNSW", "CPU"),
+    row("RcppAnnoy_euclidean", "RcppAnnoy", "CPU"),
+    row("BiocNeighbors_exhaustive", "BiocNeighbors", "CPU"),
+    row("BiocNeighbors_hnsw", "BiocNeighbors", "CPU"),
+    row("BiocNeighbors_annoy", "BiocNeighbors", "CPU"),
+    row("uwot_similarity_graph_fnn", "uwot", "CPU", "knn_graph"),
+    row("uwot_similarity_graph_annoy", "uwot", "CPU", "knn_graph"),
+    row("uwot_similarity_graph_hnsw", "uwot", "CPU", "knn_graph"),
+    row("uwot_similarity_graph_nndescent", "uwot", "CPU", "knn_graph"),
+    row("cuda_ml_knn", "cuda.ml", "CUDA"),
+    row("umap_umap_knn_from_cuvs", "umap", "CPU", "knn_consumer"),
+    row("Rtsne_neighbors", "Rtsne", "CPU", "not_applicable")
+  ))
   methods$backend_detail <- methods$backend
   methods$backend_detail[methods$method == "faissR_faiss_gpu_ivf_flat"] <- "FAISS GPU + cuVS integrated IVF-Flat"
   methods$backend_detail[methods$method == "faissR_faiss_gpu_ivfpq"] <- "FAISS GPU + cuVS integrated IVF-PQ"
   methods$backend_detail[methods$method == "faissR_faiss_gpu_cagra"] <- "FAISS GPU + cuVS integrated CAGRA"
+  methods$backend_detail[methods$method == "faissR_faiss_ivfpq_fastscan"] <- "FAISS CPU IVFPQ FastScan"
   methods$backend_detail[methods$method == "faissR_cpu_vamana"] <- "Native Vamana candidate graph"
   methods$backend_detail[methods$method == "faissR_cuda_vamana"] <- "Native Vamana candidate graph + CUDA refinement"
   methods$backend_detail[methods$method == "faissR_cpu_nsg"] <- "Native CPU NSG candidate graph"
   methods$backend_detail[methods$method == "faissR_cuda_nsg"] <- "Native CUDA NSG candidate graph"
   methods$backend_detail[methods$method %in% c(
+    "faissR_cuda_cuvs_hnsw",
     "faissR_cuda_cuvs_ivf_flat",
     "faissR_cuda_cuvs_ivfpq",
+    "faissR_cuda_cuvs_ivfpq_fastscan",
     "faissR_cuda_cuvs_bruteforce",
     "faissR_cuda_cuvs_cagra",
     "faissR_cuda_cuvs_nndescent"
@@ -1064,6 +1078,7 @@ benchmark_method_aliases <- function(methods) {
     hnsw = "faissR_faiss_hnsw",
     ivf = "faissR_faiss_ivf",
     ivfpq = "faissR_faiss_ivfpq",
+    ivfpq_fastscan = "faissR_faiss_ivfpq_fastscan",
     vamana = "faissR_cpu_vamana",
     cuda_vamana = "faissR_cuda_vamana",
     faissR_cuda_vamana = "faissR_cuda_vamana",
@@ -1073,9 +1088,13 @@ benchmark_method_aliases <- function(methods) {
     cuda_nsg = "faissR_cuda_nsg",
     faissR_cuda_nsg = "faissR_cuda_nsg",
     nndescent = "faissR_cpu_nndescent",
+    cuda_hnsw = "faissR_cuda_cuvs_hnsw",
+    faissR_cuda_hnsw = "faissR_cuda_cuvs_hnsw",
     cagra = "faissR_faiss_gpu_cagra",
     cuda_ivf = "faissR_cuda_cuvs_ivf_flat",
-    faissR_cuda_ivf = "faissR_cuda_cuvs_ivf_flat"
+    faissR_cuda_ivf = "faissR_cuda_cuvs_ivf_flat",
+    cuda_ivfpq_fastscan = "faissR_cuda_cuvs_ivfpq_fastscan",
+    faissR_cuda_ivfpq_fastscan = "faissR_cuda_cuvs_ivfpq_fastscan"
   )
   out <- trimws(methods)
   mapped <- aliases[out]
@@ -1098,6 +1117,66 @@ benchmark1_method_values <- function(methods, valid_methods = method_table()$met
     )
   }
   values
+}
+
+benchmark1_logical_arg <- function(value, default = FALSE, arg = "value") {
+  raw <- value
+  if (is.null(raw) || length(raw) != 1L || is.na(raw)) return(isTRUE(default))
+  raw <- tolower(trimws(as.character(raw)))
+  if (raw %in% c("true", "t", "1", "yes", "y", "on")) return(TRUE)
+  if (raw %in% c("false", "f", "0", "no", "n", "off")) return(FALSE)
+  stop("`", arg, "` must be TRUE or FALSE.", call. = FALSE)
+}
+
+benchmark1_method_group_value <- function(group = NULL) {
+  raw <- group %||% Sys.getenv("FAISSR_BENCHMARK1_METHOD_GROUP", unset = "all")
+  if (length(raw) != 1L || is.na(raw) || !nzchar(raw)) raw <- "all"
+  raw <- tolower(trimws(raw))
+  choices <- c("all", "cpu", "cuda", "faissr_cpu", "faissr_cuda", "external_cpu", "external_cuda")
+  if (!raw %in% choices) {
+    stop(
+      "`method_group` must be one of: ",
+      paste(choices, collapse = ", "),
+      ". Invalid value: ",
+      raw,
+      ".",
+      call. = FALSE
+    )
+  }
+  raw
+}
+
+benchmark1_filter_methods <- function(methods,
+                                      method_group = "all",
+                                      include_faissr = TRUE,
+                                      include_external = TRUE,
+                                      include_non_knn = NULL) {
+  method_group <- benchmark1_method_group_value(method_group)
+  keep <- rep(TRUE, nrow(methods))
+  if (method_group %in% c("cpu", "faissr_cpu", "external_cpu")) {
+    keep <- keep & methods$backend == "CPU"
+  } else if (method_group %in% c("cuda", "faissr_cuda", "external_cuda")) {
+    keep <- keep & methods$backend == "CUDA"
+  }
+  if (method_group %in% c("faissr_cpu", "faissr_cuda")) {
+    keep <- keep & methods$implementation == "faissR"
+  } else if (method_group %in% c("external_cpu", "external_cuda")) {
+    keep <- keep & methods$implementation != "faissR"
+  } else {
+    if (!isTRUE(include_faissr)) keep <- keep & methods$implementation != "faissR"
+    if (!isTRUE(include_external)) keep <- keep & methods$implementation == "faissR"
+  }
+  if (is.null(include_non_knn)) {
+    include_non_knn <- identical(method_group, "all")
+  }
+  if (!isTRUE(include_non_knn)) {
+    keep <- keep & methods$kind == "knn_search"
+  }
+  methods <- methods[keep, , drop = FALSE]
+  if (!nrow(methods)) {
+    stop("No Benchmark #1 methods remain after applying `method_group` and include/exclude filters.", call. = FALSE)
+  }
+  methods
 }
 
 benchmark1_compact_route_metadata_value <- function(x) {
@@ -1461,17 +1540,65 @@ if (!is.null(args$datasets)) {
 }
 
 methods <- method_table()
+method_group <- benchmark1_method_group_value(args$method_group)
+include_faissr <- benchmark1_logical_arg(
+  args$include_faissr %||% Sys.getenv("FAISSR_BENCHMARK1_INCLUDE_FAISSR", unset = NA_character_),
+  default = TRUE,
+  arg = "include_faissr"
+)
+include_external <- benchmark1_logical_arg(
+  args$include_external %||% Sys.getenv("FAISSR_BENCHMARK1_INCLUDE_EXTERNAL", unset = NA_character_),
+  default = TRUE,
+  arg = "include_external"
+)
+include_non_knn_default <- identical(method_group, "all")
+include_non_knn <- benchmark1_logical_arg(
+  args$include_non_knn %||% Sys.getenv("FAISSR_BENCHMARK1_INCLUDE_NON_KNN", unset = NA_character_),
+  default = include_non_knn_default,
+  arg = "include_non_knn"
+)
 if (!is.null(args$methods)) {
   wanted_methods <- benchmark1_method_values(args$methods, methods$method)
   methods <- methods[methods$method %in% wanted_methods, , drop = FALSE]
+} else {
+  methods <- benchmark1_filter_methods(
+    methods,
+    method_group = method_group,
+    include_faissr = include_faissr,
+    include_external = include_external,
+    include_non_knn = include_non_knn
+  )
+}
+if (!nrow(methods)) {
+  stop("No Benchmark #1 methods selected.", call. = FALSE)
 }
 
 dir.create(file.path(out_dir, "worker_results"), recursive = TRUE, showWarnings = FALSE)
 
-utils::write.csv(datasets, file.path(out_dir, "benchmark1_datasets.csv"), row.names = FALSE)
-utils::write.csv(methods, file.path(out_dir, "benchmark1_methods.csv"), row.names = FALSE)
 k_values <- benchmark1_k_values(args$k_values)
 metric_values <- benchmark1_metric_values(args$metrics)
+
+utils::write.csv(
+  data.frame(
+    data_root = data_root,
+    out_dir = out_dir,
+    method_group = method_group,
+    include_faissr = include_faissr,
+    include_external = include_external,
+    include_non_knn = include_non_knn,
+    metrics = paste(metric_values, collapse = ","),
+    k_values = paste(k_values, collapse = ","),
+    timeout_sec = timeout_sec,
+    n_threads = n_threads,
+    quality_eval_max_n = quality_eval_max_n,
+    quality_eval_max_ops = quality_eval_max_ops,
+    stringsAsFactors = FALSE
+  ),
+  file.path(out_dir, "benchmark1_config.csv"),
+  row.names = FALSE
+)
+utils::write.csv(datasets, file.path(out_dir, "benchmark1_datasets.csv"), row.names = FALSE)
+utils::write.csv(methods, file.path(out_dir, "benchmark1_methods.csv"), row.names = FALSE)
 utils::write.csv(
   expand.grid(k = k_values, metric = metric_values, stringsAsFactors = FALSE),
   file.path(out_dir, "benchmark1_parameter_grid.csv"),
@@ -1617,20 +1744,22 @@ materials <- c(
   "Benchmark #1 measures nearest-neighbour construction speed across faissR native/FAISS backends, optional CUDA/cuVS backends, and external R package implementations.",
   "",
   paste0("Datasets were read from `", data_root, "`. The required datasets were COIL20, USPS, FashionMNIST, FlowRepository_FR-FCM-ZYRM_files, flow18, MNIST, imagenet, MetRef, and mass41. Each dataset file was loaded from its dataset folder as an `.RData` object named `dataset` containing `dataset$data` and `dataset$labels`. Two simulated reference datasets were generated as `matrix(runif(2000000), ncol = 2)` and `matrix(runif(3000000), ncol = 3)`, giving 1,000,000 observations with 2 and 3 variables, respectively."),
-  paste0("All methods were tested over k = ", paste(k_values, collapse = ", "), " and metrics = ", paste(metric_values, collapse = ", "), ". CPU methods were run with n_threads/cores = ", n_threads, " when the package exposed a thread argument. Each dataset-method-parameter combination was executed in a separate R process with GNU `timeout` set to ", timeout_sec, " seconds."),
+  paste0("This run used Benchmark #1 method group `", method_group, "`, with faissR methods included = ", include_faissr, ", external R packages included = ", include_external, ", and non-KNN graph/consumer rows included = ", include_non_knn, ". The selected method table is written to `benchmark1_methods.csv`."),
+  paste0("Selected methods were tested over k = ", paste(k_values, collapse = ", "), " and metrics = ", paste(metric_values, collapse = ", "), ". CPU methods were run with n_threads/cores = ", n_threads, " when the package exposed a thread argument. Each dataset-method-parameter combination was executed in a separate R process with GNU `timeout` set to ", timeout_sec, " seconds."),
+  "For Euclidean speed comparisons, use separate CPU and CUDA launches so CPU-only external R packages are compared with faissR CPU methods, and CUDA methods are compared only with faissR CUDA/cuVS/FAISS-GPU routes plus CUDA-capable external packages such as cuda.ml when installed.",
     "Workers were launched with the configured FAISS/cuVS/CUDA library paths before system library paths when those variables were supplied.",
   paste0("Nearest-neighbour quality was evaluated against an exact subset reference where feasible. The reference subset used at most ", quality_eval_max_n, " rows and was automatically reduced when the estimated operation count exceeded ", format(quality_eval_max_ops, scientific = TRUE), ". Reported quality metrics are recall@k, median recall@k, minimum recall@k, mean relative distance error, and Spearman rank correlation of neighbour ranks. Invalid or non-finite distance/rank quality summaries are recorded as `NA`."),
   "`benchmark1_best_by_dataset.csv` and `benchmark1_ranked_speed_quality_memory.csv` rank successful KNN-search rows by recall@k, neighbour-rank correlation, mean relative distance error, elapsed time, and peak memory. This keeps fast but low-recall rows from being reported as the best method.",
   "The faissR CUDA/cuVS NN-descent output was saved for every dataset where the method completed successfully.",
   "",
-  "faissR methods tested: exact CPU, RcppHNSW wrapper, FAISS Flat, FAISS CPU IVF/IVF-Flat, FAISS CPU IVFPQ, FAISS GPU Flat, FAISS GPU IVF-Flat with NVIDIA cuVS integration, FAISS GPU IVF-PQ with NVIDIA cuVS integration, FAISS HNSW, optional explicit FAISS NSG, native CPU/CUDA NSG candidate graph, native CPU NNDescent, CPU grid on simulated 2D/3D only, native CUDA exact, native CUDA IVF, CUDA grid on simulated 2D/3D only, direct RAPIDS cuVS IVF-Flat, direct RAPIDS cuVS IVF-PQ, direct cuVS brute force, direct cuVS CAGRA, and direct cuVS NN-descent.",
+  "faissR methods tested when selected: exact CPU, RcppHNSW wrapper, FAISS Flat, FAISS CPU IVF/IVF-Flat, FAISS CPU IVFPQ, FAISS CPU IVFPQ FastScan, FAISS GPU Flat, FAISS GPU IVF-Flat with NVIDIA cuVS integration, FAISS GPU IVF-PQ with NVIDIA cuVS integration, FAISS GPU CAGRA, FAISS HNSW, optional explicit FAISS NSG, native CPU/CUDA NSG candidate graph, native CPU NNDescent, CPU grid on simulated 2D/3D only, native CUDA exact, CUDA grid on simulated 2D/3D only, direct RAPIDS cuVS brute force, direct cuVS HNSW, direct cuVS IVF-Flat, direct cuVS IVF-PQ, direct cuVS 4-bit IVFPQ FastScan route, direct cuVS CAGRA, and direct cuVS NN-descent.",
   "Native CPU NNDescent is benchmarked for Euclidean, cosine, correlation, and raw inner-product metrics. Direct CUDA/cuVS brute force and direct CUDA/cuVS IVF/PQ are benchmarked for transformed raw inner product where available. Direct CUDA/cuVS NN-descent is benchmarked for Euclidean, cosine, and correlation; raw inner-product CUDA/cuVS NN-descent is recorded as unsupported.",
   "The Flat rows use the public `method = \"flat\"` route. When `metric = \"inner_product\"` is explicitly requested, faissR dispatches the same public Flat rows to the appropriate FAISS inner-product index internally instead of listing duplicate Flat-IP methods.",
   "For faissR rows, `execution_backend` records the internal backend label used by `nn_compute()`, while `public_backend` and `public_method` record the equivalent public `nn(..., backend = , method = )` route. This separates legacy benchmark labels from the public API.",
   "Successful faissR rows also record `result_backend`, `result_requested_backend`, `result_requested_method`, `result_tuning`, `resolved_backend`, `implementation_backend`, `auto_predicted_method`, `auto_predicted_device`, `auto_explicit_backend`, `auto_explicit_method`, `auto_backend_decision`, `auto_method_decision`, compact `route_parameters`, and `tuning_status`. These fields make deterministic no-pilot tuning choices, explicit backend/method requests, and concrete FAISS/cuVS/native routes explicit in the Benchmark #1 result table.",
   "The benchmark result table includes `backend_detail` to distinguish FAISS GPU indexes that use NVIDIA cuVS internally from direct RAPIDS cuVS API calls.",
   "`benchmark1_runtime_capabilities.csv` records the faissR Benchmark #1 method/metric preflight table, including legacy Benchmark #1 method labels, equivalent public `nn()` routes where available, execution backends, metric support, `public_runtime_reason`, `runtime_available`, `runtime_reason`, and current runtime availability notes.",
-  "External R package methods tested: Rnanoflann, RANN kd-tree and bd-tree, rnndescent RPF/RNND/NND/brute-force, RcppHNSW, RcppAnnoy, BiocNeighbors exhaustive/HNSW/Annoy, uwot::similarity_graph with nn_method = fnn, annoy, hnsw, and nndescent, and cuda.ml KNN if an installed cuda.ml package exposes a recognised KNN routine. External RcppHNSW rows use Euclidean, cosine, or inner-product (`distance = \"ip\"`) modes when those metrics are requested; correlation is recorded as unavailable for the external RcppHNSW row because Benchmark #1 does not row-center data before calling that package.",
+  "External R package methods tested when selected: Rnanoflann, RANN kd-tree and bd-tree, rnndescent RPF/RNND/NND/brute-force, RcppHNSW, RcppAnnoy, BiocNeighbors exhaustive/HNSW/Annoy, and cuda.ml KNN if an installed cuda.ml package exposes a recognised KNN routine. uwot::similarity_graph rows are retained as optional graph-construction rows (`kind = \"knn_graph\"`) but are excluded from the CPU/CUDA KNN-search comparison launchers by default. External RcppHNSW rows use Euclidean, cosine, or inner-product (`distance = \"ip\"`) modes when those metrics are requested; correlation is recorded as unavailable for the external RcppHNSW row because Benchmark #1 does not row-center data before calling that package.",
   "umap::umap.knn was included as a precomputed-neighbour consumer test, not as a standalone KNN search algorithm. Rtsne::Rtsne_neighbors was marked not applicable because it consumes precomputed neighbours and optimizes t-SNE rather than exporting a standalone KNN search.",
   "",
   "The benchmark records elapsed method time, load/conversion time, peak resident memory when available from `/proc/self/status`, output dimensions where an index matrix is returned, quality metrics, status, and error messages."

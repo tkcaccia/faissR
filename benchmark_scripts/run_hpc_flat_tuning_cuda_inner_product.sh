@@ -15,6 +15,8 @@ set -euo pipefail
 
 # Generated metric-specific wrapper for run_hpc_flat_tuning_cuda.sh.
 # Submit this file directly with sbatch to run exactly one metric.
+# This sweep replaces the seeded CUDA Flat inner-product defaults in
+# cuda_flat_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv.
 export METRICS="inner_product"
 export FAISSR_SINGLE_METRIC="inner_product"
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"

@@ -77,6 +77,36 @@ test_that("GPU-resident NN API exposes explicit device-output contract", {
   }
 })
 
+test_that("GPU-resident NN tuning metadata includes raw inner-product rows", {
+  exact <- faissR:::nn_gpu_tuning_params_for_method(
+    n = 70000L,
+    p = 784L,
+    k = 30L,
+    method = "exact",
+    metric = "inner_product",
+    target_recall = 0.99
+  )
+  expect_equal(exact$tuning_backend, "cuda")
+  expect_equal(exact$tuning_method, "exact")
+  expect_equal(exact$tuning_metric, "inner_product")
+  expect_equal(exact$result_backend, "faiss_gpu_flat_ip")
+  expect_match(exact$tuning_benchmark_source, "inner_product_seeded")
+
+  cagra <- faissR:::nn_gpu_tuning_params_for_method(
+    n = 70000L,
+    p = 784L,
+    k = 30L,
+    method = "cagra",
+    metric = "inner_product",
+    target_recall = 0.99
+  )
+  expect_equal(cagra$tuning_backend, "cuda")
+  expect_equal(cagra$tuning_method, "cagra")
+  expect_equal(cagra$tuning_metric, "inner_product")
+  expect_match(cagra$tuning_rule, "hpc_cuda_cagra_inner_product")
+  expect_false(isTRUE(cagra$tuning_benchmark_target_met))
+})
+
 test_that("public high-level APIs expose auto/cpu/cuda backend and auto tuning", {
   backend_choices <- c("auto", "cpu", "cuda")
   nn_tuning_choices <- c("auto", "cache", "pilot", "fixed", "off", "none")
@@ -2813,6 +2843,10 @@ test_that("public backend and method resolver maps device plus method", {
     "faiss_gpu_ivfpq"
   )
   expect_equal(
+    faissR:::resolve_public_nn_backend("cuda", "ivfpq", "inner_product"),
+    "faiss_gpu_ivfpq"
+  )
+  expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "ivfpq_fastscan", "euclidean"),
     "faiss_ivfpq_fastscan"
   )
@@ -2824,9 +2858,9 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cpu", "ivfpq_fastscan", "cosine"),
     "ivfpq_fastscan"
   )
-  expect_error(
+  expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "ivfpq_fastscan", "inner_product"),
-    "ivfpq_fastscan"
+    "cuda_cuvs_ivfpq_fastscan"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "vamana", "euclidean"),
@@ -3134,6 +3168,18 @@ test_that("native NSG tuning is backend-specific", {
   expect_equal(cpu$seed_k, cpu$graph_k)
   expect_equal(cuda$seed_backend, "exact")
   expect_equal(cuda$seed_k, cuda$graph_k)
+
+  cuda_ip <- faissR:::native_nsg_params(
+    n = 70000L,
+    p = 784L,
+    k = 50L,
+    metric = "inner_product",
+    backend = "cuda"
+  )
+  expect_equal(cuda_ip$tuning_metric, "inner_product")
+  expect_match(cuda_ip$tuning_rule, "cuda_nsg_inner_product")
+  expect_match(cuda_ip$tuning_benchmark_source, "validation_pending_seeded_from_cosine")
+  expect_false(isTRUE(cuda_ip$tuning_benchmark_target_met))
 
   options(
     faissR.cpu_nsg_graph_k = 400L,
@@ -3581,6 +3627,100 @@ test_that("CUDA cuVS HNSW defaults use HPC shape, k, and recall tiers", {
   expect_equal(imagenet99$tuning_benchmark_basis, "target_not_reached_best_available")
 })
 
+test_that("CUDA cuVS HNSW auto tuning includes raw inner product", {
+  params <- faissR:::cuvs_hnsw_params(
+    n = 70000L,
+    p = 784L,
+    k = 30L,
+    n_threads = 12L,
+    target_recall = 0.99,
+    metric = "inner_product"
+  )
+
+  expect_equal(params$tuning_rule, "hpc_cuda_hnsw_inner_product_large_high_dim_k30_recall99")
+  expect_equal(params$tuning_metric, "inner_product")
+  expect_equal(params$tuning_shape_group, "large_high_dim")
+  expect_equal(params$tuning_k_bucket, 30L)
+  expect_equal(params$tuning_target_recall_code, 99L)
+  expect_equal(params$graph_degree, 96L)
+  expect_equal(params$intermediate_graph_degree, 320L)
+  expect_equal(params$ef, 480L)
+  expect_equal(
+    params$tuning_benchmark_basis,
+    "seeded_from_cuda_hnsw_euclidean_pending_inner_product_sweep"
+  )
+  expect_equal(
+    params$tuning_benchmark_source,
+    "hpc_hnsw_cuda_inner_product_seeded_from_euclidean_pending"
+  )
+  expect_false(isTRUE(params$tuning_benchmark_target_met))
+  expect_equal(params$cuda_hnsw_design, "cuvs_hnsw_from_cagra_cpu_hierarchy")
+  expect_false(isTRUE(params$cuda_hnsw_pure_gpu))
+})
+
+test_that("CUDA IVF auto tuning includes raw inner product", {
+  params <- faissR:::cuda_ivf_params(
+    n = 70000L,
+    p = 784L,
+    k = 30L,
+    metric = "inner_product",
+    target_recall = 0.99
+  )
+
+  expect_equal(params$tuning_rule, "cuda_ivf_inner_product_large_high_dim_k30_recall99")
+  expect_equal(params$tuning_metric, "inner_product")
+  expect_equal(params$tuning_shape_group, "large_high_dim")
+  expect_equal(params$tuning_k_bucket, 30L)
+  expect_equal(params$tuning_target_recall_code, 99L)
+  expect_equal(params$nlist, 1060L)
+  expect_equal(params$nprobe, 99L)
+  expect_equal(
+    params$tuning_benchmark_basis,
+    "seeded_from_cuda_ivf_euclidean_pending_inner_product_sweep"
+  )
+  expect_equal(
+    params$tuning_benchmark_source,
+    "hpc_ivf_cuda_inner_product_seeded_from_euclidean_pending"
+  )
+  expect_false(isTRUE(params$tuning_benchmark_target_met))
+})
+
+test_that("CUDA IVFPQ auto tuning includes raw inner product", {
+  params <- faissR:::faiss_ivf_params(
+    n = 70000L,
+    k = 30L,
+    metric = "inner_product",
+    p = 784L,
+    backend = "cuda",
+    method = "ivfpq",
+    target_recall = 0.99
+  )
+  pq <- faissR:::faiss_ivfpq_pq_params(784L, n = 70000L, ivf_params = params)
+
+  expect_equal(params$tuning_rule, "hpc_cuda_ivfpq_inner_product_large_high_dim_k30_recall99")
+  expect_equal(params$tuning_metric, "inner_product")
+  expect_equal(params$tuning_backend, "cuda")
+  expect_equal(params$tuning_method, "ivfpq")
+  expect_equal(params$tuning_shape_group, "large_high_dim")
+  expect_equal(params$tuning_k_bucket, 30L)
+  expect_equal(params$tuning_target_recall_code, 99L)
+  expect_equal(params$nlist, 530L)
+  expect_equal(params$nprobe, 36L)
+  expect_equal(params$pq_m, 56L)
+  expect_equal(params$pq_nbits, 8L)
+  expect_equal(pq$m, 56L)
+  expect_equal(pq$nbits, 8L)
+  expect_equal(
+    params$tuning_benchmark_basis,
+    "seeded_from_cuda_ivfpq_euclidean_pending_inner_product_sweep"
+  )
+  expect_equal(
+    params$tuning_benchmark_source,
+    "hpc_ivfpq_cuda_inner_product_seeded_from_euclidean_pending"
+  )
+  expect_false(isTRUE(params$tuning_benchmark_target_met))
+})
+
 test_that("approximate NN parameter selectors expose deterministic tuning metadata", {
   old_options <- options(
     faissR.faiss_nlist = NULL,
@@ -3683,6 +3823,27 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   expect_equal(ivfpq_fastscan_odd_pq$pq$pq_dim, 10L)
   expect_equal(ivfpq_fastscan_odd_pq$pq$pq_bits, 4L)
   expect_true(isTRUE(ivfpq_fastscan_odd_pq$pq$pq_alignment_adjusted))
+  ivfpq_fastscan_ip <- faissR:::ivfpq_fastscan_cuda_params(
+    70000L, 785L, 30L,
+    metric = "inner_product",
+    target_recall = 0.99
+  )
+  expect_equal(ivfpq_fastscan_ip$tuning$tuning_metric, "inner_product")
+  expect_equal(ivfpq_fastscan_ip$tuning$tuning_backend, "cuda")
+  expect_equal(ivfpq_fastscan_ip$tuning$tuning_method, "ivfpq_fastscan")
+  expect_equal(ivfpq_fastscan_ip$tuning$tuning_shape_group, "large_high_dim")
+  expect_equal(ivfpq_fastscan_ip$tuning$tuning_k_bucket, 30L)
+  expect_equal(ivfpq_fastscan_ip$tuning$tuning_target_recall_code, 99L)
+  expect_equal(
+    ivfpq_fastscan_ip$tuning$tuning_rule,
+    "hpc_cuda_ivfpq_fastscan_inner_product_large_high_dim_k30_recall99"
+  )
+  expect_equal(
+    ivfpq_fastscan_ip$tuning$tuning_benchmark_basis,
+    "inner_product_validation_pending_seeded_from_cuda_euclidean_fastscan"
+  )
+  expect_false(isTRUE(ivfpq_fastscan_ip$tuning$tuning_benchmark_target_met))
+  expect_equal(ivfpq_fastscan_ip$tuning$cuvs_ivf_batch_size, 16384L)
   expect_error(
     faissR:::validate_faiss_cpu_ivfpq_training_size(120L),
     "at least 624 training rows"
@@ -3706,6 +3867,20 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   expect_true(isTRUE(cagra$tuning_large_n))
   expect_true(isTRUE(cagra$tuning_large_k))
 
+  cagra_ip <- faissR:::cuvs_cagra_params(
+    70000L,
+    50L,
+    p = 784L,
+    metric = "inner_product",
+    target_recall = 0.99
+  )
+  expect_equal(cagra_ip$tuning_source, "cpp")
+  expect_equal(cagra_ip$tuning_metric, "inner_product")
+  expect_match(cagra_ip$tuning_rule, "hpc_cuda_cagra_inner_product")
+  expect_match(cagra_ip$tuning_benchmark_basis, "seeded_from_euclidean")
+  expect_match(cagra_ip$tuning_benchmark_source, "inner_product_validation_pending")
+  expect_false(isTRUE(cagra_ip$tuning_benchmark_target_met))
+
   cuvs_nnd <- faissR:::cuvs_nndescent_params(1000000L, 50L)
   expect_equal(cuvs_nnd$tuning_rule, "large_graph_search")
   expect_equal(cuvs_nnd$tuning_source, "cpp")
@@ -3728,6 +3903,18 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   expect_equal(vamana$tuning_source, "cpp")
   expect_equal(vamana$tuning_rule, "high_recall_vamana")
   expect_equal(vamana$seed_backend, "faiss_hnsw")
+
+  cuda_vamana_ip <- faissR:::vamana_params(
+    70000L,
+    784L,
+    50L,
+    metric = "inner_product",
+    backend = "cuda"
+  )
+  expect_equal(cuda_vamana_ip$tuning_source, "cpp")
+  expect_match(cuda_vamana_ip$tuning_rule, "cuda_vamana_inner_product")
+  expect_match(cuda_vamana_ip$tuning_benchmark_source, "validation_pending_seeded_from_cosine")
+  expect_false(isTRUE(cuda_vamana_ip$tuning_benchmark_target_met))
 
   gpu_nnd <- faissR:::cuvs_nndescent_params(70000L, 50L)
   expect_equal(gpu_nnd$tuning_source, "cpp")
@@ -4080,6 +4267,78 @@ test_that("C++ CUDA auto selector has deterministic k and metric policy", {
     cuvs_available_value = TRUE
   )
   expect_equal(high_dim_route, "cuda_cuvs_nndescent")
+})
+
+test_that("CUDA exact auto tuning includes raw inner product", {
+  params <- faissR:::cuda_exact_params(
+    n = 70000L,
+    p = 784L,
+    k = 30L,
+    metric = "inner_product",
+    target_recall = 0.99
+  )
+
+  expect_equal(params$tuning_backend, "cuda")
+  expect_equal(params$tuning_method, "exact")
+  expect_equal(params$tuning_metric, "inner_product")
+  expect_equal(params$tuning_shape_group, "large_high_dim")
+  expect_equal(params$tuning_k_bucket, 30L)
+  expect_equal(params$tuning_target_recall_code, 99L)
+  expect_equal(params$result_backend, "faiss_gpu_flat_ip")
+  expect_equal(params$resolved_backend, "faiss_gpu_flat_ip")
+  expect_equal(params$faiss_gpu_query_batch_size, 4096L)
+  expect_false(isTRUE(params$faiss_gpu_reuse_resources))
+  expect_true(isTRUE(params$exact_recall_by_construction))
+  expect_false(isTRUE(params$tuning_benchmark_target_met))
+  expect_match(params$tuning_benchmark_source, "inner_product_seeded")
+})
+
+test_that("CUDA flat auto tuning includes raw inner product", {
+  params <- faissR:::cuda_flat_params(
+    n = 70000L,
+    p = 784L,
+    k = 30L,
+    metric = "inner_product",
+    target_recall = 0.99
+  )
+
+  expect_equal(params$tuning_backend, "cuda")
+  expect_equal(params$tuning_method, "flat")
+  expect_equal(params$tuning_metric, "inner_product")
+  expect_equal(params$tuning_shape_group, "large_high_dim")
+  expect_equal(params$tuning_k_bucket, 30L)
+  expect_equal(params$tuning_target_recall_code, 99L)
+  expect_equal(params$result_backend, "faiss_gpu_flat_ip")
+  expect_equal(params$resolved_backend, "faiss_gpu_flat_ip")
+  expect_equal(params$faiss_gpu_query_batch_size, 1024L)
+  expect_true(isTRUE(params$faiss_gpu_reuse_resources))
+  expect_true(isTRUE(params$exact_recall_by_construction))
+  expect_false(isTRUE(params$tuning_benchmark_target_met))
+  expect_match(params$tuning_benchmark_source, "inner_product_seeded")
+})
+
+test_that("CUDA bruteforce auto tuning includes raw inner product", {
+  params <- faissR:::cuda_bruteforce_params(
+    n = 70000L,
+    p = 784L,
+    k = 30L,
+    metric = "inner_product",
+    target_recall = 0.99
+  )
+
+  expect_equal(params$tuning_backend, "cuda")
+  expect_equal(params$tuning_method, "bruteforce")
+  expect_equal(params$tuning_metric, "inner_product")
+  expect_equal(params$tuning_shape_group, "large_high_dim")
+  expect_equal(params$tuning_k_bucket, 30L)
+  expect_equal(params$tuning_target_recall_code, 99L)
+  expect_equal(params$result_backend, "cuda_cuvs_bruteforce")
+  expect_equal(params$resolved_backend, "cuda_cuvs_bruteforce")
+  expect_equal(params$faiss_gpu_query_batch_size, 4096L)
+  expect_true(isTRUE(params$faiss_gpu_reuse_resources))
+  expect_true(isTRUE(params$exact_recall_by_construction))
+  expect_false(isTRUE(params$tuning_benchmark_target_met))
+  expect_match(params$tuning_benchmark_source, "inner_product_seeded")
 })
 
 test_that("RcppHNSW implementation backend is available when installed", {

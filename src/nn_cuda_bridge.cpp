@@ -120,15 +120,17 @@ extern "C" SEXP faissR_nn_cuda_tuned_gpu_call(SEXP x,
   const std::string resolved_method =
     method_value == "auto" ? "exact" : method_value;
   Rcpp::List out;
-  if (metric_value == "euclidean" &&
+  if ((metric_value == "euclidean" || metric_value == "inner_product") &&
       faiss_gpu_bfknn_float32_gpu_available_impl()) {
+    const std::string backend_used = metric_value == "inner_product" ?
+      "faiss_gpu_flat_ip" : "faiss_gpu_bfknn_l2";
     out = faiss_gpu_bfknn_float32_gpu_impl(
       x,
       x,
       kk,
       !include_self_value,
       metric_value,
-      "faiss_gpu_bfknn_l2",
+      backend_used,
       resolved_method
     );
   } else {

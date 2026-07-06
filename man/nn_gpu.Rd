@@ -35,7 +35,8 @@ exact-family buffers.}
 \code{"inner_product"}.}
 
 \item{tuning}{Tuning label to record. The current GPU-resident route is exact,
-so \code{target_recall} is metadata rather than an approximation knob.}
+so \code{target_recall} is metadata for the executed route; auto-selected
+approximate settings are recorded separately as \code{auto_preferred_tuning}.}
 
 \item{target_recall}{Target recall label to record; use \code{0.9},
 \code{0.95}, or \code{0.99}.}
@@ -45,7 +46,10 @@ A \code{faissR_gpu_knn} list. It contains an owning \code{handle},
 non-owning \code{indices_ptr} and \code{distances_ptr}, \code{n_query},
 \code{k}, \code{index_base = 1L}, \code{indices_type = "int32"},
 \code{distance_type = "float32"}, \code{layout}, \code{metric}, and
-\code{backend_used}.
+\code{backend_used}. With \code{tuning = "auto"}, it also includes
+\code{execution_tuning}; with \code{method = "auto"}, it includes
+\code{auto_preferred_tuning} when the compiled selector has a preferred CUDA
+method/tuning row.
 }
 \description{
 \code{nn_gpu()} runs a CUDA nearest-neighbour search and returns a
@@ -55,16 +59,17 @@ stores owning and non-owning external pointers so downstream C/C++ packages can
 consume the KNN output on the CUDA device.
 }
 \details{
-This is intentionally narrower than \code{nn()}: for Euclidean
+This is intentionally narrower than \code{nn()}: for Euclidean and raw
+inner-product
 \code{method = "auto"}, \code{"exact"}, \code{"flat"}, or \code{"bruteforce"},
 \code{nn_gpu()} uses a FAISS GPU direct \code{bfKnn} route and keeps the
-result buffers on the CUDA device. When FAISS was built with cuVS support,
-FAISS may dispatch the brute-force GPU distance primitive through cuVS
-internally. Cosine, correlation, and inner-product currently keep using the
-native CUDA GPU-resident exact route; cosine and correlation are transformed to
-normalized squared L2 on the C++ side and stored as \code{1 - similarity},
-while raw inner product uses the standard maximum-inner-product-to-L2
-transform and stores faissR's shifted smaller-is-better distance. Approximate
+result buffers on the CUDA device when FAISS GPU is available. When FAISS was
+built with cuVS support, FAISS may dispatch the brute-force GPU distance
+primitive through cuVS internally. Raw inner-product results are converted on
+the CUDA device from FAISS similarities to faissR's shifted
+smaller-is-better distance. Cosine and correlation currently keep using the
+native CUDA GPU-resident exact route; they are transformed to normalized
+squared L2 on the C++ side and stored as \code{1 - similarity}. Approximate
 cuVS/FAISS GPU methods currently fail clearly here because those provider
 result buffers still need provider-specific persistent GPU ownership.
 For \code{method = "auto"}, \code{nn_gpu()} records the same C++ auto-selection
@@ -72,5 +77,9 @@ metadata used by \code{nn()}. If that policy would prefer an approximate CUDA
 method whose result buffers are not yet exposed as persistent GPU-resident
 objects, \code{nn_gpu()} keeps the exact-family GPU-resident route and records
 \code{auto_preferred_backend}, \code{auto_preferred_method}, and
-\code{auto_residency_constraint}.
+\code{auto_residency_constraint}. It also records the actual exact-family
+\code{execution_tuning} used by the GPU-resident route and the
+\code{auto_preferred_tuning} row for the approximate method selected by the
+compiled policy, including inner-product CAGRA/IVF/graph settings when
+available.
 }

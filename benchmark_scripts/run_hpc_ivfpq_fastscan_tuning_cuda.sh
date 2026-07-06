@@ -27,9 +27,12 @@ set -euo pipefail
 # (default: euclidean), k=15,30,50,100, and writes recommendation
 # tables for target recall 0.90, 0.95, and 0.99.
 # Use the metric-specific wrapper
-# run_hpc_ivfpq_fastscan_tuning_cuda_correlation.sh for the correlation sweep.
+# run_hpc_ivfpq_fastscan_tuning_cuda_correlation.sh for the correlation sweep,
+# and run_hpc_ivfpq_fastscan_tuning_cuda_inner_product.sh for the raw-IP sweep.
 # It sweeps IVF `nlist`, IVF `nprobe`, byte-aligned cuVS 4-bit `pq_dim`,
-# and cuVS batch size. By default, the R benchmark uses a curated paired
+# and cuVS batch size. Raw inner product is searched through faissR's
+# maximum-inner-product-to-L2 transform before the same cuVS 4-bit IVF-PQ
+# kernel. By default, the R benchmark uses a curated paired
 # speed-to-recall grid. Set IVFPQ_FASTSCAN_NLIST_MULTS,
 # IVFPQ_FASTSCAN_NPROBE_MULTS, IVFPQ_FASTSCAN_PQ_DIMS, and
 # CUVS_IVF_BATCH_SIZES to force a wider manual grid.

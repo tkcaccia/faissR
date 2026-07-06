@@ -15,6 +15,8 @@ set -euo pipefail
 
 # Generated metric-specific wrapper for run_hpc_cagra_tuning_cuda.sh.
 # Submit this file directly with sbatch to run exactly one metric.
+# This launcher replaces the validation-pending CUDA CAGRA raw-inner-product
+# defaults in cuda_cagra_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv.
 export METRICS="inner_product"
 export FAISSR_SINGLE_METRIC="inner_product"
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"

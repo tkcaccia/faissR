@@ -26,8 +26,9 @@ set -euo pipefail
 # method="exact", the selected metric set, k=15,30,50,100, and writes
 # recommendation tables for target recall 0.90, 0.95, and 0.99.
 # Use run_hpc_exact_tuning_cuda_euclidean.sh,
-# run_hpc_exact_tuning_cuda_cosine.sh, or
-# run_hpc_exact_tuning_cuda_correlation.sh for the metric-specific grids used
+# run_hpc_exact_tuning_cuda_cosine.sh,
+# run_hpc_exact_tuning_cuda_correlation.sh, or
+# run_hpc_exact_tuning_cuda_inner_product.sh for the metric-specific grids used
 # by the default CUDA exact tuning policy.
 
 export BASE_DIR="${BASE_DIR:-/scratch/firenze/NN}"

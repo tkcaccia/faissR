@@ -94,6 +94,9 @@ Metric-specific CAGRA wrappers submit one metric at a time. For example,
 float32 datasets and writes rows that can replace the current validation-pending
 seed table
 `benchmark_scripts/cuda_cagra_correlation_shape_tuning_defaults_from_seeded_euclidean_results.csv`.
+Likewise, `benchmark_scripts/run_hpc_cagra_tuning_cuda_inner_product.sh`
+validates the raw-inner-product CAGRA MIPS-to-L2 route and replaces
+`benchmark_scripts/cuda_cagra_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`.
 
 Each method writes candidate grids, raw results, target-recall recommendations,
 shape summaries, and a Markdown report. The recommendation table selects the
@@ -151,6 +154,13 @@ ImageNet missing successful CPU IVF IP candidates, small-n partial coverage, or
 large low-dimensional candidates below the requested recall are still exposed as
 the best tested defaults, but result metadata reports
 `tuning_benchmark_target_met = FALSE`.
+For CUDA IVF raw inner-product search,
+`benchmark_scripts/cuda_ivf_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`
+currently seeds FAISS GPU IVF IP `nlist`/`nprobe` settings from the measured
+CUDA IVF Euclidean sweep. These rows are validation-pending and report
+`tuning_benchmark_target_met = FALSE` until
+`benchmark_scripts/run_hpc_ivf_tuning_cuda_inner_product.sh` is rerun and a
+measured metric-specific summary replaces the seed table.
 For IVFPQ raw inner-product search,
 `benchmark_scripts/inner_product_ivfpq_shape_tuning_defaults_from_uploaded_results.csv`
 summarizes the CPU12 FAISS IVFPQ IP sweep from
@@ -170,6 +180,12 @@ before backend execution because the old package rejected CPU FastScan raw
 inner product. After that guard was removed and FastScan IP was wired through
 FAISS, the seeded rows deliberately report `tuning_benchmark_target_met = FALSE`
 until the corrected CPU12 inner-product sweep is rerun.
+CUDA IVFPQ FastScan raw inner-product search uses the maximum-inner-product-to-L2
+transform before direct cuVS 4-bit IVF-PQ search. Its validation-pending seed
+defaults are stored in
+`benchmark_scripts/cuda_ivfpq_fastscan_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`
+and should be replaced by running
+`benchmark_scripts/run_hpc_ivfpq_fastscan_tuning_cuda_inner_product.sh`.
 `benchmark_scripts/cosine_nndescent_shape_tuning_defaults_from_uploaded_results.csv`
 summarizes the CPU12 cosine NN-descent sweep and feeds the compiled cosine
 NN-descent `tuning = "auto"` table. This matters because cosine search is
@@ -200,6 +216,11 @@ shape/k/target table.
 records the current CUDA correlation NSG defaults, seeded from the measured CUDA
 cosine NSG sweep until the dedicated CUDA correlation run replaces them; these
 rows report `tuning_benchmark_target_met = FALSE`.
+`benchmark_scripts/cuda_nsg_inner_product_shape_tuning_defaults_from_seeded_cosine_results.csv`
+does the same for CUDA raw inner-product NSG defaults. Submit
+`benchmark_scripts/run_hpc_nsg_tuning_cuda_inner_product.sh` to replace the
+seeded `r`/`graph_k` rows with measured raw-inner-product recall/speed
+recommendations.
 `benchmark_scripts/inner_product_nsg_shape_tuning_defaults_from_uploaded_results.csv`
 summarizes the CPU12 raw inner-product NSG sweep from
 `faissR_NSG_TUNING_CPU12_inner_product_20260701_090337`. These rows now feed
@@ -220,6 +241,11 @@ own shape/k/target table.
 records the current CUDA correlation Vamana defaults, seeded from the measured
 CUDA cosine Vamana sweep until the dedicated CUDA correlation run replaces
 them; these rows report `tuning_benchmark_target_met = FALSE`.
+`benchmark_scripts/cuda_vamana_inner_product_shape_tuning_defaults_from_seeded_cosine_results.csv`
+does the same for CUDA raw inner-product Vamana defaults. Submit
+`benchmark_scripts/run_hpc_vamana_tuning_cuda_inner_product.sh` to replace the
+seeded `r`/`search_l`/`alpha` rows with measured raw-inner-product recall/speed
+recommendations.
 `benchmark_scripts/inner_product_vamana_shape_tuning_defaults_from_uploaded_results.csv`
 summarizes the CPU12 raw inner-product Vamana sweep from
 `faissR_VAMANA_TUNING_CPU12_inner_product_20260701_090337`. These rows feed
@@ -243,6 +269,14 @@ compiled CUDA exact `tuning = "auto"` table for `metric = "correlation"`.
 Exact CUDA correlation is searched after centering and L2-normalizing float32
 rows; recall is exact by construction, while below-target validation rows are
 still preserved with `tuning_benchmark_target_met = FALSE`.
+For CUDA exact raw inner-product search,
+`benchmark_scripts/cuda_exact_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`
+currently seeds FAISS GPU Flat IP query-batch/resource settings from the
+measured CUDA exact Euclidean sweep. Exact IP recall is exact by construction,
+but these rows are marked validation-pending with
+`tuning_benchmark_target_met = FALSE` until
+`benchmark_scripts/run_hpc_exact_tuning_cuda_inner_product.sh` is rerun and the
+measured metric-specific summary replaces the seed table.
 For CUDA Flat correlation search,
 `benchmark_scripts/cuda_flat_correlation_shape_tuning_defaults_from_uploaded_results.csv`
 summarizes FAISS GPU Flat correlation query-batch/resource settings from
@@ -250,6 +284,14 @@ summarizes FAISS GPU Flat correlation query-batch/resource settings from
 compiled CUDA Flat `tuning = "auto"` table for `metric = "correlation"` and
 are stored in `attr(result, "flat_tuning")`; below-target validation rows are
 preserved with `tuning_benchmark_target_met = FALSE`.
+For CUDA Flat raw inner-product search,
+`benchmark_scripts/cuda_flat_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`
+currently seeds FAISS GPU Flat IP query-batch/resource settings from the
+measured CUDA Flat Euclidean sweep. Flat IP recall is exact by construction,
+but these rows are marked validation-pending with
+`tuning_benchmark_target_met = FALSE` until
+`benchmark_scripts/run_hpc_flat_tuning_cuda_inner_product.sh` is rerun and the
+measured metric-specific summary replaces the seed table.
 For exact raw inner-product search,
 `benchmark_scripts/inner_product_exact_shape_tuning_defaults_from_uploaded_results.csv`
 summarizes CPU12 FAISS Flat IP query-batch and fitted-index reuse settings from
@@ -286,6 +328,23 @@ the measured CUDA Euclidean cuVS brute-force sweep because the earlier uploaded
 correlation run failed before reaching the backend; the metric-specific wrapper
 `run_hpc_bruteforce_tuning_cuda_correlation.sh` reruns the corrected path and
 can replace those proxy rows with measured correlation timings.
+For CUDA bruteforce raw inner-product search,
+`benchmark_scripts/cuda_bruteforce_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`
+currently seeds cuVS brute-force query-batch and GPU resource reuse settings
+from the measured CUDA Euclidean cuVS brute-force sweep. The search remains
+exact after the maximum-inner-product-to-L2 transform, but the batch/resource
+rows are marked validation-pending with `tuning_benchmark_target_met = FALSE`
+until `benchmark_scripts/run_hpc_bruteforce_tuning_cuda_inner_product.sh`
+reruns the metric-specific path and replaces the seed table.
+For CUDA HNSW raw inner-product search,
+`benchmark_scripts/cuda_hnsw_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`
+currently seeds cuVS HNSW-from-CAGRA graph-degree and `ef` settings from the
+measured CUDA HNSW Euclidean sweep. The search route applies the
+maximum-inner-product-to-L2 transform before graph construction/search, but the
+shape/k/target rows are marked validation-pending with
+`tuning_benchmark_target_met = FALSE` until
+`benchmark_scripts/run_hpc_hnsw_tuning_cuda_inner_product.sh` reruns the
+metric-specific path and replaces the seed table.
 For bruteforce raw inner-product search,
 `benchmark_scripts/inner_product_bruteforce_shape_tuning_defaults_from_uploaded_results.csv`
 summarizes CPU12 FAISS Flat IP query-batch and fitted-index reuse settings from
@@ -359,6 +418,34 @@ rather than duplicate Flat-IP rows. Implementation-specific faissR rows,
 such as FAISS GPU IVF and direct cuVS rows, are timed through faissR's internal
 benchmark route so the table can distinguish FAISS GPU indexes that use NVIDIA
 cuVS internally from direct RAPIDS cuVS API calls.
+
+For Euclidean speed comparisons against external R packages, run CPU and CUDA
+separately. The CPU launcher selects CPU faissR methods plus CPU external KNN
+packages; the CUDA launcher selects CUDA faissR/FAISS-GPU/cuVS methods plus
+CUDA-capable external packages such as `cuda.ml` when installed. Both launchers
+exclude graph consumers by default so the leaderboard compares KNN-search
+outputs, not downstream embedding or graph-construction functions:
+
+```bash
+benchmark_scripts/run_benchmark1_compare_cpu_euclidean.sh
+benchmark_scripts/run_benchmark1_compare_cuda_euclidean.sh
+```
+
+Both launchers accept the same overrides as `benchmark1_nn_speed.R`; for
+example:
+
+```bash
+K_VALUES=30 THREADS=12 DATA_ROOT=/scratch/firenze/NN/Data \
+  benchmark_scripts/run_benchmark1_compare_cpu_euclidean.sh
+
+K_VALUES=30 THREADS=2 DATA_ROOT=/scratch/firenze/NN/Data \
+  benchmark_scripts/run_benchmark1_compare_cuda_euclidean.sh
+```
+
+The selected rows are saved in `benchmark1_methods.csv`, and the run choices
+are saved in `benchmark1_config.csv`. Direct Rscript users can reproduce the
+same split with `--method_group=cpu` or `--method_group=cuda`,
+`--metrics=euclidean`, and `--include_non_knn=FALSE`.
 CUDA NN-descent has one Benchmark #1 row:
 `faissR_cuda_cuvs_nndescent`, covering the direct RAPIDS cuVS
 Euclidean/normalized-metric route. Raw inner-product CUDA NN-descent is not
@@ -455,6 +542,10 @@ CPU IVFPQ correlation rows are promoted from
 CUDA IVFPQ correlation rows are promoted from
 `faissR_IVFPQ_TUNING_CUDA_correlation_20260703_095008` into
 `benchmark_scripts/cuda_ivfpq_correlation_shape_tuning_defaults_from_uploaded_results.csv`.
+CUDA IVFPQ raw-inner-product rows currently use
+`benchmark_scripts/cuda_ivfpq_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`,
+seeded from measured CUDA Euclidean IVFPQ settings until
+`run_hpc_ivfpq_tuning_cuda_inner_product.sh` replaces them with measured IP rows.
 Those rows tune `nlist`, `nprobe`, `pq_m`, and `pq_nbits` by shape, `k`, and
 target recall. Because product quantization can reduce recall substantially,
 rows that did not reach the requested target are labelled
