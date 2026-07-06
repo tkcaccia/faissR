@@ -292,9 +292,12 @@ See [Installation](docs/installation.md) for CRAN/source-build details.
 
 ## Bioconductor Readiness
 
-`faissR` includes `biocViews`, a `BiocStyle` vignette, `NEWS.md`, and a standard
-`License: MIT + file LICENSE` declaration. Local submission checks should be run
-from a source tarball:
+`faissR` includes the `GPU` `biocViews` term, a `BiocStyle` vignette, `NEWS.md`,
+a standard `License: MIT + file LICENSE` declaration, and a top-level
+`.BBSoptions` file with `GPU_reliance: optional`. This opts the package into
+Bioconductor GPU builders without making NVIDIA libraries mandatory for the
+regular CPU/FAISS build. Local submission checks should be run from a source
+tarball:
 
 ```sh
 R CMD build .

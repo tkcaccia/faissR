@@ -393,3 +393,20 @@ installation path clear for the Bioconductor build system. NVIDIA libraries
 should not be required on CPU-only Bioconductor builders, but GPU builders
 should set the strict `FAISSR_REQUIRE_*` variables to avoid accidental CPU-only
 builds.
+
+Bioconductor GPU builders are requested through repository metadata, not by
+making CUDA mandatory in `DESCRIPTION`. faissR therefore uses:
+
+```text
+biocViews: ..., GPU, ...
+```
+
+and a top-level `.BBSoptions` file:
+
+```text
+GPU_reliance: optional
+```
+
+This follows the GPU-optional package pattern: regular Bioconductor checks can
+build the CPU/FAISS package, while GPU build machines can exercise CUDA/cuVS
+tests when the NVIDIA stack is present.

@@ -28,6 +28,9 @@ For a NVIDIA GPU build, set `FAISSR_REQUIRE_CUDA=1` and, as needed,
 `FAISSR_REQUIRE_CUVS=1` or `FAISSR_REQUIRE_CUGRAPH=1`; then missing GPU
 libraries are fatal at configure time. The package does not call Python and
 does not silently replace an explicit CUDA request with CPU work.
+For Bioconductor, faissR declares the `GPU` biocView and opts into optional GPU
+builders with `.BBSoptions` set to `GPU_reliance: optional`; this advertises GPU
+capability without making NVIDIA libraries required for CPU-only builders.
 
 ## Public Backend Policy
 
