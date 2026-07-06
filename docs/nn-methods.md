@@ -54,17 +54,17 @@ layout support require `exclude_self = TRUE` and report an error otherwise.
 | `method` | Exact? | CPU | CUDA | Main references |
 | --- | --- | --- | --- | --- |
 | `"auto"` | depends on selected route | yes | yes | FAISS/cuVS/HNSW/IVF/CAGRA as selected [1-6,13-16,22-23,34] |
-| `"exact"` | yes | FAISS Flat L2 for Euclidean, normalized FAISS Flat cosine for cosine, and centered/normalized FAISS Flat correlation when FAISS is available; native CPU fallback | FAISS GPU Flat or cuVS brute force | FAISS/cuVS [1-3,16] |
+| `"exact"` | yes | FAISS Flat L2 for Euclidean, normalized FAISS Flat cosine for cosine, centered/normalized FAISS Flat correlation, and FAISS Flat IP for raw inner product | FAISS GPU Flat or cuVS brute force | FAISS/cuVS [1-3,16] |
 | `"flat"` | yes | FAISS Flat | FAISS GPU Flat | FAISS [1-2,16] |
-| `"bruteforce"` | yes | FAISS Flat L2 for Euclidean, normalized FAISS Flat cosine for cosine, centered/normalized FAISS Flat correlation for correlation, and FAISS Flat IP for raw inner product when FAISS is available; native CPU fallback | cuVS brute force with Euclidean/cosine/correlation compiled query-batch/resource policies | FAISS/cuVS [1-3,16] |
+| `"bruteforce"` | yes | FAISS Flat L2 for Euclidean, normalized FAISS Flat cosine for cosine, centered/normalized FAISS Flat correlation for correlation, and FAISS Flat IP for raw inner product | cuVS brute force with Euclidean/cosine/correlation compiled query-batch/resource policies | FAISS/cuVS [1-3,16] |
 | `"grid"` | yes | native 2D/3D grid | native CUDA 2D/3D grid | native faissR implementation |
-| `"hnsw"` | approximate | FAISS HNSW for all metrics when FAISS is available; RcppHNSW/hnswlib fallback | cuVS HNSW from CAGRA | HNSW/cuVS API note [5,16,22-23] |
+| `"hnsw"` | approximate | FAISS HNSW for all metrics | cuVS HNSW from CAGRA | HNSW/cuVS API note [5,16,22-23] |
 | `"ivf"` | approximate | FAISS IVF-Flat | FAISS GPU IVF-Flat | FAISS IVF [1-2,16] |
 | `"ivfpq"` | approximate | FAISS IVF-PQ | FAISS GPU IVF-PQ | product quantization [6,16] |
 | `"ivfpq_fastscan"` | approximate | FAISS IVFPQ FastScan with Flat refinement | cuVS IVF-PQ with 4-bit compressed codes | 4-bit IVFPQ compressed-code scan [6,34] |
 | `"vamana"` | approximate | native Vamana candidate graph | native Vamana candidate graph with CUDA refinement | DiskANN/Vamana [3,24] |
 | `"nsg"` | approximate | native CPU NSG-style candidate graph for all public metrics | native CUDA NSG-style candidate graph for all public metrics | NSG/FAISS [16,21,29] |
-| `"nndescent"` | approximate | native CPU NNDescent | cuVS NN-descent for Euclidean/cosine/correlation; raw inner product unsupported | NN-descent/cuVS [3-4,16] |
+| `"nndescent"` | approximate | native CPU NNDescent | cuVS NN-descent for Euclidean/cosine/correlation; native CUDA shifted-dot-product refinement for raw inner product | NN-descent/cuVS [3-4,16] |
 | `"cagra"` | approximate | unsupported | FAISS GPU CAGRA or cuVS CAGRA | FAISS/cuVS CAGRA [3,13-16] |
 
 ## Metric Support Matrix
@@ -103,7 +103,7 @@ clearly instead of repairing those rows on CPU.
 | `"ivfpq_fastscan"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | IVFPQ FastScan route. CPU uses FAISS `IndexIVFPQFastScan` with 4-bit PQ lookup tables in registers plus optional Flat reranking; raw inner product uses FastScan IP, while cosine uses row L2 normalization and correlation uses row centering plus L2 normalization before FastScan L2 search. CUDA uses direct cuVS IVF-PQ with 4-bit compressed codes; cosine row-normalizes, correlation row-centers plus row-normalizes, and raw inner product applies the maximum-inner-product-to-L2 extra-dimension transform before cuVS L2 search and distance conversion. |
 | `"vamana"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native robust-pruned candidate graph inspired by DiskANN/Vamana; CPU/CUDA refine top-k within candidate rows. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before robust pruning. Cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. CPU Euclidean/cosine/correlation/inner-product and CUDA Euclidean/cosine/correlation/inner-product `tuning = "auto"` use compiled shape/k/target tables; CUDA correlation and raw-inner-product defaults are seeded from the measured CUDA cosine table and marked validation-pending until the dedicated sweeps are rerun. |
 | `"nsg"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Public CPU NSG uses faissR's native NSG-style candidate graph for all metrics. Large high-dimensional CPU inputs use deterministic HNSW seed neighbours before NSG/MRNG-style pruning. CUDA NSG is self-KNN only; cosine/correlation use normalized Euclidean search and inner product uses shifted dot-product distances. CPU Euclidean/cosine/correlation/inner-product and CUDA Euclidean/cosine/correlation/inner-product `tuning = "auto"` use compiled shape/k/target tables; CUDA correlation and raw-inner-product defaults are seeded from the measured CUDA cosine table and marked validation-pending until the dedicated sweeps are rerun. |
-| `"nndescent"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation | Native CPU NN-descent supports raw inner-product search; CPU/CUDA cosine and correlation use normalized Euclidean graph search. CUDA uses direct RAPIDS cuVS NN-descent, which does not expose raw inner-product search. FAISS NNDescent is experimental opt-in because linked FAISS builds can abort during graph construction. |
+| `"nndescent"` | euclidean, cosine, correlation, inner_product | euclidean, cosine, correlation, inner_product | Native CPU NN-descent supports raw inner-product search; CPU/CUDA cosine and correlation use normalized Euclidean graph search. CUDA uses direct RAPIDS cuVS NN-descent for Euclidean/cosine/correlation and faissR's native CUDA shifted-dot-product candidate refinement route for raw inner product. FAISS NNDescent is experimental opt-in because linked FAISS builds can abort during graph construction. |
 | `"cagra"` | unsupported | euclidean, cosine, correlation, inner_product | CUDA-only FAISS/cuVS graph search; cosine/correlation use normalized Euclidean graph search, and raw inner product uses a maximum-inner-product-to-L2 transform. CUDA Euclidean has measured shape/k/target auto-tuning; cosine, correlation, and raw inner product use validation-pending Euclidean-seeded tables until metric-specific sweeps replace them. |
 
 Programmatic form:
@@ -129,10 +129,8 @@ arguments and collected runtime capability flags:
   Euclidean/cosine/correlation self-search, FAISS IVF for some million-row low-dimensional cases,
   FAISS HNSW for large high-dimensional self-search, including non-Euclidean
   HNSW when FAISS exposes it, FAISS Flat exact search for larger cosine,
-  correlation, or inner-product query/exact workloads, and RcppHNSW/hnswlib as
-  the preferred large non-Euclidean self-search fallback when FAISS is
-  unavailable. If neither FAISS nor RcppHNSW is available, CPU auto can use
-  faissR's native CPU NSG-style route for larger non-Euclidean self-KNN, or
+  correlation, or inner-product query/exact workloads, faissR's native CPU
+  NSG-style route for selected larger non-Euclidean self-KNN cases, and
   native CPU NN-descent for other large self-KNN cases, instead of exact brute
   force [1-2,5,16,21].
 - CUDA auto uses CUDA grid for large 2D/3D Euclidean/cosine/correlation
@@ -163,8 +161,8 @@ implementation labels or rerunning any tuning logic inside `nn()`.
 
 After the route is selected, deterministic `tuning = "auto"` parameters are
 also computed by compiled C++ helpers. FAISS HNSW, IVF, IVFPQ/PQ, FAISS graph
-indexes, cuVS CAGRA/NN-descent/IVFPQ, native NSG, Vamana, native CUDA
-NN-descent, and the RcppHNSW fallback all return parameter metadata with
+indexes, cuVS CAGRA/NN-descent/IVFPQ, native NSG, Vamana, and native CUDA
+NN-descent all return parameter metadata with
 `tuning_source = "cpp"`. R options remain the user-facing way to override
 defaults, but clipping, shape/k/metric tier labels, and requested/effective
 values come from the C++ policy layer.
@@ -178,18 +176,19 @@ large-`k`/high-dimensional tier [5].
 
 ## `"hnsw"` Metrics
 
-CPU `method = "hnsw"` is metric-aware. When FAISS is available, faissR uses
-FAISS HNSW for Euclidean/L2 and raw inner-product search. Cosine is implemented
+CPU `method = "hnsw"` is metric-aware. faissR uses FAISS HNSW for
+Euclidean/L2 and raw inner-product search. Cosine is implemented
 by row L2 normalization followed by FAISS HNSW inner-product search, and
 correlation is implemented by row centering plus L2 normalization followed by
 FAISS HNSW inner-product search [5,16]. Inner-product HNSW normalizes returned
 distances to the package convention `best_dot - dot`, so the first returned
-neighbour has distance zero. If FAISS is unavailable, faissR falls back to
-RcppHNSW/hnswlib for the HNSW route.
+neighbour has distance zero.
 
-CUDA `method = "hnsw"` resolves to `cuda_cuvs_hnsw` when cuVS is available.
-RAPIDS cuVS HNSW is documented as a CAGRA-to-HNSW wrapper that converts a CUDA
-CAGRA index and searches host-compatible tensors, so faissR records
+CUDA `method = "hnsw"` uses RAPIDS cuVS HNSW when cuVS is available. The
+resolved implementation label, such as `cuda_cuvs_hnsw`, is metadata only; it is
+not a separate public method or backend option. RAPIDS cuVS HNSW is documented
+as a CAGRA-to-HNSW wrapper that converts a CUDA CAGRA index and searches
+host-compatible tensors, so faissR records
 `cuda_hnsw_design = "cuvs_hnsw_from_cagra_cpu_hierarchy"` instead of presenting
 it as a pure all-GPU HNSW implementation. Use CUDA `method = "cagra"` when the
 goal is a fully GPU graph-search baseline. CUHNSW is acknowledged as related
@@ -200,11 +199,10 @@ source [22-23].
 
 `method = "exact"` requests exhaustive exact KNN.
 
-- On CPU, Euclidean exact search uses FAISS Flat L2 when FAISS is available.
+- On CPU, Euclidean exact search uses FAISS Flat L2.
   Cosine exact search uses row L2 normalization followed by FAISS Flat
   inner-product search, and correlation exact search uses row centering plus
-  L2 normalization followed by the same Flat inner-product search. The native
-  exact CPU route remains the no-FAISS fallback.
+  L2 normalization followed by the same Flat inner-product search.
 - CPU Euclidean, cosine, and correlation exact have compiled `tuning = "auto"` policies
   keyed by metric, shape group, `k` bucket, and `target_recall`. They tune FAISS
   query batch size and fitted Flat-index reuse where implemented, while result
@@ -277,8 +275,7 @@ issues.
 - On CPU, Euclidean brute force uses the batched FAISS Flat L2 route, cosine
   brute force uses normalized FAISS Flat cosine, correlation brute force
   uses centered/normalized FAISS Flat correlation, and raw inner-product brute
-  force uses FAISS Flat IP when FAISS is available; the native exact CPU scorer
-  remains the no-FAISS fallback.
+  force uses FAISS Flat IP.
 - CPU Euclidean/cosine/correlation/inner-product brute force has a compiled `tuning = "auto"` policy keyed
   by metric, shape group, `k` bucket, and `target_recall`, derived from
   `faissR_BRUTEFORCE_TUNING_CPU12_euclidean_20260630_161409`,
@@ -323,8 +320,7 @@ benchmarks. It is not a general high-dimensional ANN algorithm.
 `method = "hnsw"` requests an HNSW graph-based approximate nearest-neighbour
 route based on Hierarchical Navigable Small World graphs [5,16].
 
-- On CPU, faissR uses FAISS HNSW when FAISS is available, with
-  RcppHNSW/hnswlib as the fallback.
+- On CPU, faissR uses FAISS HNSW.
 - On CUDA, faissR uses RAPIDS cuVS HNSW by building a CAGRA seed graph and
   converting it with `cuvsHnswFromCagraWithDataset`. The route records
   `cuda_hnsw_design = "cuvs_hnsw_from_cagra_cpu_hierarchy"` because it is not a

@@ -13,3 +13,6 @@ cuda_available()
 \description{
 Check whether the native CUDA backend is available
 }
+\examples{
+cuda_available()
+}

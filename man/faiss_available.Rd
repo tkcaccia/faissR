@@ -12,3 +12,6 @@ faiss_available()
 \description{
 Check whether the real FAISS C++ backend is available
 }
+\examples{
+faiss_available()
+}

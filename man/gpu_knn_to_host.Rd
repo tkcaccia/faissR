@@ -7,15 +7,22 @@
 gpu_knn_to_host(x)
 }
 \arguments{
-\item{x}{A \code{faissR_gpu_knn} object.}
+\item{x}{A `faissR_gpu_knn` object.}
 }
 \value{
-A host \code{faissR_nn} list with integer \code{indices} and numeric
-\code{distances}.
+A host `faissR_nn` list with integer `indices` and numeric
+  `distances`.
 }
 \description{
-\code{gpu_knn_to_host()} is an explicit diagnostic/conversion helper for
-\code{faissR_gpu_knn} objects. It copies device \code{indices} and
-\code{distances} into ordinary R matrices. It is never called automatically by
-\code{nn_gpu()}.
+`gpu_knn_to_host()` is an explicit diagnostic/conversion helper for
+`faissR_gpu_knn` objects. It copies device `indices` and `distances` into
+ordinary R matrices. It is never called automatically by `nn_gpu()`.
+}
+\examples{
+if (cuda_available()) {
+  x <- matrix(rnorm(200), ncol = 4)
+  gpu_knn <- nn_gpu(x, k = 5, exclude_self = TRUE)
+  host_knn <- gpu_knn_to_host(gpu_knn)
+  str(host_knn)
+}
 }

@@ -12,8 +12,10 @@
 
 `faissR` is an R source package that links to external system libraries. FAISS
 is mandatory. CUDA, FAISS GPU/cuVS integration, RAPIDS cuVS, and RAPIDS
-libcugraph are optional and are compiled only when the matching headers and
-libraries are available [1-3,12-16,30-33].
+libcugraph are optional for CPU-only builds and are compiled only when the
+matching headers and libraries are available [1-3,12-16,30-33]. For a NVIDIA
+GPU build, request the GPU features explicitly; then missing CUDA/cuVS/cuGraph
+libraries are fatal rather than silently producing a CPU-only installation.
 
 The package code does not depend on Python or conda. Conda/micromamba can still
 be a convenient way to install compatible C/C++ libraries for development or
@@ -32,6 +34,11 @@ optionally, CUDA/RAPIDS libraries.
 
 GPU requests are explicit. If a GPU backend was not compiled or is unavailable
 at runtime, faissR errors instead of silently falling back to CPU.
+
+For submission/build systems such as Bioconductor, the intended CPU build
+requires FAISS but not NVIDIA libraries. For NVIDIA GPU users, the intended
+strict build uses `FAISSR_REQUIRE_CUDA=1` and, where relevant,
+`FAISSR_REQUIRE_CUVS=1` or `FAISSR_REQUIRE_CUGRAPH=1`.
 
 ## Known cuVS NN-Descent Issue
 
@@ -164,9 +171,9 @@ CUDA_HOME=/usr/local/cuda \
 FAISS_HOME=/path/to/faiss-gpu \
 CUVS_HOME=/path/to/rapids \
 CUGRAPH_HOME=/path/to/rapids \
-FAISSR_USE_CUDA=1 \
-FAISSR_USE_CUVS=1 \
-FAISSR_USE_CUGRAPH=1 \
+FAISSR_REQUIRE_CUDA=1 \
+FAISSR_REQUIRE_CUVS=1 \
+FAISSR_REQUIRE_CUGRAPH=1 \
 R CMD INSTALL .
 ```
 
@@ -176,7 +183,7 @@ cuVS:
 ```sh
 CUDA_HOME=/usr/local/cuda \
 FAISS_HOME=/path/to/faiss-gpu \
-FAISSR_USE_CUDA=1 \
+FAISSR_REQUIRE_CUDA=1 \
 FAISSR_USE_CUVS=0 \
 FAISSR_USE_CUGRAPH=0 \
 R CMD INSTALL .
@@ -188,8 +195,8 @@ Direct cuVS without cuGraph:
 CUDA_HOME=/usr/local/cuda \
 FAISS_HOME=/path/to/faiss \
 CUVS_HOME=/path/to/rapids \
-FAISSR_USE_CUDA=1 \
-FAISSR_USE_CUVS=1 \
+FAISSR_REQUIRE_CUDA=1 \
+FAISSR_REQUIRE_CUVS=1 \
 FAISSR_USE_CUGRAPH=0 \
 R CMD INSTALL .
 ```
@@ -211,9 +218,9 @@ FAISS_HOME="$ENV_DIR" \
 CUVS_HOME="$ENV_DIR" \
 CUGRAPH_HOME="$ENV_DIR" \
 CUDA_HOME=/usr/local/cuda \
-FAISSR_USE_CUDA=1 \
-FAISSR_USE_CUVS=1 \
-FAISSR_USE_CUGRAPH=1 \
+FAISSR_REQUIRE_CUDA=1 \
+FAISSR_REQUIRE_CUVS=1 \
+FAISSR_REQUIRE_CUGRAPH=1 \
 R CMD INSTALL .
 
 export LD_LIBRARY_PATH="$ENV_DIR/lib:/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}"
@@ -282,6 +289,9 @@ Rscript -e 'library(faissR); print(backend_info())'
 | `FAISSR_USE_CUDA` | Set to `1` to request CUDA native/FAISS GPU build paths; set to `0` to force CPU-only stubs. |
 | `FAISSR_USE_CUVS` | Set to `1` to request direct RAPIDS cuVS build paths; set to `0` to force cuVS stubs. |
 | `FAISSR_USE_CUGRAPH` | Set to `1` to request RAPIDS libcugraph graph clustering; set to `0` to force cuGraph stubs. |
+| `FAISSR_REQUIRE_CUDA` | Strict alias for a NVIDIA GPU build. Set to `1` to make missing CUDA toolkit/`nvcc` fatal at configure time. |
+| `FAISSR_REQUIRE_CUVS` | Strict direct cuVS request. Set to `1` to make missing RAPIDS cuVS fatal at configure time. |
+| `FAISSR_REQUIRE_CUGRAPH` | Strict CUDA graph-clustering request. Set to `1` to make missing RAPIDS libcugraph fatal at configure time. |
 | `CUDA_HOME` | CUDA toolkit prefix, for example `/usr/local/cuda`. |
 | `CUVS_HOME` | RAPIDS cuVS prefix containing headers and `libcuvs`. |
 | `CUGRAPH_HOME` | RAPIDS libcugraph prefix containing headers and `libcugraph`. |
@@ -373,10 +383,13 @@ BiocCheck::BiocCheckGitClone(".")
 BiocCheck::BiocCheck("faissR_0.99.0.tar.gz", `new-package` = TRUE)
 ```
 
-A CPU-only check should still finish with `Status: OK`; CUDA/cuVS/cuGraph tests
-are skipped unless those optional backends were compiled and are available at
-runtime. New Bioconductor submissions also require the maintainer to be
-registered on the Bioconductor Support Site and subscribed to the bioc-devel
-mailing list. FAISS is a mandatory external system dependency, so the submitted
-package and review notes should make the FAISS installation path clear for the
-Bioconductor build system.
+A CPU-only check should still finish with `Status: OK` once FAISS is installed;
+CUDA/cuVS/cuGraph tests are skipped unless those optional backends were
+compiled and are available at runtime. New Bioconductor submissions also
+require the maintainer to be registered on the Bioconductor Support Site and
+subscribed to the bioc-devel mailing list. FAISS is a mandatory external system
+dependency, so the submitted package and review notes should make the FAISS
+installation path clear for the Bioconductor build system. NVIDIA libraries
+should not be required on CPU-only Bioconductor builders, but GPU builders
+should set the strict `FAISSR_REQUIRE_*` variables to avoid accidental CPU-only
+builds.

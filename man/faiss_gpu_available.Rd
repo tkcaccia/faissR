@@ -11,3 +11,6 @@ that reports GPU support.
 \description{
 Check whether FAISS GPU support is available.
 }
+\examples{
+faiss_gpu_available()
+}

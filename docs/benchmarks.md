@@ -431,6 +431,13 @@ benchmark_scripts/run_benchmark1_compare_cpu_euclidean.sh
 benchmark_scripts/run_benchmark1_compare_cuda_euclidean.sh
 ```
 
+On SLURM/HPC systems, submit the separated Euclidean comparison jobs with:
+
+```bash
+sbatch benchmark_scripts/run_hpc_benchmark1_compare_cpu12_euclidean.sh
+sbatch benchmark_scripts/run_hpc_benchmark1_compare_cuda_euclidean.sh
+```
+
 Both launchers accept the same overrides as `benchmark1_nn_speed.R`; for
 example:
 
@@ -446,6 +453,11 @@ The selected rows are saved in `benchmark1_methods.csv`, and the run choices
 are saved in `benchmark1_config.csv`. Direct Rscript users can reproduce the
 same split with `--method_group=cpu` or `--method_group=cuda`,
 `--metrics=euclidean`, and `--include_non_knn=FALSE`.
+The speed-only files are `benchmark1_ranked_speed_only.csv` and
+`benchmark1_faissr_vs_external_speed.csv`; the latter reports the fastest
+faissR method versus the fastest non-faissR package method for each
+dataset/k/backend block and includes recall columns so speed can be interpreted
+beside quality.
 CUDA NN-descent has one Benchmark #1 row:
 `faissR_cuda_cuvs_nndescent`, covering the direct RAPIDS cuVS
 Euclidean/normalized-metric route. Raw inner-product CUDA NN-descent is not

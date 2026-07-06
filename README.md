@@ -18,9 +18,11 @@ Numbered citations in this README refer to the bibliography in
 clustering, kNN models, and k-means for R workflows that need mandatory
 [FAISS](https://faiss.ai/index.html) support and optional NVIDIA CUDA/RAPIDS
 acceleration [1-3,12-16]. The package is intended for CRAN-style source
-installation: FAISS is required, while CUDA, RAPIDS cuVS, and RAPIDS libcugraph
-are optional build features. A machine without CUDA can still install the
-package from source and use the CPU/FAISS functionality.
+installation: FAISS is required for all builds, while CUDA, RAPIDS cuVS, and
+RAPIDS libcugraph are optional for CPU-only builds. A machine without CUDA can
+still install the package from source and use the CPU/FAISS functionality. For
+NVIDIA GPU users, the GPU stack should be requested explicitly so missing CUDA
+or RAPIDS libraries are fatal rather than silently producing a CPU-only build.
 
 The package code does not depend on Python or conda. Conda/mamba environments
 can be useful for development or benchmarking because they provide compatible
@@ -276,14 +278,14 @@ Optional CUDA/cuVS builds are enabled only when requested or auto-detected:
 
 ```sh
 CUDA_HOME=/path/to/cuda CUVS_HOME=/path/to/cuvs \
-FAISSR_USE_CUDA=1 FAISSR_USE_CUVS=1 R CMD INSTALL .
+FAISSR_REQUIRE_CUDA=1 FAISSR_REQUIRE_CUVS=1 R CMD INSTALL .
 ```
 
 Optional CUDA graph clustering uses native RAPIDS libcugraph when available:
 
 ```sh
 CUDA_HOME=/path/to/cuda CUGRAPH_HOME=/path/to/cugraph \
-FAISSR_USE_CUDA=1 FAISSR_USE_CUGRAPH=1 R CMD INSTALL .
+FAISSR_REQUIRE_CUDA=1 FAISSR_REQUIRE_CUGRAPH=1 R CMD INSTALL .
 ```
 
 See [Installation](docs/installation.md) for CRAN/source-build details.
@@ -307,9 +309,11 @@ BiocCheck::BiocCheck("faissR_0.99.0.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA, cuVS, and libcugraph are
-optional and must not be required for a CPU-only Bioconductor build. Maintainer
-Support Site registration and bioc-devel subscription are external submission
-steps.
+optional for CPU-only Bioconductor builds and must not be required there.
+NVIDIA GPU builds should use `FAISSR_REQUIRE_CUDA=1` and, as needed,
+`FAISSR_REQUIRE_CUVS=1` or `FAISSR_REQUIRE_CUGRAPH=1` so missing GPU libraries
+fail during configuration. Maintainer Support Site registration and bioc-devel
+subscription are external submission steps.
 
 ## FAISS GPU With cuVS
 
@@ -332,10 +336,13 @@ steps.
   seeded from measured CUDA Euclidean IVFPQ rows until the dedicated IP sweep
   replaces it; seeded or below-target rows record
   `tuning_benchmark_target_met = FALSE`.
-- Direct RAPIDS cuVS calls, exposed through explicit backends such as
+- Direct RAPIDS cuVS calls selected through the public
+  `backend = "cuda"` plus `method = ...` API. Concrete labels such as
   `cuda_cuvs_cagra`, `cuda_cuvs_hnsw`, `cuda_cuvs_nndescent`,
   `cuda_cuvs_bruteforce`, `cuda_cuvs_ivf_flat`, `cuda_cuvs_ivfpq`, and
-  `cuda_cuvs_ivfpq_fastscan`.
+  `cuda_cuvs_ivfpq_fastscan` are recorded as resolved backend metadata for
+  diagnostics and benchmarks; they are not hidden public backend or method
+  options.
   CUDA CAGRA supports cosine by row-normalizing float32 input, correlation by
   row-centering plus row-normalizing float32 input, and raw inner product by a
   maximum-inner-product-to-L2 extra-dimension transform before CAGRA search,

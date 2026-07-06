@@ -13,3 +13,6 @@ cuvs_available()
 \description{
 Check whether the RAPIDS cuVS backend is available
 }
+\examples{
+cuvs_available()
+}

@@ -12,3 +12,6 @@ cugraph_available()
 \description{
 Check whether the RAPIDS libcugraph backend is available for native CUDA graph clustering.
 }
+\examples{
+cugraph_available()
+}

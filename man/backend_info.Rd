@@ -18,3 +18,7 @@ A data frame with one row per compiled/runtime backend family and
 currently run. It never silently falls back from an explicit GPU request to
 CPU; this table is informational only.
 }
+\examples{
+info <- backend_info()
+info[, c("backend", "available", "public_backends")]
+}

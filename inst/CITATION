@@ -1,20 +1,20 @@
 citHeader("If you use faissR in published work, please cite or acknowledge the package and the upstream vector-search systems it uses.")
 
-citEntry(
-  entry = "Manual",
+bibentry(
+  bibtype = "Manual",
   title = "faissR: Fast Native Nearest Neighbours, Graphs, kNN Models, and k-means for R",
-  author = personList(person(given = "Stefano", family = "Caccia")),
+  author = c(person(given = "Stefano", family = "Cacciatore")),
   year = "2026",
   url = "https://github.com/tkcaccia/faissR",
-  textVersion = "Caccia S (2026). faissR: Fast Native Nearest Neighbours, Graphs, kNN Models, and k-means for R. https://github.com/tkcaccia/faissR"
+  textVersion = "Cacciatore S (2026). faissR: Fast Native Nearest Neighbours, Graphs, kNN Models, and k-means for R. https://github.com/tkcaccia/faissR"
 )
 
 citHeader("faissR builds on FAISS for the FAISS CPU/GPU backends. Please also cite the FAISS project and relevant FAISS research papers for the indexes used in your analysis.")
 
-citEntry(
-  entry = "Manual",
+bibentry(
+  bibtype = "Manual",
   title = "Faiss: A library for efficient similarity search and clustering of dense vectors",
-  author = personList(person(given = "Meta", family = "FAIR")),
+  author = c(person(given = "Meta", family = "FAIR")),
   year = "2026",
   url = "https://faiss.ai/index.html",
   textVersion = "Meta FAIR. Faiss: A library for efficient similarity search and clustering of dense vectors. https://faiss.ai/index.html"
@@ -22,10 +22,10 @@ citEntry(
 
 citHeader("For FAISS GPU indexes backed by NVIDIA cuVS, such as FAISS/cuVS IVF-Flat, IVF-PQ, and CAGRA, please acknowledge the Meta and NVIDIA FAISS/cuVS integration work.")
 
-citEntry(
-  entry = "Misc",
+bibentry(
+  bibtype = "Misc",
   title = "Accelerating GPU indexes in Faiss with NVIDIA cuVS",
-  author = personList(
+  author = c(
     person(given = "Junjie", family = "Qi"),
     person(given = "Gergely", family = "Szilvasy"),
     person(given = "Michael", family = "Norris"),
@@ -38,19 +38,19 @@ citEntry(
 
 citHeader("For direct cuVS HNSW, please acknowledge the RAPIDS cuVS HNSW API. CUHNSW is acknowledged as related Apache-2.0 CUDA HNSW prior software; faissR does not vendor or copy CUHNSW source.")
 
-citEntry(
-  entry = "Manual",
+bibentry(
+  bibtype = "Manual",
   title = "cuVS HNSW C API documentation",
-  author = personList(person(given = "RAPIDS", family = "Development Team")),
+  author = c(person(given = "RAPIDS", family = "Development Team")),
   year = "2026",
   url = "https://docs.rapids.ai/api/cuvs/stable/c_api/neighbors_hnsw_c/",
   textVersion = "RAPIDS Development Team (2026). cuVS HNSW C API documentation. https://docs.rapids.ai/api/cuvs/stable/c_api/neighbors_hnsw_c/"
 )
 
-citEntry(
-  entry = "Manual",
+bibentry(
+  bibtype = "Manual",
   title = "CUHNSW: CUDA implementation of Hierarchical Navigable Small World Graph algorithm",
-  author = personList(person(given = "J.", family = "Kim")),
+  author = c(person(given = "J.", family = "Kim")),
   year = "2026",
   url = "https://github.com/js1010/cuhnsw",
   textVersion = "Kim J (2026). CUHNSW: CUDA implementation of Hierarchical Navigable Small World Graph algorithm. Apache-2.0 software. https://github.com/js1010/cuhnsw"
