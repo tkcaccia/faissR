@@ -165,7 +165,10 @@ headers and libraries discovered by `configure`.
   CPU methods with CPU external R KNN packages, while
   `benchmark_scripts/run_benchmark1_compare_cuda_euclidean.sh` compares faissR
   CUDA/FAISS-GPU/cuVS methods with CUDA-capable external packages such as
-  `cuda.ml` when available.
+  `cuda.ml` when available. HPC/SLURM equivalents are
+  `benchmark_scripts/run_hpc_benchmark1_compare_cpu12_euclidean.sh` and
+  `benchmark_scripts/run_hpc_benchmark1_compare_cuda_euclidean.sh`; both force
+  Euclidean distance and write `benchmark1_faissr_vs_external_speed.csv`.
 
 ## Available Functions
 
@@ -284,6 +287,29 @@ FAISSR_USE_CUDA=1 FAISSR_USE_CUGRAPH=1 R CMD INSTALL .
 ```
 
 See [Installation](docs/installation.md) for CRAN/source-build details.
+
+## Bioconductor Readiness
+
+`faissR` includes `biocViews`, a `BiocStyle` vignette, `NEWS.md`, and a standard
+`License: MIT + file LICENSE` declaration. Local submission checks should be run
+from a source tarball:
+
+```sh
+R CMD build .
+R CMD check faissR_0.1.0.tar.gz
+```
+
+and then:
+
+```r
+BiocCheck::BiocCheckGitClone(".")
+BiocCheck::BiocCheck("faissR_0.1.0.tar.gz", `new-package` = TRUE)
+```
+
+FAISS is a required external system dependency. CUDA, cuVS, and libcugraph are
+optional and must not be required for a CPU-only Bioconductor build. Maintainer
+Support Site registration and bioc-devel subscription are external submission
+steps.
 
 ## FAISS GPU With cuVS
 

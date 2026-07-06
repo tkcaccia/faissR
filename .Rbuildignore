@@ -9,6 +9,8 @@
 ^[.]Ruserdata$
 ^[A-Za-z0-9_.-]+[.]Rcheck$
 ^[A-Za-z0-9_.-]+[.]Rcheck/
+^[A-Za-z0-9_.-]+[.]BiocCheck$
+^[A-Za-z0-9_.-]+[.]BiocCheck/
 ^faissR_[0-9.]+[.]tar[.]gz$
 ^Rplots[.]pdf$
 ^cache$
@@ -17,10 +19,12 @@
 ^dev/
 ^docs$
 ^docs/
+^manuscript$
+^manuscript/
+^local_mnist70k_cpu_[^/]*$
+^local_mnist70k_cpu_[^/]*/
 ^tools$
 ^tools/
-^inst$
-^inst/
 .*[.]log$
 .*[.]tmp$
 .*[.]bak$
@@ -37,3 +41,5 @@
 ^benchmark_scripts/
 ^faiss_hnsw_mnist70k_.*[.]csv$
 ^mnist70k_knn_predict_speed.*[.]csv$
+^faissR_GRAPH_CLUSTER_[^/]*$
+^faissR_GRAPH_CLUSTER_[^/]*/

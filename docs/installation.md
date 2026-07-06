@@ -353,19 +353,30 @@ available at runtime.
 | cuGraph routes unavailable | libcugraph headers/library were not found at build time | Set `CUGRAPH_HOME`, `FAISSR_USE_CUGRAPH=1`, and runtime `LD_LIBRARY_PATH`. |
 | Windows GPU build is difficult | Native RAPIDS/cuVS C++ libraries are Linux-oriented | Use WSL2 and follow the Linux CUDA instructions. |
 
-## CRAN-Style Check
+## Bioconductor-Style Check
 
-For CRAN-style checks, build from a source tarball and use a valid UTF-8 locale.
-Some R installations emit startup locale warnings under `LC_ALL=C`; those
-warnings can be counted during metadata checks even when `DESCRIPTION` itself is
-valid.
+For Bioconductor-style checks, build from a source tarball and use a valid
+UTF-8 locale. Some R installations emit startup locale warnings under `LC_ALL=C`;
+those warnings can be counted during metadata checks even when `DESCRIPTION`
+itself is valid.
 
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check --no-manual --no-build-vignettes faissR_0.1.0.tar.gz
+R CMD check faissR_0.1.0.tar.gz
+```
+
+Bioconductor submission checks are run in addition to `R CMD check`:
+
+```r
+BiocCheck::BiocCheckGitClone(".")
+BiocCheck::BiocCheck("faissR_0.1.0.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK`; CUDA/cuVS/cuGraph tests
 are skipped unless those optional backends were compiled and are available at
-runtime.
+runtime. New Bioconductor submissions also require the maintainer to be
+registered on the Bioconductor Support Site and subscribed to the bioc-devel
+mailing list. FAISS is a mandatory external system dependency, so the submitted
+package and review notes should make the FAISS installation path clear for the
+Bioconductor build system.

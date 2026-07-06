@@ -1,0 +1,416 @@
+---
+title: "faissR: nearest neighbours, graphs, and clustering"
+author:
+- name: "Stefano Cacciatore"
+package: faissR
+output:
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+vignette: >
+  %\VignetteIndexEntry{faissR: nearest neighbours, graphs, and clustering}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+    collapse = TRUE,
+    comment = "#>",
+    fig.width = 6,
+    fig.height = 4
+)
+```
+
+# Overview
+
+`faissR` provides native nearest-neighbour search, graph construction, graph
+clustering, k-nearest-neighbour prediction, and k-means utilities for R
+workflows that use large row-wise matrices. The package is designed for
+high-throughput biological data analysis, including single-cell, flow
+cytometry, imaging, and mass spectrometry applications.
+
+The package requires the FAISS C++ library for CPU indexes. CUDA, FAISS GPU
+indexes, NVIDIA cuVS, and RAPIDS libcugraph are optional. CPU-only
+installations do not need NVIDIA libraries, and explicit CUDA requests fail
+clearly when CUDA support is not available.
+
+The main public functions are:
+
+| Function | Purpose |
+|---|---|
+| `nn()` | nearest-neighbour search on host matrices |
+| `nn_gpu()` | GPU-resident exact-family KNN result for downstream CUDA code |
+| `candidate_knn()` | refine a supplied candidate neighbour set |
+| `knn()` and `predict()` | supervised kNN fitting and prediction |
+| `knn_graph()` | construct a weighted nearest-neighbour graph |
+| `graph_cluster()` | random-walking, Louvain, or Leiden-style graph clustering |
+| `fast_kmeans()` | CPU or optional CUDA k-means |
+| `backend_info()` and `nn_capabilities()` | inspect compiled backends |
+
+# Example data
+
+The examples use a small synthetic matrix with three groups. Rows are
+observations and columns are features, matching the input convention used by
+`faissR`.
+
+```{r data}
+library(faissR)
+
+set.seed(100)
+n_per_group <- 30L
+p <- 8L
+
+centers <- rbind(
+    rep(-2, p),
+    rep(0, p),
+    rep(2, p)
+)
+
+x <- do.call(rbind, lapply(seq_len(nrow(centers)), function(i) {
+    sweep(
+        matrix(rnorm(n_per_group * p, sd = 0.7), ncol = p),
+        2,
+        centers[i, ],
+        "+"
+    )
+}))
+
+groups <- factor(rep(LETTERS[1:3], each = n_per_group))
+dim(x)
+table(groups)
+```
+
+# Backends
+
+`backend_info()` reports which compiled routes are available in the current R
+session. On a CPU-only machine, CUDA-related entries are expected to be
+unavailable.
+
+```{r backends}
+backend_info()[, c("backend", "available", "knn_available")]
+```
+
+`nn_capabilities()` gives method, backend, and metric support. The table can be
+large, so the example below shows only CPU Euclidean rows.
+
+```{r capabilities}
+caps <- nn_capabilities()
+subset(
+    caps,
+    backend == "cpu" & metric == "euclidean",
+    select = c("method", "backend", "metric", "supported", "exact")
+)
+```
+
+# Nearest-neighbour search
+
+The main entry point is `nn()`. Use `exclude_self = TRUE` for self-KNN when
+each row is searched against the same matrix and should not return itself.
+
+```{r nn-exact}
+nearest <- nn(
+    x,
+    k = 5,
+    backend = "cpu",
+    method = "exact",
+    metric = "euclidean",
+    exclude_self = TRUE,
+    n_threads = 2
+)
+
+nearest
+dim(nearest$indices)
+head(nearest$indices)
+head(round(nearest$distances, 3))
+```
+
+The returned object stores both the public request and the implementation that
+actually ran.
+
+```{r nn-metadata}
+c(
+    requested_backend = attr(nearest, "requested_backend"),
+    requested_method = attr(nearest, "requested_method"),
+    backend_used = attr(nearest, "backend_used"),
+    metric = attr(nearest, "metric"),
+    distance_type = attr(nearest, "distance_type")
+)
+```
+
+## Automatic method selection
+
+The default `method = "auto"` uses compiled shape-, metric-, `k`-, backend-,
+and target-recall-aware rules. These rules are deterministic; they do not run a
+slow tuning pass inside ordinary user calls.
+
+```{r nn-auto}
+auto_nearest <- nn(
+    x,
+    k = 8,
+    backend = "cpu",
+    method = "auto",
+    metric = "euclidean",
+    exclude_self = TRUE,
+    n_threads = 2
+)
+
+c(
+    backend_used = attr(auto_nearest, "backend_used"),
+    requested_method = attr(auto_nearest, "requested_method")
+)
+```
+
+For large two- or three-dimensional self-KNN, `method = "auto"` can select the
+native grid route. The explicit call below demonstrates that route on a small
+two-dimensional matrix.
+
+```{r grid}
+x2 <- matrix(runif(2000), ncol = 2)
+grid_nearest <- nn(
+    x2,
+    k = 10,
+    backend = "cpu",
+    method = "grid",
+    metric = "euclidean",
+    exclude_self = TRUE,
+    n_threads = 2
+)
+
+c(
+    backend_used = attr(grid_nearest, "backend_used"),
+    k = attr(grid_nearest, "k")
+)
+```
+
+# Metrics
+
+The public metric set is intentionally small:
+
+- `euclidean`;
+- `cosine`;
+- `correlation`;
+- `inner_product`.
+
+Cosine normalizes each row before searching. Correlation first centers each row
+and then applies row normalization. Inner product ranks neighbours by larger
+raw dot product, while returned distances keep faissR's smaller-is-better
+convention.
+
+```{r metrics}
+metric_results <- lapply(
+    c("euclidean", "cosine", "correlation", "inner_product"),
+    function(metric) {
+        out <- nn(
+            x,
+            k = 5,
+            backend = "cpu",
+            method = "exact",
+            metric = metric,
+            exclude_self = TRUE,
+            n_threads = 2
+        )
+        data.frame(
+            metric = metric,
+            backend_used = attr(out, "backend_used"),
+            first_distance = round(out$distances[1, 1], 4)
+        )
+    }
+)
+
+do.call(rbind, metric_results)
+```
+
+# Float32 input and output
+
+FAISS and cuVS consume float32 data internally. Ordinary R numeric matrices are
+converted once for those compiled routes. If the optional `float` package is
+installed, `faissR` can also accept `float::fl()` input and return float32
+distance matrices with `output = "float"`.
+
+```{r float32, eval=requireNamespace("float", quietly = TRUE)}
+xf <- float::fl(x)
+
+float_nearest <- nn(
+    xf,
+    k = 5,
+    backend = "cpu",
+    method = "exact",
+    metric = "euclidean",
+    exclude_self = TRUE,
+    output = "float",
+    n_threads = 2
+)
+
+c(
+    input_type = attr(float_nearest, "input_type"),
+    distance_type = attr(float_nearest, "distance_type")
+)
+class(float_nearest$distances)
+```
+
+# Reusing fitted indexes with kNN models
+
+`knn()` can fit a model for repeated prediction, or it can fit and predict in
+one call when `Xtest` is supplied. Fitted FAISS Flat, HNSW, IVF, and IVFPQ
+indexes are reused by `predict()` where supported.
+
+```{r knn-fit}
+fit <- knn(
+    Xtrain = x,
+    Ytrain = groups,
+    k = 7,
+    backend = "cpu",
+    method = "exact",
+    metric = "euclidean",
+    n_threads = 2
+)
+
+pred <- predict(fit, x[1:6, , drop = FALSE])
+prob <- predict(fit, x[1:6, , drop = FALSE], type = "prob")
+
+pred
+round(prob, 3)
+```
+
+Immediate prediction uses the same interface:
+
+```{r knn-immediate}
+immediate <- knn(
+    Xtrain = x,
+    Ytrain = groups,
+    Xtest = x[1:6, , drop = FALSE],
+    k = 7,
+    backend = "cpu",
+    method = "exact",
+    metric = "euclidean",
+    n_threads = 2
+)
+
+immediate
+```
+
+# Nearest-neighbour graphs
+
+`knn_graph()` builds a weighted graph from a data matrix or from a precomputed
+`nn()` result. Passing a precomputed KNN object is useful when the same
+neighbours are reused by several downstream methods.
+
+```{r graph}
+g <- knn_graph(
+    x,
+    k = 8,
+    backend = "cpu",
+    method = "exact",
+    metric = "euclidean",
+    weight = "snn",
+    n_threads = 2
+)
+
+c(
+    n_vertices = g$n_vertices,
+    n_edges = g$n_edges,
+    weight_type = g$weight_type
+)
+head(g$from)
+head(g$to)
+```
+
+# Graph clustering
+
+`graph_cluster()` accepts a graph, a KNN object, or a matrix. CPU graph
+clustering is implemented in native C++ and does not depend on `igraph`.
+Available clustering methods are `random_walking`, `louvain`, and `leiden`.
+
+```{r clustering}
+clusters <- graph_cluster(
+    g,
+    method = "louvain",
+    backend = "cpu",
+    n_threads = 2,
+    seed = 1
+)
+
+c(
+    method = clusters$method,
+    backend = clusters$backend,
+    n_communities = clusters$n_communities,
+    modularity = round(clusters$modularity, 3)
+)
+table(clusters$membership, groups)
+```
+
+For Louvain and Leiden, `n_clusters` is an optional target-count convenience
+parameter. It is an alternative to direct resolution control and is not a hard
+guarantee.
+
+```{r target-clusters}
+targeted <- graph_cluster(
+    g,
+    method = "louvain",
+    backend = "cpu",
+    n_clusters = 3,
+    n_threads = 2,
+    seed = 1
+)
+
+c(
+    requested = targeted$parameters$n_clusters_requested,
+    observed = targeted$n_communities,
+    selected_resolution = round(targeted$selected_resolution, 3)
+)
+```
+
+# k-means
+
+`fast_kmeans()` uses the same backend style as the nearest-neighbour functions.
+The CPU route is available everywhere; CUDA is optional.
+
+```{r kmeans}
+km <- fast_kmeans(
+    x,
+    centers = 3,
+    backend = "cpu",
+    n_init = 2,
+    max_iter = 20
+)
+
+c(
+    backend = km$backend,
+    backend_library = km$backend_library,
+    converged = km$converged
+)
+table(km$cluster, groups)
+```
+
+# Optional CUDA use
+
+CUDA-specific calls should be guarded with `cuda_available()` or inspected with
+`backend_info()`. The example below is not evaluated on CPU-only builders.
+
+```{r cuda-example, eval=FALSE}
+if (cuda_available()) {
+    gpu_knn <- nn_gpu(
+        x,
+        k = 15,
+        exclude_self = TRUE,
+        method = "auto",
+        metric = "euclidean",
+        tuning = "auto",
+        target_recall = 0.99
+    )
+
+    gpu_knn
+    host_copy <- gpu_knn_to_host(gpu_knn)
+}
+```
+
+`nn_gpu()` is for downstream CUDA consumers. It keeps result buffers resident on
+the GPU and copies them back to R only when `gpu_knn_to_host()` is called
+explicitly.
+
+# Session information
+
+```{r session-info}
+sessionInfo()
+```
