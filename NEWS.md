@@ -1,6 +1,6 @@
-# faissR 0.1.0
+# faissR 0.99.0
 
-* Initial development release.
+* Initial Bioconductor development release.
 * Provides FAISS-backed nearest-neighbour search, graph construction,
   graph clustering, k-nearest-neighbour prediction, and k-means helpers.
 * Adds optional CUDA, FAISS GPU, RAPIDS cuVS, and RAPIDS libcugraph routes
