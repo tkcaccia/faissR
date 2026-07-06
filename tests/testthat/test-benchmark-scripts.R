@@ -1552,8 +1552,6 @@ test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
   expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_cuvs_bruteforce", "inner_product")$ok))
   expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_cuvs_ivf_flat", "inner_product")$ok))
   expect_true(isTRUE(env$method_metric_applicable("faissR_cuda_cuvs_ivfpq", "inner_product")$ok))
-  expect_true(isTRUE(env$method_metric_applicable("RcppHNSW_hnsw", "inner_product")$ok))
-  expect_false(isTRUE(env$method_metric_applicable("RcppHNSW_hnsw", "correlation")$ok))
   expect_true(isTRUE(env$method_is_exact("faissR_faiss_flat_l2", "inner_product")))
   expect_true(isTRUE(env$method_is_exact("faissR_faiss_gpu_flat_l2", "inner_product")))
   expect_true(isTRUE(env$method_is_exact("faissR_cuda_cuvs_bruteforce", "euclidean")))
@@ -1563,9 +1561,6 @@ test_that("legacy Benchmark #1 uses canonical Flat rows for inner product", {
   expect_equal(cuvs_bruteforce_route$execution_backend, "cuda_cuvs_bruteforce")
   expect_equal(cuvs_bruteforce_route$public_backend, "cuda")
   expect_equal(cuvs_bruteforce_route$public_method, "bruteforce")
-  expect_equal(env$rcpphnsw_distance_arg("euclidean"), "euclidean")
-  expect_equal(env$rcpphnsw_distance_arg("cosine"), "cosine")
-  expect_equal(env$rcpphnsw_distance_arg("inner_product"), "ip")
 
   removed_cpu_route <- env$faissr_benchmark_route("faissR_faiss_flat_ip")
   removed_gpu_route <- env$faissr_benchmark_route("faissR_faiss_gpu_flat_ip")
@@ -1685,8 +1680,8 @@ test_that("legacy Benchmark #1 records faissR runtime capability preflight", {
   expect_equal(cuda_cuvs_nnd_ip$public_method, "nndescent")
   expect_equal(cuda_cuvs_nnd_ip$public_metric, "inner_product")
   expect_false(isTRUE(cuda_cuvs_nnd_ip$metric_supported))
-  expect_false(isTRUE(cuda_cuvs_nnd_ip$public_supported))
-  expect_true(is.na(cuda_cuvs_nnd_ip$public_resolved_backend))
+  expect_true(isTRUE(cuda_cuvs_nnd_ip$public_supported))
+  expect_equal(cuda_cuvs_nnd_ip$public_resolved_backend, "cuda_nndescent")
 
   direct_cuvs_ivf_ip <- caps[
     caps$method == "faissR_cuda_cuvs_ivf_flat" & caps$metric == "inner_product",
@@ -1910,6 +1905,44 @@ test_that("legacy Benchmark #1 best ranking is quality-aware before speed", {
   best <- ranked[!duplicated(paste(ranked$dataset, ranked$metric, ranked$k, sep = "\r")), ]
 
   expect_equal(best$method, c("same_recall_better_rank", "fast_missing_quality"))
+})
+
+test_that("legacy Benchmark #1 writes faissR versus external speed summaries", {
+  env <- source_benchmark_helpers(
+    test_path("../../benchmark_scripts/benchmark1_nn_speed.R"),
+    "if (worker)"
+  )
+
+  success <- data.frame(
+    dataset = c("A", "A", "A", "B"),
+    metric = rep("euclidean", 4L),
+    k = c(15L, 15L, 15L, 30L),
+    backend = c("CPU", "CPU", "CPU", "CUDA"),
+    implementation = c("faissR", "faissR", "RANN", "faissR"),
+    method = c("faissR_hnsw", "faissR_flat", "RANN_kd", "faissR_cuda_cuvs_cagra"),
+    backend_detail = c("FAISS HNSW", "FAISS Flat", "CPU", "Direct RAPIDS cuVS"),
+    kind = rep("knn_search", 4L),
+    status = rep("success", 4L),
+    time_sec = c(4, 10, 5, 2),
+    recall_at_k = c(0.99, 1, 1, 0.99),
+    peak_rss_gb = c(2, 3, 1, 4),
+    stringsAsFactors = FALSE
+  )
+
+  speed_ranked <- env$benchmark1_rank_speed_only(success)
+  expect_equal(speed_ranked$method[1L], "faissR_hnsw")
+
+  summary <- env$benchmark1_faissr_external_speed_summary(success)
+  cpu <- summary[summary$dataset == "A", , drop = FALSE]
+  cuda <- summary[summary$dataset == "B", , drop = FALSE]
+
+  expect_equal(cpu$faissr_method, "faissR_hnsw")
+  expect_equal(cpu$external_method, "RANN_kd")
+  expect_equal(cpu$speedup_faissr_vs_external, 5 / 4)
+  expect_equal(cpu$fastest_source, "faissR")
+  expect_equal(cuda$faissr_method, "faissR_cuda_cuvs_cagra")
+  expect_true(is.na(cuda$external_method))
+  expect_equal(cuda$fastest_source, "faissR")
 })
 
 test_that("legacy Benchmark #1 quality metrics guard invalid finite means", {
@@ -3045,8 +3078,10 @@ test_that("graph benchmark preflights graph method and metric skips", {
 
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nndescent", metric = "inner_product", x = dense))
   cuda_nnd_ip_skip <- env$graph_build_expected_skip("cuda", graph_method = "nndescent", metric = "inner_product", x = dense)
-  expect_equal(cuda_nnd_ip_skip$reason, "unsupported_combination")
-  expect_match(cuda_nnd_ip_skip$notes, "raw inner-product")
+  if (!is.null(cuda_nnd_ip_skip)) {
+    expect_true(cuda_nnd_ip_skip$reason %in% c("missing_cuda", "missing_cuvs", "unavailable_runtime"))
+    expect_match(cuda_nnd_ip_skip$notes, "runtime|CUDA|cuVS", ignore.case = TRUE)
+  }
 
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(80 * 4), ncol = 4)))
   expect_null(env$graph_build_expected_skip("cpu", graph_method = "nsg", metric = "euclidean", x = matrix(rnorm(120 * 4), ncol = 4)))

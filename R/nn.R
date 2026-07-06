@@ -28,9 +28,9 @@ with_faiss_query_batch_size <- function(params, expr) {
   if (is.na(old)) {
     on.exit(Sys.unsetenv(env_name), add = TRUE)
   } else {
-    on.exit(do.call(Sys.setenv, setNames(list(old), env_name)), add = TRUE)
+    on.exit(do.call(Sys.setenv, stats::setNames(list(old), env_name)), add = TRUE)
   }
-  do.call(Sys.setenv, setNames(list(as.character(size)), env_name))
+  do.call(Sys.setenv, stats::setNames(list(as.character(size)), env_name))
   force(expr)
 }
 
@@ -47,17 +47,17 @@ with_faiss_gpu_runtime <- function(params, expr) {
       if (is.na(old[[name]])) {
         Sys.unsetenv(name)
       } else {
-        do.call(Sys.setenv, setNames(list(old[[name]]), name))
+        do.call(Sys.setenv, stats::setNames(list(old[[name]]), name))
       }
     }
   }, add = TRUE)
   size <- suppressWarnings(as.integer(params$faiss_gpu_query_batch_size %||% NA_integer_))
   if (length(size) == 1L && !is.na(size) && is.finite(size) && size >= 1L) {
-    Sys.setenv(FAISSR_FAISS_GPU_QUERY_BATCH_SIZE = as.character(size))
+    set_env_var("FAISSR_FAISS_GPU_QUERY_BATCH_SIZE", size)
   }
   reuse <- params$faiss_gpu_reuse_resources %||% NA
   if (!is.na(reuse)) {
-    Sys.setenv(FAISSR_FAISS_GPU_REUSE_RESOURCES = if (isTRUE(reuse)) "1" else "0")
+    set_env_var("FAISSR_FAISS_GPU_REUSE_RESOURCES", if (isTRUE(reuse)) "1" else "0")
   }
   force(expr)
 }
@@ -79,10 +79,10 @@ with_cuvs_ivf_batch_size <- function(params, expr) {
     if (is.na(old)) {
       Sys.unsetenv("FAISSR_CUVS_IVF_BATCH_SIZE")
     } else {
-      Sys.setenv(FAISSR_CUVS_IVF_BATCH_SIZE = old)
+      set_env_var("FAISSR_CUVS_IVF_BATCH_SIZE", old)
     }
   }, add = TRUE)
-  Sys.setenv(FAISSR_CUVS_IVF_BATCH_SIZE = as.character(size))
+  set_env_var("FAISSR_CUVS_IVF_BATCH_SIZE", size)
   force(expr)
 }
 
@@ -282,10 +282,9 @@ attach_cpu_exact_tuning <- function(result, params, output, n_threads, extra = N
     extra %||% list()
   )
   attr(result, attr_name) <- meta
-  provider_attr <- if (identical(library_label, "cuvs")) "cuvs" else "faiss"
-  provider <- attr(result, provider_attr, exact = TRUE)
+  provider <- attr(result, "faiss", exact = TRUE)
   if (is.null(provider)) provider <- list()
-  attr(result, provider_attr) <- c(provider, meta[setdiff(names(meta), names(provider))])
+  attr(result, "faiss") <- c(provider, meta[setdiff(names(meta), names(provider))])
   result
 }
 
@@ -1045,6 +1044,13 @@ nn_compute <- function(data,
   requested_method <- public_nn_method_label(
     requested_method %||% nn_resolved_backend_public_method(backend) %||% "auto"
   )
+  if (backend %in% c("hnsw", "cpu_hnsw") || grepl("^rcpp", backend)) {
+    stop(
+      "Legacy direct HNSW backend labels were removed. ",
+      "Use `backend = \"cpu\", method = \"hnsw\"` for FAISS HNSW.",
+      call. = FALSE
+    )
+  }
   tuning <- normalize_nn_tuning(tuning)
   target_recall <- normalize_hnsw_target_recall(target_recall)
   data_float32 <- is_float32_matrix_input(data)
@@ -2631,7 +2637,7 @@ nn_compute <- function(data,
         output = output,
         params = exact_params,
         target_recall = target_recall,
-        use_cache = isTRUE(exact_params$cache_fitted_indexes)
+        use_cache = TRUE
       )
       if (!is.null(cached)) return(cached)
     }
@@ -2750,7 +2756,7 @@ nn_compute <- function(data,
                               "cuda_grid_auto", "gpu_grid", "cuda_grid2d",
                               "cuda_grid3d")) {
       stop("Grid nearest-neighbour search does not support `metric = \"inner_product\"`.", call. = FALSE)
-    } else if (!backend %in% c("auto", "cpu", "cpu_auto", "hnsw", "rcpphnsw", "cpu_hnsw",
+    } else if (!backend %in% c("auto", "cpu", "cpu_auto",
                                "faiss_hnsw", "faiss_ivf", "faiss_ivf_flat",
                                "faiss_ivfpq", "faiss_ivfpq_fastscan", "faiss_nsg", "faiss_nndescent",
                                "cpu_nsg", "cpu_vamana", "cuda_vamana", "cuda_nsg",
@@ -2848,7 +2854,7 @@ nn_compute <- function(data,
         output = output,
         params = exact_params,
         target_recall = target_recall,
-        use_cache = isTRUE(exact_params$cache_fitted_indexes)
+        use_cache = TRUE
       )
       if (!is.null(cached)) return(cached)
     }
@@ -2908,7 +2914,7 @@ nn_compute <- function(data,
         output = output,
         params = exact_params,
         target_recall = target_recall,
-        use_cache = isTRUE(exact_params$cache_fitted_indexes)
+        use_cache = TRUE
       )
       if (!is.null(cached)) return(cached)
     }
@@ -2958,7 +2964,7 @@ nn_compute <- function(data,
       output = output,
       params = exact_params,
       target_recall = target_recall,
-      use_cache = isTRUE(exact_params$cache_fitted_indexes)
+      use_cache = TRUE
     )
     if (!is.null(cached)) return(cached)
     out <- with_faiss_query_batch_size(exact_params, {
@@ -4703,22 +4709,6 @@ nn_compute <- function(data,
     return(result)
   }
 
-  if (backend %in% c("hnsw", "rcpphnsw", "cpu_hnsw")) {
-    out <- rcpphnsw_knn(
-      data,
-      points,
-      k = k,
-      self_query = self_query,
-      exclude_self = isTRUE(exclude_self),
-      metric = metric,
-      n_threads = n_threads
-    )
-    result <- finish_nn_result(out, "hnsw", k, self_query, exact = FALSE, metric = metric)
-    attr(result, "approximation") <- attr(out, "approximation")
-    return(result)
-  }
-
-
   if (backend %in% c("cuda_grid", "cuda_grid_auto", "gpu_grid",
                      "cuda_grid2d", "cuda_grid3d")) {
     if (!isTRUE(self_query)) {
@@ -5410,12 +5400,11 @@ nn_resolved_backend_available <- function(backend) {
   )) {
     return(list(available = TRUE, reason = "available", notes = "Native CPU route is available."))
   }
-  if (identical(backend, "hnsw")) {
-    ok <- requireNamespace("RcppHNSW", quietly = TRUE)
+  if (backend %in% c("hnsw", "cpu_hnsw")) {
     return(list(
-      available = ok,
-      reason = if (ok) "available" else "missing_rcpphnsw",
-      notes = if (ok) "RcppHNSW fallback is available." else "RcppHNSW fallback is not installed."
+      available = FALSE,
+      reason = "removed_legacy_hnsw_backend",
+      notes = "The legacy direct HNSW backend label was removed; use backend = \"cpu\", method = \"hnsw\" for FAISS HNSW."
     ))
   }
   if (startsWith(backend, "faiss_gpu")) {
@@ -5518,7 +5507,7 @@ nn_capability_row <- function(method, backend, metric) {
       supported <- all_metrics
       exact <- NA
       implementation <- "shape-aware CPU selector"
-      notes <- "Euclidean can resolve to exact, grid, FAISS IVF, FAISS HNSW, or native CPU NN-descent fallback; non-Euclidean resolves to exact, FAISS Flat, FAISS HNSW, RcppHNSW/hnswlib, or native CPU NN-descent fallback depending on shape and availability."
+      notes <- "Euclidean can resolve to exact, grid, FAISS IVF, FAISS HNSW, native CPU NSG/Vamana refinement, or native CPU NN-descent depending on shape; non-Euclidean resolves to exact, FAISS Flat, FAISS HNSW, native CPU NSG/Vamana refinement, or native CPU NN-descent depending on shape."
     } else if (all_metrics) {
       supported <- TRUE
       exact <- NA
@@ -5535,8 +5524,8 @@ nn_capability_row <- function(method, backend, metric) {
     supported <- all_metrics
     exact <- TRUE
     if (identical(backend, "cpu")) {
-      implementation <- if (isTRUE(faiss_available())) "FAISS CPU Flat or native CPU exact fallback" else "native CPU exact"
-      notes <- "CPU exact search supports all public metrics; with FAISS available it resolves to Flat L2/IP routes, with cosine and correlation using normalized Flat IP transforms."
+      implementation <- "FAISS CPU Flat"
+      notes <- "CPU exact search supports all public metrics through FAISS Flat L2/IP routes, with cosine and correlation using normalized Flat IP transforms."
     } else {
       if (euclidean) {
         implementation <- "FAISS GPU Flat or cuVS brute force"
@@ -5564,12 +5553,12 @@ nn_capability_row <- function(method, backend, metric) {
     supported <- all_metrics
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) {
-      "FAISS HNSW or RcppHNSW/hnswlib"
+      "FAISS HNSW"
     } else {
       "RAPIDS cuVS HNSW from CAGRA"
     }
     notes <- if (identical(backend, "cpu")) {
-      "Uses FAISS HNSW for all metrics when available; cosine and correlation use normalized inner-product HNSW. Falls back to RcppHNSW/hnswlib when FAISS is unavailable."
+      "Uses FAISS HNSW for all metrics; cosine and correlation use normalized inner-product HNSW."
     } else {
       "Uses RAPIDS cuVS HNSW by building a CAGRA seed graph and converting it with the host dataset. Metadata records cuda_hnsw_design = cuvs_hnsw_from_cagra_cpu_hierarchy because this is not a pure all-GPU HNSW search implementation."
     }
@@ -5638,17 +5627,19 @@ nn_capability_row <- function(method, backend, metric) {
       "Builds a Vamana-style candidate graph using compiled C++ pruning over compact candidate storage and refines candidate rows with the native CUDA row-candidate kernel; cuVS Vamana currently builds/serializes DiskANN-compatible indexes but does not expose KNN search."
     }
   } else if (identical(method, "nndescent")) {
-    supported <- if (identical(backend, "cpu")) all_metrics else non_ip_metric
+    supported <- all_metrics
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) {
       "native CPU NNDescent"
+    } else if (identical(metric, "inner_product")) {
+      "native CUDA NNDescent candidate refinement"
     } else {
       "cuVS CUDA NN-descent"
     }
     notes <- if (identical(backend, "cpu")) {
       "Native CPU NNDescent supports Euclidean/L2 and raw inner-product self-KNN; cosine/correlation use normalized Euclidean graph search. Seed neighbours use random-projection windows plus deterministic row fill, with flat row-major graph buffers and fixed-width reverse-neighbour storage in C++."
     } else if (supported) {
-      "CUDA NN-descent uses direct RAPIDS cuVS NN-descent for Euclidean/L2 self-KNN; cosine/correlation use normalized Euclidean graph search."
+      "CUDA NN-descent uses direct RAPIDS cuVS NN-descent for Euclidean/L2 self-KNN; cosine/correlation use normalized Euclidean graph search, and raw inner-product uses faissR's native CUDA shifted-dot-product candidate refinement route."
     } else {
       "Direct cuVS NN-descent does not expose raw inner-product search."
     }
@@ -5885,6 +5876,13 @@ resolve_public_nn_backend <- function(backend,
 }
 
 public_nn_method_label <- function(method) {
+  if (missing(method) || is.null(method) || length(method) < 1L) {
+    return(NA_character_)
+  }
+  method <- as.character(method)[1L]
+  if (is.na(method) || !nzchar(method)) {
+    return(NA_character_)
+  }
   labels <- c(
     auto = "auto",
     exact = "exact",
@@ -5921,8 +5919,7 @@ nn_resolved_backend_public_method <- function(backend) {
                      "cpu_grid2d", "cpu_grid3d", "cuda_grid",
                      "cuda_grid_auto", "gpu_grid", "cuda_grid2d",
                      "cuda_grid3d")) return("grid")
-  if (backend %in% c("hnsw", "rcpphnsw", "cpu_hnsw", "faiss_hnsw",
-                     "cuda_cuvs_hnsw", "cuvs_hnsw")) return("hnsw")
+  if (backend %in% c("faiss_hnsw", "cuda_cuvs_hnsw", "cuvs_hnsw")) return("hnsw")
   if (backend %in% c("faiss_ivf", "cpu_faiss_index_ivf", "faiss_ivf_flat",
                      "faiss_gpu_ivf", "faiss_gpu_ivf_flat",
                      "cuda_faiss_ivf_flat", "cuvs_ivf",
@@ -6248,9 +6245,6 @@ select_self_approx_backend <- function(prefer_cuda = FALSE) {
   if (isTRUE(faiss_available())) {
     return("faiss_hnsw")
   }
-  if (isTRUE(requireNamespace("RcppHNSW", quietly = TRUE))) {
-    return("hnsw")
-  }
   "cpu"
 }
 
@@ -6307,8 +6301,7 @@ nn_auto_select_shape_cpp <- function(resolved_backend,
                                      cuda_available_value = cuda_available(),
                                      cuvs_available_value = cuvs_available(),
                                      faiss_available_value = faiss_available(),
-                                     faiss_gpu_available_value = faiss_gpu_available(),
-                                     rcpphnsw_available_value = requireNamespace("RcppHNSW", quietly = TRUE)) {
+                                     faiss_gpu_available_value = faiss_gpu_available()) {
   numeric_option <- function(name, default) {
     value <- suppressWarnings(as.numeric(faissr_option(name, default)))
     if (length(value) != 1L || is.na(value) || !is.finite(value)) default else value
@@ -6328,7 +6321,6 @@ nn_auto_select_shape_cpp <- function(resolved_backend,
     cuvs_available = isTRUE(cuvs_available_value),
     faiss_available = isTRUE(faiss_available_value),
     faiss_gpu_available = isTRUE(faiss_gpu_available_value),
-    rcpphnsw_available = isTRUE(rcpphnsw_available_value),
     cagra_preference = cagra_implementation_preference(),
     cuda_exact_n = faiss_option_int("cuda_auto_exact_n", 100000L, min_value = 1000L, max_value = 10000000L),
     cuda_exact_work = numeric_option("cuda_auto_exact_work", 5e12),
@@ -7621,19 +7613,6 @@ candidate_graph_hnsw_seed_knn <- function(data,
     attr(out, "seed_backend") <- "faiss_hnsw"
     return(out)
   }
-  if (requireNamespace("RcppHNSW", quietly = TRUE)) {
-    out <- rcpphnsw_knn(
-      data,
-      data,
-      k = k,
-      self_query = TRUE,
-      exclude_self = TRUE,
-      metric = metric,
-      n_threads = n_threads
-    )
-    attr(out, "seed_backend") <- "rcpphnsw"
-    return(out)
-  }
   NULL
 }
 
@@ -8070,7 +8049,7 @@ attach_knn_recall_subset <- function(result,
     return(result)
   }
   sample_size <- knn_recall_subset_size(n)
-  set.seed(as.integer(seed) + 1009L)
+  set_rng_seed(as.integer(seed) + 1009L)
   rows <- sort(sample.int(n, sample_size))
   exact_raw <- nn_compute(
     data,
@@ -8350,113 +8329,6 @@ faiss_self_knn <- function(data,
     nlist = as.integer(out$nlist),
     nprobe = as.integer(out$nprobe),
     seed = as.integer(seed)
-  )
-  out
-}
-
-rcpphnsw_params <- function(k) {
-  nn_tune_rcpphnsw_cpp(
-    as.integer(k),
-    nn_option_int_or_na("hnsw_m"),
-    nn_option_int_or_na("hnsw_ef_construction"),
-    nn_option_int_or_na("hnsw_ef")
-  )
-}
-
-rcpphnsw_knn <- function(data,
-                         points,
-                         k,
-                         self_query,
-                         exclude_self,
-                         metric = "euclidean",
-                         n_threads = NULL) {
-  if (!requireNamespace("RcppHNSW", quietly = TRUE)) {
-    stop(
-      "The RcppHNSW fallback backend is not installed. ",
-      "Install it with `install.packages(\"RcppHNSW\")`, or use `backend = \"cpu\"`.",
-      call. = FALSE
-    )
-  }
-  metric <- normalize_nn_metric(metric)
-  if (identical(metric, "correlation")) {
-    data <- row_center_l2_normalize(data)
-    if (isTRUE(self_query)) {
-      points <- data
-    } else {
-      points <- row_center_l2_normalize(points)
-    }
-  }
-  hnsw_metric <- switch(
-    metric,
-    euclidean = "euclidean",
-    cosine = "cosine",
-    correlation = "cosine",
-    inner_product = "ip"
-  )
-  n_threads <- normalize_nn_threads(n_threads)
-  params <- rcpphnsw_params(k)
-
-  raw <- if (isTRUE(self_query)) {
-    query_k <- if (isTRUE(exclude_self)) k + 1L else k
-    RcppHNSW::hnsw_knn(
-      data,
-      k = as.integer(query_k),
-      distance = hnsw_metric,
-      M = as.integer(params$m),
-      ef_construction = as.integer(params$ef_construction),
-      ef = as.integer(max(params$ef, query_k)),
-      verbose = FALSE,
-      progress = "none",
-      n_threads = as.integer(n_threads),
-      byrow = TRUE,
-      random_seed = as.integer(fast_knn_approx_seed())
-    )
-  } else {
-    index <- RcppHNSW::hnsw_build(
-      data,
-      distance = hnsw_metric,
-      M = as.integer(params$m),
-      ef = as.integer(params$ef_construction),
-      verbose = FALSE,
-      progress = "none",
-      n_threads = as.integer(n_threads),
-      byrow = TRUE,
-      random_seed = as.integer(fast_knn_approx_seed())
-    )
-    RcppHNSW::hnsw_search(
-      points,
-      index,
-      k = as.integer(k),
-      ef = as.integer(max(params$ef, k)),
-      verbose = FALSE,
-      progress = "none",
-      n_threads = as.integer(n_threads),
-      byrow = TRUE
-    )
-  }
-
-  out <- list(indices = as.matrix(raw$idx), distances = as.matrix(raw$dist))
-  storage.mode(out$indices) <- "integer"
-  storage.mode(out$distances) <- "double"
-  if (identical(metric, "inner_product") && ncol(out$distances) > 0L) {
-    out$distances <- out$distances - out$distances[, 1L]
-  }
-  if (isTRUE(self_query) && isTRUE(exclude_self)) {
-    out <- drop_self_knn_result(out, k)
-  }
-  attr(out, "approximation") <- list(
-    strategy = "RcppHNSW_hnswlib",
-    backend = "hnsw",
-    library = "RcppHNSW",
-    metric = metric,
-    exact = FALSE,
-    m = as.integer(params$m),
-    ef_construction = as.integer(params$ef_construction),
-    ef = as.integer(params$ef),
-    n_threads = as.integer(n_threads),
-    tuning_policy = params$tuning_policy,
-    tuning_rule = params$tuning_rule,
-    tuning_source = params$tuning_source %||% "cpp"
   )
   out
 }
@@ -9225,7 +9097,7 @@ faiss_gpu_ivf_tune_params <- function(data, k, base_params, tuning = "auto") {
       assign(".Random.seed", old_seed, envir = .GlobalEnv)
     }
   }, add = TRUE)
-  set.seed(seed)
+  set_rng_seed(seed)
   rows <- sort(sample.int(nrow(data), sample_size))
   x <- data[rows, , drop = FALSE]
   compare_k <- as.integer(min(k, nrow(x)))
@@ -9839,7 +9711,7 @@ cuvs_cagra_tune_params <- function(data, k, base_params, tuning = "auto", build_
       assign(".Random.seed", old_seed, envir = .GlobalEnv)
     }
   }, add = TRUE)
-  set.seed(seed)
+  set_rng_seed(seed)
   rows <- sort(sample.int(nrow(data), sample_size))
   x <- data[rows, , drop = FALSE]
   compare_k <- as.integer(min(k, nrow(x)))
@@ -10154,8 +10026,9 @@ grid_self_knn <- function(data,
 #' Method descriptions:
 #' \itemize{
 #'   \item `"auto"`: shape-aware selector for the selected backend. CPU auto
-#'   uses exact, grid, FAISS IVF, FAISS HNSW, or native CPU NN-descent fallback
-#'   depending on data shape, size, and available libraries. CUDA auto uses CUDA
+#'   uses exact, grid, FAISS IVF, FAISS HNSW, native CPU NSG/Vamana
+#'   refinement, or native CPU NN-descent depending on data shape and size.
+#'   CUDA auto uses CUDA
 #'   grid for 2D/3D Euclidean/cosine/correlation
 #'   self-KNN. For Euclidean non-grid self-KNN, CUDA auto uses benchmark-derived
 #'   shape/k/target-recall rules: large low-dimensional datasets use IVF-Flat,
@@ -10169,9 +10042,8 @@ grid_self_knn <- function(data,
 #'   route when that method/metric is supported on CPU.
 #'   \item `"exact"`: exact nearest-neighbour search. CPU Euclidean exact uses
 #'   FAISS Flat L2, CPU cosine exact uses normalized FAISS Flat cosine, and CPU
-#'   correlation exact uses centered/normalized FAISS Flat correlation when
-#'   FAISS is available; these routes apply compiled exact tuning metadata for
-#'   query batching, and the native exact CPU scorer remains the no-FAISS fallback.
+#'   correlation exact uses centered/normalized FAISS Flat correlation; these
+#'   routes apply compiled exact tuning metadata for query batching.
 #'   CUDA uses FAISS GPU Flat when the linked
 #'   FAISS build reports GPU support; Euclidean, cosine, and correlation exact
 #'   CUDA routes use compiled shape/k/target policies for GPU query batching.
@@ -10188,8 +10060,7 @@ grid_self_knn <- function(data,
 #'   \item `"bruteforce"`: exhaustive brute-force search. CPU Euclidean
 #'   brute force uses FAISS Flat L2, CPU cosine brute force uses normalized
 #'   FAISS Flat cosine, and CPU correlation brute force uses centered/normalized
-#'   FAISS Flat correlation when FAISS is available, with native exact CPU as the
-#'   no-FAISS fallback. It has its own compiled metric/shape/k/target tuning
+#'   FAISS Flat correlation. It has its own compiled metric/shape/k/target tuning
 #'   policy for FAISS query batching and fitted-index reuse, stored in
 #'   `attr(result, "bruteforce_tuning")`. On CUDA, RAPIDS cuVS brute force is
 #'   preferred when available. CUDA Euclidean and cosine brute force use compiled
@@ -10204,8 +10075,7 @@ grid_self_knn <- function(data,
 #'   requests error for higher-dimensional matrices; use `"auto"` to let
 #'   faissR choose a non-grid method when appropriate.
 #'   \item `"hnsw"`: HNSW approximate graph-search index [3,5,16,22-23].
-#'   CPU uses FAISS HNSW when available and RcppHNSW/hnswlib fallback
-#'   otherwise. CUDA uses RAPIDS cuVS HNSW by building a CAGRA seed graph and
+#'   CPU uses FAISS HNSW. CUDA uses RAPIDS cuVS HNSW by building a CAGRA seed graph and
 #'   converting it with `cuvsHnswFromCagraWithDataset` using the host dataset
 #'   and cuVS CPU hierarchy; result metadata marks this as the cuVS wrapper
 #'   design rather than a pure all-GPU HNSW search implementation.
@@ -10395,8 +10265,8 @@ grid_self_knn <- function(data,
 #'   search, FAISS CPU/GPU Flat,
 #'   FAISS CPU/GPU IVF-Flat, FAISS CPU/GPU IVFPQ, FAISS CPU FastScan,
 #'   CUDA cuVS IVFPQ FastScan for cosine and correlation,
-#'   FAISS CPU HNSW,
-#'   and RcppHNSW. FAISS approximate IP-capable routes use row L2 normalization
+#'   FAISS CPU HNSW, and native graph-refinement routes. FAISS approximate
+#'   IP-capable routes use row L2 normalization
 #'   for cosine and row centering plus L2 normalization for correlation before
 #'   inner-product search; distances are returned as `1 - similarity`.
 #'   All-zero cosine rows and constant correlation rows are zero-normalized
@@ -10408,10 +10278,10 @@ grid_self_knn <- function(data,
 #'   `attr(result, "gpu_residency")` metadata with provider, index residency,
 #'   host/device transfer strategy, query device reuse, and CPU fallback flags.
 #'   CPU `method = "auto"` can use FAISS Flat for larger exact non-Euclidean
-#'   query workloads, FAISS HNSW for large non-Euclidean self-search when FAISS
-#'   is available, and RcppHNSW/hnswlib only as the fallback when FAISS is
-#'   unavailable. CPU `method = "hnsw"` uses FAISS HNSW for all metrics when
-#'   available and RcppHNSW/hnswlib when FAISS is unavailable.
+#'   query workloads, FAISS HNSW for large non-Euclidean self-search, native
+#'   CPU NSG/Vamana refinement for selected larger self-KNN cases, and native
+#'   CPU NN-descent for other large self-KNN cases. CPU `method = "hnsw"` uses
+#'   FAISS HNSW for all metrics.
 #'   `"inner_product"` is exact on native CPU routes and maps to FAISS Flat IP,
 #'   FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, native CPU NN-descent raw
 #'   dot-product search, direct cuVS brute force through an exact MIPS-to-L2
@@ -10774,6 +10644,12 @@ nn <- function(data,
 #'   `execution_tuning`; with `method = "auto"`, it includes
 #'   `auto_preferred_tuning` when the compiled selector has a preferred CUDA
 #'   method/tuning row.
+#' @examples
+#' if (cuda_available()) {
+#'   x <- matrix(rnorm(200), ncol = 4)
+#'   gpu_knn <- nn_gpu(x, k = 5, exclude_self = TRUE)
+#'   print(gpu_knn)
+#' }
 #' @export
 nn_gpu <- function(data,
                    points = data,
@@ -11002,6 +10878,13 @@ nn_gpu <- function(data,
 #' @param x A `faissR_gpu_knn` object.
 #' @return A host `faissR_nn` list with integer `indices` and numeric
 #'   `distances`.
+#' @examples
+#' if (cuda_available()) {
+#'   x <- matrix(rnorm(200), ncol = 4)
+#'   gpu_knn <- nn_gpu(x, k = 5, exclude_self = TRUE)
+#'   host_knn <- gpu_knn_to_host(gpu_knn)
+#'   str(host_knn)
+#' }
 #' @export
 gpu_knn_to_host <- function(x) {
   if (!inherits(x, "faissR_gpu_knn")) {
@@ -11118,6 +11001,8 @@ print.faissR_nn <- function(x, ...) {
 #'
 #' @return `TRUE` when the package was built with CUDA support and the CUDA
 #'   runtime reports at least one available device.
+#' @examples
+#' cuda_available()
 #' @export
 cuda_available <- function() {
   isTRUE(cuda_available_cpp())
@@ -11126,6 +11011,8 @@ cuda_available <- function() {
 #' Check whether the real FAISS C++ backend is available
 #'
 #' @return `TRUE` when faissR was compiled and linked against FAISS.
+#' @examples
+#' faiss_available()
 #' @export
 faiss_available <- function() {
   isTRUE(faiss_available_cpp())
@@ -11140,6 +11027,8 @@ faiss_fastscan_available <- function() {
 #'
 #' @return `TRUE` when faissR was compiled and linked against RAPIDS cuVS
 #'   and the CUDA runtime reports at least one available device.
+#' @examples
+#' cuvs_available()
 #' @export
 cuvs_available <- function() {
   isTRUE(cuvs_available_cpp())
@@ -11148,6 +11037,8 @@ cuvs_available <- function() {
 #' Check whether the RAPIDS libcugraph backend is available
 #'
 #' @return `TRUE` when faissR was compiled and linked against RAPIDS libcugraph.
+#' @examples
+#' cugraph_available()
 #' @export
 cugraph_available <- function() {
   isTRUE(cugraph_available_cpp())

@@ -59,8 +59,8 @@ Leiden, walktrap/random-walk, and multicore graph-clustering literature
 FAISS GPU CAGRA and FAISS GPU IVF routes follow the FAISS GPU/cuVS integration
 documented by FAISS, NVIDIA, and Meta [13-15]. Direct cuVS routes call RAPIDS
 cuVS C/C++ libraries [3]. RAPIDS cuVS HNSW is cited because its C API documents
-the CAGRA-to-hnswlib wrapper behavior that faissR intentionally does not expose
-as CUDA HNSW [22]. CUHNSW is acknowledged as related Apache-2.0 CUDA HNSW prior
+the CAGRA-to-HNSW wrapper behavior used by that backend [22].
+CUHNSW is acknowledged as related Apache-2.0 CUDA HNSW prior
 software, but no CUHNSW source code is vendored or copied into faissR [23]. The
 IVFPQ FastScan `method = "ivfpq_fastscan"` route uses
 FAISS FastScan on CPU and direct RAPIDS cuVS 4-bit IVF-PQ on CUDA [3,6,34]. The native Vamana route is inspired by DiskANN/Vamana

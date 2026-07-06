@@ -141,8 +141,7 @@ std::string public_method_from_backend(const std::string& backend) {
       backend == "cuda_grid" || backend == "cuda_grid_auto" ||
       backend == "gpu_grid" || backend == "cuda_grid2d" ||
       backend == "cuda_grid3d") return "grid";
-  if (backend == "hnsw" || backend == "rcpphnsw" ||
-      backend == "cpu_hnsw" || backend == "faiss_hnsw" ||
+  if (backend == "faiss_hnsw" ||
       backend == "cuda_cuvs_hnsw" || backend == "cuvs_hnsw") return "hnsw";
   if (backend == "faiss_ivf" || backend == "cpu_faiss_index_ivf" ||
       backend == "faiss_ivf_flat" || backend == "faiss_gpu_ivf" ||
@@ -384,7 +383,6 @@ std::string select_cpu(bool self_query,
                        double work_size,
                        const std::string& metric,
                        bool faiss_available,
-                       bool rcpphnsw_available,
                        double cpu_exact_work,
                        double cpu_faiss_flat_work,
                        int target_recall_code) {
@@ -404,7 +402,6 @@ std::string select_cpu(bool self_query,
       return "cpu";
     }
     if (faiss_available) return "faiss_hnsw";
-    if (rcpphnsw_available) return "hnsw";
     if (native_nsg_fallback(self_query, n, p, k, work_size, metric)) {
       return "cpu_nsg";
     }
@@ -427,7 +424,6 @@ std::string select_cpu(bool self_query,
     return "faiss_ivf";
   }
   if (faiss_available) return "faiss_hnsw";
-  if (rcpphnsw_available) return "hnsw";
   if (native_nsg_fallback(self_query, n, p, k, work_size, metric)) {
     return "cpu_nsg";
   }
@@ -1308,7 +1304,6 @@ List nn_auto_select_backend_cpp(std::string resolved_backend,
                                 bool cuvs_available,
                                 bool faiss_available,
                                 bool faiss_gpu_available,
-                                bool rcpphnsw_available,
                                 std::string cagra_preference,
                                 int cuda_exact_n,
                                 double cuda_exact_work,
@@ -1358,7 +1353,7 @@ List nn_auto_select_backend_cpp(std::string resolved_backend,
     } else {
       selected = select_cpu(
         self_query, n, p, n_points, k, work_size, metric,
-        faiss_available, rcpphnsw_available,
+        faiss_available,
         cpu_exact_work, cpu_faiss_flat_work, target_recall_code
       );
       reason = "auto_cpu_fallback";
@@ -1366,7 +1361,7 @@ List nn_auto_select_backend_cpp(std::string resolved_backend,
   } else if (resolved_backend == "cpu_auto") {
     selected = select_cpu(
       self_query, n, p, n_points, k, work_size, metric,
-      faiss_available, rcpphnsw_available,
+      faiss_available,
       cpu_exact_work, cpu_faiss_flat_work, target_recall_code
     );
     reason = "cpu_auto_shape_selector";
@@ -2908,35 +2903,6 @@ List nn_tune_faiss_hnsw_cpp(int n,
     _["requested_ef_construction"] = default_ef_construction,
     _["requested_ef_search"] = default_ef_search,
     _["target_recall"] = target_recall,
-    _["tuning_source"] = "cpp"
-  );
-}
-
-// [[Rcpp::export]]
-List nn_tune_rcpphnsw_cpp(int k,
-                          int m_option = NA_INTEGER,
-                          int ef_construction_option = NA_INTEGER,
-                          int ef_option = NA_INTEGER) {
-  k = safe_k(k);
-  const int m = option_int(m_option, 16, 2, 256);
-  const int ef_construction = option_int(
-    ef_construction_option,
-    std::max(200, m),
-    m,
-    4096
-  );
-  const int ef = option_int(
-    ef_option,
-    std::max(50, 3 * k),
-    k,
-    4096
-  );
-  return List::create(
-    _["m"] = m,
-    _["ef_construction"] = ef_construction,
-    _["ef"] = ef,
-    _["tuning_policy"] = "auto_k",
-    _["tuning_rule"] = k >= 100 ? "large_k_hnswlib" : (k <= 10 ? "small_k_hnswlib" : "balanced_hnswlib"),
     _["tuning_source"] = "cpp"
   );
 }

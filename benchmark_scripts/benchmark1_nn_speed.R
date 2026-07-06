@@ -250,6 +250,100 @@ rank_benchmark1_success <- function(success) {
   ), , drop = FALSE]
 }
 
+benchmark1_rank_speed_only <- function(success) {
+  if (!nrow(success)) return(success)
+  success[order(
+    success$dataset,
+    success$metric,
+    success$k,
+    success$backend,
+    benchmark1_rank_value(success, "time_sec", Inf),
+    benchmark1_rank_value(success, "peak_rss_gb", Inf),
+    benchmark1_rank_value(success, "recall_at_k", -Inf, higher_is_better = TRUE),
+    success$implementation,
+    success$method
+  ), , drop = FALSE]
+}
+
+benchmark1_faissr_external_speed_summary <- function(success) {
+  if (!nrow(success)) return(data.frame())
+  required <- c("dataset", "metric", "k", "backend", "implementation", "method", "kind", "status", "time_sec")
+  missing <- setdiff(required, names(success))
+  if (length(missing)) {
+    stop("Benchmark #1 success table is missing required column(s): ", paste(missing, collapse = ", "), call. = FALSE)
+  }
+  success <- success[
+    !is.na(success$kind) & success$kind == "knn_search" &
+      !is.na(success$status) & success$status == "success",
+    ,
+    drop = FALSE
+  ]
+  success$time_sec <- suppressWarnings(as.numeric(success$time_sec))
+  success <- success[is.finite(success$time_sec), , drop = FALSE]
+  if (!nrow(success)) return(data.frame())
+
+  success$source_group <- ifelse(success$implementation == "faissR", "faissR", "external_R")
+  speed_ranked <- benchmark1_rank_speed_only(success)
+  keys <- unique(speed_ranked[, c("dataset", "metric", "k", "backend"), drop = FALSE])
+  rows <- vector("list", nrow(keys))
+  first_or_na <- function(x, default = NA) {
+    if (length(x)) x[[1L]] else default
+  }
+  numeric_first_or_na <- function(x) {
+    if (length(x)) suppressWarnings(as.numeric(x[[1L]])) else NA_real_
+  }
+  for (i in seq_len(nrow(keys))) {
+    key <- keys[i, , drop = FALSE]
+    part <- speed_ranked[
+      speed_ranked$dataset == key$dataset &
+        speed_ranked$metric == key$metric &
+        speed_ranked$k == key$k &
+        speed_ranked$backend == key$backend,
+      ,
+      drop = FALSE
+    ]
+    faissr <- part[part$source_group == "faissR", , drop = FALSE]
+    external <- part[part$source_group == "external_R", , drop = FALSE]
+    faissr <- faissr[seq_len(min(1L, nrow(faissr))), , drop = FALSE]
+    external <- external[seq_len(min(1L, nrow(external))), , drop = FALSE]
+    faissr_time <- numeric_first_or_na(faissr$time_sec)
+    external_time <- numeric_first_or_na(external$time_sec)
+    rows[[i]] <- data.frame(
+      dataset = key$dataset,
+      metric = key$metric,
+      k = as.integer(key$k),
+      backend = key$backend,
+      faissr_method = first_or_na(faissr$method, NA_character_),
+      faissr_backend_detail = first_or_na(faissr$backend_detail, NA_character_),
+      faissr_time_sec = faissr_time,
+      faissr_recall_at_k = numeric_first_or_na(faissr$recall_at_k),
+      faissr_peak_rss_gb = numeric_first_or_na(faissr$peak_rss_gb),
+      external_method = first_or_na(external$method, NA_character_),
+      external_package = first_or_na(external$implementation, NA_character_),
+      external_time_sec = external_time,
+      external_recall_at_k = numeric_first_or_na(external$recall_at_k),
+      external_peak_rss_gb = numeric_first_or_na(external$peak_rss_gb),
+      speedup_faissr_vs_external = if (is.finite(faissr_time) && is.finite(external_time) && faissr_time > 0) {
+        external_time / faissr_time
+      } else {
+        NA_real_
+      },
+      fastest_source = if (is.finite(faissr_time) && is.finite(external_time)) {
+        if (faissr_time <= external_time) "faissR" else "external_R"
+      } else if (is.finite(faissr_time)) {
+        "faissR"
+      } else if (is.finite(external_time)) {
+        "external_R"
+      } else {
+        NA_character_
+      },
+      stringsAsFactors = FALSE
+    )
+  }
+  out <- do.call(rbind, rows)
+  out[order(out$dataset, out$metric, out$k, out$backend), , drop = FALSE]
+}
+
 benchmark1_finite_mean <- function(x) {
   x <- suppressWarnings(as.numeric(x))
   x <- x[is.finite(x)]
@@ -280,19 +374,9 @@ metric_arg_for_label <- function(metric) {
   )
 }
 
-rcpphnsw_distance_arg <- function(metric) {
-  switch(
-    metric,
-    cosine = "cosine",
-    inner_product = "ip",
-    "euclidean"
-  )
-}
-
 method_metric_applicable <- function(method, metric) {
   ip_methods <- c(
     "faissR_cpu_exact",
-    "faissR_rcpphnsw",
     "faissR_faiss_flat_l2",
     "faissR_faiss_gpu_flat_l2",
     "faissR_faiss_ivf",
@@ -310,8 +394,7 @@ method_metric_applicable <- function(method, metric) {
     "faissR_cuda_vamana",
     "faissR_cpu_nsg",
     "faissR_cuda_nsg",
-    "faissR_cpu_nndescent",
-    "RcppHNSW_hnsw"
+    "faissR_cpu_nndescent"
   )
   if (grepl("_ip$", method) && !identical(metric, "inner_product")) {
     return(list(ok = FALSE, reason = "inner-product FAISS Flat methods are benchmarked only with `metric = inner_product`"))
@@ -323,7 +406,6 @@ method_metric_applicable <- function(method, metric) {
   }
   non_euclidean_methods <- c(
     "faissR_cpu_exact",
-    "faissR_rcpphnsw",
     "faissR_faiss_flat_l2",
     "faissR_faiss_gpu_flat_l2",
     "faissR_faiss_ivf",
@@ -340,7 +422,6 @@ method_metric_applicable <- function(method, metric) {
     "faissR_cuda_nsg",
     "faissR_cpu_nndescent",
     "faissR_cuda_cuvs_nndescent",
-    "RcppHNSW_hnsw",
     "BiocNeighbors_hnsw",
     "BiocNeighbors_annoy",
     "uwot_similarity_graph_fnn",
@@ -351,7 +432,6 @@ method_metric_applicable <- function(method, metric) {
   if (identical(metric, "correlation")) {
     non_euclidean_methods <- c(
       "faissR_cpu_exact",
-      "faissR_rcpphnsw",
       "faissR_faiss_flat_l2",
       "faissR_faiss_gpu_flat_l2",
       "faissR_faiss_ivf",
@@ -681,7 +761,6 @@ faissr_benchmark_route <- function(method) {
   route <- switch(
     key,
     cpu_exact = list(execution_backend = "cpu", public_backend = "cpu", public_method = "exact"),
-    rcpphnsw = list(execution_backend = "hnsw", public_backend = "cpu", public_method = "hnsw"),
     faiss_flat_l2 = list(execution_backend = "faiss_flat_l2", public_backend = "cpu", public_method = "flat"),
     faiss_gpu_flat_l2 = list(execution_backend = "faiss_gpu_flat_l2", public_backend = "cuda", public_method = "flat"),
     faiss_ivf = list(execution_backend = "faiss_ivf", public_backend = "cpu", public_method = "ivf"),
@@ -723,14 +802,6 @@ benchmark1_execution_backend_status <- function(execution_backend) {
   }
   if (backend %in% c("cpu", "cpu_nndescent", "cpu_grid")) {
     return(list(runtime_available = TRUE, runtime_reason = "available", runtime_notes = "Native CPU faissR route is available."))
-  }
-  if (identical(backend, "hnsw")) {
-    ok <- available_pkg("RcppHNSW")
-    return(list(
-      runtime_available = ok,
-      runtime_reason = if (ok) "available" else "missing_rcpphnsw",
-      runtime_notes = if (ok) "RcppHNSW fallback route is available." else "RcppHNSW is not installed."
-    ))
   }
   if (identical(backend, "faiss_ivfpq_fastscan")) {
     ok <- isTRUE(tryCatch(getFromNamespace("faiss_fastscan_available", "faissR")(), error = function(e) FALSE))
@@ -901,10 +972,6 @@ run_method <- function(method, x, k, n_threads, dataset, out_dir, metric) {
       if (!available_pkg("rnndescent")) stop("rnndescent unavailable")
       rnndescent::brute_force_knn(x, k = k, n_threads = n_threads)
     },
-    RcppHNSW_hnsw = {
-      if (!available_pkg("RcppHNSW")) stop("RcppHNSW unavailable")
-      RcppHNSW::hnsw_knn(x, k = k, distance = rcpphnsw_distance_arg(metric), M = 16, ef_construction = 200, ef = max(50, 3 * k), n_threads = n_threads, progress = "none")
-    },
     RcppAnnoy_euclidean = annoy_knn(x, k, n_threads = n_threads),
     BiocNeighbors_exhaustive = {
       if (!available_pkg("BiocNeighbors")) stop("BiocNeighbors unavailable")
@@ -984,7 +1051,6 @@ method_table <- function() {
   }
   methods <- do.call(rbind, list(
     row("faissR_cpu_exact", "faissR", "CPU"),
-    row("faissR_rcpphnsw", "faissR", "CPU"),
     row("faissR_faiss_flat_l2", "faissR", "CPU"),
     row("faissR_faiss_ivf", "faissR", "CPU"),
     row("faissR_faiss_ivfpq", "faissR", "CPU"),
@@ -1017,7 +1083,6 @@ method_table <- function() {
     row("rnndescent_rnnd", "rnndescent", "CPU"),
     row("rnndescent_nnd", "rnndescent", "CPU"),
     row("rnndescent_bruteforce", "rnndescent", "CPU"),
-    row("RcppHNSW_hnsw", "RcppHNSW", "CPU"),
     row("RcppAnnoy_euclidean", "RcppAnnoy", "CPU"),
     row("BiocNeighbors_exhaustive", "BiocNeighbors", "CPU"),
     row("BiocNeighbors_hnsw", "BiocNeighbors", "CPU"),
@@ -1711,10 +1776,16 @@ utils::write.csv(results, file.path(out_dir, "benchmark1_nn_speed_results.csv"),
 
 success <- results[results$status == "success" & results$kind == "knn_search", , drop = FALSE]
 ranked_quality <- rank_benchmark1_success(success)
+ranked_speed <- benchmark1_rank_speed_only(success)
+speed_comparison <- benchmark1_faissr_external_speed_summary(success)
 best <- ranked_quality[!duplicated(paste(ranked_quality$dataset, ranked_quality$metric, ranked_quality$k, sep = "\r")), ]
 utils::write.csv(best, file.path(out_dir, "benchmark1_best_by_dataset.csv"), row.names = FALSE)
 if (nrow(success)) {
   utils::write.csv(ranked_quality, file.path(out_dir, "benchmark1_ranked_speed_quality_memory.csv"), row.names = FALSE)
+  utils::write.csv(ranked_speed, file.path(out_dir, "benchmark1_ranked_speed_only.csv"), row.names = FALSE)
+}
+if (nrow(speed_comparison)) {
+  utils::write.csv(speed_comparison, file.path(out_dir, "benchmark1_faissr_vs_external_speed.csv"), row.names = FALSE)
 }
 
 png(file.path(out_dir, "benchmark1_nn_speed_barplot.png"), width = 2200, height = 1400, res = 160)
@@ -1750,16 +1821,17 @@ materials <- c(
     "Workers were launched with the configured FAISS/cuVS/CUDA library paths before system library paths when those variables were supplied.",
   paste0("Nearest-neighbour quality was evaluated against an exact subset reference where feasible. The reference subset used at most ", quality_eval_max_n, " rows and was automatically reduced when the estimated operation count exceeded ", format(quality_eval_max_ops, scientific = TRUE), ". Reported quality metrics are recall@k, median recall@k, minimum recall@k, mean relative distance error, and Spearman rank correlation of neighbour ranks. Invalid or non-finite distance/rank quality summaries are recorded as `NA`."),
   "`benchmark1_best_by_dataset.csv` and `benchmark1_ranked_speed_quality_memory.csv` rank successful KNN-search rows by recall@k, neighbour-rank correlation, mean relative distance error, elapsed time, and peak memory. This keeps fast but low-recall rows from being reported as the best method.",
+  "`benchmark1_ranked_speed_only.csv` ranks successful KNN-search rows by elapsed time within each dataset/metric/k/backend block. `benchmark1_faissr_vs_external_speed.csv` compares the fastest faissR row with the fastest non-faissR package row for each block and reports the faissR-vs-external speed ratio. These speed-only tables are intended for Euclidean CPU-vs-CPU and CUDA-vs-CUDA comparison launchers; use the quality-aware tables when recall is part of the selection rule.",
   "The faissR CUDA/cuVS NN-descent output was saved for every dataset where the method completed successfully.",
   "",
-  "faissR methods tested when selected: exact CPU, RcppHNSW wrapper, FAISS Flat, FAISS CPU IVF/IVF-Flat, FAISS CPU IVFPQ, FAISS CPU IVFPQ FastScan, FAISS GPU Flat, FAISS GPU IVF-Flat with NVIDIA cuVS integration, FAISS GPU IVF-PQ with NVIDIA cuVS integration, FAISS GPU CAGRA, FAISS HNSW, optional explicit FAISS NSG, native CPU/CUDA NSG candidate graph, native CPU NNDescent, CPU grid on simulated 2D/3D only, native CUDA exact, CUDA grid on simulated 2D/3D only, direct RAPIDS cuVS brute force, direct cuVS HNSW, direct cuVS IVF-Flat, direct cuVS IVF-PQ, direct cuVS 4-bit IVFPQ FastScan route, direct cuVS CAGRA, and direct cuVS NN-descent.",
+  "faissR methods tested when selected: exact CPU, FAISS Flat, FAISS CPU IVF/IVF-Flat, FAISS CPU IVFPQ, FAISS CPU IVFPQ FastScan, FAISS GPU Flat, FAISS GPU IVF-Flat with NVIDIA cuVS integration, FAISS GPU IVF-PQ with NVIDIA cuVS integration, FAISS GPU CAGRA, FAISS HNSW, optional explicit FAISS NSG, native CPU/CUDA NSG candidate graph, native CPU NNDescent, CPU grid on simulated 2D/3D only, native CUDA exact, CUDA grid on simulated 2D/3D only, direct RAPIDS cuVS brute force, direct cuVS HNSW, direct cuVS IVF-Flat, direct cuVS IVF-PQ, direct cuVS 4-bit IVFPQ FastScan route, direct cuVS CAGRA, and direct cuVS NN-descent.",
   "Native CPU NNDescent is benchmarked for Euclidean, cosine, correlation, and raw inner-product metrics. Direct CUDA/cuVS brute force and direct CUDA/cuVS IVF/PQ are benchmarked for transformed raw inner product where available. Direct CUDA/cuVS NN-descent is benchmarked for Euclidean, cosine, and correlation; raw inner-product CUDA/cuVS NN-descent is recorded as unsupported.",
   "The Flat rows use the public `method = \"flat\"` route. When `metric = \"inner_product\"` is explicitly requested, faissR dispatches the same public Flat rows to the appropriate FAISS inner-product index internally instead of listing duplicate Flat-IP methods.",
   "For faissR rows, `execution_backend` records the internal backend label used by `nn_compute()`, while `public_backend` and `public_method` record the equivalent public `nn(..., backend = , method = )` route. This separates legacy benchmark labels from the public API.",
   "Successful faissR rows also record `result_backend`, `result_requested_backend`, `result_requested_method`, `result_tuning`, `resolved_backend`, `implementation_backend`, `auto_predicted_method`, `auto_predicted_device`, `auto_explicit_backend`, `auto_explicit_method`, `auto_backend_decision`, `auto_method_decision`, compact `route_parameters`, and `tuning_status`. These fields make deterministic no-pilot tuning choices, explicit backend/method requests, and concrete FAISS/cuVS/native routes explicit in the Benchmark #1 result table.",
   "The benchmark result table includes `backend_detail` to distinguish FAISS GPU indexes that use NVIDIA cuVS internally from direct RAPIDS cuVS API calls.",
   "`benchmark1_runtime_capabilities.csv` records the faissR Benchmark #1 method/metric preflight table, including legacy Benchmark #1 method labels, equivalent public `nn()` routes where available, execution backends, metric support, `public_runtime_reason`, `runtime_available`, `runtime_reason`, and current runtime availability notes.",
-  "External R package methods tested when selected: Rnanoflann, RANN kd-tree and bd-tree, rnndescent RPF/RNND/NND/brute-force, RcppHNSW, RcppAnnoy, BiocNeighbors exhaustive/HNSW/Annoy, and cuda.ml KNN if an installed cuda.ml package exposes a recognised KNN routine. uwot::similarity_graph rows are retained as optional graph-construction rows (`kind = \"knn_graph\"`) but are excluded from the CPU/CUDA KNN-search comparison launchers by default. External RcppHNSW rows use Euclidean, cosine, or inner-product (`distance = \"ip\"`) modes when those metrics are requested; correlation is recorded as unavailable for the external RcppHNSW row because Benchmark #1 does not row-center data before calling that package.",
+  "External R package methods tested when selected: Rnanoflann, RANN kd-tree and bd-tree, rnndescent RPF/RNND/NND/brute-force, RcppAnnoy, BiocNeighbors exhaustive/HNSW/Annoy, and cuda.ml KNN if an installed cuda.ml package exposes a recognised KNN routine. uwot::similarity_graph rows are retained as optional graph-construction rows (`kind = \"knn_graph\"`) but are excluded from the CPU/CUDA KNN-search comparison launchers by default.",
   "umap::umap.knn was included as a precomputed-neighbour consumer test, not as a standalone KNN search algorithm. Rtsne::Rtsne_neighbors was marked not applicable because it consumes precomputed neighbours and optimizes t-SNE rather than exporting a standalone KNN search.",
   "",
   "The benchmark records elapsed method time, load/conversion time, peak resident memory when available from `/proc/self/status`, output dimensions where an index matrix is returned, quality metrics, status, and error messages."
@@ -1774,6 +1846,14 @@ summary_lines <- c(
   "## Best Successful KNN Search Per Dataset, Metric, And k",
   "",
   paste(capture.output(print(best[, c("dataset", "metric", "k", "method", "implementation", "backend", "time_sec", "status")], row.names = FALSE)), collapse = "\n"),
+  "",
+  "## Fastest faissR Versus Fastest External Package",
+  "",
+  if (nrow(speed_comparison)) {
+    paste(capture.output(print(speed_comparison[, c("dataset", "metric", "k", "backend", "faissr_method", "faissr_time_sec", "external_method", "external_package", "external_time_sec", "speedup_faissr_vs_external", "fastest_source")], row.names = FALSE)), collapse = "\n")
+  } else {
+    "No successful faissR/external speed comparison rows were available."
+  },
   "",
   "## Comments",
   "",

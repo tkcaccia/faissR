@@ -690,8 +690,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // nn_auto_select_backend_cpp
-List nn_auto_select_backend_cpp(std::string resolved_backend, std::string requested_backend, std::string requested_method, std::string metric, int n, int p, int n_points, int k, bool self_query, bool exclude_self, bool cuda_available, bool cuvs_available, bool faiss_available, bool faiss_gpu_available, bool rcpphnsw_available, std::string cagra_preference, int cuda_exact_n, double cuda_exact_work, int metric_graph_n, int metric_graph_min_k, double metric_graph_work, int cagra_compact_n, int cagra_high_dim_p, int cagra_compact_max_k, double cuvs_bruteforce_work_threshold, double cpu_exact_work, double cpu_faiss_flat_work, double target_recall_option, std::string tuning);
-RcppExport SEXP _faissR_nn_auto_select_backend_cpp(SEXP resolved_backendSEXP, SEXP requested_backendSEXP, SEXP requested_methodSEXP, SEXP metricSEXP, SEXP nSEXP, SEXP pSEXP, SEXP n_pointsSEXP, SEXP kSEXP, SEXP self_querySEXP, SEXP exclude_selfSEXP, SEXP cuda_availableSEXP, SEXP cuvs_availableSEXP, SEXP faiss_availableSEXP, SEXP faiss_gpu_availableSEXP, SEXP rcpphnsw_availableSEXP, SEXP cagra_preferenceSEXP, SEXP cuda_exact_nSEXP, SEXP cuda_exact_workSEXP, SEXP metric_graph_nSEXP, SEXP metric_graph_min_kSEXP, SEXP metric_graph_workSEXP, SEXP cagra_compact_nSEXP, SEXP cagra_high_dim_pSEXP, SEXP cagra_compact_max_kSEXP, SEXP cuvs_bruteforce_work_thresholdSEXP, SEXP cpu_exact_workSEXP, SEXP cpu_faiss_flat_workSEXP, SEXP target_recall_optionSEXP, SEXP tuningSEXP) {
+List nn_auto_select_backend_cpp(std::string resolved_backend, std::string requested_backend, std::string requested_method, std::string metric, int n, int p, int n_points, int k, bool self_query, bool exclude_self, bool cuda_available, bool cuvs_available, bool faiss_available, bool faiss_gpu_available, std::string cagra_preference, int cuda_exact_n, double cuda_exact_work, int metric_graph_n, int metric_graph_min_k, double metric_graph_work, int cagra_compact_n, int cagra_high_dim_p, int cagra_compact_max_k, double cuvs_bruteforce_work_threshold, double cpu_exact_work, double cpu_faiss_flat_work, double target_recall_option, std::string tuning);
+RcppExport SEXP _faissR_nn_auto_select_backend_cpp(SEXP resolved_backendSEXP, SEXP requested_backendSEXP, SEXP requested_methodSEXP, SEXP metricSEXP, SEXP nSEXP, SEXP pSEXP, SEXP n_pointsSEXP, SEXP kSEXP, SEXP self_querySEXP, SEXP exclude_selfSEXP, SEXP cuda_availableSEXP, SEXP cuvs_availableSEXP, SEXP faiss_availableSEXP, SEXP faiss_gpu_availableSEXP, SEXP cagra_preferenceSEXP, SEXP cuda_exact_nSEXP, SEXP cuda_exact_workSEXP, SEXP metric_graph_nSEXP, SEXP metric_graph_min_kSEXP, SEXP metric_graph_workSEXP, SEXP cagra_compact_nSEXP, SEXP cagra_high_dim_pSEXP, SEXP cagra_compact_max_kSEXP, SEXP cuvs_bruteforce_work_thresholdSEXP, SEXP cpu_exact_workSEXP, SEXP cpu_faiss_flat_workSEXP, SEXP target_recall_optionSEXP, SEXP tuningSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -709,7 +709,6 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type cuvs_available(cuvs_availableSEXP);
     Rcpp::traits::input_parameter< bool >::type faiss_available(faiss_availableSEXP);
     Rcpp::traits::input_parameter< bool >::type faiss_gpu_available(faiss_gpu_availableSEXP);
-    Rcpp::traits::input_parameter< bool >::type rcpphnsw_available(rcpphnsw_availableSEXP);
     Rcpp::traits::input_parameter< std::string >::type cagra_preference(cagra_preferenceSEXP);
     Rcpp::traits::input_parameter< int >::type cuda_exact_n(cuda_exact_nSEXP);
     Rcpp::traits::input_parameter< double >::type cuda_exact_work(cuda_exact_workSEXP);
@@ -724,7 +723,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type cpu_faiss_flat_work(cpu_faiss_flat_workSEXP);
     Rcpp::traits::input_parameter< double >::type target_recall_option(target_recall_optionSEXP);
     Rcpp::traits::input_parameter< std::string >::type tuning(tuningSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_auto_select_backend_cpp(resolved_backend, requested_backend, requested_method, metric, n, p, n_points, k, self_query, exclude_self, cuda_available, cuvs_available, faiss_available, faiss_gpu_available, rcpphnsw_available, cagra_preference, cuda_exact_n, cuda_exact_work, metric_graph_n, metric_graph_min_k, metric_graph_work, cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k, cuvs_bruteforce_work_threshold, cpu_exact_work, cpu_faiss_flat_work, target_recall_option, tuning));
+    rcpp_result_gen = Rcpp::wrap(nn_auto_select_backend_cpp(resolved_backend, requested_backend, requested_method, metric, n, p, n_points, k, self_query, exclude_self, cuda_available, cuvs_available, faiss_available, faiss_gpu_available, cagra_preference, cuda_exact_n, cuda_exact_work, metric_graph_n, metric_graph_min_k, metric_graph_work, cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k, cuvs_bruteforce_work_threshold, cpu_exact_work, cpu_faiss_flat_work, target_recall_option, tuning));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -903,20 +902,6 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type ef_search_option(ef_search_optionSEXP);
     Rcpp::traits::input_parameter< bool >::type manual(manualSEXP);
     rcpp_result_gen = Rcpp::wrap(nn_tune_faiss_hnsw_cpp(n, p, k, metric, target_recall, m_option, ef_construction_option, ef_search_option, manual));
-    return rcpp_result_gen;
-END_RCPP
-}
-// nn_tune_rcpphnsw_cpp
-List nn_tune_rcpphnsw_cpp(int k, int m_option, int ef_construction_option, int ef_option);
-RcppExport SEXP _faissR_nn_tune_rcpphnsw_cpp(SEXP kSEXP, SEXP m_optionSEXP, SEXP ef_construction_optionSEXP, SEXP ef_optionSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< int >::type k(kSEXP);
-    Rcpp::traits::input_parameter< int >::type m_option(m_optionSEXP);
-    Rcpp::traits::input_parameter< int >::type ef_construction_option(ef_construction_optionSEXP);
-    Rcpp::traits::input_parameter< int >::type ef_option(ef_optionSEXP);
-    rcpp_result_gen = Rcpp::wrap(nn_tune_rcpphnsw_cpp(k, m_option, ef_construction_option, ef_option));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2207,7 +2192,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_grid3d_self_knn_cpp", (DL_FUNC) &_faissR_grid3d_self_knn_cpp, 6},
     {"_faissR_candidate_knn_cpp", (DL_FUNC) &_faissR_candidate_knn_cpp, 9},
     {"_faissR_candidate_knn_float32_cpp", (DL_FUNC) &_faissR_candidate_knn_float32_cpp, 9},
-    {"_faissR_nn_auto_select_backend_cpp", (DL_FUNC) &_faissR_nn_auto_select_backend_cpp, 29},
+    {"_faissR_nn_auto_select_backend_cpp", (DL_FUNC) &_faissR_nn_auto_select_backend_cpp, 28},
     {"_faissR_nn_tune_cpu_exact_cpp", (DL_FUNC) &_faissR_nn_tune_cpu_exact_cpp, 5},
     {"_faissR_nn_tune_cuda_exact_cpp", (DL_FUNC) &_faissR_nn_tune_cuda_exact_cpp, 5},
     {"_faissR_nn_tune_cuda_flat_cpp", (DL_FUNC) &_faissR_nn_tune_cuda_flat_cpp, 5},
@@ -2219,7 +2204,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_tune_faiss_pq_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_pq_cpp, 6},
     {"_faissR_nn_tune_cuvs_ivfpq_cpp", (DL_FUNC) &_faissR_nn_tune_cuvs_ivfpq_cpp, 5},
     {"_faissR_nn_tune_faiss_hnsw_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_hnsw_cpp, 9},
-    {"_faissR_nn_tune_rcpphnsw_cpp", (DL_FUNC) &_faissR_nn_tune_rcpphnsw_cpp, 4},
     {"_faissR_nn_tune_faiss_nsg_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_nsg_cpp, 5},
     {"_faissR_nn_tune_faiss_nndescent_cpp", (DL_FUNC) &_faissR_nn_tune_faiss_nndescent_cpp, 5},
     {"_faissR_nn_tune_cpu_nndescent_cpp", (DL_FUNC) &_faissR_nn_tune_cpu_nndescent_cpp, 5},

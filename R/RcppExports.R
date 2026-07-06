@@ -177,8 +177,8 @@ candidate_knn_float32_cpp <- function(data, points, candidate_indices, k, method
     .Call(`_faissR_candidate_knn_float32_cpp`, data, points, candidate_indices, k, method, square, exclude_self, parallel, cores)
 }
 
-nn_auto_select_backend_cpp <- function(resolved_backend, requested_backend, requested_method, metric, n, p, n_points, k, self_query, exclude_self, cuda_available, cuvs_available, faiss_available, faiss_gpu_available, rcpphnsw_available, cagra_preference, cuda_exact_n, cuda_exact_work, metric_graph_n, metric_graph_min_k, metric_graph_work, cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k, cuvs_bruteforce_work_threshold, cpu_exact_work, cpu_faiss_flat_work, target_recall_option, tuning) {
-    .Call(`_faissR_nn_auto_select_backend_cpp`, resolved_backend, requested_backend, requested_method, metric, n, p, n_points, k, self_query, exclude_self, cuda_available, cuvs_available, faiss_available, faiss_gpu_available, rcpphnsw_available, cagra_preference, cuda_exact_n, cuda_exact_work, metric_graph_n, metric_graph_min_k, metric_graph_work, cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k, cuvs_bruteforce_work_threshold, cpu_exact_work, cpu_faiss_flat_work, target_recall_option, tuning)
+nn_auto_select_backend_cpp <- function(resolved_backend, requested_backend, requested_method, metric, n, p, n_points, k, self_query, exclude_self, cuda_available, cuvs_available, faiss_available, faiss_gpu_available, cagra_preference, cuda_exact_n, cuda_exact_work, metric_graph_n, metric_graph_min_k, metric_graph_work, cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k, cuvs_bruteforce_work_threshold, cpu_exact_work, cpu_faiss_flat_work, target_recall_option, tuning) {
+    .Call(`_faissR_nn_auto_select_backend_cpp`, resolved_backend, requested_backend, requested_method, metric, n, p, n_points, k, self_query, exclude_self, cuda_available, cuvs_available, faiss_available, faiss_gpu_available, cagra_preference, cuda_exact_n, cuda_exact_work, metric_graph_n, metric_graph_min_k, metric_graph_work, cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k, cuvs_bruteforce_work_threshold, cpu_exact_work, cpu_faiss_flat_work, target_recall_option, tuning)
 }
 
 nn_tune_cpu_exact_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_) {
@@ -223,10 +223,6 @@ nn_tune_cuvs_ivfpq_cpp <- function(p, n = NA_integer_, pq_dim_option = NA_intege
 
 nn_tune_faiss_hnsw_cpp <- function(n, p, k, metric, target_recall = 0.99, m_option = NA_integer_, ef_construction_option = NA_integer_, ef_search_option = NA_integer_, manual = FALSE) {
     .Call(`_faissR_nn_tune_faiss_hnsw_cpp`, n, p, k, metric, target_recall, m_option, ef_construction_option, ef_search_option, manual)
-}
-
-nn_tune_rcpphnsw_cpp <- function(k, m_option = NA_integer_, ef_construction_option = NA_integer_, ef_option = NA_integer_) {
-    .Call(`_faissR_nn_tune_rcpphnsw_cpp`, k, m_option, ef_construction_option, ef_option)
 }
 
 nn_tune_faiss_nsg_cpp <- function(k, r_option = NA_integer_, search_l_option = NA_integer_, build_type_option = NA_integer_, manual = FALSE) {

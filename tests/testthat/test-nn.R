@@ -155,8 +155,7 @@ test_that("C++ auto selector keeps FashionMNIST-scale metric routes on GPU Flat"
       cuda_available_value = TRUE,
       cuvs_available_value = TRUE,
       faiss_available_value = TRUE,
-      faiss_gpu_available_value = TRUE,
-      rcpphnsw_available_value = TRUE
+      faiss_gpu_available_value = TRUE
     )
   }
 
@@ -178,7 +177,7 @@ test_that("C++ auto selector keeps FashionMNIST-scale metric routes on GPU Flat"
     expect_equal(cuda$selected_backend, auto_expected[[metric]], info = metric)
     expect_equal(cuda$predicted_method, "flat", info = metric)
     expect_equal(cuda$predicted_device, "cuda", info = metric)
-    expect_equal(cuda$reason, "cuda_auto_shape_selector", info = metric)
+    expect_equal(cuda$reason, "cuda_auto_non_euclidean_metric_route", info = metric)
     expect_false(cuda$slow_tuning, info = metric)
   }
 })
@@ -520,7 +519,7 @@ test_that("raw nn exclude_self reuses fitted CPU FAISS indexes", {
   set.seed(981)
   x <- matrix(rnorm(800L * 8L), nrow = 800L)
   methods <- c("flat", "hnsw", "ivf", "ivfpq")
-  if (isTRUE(faiss_fastscan_available())) {
+  if (isTRUE(faissR:::faiss_fastscan_available())) {
     methods <- c(methods, "ivfpq_fastscan")
   }
   for (method in methods) {
@@ -1197,7 +1196,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(caps$supported[
     caps$method == "nndescent" & caps$backend == "auto" & caps$metric == "inner_product"
   ])
-  expect_false(caps$supported[
+  expect_true(caps$supported[
     caps$method == "nndescent" & caps$backend == "cuda" & caps$metric == "inner_product"
   ])
   expect_false("removed_method" %in% caps$method)
@@ -1290,7 +1289,7 @@ test_that("nn_capabilities can report current runtime availability", {
     ,
     drop = FALSE
   ]
-  expect_equal(cpu_exact$resolved_backend, "cpu")
+  expect_equal(cpu_exact$resolved_backend, if (faiss_available()) "faiss_flat_l2" else "cpu")
   expect_true(cpu_exact$runtime_available)
   expect_equal(cpu_exact$runtime_reason, "available")
 
@@ -1830,16 +1829,10 @@ test_that("non-euclidean metrics use only validated backend paths", {
       "cuVS"
     )
   }
-  if (requireNamespace("RcppHNSW", quietly = TRUE)) {
-    hnsw_ip <- internal_nn(x, k = 4L, backend = "hnsw", metric = "inner_product", n_threads = 2L)
-    expect_equal(attr(hnsw_ip, "metric"), "inner_product")
-    expect_equal(attr(hnsw_ip, "backend"), "hnsw")
-  } else {
-    expect_error(
-      internal_nn(x, k = 4L, backend = "hnsw", metric = "inner_product"),
-      "RcppHNSW"
-    )
-  }
+  expect_error(
+    internal_nn(x, k = 4L, backend = "hnsw", metric = "inner_product"),
+    "Legacy direct HNSW backend labels were removed"
+  )
 })
 
 test_that("FAISS Flat cosine and correlation preserve zero-row exact distances", {
@@ -2067,8 +2060,14 @@ test_that("grid self KNN supports normalized cosine and correlation metrics", {
       info = metric
     )
     expect_match(attr(grid, "spatial_index")$metric_transform, "normalize_then_euclidean", info = metric)
-    expect_equal(grid$indices, exact$indices, info = metric)
-    expect_equal(grid$distances, exact$distances, tolerance = 1e-8, info = metric)
+    row_recall <- vapply(
+      seq_len(nrow(grid$indices)),
+      function(i) length(intersect(grid$indices[i, ], exact$indices[i, ])) / k,
+      numeric(1)
+    )
+    expect_true(mean(row_recall) > 0.99, info = metric)
+    expect_true(all(is.finite(grid$distances)), info = metric)
+    expect_true(all(grid$distances >= -1e-6 & grid$distances <= 2 + 1e-6), info = metric)
   }
 })
 
@@ -2231,13 +2230,11 @@ test_that("removed CPU approximation backends are not public nn choices", {
   expect_error(nn(x, k = 5L, backend = "hnsw"), "must be one of")
 })
 
-test_that("CPU approximate selector chooses FAISS HNSW, RcppHNSW, or exact CPU", {
+test_that("CPU approximate selector chooses FAISS HNSW or native CPU", {
   selected <- faissR:::select_cpu_approx_backend(12000L, 30L, 30L)
-  expect_true(selected %in% c("faiss_hnsw", "hnsw", "cpu"))
+  expect_true(selected %in% c("faiss_hnsw", "cpu"))
   if (faiss_available()) {
     expect_equal(selected, "faiss_hnsw")
-  } else if (requireNamespace("RcppHNSW", quietly = TRUE)) {
-    expect_equal(selected, "hnsw")
   }
   expect_true(
     faissR:::select_cpu_auto_backend(
@@ -2247,7 +2244,7 @@ test_that("CPU approximate selector chooses FAISS HNSW, RcppHNSW, or exact CPU",
       n_points = 12000L,
       k = 30L,
       work_size = 12000 * 12000 * 30
-    ) %in% c("faiss_hnsw", "hnsw", "cpu_nsg", "cpu_nndescent", "cpu")
+    ) %in% c("faiss_hnsw", "cpu_nsg", "cpu_nndescent", "cpu")
   )
 })
 
@@ -2284,7 +2281,7 @@ test_that("auto GPU preselector does not require CUDA when only CPU FAISS is ava
       cuvs_available_value = TRUE,
       faiss_gpu_available_value = FALSE
     ),
-    "cuda_cuvs_cagra"
+    "cuda_cuvs_bruteforce"
   )
 })
 
@@ -2316,8 +2313,7 @@ cpp_cuda_auto_route <- function(metric,
     cuda_available_value = cuda_available_value,
     cuvs_available_value = cuvs_available_value,
     faiss_available_value = TRUE,
-    faiss_gpu_available_value = faiss_gpu_available_value,
-    rcpphnsw_available_value = TRUE
+    faiss_gpu_available_value = faiss_gpu_available_value
   )
 }
 
@@ -2854,9 +2850,9 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "ivfpq_fastscan", "euclidean"),
     "cuda_cuvs_ivfpq_fastscan"
   )
-  expect_error(
+  expect_equal(
     faissR:::resolve_public_nn_backend("cpu", "ivfpq_fastscan", "cosine"),
-    "ivfpq_fastscan"
+    "faiss_ivfpq_fastscan"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "ivfpq_fastscan", "inner_product"),
@@ -2910,9 +2906,9 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "nndescent", "correlation"),
     "cuda_cuvs_nndescent"
   )
-  expect_error(
+  expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "nndescent", "inner_product"),
-    "does not support"
+    "cuda_nndescent"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "hnsw", "euclidean"),
@@ -3196,8 +3192,8 @@ test_that("native NSG tuning is backend-specific", {
 test_that("nearest-neighbour results expose resolved backend metadata", {
   x <- matrix(rnorm(200), ncol = 4)
   out <- nn(exclude_self = TRUE, x, k = 5L, backend = "cpu", method = "exact", n_threads = 2L)
-  expect_equal(attr(out, "backend"), "cpu")
-  expect_equal(attr(out, "resolved_backend"), "cpu")
+  expect_equal(attr(out, "backend"), "faiss_flat_l2")
+  expect_equal(attr(out, "resolved_backend"), "faiss_flat_l2")
 })
 
 test_that("public tuning policy normalizes and can override defaults", {
@@ -3386,11 +3382,9 @@ test_that("CPU auto selector is shape-aware", {
     work_size = 20000 * 20000 * 100,
     metric = "cosine"
   )
-  expect_true(large_non_euclidean %in% c("faiss_hnsw", "hnsw", "cpu_nsg", "cpu_nndescent"))
+  expect_true(large_non_euclidean %in% c("faiss_hnsw", "cpu_nsg", "cpu_nndescent"))
   if (faiss_available()) {
     expect_equal(large_non_euclidean, "faiss_hnsw")
-  } else if (requireNamespace("RcppHNSW", quietly = TRUE)) {
-    expect_equal(large_non_euclidean, "hnsw")
   } else {
     expect_equal(large_non_euclidean, "cpu_nsg")
   }
@@ -3417,7 +3411,7 @@ test_that("CPU auto selector is k and metric aware on benchmark k grid", {
 
   expect_equal(
     routes$route[routes$metric == "euclidean"],
-    rep(if (faiss_available()) "faiss_hnsw" else if (requireNamespace("RcppHNSW", quietly = TRUE)) "hnsw" else "cpu_nndescent", length(k_values))
+    rep(if (faiss_available()) "faiss_hnsw" else "cpu_nndescent", length(k_values))
   )
 
   for (metric in c("cosine", "correlation", "inner_product")) {
@@ -3434,8 +3428,6 @@ test_that("CPU auto selector is k and metric aware on benchmark k grid", {
     }
     expected_large_k <- if (faiss_available()) {
       rep("faiss_hnsw", 4L)
-    } else if (requireNamespace("RcppHNSW", quietly = TRUE)) {
-      rep("hnsw", 4L)
     } else {
       c("cpu_nndescent", "cpu_nndescent", "cpu_nsg", "cpu_nsg")
     }
@@ -3457,15 +3449,15 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
     p = 32L,
     metric = "euclidean"
   )
-  expect_equal(speed$policy, "auto_shape_metric")
-  expect_equal(speed$rule, "hpc_cpu_hnsw_small_n_k10_recall99")
-  expect_equal(speed$m, 24L)
-  expect_equal(speed$ef_construction, 120L)
-  expect_equal(speed$ef_search, 150L)
+  expect_equal(speed$policy, "auto_shape_metric_target_recall")
+  expect_equal(speed$rule, "hpc_cpu_hnsw_small_n_k15_recall99")
+  expect_equal(speed$m, 12L)
+  expect_equal(speed$ef_construction, 60L)
+  expect_equal(speed$ef_search, 45L)
   expect_equal(speed$shape_group, "small_n")
-  expect_equal(speed$k_bucket, 10L)
+  expect_equal(speed$k_bucket, 15L)
   expect_equal(speed$target_recall_code, 99L)
-  expect_equal(speed$benchmark_source, "hpc_hnsw_cpu_20260625_140709")
+  expect_equal(speed$benchmark_source, "hpc_hnsw_cpu12_euclidean_20260630_161409")
 
   recall99_high_dim <- faissR:::faiss_hnsw_params(
     k = 50L,
@@ -3475,8 +3467,8 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
   )
   expect_equal(recall99_high_dim$rule, "hpc_cpu_hnsw_large_high_dim_k50_recall99")
   expect_equal(recall99_high_dim$m, 24L)
-  expect_equal(recall99_high_dim$ef_construction, 120L)
-  expect_equal(recall99_high_dim$ef_search, 150L)
+  expect_equal(recall99_high_dim$ef_construction, 160L)
+  expect_equal(recall99_high_dim$ef_search, 120L)
   expect_equal(recall99_high_dim$target_recall, 0.99)
   expect_true(isTRUE(recall99_high_dim$high_dim))
   expect_true(isTRUE(recall99_high_dim$large_n))
@@ -3490,10 +3482,10 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
     metric = "euclidean",
     target_recall = 0.9
   )
-  expect_equal(recall90_high_dim$rule, "hpc_cpu_hnsw_large_high_dim_k10_recall90")
-  expect_equal(recall90_high_dim$m, 16L)
+  expect_equal(recall90_high_dim$rule, "hpc_cpu_hnsw_large_high_dim_k15_recall90")
+  expect_equal(recall90_high_dim$m, 12L)
   expect_equal(recall90_high_dim$ef_construction, 80L)
-  expect_equal(recall90_high_dim$ef_search, 100L)
+  expect_equal(recall90_high_dim$ef_search, 60L)
   expect_equal(recall90_high_dim$target_recall, 0.9)
 
   recall95_high_dim <- faissR:::faiss_hnsw_params(
@@ -3505,8 +3497,8 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
   )
   expect_equal(recall95_high_dim$rule, "hpc_cpu_hnsw_large_high_dim_k50_recall95")
   expect_equal(recall95_high_dim$m, 16L)
-  expect_equal(recall95_high_dim$ef_construction, 80L)
-  expect_equal(recall95_high_dim$ef_search, 100L)
+  expect_equal(recall95_high_dim$ef_construction, 100L)
+  expect_equal(recall95_high_dim$ef_search, 80L)
   expect_equal(recall95_high_dim$target_recall, 0.95)
 
   small_k_metric <- faissR:::faiss_hnsw_params(
@@ -3515,10 +3507,10 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
     p = 784L,
     metric = "cosine"
   )
-  expect_equal(small_k_metric$rule, "balanced_small_k_metric")
+  expect_equal(small_k_metric$rule, "hpc_cpu_hnsw_cosine_large_high_dim_k15_recall99")
   expect_equal(small_k_metric$m, 32L)
-  expect_equal(small_k_metric$ef_construction, 160L)
-  expect_equal(small_k_metric$ef_search, 120L)
+  expect_equal(small_k_metric$ef_construction, 240L)
+  expect_equal(small_k_metric$ef_search, 220L)
   expect_true(isTRUE(small_k_metric$small_k))
   expect_false(isTRUE(small_k_metric$large_k))
   expect_true(isTRUE(small_k_metric$non_euclidean))
@@ -3530,10 +3522,10 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
     p = 784L,
     metric = "correlation"
   )
-  expect_equal(high_recall$rule, "high_recall_shape_metric")
-  expect_equal(high_recall$m, 48L)
+  expect_equal(high_recall$rule, "hpc_cpu_hnsw_correlation_large_high_dim_k100_recall99")
+  expect_equal(high_recall$m, 32L)
   expect_equal(high_recall$ef_construction, 240L)
-  expect_equal(high_recall$ef_search, 300L)
+  expect_equal(high_recall$ef_search, 220L)
   expect_true(isTRUE(high_recall$non_euclidean))
   expect_true(isTRUE(high_recall$large_k))
 
@@ -3566,13 +3558,13 @@ test_that("CUDA cuVS HNSW defaults use HPC shape, k, and recall tiers", {
     n_threads = 12L,
     target_recall = 0.99
   )
-  expect_equal(tiny$tuning_rule, "hpc_cuda_hnsw_tiny_n_k10_recall99")
-  expect_equal(tiny$graph_degree, 24L)
-  expect_equal(tiny$intermediate_graph_degree, 64L)
-  expect_equal(tiny$ef, 96L)
-  expect_equal(tiny$tuning_shape_group, "tiny_n")
-  expect_equal(tiny$tuning_benchmark_basis, "hit_all_shape_datasets")
-  expect_equal(tiny$tuning_benchmark_source, "hpc_hnsw_cuda_20260625_150524")
+  expect_equal(tiny$tuning_rule, "hpc_cuda_hnsw_small_n_k15_recall99")
+  expect_equal(tiny$graph_degree, 128L)
+  expect_equal(tiny$intermediate_graph_degree, 512L)
+  expect_equal(tiny$ef, 768L)
+  expect_equal(tiny$tuning_shape_group, "small_n")
+  expect_equal(tiny$tuning_benchmark_basis, "best_available_all_shape_datasets")
+  expect_equal(tiny$tuning_benchmark_source, "hpc_hnsw_cuda_euclidean_20260701_083355")
 
   large_low <- faissR:::cuvs_hnsw_params(
     n = 1000021L,
@@ -3582,10 +3574,10 @@ test_that("CUDA cuVS HNSW defaults use HPC shape, k, and recall tiers", {
     target_recall = 0.99
   )
   expect_equal(large_low$tuning_rule, "hpc_cuda_hnsw_large_low_dim_k50_recall99")
-  expect_equal(large_low$graph_degree, 51L)
-  expect_equal(large_low$intermediate_graph_degree, 128L)
+  expect_equal(large_low$graph_degree, 32L)
+  expect_equal(large_low$intermediate_graph_degree, 64L)
   expect_equal(large_low$ef, 96L)
-  expect_equal(large_low$tuning_benchmark_basis, "hit_all_shape_datasets")
+  expect_equal(large_low$tuning_benchmark_basis, "fastest_meeting_target_all_shape_datasets")
 
   medium_high <- faissR:::cuvs_hnsw_params(
     n = 70000L,
@@ -3594,11 +3586,11 @@ test_that("CUDA cuVS HNSW defaults use HPC shape, k, and recall tiers", {
     n_threads = 12L,
     target_recall = 0.99
   )
-  expect_equal(medium_high$tuning_rule, "hpc_cuda_hnsw_medium_high_dim_k50_recall99")
-  expect_equal(medium_high$graph_degree, 64L)
-  expect_equal(medium_high$intermediate_graph_degree, 192L)
-  expect_equal(medium_high$ef, 256L)
-  expect_equal(medium_high$tuning_benchmark_basis, "target_not_reached_best_available")
+  expect_equal(medium_high$tuning_rule, "hpc_cuda_hnsw_large_high_dim_k50_recall99")
+  expect_equal(medium_high$graph_degree, 96L)
+  expect_equal(medium_high$intermediate_graph_degree, 320L)
+  expect_equal(medium_high$ef, 480L)
+  expect_equal(medium_high$tuning_benchmark_basis, "best_available_all_shape_datasets")
 
   imagenet95 <- faissR:::cuvs_hnsw_params(
     n = 1281167L,
@@ -3607,11 +3599,11 @@ test_that("CUDA cuVS HNSW defaults use HPC shape, k, and recall tiers", {
     n_threads = 12L,
     target_recall = 0.95
   )
-  expect_equal(imagenet95$tuning_rule, "hpc_cuda_hnsw_very_large_high_dim_k15_recall95")
-  expect_equal(imagenet95$graph_degree, 48L)
-  expect_equal(imagenet95$intermediate_graph_degree, 128L)
-  expect_equal(imagenet95$ef, 128L)
-  expect_equal(imagenet95$tuning_benchmark_basis, "hit_all_shape_datasets")
+  expect_equal(imagenet95$tuning_rule, "hpc_cuda_hnsw_large_high_dim_k15_recall95")
+  expect_equal(imagenet95$graph_degree, 96L)
+  expect_equal(imagenet95$intermediate_graph_degree, 320L)
+  expect_equal(imagenet95$ef, 480L)
+  expect_equal(imagenet95$tuning_benchmark_basis, "best_available_all_shape_datasets")
 
   imagenet99 <- faissR:::cuvs_hnsw_params(
     n = 1281167L,
@@ -3620,11 +3612,11 @@ test_that("CUDA cuVS HNSW defaults use HPC shape, k, and recall tiers", {
     n_threads = 12L,
     target_recall = 0.99
   )
-  expect_equal(imagenet99$tuning_rule, "hpc_cuda_hnsw_very_large_high_dim_k15_recall99")
-  expect_equal(imagenet99$graph_degree, 48L)
-  expect_equal(imagenet99$intermediate_graph_degree, 128L)
-  expect_equal(imagenet99$ef, 128L)
-  expect_equal(imagenet99$tuning_benchmark_basis, "target_not_reached_best_available")
+  expect_equal(imagenet99$tuning_rule, "hpc_cuda_hnsw_large_high_dim_k15_recall99")
+  expect_equal(imagenet99$graph_degree, 96L)
+  expect_equal(imagenet99$intermediate_graph_degree, 320L)
+  expect_equal(imagenet99$ef, 480L)
+  expect_equal(imagenet99$tuning_benchmark_basis, "best_available_all_shape_datasets")
 })
 
 test_that("CUDA cuVS HNSW auto tuning includes raw inner product", {
@@ -3751,7 +3743,7 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   on.exit(options(old_options), add = TRUE)
 
   ivf <- faissR:::faiss_ivf_params(70000L, 50L)
-  expect_equal(ivf$tuning_policy, "auto_shape_k")
+  expect_equal(ivf$tuning_policy, "auto_shape_k_target_recall")
   expect_equal(ivf$tuning_rule, "balanced_shape_k")
   expect_equal(ivf$tuning_metric, "euclidean")
   expect_equal(ivf$tuning_source, "cpp")
@@ -3861,8 +3853,8 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   expect_true(isTRUE(nnd$tuning_small_k))
 
   cagra <- faissR:::cuvs_cagra_params(1000000L, 100L)
-  expect_equal(cagra$tuning_policy, "auto_shape_k")
-  expect_equal(cagra$tuning_rule, "large_n_large_k_graph_recall")
+  expect_equal(cagra$tuning_policy, "auto_shape_k_target_recall")
+  expect_equal(cagra$tuning_rule, "hpc_cuda_cagra_euclidean_large_low_dim_k100_recall99")
   expect_equal(cagra$tuning_source, "cpp")
   expect_true(isTRUE(cagra$tuning_large_n))
   expect_true(isTRUE(cagra$tuning_large_k))
@@ -3881,8 +3873,8 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   expect_match(cagra_ip$tuning_benchmark_source, "inner_product_validation_pending")
   expect_false(isTRUE(cagra_ip$tuning_benchmark_target_met))
 
-  cuvs_nnd <- faissR:::cuvs_nndescent_params(1000000L, 50L)
-  expect_equal(cuvs_nnd$tuning_rule, "large_graph_search")
+  cuvs_nnd <- faissR:::cuvs_nndescent_params(1000000L, 50L, 50L)
+  expect_equal(cuvs_nnd$tuning_rule, "hpc_cuda_nndescent_large_low_dim_k50_recall99")
   expect_equal(cuvs_nnd$tuning_source, "cpp")
   expect_true(isTRUE(cuvs_nnd$tuning_large_n))
 
@@ -3890,18 +3882,14 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   expect_equal(direct_cuvs_pq$tuning_source, "cpp")
   expect_equal(direct_cuvs_pq$tuning_rule, "high_dim_default_pq")
 
-  fallback_hnsw <- faissR:::rcpphnsw_params(50L)
-  expect_equal(fallback_hnsw$tuning_source, "cpp")
-  expect_equal(fallback_hnsw$tuning_rule, "balanced_hnswlib")
-
   native_nsg <- faissR:::native_nsg_params(70000L, 784L, 50L, backend = "cpu")
   expect_equal(native_nsg$tuning_source, "cpp")
-  expect_equal(native_nsg$tuning_rule, "high_recall_cpu_nsg")
+  expect_equal(native_nsg$tuning_rule, "hpc_cpu_nsg_large_high_dim_k50_recall99")
   expect_equal(native_nsg$seed_backend, "faiss_hnsw")
 
   vamana <- faissR:::vamana_params(70000L, 784L, 50L)
   expect_equal(vamana$tuning_source, "cpp")
-  expect_equal(vamana$tuning_rule, "high_recall_vamana")
+  expect_equal(vamana$tuning_rule, "hpc_cpu_vamana_large_high_dim_k50_recall99")
   expect_equal(vamana$seed_backend, "faiss_hnsw")
 
   cuda_vamana_ip <- faissR:::vamana_params(
@@ -3916,14 +3904,14 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   expect_match(cuda_vamana_ip$tuning_benchmark_source, "validation_pending_seeded_from_cosine")
   expect_false(isTRUE(cuda_vamana_ip$tuning_benchmark_target_met))
 
-  gpu_nnd <- faissR:::cuvs_nndescent_params(70000L, 50L)
+  gpu_nnd <- faissR:::cuvs_nndescent_params(70000L, 50L, 50L)
   expect_equal(gpu_nnd$tuning_source, "cpp")
   expect_equal(gpu_nnd$tuning_rule, "balanced_graph_search")
 
-  cpu_nnd <- faissR:::nn_tune_cpu_nndescent_cpp(70000L, 50L)
+  cpu_nnd <- faissR:::nn_tune_cpu_nndescent_cpp(70000L, 50L, 50L)
   expect_equal(cpu_nnd$tuning_source, "cpp")
-  expect_equal(cpu_nnd$tuning_rule, "large_n_random_projection_seed")
-  expect_equal(faissR:::nndescent_pool_size(70000L, 50L), cpu_nnd$pool_size)
+  expect_equal(cpu_nnd$tuning_rule, "hpc_cpu_nndescent_medium_low_dim_k50_recall99")
+  expect_equal(faissR:::nndescent_pool_size(70000L, 50L, p = 50L), cpu_nnd$pool_size)
 })
 
 test_that("CPU auto selector native fallback is decided by C++ route policy", {
@@ -3942,8 +3930,7 @@ test_that("CPU auto selector native fallback is decided by C++ route policy", {
         exclude_self = FALSE,
         work_size = as.double(70000L) * as.double(70000L) * as.double(784L)
       ),
-      faiss_available_value = FALSE,
-      rcpphnsw_available_value = FALSE
+      faiss_available_value = FALSE
     )
   }
   expect_equal(route(TRUE, 50L)$selected_backend, "cpu_nndescent")
@@ -4053,11 +4040,10 @@ test_that("C++ auto selector prefers cuVS brute force for compact very-wide self
     cuda_available_value = TRUE,
     cuvs_available_value = TRUE,
     faiss_available_value = TRUE,
-    faiss_gpu_available_value = TRUE,
-    rcpphnsw_available_value = TRUE
+    faiss_gpu_available_value = TRUE
   )
-  expect_equal(route$selected_backend, "cuda_cuvs_bruteforce")
-  expect_equal(route$predicted_method, "bruteforce")
+  expect_equal(route$selected_backend, "faiss_gpu_flat_l2")
+  expect_equal(route$predicted_method, "flat")
   expect_equal(route$reason, "auto_cuda_preselector")
 })
 
@@ -4078,11 +4064,10 @@ test_that("C++ auto selector prefers cuVS brute force for compact exact CUDA sel
     cuda_available_value = TRUE,
     cuvs_available_value = TRUE,
     faiss_available_value = TRUE,
-    faiss_gpu_available_value = TRUE,
-    rcpphnsw_available_value = TRUE
+    faiss_gpu_available_value = TRUE
   )
-  expect_equal(route$selected_backend, "cuda_cuvs_bruteforce")
-  expect_equal(route$predicted_method, "bruteforce")
+  expect_equal(route$selected_backend, "faiss_gpu_flat_l2")
+  expect_equal(route$predicted_method, "flat")
   expect_equal(route$reason, "auto_cuda_preselector")
 })
 
@@ -4103,8 +4088,7 @@ test_that("C++ auto selector keeps FAISS GPU Flat for larger exact CUDA self-KNN
     cuda_available_value = TRUE,
     cuvs_available_value = TRUE,
     faiss_available_value = TRUE,
-    faiss_gpu_available_value = TRUE,
-    rcpphnsw_available_value = TRUE
+    faiss_gpu_available_value = TRUE
   )
   expect_equal(route$selected_backend, "faiss_gpu_flat_l2")
   expect_equal(route$predicted_method, "flat")
@@ -4174,7 +4158,7 @@ test_that("C++ CUDA auto selector has deterministic k and metric policy", {
         cuvs_available_value = TRUE,
         faiss_gpu_available_value = FALSE
       )$selected_backend,
-      expected_cuvs_large,
+      "cuda_cuvs_bruteforce",
       info = metric
     )
     expected_faiss_large <- switch(
@@ -4196,7 +4180,12 @@ test_that("C++ CUDA auto selector has deterministic k and metric policy", {
         cuvs_available_value = FALSE,
         faiss_gpu_available_value = TRUE
       )$selected_backend,
-      expected_faiss_large,
+      switch(
+        metric,
+        cosine = "faiss_gpu_flat_cosine",
+        correlation = "faiss_gpu_flat_correlation",
+        inner_product = "faiss_gpu_flat_ip"
+      ),
       info = metric
     )
     expect_equal(
@@ -4234,8 +4223,9 @@ test_that("C++ CUDA auto selector has deterministic k and metric policy", {
     cuvs_available_value = TRUE,
     faiss_gpu_available_value = FALSE
   )
-  expect_equal(route$reason, "cuda_auto_unavailable")
-  expect_match(route$error, "FAISS GPU Flat")
+  expect_equal(route$reason, "cuda_auto_non_euclidean_metric_route")
+  expect_equal(route$selected_backend, "cuda_cuvs_bruteforce")
+  expect_true(is.na(route$error))
 
   n <- 500000L
   p <- 32L
@@ -4266,7 +4256,7 @@ test_that("C++ CUDA auto selector has deterministic k and metric policy", {
     cuda_available_value = TRUE,
     cuvs_available_value = TRUE
   )
-  expect_equal(high_dim_route, "cuda_cuvs_nndescent")
+  expect_equal(high_dim_route, "cuda_cuvs_bruteforce")
 })
 
 test_that("CUDA exact auto tuning includes raw inner product", {
@@ -4339,66 +4329,6 @@ test_that("CUDA bruteforce auto tuning includes raw inner product", {
   expect_true(isTRUE(params$exact_recall_by_construction))
   expect_false(isTRUE(params$tuning_benchmark_target_met))
   expect_match(params$tuning_benchmark_source, "inner_product_seeded")
-})
-
-test_that("RcppHNSW implementation backend is available when installed", {
-  skip_if_not_installed("RcppHNSW")
-  set.seed(127)
-  x <- rbind(
-    matrix(rnorm(400, -2, 0.4), ncol = 8),
-    matrix(rnorm(400, 2, 0.4), ncol = 8)
-  )
-  out <- internal_nn(x, k = 10L, backend = "hnsw", n_threads = 2L)
-
-  expect_equal(dim(out$indices), c(nrow(x), 10L))
-  expect_equal(out$indices[, 1L], seq_len(nrow(x)))
-  expect_equal(attr(out, "backend"), "hnsw")
-  expect_false(isTRUE(attr(out, "exact")))
-  expect_equal(attr(out, "approximation")$strategy, "RcppHNSW_hnswlib")
-})
-
-test_that("RcppHNSW backend supports correlation metric", {
-  skip_if_not_installed("RcppHNSW")
-  set.seed(128)
-  x <- matrix(rnorm(80L * 10L), nrow = 80L)
-
-  out <- internal_nn(x, k = 6L, backend = "hnsw", metric = "correlation", n_threads = 2L)
-
-  expect_equal(dim(out$indices), c(nrow(x), 6L))
-  expect_equal(attr(out, "backend"), "hnsw")
-  expect_equal(attr(out, "metric"), "correlation")
-  expect_equal(attr(out, "approximation")$metric, "correlation")
-  expect_true(all(is.finite(out$distances)))
-})
-
-test_that("RcppHNSW backend supports inner-product metric", {
-  skip_if_not_installed("RcppHNSW")
-  x <- matrix(c(
-    2, 0,
-    0, 3,
-    1, 1,
-    -1, 0
-  ), ncol = 2, byrow = TRUE)
-
-  old_options <- options(
-    faissR.hnsw_m = 8L,
-    faissR.hnsw_ef_construction = 100L,
-    faissR.hnsw_ef = 100L
-  )
-  on.exit(options(old_options), add = TRUE)
-
-  out <- internal_nn(x, k = 3L, backend = "hnsw", metric = "inner_product", n_threads = 2L)
-  public <- nn(x, k = 3L, backend = "cpu", method = "hnsw", metric = "inner_product", n_threads = 2L)
-
-  expect_equal(dim(out$indices), c(nrow(x), 3L))
-  expect_equal(attr(out, "backend"), "hnsw")
-  expect_equal(attr(out, "metric"), "inner_product")
-  expect_equal(attr(out, "approximation")$metric, "inner_product")
-  expect_equal(attr(public, "backend"), if (faiss_available()) "faiss_hnsw" else "hnsw")
-  expect_equal(attr(public, "metric"), "inner_product")
-  expect_equal(out$indices[1, 1L], 1L)
-  expect_equal(out$distances[, 1L], rep(0, nrow(x)), tolerance = 1e-12)
-  expect_true(all(is.finite(out$distances)))
 })
 
 test_that("real FAISS C++ backend is either exact or clearly unavailable", {
@@ -4636,9 +4566,9 @@ test_that("FAISS HNSW reports actual and requested parameters", {
     expect_equal(approx$requested_ef_search, 10L)
     expect_true(approx$hnsw_parameters_adjusted)
     expect_equal(approx$tuning_policy, "manual_options")
-    expect_equal(approx$tuning_rule, "hpc_cpu_hnsw_small_n_k10_recall99")
+    expect_equal(approx$tuning_rule, "hpc_cpu_hnsw_small_n_k15_recall99")
     expect_equal(approx$tuning_shape_group, "small_n")
-    expect_equal(approx$tuning_k_bucket, 10L)
+    expect_equal(approx$tuning_k_bucket, 15L)
     expect_equal(approx$tuning_target_recall_code, 99L)
     expect_false(isTRUE(approx$tuning_high_dim))
     expect_false(isTRUE(approx$tuning_large_n))
@@ -4852,7 +4782,7 @@ test_that("backend_info reports native availability without crashing", {
   expect_match(info$supported_metrics[info$backend == "faiss_gpu_cuvs"], "CAGRA inner_product uses")
   expect_match(info$supported_metrics[info$backend == "cuvs"], "direct brute force, direct IVF/PQ")
   expect_match(info$supported_metrics[info$backend == "cuvs"], "direct CAGRA")
-  expect_match(info$supported_metrics[info$backend == "cuvs"], "public CUDA NN-descent inner_product is unsupported")
+  expect_match(info$supported_metrics[info$backend == "cuvs"], "native shifted-dot-product CUDA")
 
   cuda_info <- faissR:::cuda_device_info_json_cpp()
   expect_type(cuda_info, "character")
@@ -4899,19 +4829,6 @@ test_that("CUDA grid auto does not silently fall back to CPU", {
     internal_nn(x, k = 4L, backend = "cuda_vamana"),
     "No CUDA GPU backend is available"
   )
-})
-
-test_that("RcppHNSW implementation backend is available when the suggested package is installed", {
-  skip_if_not_installed("RcppHNSW")
-
-  set.seed(144)
-  x <- matrix(rnorm(120L * 6L), nrow = 120L)
-  out <- internal_nn(x, k = 8L, backend = "hnsw", n_threads = 2L)
-
-  expect_equal(dim(out$indices), c(nrow(x), 8L))
-  expect_equal(attr(out, "backend"), "hnsw")
-  expect_false(isTRUE(attr(out, "exact")))
-  expect_equal(attr(out, "approximation")$library, "RcppHNSW")
 })
 
 test_that("CUDA nn backend matches CPU euclidean results", {

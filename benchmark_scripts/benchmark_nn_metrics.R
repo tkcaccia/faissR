@@ -614,7 +614,7 @@ should_isolate_native_timeout <- function(x, backend, method, preflight_route,
   cpu_exact_route <- identical(route, "cpu") || isTRUE(grepl("^faiss_flat", route))
   cpu_approx_route <- identical(route, "cpu_auto") ||
     isTRUE(grepl(
-      "^(faiss_(hnsw|ivf|ivfpq|ivfpq_fastscan|nsg|nndescent)|cpu_(auto|hnsw|vamana|nsg|nndescent)|hnsw|rcpphnsw|cpu_approx)",
+      "^(faiss_(hnsw|ivf|ivfpq|ivfpq_fastscan|nsg|nndescent)|cpu_(auto|vamana|nsg|nndescent)|cpu_approx)",
       route
     ))
   explicit_cpu_exact <- identical(backend, "cpu") &&

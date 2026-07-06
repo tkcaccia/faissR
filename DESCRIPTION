@@ -10,10 +10,12 @@ Description: Native nearest-neighbour search, graph construction, graph clusteri
     k-nearest neighbour prediction, and k-means helpers for large dimensionality
     reduction workflows in high-throughput biological data analysis, including
     single-cell, flow cytometry, imaging, and mass spectrometry applications.
-    The package requires the FAISS C++ library for CPU indexes and can
-    optionally use FAISS GPU indexes with NVIDIA cuVS integration or direct
-    RAPIDS cuVS/CUDA indexes on NVIDIA machines. CPU-only systems do not need
-    NVIDIA libraries. Supervised kNN models use
+    The package requires the FAISS C++ library for all builds, including
+    CPU-only indexes, and can optionally use FAISS GPU indexes with NVIDIA
+    cuVS integration or direct RAPIDS cuVS/CUDA indexes on NVIDIA machines.
+    CPU-only systems do not need NVIDIA libraries, but NVIDIA CUDA/cuVS
+    libraries are mandatory when a GPU-enabled build is explicitly requested.
+    Supervised kNN models use
     knn(Xtrain, Ytrain) and predict(), or knn(Xtrain, Ytrain, Xtest) for
     immediate prediction. Class probabilities are returned through
     predict(type = "prob") for kNN classification models.
@@ -41,13 +43,12 @@ Suggests:
     knitr,
     Matrix,
     float,
-    RcppHNSW,
     rmarkdown,
     testthat,
     withr
 LinkingTo:
     Rcpp
-SystemRequirements: C++20, Fortran, FAISS C++ library; optional CUDA toolkit, RAPIDS cuVS library for CUDA/cuVS NN and k-means backends, and RAPIDS libcugraph for CUDA graph clustering
+SystemRequirements: C++20, Fortran, mandatory FAISS C++ library; optional for CPU-only builds but required when GPU support is requested: NVIDIA CUDA toolkit, RAPIDS cuVS library for CUDA/cuVS NN and k-means backends, and RAPIDS libcugraph for CUDA graph clustering
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.0.0
 Config/testthat/edition: 3

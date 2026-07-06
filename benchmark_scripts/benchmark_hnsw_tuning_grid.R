@@ -857,7 +857,7 @@ main <- function() {
   if (identical(backend, "cuda")) {
     stop(
       "CUDA HNSW tuning is disabled: RAPIDS cuVS HNSW is a ",
-      "CAGRA-to-hnswlib host-wrapper path, not a pure all-GPU HNSW ",
+      "CAGRA-to-HNSW host-wrapper path, not a pure all-GPU HNSW ",
       "implementation. Use CUDA method=\"cagra\" benchmarks for GPU graph ",
       "search, or run this HNSW tuning grid with `--backend=cpu`.",
       call. = FALSE
