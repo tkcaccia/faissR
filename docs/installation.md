@@ -125,6 +125,20 @@ backend_info()
 Expected macOS result: FAISS CPU should be available; CUDA, cuVS, and cuGraph
 should report unavailable.
 
+For GitHub installs on a new macOS machine, faissR can call Homebrew only when
+the user explicitly opts in:
+
+```r
+Sys.setenv(FAISSR_AUTO_INSTALL_FAISS = "1")
+remotes::install_github("tkcaccia/faissR")
+```
+
+This runs `brew install faiss` during `configure` if FAISS is missing and
+Homebrew is available. Silent system-library installation is deliberately not
+the default because CRAN, Bioconductor, and shared machines expect system
+dependencies to be managed outside the R package install unless the user
+explicitly requested otherwise.
+
 ## Linux CPU/FAISS
 
 Install R development tools, a C++20 compiler, Fortran, and FAISS. The exact
@@ -286,6 +300,7 @@ Rscript -e 'library(faissR); print(backend_info())'
 | Variable | Purpose |
 |---|---|
 | `FAISS_HOME` | Prefix containing FAISS headers and libraries. Mandatory when FAISS is not visible through compiler defaults or `pkg-config`. |
+| `FAISSR_AUTO_INSTALL_FAISS` | macOS/Homebrew convenience switch. Set to `1` to let `configure` run `brew install faiss` if FAISS is missing. Disabled by default and intended for interactive GitHub installs, not CRAN/Bioconductor builders. |
 | `FAISSR_USE_CUDA` | Set to `1` to request CUDA native/FAISS GPU build paths; set to `0` to force CPU-only stubs. |
 | `FAISSR_USE_CUVS` | Set to `1` to request direct RAPIDS cuVS build paths; set to `0` to force cuVS stubs. |
 | `FAISSR_USE_CUGRAPH` | Set to `1` to request RAPIDS libcugraph graph clustering; set to `0` to force cuGraph stubs. |

@@ -274,6 +274,22 @@ through `pkg-config` or standard compiler paths, set `FAISS_HOME`:
 FAISS_HOME=/path/to/faiss R CMD INSTALL .
 ```
 
+On macOS with Homebrew, install FAISS first:
+
+```sh
+brew install faiss
+```
+
+or explicitly allow the GitHub install to call Homebrew for you:
+
+```r
+Sys.setenv(FAISSR_AUTO_INSTALL_FAISS = "1")
+remotes::install_github("tkcaccia/faissR")
+```
+
+The automatic Homebrew step is opt-in; CRAN/Bioconductor-style builds should
+provide FAISS as a normal system dependency.
+
 Optional CUDA/cuVS builds are enabled only when requested or auto-detected:
 
 ```sh
