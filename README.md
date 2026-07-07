@@ -274,10 +274,10 @@ through `pkg-config` or standard compiler paths, set `FAISS_HOME`:
 FAISS_HOME=/path/to/faiss R CMD INSTALL .
 ```
 
-On macOS with Homebrew, install FAISS first:
+On macOS with Homebrew, install FAISS and the OpenMP runtime first:
 
 ```sh
-brew install faiss
+brew install faiss libomp
 ```
 
 or explicitly allow the GitHub install to call Homebrew for you:

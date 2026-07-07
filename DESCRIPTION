@@ -48,7 +48,11 @@ Suggests:
     withr
 LinkingTo:
     Rcpp
-SystemRequirements: C++20, Fortran, mandatory FAISS C++ library; optional for CPU-only builds but required when GPU support is requested: NVIDIA CUDA toolkit, RAPIDS cuVS library for CUDA/cuVS NN and k-means backends, and RAPIDS libcugraph for CUDA graph clustering
+SystemRequirements: C++20, Fortran, mandatory FAISS C++ library, OpenMP
+    runtime on macOS when FAISS headers include omp.h (for example Homebrew
+    libomp); optional for CPU-only builds but required when GPU support is
+    requested: NVIDIA CUDA toolkit, RAPIDS cuVS library for CUDA/cuVS NN and
+    k-means backends, and RAPIDS libcugraph for CUDA graph clustering
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.0.0
 Config/testthat/edition: 3

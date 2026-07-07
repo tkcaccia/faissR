@@ -34,12 +34,49 @@ fi
 
 cppflags=""
 libs="-pthread"
+extra_cxxflags=""
 
 faiss_home=${FAISS_HOME:-}
 faiss_objects="nn_faiss_bridge.o nn_faiss_impl.o"
 faiss_cppflags=""
 faiss_libs=""
 faiss_libdir=""
+libomp_home=${LIBOMP_HOME:-${FAISSR_LIBOMP_HOME:-}}
+libomp_cppflags=""
+libomp_libs=""
+
+try_libomp_prefix() {
+  libomp_prefix=$1
+  if [ -n "$libomp_prefix" ] && [ -f "$libomp_prefix/include/omp.h" ]; then
+    if [ -d "$libomp_prefix/lib64" ]; then
+      candidate_libomp_libdir="$libomp_prefix/lib64"
+    else
+      candidate_libomp_libdir="$libomp_prefix/lib"
+    fi
+    if [ -f "$candidate_libomp_libdir/libomp.dylib" ] || \
+       [ -f "$candidate_libomp_libdir/libomp.so" ] || \
+       [ -f "$candidate_libomp_libdir/libomp.a" ]; then
+      libomp_cppflags="-I$libomp_prefix/include"
+      libomp_libs="-L$candidate_libomp_libdir -Wl,-rpath,$candidate_libomp_libdir -lomp"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+try_homebrew_libomp() {
+  if command -v brew >/dev/null 2>&1; then
+    brew_libomp_prefix=$(brew --prefix libomp 2>/dev/null || true)
+    if try_libomp_prefix "$brew_libomp_prefix"; then
+      return 0
+    fi
+    brew_prefix=$(brew --prefix 2>/dev/null || true)
+    if try_libomp_prefix "$brew_prefix/opt/libomp"; then
+      return 0
+    fi
+  fi
+  return 1
+}
 
 try_faiss_prefix() {
   faiss_prefix=$1
@@ -92,8 +129,8 @@ if [ -z "$faiss_cppflags" ] || [ -z "$faiss_libs" ]; then
   if [ "${FAISSR_AUTO_INSTALL_FAISS:-0}" = "1" ]; then
     if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ] && \
        command -v brew >/dev/null 2>&1; then
-      echo "FAISSR_AUTO_INSTALL_FAISS=1: installing FAISS with Homebrew." >&2
-      brew install faiss
+      echo "FAISSR_AUTO_INSTALL_FAISS=1: installing FAISS and libomp with Homebrew." >&2
+      brew install faiss libomp
       if ! try_homebrew_faiss; then
         echo "Homebrew FAISS installation finished, but configure still could not find include/faiss and lib/libfaiss." >&2
       fi
@@ -106,8 +143,8 @@ fi
 if [ -z "$faiss_cppflags" ] || [ -z "$faiss_libs" ]; then
   echo "FAISS is required to build faissR, but FAISS headers/library were not found." >&2
   if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
-    echo "On macOS with Homebrew, install FAISS with:" >&2
-    echo "  brew install faiss" >&2
+    echo "On macOS with Homebrew, install FAISS and OpenMP with:" >&2
+    echo "  brew install faiss libomp" >&2
     echo "Then retry, or set FAISS_HOME=\"\$(brew --prefix faiss)\" before installing faissR." >&2
     echo "For an explicit GitHub-install convenience path, run:" >&2
     echo "  Sys.setenv(FAISSR_AUTO_INSTALL_FAISS = \"1\")" >&2
@@ -120,8 +157,46 @@ if [ -z "$faiss_cppflags" ] || [ -z "$faiss_libs" ]; then
   exit 1
 fi
 
-cppflags="$cppflags -DFAISSR_HAS_FAISS $faiss_cppflags"
-libs="$libs $faiss_libs"
+if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
+  if try_libomp_prefix "$libomp_home"; then
+    :
+  elif try_homebrew_libomp; then
+    :
+  elif try_libomp_prefix /opt/homebrew/opt/libomp; then
+    :
+  elif try_libomp_prefix /usr/local/opt/libomp; then
+    :
+  elif try_libomp_prefix /opt/homebrew; then
+    :
+  elif try_libomp_prefix /usr/local; then
+    :
+  fi
+
+  if [ -z "$libomp_cppflags" ] || [ -z "$libomp_libs" ]; then
+    if [ "${FAISSR_AUTO_INSTALL_FAISS:-0}" = "1" ] && command -v brew >/dev/null 2>&1; then
+      echo "FAISSR_AUTO_INSTALL_FAISS=1: installing libomp with Homebrew." >&2
+      brew install libomp
+      try_homebrew_libomp || true
+    fi
+  fi
+
+  if [ -z "$libomp_cppflags" ] || [ -z "$libomp_libs" ]; then
+    echo "FAISS was found, but macOS OpenMP headers/library were not found." >&2
+    echo "Homebrew FAISS headers include <omp.h>, so Apple clang needs Homebrew libomp." >&2
+    echo "Install it with:" >&2
+    echo "  brew install libomp" >&2
+    echo "Then retry, or set LIBOMP_HOME=\"\$(brew --prefix libomp)\" before installing faissR." >&2
+    echo "For an explicit GitHub-install convenience path, run:" >&2
+    echo "  Sys.setenv(FAISSR_AUTO_INSTALL_FAISS = \"1\")" >&2
+    echo "  remotes::install_github(\"tkcaccia/faissR\")" >&2
+    exit 1
+  fi
+
+  extra_cxxflags="$extra_cxxflags -Xpreprocessor -fopenmp"
+fi
+
+cppflags="$cppflags -DFAISSR_HAS_FAISS $faiss_cppflags $libomp_cppflags"
+libs="$libs $faiss_libs $libomp_libs"
 
 cuda_objects="nn_cuda_stub.o"
 cuda_rule=""
@@ -296,7 +371,7 @@ fi
 
 {
   echo "CXX_STD = CXX20"
-  echo 'PKG_CXXFLAGS = -pthread $(SHLIB_OPENMP_CXXFLAGS)'
+  printf '%s%s\n' 'PKG_CXXFLAGS = -pthread $(SHLIB_OPENMP_CXXFLAGS)' "$extra_cxxflags"
   if [ -n "$cppflags" ]; then
     echo "PKG_CPPFLAGS = $cppflags"
   fi
