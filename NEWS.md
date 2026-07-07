@@ -1,4 +1,4 @@
-# faissR 0.99.3
+# faissR 0.99.4
 
 * Initial Bioconductor development release.
 * Provides FAISS-backed nearest-neighbour search, graph construction,
@@ -14,3 +14,7 @@
   Debian/Ubuntu FAISS development package while the upstream sysreq database
   learns the FAISS rule, and detects `/usr` multiarch FAISS installs during
   configuration.
+* Keeps FAISS k-means compilation compatible with distro FAISS headers that do
+  not expose newer clustering fields, and links macOS OpenMP through the exact
+  detected `libomp` library path to avoid duplicate OpenMP runtimes when
+  Homebrew FAISS is loaded.

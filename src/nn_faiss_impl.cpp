@@ -3617,10 +3617,6 @@ List faiss_kmeans_impl(NumericMatrix data,
     256,
     static_cast<int>((static_cast<long long>(n) + centers - 1) / centers)
   );
-  cp.early_stop_threshold = tol;
-  if (kmeans_plus_plus) {
-    cp.init_method = faiss::ClusteringInitMethod::KMEANS_PLUS_PLUS;
-  }
 
   faiss::IndexFlatL2 index(p);
   try {
@@ -3675,6 +3671,9 @@ List faiss_kmeans_impl(NumericMatrix data,
         Rcpp::Named("max_iter") = max_iter,
         Rcpp::Named("n_init") = nredo,
         Rcpp::Named("tol") = tol,
+        Rcpp::Named("tol_applied_by_faiss") = false,
+        Rcpp::Named("kmeans_plus_plus_requested") = kmeans_plus_plus,
+        Rcpp::Named("kmeans_plus_plus_applied_by_faiss") = false,
         Rcpp::Named("seed") = seed,
         Rcpp::Named("n_threads") = n_threads,
         Rcpp::Named("max_points_per_centroid") = cp.max_points_per_centroid
@@ -3719,10 +3718,6 @@ List faiss_gpu_kmeans_impl(NumericMatrix data,
     256,
     static_cast<int>((static_cast<long long>(n) + centers - 1) / centers)
   );
-  cp.early_stop_threshold = tol;
-  if (kmeans_plus_plus) {
-    cp.init_method = faiss::ClusteringInitMethod::KMEANS_PLUS_PLUS;
-  }
 
   try {
     faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
@@ -3780,6 +3775,9 @@ List faiss_gpu_kmeans_impl(NumericMatrix data,
         Rcpp::Named("max_iter") = max_iter,
         Rcpp::Named("n_init") = nredo,
         Rcpp::Named("tol") = tol,
+        Rcpp::Named("tol_applied_by_faiss") = false,
+        Rcpp::Named("kmeans_plus_plus_requested") = kmeans_plus_plus,
+        Rcpp::Named("kmeans_plus_plus_applied_by_faiss") = false,
         Rcpp::Named("seed") = seed,
         Rcpp::Named("device") = 0,
         Rcpp::Named("max_points_per_centroid") = cp.max_points_per_centroid

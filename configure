@@ -53,11 +53,17 @@ try_libomp_prefix() {
     else
       candidate_libomp_libdir="$libomp_prefix/lib"
     fi
-    if [ -f "$candidate_libomp_libdir/libomp.dylib" ] || \
-       [ -f "$candidate_libomp_libdir/libomp.so" ] || \
-       [ -f "$candidate_libomp_libdir/libomp.a" ]; then
+    candidate_libomp_file=""
+    if [ -f "$candidate_libomp_libdir/libomp.dylib" ]; then
+      candidate_libomp_file="$candidate_libomp_libdir/libomp.dylib"
+    elif [ -f "$candidate_libomp_libdir/libomp.so" ]; then
+      candidate_libomp_file="$candidate_libomp_libdir/libomp.so"
+    elif [ -f "$candidate_libomp_libdir/libomp.a" ]; then
+      candidate_libomp_file="$candidate_libomp_libdir/libomp.a"
+    fi
+    if [ -n "$candidate_libomp_file" ]; then
       libomp_cppflags="-I$libomp_prefix/include"
-      libomp_libs="-L$candidate_libomp_libdir -Wl,-rpath,$candidate_libomp_libdir -lomp"
+      libomp_libs="-Wl,-rpath,$candidate_libomp_libdir $candidate_libomp_file"
       return 0
     fi
   fi
