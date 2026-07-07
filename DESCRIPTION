@@ -1,7 +1,7 @@
 Package: faissR
 Type: Package
 Title: FAISS-Backed Nearest Neighbours, Graph Clustering, kNN Models, and k-Means
-Version: 0.99.1
+Version: 0.99.2
 Authors@R: person(given = "Stefano",
     family = "Cacciatore",
     role = c("aut", "cre"),
@@ -48,11 +48,11 @@ Suggests:
     withr
 LinkingTo:
     Rcpp
-SystemRequirements: C++20, Fortran, mandatory FAISS C++ library, OpenMP
-    runtime on macOS when FAISS headers include omp.h (for example Homebrew
-    libomp); optional for CPU-only builds but required when GPU support is
-    requested: NVIDIA CUDA toolkit, RAPIDS cuVS library for CUDA/cuVS NN and
-    k-means backends, and RAPIDS libcugraph for CUDA graph clustering
+SystemRequirements: C++20, Fortran, FAISS C++ development library
+    (Debian/Ubuntu: libfaiss-dev), OpenMP runtime on macOS when FAISS
+    headers include omp.h (for example Homebrew libomp). Optional GPU
+    libraries are documented in the installation guide and are used only when
+    a GPU-enabled build is explicitly requested.
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.0.0
 Config/testthat/edition: 3

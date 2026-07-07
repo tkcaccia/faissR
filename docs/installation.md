@@ -40,6 +40,16 @@ requires FAISS but not NVIDIA libraries. For NVIDIA GPU users, the intended
 strict build uses `FAISSR_REQUIRE_CUDA=1` and, where relevant,
 `FAISSR_REQUIRE_CUVS=1` or `FAISSR_REQUIRE_CUGRAPH=1`.
 
+On Debian/Ubuntu builders, the mandatory CPU dependency is the FAISS
+development package, typically `libfaiss-dev`. Automated systems such as
+r-universe resolve this from the package `SystemRequirements` field through
+their system-requirements database. If that database or base image does not yet
+provide FAISS, the package will fail early at `configure` with a clear
+diagnostic rather than building a non-FAISS stub. NVIDIA CUDA/RAPIDS libraries
+are intentionally not listed as mandatory CPU-builder requirements; they should
+be supplied only by GPU-capable builders or users who explicitly request a GPU
+build.
+
 ## Known cuVS NN-Descent Issue
 
 Direct RAPIDS cuVS NN-descent can fail on high-dimensional FP32 Euclidean/L2
@@ -389,14 +399,14 @@ itself is valid.
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check faissR_0.99.1.tar.gz
+R CMD check faissR_0.99.2.tar.gz
 ```
 
 Bioconductor submission checks are run in addition to `R CMD check`:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.1.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.2.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;
@@ -409,6 +419,11 @@ installation path clear for the Bioconductor build system. NVIDIA libraries
 should not be required on CPU-only Bioconductor builders, but GPU builders
 should set the strict `FAISSR_REQUIRE_*` variables to avoid accidental CPU-only
 builds.
+
+For r-universe/BiocStaging logs, a failure that installs `nvidia-cuda-dev` but
+not `libfaiss-dev` indicates a system-requirements resolver issue rather than a
+package compile error: FAISS is mandatory for all builds, whereas CUDA/RAPIDS
+is optional unless a GPU build is requested.
 
 Bioconductor GPU builders are requested through repository metadata, not by
 making CUDA mandatory in `DESCRIPTION`. faissR therefore uses:
