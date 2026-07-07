@@ -98,6 +98,21 @@ try_faiss_prefix() {
   return 1
 }
 
+try_faiss_system() {
+  if [ -f /usr/include/faiss/IndexFlat.h ]; then
+    for candidate_faiss_libdir in /usr/lib /usr/lib/* /lib /lib/*; do
+      if [ -f "$candidate_faiss_libdir/libfaiss.so" ] || \
+         [ -f "$candidate_faiss_libdir/libfaiss.a" ]; then
+        faiss_cppflags="-I/usr/include"
+        faiss_libdir="$candidate_faiss_libdir"
+        faiss_libs="-L$faiss_libdir -Wl,-rpath,$faiss_libdir -lfaiss"
+        return 0
+      fi
+    done
+  fi
+  return 1
+}
+
 try_homebrew_faiss() {
   if command -v brew >/dev/null 2>&1; then
     brew_faiss_prefix=$(brew --prefix faiss 2>/dev/null || true)
@@ -120,6 +135,8 @@ elif command -v pkg-config >/dev/null 2>&1 && pkg-config --exists faiss 2>/dev/n
 elif try_faiss_prefix /opt/homebrew; then
   :
 elif try_faiss_prefix /usr/local; then
+  :
+elif try_faiss_system; then
   :
 elif try_homebrew_faiss; then
   :

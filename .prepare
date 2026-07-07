@@ -1,0 +1,22 @@
+#!/bin/sh
+
+set -eu
+
+if [ "$(uname -s 2>/dev/null || echo unknown)" != "Linux" ]; then
+  exit 0
+fi
+
+if [ -f /usr/include/faiss/IndexFlat.h ] && \
+   { ls /usr/lib/*/libfaiss.so /usr/lib/libfaiss.so >/dev/null 2>&1 || \
+     ls /usr/lib/*/libfaiss.a /usr/lib/libfaiss.a >/dev/null 2>&1; }; then
+  echo "faissR .prepare: FAISS development files already available."
+  exit 0
+fi
+
+if command -v apt-get >/dev/null 2>&1; then
+  echo "faissR .prepare: installing mandatory FAISS development package libfaiss-dev."
+  apt-get update -y
+  DEBIAN_FRONTEND=noninteractive apt-get install -y libfaiss-dev
+else
+  echo "faissR .prepare: apt-get is unavailable; relying on configure to find FAISS." >&2
+fi

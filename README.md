@@ -317,14 +317,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check faissR_0.99.2.tar.gz
+R CMD check faissR_0.99.3.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.2.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.3.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA, cuVS, and libcugraph are
@@ -339,6 +339,9 @@ development package, typically `libfaiss-dev`. If a BiocStaging/r-universe log
 installs NVIDIA CUDA packages but not `libfaiss-dev`, the failing step is the
 automated system-requirements resolution: FAISS is mandatory for faissR, while
 CUDA/RAPIDS libraries are optional unless a GPU build is explicitly requested.
+Until the upstream r-universe resolver includes FAISS, the repository-level
+`.prepare` hook installs `libfaiss-dev` for r-universe source builds and is
+excluded from the package tarball.
 
 ## FAISS GPU With cuVS
 

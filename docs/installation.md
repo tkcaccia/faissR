@@ -399,14 +399,14 @@ itself is valid.
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check faissR_0.99.2.tar.gz
+R CMD check faissR_0.99.3.tar.gz
 ```
 
 Bioconductor submission checks are run in addition to `R CMD check`:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.2.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.3.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;
@@ -424,6 +424,13 @@ For r-universe/BiocStaging logs, a failure that installs `nvidia-cuda-dev` but
 not `libfaiss-dev` indicates a system-requirements resolver issue rather than a
 package compile error: FAISS is mandatory for all builds, whereas CUDA/RAPIDS
 is optional unless a GPU build is requested.
+
+Until the upstream r-universe system-requirements database includes a FAISS
+rule, the repository includes a top-level `.prepare` hook for r-universe source
+builds. The hook installs `libfaiss-dev` on Debian/Ubuntu before `R CMD build`.
+It is excluded from the package tarball with `.Rbuildignore`; regular package
+installation still relies on normal system-library discovery through
+`configure`.
 
 Bioconductor GPU builders are requested through repository metadata, not by
 making CUDA mandatory in `DESCRIPTION`. faissR therefore uses:
