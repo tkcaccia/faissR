@@ -1,4 +1,4 @@
-# faissR 0.99.7
+# faissR 0.99.6
 
 * Initial Bioconductor development release.
 * Provides FAISS-backed nearest-neighbour search, graph construction,
