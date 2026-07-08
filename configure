@@ -45,6 +45,26 @@ libomp_home=${LIBOMP_HOME:-${FAISSR_LIBOMP_HOME:-}}
 libomp_cppflags=""
 libomp_libs=""
 
+macos_auto_install_faiss() {
+  if [ "$(uname -s 2>/dev/null || echo unknown)" != "Darwin" ]; then
+    return 1
+  fi
+  if [ "${FAISSR_AUTO_INSTALL_FAISS:-}" = "1" ]; then
+    return 0
+  fi
+  if [ -n "${FAISSR_AUTO_INSTALL_FAISS:-}" ]; then
+    return 1
+  fi
+  if [ "${GITHUB_ACTIONS:-}" = "true" ] || \
+     [ "${CI:-}" = "true" ] || \
+     [ -n "${RUNNER_OS:-}" ] || \
+     [ -n "${UNIVERSE_NAME:-}" ] || \
+     [ -n "${MY_UNIVERSE:-}" ]; then
+    return 0
+  fi
+  return 1
+}
+
 try_libomp_prefix() {
   libomp_prefix=$1
   if [ -n "$libomp_prefix" ] && [ -f "$libomp_prefix/include/omp.h" ]; then
@@ -149,16 +169,20 @@ elif try_homebrew_faiss; then
 fi
 
 if [ -z "$faiss_cppflags" ] || [ -z "$faiss_libs" ]; then
-  if [ "${FAISSR_AUTO_INSTALL_FAISS:-0}" = "1" ]; then
+  if macos_auto_install_faiss; then
     if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ] && \
        command -v brew >/dev/null 2>&1; then
-      echo "FAISSR_AUTO_INSTALL_FAISS=1: installing FAISS and libomp with Homebrew." >&2
+      if [ "${FAISSR_AUTO_INSTALL_FAISS:-}" = "1" ]; then
+        echo "FAISSR_AUTO_INSTALL_FAISS=1: installing FAISS and libomp with Homebrew." >&2
+      else
+        echo "macOS CI detected: installing mandatory FAISS and OpenMP runtime with Homebrew." >&2
+      fi
       brew install faiss libomp
       if ! try_homebrew_faiss; then
         echo "Homebrew FAISS installation finished, but configure still could not find include/faiss and lib/libfaiss." >&2
       fi
     else
-      echo "FAISSR_AUTO_INSTALL_FAISS=1 was set, but automatic FAISS installation is supported only on macOS with Homebrew." >&2
+      echo "Automatic FAISS installation was requested, but it is supported only on macOS with Homebrew." >&2
     fi
   fi
 fi
@@ -196,8 +220,12 @@ if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
   fi
 
   if [ -z "$libomp_cppflags" ] || [ -z "$libomp_libs" ]; then
-    if [ "${FAISSR_AUTO_INSTALL_FAISS:-0}" = "1" ] && command -v brew >/dev/null 2>&1; then
-      echo "FAISSR_AUTO_INSTALL_FAISS=1: installing libomp with Homebrew." >&2
+    if macos_auto_install_faiss && command -v brew >/dev/null 2>&1; then
+      if [ "${FAISSR_AUTO_INSTALL_FAISS:-}" = "1" ]; then
+        echo "FAISSR_AUTO_INSTALL_FAISS=1: installing libomp with Homebrew." >&2
+      else
+        echo "macOS CI detected: installing OpenMP runtime with Homebrew." >&2
+      fi
       brew install libomp
       try_homebrew_libomp || true
     fi

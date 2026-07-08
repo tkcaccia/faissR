@@ -293,8 +293,11 @@ Sys.setenv(FAISSR_AUTO_INSTALL_FAISS = "1")
 remotes::install_github("tkcaccia/faissR")
 ```
 
-The automatic Homebrew step is opt-in; CRAN/Bioconductor-style builds should
-provide FAISS as a normal system dependency.
+The automatic Homebrew step is opt-in for ordinary user installs. On macOS
+GitHub Actions and r-universe/BiocStaging workers, `configure` may run
+`brew install faiss libomp` automatically because FAISS is mandatory and those
+binary builders do not execute the Linux `.prepare` sysreq hook. Set
+`FAISSR_AUTO_INSTALL_FAISS=0` to suppress that CI convenience path.
 
 Optional CUDA/cuVS builds are enabled only when requested or auto-detected:
 
@@ -323,14 +326,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check faissR_0.99.5.tar.gz
+R CMD check faissR_0.99.6.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.5.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.6.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA, cuVS, and libcugraph are
@@ -348,6 +351,11 @@ CUDA/RAPIDS libraries are optional unless a GPU build is explicitly requested.
 Until the upstream r-universe resolver includes FAISS, the repository-level
 `.prepare` hook installs `libfaiss-dev` for r-universe source builds and is
 excluded from the package tarball.
+
+For macOS r-universe/BiocStaging binary builds, the package `configure` script
+uses Homebrew on the CI runner to install `faiss` and `libomp` when they are
+missing. This keeps FAISS mandatory while avoiding a false macOS failure before
+compilation starts.
 
 ## FAISS GPU With cuVS
 

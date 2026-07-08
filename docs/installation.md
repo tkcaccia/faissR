@@ -135,8 +135,8 @@ backend_info()
 Expected macOS result: FAISS CPU should be available; CUDA, cuVS, and cuGraph
 should report unavailable.
 
-For GitHub installs on a new macOS machine, faissR can call Homebrew only when
-the user explicitly opts in:
+For GitHub installs on a new macOS machine, faissR can call Homebrew when the
+user explicitly opts in:
 
 ```r
 Sys.setenv(FAISSR_AUTO_INSTALL_FAISS = "1")
@@ -144,10 +144,12 @@ remotes::install_github("tkcaccia/faissR")
 ```
 
 This runs `brew install faiss libomp` during `configure` if FAISS or the macOS
-OpenMP runtime is missing and Homebrew is available. Silent system-library
-installation is deliberately not the default because CRAN, Bioconductor, and
-shared machines expect system dependencies to be managed outside the R package
-install unless the user explicitly requested otherwise.
+OpenMP runtime is missing and Homebrew is available. On macOS GitHub Actions
+and r-universe/BiocStaging runners, `configure` may run the same Homebrew
+installation automatically because FAISS is a mandatory system dependency and
+the binary build worker does not execute the Linux `.prepare` hook. Ordinary
+interactive installs remain explicit or opt-in, so shared machines do not
+silently mutate system libraries unless the user requested it.
 
 ## Linux CPU/FAISS
 
@@ -316,7 +318,7 @@ Rscript -e 'library(faissR); print(backend_info())'
 | Variable | Purpose |
 |---|---|
 | `FAISS_HOME` | Prefix containing FAISS headers and libraries. Mandatory when FAISS is not visible through compiler defaults or `pkg-config`. |
-| `FAISSR_AUTO_INSTALL_FAISS` | macOS/Homebrew convenience switch. Set to `1` to let `configure` run `brew install faiss libomp` if FAISS or the macOS OpenMP runtime is missing. Disabled by default and intended for interactive GitHub installs, not CRAN/Bioconductor builders. |
+| `FAISSR_AUTO_INSTALL_FAISS` | macOS/Homebrew convenience switch. Set to `1` to let `configure` run `brew install faiss libomp` if FAISS or the macOS OpenMP runtime is missing. Ordinary interactive installs are explicit or opt-in; macOS GitHub Actions and r-universe/BiocStaging runners may auto-install FAISS/libomp because those CI workers do not receive the Linux `.prepare` sysreq hook. Set this variable to `0` to suppress that CI convenience path. |
 | `LIBOMP_HOME` or `FAISSR_LIBOMP_HOME` | macOS OpenMP prefix containing `include/omp.h` and `lib/libomp.*`. Usually `$(brew --prefix libomp)`. |
 | `FAISSR_USE_CUDA` | Set to `1` to request CUDA native/FAISS GPU build paths; set to `0` to force CPU-only stubs. |
 | `FAISSR_USE_CUVS` | Set to `1` to request direct RAPIDS cuVS build paths; set to `0` to force cuVS stubs. |
@@ -405,14 +407,14 @@ itself is valid.
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check faissR_0.99.5.tar.gz
+R CMD check faissR_0.99.6.tar.gz
 ```
 
 Bioconductor submission checks are run in addition to `R CMD check`:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.5.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.6.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;
