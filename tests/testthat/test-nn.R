@@ -3390,28 +3390,40 @@ test_that("CPU auto selector is shape-aware", {
   }
 })
 
-test_that("CPU auto selector is k and metric aware on benchmark k grid", {
+test_that("CPU auto selector is k, dimensionality, and metric aware on benchmark k grid", {
   n <- 70000L
-  p <- 784L
-  work_size <- as.double(n) * as.double(n) * as.double(p)
   k_values <- c(5L, 10L, 15L, 50L, 100L)
   metrics <- c("euclidean", "cosine", "correlation", "inner_product")
-  routes <- expand.grid(k = k_values, metric = metrics, stringsAsFactors = FALSE)
-  routes$route <- vapply(seq_len(nrow(routes)), function(i) {
-    faissR:::select_cpu_auto_backend(
-      self_query = TRUE,
-      n = n,
-      p = p,
-      n_points = n,
-      k = routes$k[[i]],
-      work_size = work_size,
-      metric = routes$metric[[i]]
-    )
-  }, character(1L))
+
+  route_grid <- function(p, faiss_available_value) {
+    routes <- expand.grid(k = k_values, metric = metrics, stringsAsFactors = FALSE)
+    routes$route <- vapply(seq_len(nrow(routes)), function(i) {
+      route <- faissR:::nn_auto_select_shape_cpp(
+        resolved_backend = "cpu_auto",
+        requested_backend = "cpu",
+        requested_method = "auto",
+        shape = list(
+          n = n,
+          p = as.integer(p),
+          n_points = n,
+          k = routes$k[[i]],
+          metric = routes$metric[[i]],
+          self_query = TRUE,
+          exclude_self = FALSE,
+          work_size = as.double(n) * as.double(n) * as.double(p)
+        ),
+        faiss_available_value = faiss_available_value
+      )
+      route$selected_backend
+    }, character(1L))
+    routes
+  }
+
+  routes <- route_grid(784L, faiss_available_value = faiss_available())
 
   expect_equal(
     routes$route[routes$metric == "euclidean"],
-    rep(if (faiss_available()) "faiss_hnsw" else "cpu_nndescent", length(k_values))
+    if (faiss_available()) rep("faiss_hnsw", length(k_values)) else c("cpu", rep("cpu_nndescent", 4L))
   )
 
   for (metric in c("cosine", "correlation", "inner_product")) {
@@ -3429,9 +3441,33 @@ test_that("CPU auto selector is k and metric aware on benchmark k grid", {
     expected_large_k <- if (faiss_available()) {
       rep("faiss_hnsw", 4L)
     } else {
-      c("cpu_nndescent", "cpu_nndescent", "cpu_nsg", "cpu_nsg")
+      rep("cpu_nsg", 4L)
     }
     expect_equal(routes$route[routes$metric == metric & routes$k >= 10L], expected_large_k)
+  }
+
+  high_dim_no_faiss <- route_grid(784L, faiss_available_value = FALSE)
+  expect_equal(
+    high_dim_no_faiss$route[high_dim_no_faiss$metric == "euclidean"],
+    c("cpu", rep("cpu_nndescent", 4L))
+  )
+  for (metric in c("cosine", "correlation", "inner_product")) {
+    expect_equal(
+      high_dim_no_faiss$route[high_dim_no_faiss$metric == metric & high_dim_no_faiss$k == 5L],
+      "cpu"
+    )
+    expect_equal(
+      high_dim_no_faiss$route[high_dim_no_faiss$metric == metric & high_dim_no_faiss$k >= 10L],
+      rep("cpu_nsg", 4L)
+    )
+  }
+
+  moderate_routes <- route_grid(64L, faiss_available_value = FALSE)
+  for (metric in c("cosine", "correlation", "inner_product")) {
+    expect_equal(
+      moderate_routes$route[moderate_routes$metric == metric & moderate_routes$k >= 10L],
+      c("cpu_nndescent", "cpu_nndescent", "cpu_nsg", "cpu_nsg")
+    )
   }
 })
 
