@@ -1,4 +1,4 @@
-# faissR 0.99.6
+# faissR 0.99.7
 
 * Initial Bioconductor development release.
 * Provides FAISS-backed nearest-neighbour search, graph construction,
@@ -17,6 +17,10 @@
 * Allows macOS GitHub Actions and r-universe/BiocStaging binary builders to
   install the mandatory Homebrew `faiss` and `libomp` dependencies during
   `configure`, while keeping ordinary interactive installs explicit or opt-in.
+* Handles r-universe/WebAssembly cross-builds without leaking host Linux
+  headers into the Emscripten sysroot. WebAssembly builds install diagnostic
+  stubs because native FAISS/CUDA/cuVS libraries are not available in webR;
+  supported native Linux/macOS builds still require FAISS.
 * Keeps FAISS k-means compilation compatible with distro FAISS headers that do
   not expose newer clustering fields, and links macOS OpenMP through the exact
   detected `libomp` library path to avoid duplicate OpenMP runtimes when

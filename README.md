@@ -326,14 +326,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check faissR_0.99.6.tar.gz
+R CMD check faissR_0.99.7.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.6.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.7.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA, cuVS, and libcugraph are
@@ -356,6 +356,13 @@ For macOS r-universe/BiocStaging binary builds, the package `configure` script
 uses Homebrew on the CI runner to install `faiss` and `libomp` when they are
 missing. This keeps FAISS mandatory while avoiding a false macOS failure before
 compilation starts.
+
+For r-universe/WebAssembly, `configure` detects the
+`wasm32-unknown-emscripten` target and builds diagnostic stubs rather than
+using host `/usr/include` FAISS headers inside the Emscripten sysroot. The WASM
+artifact can report backend availability, but FAISS/CUDA/cuVS methods are not
+available because those native libraries are not webR system libraries.
+Supported Linux and macOS builds still require real FAISS.
 
 ## FAISS GPU With cuVS
 

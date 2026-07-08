@@ -2,6 +2,29 @@
 
 set -eu
 
+wasm_build=0
+for arg in "$@"; do
+  case "$arg" in
+    --host=wasm32-*|--host=*emscripten*)
+      wasm_build=1
+      ;;
+  esac
+done
+
+if [ "$wasm_build" = "1" ]; then
+  echo "WebAssembly target detected: building faissR with diagnostic stubs." >&2
+  echo "Native FAISS/CUDA/cuVS libraries are not available for webR/WebAssembly;" >&2
+  echo "native Linux/macOS builds still require FAISS." >&2
+  {
+    echo "CXX_STD = CXX20"
+    echo "PKG_CXXFLAGS ="
+    echo "PKG_CPPFLAGS = -DFAISSR_WASM_UNSUPPORTED"
+    echo "PKG_LIBS ="
+    echo "OBJECTS = RcppExports.o embedding_utils.o graph.o graph_cugraph_stub.o nn.o nn_auto_select.o nn_fortran.o nn_faiss_bridge.o nn_faiss_stub.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o"
+  } > src/Makevars
+  exit 0
+fi
+
 use_cuda=${FAISSR_USE_CUDA:-}
 if [ -z "$use_cuda" ]; then use_cuda=auto; fi
 if [ "${FAISSR_REQUIRE_CUDA:-0}" = "1" ]; then use_cuda=1; fi

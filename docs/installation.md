@@ -313,6 +313,17 @@ nvidia-smi
 Rscript -e 'library(faissR); print(backend_info())'
 ```
 
+## WebAssembly / webR
+
+`faissR` is native nearest-neighbour infrastructure around FAISS, CUDA, and
+RAPIDS libraries. These libraries are not available as normal webR/WebAssembly
+system libraries. When r-universe attempts a WebAssembly binary build,
+`configure` detects the `wasm32-unknown-emscripten` target and builds diagnostic
+stubs instead of using host `/usr/include` FAISS headers, which would corrupt
+the Emscripten sysroot. The resulting WASM artifact can report backend
+availability, but FAISS/CUDA/cuVS methods are unavailable there. Supported
+Linux and macOS source builds still require real FAISS.
+
 ## Environment Variables
 
 | Variable | Purpose |
@@ -407,14 +418,14 @@ itself is valid.
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check faissR_0.99.6.tar.gz
+R CMD check faissR_0.99.7.tar.gz
 ```
 
 Bioconductor submission checks are run in addition to `R CMD check`:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.6.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.7.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;
