@@ -14,9 +14,9 @@
   Debian/Ubuntu FAISS development package while the upstream sysreq database
   learns the FAISS rule, and detects `/usr` multiarch FAISS installs during
   configuration.
-* Allows macOS GitHub Actions and r-universe/BiocStaging binary builders to
-  install the mandatory Homebrew `faiss` and `libomp` dependencies during
-  `configure`, while keeping ordinary interactive installs explicit or opt-in.
+* Allows ordinary macOS GitHub Actions builders to install the mandatory
+  Homebrew `faiss` and `libomp` dependencies during `configure`, while keeping
+  ordinary interactive installs explicit or opt-in.
 * Handles r-universe/WebAssembly cross-builds without leaking host Linux
   headers into the Emscripten sysroot. WebAssembly builds install diagnostic
   stubs because native FAISS/CUDA/cuVS libraries are not available in webR;
@@ -24,6 +24,10 @@
 * Detects already-active conda/mamba environments through `CONDA_PREFIX` as a
   passive macOS FAISS/libomp fallback without installing conda from
   `configure`.
+* Marks automated Bioconductor macOS binary builds as unsupported until the
+  Bioconductor/r-universe macOS system-library bundle provides FAISS. User
+  macOS source installs remain supported with Homebrew or an active conda/mamba
+  environment.
 * Keeps FAISS k-means compilation compatible with distro FAISS headers that do
   not expose newer clustering fields, and links macOS OpenMP through the exact
   detected `libomp` library path to avoid duplicate OpenMP runtimes when

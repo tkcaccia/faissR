@@ -276,9 +276,12 @@ FAISS_HOME=/path/to/faiss R CMD INSTALL .
 
 Automated Bioconductor/r-universe Windows binary builds are skipped with
 `OS_type: unix` because FAISS is mandatory and those builders do not provide a
-compatible FAISS development library. Windows users should use WSL2 for the
-supported Linux path, or provide a native Rtools-compatible FAISS build and
-install from source manually.
+compatible FAISS development library. Automated Bioconductor macOS binary builds
+are also marked unsupported until the Bioconductor/r-universe macOS
+system-library bundle provides FAISS. User macOS source installs remain
+supported with Homebrew or an active conda/mamba environment. Windows users
+should use WSL2 for the supported Linux path, or provide a native
+Rtools-compatible FAISS build and install from source manually.
 
 On macOS with Homebrew, install FAISS and the OpenMP runtime first:
 
@@ -293,11 +296,13 @@ Sys.setenv(FAISSR_AUTO_INSTALL_FAISS = "1")
 remotes::install_github("tkcaccia/faissR")
 ```
 
-The automatic Homebrew step is opt-in for ordinary user installs. On macOS
-GitHub Actions and r-universe/BiocStaging workers, `configure` may run
-`brew install faiss libomp` automatically because FAISS is mandatory and those
-binary builders do not execute the Linux `.prepare` sysreq hook. Set
-`FAISSR_AUTO_INSTALL_FAISS=0` to suppress that CI convenience path.
+The automatic Homebrew step is opt-in for ordinary user installs. On ordinary
+macOS GitHub Actions workers, `configure` may run `brew install faiss libomp`
+automatically because FAISS is mandatory. Bioconductor/r-universe macOS binary
+workers deliberately remove Homebrew and do not currently provide FAISS, so
+those builds are marked unsupported rather than using a hidden dependency
+manager. Set `FAISSR_AUTO_INSTALL_FAISS=0` to suppress the Homebrew convenience
+path.
 
 If Homebrew is not available on a user macOS machine, an already-active
 conda/mamba environment is also supported:
@@ -366,10 +371,11 @@ Until the upstream r-universe resolver includes FAISS, the repository-level
 `.prepare` hook installs `libfaiss-dev` for r-universe source builds and is
 excluded from the package tarball.
 
-For macOS r-universe/BiocStaging binary builds, the package `configure` script
-uses Homebrew on the CI runner to install `faiss` and `libomp` when they are
-missing. This keeps FAISS mandatory while avoiding a false macOS failure before
-compilation starts.
+For macOS r-universe/BiocStaging binary builds, FAISS is not currently available
+in the worker system-library bundle and Homebrew is deliberately removed before
+package installation. Those automated macOS binary builds are therefore marked
+unsupported until FAISS is provided by the builder. This keeps FAISS mandatory
+without silently changing the package into a non-FAISS stub build.
 
 For r-universe/WebAssembly, `configure` detects the
 `wasm32-unknown-emscripten` target and builds diagnostic stubs rather than

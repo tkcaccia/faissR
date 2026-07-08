@@ -55,6 +55,7 @@ SystemRequirements: C++20, Fortran, FAISS C++ development library
     headers include omp.h (for example Homebrew libomp). Optional GPU
     libraries are documented in the installation guide and are used only when
     a GPU-enabled build is explicitly requested.
+Config/Bioconductor/UnsupportedPlatforms: mac
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.0.0
 Config/testthat/edition: 3
