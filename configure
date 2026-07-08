@@ -67,6 +67,26 @@ faiss_libdir=""
 libomp_home=${LIBOMP_HOME:-${FAISSR_LIBOMP_HOME:-}}
 libomp_cppflags=""
 libomp_libs=""
+brew_cmd=""
+
+find_brew() {
+  if [ -n "${BREW:-}" ] && [ -x "${BREW:-}" ]; then
+    brew_cmd=$BREW
+    return 0
+  fi
+  candidate_brew=$(command -v brew 2>/dev/null || true)
+  if [ -n "$candidate_brew" ] && [ -x "$candidate_brew" ]; then
+    brew_cmd=$candidate_brew
+    return 0
+  fi
+  for candidate_brew in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    if [ -x "$candidate_brew" ]; then
+      brew_cmd=$candidate_brew
+      return 0
+    fi
+  done
+  return 1
+}
 
 macos_auto_install_faiss() {
   if [ "$(uname -s 2>/dev/null || echo unknown)" != "Darwin" ]; then
@@ -114,12 +134,12 @@ try_libomp_prefix() {
 }
 
 try_homebrew_libomp() {
-  if command -v brew >/dev/null 2>&1; then
-    brew_libomp_prefix=$(brew --prefix libomp 2>/dev/null || true)
+  if find_brew; then
+    brew_libomp_prefix=$("$brew_cmd" --prefix libomp 2>/dev/null || true)
     if try_libomp_prefix "$brew_libomp_prefix"; then
       return 0
     fi
-    brew_prefix=$(brew --prefix 2>/dev/null || true)
+    brew_prefix=$("$brew_cmd" --prefix 2>/dev/null || true)
     if try_libomp_prefix "$brew_prefix/opt/libomp"; then
       return 0
     fi
@@ -163,12 +183,12 @@ try_faiss_system() {
 }
 
 try_homebrew_faiss() {
-  if command -v brew >/dev/null 2>&1; then
-    brew_faiss_prefix=$(brew --prefix faiss 2>/dev/null || true)
+  if find_brew; then
+    brew_faiss_prefix=$("$brew_cmd" --prefix faiss 2>/dev/null || true)
     if try_faiss_prefix "$brew_faiss_prefix"; then
       return 0
     fi
-    brew_prefix=$(brew --prefix 2>/dev/null || true)
+    brew_prefix=$("$brew_cmd" --prefix 2>/dev/null || true)
     if try_faiss_prefix "$brew_prefix/opt/faiss"; then
       return 0
     fi
@@ -194,13 +214,13 @@ fi
 if [ -z "$faiss_cppflags" ] || [ -z "$faiss_libs" ]; then
   if macos_auto_install_faiss; then
     if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ] && \
-       command -v brew >/dev/null 2>&1; then
+       find_brew; then
       if [ "${FAISSR_AUTO_INSTALL_FAISS:-}" = "1" ]; then
         echo "FAISSR_AUTO_INSTALL_FAISS=1: installing FAISS and libomp with Homebrew." >&2
       else
         echo "macOS CI detected: installing mandatory FAISS and OpenMP runtime with Homebrew." >&2
       fi
-      brew install faiss libomp
+      "$brew_cmd" install faiss libomp
       if ! try_homebrew_faiss; then
         echo "Homebrew FAISS installation finished, but configure still could not find include/faiss and lib/libfaiss." >&2
       fi
@@ -243,13 +263,13 @@ if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
   fi
 
   if [ -z "$libomp_cppflags" ] || [ -z "$libomp_libs" ]; then
-    if macos_auto_install_faiss && command -v brew >/dev/null 2>&1; then
+    if macos_auto_install_faiss && find_brew; then
       if [ "${FAISSR_AUTO_INSTALL_FAISS:-}" = "1" ]; then
         echo "FAISSR_AUTO_INSTALL_FAISS=1: installing libomp with Homebrew." >&2
       else
         echo "macOS CI detected: installing OpenMP runtime with Homebrew." >&2
       fi
-      brew install libomp
+      "$brew_cmd" install libomp
       try_homebrew_libomp || true
     fi
   fi
