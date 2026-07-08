@@ -5,7 +5,8 @@ Version: 0.99.4
 Authors@R: person(given = "Stefano",
     family = "Cacciatore",
     role = c("aut", "cre"),
-    email = "tkcaccia@gmail.com")
+    email = "tkcaccia@gmail.com",
+    comment = c(ORCID = "0000-0001-7052-7156"))
 Description: Native nearest-neighbour search, graph construction, graph clustering,
     k-nearest neighbour prediction, and k-means helpers for large dimensionality
     reduction workflows in high-throughput biological data analysis, including
