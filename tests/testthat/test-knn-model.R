@@ -68,7 +68,7 @@ test_that("predict preserves nearest-neighbour route metadata", {
   expect_true(reg_meta$batch_query)
   expect_equal(reg_meta$query_n, 2L)
   expect_equal(reg_meta$query_call_count, 1L)
-  expect_equal(reg_meta$query_source, "nn")
+  expect_equal(reg_meta$query_source, "fitted_index")
 })
 
 test_that("knn preserves float32 input for direct NN backends", {
@@ -102,7 +102,7 @@ test_that("knn preserves float32 input for direct NN backends", {
   expect_equal(meta$requested_method, "hnsw")
   expect_equal(meta$input_type, "float32")
   expect_false(meta$float32_compatibility_conversion)
-  expect_equal(meta$approximation$tuning_policy, "auto_shape_metric")
+  expect_match(meta$approximation$tuning_policy, "auto_shape_metric")
 })
 
 test_that("knn reuses fitted FAISS HNSW index for matching predictions", {

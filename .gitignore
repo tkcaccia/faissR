@@ -3,6 +3,7 @@
 .RData
 .Ruserdata
 *.Rcheck/
+*.BiocCheck/
 *.tar.gz
 Rplots.pdf
 cache/
@@ -15,3 +16,10 @@ src/*.dylib
 src/Makevars
 src/symbols.rds
 .DS_Store
+tmp/
+*.log
+faiss_hnsw_mnist70k_*.csv
+mnist70k_knn_predict_speed*.csv
+local_mnist70k_cpu_*/
+manuscript/
+faissR_GRAPH_CLUSTER_*/

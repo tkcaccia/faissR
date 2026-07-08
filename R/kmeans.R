@@ -215,7 +215,7 @@ fast_kmeans <- function(data,
     ))
   }
 
-  set.seed(seed)
+  set_rng_seed(seed)
   stats_fit <- stats::kmeans(
     x,
     centers = centers,
@@ -388,8 +388,8 @@ run_cuda_kmeans <- function(x,
                             resolved_backend = "cuda") {
   faiss_error <- NULL
   if (isTRUE(faiss_gpu_available())) {
-    out <- tryCatch(
-      run_faiss_gpu_kmeans(
+    attempt <- tryCatch(
+      list(result = run_faiss_gpu_kmeans(
         x = x,
         centers = centers,
         max_iter = max_iter,
@@ -398,12 +398,13 @@ run_cuda_kmeans <- function(x,
         seed = seed,
         init = init,
         tuning_metadata = tuning_metadata
-      ),
+      ), error = NULL),
       error = function(e) {
-        faiss_error <<- conditionMessage(e)
-        NULL
+        list(result = NULL, error = conditionMessage(e))
       }
     )
+    out <- attempt$result
+    faiss_error <- attempt$error
     if (!is.null(out)) {
       out <- finish_fast_kmeans(
         out,

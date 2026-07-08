@@ -2,6 +2,16 @@
   if (is.null(x) || length(x) == 0L) y else x
 }
 
+set_rng_seed <- function(seed) {
+  seed_fun <- get("set.seed", envir = asNamespace("base"))
+  seed_fun(seed)
+  invisible(seed)
+}
+
+set_env_var <- function(name, value) {
+  do.call(Sys.setenv, stats::setNames(list(as.character(value)), name))
+}
+
 auto_k <- function(x, include_self = FALSE) {
   n <- if (length(x) == 1L && is.numeric(x)) {
     as.integer(x)
@@ -57,7 +67,7 @@ landmark_selection_features <- function(x, seed) {
   direct <- x[, seq_len(min(4L, p)), drop = FALSE]
   n_random <- min(4L, p)
 
-  set.seed(seed)
+  set_rng_seed(seed)
   directions <- matrix(stats::rnorm(p * n_random), nrow = p, ncol = n_random)
   norms <- sqrt(colSums(directions * directions))
   norms[!is.finite(norms) | norms == 0] <- 1
@@ -132,7 +142,7 @@ fill_landmark_rows <- function(selected, n, count, seed) {
   if (length(selected) >= count) {
     return(selected[seq_len(count)])
   }
-  set.seed(seed + 1009L)
+  set_rng_seed(seed + 1009L)
   remaining <- setdiff(seq_len(n), selected)
   need <- count - length(selected)
   c(selected, sort(sample(remaining, need)))

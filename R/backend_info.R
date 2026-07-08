@@ -9,6 +9,9 @@
 #'   supported public method/metric summaries, non-public implementation route
 #'   labels, device/runtime hints, and a short note. Use
 #'   \code{\link{nn_capabilities}()} for the full method/backend/metric matrix.
+#' @examples
+#' info <- backend_info()
+#' info[, c("backend", "available", "public_backends")]
 #' @export
 backend_info <- function() {
   cuda_knn <- backend_flag(cuda_available)
@@ -51,7 +54,7 @@ backend_info <- function() {
       "euclidean, cosine, correlation, inner_product; method-specific exclusions in nn_capabilities()",
       "euclidean, cosine, correlation, inner_product for Flat/IVF/IVFPQ/HNSW and CPU IVFPQ FastScan where FastScan is available; public NSG uses the native CPU route for all metrics, with deterministic FAISS HNSW seeding on large high-dimensional CPU inputs, while explicit FAISS NSG is Euclidean-only",
       "euclidean, cosine, correlation, inner_product for IVF/IVFPQ and CAGRA; CAGRA inner_product uses a maximum-inner-product-to-L2 transform",
-      "euclidean, cosine, correlation, inner_product for direct brute force, direct IVF/PQ, HNSW from CAGRA, and direct CAGRA using metric transforms where needed; euclidean plus normalized cosine/correlation for direct cuVS NN-descent; public CUDA NN-descent inner_product is unsupported",
+      "euclidean, cosine, correlation, inner_product for direct brute force, direct IVF/PQ, HNSW from CAGRA, and direct CAGRA using metric transforms where needed; euclidean plus normalized cosine/correlation for direct cuVS NN-descent, with public CUDA NN-descent raw inner product using faissR's native shifted-dot-product CUDA refinement route",
       "euclidean, cosine, correlation, inner_product where the selected CUDA method supports the metric",
       "not metric-based; uses graph edge weights"
     ),
@@ -234,6 +237,8 @@ faiss_summary <- function() {
 #'
 #' @return `TRUE` when faissR was compiled and linked against a FAISS build
 #'   that reports GPU support.
+#' @examples
+#' faiss_gpu_available()
 #' @export
 faiss_gpu_available <- function() {
   text <- tryCatch(

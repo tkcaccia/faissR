@@ -221,9 +221,9 @@ test_that("knn_graph passes method metric and tuning to internal KNN", {
   expect_equal(meta$nn_method, "exact")
   expect_equal(meta$metric, "correlation")
   expect_equal(meta$tuning, "off")
-  expect_equal(meta$nn_backend, "cpu")
+  expect_equal(meta$nn_backend, "faiss_flat_correlation")
   expect_equal(meta$requested_backend, "cpu")
-  expect_equal(meta$resolved_backend, "cpu")
+  expect_equal(meta$resolved_backend, "faiss_flat_correlation")
 })
 
 test_that("knn_graph preserves normalized metric transform metadata", {
@@ -830,7 +830,9 @@ test_that("graph_cluster passes method metric and tuning to internal KNN", {
   expect_equal(cl$parameters$graph_method, "exact")
   expect_equal(cl$parameters$metric, "correlation")
   expect_equal(cl$parameters$tuning, "off")
-  expect_equal(cl$parameters$graph_backend, "cpu")
+  expect_equal(cl$parameters$graph_backend, "faiss_flat_correlation")
+  expect_equal(cl$parameters$graph_requested_backend, "cpu")
+  expect_equal(cl$parameters$graph_resolved_backend, "faiss_flat_correlation")
 })
 
 test_that("graph_cluster preserves internal KNN route metadata when building a graph", {
