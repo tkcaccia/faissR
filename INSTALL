@@ -1,0 +1,103 @@
+External system requirements
+============================
+
+faissR requires the FAISS C++ library. FAISS is mandatory for all builds,
+including CPU-only builds. The package does not vendor FAISS.
+
+NVIDIA CUDA, RAPIDS cuVS, and RAPIDS libcugraph are not required for a
+CPU-only FAISS build. They are required when the user requests a GPU-enabled
+build.
+
+Required for all platforms
+--------------------------
+
+- R development headers.
+- A C++20-capable compiler.
+- A Fortran compiler.
+- FAISS C++ headers and library.
+
+If FAISS is not in a standard compiler/linker path or visible through
+pkg-config, set FAISS_HOME to a prefix containing:
+
+  include/faiss/Index.h
+  lib/libfaiss.so      on Linux
+  lib/libfaiss.dylib   on macOS
+
+Example:
+
+  FAISS_HOME=/path/to/faiss R CMD INSTALL .
+
+Linux CPU-only build
+--------------------
+
+Install or build FAISS with GPU support disabled. Then install faissR with:
+
+  FAISS_HOME=/path/to/faiss-cpu \
+  FAISSR_USE_CUDA=0 \
+  FAISSR_USE_CUVS=0 \
+  FAISSR_USE_CUGRAPH=0 \
+  R CMD INSTALL .
+
+Linux NVIDIA GPU build
+----------------------
+
+Install a compatible NVIDIA driver, CUDA toolkit, FAISS build, and any RAPIDS
+libraries required by the desired routes.
+
+Strict FAISS GPU / CUDA-native build:
+
+  CUDA_HOME=/usr/local/cuda \
+  FAISS_HOME=/path/to/faiss-gpu \
+  FAISSR_REQUIRE_CUDA=1 \
+  R CMD INSTALL .
+
+Strict direct cuVS build:
+
+  CUDA_HOME=/usr/local/cuda \
+  FAISS_HOME=/path/to/faiss \
+  CUVS_HOME=/path/to/rapids-or-cuvs \
+  FAISSR_REQUIRE_CUDA=1 \
+  FAISSR_REQUIRE_CUVS=1 \
+  R CMD INSTALL .
+
+Strict CUDA graph-clustering build:
+
+  CUDA_HOME=/usr/local/cuda \
+  FAISS_HOME=/path/to/faiss \
+  CUGRAPH_HOME=/path/to/rapids-or-cugraph \
+  FAISSR_REQUIRE_CUDA=1 \
+  FAISSR_REQUIRE_CUGRAPH=1 \
+  R CMD INSTALL .
+
+The FAISSR_REQUIRE_* variables are aliases for requiring the corresponding
+GPU feature at configure time. If a required GPU component is missing,
+installation fails rather than producing a CPU-only build.
+
+macOS
+-----
+
+macOS builds are expected to be CPU/FAISS builds. NVIDIA CUDA is not supported
+on modern macOS/Apple Silicon systems. With Homebrew FAISS:
+
+  brew install faiss libomp
+  FAISS_HOME="$(brew --prefix faiss)" R CMD INSTALL .
+
+Windows
+-------
+
+Automated Bioconductor/r-universe Windows builds are skipped because the
+package is marked OS_type: unix. FAISS is mandatory and the Windows builders do
+not provide a compatible FAISS development library.
+
+Use Rtools and a FAISS build compiled with a compatible toolchain, or use WSL2
+for Linux-style builds. Native RAPIDS cuVS/libcugraph C++ builds are generally
+Linux-oriented; for NVIDIA GPU support on Windows, WSL2 is the recommended
+route.
+
+Bioconductor notes
+------------------
+
+Bioconductor and r-universe CPU builders need FAISS installed or FAISS_HOME set.
+CUDA/cuVS/libcugraph should not be required on CPU-only builders. If NVIDIA GPU
+support is required for a particular build environment, use the strict
+FAISSR_REQUIRE_* variables above.
