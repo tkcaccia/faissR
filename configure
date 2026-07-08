@@ -11,17 +11,22 @@ for arg in "$@"; do
   esac
 done
 
+write_diagnostic_makevars() {
+  diagnostic_cppflags=$1
+  {
+    echo "CXX_STD = CXX20"
+    echo "PKG_CXXFLAGS ="
+    echo "PKG_CPPFLAGS = $diagnostic_cppflags"
+    echo "PKG_LIBS ="
+    echo "OBJECTS = RcppExports.o embedding_utils.o graph.o graph_cugraph_stub.o nn.o nn_auto_select.o nn_fortran.o nn_faiss_bridge.o nn_faiss_stub.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o"
+  } > src/Makevars
+}
+
 if [ "$wasm_build" = "1" ]; then
   echo "WebAssembly target detected: building faissR with diagnostic stubs." >&2
   echo "Native FAISS/CUDA/cuVS libraries are not available for webR/WebAssembly;" >&2
   echo "native Linux/macOS builds still require FAISS." >&2
-  {
-    echo "CXX_STD = CXX20"
-    echo "PKG_CXXFLAGS ="
-    echo "PKG_CPPFLAGS = -DFAISSR_WASM_UNSUPPORTED"
-    echo "PKG_LIBS ="
-    echo "OBJECTS = RcppExports.o embedding_utils.o graph.o graph_cugraph_stub.o nn.o nn_auto_select.o nn_fortran.o nn_faiss_bridge.o nn_faiss_stub.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o"
-  } > src/Makevars
+  write_diagnostic_makevars "-DFAISSR_WASM_UNSUPPORTED"
   exit 0
 fi
 
@@ -103,6 +108,19 @@ macos_auto_install_faiss() {
      [ -n "${RUNNER_OS:-}" ] || \
      [ -n "${UNIVERSE_NAME:-}" ] || \
      [ -n "${MY_UNIVERSE:-}" ]; then
+    return 0
+  fi
+  return 1
+}
+
+runiverse_macos_diagnostic_stubs_allowed() {
+  if [ "$(uname -s 2>/dev/null || echo unknown)" != "Darwin" ]; then
+    return 1
+  fi
+  if [ "${FAISSR_RUNIVERSE_MACOS_STUBS:-1}" = "0" ]; then
+    return 1
+  fi
+  if [ -n "${UNIVERSE_NAME:-}" ] || [ -n "${MY_UNIVERSE:-}" ]; then
     return 0
   fi
   return 1
@@ -227,12 +245,21 @@ if [ -z "$faiss_cppflags" ] || [ -z "$faiss_libs" ]; then
         echo "Homebrew FAISS installation finished, but configure still could not find include/faiss and lib/libfaiss." >&2
       fi
     else
-      echo "Automatic FAISS installation was requested, but it is supported only on macOS with Homebrew." >&2
+      if ! runiverse_macos_diagnostic_stubs_allowed; then
+        echo "Automatic FAISS installation was requested, but it is supported only on macOS with Homebrew." >&2
+      fi
     fi
   fi
 fi
 
 if [ -z "$faiss_cppflags" ] || [ -z "$faiss_libs" ]; then
+  if runiverse_macos_diagnostic_stubs_allowed; then
+    echo "r-universe/BiocStaging macOS binary worker detected without FAISS." >&2
+    echo "Building diagnostic stubs because this worker removes Homebrew and does not provide FAISS." >&2
+    echo "Linux and user macOS source builds still require real FAISS." >&2
+    write_diagnostic_makevars "-DFAISSR_MACOS_CI_NO_FAISS"
+    exit 0
+  fi
   echo "FAISS is required to build faissR, but FAISS headers/library were not found." >&2
   if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
     echo "On macOS with Homebrew, install FAISS and OpenMP with:" >&2

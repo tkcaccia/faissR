@@ -9,8 +9,18 @@ bool faiss_is_available_impl() {
   return false;
 }
 
+bool faiss_gpu_bfknn_float32_gpu_available_impl() {
+  return false;
+}
+
 std::string faiss_info_json_impl() {
+#if defined(FAISSR_MACOS_CI_NO_FAISS)
+  return "{\"available\":false,\"gpu\":false,\"gpu_cagra\":false,\"reason\":\"runiverse_macos_diagnostic_stub_no_faiss\"}";
+#elif defined(FAISSR_WASM_UNSUPPORTED)
+  return "{\"available\":false,\"gpu\":false,\"gpu_cagra\":false,\"reason\":\"webassembly_diagnostic_stub_no_faiss\"}";
+#else
   return "{\"available\":false,\"gpu\":false,\"gpu_cagra\":false,\"reason\":\"package_not_built_with_faiss\"}";
+#endif
 }
 
 List faiss_flat_knn_impl(NumericMatrix,
@@ -36,6 +46,18 @@ List faiss_flat_float32_knn_impl(SEXP,
     "FAISS float32 Flat backend is not available. Reinstall faissR with "
     "a FAISS C++ library visible to configure, for example "
     "FAISS_HOME=/path/to/faiss."
+  );
+}
+
+List faiss_flat_pretransformed_float32_knn_impl(SEXP,
+                                                SEXP,
+                                                int,
+                                                bool,
+                                                int,
+                                                std::string) {
+  Rcpp::stop(
+    "FAISS pretransformed float32 Flat backend is not available. Reinstall "
+    "faissR with FAISS_HOME=/path/to/faiss."
   );
 }
 
@@ -115,6 +137,19 @@ List faiss_gpu_flat_float32_knn_impl(SEXP,
     "FAISS GPU float32 Flat backend is not available. Reinstall faissR with "
     "a FAISS GPU/cuVS library visible to configure, for example "
     "FAISS_HOME=/path/to/faiss-gpu."
+  );
+}
+
+List faiss_gpu_bfknn_float32_gpu_impl(SEXP,
+                                      SEXP,
+                                      int,
+                                      bool,
+                                      std::string,
+                                      std::string,
+                                      std::string) {
+  Rcpp::stop(
+    "FAISS GPU-resident exact backend is not available. Reinstall faissR "
+    "with FAISS GPU and CUDA headers visible to configure."
   );
 }
 

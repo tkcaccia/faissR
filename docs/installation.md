@@ -148,9 +148,11 @@ OpenMP runtime is missing and Homebrew is available. Ordinary macOS GitHub
 Actions workers may use the same Homebrew convenience path because FAISS is a
 mandatory system dependency. Bioconductor/r-universe macOS binary workers
 deliberately remove Homebrew and do not currently provide FAISS, so those
-automated binary builds are marked unsupported rather than using a hidden
-dependency manager. Ordinary interactive installs remain explicit or opt-in, so
-shared machines do not silently mutate system libraries unless the user
+automated binary builds are marked unsupported for real FAISS execution rather
+than using a hidden dependency manager. Because the r-universe workflow may
+still launch the macOS binary job, that exact worker builds diagnostic stubs
+when FAISS is absent. Ordinary interactive installs remain explicit or opt-in,
+so shared machines do not silently mutate system libraries unless the user
 requested it.
 
 If Homebrew is unavailable on a user macOS machine, a pre-existing conda or
@@ -280,10 +282,13 @@ builders do not provide a compatible FAISS development library. Automated
 Bioconductor macOS binary builds are marked unsupported through
 `Config/Bioconductor/UnsupportedPlatforms: mac` and `.BBSoptions` because the
 r-universe macOS worker removes Homebrew and the CRAN-style macOS system-library
-bundle does not currently include FAISS. macOS users can still install from
-source with Homebrew or conda/mamba as described above. Windows users should use
-WSL2 for the supported Linux-style installation path, or maintain their own
-native FAISS/Rtools-compatible build and install from source manually.
+bundle does not currently include FAISS. If that r-universe macOS job is still
+launched, `configure` emits diagnostic stubs so the binary can load and report
+FAISS as unavailable; it does not provide working FAISS methods. macOS users
+can still install from source with Homebrew or conda/mamba as described above.
+Windows users should use WSL2 for the supported Linux-style installation path,
+or maintain their own native FAISS/Rtools-compatible build and install from
+source manually.
 
 ### Windows CPU/FAISS
 
@@ -351,7 +356,8 @@ Linux and macOS source builds still require real FAISS.
 | Variable | Purpose |
 |---|---|
 | `FAISS_HOME` | Prefix containing FAISS headers and libraries. Mandatory when FAISS is not visible through compiler defaults or `pkg-config`. |
-| `FAISSR_AUTO_INSTALL_FAISS` | macOS/Homebrew convenience switch. Set to `1` to let `configure` run `brew install faiss libomp` if FAISS or the macOS OpenMP runtime is missing. Ordinary interactive installs are explicit or opt-in; ordinary macOS GitHub Actions runners may use this convenience path. Bioconductor/r-universe macOS binary workers remove Homebrew and are marked unsupported until their system-library bundle provides FAISS. Set this variable to `0` to suppress the Homebrew convenience path. |
+| `FAISSR_AUTO_INSTALL_FAISS` | macOS/Homebrew convenience switch. Set to `1` to let `configure` run `brew install faiss libomp` if FAISS or the macOS OpenMP runtime is missing. Ordinary interactive installs are explicit or opt-in; ordinary macOS GitHub Actions runners may use this convenience path. Bioconductor/r-universe macOS binary workers remove Homebrew and are marked unsupported for real FAISS execution until their system-library bundle provides FAISS. Set this variable to `0` to suppress the Homebrew convenience path. |
+| `FAISSR_RUNIVERSE_MACOS_STUBS` | r-universe/BiocStaging macOS-only diagnostic switch. Defaults to `1`, allowing diagnostic stubs only on those macOS binary workers when FAISS is absent. Set to `0` to make that worker fail instead. User macOS installs are unaffected and still require FAISS. |
 | `LIBOMP_HOME` or `FAISSR_LIBOMP_HOME` | macOS OpenMP prefix containing `include/omp.h` and `lib/libomp.*`. Usually `$(brew --prefix libomp)`. |
 | `CONDA_PREFIX` | Active conda/mamba prefix. Used only as a passive fallback when `faiss-cpu` and `libomp` are already installed there. |
 | `FAISSR_USE_CUDA` | Set to `1` to request CUDA native/FAISS GPU build paths; set to `0` to force CPU-only stubs. |
@@ -441,14 +447,14 @@ itself is valid.
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check faissR_0.99.7.tar.gz
+R CMD check faissR_0.99.8.tar.gz
 ```
 
 Bioconductor submission checks are run in addition to `R CMD check`:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.7.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.8.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;

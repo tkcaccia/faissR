@@ -1,4 +1,4 @@
-# faissR 0.99.7
+# faissR 0.99.8
 
 * Initial Bioconductor development release.
 * Provides FAISS-backed nearest-neighbour search, graph construction,
@@ -24,10 +24,12 @@
 * Detects already-active conda/mamba environments through `CONDA_PREFIX` as a
   passive macOS FAISS/libomp fallback without installing conda from
   `configure`.
-* Marks automated Bioconductor macOS binary builds as unsupported until the
-  Bioconductor/r-universe macOS system-library bundle provides FAISS. User
+* Marks automated Bioconductor macOS binary builds as unsupported for real
+  FAISS execution until the Bioconductor/r-universe macOS system-library bundle
+  provides FAISS. Because r-universe currently still launches the macOS binary
+  job, that exact worker receives diagnostic stubs when FAISS is absent; user
   macOS source installs remain supported with Homebrew or an active conda/mamba
-  environment.
+  environment and still require real FAISS.
 * Keeps FAISS k-means compilation compatible with distro FAISS headers that do
   not expose newer clustering fields, and links macOS OpenMP through the exact
   detected `libomp` library path to avoid duplicate OpenMP runtimes when

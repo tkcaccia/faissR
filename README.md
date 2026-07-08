@@ -345,14 +345,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check faissR_0.99.7.tar.gz
+R CMD check faissR_0.99.8.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.7.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.8.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA, cuVS, and libcugraph are
@@ -374,8 +374,12 @@ excluded from the package tarball.
 For macOS r-universe/BiocStaging binary builds, FAISS is not currently available
 in the worker system-library bundle and Homebrew is deliberately removed before
 package installation. Those automated macOS binary builds are therefore marked
-unsupported until FAISS is provided by the builder. This keeps FAISS mandatory
-without silently changing the package into a non-FAISS stub build.
+unsupported for real FAISS execution until FAISS is provided by the builder.
+Because the r-universe workflow may still launch the macOS binary job, the
+configure script builds diagnostic stubs only for that worker when FAISS is
+absent. `backend_info()` then reports FAISS as unavailable with reason
+`runiverse_macos_diagnostic_stub_no_faiss`. Linux builds and ordinary user
+macOS source installs still require real FAISS.
 
 For r-universe/WebAssembly, `configure` detects the
 `wasm32-unknown-emscripten` target and builds diagnostic stubs rather than
