@@ -1,4 +1,4 @@
-# faissR 0.99.6
+# faissR 0.99.7
 
 * Initial Bioconductor development release.
 * Provides FAISS-backed nearest-neighbour search, graph construction,
@@ -21,6 +21,9 @@
   headers into the Emscripten sysroot. WebAssembly builds install diagnostic
   stubs because native FAISS/CUDA/cuVS libraries are not available in webR;
   supported native Linux/macOS builds still require FAISS.
+* Detects already-active conda/mamba environments through `CONDA_PREFIX` as a
+  passive macOS FAISS/libomp fallback without installing conda from
+  `configure`.
 * Keeps FAISS k-means compilation compatible with distro FAISS headers that do
   not expose newer clustering fields, and links macOS OpenMP through the exact
   detected `libomp` library path to avoid duplicate OpenMP runtimes when

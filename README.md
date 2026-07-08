@@ -299,6 +299,20 @@ GitHub Actions and r-universe/BiocStaging workers, `configure` may run
 binary builders do not execute the Linux `.prepare` sysreq hook. Set
 `FAISSR_AUTO_INSTALL_FAISS=0` to suppress that CI convenience path.
 
+If Homebrew is not available on a user macOS machine, an already-active
+conda/mamba environment is also supported:
+
+```sh
+conda install -c conda-forge faiss-cpu libomp
+export FAISS_HOME="$CONDA_PREFIX"
+export LIBOMP_HOME="$CONDA_PREFIX"
+R CMD INSTALL .
+```
+
+`configure` detects `CONDA_PREFIX` passively when FAISS and libomp are already
+installed there. It does not install conda automatically, which keeps
+Bioconductor and shared-machine builds explicit.
+
 Optional CUDA/cuVS builds are enabled only when requested or auto-detected:
 
 ```sh
@@ -326,14 +340,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check faissR_0.99.6.tar.gz
+R CMD check faissR_0.99.7.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.6.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.7.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA, cuVS, and libcugraph are

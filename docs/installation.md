@@ -151,6 +151,21 @@ the binary build worker does not execute the Linux `.prepare` hook. Ordinary
 interactive installs remain explicit or opt-in, so shared machines do not
 silently mutate system libraries unless the user requested it.
 
+If Homebrew is unavailable on a user macOS machine, a pre-existing conda or
+mamba environment can provide CPU FAISS:
+
+```sh
+conda install -c conda-forge faiss-cpu libomp
+export FAISS_HOME="$CONDA_PREFIX"
+export LIBOMP_HOME="$CONDA_PREFIX"
+R CMD INSTALL .
+```
+
+The configure script also detects `CONDA_PREFIX` directly when FAISS and libomp
+are installed in the active environment. It does not install conda or
+micromamba automatically; that keeps Bioconductor/r-universe builds aligned
+with the system-dependency model and avoids silently changing shared systems.
+
 ## Linux CPU/FAISS
 
 Install R development tools, a C++20 compiler, Fortran, and FAISS. The exact
@@ -331,6 +346,7 @@ Linux and macOS source builds still require real FAISS.
 | `FAISS_HOME` | Prefix containing FAISS headers and libraries. Mandatory when FAISS is not visible through compiler defaults or `pkg-config`. |
 | `FAISSR_AUTO_INSTALL_FAISS` | macOS/Homebrew convenience switch. Set to `1` to let `configure` run `brew install faiss libomp` if FAISS or the macOS OpenMP runtime is missing. Ordinary interactive installs are explicit or opt-in; macOS GitHub Actions and r-universe/BiocStaging runners may auto-install FAISS/libomp because those CI workers do not receive the Linux `.prepare` sysreq hook. Set this variable to `0` to suppress that CI convenience path. |
 | `LIBOMP_HOME` or `FAISSR_LIBOMP_HOME` | macOS OpenMP prefix containing `include/omp.h` and `lib/libomp.*`. Usually `$(brew --prefix libomp)`. |
+| `CONDA_PREFIX` | Active conda/mamba prefix. Used only as a passive fallback when `faiss-cpu` and `libomp` are already installed there. |
 | `FAISSR_USE_CUDA` | Set to `1` to request CUDA native/FAISS GPU build paths; set to `0` to force CPU-only stubs. |
 | `FAISSR_USE_CUVS` | Set to `1` to request direct RAPIDS cuVS build paths; set to `0` to force cuVS stubs. |
 | `FAISSR_USE_CUGRAPH` | Set to `1` to request RAPIDS libcugraph graph clustering; set to `0` to force cuGraph stubs. |
@@ -418,14 +434,14 @@ itself is valid.
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check faissR_0.99.6.tar.gz
+R CMD check faissR_0.99.7.tar.gz
 ```
 
 Bioconductor submission checks are run in addition to `R CMD check`:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.6.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.7.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;

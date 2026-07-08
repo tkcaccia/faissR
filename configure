@@ -201,6 +201,8 @@ if try_faiss_prefix "$faiss_home"; then
 elif command -v pkg-config >/dev/null 2>&1 && pkg-config --exists faiss 2>/dev/null; then
   faiss_cppflags=$(pkg-config --cflags faiss)
   faiss_libs=$(pkg-config --libs faiss)
+elif [ -n "${CONDA_PREFIX:-}" ] && try_faiss_prefix "$CONDA_PREFIX"; then
+  :
 elif try_faiss_prefix /opt/homebrew; then
   :
 elif try_faiss_prefix /usr/local; then
@@ -249,6 +251,8 @@ fi
 
 if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
   if try_libomp_prefix "$libomp_home"; then
+    :
+  elif [ -n "${CONDA_PREFIX:-}" ] && try_libomp_prefix "$CONDA_PREFIX"; then
     :
   elif try_homebrew_libomp; then
     :
