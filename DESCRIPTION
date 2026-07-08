@@ -22,6 +22,7 @@ Description: Native nearest-neighbour search, graph construction, graph clusteri
 License: MIT + file LICENSE
 URL: https://github.com/tkcaccia/faissR
 BugReports: https://github.com/tkcaccia/faissR/issues
+OS_type: unix
 biocViews:
     Software,
     Infrastructure,

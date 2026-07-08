@@ -255,6 +255,12 @@ not import Python.
 
 ## Windows
 
+`faissR` is marked `OS_type: unix` for automated Bioconductor/r-universe
+builds because FAISS is a mandatory system dependency and the Windows builders
+do not provide a compatible FAISS development library. Windows users should use
+WSL2 for the supported Linux-style installation path, or maintain their own
+native FAISS/Rtools-compatible build and install from source manually.
+
 ### Windows CPU/FAISS
 
 Use R for Windows plus Rtools with a C++20-capable compiler. FAISS is not

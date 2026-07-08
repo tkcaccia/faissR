@@ -274,6 +274,12 @@ through `pkg-config` or standard compiler paths, set `FAISS_HOME`:
 FAISS_HOME=/path/to/faiss R CMD INSTALL .
 ```
 
+Automated Bioconductor/r-universe Windows binary builds are skipped with
+`OS_type: unix` because FAISS is mandatory and those builders do not provide a
+compatible FAISS development library. Windows users should use WSL2 for the
+supported Linux path, or provide a native Rtools-compatible FAISS build and
+install from source manually.
+
 On macOS with Homebrew, install FAISS and the OpenMP runtime first:
 
 ```sh
