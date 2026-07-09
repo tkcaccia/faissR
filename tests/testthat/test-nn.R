@@ -3192,8 +3192,10 @@ test_that("native NSG tuning is backend-specific", {
 test_that("nearest-neighbour results expose resolved backend metadata", {
   x <- matrix(rnorm(200), ncol = 4)
   out <- nn(exclude_self = TRUE, x, k = 5L, backend = "cpu", method = "exact", n_threads = 2L)
-  expect_equal(attr(out, "backend"), "faiss_flat_l2")
-  expect_equal(attr(out, "resolved_backend"), "faiss_flat_l2")
+  expected_backend <- if (faiss_available()) "faiss_flat_l2" else "cpu"
+  expect_equal(attr(out, "backend"), expected_backend)
+  expect_equal(attr(out, "resolved_backend"), expected_backend)
+  expect_equal(out$backend_used, expected_backend)
 })
 
 test_that("public tuning policy normalizes and can override defaults", {
