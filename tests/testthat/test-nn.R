@@ -2989,11 +2989,12 @@ test_that("CPU-supported public method/metric rows execute on smoke data", {
   spatial <- matrix(runif(40L * 2L), ncol = 2L)
   nsg_dense <- matrix(rnorm(200L * 8L), nrow = 200L)
   pq_dense <- matrix(rnorm(720L * 8L), nrow = 720L)
-  caps <- nn_capabilities()
-  checked <- caps[
-    caps$supported &
-      caps$backend == "cpu" &
-      caps$method != "auto",
+  runtime_caps <- nn_capabilities(runtime = TRUE)
+  checked <- runtime_caps[
+    runtime_caps$supported &
+      runtime_caps$runtime_available &
+      runtime_caps$backend == "cpu" &
+      runtime_caps$method != "auto",
     c("method", "metric"),
     drop = FALSE
   ]
