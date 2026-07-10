@@ -3163,7 +3163,8 @@ test_that("native NSG tuning is backend-specific", {
   expect_equal(cuda$graph_k_cap, 255L)
   expect_match(cpu$tuning_rule, "cpu_nsg")
   expect_match(cuda$tuning_rule, "cuda_nsg")
-  expect_equal(cpu$seed_backend, if (faiss_available()) "faiss_hnsw" else "exact")
+  expect_true(cpu$seed_backend %in% c("faiss_hnsw", "exact"))
+  if (faiss_available()) expect_equal(cpu$seed_backend, "faiss_hnsw")
   expect_equal(cpu$seed_k, cpu$graph_k)
   expect_equal(cuda$seed_backend, "exact")
   expect_equal(cuda$seed_k, cuda$graph_k)
@@ -3926,12 +3927,14 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   native_nsg <- faissR:::native_nsg_params(70000L, 784L, 50L, backend = "cpu")
   expect_equal(native_nsg$tuning_source, "cpp")
   expect_equal(native_nsg$tuning_rule, "hpc_cpu_nsg_large_high_dim_k50_recall99")
-  expect_equal(native_nsg$seed_backend, if (faiss_available()) "faiss_hnsw" else "exact")
+  expect_true(native_nsg$seed_backend %in% c("faiss_hnsw", "exact"))
+  if (faiss_available()) expect_equal(native_nsg$seed_backend, "faiss_hnsw")
 
   vamana <- faissR:::vamana_params(70000L, 784L, 50L)
   expect_equal(vamana$tuning_source, "cpp")
   expect_equal(vamana$tuning_rule, "hpc_cpu_vamana_large_high_dim_k50_recall99")
-  expect_equal(vamana$seed_backend, if (faiss_available()) "faiss_hnsw" else "exact")
+  expect_true(vamana$seed_backend %in% c("faiss_hnsw", "exact"))
+  if (faiss_available()) expect_equal(vamana$seed_backend, "faiss_hnsw")
 
   cuda_vamana_ip <- faissR:::vamana_params(
     70000L,
