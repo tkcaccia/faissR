@@ -68,7 +68,7 @@ test_that("predict preserves nearest-neighbour route metadata", {
   expect_true(reg_meta$batch_query)
   expect_equal(reg_meta$query_n, 2L)
   expect_equal(reg_meta$query_call_count, 1L)
-  expect_equal(reg_meta$query_source, "fitted_index")
+  expect_equal(reg_meta$query_source, if (is.null(reg$nn_index)) "nn" else "fitted_index")
 })
 
 test_that("knn preserves float32 input for direct NN backends", {
