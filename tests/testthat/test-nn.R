@@ -229,20 +229,22 @@ test_that("nn output distance storage can be requested explicitly", {
     expect_equal(fout$index_base, 1L)
     expect_equal(attr(fout, "distance_type"), "float32")
 
-    dout <- nn(exclude_self = TRUE,
-      x,
-      k = 2L,
-      backend = "cpu",
-      method = "flat",
-      distances = "float"
-    )
-    expect_true(inherits(dout$distances, "float32"))
-    expect_equal(dout$input_type, "float32")
-    expect_match(dout$input_layout, "r_double_column_major_to_row_major_float32", fixed = TRUE)
-    expect_true(dout$input_owns_data)
-    expect_equal(dout$backend_used, "faiss_flat_l2")
-    expect_equal(dout$distance_type, "float32")
-    expect_equal(attr(dout, "distance_type"), "float32")
+    if (faiss_available()) {
+      dout <- nn(exclude_self = TRUE,
+        x,
+        k = 2L,
+        backend = "cpu",
+        method = "flat",
+        distances = "float"
+      )
+      expect_true(inherits(dout$distances, "float32"))
+      expect_equal(dout$input_type, "float32")
+      expect_match(dout$input_layout, "r_double_column_major_to_row_major_float32", fixed = TRUE)
+      expect_true(dout$input_owns_data)
+      expect_equal(dout$backend_used, "faiss_flat_l2")
+      expect_equal(dout$distance_type, "float32")
+      expect_equal(attr(dout, "distance_type"), "float32")
+    }
   } else {
     expect_error(
       nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "float"),
@@ -1683,7 +1685,7 @@ test_that("faissR options use the faissR namespace only", {
     work_size = 100,
     metric = "euclidean"
   )
-  expect_true(current %in% c("faiss_hnsw", "hnsw", "cpu"))
+  expect_true(current %in% c("faiss_hnsw", "hnsw", "cpu", "cpu_nndescent"))
 
   expect_false(identical(faissR:::faiss_ivf_params(1000L, 10L)$requested_nlist, 32L))
   options(faissR.faiss_nlist = 32L)
@@ -3161,7 +3163,7 @@ test_that("native NSG tuning is backend-specific", {
   expect_equal(cuda$graph_k_cap, 255L)
   expect_match(cpu$tuning_rule, "cpu_nsg")
   expect_match(cuda$tuning_rule, "cuda_nsg")
-  expect_equal(cpu$seed_backend, "faiss_hnsw")
+  expect_equal(cpu$seed_backend, if (faiss_available()) "faiss_hnsw" else "exact")
   expect_equal(cpu$seed_k, cpu$graph_k)
   expect_equal(cuda$seed_backend, "exact")
   expect_equal(cuda$seed_k, cuda$graph_k)
@@ -3924,12 +3926,12 @@ test_that("approximate NN parameter selectors expose deterministic tuning metada
   native_nsg <- faissR:::native_nsg_params(70000L, 784L, 50L, backend = "cpu")
   expect_equal(native_nsg$tuning_source, "cpp")
   expect_equal(native_nsg$tuning_rule, "hpc_cpu_nsg_large_high_dim_k50_recall99")
-  expect_equal(native_nsg$seed_backend, "faiss_hnsw")
+  expect_equal(native_nsg$seed_backend, if (faiss_available()) "faiss_hnsw" else "exact")
 
   vamana <- faissR:::vamana_params(70000L, 784L, 50L)
   expect_equal(vamana$tuning_source, "cpp")
   expect_equal(vamana$tuning_rule, "hpc_cpu_vamana_large_high_dim_k50_recall99")
-  expect_equal(vamana$seed_backend, "faiss_hnsw")
+  expect_equal(vamana$seed_backend, if (faiss_available()) "faiss_hnsw" else "exact")
 
   cuda_vamana_ip <- faissR:::vamana_params(
     70000L,
