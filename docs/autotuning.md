@@ -125,7 +125,7 @@ can be expanded consistently.
 The target recall tiers have different roles:
 
 - `target_recall = 0.90`: speed-first approximate settings. These are useful
-  when downstream embedding or graph construction tolerates a small neighbour
+  when downstream embedding tolerates a small neighbour
   error and the matrix is large enough that exact search is too expensive.
 - `target_recall = 0.95`: balanced settings. These often become the practical
   recommendation when 0.99 requires a large increase in graph degree, search
@@ -398,13 +398,6 @@ options and runtime availability flags, then forwards them into C++; it does
 not maintain a separate R implementation of the k-means shape policy or final
 CPU/CUDA selection. Returned k-means metadata records `tuning_source = "cpp"`
 for the parameter rule, backend policy, and final selection.
-
-For `graph_cluster(n_clusters = ...)`, faissR builds the KNN graph once and
-then evaluates a deterministic resolution grid. The candidate center and grid
-width are computed by `graph_resolution_candidates_cpp()`, with wider grids for
-small graphs and narrower grids for large graphs. Target-count results record
-`resolution_selection$tuning_source = "cpp"` so benchmark summaries can verify
-that the no-pilot graph-shape rule came from compiled policy.
 
 - Prefer `method = "flat"`/`"exact"` on CUDA when the data fits and target
   recall is very high. The resolved routes `faiss_gpu_flat_l2` and

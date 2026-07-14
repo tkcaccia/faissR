@@ -17,22 +17,22 @@ backend_info <- function() {
   cuda_knn <- backend_flag(cuda_available)
   faiss_knn <- backend_flag(faiss_available)
   cuvs_knn <- backend_flag(cuvs_available)
-  cugraph_graph <- backend_flag(cugraph_available)
+  metal_knn <- backend_flag(metal_grid_available_cpp)
   cuda <- cuda_summary()
   faiss <- faiss_summary()
   cuvs <- cuvs_summary()
 
   data.frame(
-    backend = c("cpu", "faiss", "faiss_gpu_cuvs", "cuvs", "cuda", "cugraph"),
-    available = c(TRUE, faiss_knn, faiss$gpu && cuda_knn, cuvs_knn, cuda_knn, cugraph_graph && cuda_knn),
-    knn_available = c(TRUE, faiss_knn, faiss$gpu && cuda_knn, cuvs_knn, cuda_knn, FALSE),
+    backend = c("cpu", "faiss", "faiss_gpu_cuvs", "cuvs", "cuda", "metal_grid"),
+    available = c(TRUE, faiss_knn, faiss$gpu && cuda_knn, cuvs_knn, cuda_knn, metal_knn),
+    knn_available = c(TRUE, faiss_knn, faiss$gpu && cuda_knn, cuvs_knn, cuda_knn, metal_knn),
     public_call = c(
       "backend = \"cpu\"",
       "backend = \"cpu\" or \"cuda\", method = \"flat\"/\"ivf\"/\"ivfpq\"/\"hnsw\"/\"ivfpq_fastscan\"/\"cagra\" as supported",
       "backend = \"cuda\", method = \"ivf\"/\"ivfpq\"/\"cagra\"",
       "backend = \"cuda\", method = \"bruteforce\"/\"hnsw\"/\"nndescent\"/\"ivfpq_fastscan\"/\"cagra\"",
       "backend = \"cuda\"",
-      "graph_cluster(..., backend = \"cuda\")"
+      "backend = \"metal\", method = \"grid\""
     ),
     public_backends = c(
       "cpu",
@@ -40,7 +40,7 @@ backend_info <- function() {
       "cuda",
       "cuda",
       "cuda",
-      "cuda"
+      "metal"
     ),
     supported_methods = c(
       "auto, exact, flat, bruteforce, grid, hnsw, ivf, ivfpq, ivfpq_fastscan, vamana, nsg, nndescent",
@@ -48,7 +48,7 @@ backend_info <- function() {
       "ivf, ivfpq, cagra",
       "bruteforce, hnsw, nndescent, ivfpq_fastscan, cagra",
       "grid, flat, bruteforce, hnsw, ivf, ivfpq, ivfpq_fastscan, vamana, nsg, nndescent, cagra where compiled",
-      "graph_cluster louvain, leiden"
+      "grid"
     ),
     supported_metrics = c(
       "euclidean, cosine, correlation, inner_product; method-specific exclusions in nn_capabilities()",
@@ -56,7 +56,7 @@ backend_info <- function() {
       "euclidean, cosine, correlation, inner_product for IVF/IVFPQ and CAGRA; CAGRA inner_product uses a maximum-inner-product-to-L2 transform",
       "euclidean, cosine, correlation, inner_product for direct brute force, direct IVF/PQ, HNSW from CAGRA, and direct CAGRA using metric transforms where needed; euclidean plus normalized cosine/correlation for direct cuVS NN-descent, with public CUDA NN-descent raw inner product using faissR's native shifted-dot-product CUDA refinement route",
       "euclidean, cosine, correlation, inner_product where the selected CUDA method supports the metric",
-      "not metric-based; uses graph edge weights"
+      "euclidean, cosine, correlation for exact 2D/3D self-KNN"
     ),
     resolved_route = c(
       "implementation label: cpu",
@@ -64,7 +64,7 @@ backend_info <- function() {
       "implementation labels include faiss_gpu_ivf_flat, faiss_gpu_ivfpq, and faiss_gpu_cagra",
       "implementation labels include cuda_cuvs_bruteforce, cuda_cuvs_hnsw, cuda_cuvs_nndescent, cuda_cuvs_ivfpq_fastscan, and cuda_cuvs_cagra",
       "implementation labels include cuda_grid, cuda_vamana, and cuda_nsg; exact CUDA may report cuda",
-      "implementation route: graph_cluster(..., backend = \"cuda\")"
+      "implementation labels metal_grid2d and metal_grid3d"
     ),
     device = c(
       cpu_summary(),
@@ -72,7 +72,7 @@ backend_info <- function() {
       cuda$device,
       cuvs$device,
       cuda$device,
-      cuda$device
+      if (metal_knn) "Apple Metal GPU" else "Metal unavailable"
     ),
     runtime = c(
       R.version$platform,
@@ -84,7 +84,7 @@ backend_info <- function() {
       },
       cuvs$runtime,
       cuda$runtime,
-      combine_nonempty(cuda$runtime, "RAPIDS libcugraph C API")
+      if (metal_knn) "Apple Metal Shading Language exact float32 2D/3D grid KNN" else NA_character_
     ),
     note = c(
       "Native CPU path is always available.",
@@ -108,10 +108,10 @@ backend_info <- function() {
       } else {
         "Native CUDA KNN path is unavailable; explicit CUDA requests will fail."
       },
-      if (cugraph_graph && cuda_knn) {
-        "RAPIDS libcugraph graph clustering is available for explicit CUDA Louvain/Leiden requests; random_walking remains CPU-only."
+      if (metal_knn) {
+        "Native exact Metal grid KNN is available for two- and three-dimensional self-search; unsupported shapes and methods fail without CPU fallback."
       } else {
-        "RAPIDS libcugraph graph clustering is unavailable; explicit CUDA graph-clustering requests will fail unless rebuilt with libcugraph."
+        "Native Metal grid KNN is unavailable; explicit Metal nearest-neighbour requests will fail."
       }
     ),
     stringsAsFactors = FALSE

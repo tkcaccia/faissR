@@ -11,17 +11,17 @@
 [Backends](backend-capabilities.md) |
 [References](references.md)
 
-`faissR` contains vector-search, graph, k-means, and kNN-model tools for direct
-R workflows and downstream embedding pipelines. FAISS is mandatory
-[1-2,16]; CUDA, RAPIDS cuVS, and RAPIDS libcugraph are optional compiled
-backends [3,12-15].
+`faissR` contains vector-search, k-means, and kNN-model tools for direct R
+workflows and downstream embedding pipelines. FAISS is mandatory
+[1-2,16]; CUDA and RAPIDS cuVS are optional compiled
+backends [3,13-15].
 
 ## Pages
 
 - [Installation](installation.md): CRAN/source-build expectations, mandatory
   FAISS, and optional CUDA/RAPIDS libraries.
-- [Implementation](implementation.md): dense KNN, candidate KNN, native
-  graphs, graph clustering, k-means, kNN prediction, and backend rules.
+- [Implementation](implementation.md): dense KNN, candidate KNN, k-means, kNN
+  prediction, and backend rules.
 - [Examples](examples.md): compact examples based on iris.
 - [Benchmarks](benchmarks.md): benchmark design for speed, recall, memory, and
   downstream embedding checks.

@@ -1,0 +1,71 @@
+# JMLR MLOSS Publication Benchmark
+
+This directory is separate from the earlier tuning files. Every Slurm file in
+`cpu/`, `cuda/`, and `calibration/` tests exactly one method and is intended to
+be submitted individually with `sbatch`.
+
+## Resource headers
+
+CPU files retain the established CPU resources: account `immunology`,
+partition `ada`, one node, 12 tasks, and 48 hours. CUDA files retain account
+`l40sfree`, partition `l40s`, one node, two tasks, one L40S GPU, and 48 hours.
+Only the job name and log filename vary by method.
+
+## Files
+
+- `references/run_exact_references_cuda.sh`: preferred fast CUDA exact
+  references, with an independent CPU FAISS Flat audit before saving.
+- `references/run_exact_references_cpu12.sh`: slower CPU-only alternative.
+- `calibration/cpu/`: one raw-inner-product tuning file per CPU method.
+- `calibration/cuda/`: one raw-inner-product tuning file per CUDA method.
+- `cpu/`: one held-out publication benchmark file per CPU method or external
+  R-package method.
+- `cuda/`: one held-out publication benchmark file per CUDA method.
+- `common/`: shared R drivers required by the individual Slurm files.
+
+## Run One By One
+
+First submit the CUDA reference job and wait until it finishes:
+
+```bash
+cd /scratch/firenze/NN
+sbatch benchmark_scripts/jmlr_mloss_publication/references/run_exact_references_cuda.sh
+```
+
+Use `run_exact_references_cpu12.sh` instead only when a CUDA node is not
+available. Both scripts create the same reference filenames; the CUDA script
+saves a result only after its CPU audit passes. The audit uses up to 64
+queries and automatically reduces that count for very large datasets to keep
+the independent CPU check near five billion distance operations.
+
+Then submit inner-product calibration methods individually:
+
+```bash
+sbatch benchmark_scripts/jmlr_mloss_publication/calibration/cpu/run_tune_faissR_hnsw_cpu12_inner_product.sh
+sbatch benchmark_scripts/jmlr_mloss_publication/calibration/cuda/run_tune_faissR_cagra_cuda_inner_product.sh
+```
+
+After using the calibration results to update `tuning = "auto"` and rebuilding
+the Singularity image, submit publication methods individually:
+
+```bash
+sbatch benchmark_scripts/jmlr_mloss_publication/cpu/run_faissR_hnsw_cpu12.sh
+sbatch benchmark_scripts/jmlr_mloss_publication/cpu/run_RANN_kd_cpu12.sh
+sbatch benchmark_scripts/jmlr_mloss_publication/cuda/run_faissR_cagra_cuda.sh
+sbatch benchmark_scripts/jmlr_mloss_publication/cuda/run_faissR_gpu_resident_exact_cuda.sh
+```
+
+Reference files are saved in their dataset directories and reused by every
+method. Synthetic data are generated only when their manifest is absent.
+
+## Experimental Design
+
+Each faissR publication file tests one method with `tuning = "auto"`,
+`k = 15,30,50,100`, target recall 0.90/0.95/0.99, two held-out seeds, three
+repetitions, and a 2,000-second timeout per combination. Real datasets use all
+four metrics. faissR methods also run the controlled raw-inner-product norm
+stress suite. Grid files run only the 2D/3D spatial suite. External packages
+run only metrics supported by their public KNN interface.
+
+Rtsne and `umap::umap` are not included as standalone KNN methods because they
+are embedding consumers rather than comparable KNN result providers.

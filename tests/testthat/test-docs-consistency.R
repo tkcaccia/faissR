@@ -153,15 +153,12 @@ test_that("public API excludes retired wrapper and platform-specific helper name
     "backend_info",
     "candidate_knn",
     "cuda_available",
-    "cugraph_available",
     "cuvs_available",
     "faiss_available",
     "faiss_gpu_available",
     "fast_kmeans",
-    "graph_cluster",
     "gpu_knn_to_host",
     "knn",
-    "knn_graph",
     "nn",
     "nn_gpu",
     "nn_capabilities"
@@ -333,8 +330,7 @@ test_that("GitHub docs list all public availability helpers", {
     "faiss_available()",
     "faiss_gpu_available()",
     "cuda_available()",
-    "cuvs_available()",
-    "cugraph_available()"
+    "cuvs_available()"
   )
   for (file in files) {
     prose <- paste(readLines(file, warn = FALSE), collapse = " ")
@@ -350,8 +346,6 @@ test_that("GitHub docs list all public availability helpers", {
 test_that("reference manual documents live public function arguments", {
   expect_rd_documents_formals("nn", nn)
   expect_rd_documents_formals("knn", knn)
-  expect_rd_documents_formals("knn_graph", knn_graph)
-  expect_rd_documents_formals("graph_cluster", graph_cluster)
   expect_rd_documents_formals("fast_kmeans", fast_kmeans)
   expect_rd_documents_formals("candidate_knn", candidate_knn)
   expect_rd_documents_formals(
@@ -475,22 +469,6 @@ test_that("GitHub NN docs describe requested and resolved result metadata", {
   }
 })
 
-test_that("benchmark docs describe graph method and metric reuse keys", {
-  docs_file <- test_path("../../docs/benchmarks.md")
-  if (!file.exists(docs_file)) {
-    skip("GitHub benchmark documentation is not available in this installed-package test context.")
-  }
-
-  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
-  expect_true(
-    grepl(
-      "dataset/cycle/k/graph-backend/graph-method/metric/weight combination",
-      prose,
-      fixed = TRUE
-    )
-  )
-  expect_true(grepl("--k_values=5,10,15,50,100", prose, fixed = TRUE))
-})
 
 test_that("supervised kNN docs describe prediction route metadata", {
   docs_files <- c(
@@ -660,8 +638,6 @@ test_that("usage API includes all exported public workflow sections", {
     "nn_gpu",
     "gpu_knn_to_host",
     "candidate_knn",
-    "knn_graph",
-    "graph_cluster",
     "fast_kmeans",
     "knn",
     "predict"
@@ -713,8 +689,6 @@ test_that("usage API argument tables document live function formals", {
     "## `nn_gpu()`" = names(formals(nn_gpu)),
     "## `gpu_knn_to_host()`" = names(formals(gpu_knn_to_host)),
     "## `candidate_knn()`" = names(formals(candidate_knn)),
-    "## `knn_graph()`" = names(formals(knn_graph)),
-    "## `graph_cluster()`" = names(formals(graph_cluster)),
     "## `fast_kmeans()`" = names(formals(fast_kmeans)),
     "## `knn()`" = names(formals(knn)),
     "## `predict()`" = names(formals(getS3method("predict", "faissR_knn_model")))
@@ -746,106 +720,11 @@ test_that("usage API NN method documentation agrees with live signatures", {
   expect_true("exclude_self" %in% usage_argument_rows(lines, "## `nn()`"))
 })
 
-test_that("usage API graph_cluster signature shows the live default method", {
-  docs_file <- test_path("../../docs/usage-api.md")
-  if (!file.exists(docs_file)) {
-    skip("GitHub documentation files are not available in this installed-package test context.")
-  }
 
-  lines <- readLines(docs_file, warn = FALSE)
-  signature_line <- grep("^graph_cluster\\(graph, method =", lines, value = TRUE)
-  expect_length(signature_line, 1L)
 
-  documented_method <- sub('^.*method = "([^"]+)".*$', "\\1", signature_line)
-  live_method <- eval(formals(graph_cluster)$method, envir = baseenv())[[1L]]
-  expect_equal(documented_method, live_method)
-})
 
-test_that("graph cluster target documentation states integer and graph-size constraints", {
-	  docs_files <- c(
-	    test_path("../../docs", c(
-	      "usage-api.md",
-	      "implementation.md",
-	      "benchmarks.md"
-	    )),
-	    test_path("../../man/graph_cluster.Rd")
-	  )
-  missing <- !file.exists(docs_files)
-  if (any(missing)) {
-    skip("Graph documentation files are not available in this installed-package test context.")
-  }
 
-  for (docs_file in docs_files) {
-    prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
-    expect_true(grepl("positive integer", prose, fixed = TRUE), info = basename(docs_file))
-    expect_true(grepl("graph vertices", prose, fixed = TRUE) || grepl("graph vertex count", prose, fixed = TRUE),
-                info = basename(docs_file))
-  }
-})
 
-test_that("knn_graph reference documents benchmark graph metadata", {
-	  rd <- rd_file_text("knn_graph")
-	  required_metadata <- c(
-	    "nearest-neighbour method",
-	    "metric",
-	    "tuning policy"
-	  )
-
-  for (field in required_metadata) {
-	    expect_true(grepl(field, rd, fixed = TRUE), info = field)
-	  }
-	  expect_true(grepl("requested/resolved KNN", rd, fixed = TRUE), info = "requested/resolved KNN backends")
-	})
-
-test_that("graph_cluster docs describe clustered graph size metadata", {
-  docs_files <- c(
-    test_path("../../docs", c("implementation.md", "usage-api.md")),
-    test_path("../../man/graph_cluster.Rd")
-  )
-  missing <- !file.exists(docs_files)
-  if (any(missing)) {
-    skip("GitHub or reference documentation files are not available in this installed-package test context.")
-  }
-
-  for (docs_file in docs_files) {
-    prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
-    expect_true(grepl("parameters$n_vertices", prose, fixed = TRUE), info = basename(docs_file))
-    expect_true(grepl("parameters$n_edges", prose, fixed = TRUE), info = basename(docs_file))
-    expect_true(grepl("target_n_clusters", prose, fixed = TRUE), info = basename(docs_file))
-    expect_true(grepl("selected_resolution", prose, fixed = TRUE), info = basename(docs_file))
-    expect_true(grepl("target_gap", prose, fixed = TRUE), info = basename(docs_file))
-    expect_true(grepl("resolution_selection", prose, fixed = TRUE), info = basename(docs_file))
-    expect_true(grepl("resolution_search", prose, fixed = TRUE), info = basename(docs_file))
-  }
-})
-
-test_that("graph docs describe inherited inner-product distance semantics", {
-  docs_files <- c(
-    test_path("../../docs", c("usage-api.md", "implementation.md")),
-    test_path("../../man", c("knn_graph.Rd", "graph_cluster.Rd"))
-  )
-  docs_files <- docs_files[file.exists(docs_files)]
-  if (!length(docs_files)) {
-    skip("GitHub or reference documentation files are not available in this installed-package test context.")
-  }
-  for (docs_file in docs_files) {
-    prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
-    expect_true(grepl("Inner-product graph construction", prose, fixed = TRUE), info = basename(docs_file))
-    expect_true(grepl("larger raw dot product", prose, fixed = TRUE), info = basename(docs_file))
-    expect_true(grepl("shifted smaller-is-better", prose, fixed = TRUE), info = basename(docs_file))
-  }
-})
-
-test_that("benchmark docs describe deterministic ARI recommendation tie-breaks", {
-  docs_file <- test_path("../../docs/benchmarks.md")
-  if (!file.exists(docs_file)) {
-    skip("Benchmark documentation is not available in this installed-package test context.")
-  }
-
-  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
-  expect_true(grepl("higher median ARI, higher minimum ARI across cycles, and then higher median modularity", prose, fixed = TRUE))
-  expect_true(grepl("higher median ARI, higher minimum ARI across cycles", prose, fixed = TRUE))
-})
 
 test_that("benchmark docs describe deterministic NN recall recommendation tie-breaks", {
   docs_file <- test_path("../../docs/benchmarks.md")
@@ -987,35 +866,7 @@ test_that("benchmark documentation describes deterministic NN tuning metadata", 
   expect_true(grepl("deterministic no-pilot", prose, fixed = TRUE))
 })
 
-test_that("benchmark documentation describes graph expected-skip reason labels", {
-  docs_files <- c(
-    test_path("../../docs/benchmarks.md"),
-    test_path("../../benchmark_scripts/benchmark_graph_clustering.R")
-  )
-  docs_files <- docs_files[file.exists(docs_files)]
-  if (!length(docs_files)) {
-    skip("GitHub documentation files are not available in this installed-package test context.")
-  }
 
-  prose <- paste(unlist(lapply(docs_files, readLines, warn = FALSE)), collapse = " ")
-  expect_true(grepl("graph_cluster_benchmark_results.csv", prose, fixed = TRUE))
-  expect_true(grepl("expected_skip_reason", prose, fixed = TRUE))
-  expect_true(grepl("runtime, shape, and input-type skips", prose, fixed = TRUE))
-  expect_true(grepl("bounded deterministic resolution grid", prose, fixed = TRUE))
-})
-
-test_that("benchmark documentation describes graph route parameter metadata", {
-  docs_file <- test_path("../../docs/benchmarks.md")
-  if (!file.exists(docs_file)) {
-    skip("GitHub documentation files are not available in this installed-package test context.")
-  }
-
-  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
-  expect_true(grepl("graph_route_parameters", prose, fixed = TRUE))
-  expect_true(grepl("KNN route", prose, fixed = TRUE))
-  expect_true(grepl("tuning_rule", prose, fixed = TRUE))
-  expect_true(grepl("ef_search", prose, fixed = TRUE))
-})
 
 test_that("benchmark documentation describes k-means runtime reason codes", {
   docs_file <- test_path("../../docs/benchmarks.md")
@@ -1087,49 +938,8 @@ test_that("candidate KNN docs describe CUDA inner-product support", {
   expect_false(grepl("raw inner-product CUDA candidate scoring is not exposed", prose, fixed = TRUE))
 })
 
-test_that("benchmark documentation distinguishes requested and actual graph cluster counts", {
-  docs_file <- test_path("../../docs/benchmarks.md")
-  if (!file.exists(docs_file)) {
-    skip("GitHub documentation files are not available in this installed-package test context.")
-  }
 
-  prose <- paste(readLines(docs_file, warn = FALSE), collapse = " ")
-  expect_true(grepl("n_clusters_requested", prose, fixed = TRUE))
-  expect_true(grepl("n_communities", prose, fixed = TRUE))
-  expect_true(grepl("convenience target, not a hard guarantee", prose, fixed = TRUE))
-})
 
-test_that("GitHub docs describe the bounded target-cluster resolution grid", {
-  docs_files <- c(
-    test_path("../../README.md"),
-    test_path("../../docs", c("usage-api.md", "implementation.md")),
-    test_path("../../man/graph_cluster.Rd")
-  )
-  docs_files <- docs_files[file.exists(docs_files)]
-  if (!length(docs_files)) {
-    skip("GitHub or reference documentation files are not available in this installed-package test context.")
-  }
-
-  prose <- paste(unlist(lapply(docs_files, readLines, warn = FALSE)), collapse = " ")
-  expect_true(grepl("bounded deterministic", prose, fixed = TRUE))
-  expect_true(grepl("shape-aware", prose, fixed = TRUE))
-  expect_true(grepl("omitted `resolution`", prose, fixed = TRUE) ||
-    grepl("omitted \\code{resolution}", prose, fixed = TRUE))
-  expect_true(grepl("n_clusters", prose, fixed = TRUE))
-  expect_true(grepl("target_auto", prose, fixed = TRUE))
-  expect_false(grepl("small deterministic grid of resolution", prose, fixed = TRUE))
-  expect_false(grepl("small deterministic resolution grid", prose, fixed = TRUE))
-})
-
-test_that("README keeps n_clusters on graph_cluster not knn_graph", {
-  readme <- test_path("../../README.md")
-  if (!file.exists(readme)) {
-    skip("README is not available in this installed-package test context.")
-  }
-  prose <- paste(readLines(readme, warn = FALSE), collapse = "\n")
-  expect_false(grepl("knn_graph\\([^\\n)]*n_clusters", prose))
-  expect_true(grepl("n_clusters = 3", prose, fixed = TRUE))
-})
 
 test_that("autotuning method settings table keeps public and implementation labels separate", {
   docs_file <- test_path("../../docs/autotuning.md")

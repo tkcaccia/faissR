@@ -9,7 +9,7 @@ nn(
   points = data,
   k = NULL,
   exclude_self = FALSE,
-  backend = c("auto", "cpu", "cuda"),
+  backend = c("auto", "cpu", "cuda", "metal"),
   method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
     "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"),
   metric = c("euclidean", "cosine", "correlation", "inner_product"),
@@ -45,11 +45,14 @@ compiled backend path rather than repaired by R-side post-processing. CUDA
 graph routes that do not yet expose compiled include-self output shaping
 require `exclude_self = TRUE` and fail clearly instead of reshaping in R.}
 
-\item{backend}{Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
+\item{backend}{Device backend: `"auto"`, `"cpu"`, `"cuda"`, or `"metal"`. `"auto"`
 uses a validated CUDA route only when the requested method/metric
 combination is supported and CUDA/cuVS runtime support is available, and
 otherwise resolves to CPU. Explicit `"cuda"` fails clearly when CUDA
-support or the selected CUDA combination is unavailable.}
+support or the selected CUDA combination is unavailable. Explicit
+`"metal"` uses native exact float32 grid search and is restricted to
+two- or three-dimensional self-KNN with `method = "auto"` or `"grid"`
+and Euclidean, cosine, or correlation distance. It never falls back to CPU.}
 
 \item{method}{Algorithm selector. `"auto"` chooses a shape-aware default for
 the selected backend. Other values include `"exact"`, `"flat"`,
@@ -85,8 +88,8 @@ distance `0`, and lower dot products have larger shifted distances.
 search, FAISS CPU/GPU Flat,
 FAISS CPU/GPU IVF-Flat, FAISS CPU/GPU IVFPQ, FAISS CPU FastScan,
 CUDA cuVS IVFPQ FastScan for cosine and correlation,
-FAISS CPU HNSW,
-and native graph-refinement routes. FAISS approximate IP-capable routes use row L2 normalization
+FAISS CPU HNSW, and native graph-refinement routes. FAISS approximate
+IP-capable routes use row L2 normalization
 for cosine and row centering plus L2 normalization for correlation before
 inner-product search; distances are returned as `1 - similarity`.
 All-zero cosine rows and constant correlation rows are zero-normalized
@@ -339,9 +342,11 @@ A list with integer matrix `indices`, `distances`, and stable
 `nn()` provides a package-native nearest-neighbor entry point compatible with
 the common `nn(data, points, k)` use case. The public API separates device
 selection from algorithm selection. `backend` is one of `"auto"`, `"cpu"`,
-or `"cuda"`; `method` chooses the algorithm. For example,
+`"cuda"`, or `"metal"`; `method` chooses the algorithm. For example,
 `backend = "cpu", method = "grid"` uses the CPU grid implementation, while
 `backend = "cuda", method = "grid"` uses the CUDA grid implementation.
+`backend = "metal", method = "grid"` uses native exact Metal grid search
+for two- or three-column self-KNN and never falls back to CPU.
 Invalid combinations stop clearly before computation; for example,
 `backend = "cpu", method = "cagra"` errors because CAGRA is CUDA-only.
 }

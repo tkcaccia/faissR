@@ -11,11 +11,11 @@
 [Backends](backend-capabilities.md) |
 [References](references.md)
 
-`faissR` is a standalone R package for nearest-neighbour search, graph
-construction, graph clustering, kNN prediction, and k-means. FAISS is the
-required compiled vector-search dependency. CUDA, RAPIDS cuVS, and RAPIDS
-libcugraph are optional compiled backends; the package must still install from
-source on CPU-only systems with FAISS installed [1-3,12-16]. The code does
+`faissR` is a standalone R package for nearest-neighbour search, kNN
+prediction, and k-means. FAISS is the
+required compiled vector-search dependency. CUDA and RAPIDS cuVS are optional
+compiled backends; the package must still install from source on CPU-only
+systems with FAISS installed [1-3,13-16]. The code does
 not call Python and does not require conda.
 
 The implementation is organized around one public idea: users choose a device
@@ -28,12 +28,12 @@ route was attempted, not that the package silently ran a CPU fallback.
 ## Design Rules
 
 1. FAISS CPU support is mandatory for the package build.
-2. CUDA, FAISS GPU, cuVS, and libcugraph support are optional at compile time.
+2. CUDA, FAISS GPU, and cuVS support are optional at compile time.
 3. Explicit GPU backends fail clearly when GPU support is unavailable; they do
    not silently fall back to CPU.
 4. KNN outputs use simple 1-based `indices` and numeric `distances` matrices.
-5. Expensive KNN work should be reusable by graph, clustering, embedding, and
-   supervised prediction functions.
+5. Expensive KNN work should be reusable by embedding and supervised
+   prediction functions.
 6. Benchmark-only quality helpers are kept out of the public API.
 7. External compiled libraries are linked as system dependencies rather than
    vendored into the package source tree.
@@ -47,11 +47,11 @@ route was attempted, not that the package silently ran a CPU fallback.
 `configure` detects FAISS first. A build without FAISS is considered
 misconfigured because FAISS is the core compiled dependency of faissR. On
 machines without CUDA, the package can still build with FAISS CPU and native CPU
-code. CUDA/cuVS/cuGraph support is enabled only when the required headers and
+code. CUDA/cuVS support is enabled only when the required headers and
 libraries are detected.
 
 At runtime, availability helpers (`faiss_available()`, `faiss_gpu_available()`,
-`cuda_available()`, `cuvs_available()`, and `cugraph_available()`) report
+`cuda_available()`, and `cuvs_available()`) report
 compiled/runtime support.
 They are diagnostic helpers, not a substitute for execution-time validation.
 Every explicit backend request is checked again when the method runs. For
@@ -67,10 +67,11 @@ Compiled backends are reached through Rcpp/C++ bridge files:
   optional at build time [3].
 - CUDA-native helper kernels, such as the low-dimensional grid and candidate
   kernels, are isolated behind the CUDA bridge.
-- RAPIDS libcugraph is used only for optional CUDA Louvain/Leiden graph
-  clustering [12].
+- Apple Metal helper kernels are isolated in Objective-C++ translation units.
+  The spatial KNN route performs exact 2D/3D shell expansion and top-k ranking
+  in float32 on Metal and does not call Python.
 
-The package does not vendor FAISS, cuVS, cuGraph, CUDA, or cuDNN. Those
+The package does not vendor FAISS, cuVS, CUDA, or cuDNN. Those
 projects remain system dependencies with their own release cadence and
 licenses.
 
@@ -101,6 +102,17 @@ Supported CUDA routes include:
 - native CUDA 2D/3D grid search for low-dimensional Euclidean, cosine, and
   correlation self-KNN;
 - native CUDA candidate-refinement routes used by Vamana and NSG.
+
+The explicit Metal nearest-neighbour route is intentionally narrow:
+`backend = "metal", method = "grid"` supports exact two- or
+three-dimensional self-KNN for Euclidean, cosine, and correlation distance.
+Coordinates, grid cells, candidate distances, and top-k buffers remain float32
+on the Apple GPU after a single input upload; only the final KNN matrices are
+returned to R. Cosine uses row normalization and correlation uses row centering
+plus normalization before the same Euclidean grid search. Separate query
+matrices, raw inner product, dimensions other than two or three, and `k > 128`
+fail explicitly. No CPU nearest-neighbour fallback is hidden behind a Metal
+label.
 
 The validated high-performance metric is Euclidean/L2. Cosine and correlation
 are exposed for exact CPU, FAISS CPU/GPU Flat, FAISS CPU/GPU IVF-Flat,
@@ -249,8 +261,9 @@ as the fallback exact CUDA route when FAISS GPU Flat is unavailable.
 
 Explicit methods map to the selected backend. For example,
 `method = "grid", backend = "cpu"` resolves to the CPU grid implementation,
-whereas `method = "grid", backend = "cuda"` resolves to the CUDA grid
-implementation. Both grid routes return the final include-self matrix layout
+`backend = "metal"` resolves to the Metal grid implementation, and
+`backend = "cuda"` resolves to the CUDA grid implementation. All grid routes
+return the final include-self matrix layout
 from compiled code, avoiding R-side self-column reshaping. Invalid combinations fail before computation; for example,
 `method = "cagra", backend = "cpu"` errors because CAGRA is CUDA-only.
 For CUDA CAGRA, `options(faissR.cagra_implementation = "auto")` keeps the
@@ -536,7 +549,7 @@ produced untrustworthy recall on raw high-dimensional data.
 ## `nn(..., exclude_self = TRUE)`
 
 `nn(..., exclude_self = TRUE)` wraps self-KNN and returns exactly `k` non-self neighbours.
-It is used internally by graph construction, clustering, and benchmarks. The
+It is used internally by approximate-search routes and benchmarks. The
 function requests enough neighbours to remove the self-match safely and keeps the
 same `faissR_nn` result shape as `nn()`.
 For CUDA routes, self-neighbour removal is requested from the compiled FAISS,
@@ -554,134 +567,7 @@ row-normalized Euclidean transform used by graph-search methods, and raw
 inner-product candidates through a dedicated CUDA kernel mode. CUDA and CPU
 inner-product candidate scoring both return shifted smaller-is-better
 distances where the best dot product in each query row has distance `0`. The
-output can feed graph construction, prediction, or diagnostic code.
-
-## `knn_graph()`
-
-`knn_graph()` converts a matrix, an existing KNN object, or an embedding-like
-object into a native `faissR_graph` edge list. When KNN is not supplied, it calls
-`nn(..., exclude_self = TRUE)` with the requested backend, NN method, metric, and tuning
-policy. Supported edge weights include:
-
-- `"distance"`: distance-derived edge strengths;
-- `"snn"`: shared-nearest-neighbour/Jaccard weights;
-- `"adaptive"`: local-scale exponential distance weights;
-- `"binary"`: unweighted graph edges;
-- `"auto"`: SNN for input-space graphs and distance-style weights for
-  embedding-space graphs.
-
-The graph object stores `k`, weighting, pruning, mutual-edge filtering, optional
-target community count, and KNN backend/method/metric/tuning metadata. It also
-keeps compact-relevant KNN result attributes such as FAISS/cuVS approximation
-parameters, spatial-index metadata, auto-selection metadata, and normalized
-metric transform metadata so graph benchmarks can report which tuned KNN route
-and distance semantics produced a graph. It does not require `igraph`.
-Inner-product graph construction inherits the `nn()` metric contract:
-neighbours are ranked by larger raw dot product, while edge weighting receives
-shifted smaller-is-better distances.
-
-The graph construction layer deliberately accepts precomputed KNN output. This
-allows expensive FAISS/cuVS searches to be reused across clustering, embedding,
-or downstream analyses. It also makes benchmarking cleaner because nearest
-neighbour speed can be measured independently from graph weighting and
-community detection.
-
-## `graph_cluster()`
-
-`graph_cluster()` performs community detection on a precomputed `faissR_graph`,
-a KNN object, or a matrix-like input. If a graph or KNN object is not supplied,
-it builds the KNN graph internally with the requested `graph_backend`,
-`graph_method`, `metric`, and `tuning` settings.
-
-Implemented methods are:
-
-- `method = "random_walking"`: native CPU random-walk label propagation inspired
-  by walktrap/random-walk clustering and local parallel random-walk work
-  [10,19];
-- `method = "louvain"`: native CPU modularity local-moving, with optional CUDA
-  libcugraph Louvain when built and requested [9,12];
-- `method = "leiden"`: native CPU local moving plus refinement to split
-  disconnected communities, with optional CUDA libcugraph Leiden when built and
-  requested [11-12,17-18].
-
-CPU graph clustering uses faissR C++/OpenMP code and honors `n_threads` where
-OpenMP is available. CUDA Louvain and Leiden require RAPIDS libcugraph and never
-fall back to CPU for an explicit CUDA request. CUDA random-walking remains
-unavailable until a dedicated CUDA implementation is added; with
-`backend = "auto"`, random-walking stays on the CPU even when libcugraph is
-available. The public clustering backend gate is compiled:
-`graph_cluster_auto_backend_cpp()` selects CPU or CUDA from the requested
-backend, method, CUDA runtime flag, and libcugraph availability flag. Results
-record this decision in `parameters$backend_selection` with
-`tuning_source = "cpp"` and a `runtime_decision` such as
-`"cuda_cugraph_route_available"`, `"random_walking_cpu_only"`,
-`"cugraph_unavailable"`, or `"cuda_runtime_unavailable"`.
-
-`graph_cluster(n_clusters = m)` provides a target-community-count convenience
-for Louvain and Leiden. The target belongs to `graph_cluster()`, not
-`knn_graph()`, so a precomputed graph can be reused with different target
-counts or with an explicit `resolution`. If `n_clusters` is supplied and
-`method` is omitted, faissR uses Louvain as the target-count clustering method;
-passing `n_clusters` to explicit random-walking remains an error. The graph is
-built once, then faissR evaluates a bounded deterministic grid of resolution
-values. The candidate center and grid are computed by the compiled
-`graph_resolution_candidates_cpp()` helper, which records
-`resolution_selection$tuning_source = "cpp"` in target-count results. Explicit
-numeric `resolution` values center the grid near the supplied value and the
-no-pilot shape heuristic `n_clusters / sqrt(n_vertices)`. When `n_clusters` is
-supplied and `resolution` is omitted or `NULL`, faissR uses the target-count
-graph-shape seed directly. The
-candidate width is shape-aware: small graphs keep the wide `2^-4` to `2^4`
-grid around the center, medium graphs use `2^-3` to `2^3`, and large graphs
-use `2^-2` to `2^2` so target-count searches do not repeat full Louvain/Leiden
-passes more than needed. It keeps the result whose number of communities is
-closest to `m`, breaking ties by modularity. The selected resolution, candidate
-center, and search table are returned in the result metadata as
-`selected_resolution`, `resolution_selection`, and `resolution_search`, with the
-requested target stored as `target_n_clusters`. The validated target is also
-stored in `parameters$n_clusters_requested` for benchmark tables and
-`parameters$n_clusters` for backward compatibility. `parameters$resolution_source`
-records whether the grid seed came from the default, a user value, or
-omitted/`NULL` target-auto mode; in target-auto mode `parameters$resolution` is
-`NA` and the actual automatic center is stored in
-`resolution_selection$candidate_center`.
-The selected row is marked in `resolution_search$selected`; `target_gap`
-records the final absolute difference from the requested community count, and
-`resolution_selection` records the deterministic rule
-`closest_n_communities_then_highest_modularity`. The graph-clustering
-benchmark flattens these diagnostics into selected-candidate, candidate-count,
-minimum-gap, and selected-is-min-gap columns for cycle-level comparison.
-The target must be a positive integer and
-cannot exceed the graph vertex count; fractional targets and impossible targets
-fail before the resolution-search loop.
-
-Native graph clustering does not depend on `igraph`. This keeps the graph API
-under faissR's control and avoids a large mandatory graph dependency. The
-returned object includes membership, modularity, backend, parameters, graph edge
-list, and source acknowledgements. As with the nearest-neighbour and k-means
-APIs, `backend` records the implementation that actually ran, while
-`parameters$requested_backend` and `parameters$resolved_backend` preserve the
-public backend request and the resolved device policy for benchmark auditing.
-When `graph_cluster()` builds the graph internally or receives a `faissR_graph`,
-it records
-`parameters$graph_backend`, `parameters$graph_requested_backend`, and
-`parameters$graph_resolved_backend` so benchmark outputs can distinguish the
-concrete KNN implementation from the public graph-backend request and resolved
-KNN route. Precomputed `nn()` inputs propagate their resolved KNN backend into
-graph metadata.
-`parameters$n_vertices` and `parameters$n_edges` record the clustered graph
-size directly so benchmark summaries do not need to inspect the embedded graph
-edge list.
-Direct graph builds also preserve compact KNN route metadata in
-`parameters$nn_approximation`, `parameters$nn_faiss`, `parameters$nn_cuvs`,
-`parameters$nn_spatial_index`, and
-`parameters$nn_auto_selection` when those fields are attached to the internal
-`nn()` result.
-
-The clustering implementation benefits from fast KNN indirectly: FAISS/cuVS can
-build the KNN graph faster, and `graph_cluster()` can then cluster that graph.
-The community-detection step itself is a graph algorithm; it does not call FAISS
-once the graph edges have been built.
+output can feed prediction, embedding, or diagnostic code.
 
 ## `fast_kmeans()`
 
@@ -738,7 +624,7 @@ estimated work is large enough to justify GPU launch and host/device copy
 overhead. Small jobs resolve to CPU even on CUDA-capable machines;
 `backend = "cpu"` forces the CPU route; `backend = "cuda"` requires an
 accelerated route and errors if unavailable. This makes k-means behavior
-consistent with `nn()`, `knn_graph()`, and `graph_cluster()`.
+consistent with `nn()`.
 The auto `max_iter`/`n_init`/`tol` rule is implemented by
 `kmeans_auto_params_cpp()`, and the CUDA/CPU gate is implemented by
 `kmeans_auto_select_backend_cpp()` using the compiled policy from
@@ -825,7 +711,6 @@ kNN prediction.
   support.
 - `cuda_available()` reports CUDA build/runtime availability.
 - `cuvs_available()` reports direct RAPIDS cuVS availability.
-- `cugraph_available()` reports RAPIDS libcugraph graph-clustering support.
 - `backend_info()` returns a data frame summarizing compiled/runtime backends,
   public call hints, non-public implementation route labels, devices, and
   notes.
@@ -1003,8 +888,8 @@ was used.
 
 faissR is released under the MIT license. The implementation is inspired by and
 links against external work including FAISS, FAISS GPU/cuVS integration, RAPIDS
-cuVS, RAPIDS libcugraph, HNSW, NN-Descent, IVF, product quantization, k-means,
-Louvain, Leiden, random-walk clustering, NSG, DiskANN/Vamana, and related ANN
-designs such as GGNN, SONG, BANG, and PilotANN [1-29]. See
+cuVS, HNSW, NN-Descent, IVF, product quantization, k-means, NSG,
+DiskANN/Vamana, and related ANN
+designs such as GGNN, SONG, BANG, and PilotANN [1-8,13-16,20-29]. See
 [References](references.md) for papers, software projects, and acknowledgements.
 External libraries remain separate system dependencies with their own licenses.

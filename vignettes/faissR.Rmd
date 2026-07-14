@@ -24,14 +24,14 @@ knitr::opts_chunk$set(
 
 # Overview
 
-`faissR` provides native nearest-neighbour search, graph construction, graph
-clustering, k-nearest-neighbour prediction, and k-means utilities for R
+`faissR` provides native nearest-neighbour search, k-nearest-neighbour
+prediction, and k-means utilities for R
 workflows that use large row-wise matrices. The package is designed for
 high-throughput biological data analysis, including single-cell, flow
 cytometry, imaging, and mass spectrometry applications.
 
 The package requires the FAISS C++ library for CPU indexes. CUDA, FAISS GPU
-indexes, NVIDIA cuVS, and RAPIDS libcugraph are optional. CPU-only
+indexes and NVIDIA cuVS are optional. CPU-only
 installations do not need NVIDIA libraries, and explicit CUDA requests fail
 clearly when CUDA support is not available.
 
@@ -43,8 +43,6 @@ The main public functions are:
 | `nn_gpu()` | GPU-resident exact-family KNN result for downstream CUDA code |
 | `candidate_knn()` | refine a supplied candidate neighbour set |
 | `knn()` and `predict()` | supervised kNN fitting and prediction |
-| `knn_graph()` | construct a weighted nearest-neighbour graph |
-| `graph_cluster()` | random-walking, Louvain, or Leiden-style graph clustering |
 | `fast_kmeans()` | CPU or optional CUDA k-means |
 | `backend_info()` and `nn_capabilities()` | inspect compiled backends |
 
@@ -162,8 +160,8 @@ c(
 ```
 
 For large two- or three-dimensional self-KNN, `method = "auto"` can select the
-native grid route. The explicit call below demonstrates that route on a small
-two-dimensional matrix.
+native grid route. CPU, CUDA, and Metal have separate implementations. The
+explicit CPU call below demonstrates the API on a small two-dimensional matrix.
 
 ```{r grid}
 x2 <- matrix(runif(2000), ncol = 2)
@@ -180,6 +178,32 @@ grid_nearest <- nn(
 c(
     backend_used = attr(grid_nearest, "backend_used"),
     k = attr(grid_nearest, "k")
+)
+```
+
+On Apple hardware, the same exact spatial search can run in native Metal. It
+keeps the float32 coordinate, grid, candidate, and top-k buffers on the GPU and
+returns only the result matrices. CUDA uses its native grid implementation.
+Explicit device calls fail when unavailable and never report a CPU fallback as
+GPU work.
+
+```{r metal-grid, eval=FALSE}
+metal_nearest <- nn(
+    x2,
+    k = 10,
+    exclude_self = TRUE,
+    backend = "metal",
+    method = "grid",
+    metric = "euclidean"
+)
+
+cuda_nearest <- nn(
+    x2,
+    k = 10,
+    exclude_self = TRUE,
+    backend = "cuda",
+    method = "grid",
+    metric = "euclidean"
 )
 ```
 
@@ -288,77 +312,6 @@ immediate <- knn(
 )
 
 immediate
-```
-
-# Nearest-neighbour graphs
-
-`knn_graph()` builds a weighted graph from a data matrix or from a precomputed
-`nn()` result. Passing a precomputed KNN object is useful when the same
-neighbours are reused by several downstream methods.
-
-```{r graph}
-g <- knn_graph(
-    x,
-    k = 8,
-    backend = "cpu",
-    method = "exact",
-    metric = "euclidean",
-    weight = "snn",
-    n_threads = 2
-)
-
-c(
-    n_vertices = g$n_vertices,
-    n_edges = g$n_edges,
-    weight_type = g$weight_type
-)
-head(g$from)
-head(g$to)
-```
-
-# Graph clustering
-
-`graph_cluster()` accepts a graph, a KNN object, or a matrix. CPU graph
-clustering is implemented in native C++ and does not depend on `igraph`.
-Available clustering methods are `random_walking`, `louvain`, and `leiden`.
-
-```{r clustering}
-clusters <- graph_cluster(
-    g,
-    method = "louvain",
-    backend = "cpu",
-    n_threads = 2,
-    seed = 1
-)
-
-c(
-    method = clusters$method,
-    backend = clusters$backend,
-    n_communities = clusters$n_communities,
-    modularity = round(clusters$modularity, 3)
-)
-table(clusters$membership, groups)
-```
-
-For Louvain and Leiden, `n_clusters` is an optional target-count convenience
-parameter. It is an alternative to direct resolution control and is not a hard
-guarantee.
-
-```{r target-clusters}
-targeted <- graph_cluster(
-    g,
-    method = "louvain",
-    backend = "cpu",
-    n_clusters = 3,
-    n_threads = 2,
-    seed = 1
-)
-
-c(
-    requested = targeted$parameters$n_clusters_requested,
-    observed = targeted$n_communities,
-    selected_resolution = round(targeted$selected_resolution, 3)
-)
 ```
 
 # k-means

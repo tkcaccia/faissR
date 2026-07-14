@@ -31,7 +31,7 @@ Distance choices belong in `metric`, not in `method`.
 | 2D/3D spatial self-KNN | `nn(x, k, backend = "cpu", method = "grid")` or `nn(x, k, backend = "cuda", method = "grid")` |
 
 Use `backend_info()` to inspect which compiled CPU, FAISS, CUDA, cuVS, and
-cuGraph capabilities are available on a given machine.
+cuVS capabilities are available on a given machine.
 Use `nn_capabilities()` to return the same method/backend/metric support matrix
 as a data frame for benchmark preflight checks, including rows for
 `backend = "auto"`, `"cpu"`, and `"cuda"`. Use

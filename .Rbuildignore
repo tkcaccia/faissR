@@ -41,7 +41,7 @@
 
 ^benchmark_scripts$
 ^benchmark_scripts/
+^results$
+^results/
 ^faiss_hnsw_mnist70k_.*[.]csv$
 ^mnist70k_knn_predict_speed.*[.]csv$
-^faissR_GRAPH_CLUSTER_[^/]*$
-^faissR_GRAPH_CLUSTER_[^/]*/

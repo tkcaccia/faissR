@@ -85,34 +85,6 @@ project_embedding_affine_parallel_cpp <- function(reference_data, query_data, re
     .Call(`_faissR_project_embedding_affine_parallel_cpp`, reference_data, query_data, reference_layout, projection_indices, projection_distances, max_neighbors, ridge, max_extrapolation, n_threads)
 }
 
-knn_graph_edges_range_cpp <- function(indices, distances, weight_type, prune, mutual, col_start, n_neighbors) {
-    .Call(`_faissR_knn_graph_edges_range_cpp`, indices, distances, weight_type, prune, mutual, col_start, n_neighbors)
-}
-
-knn_graph_edges_cpp <- function(indices, distances, weight_type, prune, mutual) {
-    .Call(`_faissR_knn_graph_edges_cpp`, indices, distances, weight_type, prune, mutual)
-}
-
-graph_resolution_candidates_cpp <- function(resolution, n_clusters, n_vertices) {
-    .Call(`_faissR_graph_resolution_candidates_cpp`, resolution, n_clusters, n_vertices)
-}
-
-cugraph_available_cpp <- function() {
-    .Call(`_faissR_cugraph_available_cpp`)
-}
-
-graph_cluster_auto_backend_cpp <- function(requested_backend, method, cuda_available, cugraph_available) {
-    .Call(`_faissR_graph_cluster_auto_backend_cpp`, requested_backend, method, cuda_available, cugraph_available)
-}
-
-graph_cluster_cpp <- function(indices, distances, method, backend, weight_type, prune, mutual, n_threads, n_runs, resolution, n_iterations, steps, seed) {
-    .Call(`_faissR_graph_cluster_cpp`, indices, distances, method, backend, weight_type, prune, mutual, n_threads, n_runs, resolution, n_iterations, steps, seed)
-}
-
-graph_cluster_edges_cpp <- function(edge_list, method, backend, n_threads, n_runs, resolution, n_iterations, steps, seed) {
-    .Call(`_faissR_graph_cluster_edges_cpp`, edge_list, method, backend, n_threads, n_runs, resolution, n_iterations, steps, seed)
-}
-
 nn_cpp <- function(data, points, k, method, square, sorted, p, parallel, cores, exclude_self) {
     .Call(`_faissR_nn_cpp`, data, points, k, method, square, sorted, p, parallel, cores, exclude_self)
 }
@@ -163,6 +135,14 @@ ivf_self_knn_cpp <- function(data, k, nlist, nprobe, seed, parallel, cores) {
 
 grid2d_self_knn_cpp <- function(data, k, parallel, cores, bins_per_dim, include_self) {
     .Call(`_faissR_grid2d_self_knn_cpp`, data, k, parallel, cores, bins_per_dim, include_self)
+}
+
+metal_grid_available_cpp <- function() {
+    .Call(`_faissR_metal_grid_available_cpp`)
+}
+
+metal_grid_self_knn_cpp <- function(data, k, bins_per_dim, include_self) {
+    .Call(`_faissR_metal_grid_self_knn_cpp`, data, k, bins_per_dim, include_self)
 }
 
 grid3d_self_knn_cpp <- function(data, k, parallel, cores, bins_per_dim, include_self) {

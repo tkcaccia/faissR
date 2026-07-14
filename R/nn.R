@@ -1146,6 +1146,17 @@ nn_compute <- function(data,
         "faiss_flat_l2"
       )
     }
+    if (identical(backend, "metal_grid")) {
+      return(metal_grid_self_knn(
+        data = data,
+        points = points,
+        self_query = self_query,
+        k = k,
+        exclude_self = isTRUE(exclude_self),
+        metric = metric,
+        input_float32 = TRUE
+      ))
+    }
     if (metric %in% c("cosine", "correlation")) {
       if (backend %in% c("faiss_flat_cosine", "faiss_flat_correlation")) {
         if (!isTRUE(faiss_available())) {
@@ -2748,13 +2759,15 @@ nn_compute <- function(data,
                backend %in% c("grid", "cpu_grid", "grid2d", "cpu_grid2d",
                               "grid3d", "cpu_grid3d", "cuda_grid",
                               "cuda_grid_auto", "gpu_grid", "cuda_grid2d",
-                              "cuda_grid3d")) {
+                              "cuda_grid3d", "metal_grid", "metal_grid2d",
+                              "metal_grid3d")) {
       backend <- backend
     } else if (identical(metric, "inner_product") &&
                backend %in% c("grid", "cpu_grid", "grid2d", "cpu_grid2d",
                               "grid3d", "cpu_grid3d", "cuda_grid",
                               "cuda_grid_auto", "gpu_grid", "cuda_grid2d",
-                              "cuda_grid3d")) {
+                              "cuda_grid3d", "metal_grid", "metal_grid2d",
+                              "metal_grid3d")) {
       stop("Grid nearest-neighbour search does not support `metric = \"inner_product\"`.", call. = FALSE)
     } else if (!backend %in% c("auto", "cpu", "cpu_auto",
                                "faiss_hnsw", "faiss_ivf", "faiss_ivf_flat",
@@ -4757,6 +4770,18 @@ nn_compute <- function(data,
     return(result)
   }
 
+  if (backend %in% c("metal_grid", "metal_grid2d", "metal_grid3d")) {
+    return(metal_grid_self_knn(
+      data = data,
+      points = points,
+      self_query = self_query,
+      k = k,
+      exclude_self = isTRUE(exclude_self),
+      metric = metric,
+      input_float32 = FALSE
+    ))
+  }
+
   if (backend %in% c("grid", "cpu_grid", "grid2d", "cpu_grid2d", "grid3d", "cpu_grid3d")) {
     if (!isTRUE(self_query)) {
       stop("`backend = \"cpu_grid\"` is only available for self-KNN searches.", call. = FALSE)
@@ -4927,6 +4952,21 @@ normalize_public_backend_arg <- function(backend, arg = "backend") {
   backend <- tolower(backend)
   if (!backend %in% c("auto", "cpu", "cuda")) {
     stop("`", arg, "` must be one of \"auto\", \"cpu\", or \"cuda\".", call. = FALSE)
+  }
+  backend
+}
+
+normalize_nn_backend_arg <- function(backend, arg = "backend") {
+  backend <- normalize_scalar_choice_arg(
+    backend,
+    arg = arg,
+    default = "auto",
+    formal_choices = c("auto", "cpu", "cuda", "metal")
+  )
+  if (is.na(backend) || !nzchar(backend)) backend <- "auto"
+  backend <- tolower(backend)
+  if (!backend %in% c("auto", "cpu", "cuda", "metal")) {
+    stop("`", arg, "` must be one of \"auto\", \"cpu\", \"cuda\", or \"metal\".", call. = FALSE)
   }
   backend
 }
@@ -5248,7 +5288,7 @@ cuda_cagra_route_available <- function(faiss_gpu_available_value = faiss_gpu_ava
 #'   `"missing_cuda_route"`, and `"missing_cuvs"` for benchmark preflight
 #'   tables.
 #' @return A data frame with one row per public `method`, `backend` (`"auto"`,
-#'   `"cpu"`, or `"cuda"`), and `metric` combination. Columns include
+#'   `"cpu"`, `"cuda"`, or `"metal"`), and `metric` combination. Columns include
 #'   `supported`, `exact`, `implementation`, and `notes`. If `runtime = TRUE`,
 #'   runtime availability columns are appended.
 #' @examples
@@ -5258,7 +5298,7 @@ cuda_cagra_route_available <- function(faiss_gpu_available_value = faiss_gpu_ava
 nn_capabilities <- function(runtime = FALSE) {
   runtime <- normalize_scalar_logical_arg(runtime, "runtime", default = FALSE)
   methods <- nn_method_labels()
-  backends <- c("auto", "cpu", "cuda")
+  backends <- c("auto", "cpu", "cuda", "metal")
   metrics <- nn_metric_labels()
   rows <- vector("list", length(methods) * length(backends) * length(metrics))
   i <- 0L
@@ -5289,6 +5329,20 @@ nn_capability_runtime_row <- function(row) {
       runtime_available = FALSE,
       runtime_reason = "unsupported_combination",
       runtime_notes = "Unsupported method/backend/metric combination.",
+      stringsAsFactors = FALSE
+    ))
+  }
+  if (identical(row$backend[[1L]], "metal")) {
+    available <- isTRUE(metal_grid_available_cpp())
+    return(data.frame(
+      resolved_backend = "metal_grid",
+      runtime_available = available,
+      runtime_reason = if (available) "available" else "missing_metal",
+      runtime_notes = if (available) {
+        "Native exact Metal grid KNN is available for 2D/3D self-search."
+      } else {
+        "A macOS Metal device is required for native Metal grid KNN."
+      },
       stringsAsFactors = FALSE
     ))
   }
@@ -5400,6 +5454,18 @@ nn_resolved_backend_available <- function(backend) {
   )) {
     return(list(available = TRUE, reason = "available", notes = "Native CPU route is available."))
   }
+  if (backend %in% c("metal_grid", "metal_grid2d", "metal_grid3d")) {
+    ok <- isTRUE(metal_grid_available_cpp())
+    return(list(
+      available = ok,
+      reason = if (ok) "available" else "missing_metal",
+      notes = if (ok) {
+        "Native exact Metal grid KNN is available for 2D/3D self-search."
+      } else {
+        "A macOS Metal device is required for native Metal grid KNN."
+      }
+    ))
+  }
   if (backend %in% c("hnsw", "cpu_hnsw")) {
     return(list(
       available = FALSE,
@@ -5479,7 +5545,22 @@ nn_capability_row <- function(method, backend, metric) {
   euclidean <- identical(metric, "euclidean")
   non_ip_metric <- metric %in% c("euclidean", "cosine", "correlation")
 
-  if (identical(backend, "auto")) {
+  if (identical(backend, "metal")) {
+    supported <- method %in% c("auto", "grid") && non_ip_metric
+    exact <- if (supported) TRUE else NA
+    implementation <- if (supported) {
+      "native Metal exact 2D/3D grid"
+    } else {
+      NA_character_
+    }
+    notes <- if (supported) {
+      "Only valid for 2D/3D self-KNN. Cosine/correlation use normalized Euclidean grid search; unsupported shapes or methods fail without CPU fallback."
+    } else if (identical(metric, "inner_product") && method %in% c("auto", "grid")) {
+      "Metal grid search does not expose raw inner-product search."
+    } else {
+      "This nearest-neighbour method is not implemented for Metal."
+    }
+  } else if (identical(backend, "auto")) {
     cpu <- nn_capability_row(method, "cpu", metric)
     cuda <- nn_capability_row(method, "cuda", metric)
     supported <- isTRUE(cpu$supported[[1L]]) || isTRUE(cuda$supported[[1L]])
@@ -5742,16 +5823,42 @@ resolve_public_nn_backend <- function(backend,
     backend,
     arg = "backend",
     default = "auto",
-    formal_choices = c("auto", "cpu", "cuda")
+    formal_choices = c("auto", "cpu", "cuda", "metal")
   )
   method_label <- normalize_nn_method(method)
   metric <- normalize_nn_metric(metric)
-  if (!tolower(backend_label) %in% c("auto", "cpu", "cuda")) {
-    stop("`backend` should be one of \"auto\", \"cpu\", or \"cuda\".", call. = FALSE)
+  if (!tolower(backend_label) %in% c("auto", "cpu", "cuda", "metal")) {
+    stop("`backend` should be one of \"auto\", \"cpu\", \"cuda\", or \"metal\".", call. = FALSE)
   }
   requested_device <- tolower(backend_label)
-  device <- normalize_public_compute_backend(backend)
+  device <- if (identical(requested_device, "metal")) {
+    "metal"
+  } else {
+    normalize_public_compute_backend(backend)
+  }
   method <- method_label
+  if (identical(requested_device, "metal")) {
+    if (!method %in% c("auto", "grid")) {
+      stop(
+        "Metal nearest-neighbour search currently supports only `method = \"grid\"` ",
+        "for exact two- or three-dimensional self-KNN.",
+        call. = FALSE
+      )
+    }
+    if (identical(self_query, FALSE)) {
+      stop("Metal grid nearest-neighbour search currently supports only self-KNN.", call. = FALSE)
+    }
+    if (!is.null(p) && !as.integer(p) %in% c(2L, 3L)) {
+      stop("Metal grid nearest-neighbour search requires a two- or three-column matrix.", call. = FALSE)
+    }
+    if (identical(metric, "inner_product")) {
+      stop("Metal grid nearest-neighbour search does not support `metric = \"inner_product\"`.", call. = FALSE)
+    }
+    if (!isTRUE(metal_grid_available_cpp())) {
+      stop("No native Metal grid nearest-neighbour backend is available on this machine.", call. = FALSE)
+    }
+    return("metal_grid")
+  }
   if (identical(requested_device, "auto") && !identical(method, "auto")) {
     device <- resolve_auto_public_nn_device(method, metric)
   }
@@ -5918,7 +6025,8 @@ nn_resolved_backend_public_method <- function(backend) {
   if (backend %in% c("grid", "cpu_grid", "grid2d", "grid3d",
                      "cpu_grid2d", "cpu_grid3d", "cuda_grid",
                      "cuda_grid_auto", "gpu_grid", "cuda_grid2d",
-                     "cuda_grid3d")) return("grid")
+                     "cuda_grid3d", "metal_grid", "metal_grid2d",
+                     "metal_grid3d")) return("grid")
   if (backend %in% c("faiss_hnsw", "cuda_cuvs_hnsw", "cuvs_hnsw")) return("hnsw")
   if (backend %in% c("faiss_ivf", "cpu_faiss_index_ivf", "faiss_ivf_flat",
                      "faiss_gpu_ivf", "faiss_gpu_ivf_flat",
@@ -5945,6 +6053,7 @@ nn_resolved_backend_device <- function(backend) {
   backend <- as.character(backend)[1L]
   if (is.na(backend) || !nzchar(backend)) return(NA_character_)
   if (backend %in% c("auto", "cpu_auto", "cuda_auto", "gpu_auto")) return("auto")
+  if (startsWith(backend, "metal")) return("metal")
   if (startsWith(backend, "cuda") ||
       startsWith(backend, "gpu") ||
       startsWith(backend, "cuvs") ||
@@ -8521,7 +8630,7 @@ clustered_knn_center_count <- function(n, k) {
   as.integer(min(max_centers, count))
 }
 
-clustered_knn_graph_columns <- function(projection_k, k) {
+clustered_knn_projection_columns <- function(projection_k, k) {
   projection_k <- as.integer(max(1L, projection_k))
   k <- as.integer(max(1L, k))
   bucket_cols <- min(projection_k, max(2L, min(4L, ceiling(k / 10))))
@@ -8567,7 +8676,7 @@ clustered_self_knn <- function(data,
     exclude_self = FALSE,
     n_threads = n_threads
   )
-  cols <- clustered_knn_graph_columns(ncol(projection$indices), nonself_k)
+  cols <- clustered_knn_projection_columns(ncol(projection$indices), nonself_k)
   n_threads <- normalize_nn_threads(n_threads)
   out <- landmark_candidate_knn_cpp(
     data,
@@ -10011,14 +10120,115 @@ grid_self_knn <- function(data,
   stop("`backend = \"cpu_grid\"` supports only two- or three-column matrices.", call. = FALSE)
 }
 
+metal_grid_self_knn <- function(data,
+                                points,
+                                self_query,
+                                k,
+                                exclude_self,
+                                metric,
+                                input_float32 = FALSE) {
+  if (!isTRUE(self_query)) {
+    stop("Metal grid nearest-neighbour search currently supports only self-KNN.", call. = FALSE)
+  }
+  if (!isTRUE(metal_grid_available_cpp())) {
+    stop("No native Metal grid nearest-neighbour backend is available on this machine.", call. = FALSE)
+  }
+  metric <- normalize_nn_metric(metric)
+  if (identical(metric, "inner_product")) {
+    stop("Metal grid nearest-neighbour search does not support `metric = \"inner_product\"`.", call. = FALSE)
+  }
+  input_dims <- if (is_float32_matrix_input(data)) {
+    float32_matrix_dims(data, "data")
+  } else {
+    dim(data)
+  }
+  if (!as.integer(input_dims[[2L]]) %in% c(2L, 3L)) {
+    stop("Metal grid nearest-neighbour search requires a two- or three-column matrix.", call. = FALSE)
+  }
+  metric_inputs <- NULL
+  search_data <- data
+  if (metric %in% c("cosine", "correlation")) {
+    metric_inputs <- normalized_euclidean_metric_inputs(
+      data,
+      points,
+      self_query,
+      metric,
+      storage = if (isTRUE(input_float32)) "float" else "double"
+    )
+    search_data <- metric_inputs$data
+  }
+  search_dims <- if (is_float32_matrix_input(search_data)) {
+    float32_matrix_dims(search_data, "data")
+  } else {
+    dim(search_data)
+  }
+  include_self <- !isTRUE(exclude_self)
+  nonself_k <- if (include_self) as.integer(k) - 1L else as.integer(k)
+  if (nonself_k > 128L) {
+    stop("Metal grid nearest-neighbour search supports at most 128 non-self neighbours.", call. = FALSE)
+  }
+  bins <- grid_bins_per_dim(
+    as.integer(search_dims[[1L]]),
+    max(1L, nonself_k),
+    as.integer(search_dims[[2L]])
+  )
+  out <- metal_grid_self_knn_cpp(
+    search_data,
+    as.integer(k),
+    as.integer(bins),
+    isTRUE(include_self)
+  )
+  resolved <- if (as.integer(search_dims[[2L]]) == 3L) {
+    "metal_grid3d"
+  } else {
+    "metal_grid2d"
+  }
+  result <- finish_nn_result(
+    out,
+    resolved,
+    k,
+    self_query,
+    exact = TRUE,
+    metric = metric
+  )
+  if (!is.null(metric_inputs)) {
+    result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
+  }
+  attr(result, "spatial_index") <- list(
+    strategy = if (as.integer(search_dims[[2L]]) == 3L) {
+      "native_metal_exact_uniform_grid_3d"
+    } else {
+      "native_metal_exact_uniform_grid_2d"
+    },
+    backend = resolved,
+    exact = TRUE,
+    accelerator = "metal",
+    metric_transform = if (is.null(metric_inputs)) NA_character_ else metric_inputs$transform,
+    bins_per_dim = as.integer(out$bins_per_dim),
+    n_cells = as.integer(out$n_cells),
+    self_column_included = isTRUE(out$self_column_included),
+    input_type = out$input_type %||% if (isTRUE(input_float32)) "float32" else "double_to_float32",
+    input_layout = out$input_layout %||% "column_major_float32_shared",
+    output_layout = out$output_layout %||% "knn_matrix_final",
+    r_side_reshaping = FALSE,
+    cpu_fallback = FALSE
+  )
+  if (isTRUE(input_float32)) {
+    result <- finish_float32_direct_result(result, out)
+  }
+  result
+}
+
 #' Nearest neighbors from row-wise matrices
 #'
 #' `nn()` provides a package-native nearest-neighbor entry point compatible with
 #' the common `nn(data, points, k)` use case. The public API separates device
 #' selection from algorithm selection. `backend` is one of `"auto"`, `"cpu"`,
-#' or `"cuda"`; `method` chooses the algorithm. For example,
+#' `"cuda"`, or `"metal"`; `method` chooses the algorithm. For example,
 #' `backend = "cpu", method = "grid"` uses the CPU grid implementation, while
 #' `backend = "cuda", method = "grid"` uses the CUDA grid implementation.
+#' `backend = "metal", method = "grid"` uses native exact Metal grid search
+#' for two- or three-column self-KNN and never falls back to CPU.
 #' Invalid combinations stop clearly before computation; for example,
 #' `backend = "cpu", method = "cagra"` errors because CAGRA is CUDA-only.
 #'
@@ -10227,11 +10437,14 @@ grid_self_knn <- function(data,
 #'   compiled backend path rather than repaired by R-side post-processing. CUDA
 #'   graph routes that do not yet expose compiled include-self output shaping
 #'   require `exclude_self = TRUE` and fail clearly instead of reshaping in R.
-#' @param backend Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"`
+#' @param backend Device backend: `"auto"`, `"cpu"`, `"cuda"`, or `"metal"`. `"auto"`
 #'   uses a validated CUDA route only when the requested method/metric
 #'   combination is supported and CUDA/cuVS runtime support is available, and
 #'   otherwise resolves to CPU. Explicit `"cuda"` fails clearly when CUDA
-#'   support or the selected CUDA combination is unavailable.
+#'   support or the selected CUDA combination is unavailable. Explicit
+#'   `"metal"` uses native exact float32 grid search and is restricted to
+#'   two- or three-dimensional self-KNN with `method = "auto"` or `"grid"`
+#'   and Euclidean, cosine, or correlation distance. It never falls back to CPU.
 #' @param method Algorithm selector. `"auto"` chooses a shape-aware default for
 #'   the selected backend. Other values include `"exact"`, `"flat"`,
 #'   `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`,
@@ -10516,7 +10729,7 @@ nn <- function(data,
                points = data,
                k = NULL,
                exclude_self = FALSE,
-               backend = c("auto", "cpu", "cuda"),
+               backend = c("auto", "cpu", "cuda", "metal"),
                method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq", "vamana", "nsg", "nndescent", "ivfpq_fastscan", "cagra"),
                metric = c("euclidean", "cosine", "correlation", "inner_product"),
                tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
@@ -10530,7 +10743,7 @@ nn <- function(data,
   set_call_cagra_build_algo(cagra_build_algo)
   points_missing <- missing(points)
   exclude_self <- normalize_scalar_logical_arg(exclude_self, "exclude_self", default = FALSE)
-  backend <- normalize_public_backend_arg(backend)
+  backend <- normalize_nn_backend_arg(backend)
   method <- normalize_nn_method(method)
   tuning <- normalize_nn_tuning(tuning)
   target_recall <- normalize_hnsw_target_recall(target_recall)
@@ -11032,14 +11245,4 @@ faiss_fastscan_available <- function() {
 #' @export
 cuvs_available <- function() {
   isTRUE(cuvs_available_cpp())
-}
-
-#' Check whether the RAPIDS libcugraph backend is available
-#'
-#' @return `TRUE` when faissR was compiled and linked against RAPIDS libcugraph.
-#' @examples
-#' cugraph_available()
-#' @export
-cugraph_available <- function() {
-  isTRUE(cugraph_available_cpp())
 }

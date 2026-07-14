@@ -1,14 +1,14 @@
 Package: faissR
 Type: Package
-Title: FAISS-Backed Nearest Neighbours, Graph Clustering, kNN Models, and k-Means
+Title: FAISS-Backed Nearest Neighbours, kNN Models, and k-Means
 Version: 0.99.15
 Authors@R: person(given = "Stefano",
     family = "Cacciatore",
     role = c("aut", "cre"),
     email = "tkcaccia@gmail.com",
     comment = c(ORCID = "0000-0001-7052-7156"))
-Description: Native nearest-neighbour search, graph construction, graph clustering,
-    k-nearest neighbour prediction, and k-means helpers for large dimensionality
+Description: Native nearest-neighbour search, k-nearest neighbour prediction,
+    and k-means helpers for large dimensionality
     reduction workflows in high-throughput biological data analysis, including
     single-cell, flow cytometry, imaging, and mass spectrometry applications.
     The package requires the FAISS C++ library for all builds, including

@@ -18,6 +18,12 @@ using Rcpp::List;
 using Rcpp::LogicalMatrix;
 using Rcpp::NumericMatrix;
 
+bool metal_grid_available_impl();
+List metal_grid_self_knn_impl(SEXP data,
+                              int k,
+                              int bins_per_dim,
+                              bool include_self);
+
 extern "C" {
 void faissr_knn_euclidean_range(const double* data,
                                     const double* points,
@@ -3406,6 +3412,19 @@ List grid2d_self_knn_cpp(NumericMatrix data,
     Rcpp::Named("output_layout") = "knn_matrix_final",
     Rcpp::Named("r_side_reshaping") = false
   );
+}
+
+// [[Rcpp::export]]
+bool metal_grid_available_cpp() {
+  return metal_grid_available_impl();
+}
+
+// [[Rcpp::export]]
+List metal_grid_self_knn_cpp(SEXP data,
+                             int k,
+                             int bins_per_dim,
+                             bool include_self) {
+  return metal_grid_self_knn_impl(data, k, bins_per_dim, include_self);
 }
 
 // [[Rcpp::export]]

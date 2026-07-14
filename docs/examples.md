@@ -36,30 +36,6 @@ knn_ip <- nn(x, k = 15, backend = "cpu", method = "flat",
              metric = "inner_product", n_threads = 4)
 ```
 
-## Shared Nearest-Neighbour Graph And Leiden Clustering
-
-```r
-g <- knn_graph(nn_res, k = 15, weight = "snn")
-
-leiden <- graph_cluster(g, method = "leiden", backend = "cpu", n_threads = 4)
-louvain <- graph_cluster(g, method = "louvain", backend = "cpu", n_threads = 4)
-walk <- graph_cluster(g, method = "random_walking", backend = "cpu", n_threads = 4)
-
-table(labels, leiden$membership)
-table(labels, louvain$membership)
-table(labels, walk$membership)
-```
-
-If faissR was compiled with RAPIDS libcugraph, Louvain and Leiden can run on
-CUDA without changing the API [9,11-12]:
-
-```r
-if (isTRUE(cugraph_available())) {
-  leiden_gpu <- graph_cluster(g, method = "leiden", backend = "cuda")
-  table(labels, leiden_gpu$membership)
-}
-```
-
 ## kNN Classifier
 
 ```r
@@ -87,12 +63,4 @@ pred2 <- knn(x[train, ], labels[train], x[test, ], backend = "auto", k = 5)
 km <- fast_kmeans(x, centers = 3, backend = "auto", n_threads = 4)
 table(km$cluster)
 km$parameters$tuning
-```
-
-## Reuse KNN For Clustering
-
-```r
-g2 <- knn_graph(nn_res, k = 10)
-cl2 <- graph_cluster(g2, method = "leiden", backend = "cpu", n_clusters = 3, n_threads = 4)
-table(labels, cl2$membership)
 ```

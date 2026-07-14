@@ -15,19 +15,22 @@
 - `backend = "auto"` uses CUDA only for validated CUDA method/metric
   combinations when CUDA/cuVS runtime support is available, otherwise CPU.
 - `backend = "cpu"` forces CPU execution.
+- `backend = "metal"` forces the native Apple Metal exact grid route. It is
+  available only for 2D/3D self-KNN with Euclidean, cosine, or correlation
+  distance and never falls back to CPU.
 - `backend = "cuda"` forces CUDA execution and errors if no compatible CUDA
   backend is available.
 - `method` selects one canonical lowercase public algorithm family, for example
   `"auto"`, `"flat"`, `"hnsw"`, `"ivf"`, `"ivfpq_fastscan"`, `"cagra"`, or `"grid"`.
   Resolved implementation labels such as `faiss_hnsw` or `cuda_cuvs_cagra`
-  are backend metadata, not additional public method names.
+  are backend metadata, not public `method` values.
 
-FAISS is the required compiled vector-search dependency. CUDA, FAISS GPU,
-RAPIDS cuVS, and RAPIDS libcugraph are optional for CPU-only builds [1-3,12-16].
+FAISS is the required compiled vector-search dependency. CUDA, FAISS GPU, and
+RAPIDS cuVS are optional for CPU-only builds [1-3,13-16].
 For a NVIDIA GPU build, set `FAISSR_REQUIRE_CUDA=1` and, as needed,
-`FAISSR_REQUIRE_CUVS=1` or `FAISSR_REQUIRE_CUGRAPH=1`; then missing GPU
+`FAISSR_REQUIRE_CUVS=1`; then missing GPU
 libraries are fatal at configure time. The package does not call Python and
-does not silently replace an explicit CUDA request with CPU work.
+does not silently replace an explicit CUDA or Metal request with CPU work.
 For Bioconductor, faissR declares the `GPU` biocView and opts into optional GPU
 builders with `.BBSoptions` set to `GPU_reliance: optional`; this advertises GPU
 capability without making NVIDIA libraries required for CPU-only builders.
@@ -38,6 +41,7 @@ capability without making NVIDIA libraries required for CPU-only builders.
 | --- | --- | --- |
 | `"auto"` | Prefer CUDA/cuVS for validated CUDA method/metric combinations when CUDA/cuVS runtime support is available; otherwise use CPU. With an explicit method, the chosen method/metric must have a runtime-capable CUDA route before auto selects CUDA. | Falls back to CPU only because the user requested automatic device selection. |
 | `"cpu"` | Use CPU/native/FAISS CPU routes. | Errors for CUDA-only methods such as `method = "cagra"`. |
+| `"metal"` | Use native Metal grid KNN for 2D/3D self-search. | Errors when Metal is unavailable, the input is not 2D/3D, the metric is raw inner product, a separate query is supplied, or a non-grid method is requested. |
 | `"cuda"` | Use CUDA/FAISS GPU/cuVS routes. | Errors if CUDA/cuVS support is unavailable or if the selected method is CPU-only. |
 
 For explicit public methods under `backend = "auto"`, the selector checks the
@@ -64,7 +68,7 @@ with method-specific parameters.
 | `"exact"` | FAISS Flat L2 for Euclidean, normalized FAISS Flat cosine for cosine, centered/normalized FAISS Flat correlation for correlation, and FAISS Flat IP for raw inner product. | FAISS GPU Flat if available; otherwise direct cuVS brute force for exact metric-aware search when cuVS is available. | Exact/high-recall baseline with CPU Euclidean/cosine/correlation/inner-product compiled shape/k/target tuning metadata and CUDA Euclidean/cosine/correlation/inner-product exact query-batch/resource metadata. CUDA inner-product exact currently uses `benchmark_scripts/cuda_exact_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`, seeded from measured CUDA exact Euclidean rows until the dedicated inner-product sweep replaces it [1-3,16]. |
 | `"flat"` | FAISS Flat L2/IP; cosine and correlation use normalized Flat IP. | FAISS GPU Flat L2/IP; cosine and correlation use normalized Flat IP; degenerate zero-normalized rows error instead of being repaired on CPU. | Exact FAISS exhaustive search with CPU Euclidean/cosine/correlation/inner-product compiled shape/k/target tuning metadata and CUDA Euclidean/cosine/correlation/inner-product Flat query-batch/resource metadata from the metric-specific sweeps. CUDA Flat inner product currently uses `benchmark_scripts/cuda_flat_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`, seeded from measured CUDA Flat Euclidean rows until the dedicated inner-product sweep replaces it [1-2,16]. |
 | `"bruteforce"` | FAISS Flat L2 for Euclidean, normalized FAISS Flat cosine for cosine, centered/normalized FAISS Flat correlation for correlation, and FAISS Flat IP for raw inner product. | Direct RAPIDS cuVS brute force when available; cosine/correlation use normalized Euclidean search and inner product uses a maximum-inner-product-to-L2 transform around the cuVS L2 kernel. | Exhaustive route with CPU Euclidean/cosine/correlation/inner-product compiled tuning metadata and CUDA Euclidean/cosine/correlation/inner-product cuVS query-batch/resource metadata. CUDA bruteforce inner product currently uses `benchmark_scripts/cuda_bruteforce_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`, seeded from measured CUDA bruteforce Euclidean rows until the dedicated inner-product sweep replaces it [1-3,16]. |
-| `"grid"` | Native exact 2D/3D grid for Euclidean, cosine, and correlation. | Native CUDA 2D/3D grid for Euclidean, cosine, and correlation. | Low-dimensional spatial or simulated data; cosine/correlation use normalized Euclidean grid search; explicit grid requests error outside two or three columns. |
+| `"grid"` | Native exact 2D/3D grid for Euclidean, cosine, and correlation. | Native CUDA 2D/3D grid for Euclidean, cosine, and correlation. A separate native Metal 2D/3D route is selected with `backend = "metal"`. | Low-dimensional spatial or simulated data; cosine/correlation use normalized Euclidean grid search; explicit grid requests error outside two or three columns. |
 | `"hnsw"` | FAISS CPU HNSW for all four public metrics. | RAPIDS cuVS HNSW from CAGRA for all four public metrics when cuVS is available. | Euclidean, cosine, correlation, and raw-inner-product CPU HNSW use compiled CPU12 HPC shape/k tiers for k buckets 15, 30, 50, and 100, selected by `target_recall = 0.9`, `0.95`, or `0.99`; raw inner-product rows that did not reach the target are marked in metadata with `tuning_benchmark_target_met = FALSE`. CUDA HNSW builds a CAGRA seed graph and converts it with `cuvsHnswFromCagraWithDataset` using the host dataset and cuVS CPU hierarchy. CUDA Euclidean, cosine, correlation, and raw inner product use compiled CUDA shape/k/target tables; correlation uses centered row-normalized float32 Euclidean graph search, while raw inner product uses a maximum-inner-product-to-L2 transform. CUDA raw inner product currently uses `benchmark_scripts/cuda_hnsw_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`, seeded from measured Euclidean CUDA HNSW rows and marked validation-pending until the dedicated IP sweep replaces it. Metadata records that this is the cuVS wrapper design rather than a pure all-GPU HNSW search implementation [5,16,22-23]. |
 | `"ivf"` | FAISS CPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. Euclidean, cosine, correlation, and raw inner-product use compiled shape/k/target `nlist`/`nprobe` tiers; partial or below-target rows are flagged in metadata. | FAISS GPU IVF-Flat L2/IP; cosine and correlation use normalized IVF IP. Euclidean, cosine, and correlation use compiled CUDA shape/k/target `nlist`/`nprobe` tiers; raw inner product uses a validation-pending table seeded from measured CUDA Euclidean IVF rows until the dedicated IP sweep replaces it. Partial/seed rows are flagged in metadata. | Large approximate search with coarse-list probing [1-2,16]. |
 | `"ivfpq"` | FAISS CPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. Euclidean, cosine, correlation, and raw inner-product use compiled shape/k/target rows for `nlist`, `nprobe`, `pq_m`, and `pq_nbits`; partial or below-target rows are flagged in metadata. | FAISS GPU IVF-PQ L2/IP; cosine and correlation use normalized IVFPQ IP. CUDA Euclidean and correlation use compiled shape/k/target rows for `nlist`, `nprobe`, `pq_m`, and `pq_nbits`; partial or below-target rows are flagged in metadata. | Compressed-memory approximate search; CPU IVFPQ requires at least 624 training rows and auto-selects 4-bit PQ below 9,984 rows [6,16]. |
@@ -84,7 +88,7 @@ errors because the grid route is geometric Euclidean/cosine/correlation search.
 | Backend family | CPU | CUDA | Notes |
 | --- | --- | --- | --- |
 | Native faissR dense exact | yes | no | CRAN-friendly exact CPU baseline. |
-| Native faissR grid | yes | optional CUDA | 2D/3D Euclidean, cosine, and correlation self-KNN only. |
+| Native faissR grid | yes | optional CUDA; optional Metal on macOS | Exact 2D/3D Euclidean, cosine, and correlation self-KNN only. Metal consumes float32 coordinates and keeps grid/top-k buffers on device until final readback. |
 | FAISS Flat | yes | yes, if FAISS GPU is built | Exact L2 search [1-2,16]. |
 | FAISS IVF-Flat | yes | yes, if FAISS GPU is built | Inverted-file approximate L2/IP search; cosine/correlation use normalized IP [1-2,16]. |
 | FAISS IVF-PQ | yes | yes, if FAISS GPU is built | Product-quantized approximate L2/IP search; cosine/correlation use normalized IP [6,16]. |
@@ -108,15 +112,13 @@ shared-memory limit. faissR reports this case with a specific diagnostic and
 does not replace an explicit CUDA/cuVS NN-descent request with another method.
 See the copy-ready [cuVS issue report](cuvs-nndescent-shared-memory-issue.md).
 
-## Graph, Clustering, And Model Functions
+## Model Functions
 
-| Function | CPU | CUDA | Notes |
-| --- | --- | --- | --- |
-| `candidate_knn()` | yes | optional CUDA candidate ranking where compiled | Exact ranking inside supplied candidates; CUDA supports Euclidean, normalized cosine/correlation, and raw inner product. |
-| `knn_graph()` | yes | uses CUDA KNN if generated/supplied KNN uses CUDA | Returns a native `faissR_graph` edge list without requiring `igraph`. |
-| `graph_cluster()` | native random-walking, Louvain, Leiden | Louvain/Leiden with RAPIDS libcugraph when built | CUDA random-walking is not enabled yet. `backend = "auto"` is resolved by compiled `graph_cluster_auto_backend_cpp()` and records `parameters$backend_selection$tuning_source = "cpp"` [9-12,17-19]. |
-| `fast_kmeans()` | native/FAISS CPU k-means | FAISS GPU or direct cuVS k-means where available | Uses `"auto"`, `"cpu"`, and `"cuda"` backend policy; auto selects CUDA only for CUDA-capable builds and sufficiently large shape/work estimates [7-8]. |
-| `knn()` / `predict()` | yes | yes, through `nn()` | Supervised classifier/regressor API reuses `nn()` backend and method resolution. |
+| Function | CPU | Metal | CUDA | Notes |
+| --- | --- | --- | --- | --- |
+| `candidate_knn()` | yes | no | optional CUDA candidate ranking where compiled | Exact ranking inside supplied candidates; CUDA supports Euclidean, normalized cosine/correlation, and raw inner product. |
+| `fast_kmeans()` | native/FAISS CPU k-means | no | FAISS GPU or direct cuVS k-means where available | Uses `"auto"`, `"cpu"`, and `"cuda"` backend policy [7-8]. |
+| `knn()` / `predict()` | yes | no | yes, through `nn()` | Supervised classifier/regressor API reuses `nn()` backend and method resolution. |
 
 ## Availability Helpers
 
@@ -129,7 +131,6 @@ faiss_available()
 faiss_gpu_available()
 cuda_available()
 cuvs_available()
-cugraph_available()
 ```
 
 `backend_info()` returns a data frame with compiled/runtime availability,
@@ -151,8 +152,8 @@ The boolean helpers return a single
 `TRUE`/`FALSE` value. They are useful for diagnostics and examples, but
 explicit backend calls still validate availability at execution time.
 `nn_capabilities()` returns a data frame with one row per public
-method/backend/metric combination, including `backend = "auto"`, `"cpu"`, and
-`"cuda"`, and marks unsupported combinations before a benchmark tries to run
+method/backend/metric combination, including `backend = "auto"`, `"cpu"`,
+`"metal"`, and `"cuda"`, and marks unsupported combinations before a benchmark tries to run
 them.
 
 For benchmark launchers, `nn_capabilities(runtime = TRUE)` adds the
@@ -216,11 +217,11 @@ quality as exact-assumed only when the route is exact by construction.
 ## Installation Implications
 
 - A CPU-only installation still requires FAISS.
-- CUDA/cuVS/cuGraph support is optional for CPU-only builds and enabled only
+- CUDA/cuVS support is optional for CPU-only builds and enabled only
   when matching headers and libraries are available.
 - NVIDIA GPU builds should use the strict `FAISSR_REQUIRE_*` configure
-  variables so missing CUDA/cuVS/cuGraph libraries fail installation.
+  variables so missing CUDA/cuVS libraries fail installation.
 - Explicit CUDA requests fail clearly on CPU-only builds.
-- The package does not vendor FAISS, cuVS, cuGraph, or CUDA. See
+- The package does not vendor FAISS, cuVS, or CUDA. See
   [Installation](installation.md) for build variables and
   [References](references.md) for software acknowledgements.

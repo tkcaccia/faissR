@@ -22,18 +22,15 @@ expected to set. For the full R help page after installation, use
 | `nn_gpu()` | CUDA exact KNN with GPU-resident output buffers for downstream C/C++ packages. |
 | `gpu_knn_to_host()` | Explicitly copy a `faissR_gpu_knn` result back to R matrices for inspection. |
 | `candidate_knn()` | Exact top-k ranking inside a supplied candidate-neighbour matrix. |
-| `knn_graph()` | Build a native weighted graph from data, an embedding, or KNN output. |
-| `graph_cluster()` | Run native random-walking, Louvain, or Leiden graph clustering [9-12]. |
 | `fast_kmeans()` | CPU/FAISS/CUDA/cuVS k-means where available [7-8]. |
 | `knn()` | Fit a reusable kNN classifier/regressor or fit and predict immediately. |
 | `predict()` | S3 method for `faissR_knn_model`; predicts labels, numeric responses, or class probabilities from `knn()`. |
-| `backend_info()` | Report available CPU, FAISS, CUDA, cuVS, and cuGraph capabilities. |
+| `backend_info()` | Report available CPU, FAISS, CUDA, and cuVS capabilities. |
 | `nn_capabilities()` | Report supported nearest-neighbour method/backend/metric combinations for preflight checks; `runtime = TRUE` adds current-build availability columns. |
 | `faiss_available()` | Logical check for compiled/linked FAISS CPU support. |
 | `faiss_gpu_available()` | Logical check for FAISS GPU support in the linked FAISS build. |
 | `cuda_available()` | Logical check for native CUDA support and an available CUDA runtime/device. |
 | `cuvs_available()` | Logical check for direct RAPIDS cuVS support. |
-| `cugraph_available()` | Logical check for RAPIDS libcugraph graph clustering support. |
 
 ## C/C++ Callable API
 
@@ -68,8 +65,8 @@ nn(data, points = data, k = NULL, exclude_self = FALSE, backend = "auto",
 | `points` | Optional query matrix/data frame/float32 matrix with the same number of columns as `data`. Defaults to `data` for self-search. Float32 reference/query inputs can be mixed with ordinary R double matrices; direct FAISS/cuVS adapters convert only the double side once to row-major float32. |
 | `k` | Number of neighbours to return. If `NULL`, faissR chooses an automatic neighbourhood size. |
 | `exclude_self` | Logical; if `TRUE`, remove each query row from its own neighbour list. This is valid only for self-query calls where `points` is omitted or identical to `data`. The flag is passed into the compiled backend path, so self-neighbour removal is handled in C++/CUDA rather than by R-side row filtering. |
-| `backend` | Device backend: `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses a validated CUDA route only when the requested method/metric combination is supported and CUDA/cuVS runtime support is available, and otherwise resolves to CPU. Explicit `"cuda"` fails clearly when CUDA support or the selected CUDA combination is unavailable. |
-| `method` | Algorithm selector: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"vamana"`, `"nsg"`, `"nndescent"`, `"ivfpq_fastscan"`, or `"cagra"` [1-6,13-16,22-24,34]. These are canonical lowercase public labels; resolved implementation labels such as `faiss_hnsw`, `faiss_gpu_ivf_flat`, `faiss_ivfpq_fastscan`, `cuda_cuvs_ivfpq_fastscan`, or `cuda_cuvs_cagra` are recorded in result metadata but are not public `method` values. For example, `method = "grid", backend = "cpu"` maps to the CPU grid implementation, while `method = "grid", backend = "cuda"` maps to the CUDA grid implementation. Distance choices belong in `metric`, not `method`. Invalid backend/method combinations, such as `method = "cagra", backend = "cpu"`, stop with a clear error. |
+| `backend` | Device backend: `"auto"`, `"cpu"`, `"cuda"`, or `"metal"`. `"auto"` uses a validated CUDA route only when supported and otherwise resolves to CPU. Explicit `"cuda"` fails when CUDA support is unavailable. Explicit `"metal"` is a no-fallback Apple GPU route restricted to 2D/3D self-KNN with `method = "auto"` or `"grid"` and Euclidean, cosine, or correlation distance. |
+| `method` | Algorithm selector: `"auto"`, `"exact"`, `"flat"`, `"bruteforce"`, `"grid"`, `"hnsw"`, `"ivf"`, `"ivfpq"`, `"vamana"`, `"nsg"`, `"nndescent"`, `"ivfpq_fastscan"`, or `"cagra"` [1-6,13-16,22-24,34]. These are canonical lowercase public labels; resolved implementation labels are metadata, not public values. `method = "grid"` maps to native CPU, CUDA, or Metal code according to `backend`. The Metal route supports no separate query, raw inner product, dimensions outside 2D/3D, or `k > 128`; unsupported combinations stop clearly. |
 | `metric` | Distance metric: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Legacy aliases such as `"l2"`, `"cor"`, `"pearson"`, `"ip"`, and dot-product variants are rejected. Inner product is the raw dot product; cosine is the dot product after row L2 normalization; correlation is centered cosine similarity after subtracting each row mean and L2-normalizing each row. For `metric = "inner_product"`, neighbours are ranked by larger raw dot product, but returned `distances` keep faissR's smaller-is-better convention: within each query row the best returned dot product has distance `0`, and lower dot products have larger shifted distances. Euclidean is the validated high-performance route for approximate FAISS/CUDA/cuVS. Cosine and correlation use validated exact paths, FAISS CPU/GPU Flat, IVF-Flat, IVFPQ, CPU HNSW, CUDA cuVS HNSW, native CPU NSG/Vamana, and CUDA NSG/Vamana through normalized search. All-zero cosine rows and constant correlation rows are zero-normalized edge cases: faissR treats zero-vs-zero distance as `0` and zero-vs-nonzero distance as `1`; CPU FAISS Flat uses the exact CPU scorer for those rows to preserve deterministic small-`k` tie handling, while explicit CUDA routes error clearly rather than repairing those rows on CPU. Inner product is supported by native exact CPU scoring, FAISS Flat IP, FAISS IVF-Flat/IVFPQ IP, FAISS HNSW IP, native CPU NN-descent, native CPU NSG/Vamana, direct cuVS brute force through an exact MIPS-to-L2 transform, direct cuVS IVF/PQ through transformed approximate L2 indexes, CUDA CAGRA and CUDA cuVS HNSW through the same graph-search transform, CUDA NSG/Vamana self-KNN, and native CUDA NN-descent shifted-dot-product candidate refinement. |
 | `tuning` | Tuning policy: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. `"auto"` uses deterministic no-pilot defaults for the resolved method; these parameter rules are computed by C++ `nn_tune_*_cpp()` helpers and record `tuning_source = "cpp"` in result metadata. For CPU Euclidean/cosine/correlation/inner-product `method = "exact"`, `"flat"`, or `"bruteforce"`, the policy tunes FAISS Flat batch/cache behavior and records `exact_recall_by_construction = TRUE`. CUDA Euclidean/cosine/correlation/inner-product `method = "exact"` uses compiled FAISS GPU Flat query-batch/resource policies; inner-product rows use `benchmark_scripts/cuda_exact_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv` and are marked validation-pending until the dedicated CUDA IP sweep replaces them. CUDA Euclidean/cosine/correlation/inner-product `method = "flat"` uses compiled FAISS GPU Flat query-batch/resource policies; inner-product rows use `benchmark_scripts/cuda_flat_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv` and are marked validation-pending until `run_hpc_flat_tuning_cuda_inner_product.sh` replaces them. CUDA Euclidean/cosine/correlation/inner-product `method = "bruteforce"` uses compiled cuVS brute-force query-batch/resource policies; the correlation table is in `benchmark_scripts/cuda_bruteforce_correlation_shape_tuning_defaults_from_proxy_results.csv`, and the raw-inner-product table is in `benchmark_scripts/cuda_bruteforce_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv`; both are seeded from measured Euclidean cuVS brute-force rows until corrected metric-specific sweeps replace them. For CPU Euclidean/cosine/correlation/inner-product `method = "hnsw"`, `"nsg"`, or `"vamana"`, CUDA Euclidean/cosine/correlation/inner-product `method = "hnsw"`, `"nsg"`, or `"vamana"`, it selects compiled graph-search tiers by shape, `k`, and `target_recall`; CUDA HNSW raw-inner-product rows use `benchmark_scripts/cuda_hnsw_inner_product_shape_tuning_defaults_from_seeded_euclidean_results.csv` and are marked validation-pending until `run_hpc_hnsw_tuning_cuda_inner_product.sh` replaces them, CUDA NSG correlation and raw-inner-product rows are seeded from `benchmark_scripts/cuda_nsg_correlation_shape_tuning_defaults_from_seeded_cosine_results.csv` and `benchmark_scripts/cuda_nsg_inner_product_shape_tuning_defaults_from_seeded_cosine_results.csv`, and CUDA Vamana correlation/raw-inner-product rows are seeded from `benchmark_scripts/cuda_vamana_correlation_shape_tuning_defaults_from_seeded_cosine_results.csv` and `benchmark_scripts/cuda_vamana_inner_product_shape_tuning_defaults_from_seeded_cosine_results.csv`. Seeded graph rows are flagged as validation-pending until rerun. `"cache"` and `"pilot"` opt into pilot tuning where implemented. |
 | `target_recall` | Speed/recall tier. Use `0.9`, `0.95`, or `0.99`. CPU Euclidean/cosine/correlation/inner-product and CUDA Euclidean/cosine/correlation `method = "ivf"` use this value for compiled `nlist`/`nprobe` tiers; CPU Euclidean/cosine/correlation/inner-product and CUDA Euclidean/correlation `method = "ivfpq"` use it for compiled `nlist`/`nprobe`/`pq_m`/`pq_nbits` tiers. CPU IVF/IVFPQ and CUDA IVF/IVFPQ metadata records `tuning_benchmark_target_met` so best-available partial or below-target rows are not mistaken for guaranteed recall. CUDA `method = "auto"` uses this value when choosing between Flat/brute force and IVF-Flat for Euclidean self-KNN, and CPU/CUDA HNSW use it for graph-search tiers. CPU Euclidean/cosine/correlation/inner-product HNSW, NSG, and Vamana, plus CUDA Euclidean/cosine/correlation/inner-product NSG and Vamana, record `tuning_benchmark_target_met` for benchmark-derived or seeded rows; CPU Euclidean/cosine/correlation/inner-product and CUDA Euclidean/cosine/correlation/inner-product `method = "exact"` record the requested tier in exact tuning metadata, CPU Euclidean/cosine/correlation/inner-product and CUDA Euclidean/cosine/correlation/inner-product `method = "flat"` record it in flat-tuning metadata, and CPU Euclidean/cosine/correlation/inner-product plus CUDA Euclidean/cosine/correlation/inner-product `method = "bruteforce"` records it in bruteforce-tuning metadata. Exact, Flat, and brute-force recall is 1.0 by construction. |
@@ -188,7 +185,7 @@ consume CUDA device pointers. It is never called automatically by `nn_gpu()`.
 | `"nndescent"` | NN-descent style approximate graph construction. CPU uses faissR's native NNDescent route by default for Euclidean/L2, normalized cosine/correlation, and raw inner product; `tuning = "auto"` selects CPU candidate pool, iteration, candidate breadth, and random-projection settings from metric-specific shape/k/target-recall tables. CUDA maps to direct cuVS NN-descent for Euclidean/L2 plus normalized cosine/correlation. CUDA Euclidean has measured shape/k/target defaults; CUDA cosine and correlation use transformed float32 search and seeded policies derived from the measured Euclidean table until the corrected metric-specific sweeps are rerun. Raw inner-product CUDA NN-descent uses faissR's native shifted-dot-product CUDA candidate refinement route because direct cuVS NN-descent does not expose raw IP. FAISS NNDescent is disabled by default because linked FAISS builds can abort during graph construction [3-4,16]. |
 | `"cagra"` | CUDA-only graph-search method. faissR can use FAISS GPU CAGRA through the FAISS/cuVS integration or direct RAPIDS cuVS CAGRA. Use `cagra_implementation = "faiss_gpu"` or `"cuvs"` to force the provider for a call, or `options(faissR.cagra_implementation = ...)` to set a session default; `"auto"` applies the deterministic shape-aware provider rule. Direct cuVS CAGRA also exposes `cagra_build_algo` (`"auto"`, `"ivf_pq"`, `"nn_descent"`, or `"iterative_cagra_search"`) as an explicit graph-construction parameter; `cagra_build_algo = "auto"` is shape-aware rather than a silent provider fallback. It supports Euclidean/L2, cosine/correlation through normalized Euclidean graph search, and raw inner product through a maximum-inner-product-to-L2 extra-dimension transform. CUDA Euclidean `tuning = "auto"` uses measured shape/k/target rows from `benchmark_scripts/cuda_cagra_euclidean_shape_tuning_defaults_from_uploaded_results.csv`; CUDA cosine and correlation use validation-pending seeded tables and return `tuning_benchmark_target_met = FALSE` until the corrected metric-specific sweeps are rerun. The correlation seed is `benchmark_scripts/cuda_cagra_correlation_shape_tuning_defaults_from_seeded_euclidean_results.csv` [3,13-16]. |
 
-Use `nn(..., exclude_self = TRUE)` for graph construction and embedding
+Use `nn(..., exclude_self = TRUE)` for embedding
 workflows where each row should not list itself as its nearest neighbour.
 
 For CPU FAISS Flat/HNSW/IVF/IVFPQ/IVFPQ FastScan routes, raw `nn()` calls
@@ -220,128 +217,6 @@ candidate_knn(data, candidates, points = data, k,
 
 This function does not generate candidates; it only reranks candidates supplied
 by another method.
-
-## `knn_graph()`
-
-```r
-knn_graph(data, knn = NULL, k = 50L, backend = "auto",
-          method = NULL, nn_method = "auto",
-          metric = "euclidean", tuning = "auto",
-          target_recall = 0.99,
-          cagra_implementation = NULL, cagra_build_algo = NULL,
-          weight = "auto",
-          mutual = FALSE, prune = 0, n_threads = NULL)
-```
-
-| Argument | Description |
-| --- | --- |
-| `data` | Numeric matrix/data frame, a `faissR_nn` object from `nn()`, or an embedding object with a matrix `layout`. |
-| `knn` | Optional precomputed KNN object. If supplied, faissR reuses it instead of recomputing neighbours from `data`. |
-| `k` | Number of neighbours used in the graph. If `knn` has fewer columns, faissR uses the available columns. |
-| `backend` | Device backend passed to `nn(..., exclude_self = TRUE)` when neighbours must be computed from `data`: `"auto"`, `"cpu"`, or `"cuda"`. |
-| `method` | Alias for `nn_method`, matching the public method argument used by `nn()` and `knn()`. If both are supplied they must agree after alias normalization. |
-| `nn_method` | Nearest-neighbour method passed to `nn(..., exclude_self = TRUE)` when neighbours must be computed from `data`; kept for existing graph-specific code. |
-| `metric` | Distance metric passed to `nn(..., exclude_self = TRUE)` when neighbours must be computed from `data`: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Legacy aliases such as `"l2"`, `"cor"`, `"pearson"`, and `"ip"` are rejected. Correlation is centered cosine similarity, not raw inner product. Inner-product graph construction ranks by larger raw dot product and reuses faissR's shifted smaller-is-better distance convention from `nn()`. |
-| `tuning` | Tuning policy passed to `nn(..., exclude_self = TRUE)` when neighbours must be computed from `data`. |
-| `target_recall` | Speed/recall tier passed to `nn(..., exclude_self = TRUE)` when faissR computes neighbours internally; affects CPU Euclidean/cosine/correlation/inner-product IVF and IVFPQ probing/PQ tiers, CUDA auto Flat-vs-IVF selection, CUDA IVF probing, CUDA Euclidean/correlation/raw-inner-product IVFPQ probing/PQ tiers, and HNSW tiers. |
-| `cagra_implementation` | CUDA CAGRA provider passed to `nn(..., exclude_self = TRUE)` when neighbours must be computed from `data`. |
-| `cagra_build_algo` | Direct RAPIDS cuVS CAGRA graph-build algorithm passed to `nn(..., exclude_self = TRUE)` when neighbours must be computed from `data`. See `nn()`. |
-| `weight` | Edge weighting: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. `"auto"` uses shared-nearest-neighbour weights for input space and distance weights for embedding space. |
-| `mutual` | If `TRUE`, keep only reciprocal nearest-neighbour edges. |
-| `prune` | Drop edges with weight less than or equal to this non-negative threshold. |
-| `n_threads` | CPU worker threads for neighbour search when KNN is computed inside the function. |
-
-Returns a native `faissR_graph` edge-list object. No `igraph` dependency is
-required. When faissR builds neighbours internally, the `faissR_graph` metadata
-includes graph size, weighting, nearest-neighbour method, metric, tuning
-policy, and the requested/resolved public KNN backends. It also preserves compact-relevant KNN route metadata such as
-approximation parameters, auto-selection metadata, normalized metric transform
-metadata, and FAISS/cuVS/grid attributes for benchmark auditing.
-
-## `graph_cluster()`
-
-```r
-graph_cluster(graph, method = "random_walking", backend = "auto",
-              k = 50L, graph_backend = "auto", graph_method = "auto",
-              metric = "euclidean", tuning = "auto",
-              target_recall = 0.99,
-              cagra_implementation = NULL, cagra_build_algo = NULL,
-              weight = "auto",
-              mutual = FALSE, prune = 0, n_threads = NULL,
-              n_runs = 1L, resolution = 1, n_clusters = NULL,
-              objective_function = "modularity",
-              n_iterations = 10L, steps = 4L, seed = NULL, ...)
-```
-
-| Argument | Description |
-| --- | --- |
-| `graph` | A `faissR_graph`, a KNN object returned by `nn()`, a numeric matrix/data frame, or an embedding object with `layout`. |
-| `method` | Clustering algorithm: `"random_walking"`, `"louvain"`, or `"leiden"`. |
-| `backend` | `"auto"`, `"cpu"`, or `"cuda"`. `"auto"` uses CUDA when libcugraph is available for Louvain/Leiden and CPU otherwise; auto keeps `"random_walking"` on CPU. The auto backend decision is made by compiled `graph_cluster_auto_backend_cpp()` and recorded in `parameters$backend_selection`. `"cuda"` uses RAPIDS libcugraph Louvain/Leiden when compiled and available [9-12]. CUDA random-walking is not enabled yet. |
-| `k` | Number of neighbours when `graph` is raw data or an embedding rather than a graph/KNN object. |
-| `graph_backend` | Backend passed to `nn(..., exclude_self = TRUE)` when faissR needs to build the KNN graph internally. |
-| `graph_method` | Nearest-neighbour method passed to `nn(..., exclude_self = TRUE)` when faissR needs to build the KNN graph internally. |
-| `metric` | Distance metric passed to `nn(..., exclude_self = TRUE)` when faissR needs to build the KNN graph internally: `"euclidean"`, `"cosine"`, `"correlation"`, or `"inner_product"`. Legacy aliases such as `"l2"`, `"cor"`, `"pearson"`, and `"ip"` are rejected. Correlation is centered cosine similarity, not raw inner product. Inner-product graph construction ranks by larger raw dot product and reuses faissR's shifted smaller-is-better distance convention from `nn()`. |
-| `tuning` | Tuning policy passed to `nn(..., exclude_self = TRUE)` when faissR needs to build the KNN graph internally. |
-| `target_recall` | Speed/recall tier passed to `nn(..., exclude_self = TRUE)` when faissR builds the graph internally; affects CPU Euclidean/cosine/correlation/inner-product IVF and IVFPQ probing/PQ tiers, CUDA auto Flat-vs-IVF selection, CUDA IVF probing, CUDA Euclidean/correlation/raw-inner-product IVFPQ probing/PQ tiers, and HNSW tiers. |
-| `cagra_implementation` | CUDA CAGRA provider passed to `nn(..., exclude_self = TRUE)` when faissR builds the KNN graph internally. |
-| `cagra_build_algo` | Direct RAPIDS cuVS CAGRA graph-build algorithm passed to `nn(..., exclude_self = TRUE)` when faissR builds the KNN graph internally. See `nn()`. |
-| `weight` | Graph edge weighting passed to `knn_graph()`: `"auto"`, `"snn"`, `"adaptive"`, `"distance"`, or `"binary"`. |
-| `mutual` | If `TRUE`, build a mutual-nearest-neighbour graph. |
-| `prune` | Non-negative edge pruning threshold. |
-| `n_threads` | CPU threads for KNN construction and native CPU clustering. |
-| `n_runs` | Number of independent clustering runs. faissR keeps the best modularity run. |
-| `resolution` | Positive resolution parameter for Louvain/Leiden-style modularity scoring. Larger values tend to produce more communities. When `n_clusters` is supplied, omitted `resolution` or `resolution = NULL` asks faissR to seed the bounded target-count resolution grid from the graph-shape heuristic instead of the numeric default. |
-| `n_clusters` | Optional target number of communities for Louvain/Leiden. If supplied, faissR builds the KNN graph once, evaluates a bounded deterministic resolution grid, and keeps the result closest to the requested count. Explicit numeric `resolution` values center the grid near that value and graph shape; omitted `resolution` or `resolution = NULL` uses the no-pilot target-count graph-shape seed directly. The grid is computed by `graph_resolution_candidates_cpp()` and records `resolution_selection$tuning_source = "cpp"`. The grid is shape-aware: large graphs use fewer deterministic candidates than small graphs to reduce repeated clustering passes. This is a convenience target, not a hard guarantee. If `n_clusters` is supplied and `method` is omitted, faissR uses `"louvain"` as the target-count clustering method. The target must be a positive integer and cannot exceed the graph vertex count. |
-| `objective_function` | Community objective. Only `"modularity"` is currently implemented by the native CPU and CUDA clustering paths; CPM is not accepted until faissR can optimize and report it honestly. |
-| `n_iterations` | Maximum native clustering iterations. |
-| `steps` | Random-walk propagation depth for `method = "random_walking"`. |
-| `seed` | Optional seed for reproducible repeated runs. |
-| `...` | Reserved for future backend-specific options. |
-
-Returns a `faissR_graph_cluster` object with `membership`, `modularity`,
-parameters, backend metadata, and source acknowledgements. `backend` records
-the clustering implementation that actually ran, while
-`parameters$requested_backend` and `parameters$resolved_backend` record the
-public backend request and the device policy after resolving `"auto"`.
-`parameters$backend_selection` records the compiled backend selector metadata,
-including `runtime_decision`, CUDA/libcugraph availability flags, and
-`tuning_source = "cpp"`.
-When `graph_cluster()` builds the graph internally or receives a `faissR_graph`,
-`parameters$graph_backend`, `parameters$graph_requested_backend`, and
-`parameters$graph_resolved_backend` separate the concrete KNN implementation
-from the public graph backend request and resolved KNN route.
-`parameters$n_vertices` and `parameters$n_edges` record the clustered graph
-size for benchmark summaries. `parameters$nn_metric_transform` and
-`parameters$nn_distance_transform` preserve normalized cosine/correlation graph
-construction metadata from the KNN route. Direct graph builds also preserve
-compact KNN route metadata in `parameters$nn_approximation`,
-`parameters$nn_faiss`, `parameters$nn_cuvs`, `parameters$nn_spatial_index`,
-and `parameters$nn_auto_selection` when those fields are
-attached to the internal `nn()` result.
-When a target community count is used,
-`target_n_clusters`, `selected_resolution`, `target_gap`,
-`resolution_selection`, and `resolution_search` record the requested target,
-selected resolution, final community-count gap, deterministic selection rule,
-candidate center, and full resolution search table. The validated target is
-also stored in `parameters$n_clusters_requested` for benchmark summaries and
-`parameters$n_clusters` for backward compatibility. The candidate center and
-grid come from the compiled `graph_resolution_candidates_cpp()` helper and
-record `resolution_selection$tuning_source = "cpp"`. `parameters$resolution` is
-`NA` for target-auto searches where `n_clusters` is supplied and
-`resolution` is omitted or `NULL`; the actual automatic center is stored in
-`resolution_selection$candidate_center`.
-`parameters$resolution_source` is `"default"`, `"user"`, or `"target_auto"`
-depending on whether the grid seed came from the default, an explicit numeric
-`resolution`, or omitted/`NULL` `resolution` with `n_clusters`.
-
-### Graph Clustering Methods
-
-| `method` | Description |
-| --- | --- |
-| `"random_walking"` | Native CPU random-walk label-propagation/community method inspired by walktrap-style random-walk clustering and local parallel random-walk literature. CUDA random-walking is not enabled yet [10,19]. |
-| `"louvain"` | Native CPU Louvain modularity local-moving implementation, with optional RAPIDS libcugraph CUDA execution when faissR is built with cuGraph [9,12]. |
-| `"leiden"` | Native CPU Leiden-style local moving plus refinement to split disconnected communities, with optional RAPIDS libcugraph CUDA execution when available. The CPU implementation acknowledges Leiden and shared-memory/dynamic Leiden work [11-12,17-18]. |
 
 ## `fast_kmeans()`
 
@@ -512,7 +387,6 @@ faiss_available()
 faiss_gpu_available()
 cuda_available()
 cuvs_available()
-cugraph_available()
 ```
 
 | Function | Arguments | Description |
@@ -522,7 +396,6 @@ cugraph_available()
 | `faiss_gpu_available()` | None. | Returns `TRUE` when the linked FAISS build reports GPU support. |
 | `cuda_available()` | None. | Returns `TRUE` when native CUDA support was compiled and a CUDA device/runtime is available. |
 | `cuvs_available()` | None. | Returns `TRUE` when direct RAPIDS cuVS backends were compiled and can be loaded. |
-| `cugraph_available()` | None. | Returns `TRUE` when RAPIDS libcugraph graph clustering support was compiled and can be loaded. |
 
 ## Typical Workflow
 
@@ -533,10 +406,7 @@ x <- scale(as.matrix(iris[, 1:4]))
 
 nn_res <- nn(x, k = 15, exclude_self = TRUE,
              backend = "cpu", method = "auto", n_threads = 4)
-graph <- knn_graph(nn_res, k = 15, weight = "snn")
-leiden <- graph_cluster(graph, method = "leiden", backend = "cpu", n_threads = 4)
-
-table(leiden$membership)
+nn_res$indices[1:3, 1:5]
 ```
 
 For CUDA benchmarking on a GPU build:

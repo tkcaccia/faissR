@@ -11,7 +11,6 @@ OUT_DIR="${OUT_DIR:-/mnt/sata_ssd/faissR_FLOAT32_NN_EUCLIDEAN_K50_${STAMP}}"
 export CONDA_PREFIX="$ENV_DIR"
 export FAISS_HOME="${FAISS_HOME:-$ENV_DIR}"
 export CUVS_HOME="${CUVS_HOME:-$ENV_DIR}"
-export CUGRAPH_HOME="${CUGRAPH_HOME:-$ENV_DIR}"
 export CUDA_HOME
 export NVCC="${NVCC:-$CUDA_HOME/bin/nvcc}"
 export FAISSR_USE_CUDA="${FAISSR_USE_CUDA:-1}"

@@ -11,10 +11,10 @@
 [References](references.md)
 
 `faissR` is an R source package that links to external system libraries. FAISS
-is mandatory. CUDA, FAISS GPU/cuVS integration, RAPIDS cuVS, and RAPIDS
-libcugraph are optional for CPU-only builds and are compiled only when the
-matching headers and libraries are available [1-3,12-16,30-33]. For a NVIDIA
-GPU build, request the GPU features explicitly; then missing CUDA/cuVS/cuGraph
+is mandatory. CUDA, FAISS GPU/cuVS integration, and RAPIDS cuVS are optional
+for CPU-only builds and are compiled only when the matching headers and
+libraries are available [1-3,13-16,30-33]. For a NVIDIA GPU build, request the
+GPU features explicitly; then missing CUDA/cuVS
 libraries are fatal rather than silently producing a CPU-only installation.
 
 The package code does not depend on Python or conda. Conda/micromamba can still
@@ -27,10 +27,9 @@ optionally, CUDA/RAPIDS libraries.
 
 | Build type | Required external libraries | faissR result |
 |---|---|---|
-| CPU/FAISS | FAISS C++ library | FAISS CPU Flat, IVF, IVFPQ, HNSW, NSG/NNDescent where supported, native CPU routes, graph clustering, kNN models, k-means |
+| CPU/FAISS | FAISS C++ library | FAISS CPU Flat, IVF, IVFPQ, HNSW, NSG/NNDescent where supported, native CPU routes, kNN models, k-means |
 | CUDA with FAISS GPU | FAISS built with GPU support, CUDA toolkit | FAISS GPU Flat, IVF, IVFPQ, CAGRA where the linked FAISS build exposes them |
 | CUDA with direct cuVS | CUDA toolkit plus RAPIDS cuVS C/C++ library | Direct cuVS brute force, IVF, IVFPQ, CAGRA, HNSW, NN-descent, cuVS k-means. cuVS HNSW builds a CAGRA seed graph and converts it with `cuvsHnswFromCagraWithDataset` using the host dataset and cuVS CPU hierarchy; result metadata marks this wrapper design. |
-| CUDA graph clustering | CUDA toolkit plus RAPIDS libcugraph | CUDA Louvain/Leiden in `graph_cluster()` |
 
 GPU requests are explicit. If a GPU backend was not compiled or is unavailable
 at runtime, faissR errors instead of silently falling back to CPU.
@@ -38,7 +37,7 @@ at runtime, faissR errors instead of silently falling back to CPU.
 For submission/build systems such as Bioconductor, the intended CPU build
 requires FAISS but not NVIDIA libraries. For NVIDIA GPU users, the intended
 strict build uses `FAISSR_REQUIRE_CUDA=1` and, where relevant,
-`FAISSR_REQUIRE_CUVS=1` or `FAISSR_REQUIRE_CUGRAPH=1`.
+`FAISSR_REQUIRE_CUVS=1`.
 
 On Debian/Ubuntu builders, the mandatory CPU dependency is the FAISS
 development package, typically `libfaiss-dev`. Automated systems such as
@@ -132,7 +131,7 @@ faiss_available()
 backend_info()
 ```
 
-Expected macOS result: FAISS CPU should be available; CUDA, cuVS, and cuGraph
+Expected macOS result: FAISS CPU should be available; CUDA and cuVS
 should report unavailable.
 
 For GitHub installs on a new macOS machine, faissR can call Homebrew when the
@@ -206,8 +205,7 @@ CUDA builds require:
 - a compatible NVIDIA driver;
 - the NVIDIA CUDA toolkit, including `nvcc`;
 - FAISS built with GPU support if you want FAISS GPU indexes;
-- RAPIDS cuVS headers/library if you want direct cuVS routes;
-- RAPIDS libcugraph headers/library if you want CUDA Louvain/Leiden.
+- RAPIDS cuVS headers/library if you want direct cuVS routes.
 
 The source-build install command is:
 
@@ -215,10 +213,8 @@ The source-build install command is:
 CUDA_HOME=/usr/local/cuda \
 FAISS_HOME=/path/to/faiss-gpu \
 CUVS_HOME=/path/to/rapids \
-CUGRAPH_HOME=/path/to/rapids \
 FAISSR_REQUIRE_CUDA=1 \
 FAISSR_REQUIRE_CUVS=1 \
-FAISSR_REQUIRE_CUGRAPH=1 \
 R CMD INSTALL .
 ```
 
@@ -230,11 +226,10 @@ CUDA_HOME=/usr/local/cuda \
 FAISS_HOME=/path/to/faiss-gpu \
 FAISSR_REQUIRE_CUDA=1 \
 FAISSR_USE_CUVS=0 \
-FAISSR_USE_CUGRAPH=0 \
 R CMD INSTALL .
 ```
 
-Direct cuVS without cuGraph:
+Direct cuVS:
 
 ```sh
 CUDA_HOME=/usr/local/cuda \
@@ -242,7 +237,6 @@ FAISS_HOME=/path/to/faiss \
 CUVS_HOME=/path/to/rapids \
 FAISSR_REQUIRE_CUDA=1 \
 FAISSR_REQUIRE_CUVS=1 \
-FAISSR_USE_CUGRAPH=0 \
 R CMD INSTALL .
 ```
 
@@ -261,11 +255,9 @@ ENV_DIR="$HOME/.local/share/mamba/envs/faissr-gpu"
 
 FAISS_HOME="$ENV_DIR" \
 CUVS_HOME="$ENV_DIR" \
-CUGRAPH_HOME="$ENV_DIR" \
 CUDA_HOME=/usr/local/cuda \
 FAISSR_REQUIRE_CUDA=1 \
 FAISSR_REQUIRE_CUVS=1 \
-FAISSR_REQUIRE_CUGRAPH=1 \
 R CMD INSTALL .
 
 export LD_LIBRARY_PATH="$ENV_DIR/lib:/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}"
@@ -362,17 +354,14 @@ Linux and macOS source builds still require real FAISS.
 | `CONDA_PREFIX` | Active conda/mamba prefix. Used only as a passive fallback when `faiss-cpu` and `libomp` are already installed there. |
 | `FAISSR_USE_CUDA` | Set to `1` to request CUDA native/FAISS GPU build paths; set to `0` to force CPU-only stubs. |
 | `FAISSR_USE_CUVS` | Set to `1` to request direct RAPIDS cuVS build paths; set to `0` to force cuVS stubs. |
-| `FAISSR_USE_CUGRAPH` | Set to `1` to request RAPIDS libcugraph graph clustering; set to `0` to force cuGraph stubs. |
 | `FAISSR_REQUIRE_CUDA` | Strict alias for a NVIDIA GPU build. Set to `1` to make missing CUDA toolkit/`nvcc` fatal at configure time. |
 | `FAISSR_REQUIRE_CUVS` | Strict direct cuVS request. Set to `1` to make missing RAPIDS cuVS fatal at configure time. |
-| `FAISSR_REQUIRE_CUGRAPH` | Strict CUDA graph-clustering request. Set to `1` to make missing RAPIDS libcugraph fatal at configure time. |
 | `CUDA_HOME` | CUDA toolkit prefix, for example `/usr/local/cuda`. |
 | `CUVS_HOME` | RAPIDS cuVS prefix containing headers and `libcuvs`. |
-| `CUGRAPH_HOME` | RAPIDS libcugraph prefix containing headers and `libcugraph`. |
 | `NVCC` | Optional explicit CUDA compiler path. |
 | `FAISSR_CUDA_ARCH` | Optional CUDA architectures passed to `nvcc`, for example `80 89`. |
 | `FAISSR_CUDA_FLAGS` | Optional extra flags appended to CUDA compilation. |
-| `PKG_CONFIG_PATH` | Helps locate FAISS/cuVS/cuGraph `.pc` files. |
+| `PKG_CONFIG_PATH` | Helps locate FAISS/cuVS `.pc` files. |
 | `LD_LIBRARY_PATH` | Linux runtime library search path. |
 | `DYLD_LIBRARY_PATH` | macOS runtime library search path when needed. |
 | `PATH` | Windows runtime DLL search path. |
@@ -387,11 +376,10 @@ To guarantee a CPU-only build even when CUDA libraries are installed:
 FAISS_HOME=/path/to/faiss \
 FAISSR_USE_CUDA=0 \
 FAISSR_USE_CUVS=0 \
-FAISSR_USE_CUGRAPH=0 \
 R CMD INSTALL .
 ```
 
-This build links FAISS and compiles CUDA/cuVS/cuGraph stubs. Explicit GPU
+This build links FAISS and compiles CUDA/cuVS stubs. Explicit GPU
 requests fail clearly.
 
 ## Validation
@@ -406,7 +394,6 @@ faiss_available()
 faiss_gpu_available()
 cuda_available()
 cuvs_available()
-cugraph_available()
 ```
 
 Minimum expected CPU build:
@@ -434,7 +421,6 @@ available at runtime.
 | `GLIBCXX_* not found` on Linux | R loaded an older system `libstdc++` before FAISS/RAPIDS libraries | Use a consistent compiler/runtime stack; set `LD_LIBRARY_PATH` and, if necessary for benchmarks, `LD_PRELOAD` to the intended `libstdc++.so.6`. |
 | CUDA build cannot find `nvcc` | CUDA toolkit is missing or not on path | Set `CUDA_HOME` and/or `NVCC`; check `nvcc --version`. |
 | cuVS routes unavailable | cuVS headers/library were not found at build time | Set `CUVS_HOME`, `FAISSR_USE_CUVS=1`, and runtime `LD_LIBRARY_PATH`. |
-| cuGraph routes unavailable | libcugraph headers/library were not found at build time | Set `CUGRAPH_HOME`, `FAISSR_USE_CUGRAPH=1`, and runtime `LD_LIBRARY_PATH`. |
 | Windows GPU build is difficult | Native RAPIDS/cuVS C++ libraries are Linux-oriented | Use WSL2 and follow the Linux CUDA instructions. |
 
 ## Bioconductor-Style Check
@@ -458,7 +444,7 @@ BiocCheck::BiocCheck("faissR_0.99.15.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;
-CUDA/cuVS/cuGraph tests are skipped unless those optional backends were
+CUDA/cuVS tests are skipped unless those optional backends were
 compiled and are available at runtime. New Bioconductor submissions also
 require the maintainer to be registered on the Bioconductor Support Site and
 subscribed to the bioc-devel mailing list. FAISS is a mandatory external system
