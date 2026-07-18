@@ -725,6 +725,23 @@ const HnswCpuTuningSpec* hnsw_cpu_correlation_benchmark_spec(const std::string& 
 const HnswCpuTuningSpec* hnsw_cpu_inner_product_benchmark_spec(const std::string& shape_group,
                                                                int k_bucket,
                                                                int target_code) {
+  if (const auto* override_spec = jmlr_match_shape_spec(
+        jmlr_cpu_hnsw_inner_product_specs,
+        shape_group,
+        k_bucket,
+        target_code)) {
+    static thread_local HnswCpuTuningSpec adapted;
+    adapted = {
+      override_spec->shape_group,
+      override_spec->k_bucket,
+      override_spec->target_code,
+      override_spec->m,
+      override_spec->ef_construction,
+      override_spec->ef_search,
+      override_spec->basis
+    };
+    return &adapted;
+  }
   static const HnswCpuTuningSpec specs[] = {
     {"large_high_dim", 15, 90, 48, 320, 400, "best_recall_below_target_hnsw_recall90_coverage_3of3"},
     {"large_high_dim", 15, 95, 48, 320, 400, "best_recall_below_target_hnsw_recall95_coverage_3of3"},
@@ -1584,10 +1601,12 @@ List nn_tune_cuda_exact_cpp(int n,
     input_type = spec->input_type;
     input_layout = spec->input_layout;
     benchmark_basis = spec->basis;
-	benchmark_source = euclidean ? "hpc_exact_cuda_euclidean_20260701_014100" :
-	  (cosine ? "hpc_exact_cuda_cosine_20260702_110455" :
-	   (correlation ? "hpc_exact_cuda_correlation_20260703_023519" :
-	    "hpc_exact_cuda_inner_product_seeded_from_euclidean_pending"));
+	benchmark_source = inner_product && benchmark_basis.find("jmlr_mloss_inner_product") != std::string::npos ?
+	  "hpc_jmlr_mloss_exact_cuda_inner_product_20260715" :
+	  (euclidean ? "hpc_exact_cuda_euclidean_20260701_014100" :
+	   (cosine ? "hpc_exact_cuda_cosine_20260702_110455" :
+	    (correlation ? "hpc_exact_cuda_correlation_20260703_023519" :
+	     "hpc_exact_cuda_inner_product_seeded_from_euclidean_pending")));
     rule = std::string("hpc_cuda_exact_") + metric + "_" + shape_group +
       "_k" + std::to_string(k_bucket) + "_" +
       hnsw_target_label_cpp(target_code);
@@ -1690,10 +1709,12 @@ List nn_tune_cuda_flat_cpp(int n,
     input_type = spec->input_type;
     input_layout = spec->input_layout;
     benchmark_basis = spec->basis;
-    benchmark_source = euclidean ? "hpc_flat_cuda_euclidean_20260701_031219" :
-      (cosine ? "hpc_flat_cuda_cosine_20260702_120850" :
-       (correlation ? "hpc_flat_cuda_correlation_20260703_062359" :
-        "hpc_flat_cuda_inner_product_seeded_from_euclidean_pending"));
+    benchmark_source = inner_product && benchmark_basis.find("jmlr_mloss_inner_product") != std::string::npos ?
+      "hpc_jmlr_mloss_flat_cuda_inner_product_20260715" :
+      (euclidean ? "hpc_flat_cuda_euclidean_20260701_031219" :
+       (cosine ? "hpc_flat_cuda_cosine_20260702_120850" :
+        (correlation ? "hpc_flat_cuda_correlation_20260703_062359" :
+         "hpc_flat_cuda_inner_product_seeded_from_euclidean_pending")));
     rule = std::string("hpc_cuda_flat_") + metric + "_" + shape_group +
       "_k" + std::to_string(k_bucket) + "_" +
       hnsw_target_label_cpp(target_code);
@@ -2265,9 +2286,13 @@ List nn_tune_faiss_ivf_cpp(int n,
       benchmark_basis = spec->basis;
       benchmark_target_met =
         benchmark_basis.find("fastest_meeting_target") != std::string::npos;
-      benchmark_source = backend == "cpu" ?
-        "hpc_ivfpq_cpu12_inner_product_20260701_090337" :
-        "hpc_ivfpq_cuda_inner_product_seeded_from_euclidean_pending";
+      benchmark_source = benchmark_basis.find("jmlr_mloss_inner_product") != std::string::npos ?
+        (backend == "cpu" ?
+          "hpc_jmlr_mloss_ivfpq_cpu12_inner_product_20260715" :
+          "hpc_jmlr_mloss_ivfpq_cuda_inner_product_20260715") :
+        (backend == "cpu" ?
+          "hpc_ivfpq_cpu12_inner_product_20260701_090337" :
+          "hpc_ivfpq_cuda_inner_product_seeded_from_euclidean_pending");
       rule = "hpc_" + backend + "_ivfpq_inner_product_" + shape_group +
         "_k" + std::to_string(k_bucket) + "_" +
         hnsw_target_label_cpp(target_code);
@@ -2306,7 +2331,9 @@ List nn_tune_faiss_ivf_cpp(int n,
       benchmark_basis = spec->basis;
       benchmark_target_met =
         benchmark_basis.find("fastest_meeting_target") != std::string::npos;
-      benchmark_source = "hpc_ivf_cpu12_inner_product_20260701_090337";
+      benchmark_source = benchmark_basis.find("jmlr_mloss_inner_product") != std::string::npos ?
+        "hpc_jmlr_mloss_ivf_cpu12_inner_product_20260715" :
+        "hpc_ivf_cpu12_inner_product_20260701_090337";
       rule = "hpc_cpu_ivf_inner_product_" + shape_group +
         "_k" + std::to_string(k_bucket) + "_" +
         hnsw_target_label_cpp(target_code);
@@ -2567,13 +2594,16 @@ List nn_tune_cuda_ivf_cpp(int n,
       basis = spec->basis;
       benchmark_target_met =
         basis.find("fastest_meeting_target") != std::string::npos;
-      benchmark_source = metric == "cosine" ?
+      benchmark_source = metric == "inner_product" &&
+        basis.find("jmlr_mloss_inner_product") != std::string::npos ?
+        "hpc_jmlr_mloss_ivf_cuda_inner_product_20260716" :
+        (metric == "cosine" ?
         "hpc_ivf_cuda_cosine_20260702_192200" :
         (metric == "correlation" ?
           "hpc_ivf_cuda_correlation_20260703_133655" :
           (metric == "inner_product" ?
             "hpc_ivf_cuda_inner_product_seeded_from_euclidean_pending" :
-            "hpc_ivf_cuda_euclidean_20260702_001853"));
+            "hpc_ivf_cuda_euclidean_20260702_001853")));
       rule_basis = "hpc_shape_k_target_recall";
       shape = hpc_shape;
       hpc_metric_spec_used = true;
@@ -2733,10 +2763,12 @@ List nn_tune_faiss_hnsw_cpp(int n,
       (inner_product ? hnsw_cpu_inner_product_benchmark_spec(shape_group, k_bucket, target_code) : nullptr)));
   const std::string benchmark_basis = benchmark_spec ? benchmark_spec->benchmark_basis : "";
   const std::string benchmark_source = benchmark_spec ?
-    (inner_product ? "hpc_hnsw_cpu12_inner_product_20260701_090337" :
+    (inner_product && benchmark_basis.find("jmlr_mloss_inner_product") != std::string::npos ?
+       "hpc_jmlr_mloss_hnsw_cpu12_inner_product_20260715" :
+     (inner_product ? "hpc_hnsw_cpu12_inner_product_20260701_090337" :
      (correlation ? "hpc_hnsw_cpu12_correlation_20260701_090337" :
      (cosine ? "hpc_hnsw_cpu12_cosine_20260701_082849" :
-      "hpc_hnsw_cpu12_euclidean_20260630_161409"))) :
+      "hpc_hnsw_cpu12_euclidean_20260630_161409")))) :
     "heuristic_fallback";
   const bool benchmark_target_met = !manual && benchmark_spec != nullptr &&
     (benchmark_basis.find("fastest_meeting_target") != std::string::npos ||
@@ -3037,7 +3069,9 @@ List nn_tune_cpu_nndescent_cpp(int n,
       benchmark_basis = spec->basis;
       benchmark_target_met =
         benchmark_basis.find("fastest_meeting_target") != std::string::npos;
-      benchmark_source = "hpc_nndescent_cpu12_inner_product_20260701_090337";
+      benchmark_source = benchmark_basis.find("jmlr_mloss_inner_product") != std::string::npos ?
+        "hpc_jmlr_mloss_nndescent_cpu12_inner_product_20260715" :
+        "hpc_nndescent_cpu12_inner_product_20260701_090337";
       rule = "hpc_cpu_nndescent_inner_product_" + shape_group +
         "_k" + std::to_string(k_bucket) + "_" +
         hnsw_target_label_cpp(target_code);
@@ -3461,11 +3495,15 @@ List nn_tune_native_nsg_cpp(int n,
       benchmark_target_met =
         !manual && !seeded_cuda_inner_product &&
         benchmark_basis.find("fastest_meeting_target") != std::string::npos;
-      benchmark_source = seeded_cuda_inner_product ?
-        "hpc_nsg_cuda_inner_product_validation_pending_seeded_from_cosine_20260702_211910" :
+      benchmark_source = benchmark_basis.find("jmlr_mloss_inner_product") != std::string::npos ?
         (backend == "cpu" ?
-           "hpc_nsg_cpu12_inner_product_20260701_090337" :
-           "hpc_nsg_cuda_inner_product");
+          "hpc_jmlr_mloss_nsg_cpu12_inner_product_20260715" :
+          "hpc_jmlr_mloss_nsg_cuda_inner_product_20260716") :
+        (seeded_cuda_inner_product ?
+          "hpc_nsg_cuda_inner_product_validation_pending_seeded_from_cosine_20260702_211910" :
+          (backend == "cpu" ?
+             "hpc_nsg_cpu12_inner_product_20260701_090337" :
+             "hpc_nsg_cuda_inner_product"));
       rule = "hpc_" + backend + "_nsg_inner_product_" + shape_group +
         "_k" + std::to_string(k_bucket) + "_" +
         hnsw_target_label_cpp(target_code);
@@ -3607,11 +3645,15 @@ List nn_tune_vamana_cpp(int n,
       benchmark_target_met =
         !manual && !seeded_cuda_inner_product &&
         benchmark_basis.find("fastest_meeting_target") != std::string::npos;
-      benchmark_source = seeded_cuda_inner_product ?
-        "hpc_vamana_cuda_inner_product_validation_pending_seeded_from_cosine_20260702_232209" :
+      benchmark_source = benchmark_basis.find("jmlr_mloss_inner_product") != std::string::npos ?
         (backend == "cpu" ?
-           "hpc_vamana_cpu12_inner_product_20260701_090337" :
-           "hpc_vamana_cuda_inner_product");
+          "hpc_jmlr_mloss_vamana_cpu12_inner_product_20260715" :
+          "hpc_jmlr_mloss_vamana_cuda_inner_product_20260716") :
+        (seeded_cuda_inner_product ?
+          "hpc_vamana_cuda_inner_product_validation_pending_seeded_from_cosine_20260702_232209" :
+          (backend == "cpu" ?
+             "hpc_vamana_cpu12_inner_product_20260701_090337" :
+             "hpc_vamana_cuda_inner_product"));
       rule = "hpc_" + backend + "_vamana_inner_product_" + shape_group +
         "_k" + std::to_string(k_bucket) + "_" +
         hnsw_target_label_cpp(target_code);

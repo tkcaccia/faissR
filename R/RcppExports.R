@@ -13,6 +13,10 @@ normalized_float32_transform_cpp <- function(x, metric) {
     .Call(`_faissR_normalized_float32_transform_cpp`, x, metric)
 }
 
+mips_l2_float32_transform_cpp <- function(data, points, self_query) {
+    .Call(`_faissR_mips_l2_float32_transform_cpp`, data, points, self_query)
+}
+
 strip_self_neighbors_cpp <- function(indices, distances) {
     .Call(`_faissR_strip_self_neighbors_cpp`, indices, distances)
 }

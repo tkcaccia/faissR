@@ -55,6 +55,36 @@ sbatch benchmark_scripts/jmlr_mloss_publication/cuda/run_faissR_cagra_cuda.sh
 sbatch benchmark_scripts/jmlr_mloss_publication/cuda/run_faissR_gpu_resident_exact_cuda.sh
 ```
 
+All files in `cpu/` and `cuda/` are independent jobs. Submit each file once.
+Do not combine CPU and CUDA methods in one Slurm job, and do not reuse
+calibration output as held-out validation.
+
+After the one-method jobs finish, aggregate CPU and CUDA evidence separately:
+
+```bash
+sbatch benchmark_scripts/jmlr_mloss_publication/analysis/run_aggregate_cpu12.sh
+sbatch benchmark_scripts/jmlr_mloss_publication/analysis/run_aggregate_cuda.sh
+```
+
+The aggregator selects the newest run for each method and suite, requires two
+validation seeds and three repetitions, and ranks a method only when every
+measured run reaches the requested recall. It writes fastest and second-fastest
+qualifying methods, exact baselines, `method = "auto"` versus the oracle method,
+recall-compliance counts, failures, and successful route mismatches.
+
+Run the systems ablations independently:
+
+```bash
+sbatch benchmark_scripts/jmlr_mloss_publication/ablations/run_systems_ablations_cpu12.sh
+sbatch benchmark_scripts/jmlr_mloss_publication/ablations/run_systems_ablations_cuda.sh
+```
+
+These jobs compare float32 and double input, cold and warm fitted-index reuse,
+compiled and R-side self-neighbour removal, and GPU-resident exact search with
+an explicit device-to-host copy. They use COIL20, MNIST, and TabulaMuris at
+`k = 30` to cover three different dataset shapes without duplicating the full
+method grid.
+
 Reference files are saved in their dataset directories and reused by every
 method. Synthetic data are generated only when their manifest is absent.
 
@@ -66,6 +96,11 @@ repetitions, and a 2,000-second timeout per combination. Real datasets use all
 four metrics. faissR methods also run the controlled raw-inner-product norm
 stress suite. Grid files run only the 2D/3D spatial suite. External packages
 run only metrics supported by their public KNN interface.
+
+CUDA NN-descent with raw inner product is an expected unsupported combination:
+cuVS NN-descent builds a symmetric graph from one L2 dataset and cannot apply
+the asymmetric maximum-inner-product transformation. The row must remain in
+the failure evidence; it must not be replaced by another algorithm.
 
 Rtsne and `umap::umap` are not included as standalone KNN methods because they
 are embedding consumers rather than comparable KNN result providers.

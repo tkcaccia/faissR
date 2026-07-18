@@ -22,3 +22,4 @@ faiss_hnsw_mnist70k_*.csv
 mnist70k_knn_predict_speed*.csv
 local_mnist70k_cpu_*/
 manuscript/
+benchmark_scripts/jmlr_mloss_inner_product_shape_tuning_defaults_candidate_audit.csv

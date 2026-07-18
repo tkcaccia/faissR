@@ -1123,8 +1123,8 @@ List search_faiss_index_float32(faiss::Index& index,
   if (k < 1 || k > xb.nrow) {
     Rcpp::stop("k must be in [1, nrow(data)]");
   }
-  if (exclude_self && !same_storage) {
-    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  if (exclude_self && !same_storage && xq.nrow != xb.nrow) {
+    Rcpp::stop("self-neighbor exclusion requires data and points to have the same number of rows");
   }
   const int n_points = same_storage ? xb.nrow : xq.nrow;
   const int search_k = exclude_self ? std::min(xb.nrow, k + 1) : k;
@@ -3474,8 +3474,8 @@ List faiss_gpu_cagra_float32_knn_impl(SEXP data,
   if (k < 1 || k > xb.nrow) {
     Rcpp::stop("k must be in [1, nrow(data)]");
   }
-  if (exclude_self && !same_storage) {
-    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  if (exclude_self && !same_storage && xq.nrow != xb.nrow) {
+    Rcpp::stop("self-neighbor exclusion requires data and points to have the same number of rows");
   }
   const bool self_query = exclude_self || same_storage;
   const int n_data = xb.nrow;

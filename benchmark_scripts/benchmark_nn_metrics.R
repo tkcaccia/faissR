@@ -1689,7 +1689,6 @@ is_expected_skip <- function(caps, backend, method, metric) {
   if (identical(backend, "auto")) {
     return(auto_expected_skip(caps, method, metric))
   }
-  if (!backend %in% c("cpu", "cuda")) return(NULL)
   cap <- capability_status(caps, backend, method, metric)
   if (!isTRUE(cap$supported)) {
     return(list(skip = TRUE, reason = cap$runtime_reason %||% "unsupported_combination", notes = cap$notes))

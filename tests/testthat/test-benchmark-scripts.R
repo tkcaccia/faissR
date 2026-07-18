@@ -1576,8 +1576,8 @@ test_that("legacy Benchmark #1 records faissR runtime capability preflight", {
   expect_equal(cuda_cuvs_nnd_ip$public_method, "nndescent")
   expect_equal(cuda_cuvs_nnd_ip$public_metric, "inner_product")
   expect_false(isTRUE(cuda_cuvs_nnd_ip$metric_supported))
-  expect_true(isTRUE(cuda_cuvs_nnd_ip$public_supported))
-  expect_equal(cuda_cuvs_nnd_ip$public_resolved_backend, "cuda_nndescent")
+  expect_false(isTRUE(cuda_cuvs_nnd_ip$public_supported))
+  expect_true(is.na(cuda_cuvs_nnd_ip$public_resolved_backend))
 
   direct_cuvs_ivf_ip <- caps[
     caps$method == "faissR_cuda_cuvs_ivf_flat" & caps$metric == "inner_product",
@@ -2687,4 +2687,74 @@ test_that("k-means fast-vs-stats comparison guards derived metrics", {
   expect_true(is.na(out$ari_delta_vs_stats[out$dataset == "B"]))
   expect_equal(out$speedup_vs_stats[out$dataset == "B"], 2)
   expect_equal(out$withinss_ratio_vs_stats[out$dataset == "B"], 0.5)
+})
+
+test_that("publication aggregator requires complete held-out recall", {
+  path <- test_path(
+    "../../benchmark_scripts/jmlr_mloss_publication/analysis/aggregate_publication_results.R"
+  )
+  if (!file.exists(path)) {
+    skip("Publication scripts are not available in this installed-package test context.")
+  }
+  old <- Sys.getenv("FAISSR_JSS_AGGREGATE_SOURCE_ONLY", unset = NA_character_)
+  on.exit({
+    if (is.na(old)) Sys.unsetenv("FAISSR_JSS_AGGREGATE_SOURCE_ONLY") else
+      Sys.setenv(FAISSR_JSS_AGGREGATE_SOURCE_ONLY = old)
+  }, add = TRUE)
+  Sys.setenv(FAISSR_JSS_AGGREGATE_SOURCE_ONLY = "true")
+  env <- new.env(parent = globalenv())
+  sys.source(path, envir = env)
+
+  rows <- expand.grid(validation_seed = c(20260706, 20260807), repeat_id = 1:3)
+  rows$dataset <- "MNIST"
+  rows$dataset_suite <- "real"
+  rows$backend <- "cpu"
+  rows$metric <- "euclidean"
+  rows$k <- 30L
+  rows$target_recall <- 0.99
+  rows$implementation <- "faissR"
+  rows$method_id <- "faissR_cpu_hnsw"
+  rows$public_method <- "hnsw"
+  rows$kind <- "knn_search"
+  rows$n_threads <- 12L
+  rows$status <- "success"
+  rows$time_sec <- seq_len(nrow(rows))
+  rows$peak_rss_gb <- 1
+  rows$host_copy_sec <- 0
+  rows$recall_at_k <- c(rep(0.995, 5), 0.98)
+
+  summary <- env$robust_summary(rows, expected_seeds = 2L, expected_repeats = 3L)
+  expect_true(summary$complete_validation)
+  expect_false(summary$target_met_all_runs)
+  expect_equal(summary$min_recall_at_k, 0.98)
+
+  rows$recall_at_k <- 0.995
+  summary <- env$robust_summary(rows, expected_seeds = 2L, expected_repeats = 3L)
+  expect_true(summary$target_met_all_runs)
+})
+
+test_that("publication systems-ablation scripts retain backend-specific headers", {
+  root <- test_path("../../benchmark_scripts/jmlr_mloss_publication")
+  if (!dir.exists(root)) {
+    skip("Publication scripts are not available in this installed-package test context.")
+  }
+  cpu <- readLines(file.path(root, "ablations", "run_systems_ablations_cpu12.sh"), warn = FALSE)
+  cuda <- readLines(file.path(root, "ablations", "run_systems_ablations_cuda.sh"), warn = FALSE)
+  expect_true(any(grepl("^#SBATCH --account=immunology$", cpu)))
+  expect_true(any(grepl("^#SBATCH --partition=ada$", cpu)))
+  expect_true(any(grepl("^#SBATCH --ntasks=12$", cpu)))
+  expect_true(any(grepl("^#SBATCH --account=l40sfree$", cuda)))
+  expect_true(any(grepl("^#SBATCH --partition=l40s$", cuda)))
+  expect_true(any(grepl("^#SBATCH --gres=gpu:l40s:1$", cuda)))
+  expect_true(any(grepl("singularity exec --nv", cuda, fixed = TRUE)))
+
+  old <- Sys.getenv("FAISSR_JSS_ABLATION_SOURCE_ONLY", unset = NA_character_)
+  on.exit({
+    if (is.na(old)) Sys.unsetenv("FAISSR_JSS_ABLATION_SOURCE_ONLY") else
+      Sys.setenv(FAISSR_JSS_ABLATION_SOURCE_ONLY = old)
+  }, add = TRUE)
+  Sys.setenv(FAISSR_JSS_ABLATION_SOURCE_ONLY = "true")
+  env <- new.env(parent = globalenv())
+  sys.source(file.path(root, "common", "benchmark_jss_systems_ablations.R"), envir = env)
+  expect_true(all(c("worker_input_cache", "worker_self_processing", "worker_gpu_residency") %in% ls(env)))
 })

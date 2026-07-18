@@ -87,7 +87,8 @@ test_that("GPU-resident NN tuning metadata includes raw inner-product rows", {
   expect_equal(exact$tuning_method, "exact")
   expect_equal(exact$tuning_metric, "inner_product")
   expect_equal(exact$result_backend, "faiss_gpu_flat_ip")
-  expect_match(exact$tuning_benchmark_source, "inner_product_seeded")
+  expect_match(exact$tuning_benchmark_source, "jmlr_mloss_exact_cuda_inner_product")
+  expect_true(isTRUE(exact$tuning_benchmark_target_met))
 
   cagra <- faissR:::nn_gpu_tuning_params_for_method(
     n = 70000L,
@@ -591,6 +592,57 @@ test_that("float32 FAISS Flat input supports normalized metrics", {
     expect_equal(out$input_type, "float32", info = metric)
     expect_equal(attr(out, "resolved_backend"), paste0("faiss_flat_", metric), info = metric)
   }
+})
+
+test_that("float32 maximum-inner-product transform stays float32 and preserves rankings", {
+  skip_if_not_installed("float")
+
+  x <- matrix(c(
+    2, 0, 1,
+    0, 3, 1,
+    1, 1, 2,
+    -1, 0, 1
+  ), nrow = 4L, byrow = TRUE)
+  q <- matrix(c(1, 2, 0.5, -1, 0.25, 2), nrow = 2L, byrow = TRUE)
+  transformed <- faissR:::mips_l2_metric_inputs(float::fl(x), float::fl(q), FALSE)
+
+  decode_row_major <- function(value) {
+    payload <- as.integer(methods::slot(value, "Data"))
+    decoded <- readBin(
+      writeBin(payload, raw(), size = 4L),
+      what = "numeric",
+      n = length(payload),
+      size = 4L
+    )
+    matrix(decoded, nrow = nrow(value), ncol = ncol(value), byrow = TRUE)
+  }
+
+  data_augmented <- decode_row_major(transformed$data)
+  query_augmented <- decode_row_major(transformed$points)
+  dots <- q %*% t(x)
+  squared_l2 <- vapply(seq_len(nrow(q)), function(i) {
+    query_rows <- matrix(
+      rep(query_augmented[i, ], each = nrow(x)),
+      nrow = nrow(x)
+    )
+    rowSums((data_augmented - query_rows)^2)
+  }, numeric(nrow(x)))
+
+  expect_equal(transformed$transform_storage, "float32")
+  expect_true(isTRUE(attr(transformed$data, "faissR_row_major_float32")))
+  expect_true(isTRUE(attr(transformed$points, "faissR_row_major_float32")))
+  expect_equal(dim(data_augmented), c(nrow(x), ncol(x) + 1L))
+  expect_equal(dim(query_augmented), c(nrow(q), ncol(q) + 1L))
+  expect_equal(apply(dots, 1L, which.max), apply(squared_l2, 2L, which.min))
+  expect_equal(
+    squared_l2,
+    matrix(
+      rep(transformed$radius2 + transformed$points_norm2, each = nrow(x)),
+      nrow = nrow(x)
+    ) -
+      2 * t(dots),
+    tolerance = 1e-5
+  )
 })
 
 test_that("normalized FAISS Flat routes reuse cached float32 transforms", {
@@ -1202,7 +1254,7 @@ test_that("nn_capabilities documents the public method metric matrix", {
   expect_true(caps$supported[
     caps$method == "nndescent" & caps$backend == "auto" & caps$metric == "inner_product"
   ])
-  expect_true(caps$supported[
+  expect_false(caps$supported[
     caps$method == "nndescent" & caps$backend == "cuda" & caps$metric == "inner_product"
   ])
   expect_false("removed_method" %in% caps$method)
@@ -1804,7 +1856,7 @@ test_that("non-euclidean metrics use only validated backend paths", {
   }
   expect_error(
     internal_nn(x, k = 4L, backend = "cuda_cuvs_nndescent", metric = "inner_product"),
-    "inner_product"
+    "does not support raw inner-product"
   )
   for (backend in c("cuda_cuvs_ivf_flat", "cuda_cuvs_ivfpq")) {
     if (isTRUE(cuvs_available())) {
@@ -3026,9 +3078,9 @@ test_that("public backend and method resolver maps device plus method", {
     faissR:::resolve_public_nn_backend("cuda", "nndescent", "correlation"),
     "cuda_cuvs_nndescent"
   )
-  expect_equal(
+  expect_error(
     faissR:::resolve_public_nn_backend("cuda", "nndescent", "inner_product"),
-    "cuda_nndescent"
+    "does not support raw inner product"
   )
   expect_equal(
     faissR:::resolve_public_nn_backend("cuda", "hnsw", "euclidean"),
@@ -3177,7 +3229,7 @@ test_that("native CPU NSG returns metric-aware self-KNN results", {
   set.seed(240125)
   x <- matrix(rnorm(90L * 5L), nrow = 90L)
 
-  for (metric in c("euclidean", "cosine", "correlation", "inner_product")) {
+  for (metric in c("euclidean", "cosine", "correlation")) {
     out <- internal_nn(exclude_self = TRUE,
       x,
       k = 6L,
@@ -3689,6 +3741,20 @@ test_that("FAISS HNSW defaults are shape, k, and metric aware without pilot tuni
   expect_true(isTRUE(high_recall$non_euclidean))
   expect_true(isTRUE(high_recall$large_k))
 
+  inner_product <- faissR:::faiss_hnsw_params(
+    k = 30L,
+    n = 70000L,
+    p = 784L,
+    metric = "inner_product",
+    target_recall = 0.99
+  )
+  expect_equal(inner_product$m, 80L)
+  expect_equal(inner_product$ef_construction, 640L)
+  expect_equal(inner_product$ef_search, 1024L)
+  expect_match(inner_product$benchmark_source, "jmlr_mloss_hnsw_cpu12_inner_product")
+  expect_match(inner_product$benchmark_basis, "best_recall_below_target")
+  expect_false(isTRUE(inner_product$tuning_benchmark_target_met))
+
   options(faissR.faiss_hnsw_m = 40L)
   manual <- faissR:::faiss_hnsw_params(
     k = 50L,
@@ -3824,16 +3890,10 @@ test_that("CUDA IVF auto tuning includes raw inner product", {
   expect_equal(params$tuning_shape_group, "large_high_dim")
   expect_equal(params$tuning_k_bucket, 30L)
   expect_equal(params$tuning_target_recall_code, 99L)
-  expect_equal(params$nlist, 1060L)
-  expect_equal(params$nprobe, 99L)
-  expect_equal(
-    params$tuning_benchmark_basis,
-    "seeded_from_cuda_ivf_euclidean_pending_inner_product_sweep"
-  )
-  expect_equal(
-    params$tuning_benchmark_source,
-    "hpc_ivf_cuda_inner_product_seeded_from_euclidean_pending"
-  )
+  expect_equal(params$nlist, 1024L)
+  expect_equal(params$nprobe, 128L)
+  expect_match(params$tuning_benchmark_basis, "best_recall_below_target_complete_shape_coverage")
+  expect_match(params$tuning_benchmark_source, "jmlr_mloss_ivf_cuda_inner_product")
   expect_false(isTRUE(params$tuning_benchmark_target_met))
 })
 
@@ -3856,20 +3916,14 @@ test_that("CUDA IVFPQ auto tuning includes raw inner product", {
   expect_equal(params$tuning_shape_group, "large_high_dim")
   expect_equal(params$tuning_k_bucket, 30L)
   expect_equal(params$tuning_target_recall_code, 99L)
-  expect_equal(params$nlist, 530L)
-  expect_equal(params$nprobe, 36L)
-  expect_equal(params$pq_m, 56L)
+  expect_equal(params$nlist, 2048L)
+  expect_equal(params$nprobe, 2048L)
+  expect_equal(params$pq_m, 16L)
   expect_equal(params$pq_nbits, 8L)
-  expect_equal(pq$m, 56L)
+  expect_equal(pq$m, 16L)
   expect_equal(pq$nbits, 8L)
-  expect_equal(
-    params$tuning_benchmark_basis,
-    "seeded_from_cuda_ivfpq_euclidean_pending_inner_product_sweep"
-  )
-  expect_equal(
-    params$tuning_benchmark_source,
-    "hpc_ivfpq_cuda_inner_product_seeded_from_euclidean_pending"
-  )
+  expect_match(params$tuning_benchmark_basis, "best_recall_below_target_complete_shape_coverage")
+  expect_match(params$tuning_benchmark_source, "jmlr_mloss_ivfpq_cuda_inner_product")
   expect_false(isTRUE(params$tuning_benchmark_target_met))
 })
 
@@ -4438,11 +4492,11 @@ test_that("CUDA exact auto tuning includes raw inner product", {
   expect_equal(params$tuning_target_recall_code, 99L)
   expect_equal(params$result_backend, "faiss_gpu_flat_ip")
   expect_equal(params$resolved_backend, "faiss_gpu_flat_ip")
-  expect_equal(params$faiss_gpu_query_batch_size, 4096L)
+  expect_equal(params$faiss_gpu_query_batch_size, 65536L)
   expect_false(isTRUE(params$faiss_gpu_reuse_resources))
   expect_true(isTRUE(params$exact_recall_by_construction))
-  expect_false(isTRUE(params$tuning_benchmark_target_met))
-  expect_match(params$tuning_benchmark_source, "inner_product_seeded")
+  expect_true(isTRUE(params$tuning_benchmark_target_met))
+  expect_match(params$tuning_benchmark_source, "jmlr_mloss_exact_cuda_inner_product")
 })
 
 test_that("CUDA flat auto tuning includes raw inner product", {
@@ -4462,11 +4516,11 @@ test_that("CUDA flat auto tuning includes raw inner product", {
   expect_equal(params$tuning_target_recall_code, 99L)
   expect_equal(params$result_backend, "faiss_gpu_flat_ip")
   expect_equal(params$resolved_backend, "faiss_gpu_flat_ip")
-  expect_equal(params$faiss_gpu_query_batch_size, 1024L)
+  expect_equal(params$faiss_gpu_query_batch_size, 8192L)
   expect_true(isTRUE(params$faiss_gpu_reuse_resources))
   expect_true(isTRUE(params$exact_recall_by_construction))
-  expect_false(isTRUE(params$tuning_benchmark_target_met))
-  expect_match(params$tuning_benchmark_source, "inner_product_seeded")
+  expect_true(isTRUE(params$tuning_benchmark_target_met))
+  expect_match(params$tuning_benchmark_source, "jmlr_mloss_flat_cuda_inner_product")
 })
 
 test_that("CUDA bruteforce auto tuning includes raw inner product", {
@@ -4949,7 +5003,8 @@ test_that("backend_info reports native availability without crashing", {
   expect_match(info$supported_metrics[info$backend == "faiss_gpu_cuvs"], "CAGRA inner_product uses")
   expect_match(info$supported_metrics[info$backend == "cuvs"], "direct brute force, direct IVF/PQ")
   expect_match(info$supported_metrics[info$backend == "cuvs"], "direct CAGRA")
-  expect_match(info$supported_metrics[info$backend == "cuvs"], "native shifted-dot-product CUDA")
+  expect_match(info$supported_metrics[info$backend == "cuvs"], "raw inner product is unsupported for CUDA NN-descent")
+  expect_match(info$supported_metrics[info$backend == "cuvs"], "asymmetric MIPS transform")
 
   cuda_info <- faissR:::cuda_device_info_json_cpp()
   expect_type(cuda_info, "character")

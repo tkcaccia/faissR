@@ -44,6 +44,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// mips_l2_float32_transform_cpp
+List mips_l2_float32_transform_cpp(SEXP data, SEXP points, bool self_query);
+RcppExport SEXP _faissR_mips_l2_float32_transform_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP self_querySEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< bool >::type self_query(self_querySEXP);
+    rcpp_result_gen = Rcpp::wrap(mips_l2_float32_transform_cpp(data, points, self_query));
+    return rcpp_result_gen;
+END_RCPP
+}
 // strip_self_neighbors_cpp
 List strip_self_neighbors_cpp(IntegerMatrix indices, NumericMatrix distances);
 RcppExport SEXP _faissR_strip_self_neighbors_cpp(SEXP indicesSEXP, SEXP distancesSEXP) {
@@ -2064,6 +2077,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_standardize_cpu_cpp", (DL_FUNC) &_faissR_standardize_cpu_cpp, 1},
     {"_faissR_matrix_fingerprint_cpp", (DL_FUNC) &_faissR_matrix_fingerprint_cpp, 1},
     {"_faissR_normalized_float32_transform_cpp", (DL_FUNC) &_faissR_normalized_float32_transform_cpp, 2},
+    {"_faissR_mips_l2_float32_transform_cpp", (DL_FUNC) &_faissR_mips_l2_float32_transform_cpp, 3},
     {"_faissR_strip_self_neighbors_cpp", (DL_FUNC) &_faissR_strip_self_neighbors_cpp, 2},
     {"_faissR_prepend_self_neighbors_cpp", (DL_FUNC) &_faissR_prepend_self_neighbors_cpp, 2},
     {"_faissR_sort_knn_rows_cpp", (DL_FUNC) &_faissR_sort_knn_rows_cpp, 2},

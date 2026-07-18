@@ -1348,8 +1348,8 @@ List cuvs_bruteforce_float32_knn_impl(SEXP data,
   if (k < 1 || k > xb.nrow) {
     Rcpp::stop("k must be in [1, nrow(data)]");
   }
-  if (exclude_self && !same_storage) {
-    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  if (exclude_self && !same_storage && xq.nrow != xb.nrow) {
+    Rcpp::stop("self-neighbor exclusion requires data and points to have the same number of rows");
   }
   const bool self_query = exclude_self || same_storage;
   const int n_data = xb.nrow;
@@ -1694,8 +1694,8 @@ List cuvs_cagra_float32_knn_impl(SEXP data,
   if (k < 1 || k > xb.nrow) {
     Rcpp::stop("k must be in [1, nrow(data)]");
   }
-  if (exclude_self && !same_storage) {
-    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  if (exclude_self && !same_storage && xq.nrow != xb.nrow) {
+    Rcpp::stop("self-neighbor exclusion requires data and points to have the same number of rows");
   }
   const bool self_query = exclude_self || same_storage;
   const int n_data = xb.nrow;
@@ -2152,8 +2152,8 @@ List cuvs_hnsw_float32_knn_impl(SEXP data,
   if (k < 1 || k > xb.nrow) {
     Rcpp::stop("k must be in [1, nrow(data)]");
   }
-  if (exclude_self && !same_storage) {
-    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  if (exclude_self && !same_storage && xq.nrow != xb.nrow) {
+    Rcpp::stop("self-neighbor exclusion requires data and points to have the same number of rows");
   }
   const bool float_distances = wants_float_distance_storage(distance_storage);
 
@@ -2399,8 +2399,8 @@ List cuvs_ivf_flat_float32_knn_impl(SEXP data,
   if (k < 1 || k > xb.nrow) {
     Rcpp::stop("k must be in [1, nrow(data)]");
   }
-  if (exclude_self && !same_storage) {
-    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  if (exclude_self && !same_storage && xq.nrow != xb.nrow) {
+    Rcpp::stop("self-neighbor exclusion requires data and points to have the same number of rows");
   }
   const bool self_query = exclude_self || same_storage;
   const int n_data = xb.nrow;
@@ -2781,8 +2781,8 @@ List cuvs_ivf_pq_float32_knn_impl(SEXP data,
   if (k < 1 || k > xb.nrow) {
     Rcpp::stop("k must be in [1, nrow(data)]");
   }
-  if (exclude_self && !same_storage) {
-    Rcpp::stop("self-neighbor exclusion requires points to be data");
+  if (exclude_self && !same_storage && xq.nrow != xb.nrow) {
+    Rcpp::stop("self-neighbor exclusion requires data and points to have the same number of rows");
   }
   const bool self_query = exclude_self || same_storage;
   const int n_data = xb.nrow;

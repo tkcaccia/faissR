@@ -54,7 +54,7 @@ backend_info <- function() {
       "euclidean, cosine, correlation, inner_product; method-specific exclusions in nn_capabilities()",
       "euclidean, cosine, correlation, inner_product for Flat/IVF/IVFPQ/HNSW and CPU IVFPQ FastScan where FastScan is available; public NSG uses the native CPU route for all metrics, with deterministic FAISS HNSW seeding on large high-dimensional CPU inputs, while explicit FAISS NSG is Euclidean-only",
       "euclidean, cosine, correlation, inner_product for IVF/IVFPQ and CAGRA; CAGRA inner_product uses a maximum-inner-product-to-L2 transform",
-      "euclidean, cosine, correlation, inner_product for direct brute force, direct IVF/PQ, HNSW from CAGRA, and direct CAGRA using metric transforms where needed; euclidean plus normalized cosine/correlation for direct cuVS NN-descent, with public CUDA NN-descent raw inner product using faissR's native shifted-dot-product CUDA refinement route",
+      "euclidean, cosine, correlation, inner_product for direct brute force, direct IVF/PQ, HNSW from CAGRA, and direct CAGRA using metric transforms where needed; euclidean plus normalized cosine/correlation for direct cuVS NN-descent; raw inner product is unsupported for CUDA NN-descent because its symmetric one-dataset graph API cannot use the asymmetric MIPS transform",
       "euclidean, cosine, correlation, inner_product where the selected CUDA method supports the metric",
       "euclidean, cosine, correlation for exact 2D/3D self-KNN"
     ),

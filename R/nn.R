@@ -1437,10 +1437,11 @@ nn_compute <- function(data,
       return(finish_float32_direct_result(result, out))
     }
     if (backend %in% c("cuvs_bruteforce", "cuda_cuvs_bruteforce", "cuda_cuvs_exact")) {
-      if (!metric %in% c("euclidean", "cosine", "correlation")) {
+      if (!metric %in% c("euclidean", "cosine", "correlation", "inner_product")) {
         stop(
           "float32 cuVS brute-force input currently supports `metric = \"euclidean\"`, ",
-          "`metric = \"cosine\"`, or `metric = \"correlation\"`.",
+          "`metric = \"cosine\"`, `metric = \"correlation\"`, or ",
+          "`metric = \"inner_product\"`.",
           call. = FALSE
         )
       }
@@ -1453,6 +1454,10 @@ nn_compute <- function(data,
       search_points <- points
       if (metric %in% c("cosine", "correlation")) {
         metric_inputs <- normalized_euclidean_metric_inputs(data, points, self_query, metric, storage = "float")
+        search_data <- metric_inputs$data
+        search_points <- metric_inputs$points
+      } else if (identical(metric, "inner_product")) {
+        metric_inputs <- mips_l2_metric_inputs(data, points, self_query)
         search_data <- metric_inputs$data
         search_points <- metric_inputs$points
       }
@@ -1950,7 +1955,7 @@ nn_compute <- function(data,
       "cuvs_ivfpq", "cuda_cuvs_ivfpq",
       "cuvs_ivf_pq", "cuda_cuvs_ivf_pq",
       "cuda_cuvs_ivfpq_fastscan", "cuvs_ivfpq_fastscan",
-      "cuda_cuvs_nndescent", "cuvs_nndescent"
+      "cuda_cuvs_nndescent", "cuvs_nndescent", "cuda_nndescent"
     )
     if (!isTRUE(direct_float32_backend)) {
       stop(
@@ -2150,9 +2155,14 @@ nn_compute <- function(data,
       result <- append_nn_tuning_metadata(result, params, pq, .prefixes = list(NULL, "pq_"))
       return(finish_float32_direct_result(result, out))
     }
-    if (backend %in% c("cuvs_nndescent", "cuda_cuvs_nndescent")) {
+    if (backend %in% c("cuvs_nndescent", "cuda_cuvs_nndescent", "cuda_nndescent")) {
       if (identical(metric, "inner_product")) {
-        stop("cuVS NN-descent does not support `metric = \"inner_product\"`.", call. = FALSE)
+        stop(
+          "cuVS NN-descent does not support raw inner-product self-KNN: its ",
+          "graph-construction API accepts one symmetric L2 dataset, while exact ",
+          "maximum-inner-product reduction requires distinct reference and query transforms.",
+          call. = FALSE
+        )
       }
       require_cuvs_backend("cuVS NN-descent")
       if (!isTRUE(self_query)) {
@@ -2167,7 +2177,11 @@ nn_compute <- function(data,
         )
         search_data <- metric_inputs$data
       }
-      search_dim <- dim(search_data)
+      search_dim <- if (is_float32_matrix_input(search_data)) {
+        float32_matrix_dims(search_data, "data")
+      } else {
+        dim(search_data)
+      }
       nonself_k <- if (isTRUE(exclude_self)) k else max(0L, k - 1L)
       distance_storage <- if (is.null(metric_inputs)) output else "double"
       if (nonself_k < 1L) {
@@ -4598,9 +4612,14 @@ nn_compute <- function(data,
     return(result)
   }
 
-  if (backend %in% c("cuvs_nndescent", "cuda_cuvs_nndescent")) {
+  if (backend %in% c("cuvs_nndescent", "cuda_cuvs_nndescent", "cuda_nndescent")) {
     if (identical(metric, "inner_product")) {
-      stop("cuVS NN-descent does not support `metric = \"inner_product\"`.", call. = FALSE)
+      stop(
+        "cuVS NN-descent does not support raw inner-product self-KNN: its ",
+        "graph-construction API accepts one symmetric L2 dataset, while exact ",
+        "maximum-inner-product reduction requires distinct reference and query transforms.",
+        call. = FALSE
+      )
     }
     require_cuvs_backend("cuVS NN-descent")
     if (!isTRUE(self_query)) {
@@ -4622,8 +4641,13 @@ nn_compute <- function(data,
         distances = matrix(0, nrow(data), 1L)
       )
     } else {
+      search_dim <- if (is_float32_matrix_input(search_data)) {
+        float32_matrix_dims(search_data, "data")
+      } else {
+        dim(search_data)
+      }
       params <- cuvs_nndescent_params(
-        nrow(search_data), ncol(search_data), nonself_k,
+        search_dim[[1L]], search_dim[[2L]], nonself_k,
         metric = metric,
         target_recall = target_recall
       )
@@ -4648,7 +4672,7 @@ nn_compute <- function(data,
     }
     result <- finish_nn_result(out, "cuda_cuvs_nndescent", k, self_query, exact = FALSE, metric = metric)
     if (!is.null(metric_inputs)) {
-      result <- finalize_normalized_euclidean_metric_result(result, metric_inputs)
+      result <- finalize_graph_metric_result(result, metric_inputs)
     }
     if (isTRUE(use_float32_transform)) {
       result <- finish_float32_direct_result(result, out)
@@ -5708,21 +5732,21 @@ nn_capability_row <- function(method, backend, metric) {
       "Builds a Vamana-style candidate graph using compiled C++ pruning over compact candidate storage and refines candidate rows with the native CUDA row-candidate kernel; cuVS Vamana currently builds/serializes DiskANN-compatible indexes but does not expose KNN search."
     }
   } else if (identical(method, "nndescent")) {
-    supported <- all_metrics
+    supported <- if (identical(backend, "cpu")) all_metrics else !identical(metric, "inner_product")
     exact <- if (supported) FALSE else NA
     implementation <- if (identical(backend, "cpu")) {
       "native CPU NNDescent"
-    } else if (identical(metric, "inner_product")) {
-      "native CUDA NNDescent candidate refinement"
-    } else {
+    } else if (supported) {
       "cuVS CUDA NN-descent"
+    } else {
+      NA_character_
     }
     notes <- if (identical(backend, "cpu")) {
       "Native CPU NNDescent supports Euclidean/L2 and raw inner-product self-KNN; cosine/correlation use normalized Euclidean graph search. Seed neighbours use random-projection windows plus deterministic row fill, with flat row-major graph buffers and fixed-width reverse-neighbour storage in C++."
     } else if (supported) {
-      "CUDA NN-descent uses direct RAPIDS cuVS NN-descent for Euclidean/L2 self-KNN; cosine/correlation use normalized Euclidean graph search, and raw inner-product uses faissR's native CUDA shifted-dot-product candidate refinement route."
+      "CUDA NN-descent uses direct RAPIDS cuVS NN-descent for Euclidean/L2 self-KNN; cosine/correlation use normalized Euclidean graph search."
     } else {
-      "Direct cuVS NN-descent does not expose raw inner-product search."
+      "Direct cuVS NN-descent accepts one symmetric L2 graph dataset and cannot represent the asymmetric transform required for raw maximum inner product."
     }
   } else if (identical(method, "cagra")) {
     supported <- identical(backend, "cuda") && all_metrics
@@ -5955,8 +5979,15 @@ resolve_public_nn_backend <- function(backend,
     if (identical(method, "ivfpq_fastscan") && !metric %in% c("euclidean", "cosine", "correlation", "inner_product")) {
       stop("CUDA `method = \"ivfpq_fastscan\"` currently supports `metric = \"euclidean\"`, `\"cosine\"`, `\"correlation\"`, or `\"inner_product\"`.", call. = FALSE)
     }
-    if (identical(metric, "inner_product") && !method %in% c("ivf", "ivfpq", "ivfpq_fastscan", "nndescent", "nsg", "vamana", "cagra", "hnsw")) {
-      stop("CUDA `metric = \"inner_product\"` currently supports `method = \"exact\"`, `\"bruteforce\"`, `\"flat\"`, `\"ivf\"`, `\"ivfpq\"`, `\"ivfpq_fastscan\"`, `\"nndescent\"`, `\"hnsw\"`, `\"nsg\"`, `\"vamana\"`, or `\"cagra\"`.", call. = FALSE)
+    if (identical(metric, "inner_product") && identical(method, "nndescent")) {
+      stop(
+        "CUDA `method = \"nndescent\"` does not support raw inner product because ",
+        "cuVS NN-descent accepts one symmetric L2 graph dataset.",
+        call. = FALSE
+      )
+    }
+    if (identical(metric, "inner_product") && !method %in% c("ivf", "ivfpq", "ivfpq_fastscan", "nsg", "vamana", "cagra", "hnsw")) {
+      stop("CUDA `metric = \"inner_product\"` currently supports `method = \"exact\"`, `\"bruteforce\"`, `\"flat\"`, `\"ivf\"`, `\"ivfpq\"`, `\"ivfpq_fastscan\"`, `\"hnsw\"`, `\"nsg\"`, `\"vamana\"`, or `\"cagra\"`.", call. = FALSE)
     }
     switch(
       method,
@@ -5969,7 +6000,7 @@ resolve_public_nn_backend <- function(backend,
       ivfpq = "faiss_gpu_ivfpq",
       vamana = "cuda_vamana",
       nsg = "cuda_nsg",
-      nndescent = if (identical(metric, "inner_product")) "cuda_nndescent" else "cuda_cuvs_nndescent",
+      nndescent = "cuda_cuvs_nndescent",
       ivfpq_fastscan = "cuda_cuvs_ivfpq_fastscan",
       cagra = resolve_cuda_cagra_backend(
         n = n,
@@ -6816,6 +6847,20 @@ row_inner_product_norm2 <- function(x) {
 }
 
 mips_l2_metric_inputs <- function(data, points, self_query) {
+  if (is_float32_matrix_input(data) || is_float32_matrix_input(points)) {
+    transformed <- mips_l2_float32_transform_cpp(data, points, isTRUE(self_query))
+    return(list(
+      data = transformed$data,
+      points = transformed$points,
+      radius2 = as.numeric(transformed$radius2),
+      points_norm2 = as.numeric(transformed$points_norm2),
+      transform = "maximum_inner_product_to_l2_extra_dimension",
+      distance_transform = "mips_l2_to_shifted_inner_product_distance",
+      transform_storage = "float32",
+      transform_layout = "row_major",
+      transform_cache = NULL
+    ))
+  }
   data <- as.matrix(data)
   storage.mode(data) <- "double"
   points <- as.matrix(points)
@@ -6833,7 +6878,10 @@ mips_l2_metric_inputs <- function(data, points, self_query) {
     radius2 = radius2,
     points_norm2 = points_norm2,
     transform = "maximum_inner_product_to_l2_extra_dimension",
-    distance_transform = "mips_l2_to_shifted_inner_product_distance"
+    distance_transform = "mips_l2_to_shifted_inner_product_distance",
+    transform_storage = "double",
+    transform_layout = "column_major",
+    transform_cache = NULL
   )
 }
 

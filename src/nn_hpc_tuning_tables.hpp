@@ -3498,6 +3498,8 @@ static const HpcCagraSpec hpc_cagra_inner_product_specs[] = {
   {"small_n", 100, 99, "iterative_cagra_search", 24, 48, 2, 100, "inner_product_validation_pending_seeded_from_euclidean_shape_policy"},
 };
 
+#include "nn_jmlr_inner_product_overrides.hpp"
+
 inline bool hpc_match(const char* lhs, const std::string& rhs) {
   return rhs == lhs;
 }
@@ -3518,6 +3520,7 @@ inline const HpcIvfSpec* hpc_ivf_correlation_spec(const std::string& backend, co
 }
 
 inline const HpcIvfSpec* hpc_ivf_inner_product_spec(const std::string& backend, const std::string& shape_group, int k_bucket, int target_code) {
+  if (const auto* spec = jmlr_match_spec(jmlr_ivf_inner_product_specs, backend, shape_group, k_bucket, target_code)) return spec;
   for (const auto& spec : hpc_ivf_inner_product_specs) if (hpc_match(spec.backend, backend) && hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
   return nullptr;
 }
@@ -3543,6 +3546,7 @@ inline const HpcCudaExactSpec* hpc_cuda_exact_correlation_spec(const std::string
 }
 
 inline const HpcCudaExactSpec* hpc_cuda_exact_inner_product_spec(const std::string& backend, const std::string& shape_group, int k_bucket, int target_code) {
+  if (const auto* spec = jmlr_match_spec(jmlr_cuda_exact_inner_product_specs, backend, shape_group, k_bucket, target_code)) return spec;
   for (const auto& spec : hpc_cuda_exact_inner_product_specs) if (hpc_match(spec.backend, backend) && hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
   return nullptr;
 }
@@ -3563,6 +3567,7 @@ inline const HpcCudaFlatSpec* hpc_cuda_flat_correlation_spec(const std::string& 
 }
 
 inline const HpcCudaFlatSpec* hpc_cuda_flat_inner_product_spec(const std::string& backend, const std::string& shape_group, int k_bucket, int target_code) {
+  if (const auto* spec = jmlr_match_spec(jmlr_cuda_flat_inner_product_specs, backend, shape_group, k_bucket, target_code)) return spec;
   for (const auto& spec : hpc_cuda_flat_inner_product_specs) if (hpc_match(spec.backend, backend) && hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
   return nullptr;
 }
@@ -3658,6 +3663,7 @@ inline const HpcIvfpqSpec* hpc_ivfpq_correlation_spec(const std::string& backend
 }
 
 inline const HpcIvfpqSpec* hpc_ivfpq_inner_product_spec(const std::string& backend, const std::string& shape_group, int k_bucket, int target_code) {
+  if (const auto* spec = jmlr_match_spec(jmlr_ivfpq_inner_product_specs, backend, shape_group, k_bucket, target_code)) return spec;
   for (const auto& spec : hpc_ivfpq_inner_product_specs) if (hpc_match(spec.backend, backend) && hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
   return nullptr;
 }
@@ -3700,6 +3706,7 @@ inline const HpcNndescentSpec* hpc_cpu_nndescent_correlation_spec(const std::str
 }
 
 inline const HpcNndescentSpec* hpc_cpu_nndescent_inner_product_spec(const std::string& shape_group, int k_bucket, int target_code) {
+  if (const auto* spec = jmlr_match_shape_spec(jmlr_cpu_nndescent_inner_product_specs, shape_group, k_bucket, target_code)) return spec;
   for (const auto& spec : hpc_cpu_nndescent_inner_product_specs) if (hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
   return nullptr;
 }
@@ -3734,6 +3741,7 @@ inline const HpcNsgSpec* hpc_nsg_correlation_spec(const std::string& backend, co
 }
 
 inline const HpcNsgSpec* hpc_nsg_inner_product_spec(const std::string& backend, const std::string& shape_group, int k_bucket, int target_code) {
+  if (const auto* spec = jmlr_match_spec(jmlr_nsg_inner_product_specs, backend, shape_group, k_bucket, target_code)) return spec;
   for (const auto& spec : hpc_nsg_inner_product_specs) if (hpc_match(spec.backend, backend) && hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
   return nullptr;
 }
@@ -3754,6 +3762,7 @@ inline const HpcVamanaSpec* hpc_vamana_correlation_spec(const std::string& backe
 }
 
 inline const HpcVamanaSpec* hpc_vamana_inner_product_spec(const std::string& backend, const std::string& shape_group, int k_bucket, int target_code) {
+  if (const auto* spec = jmlr_match_spec(jmlr_vamana_inner_product_specs, backend, shape_group, k_bucket, target_code)) return spec;
   for (const auto& spec : hpc_vamana_inner_product_specs) if (hpc_match(spec.backend, backend) && hpc_match(spec.shape_group, shape_group) && spec.k_bucket == k_bucket && spec.target_code == target_code) return &spec;
   return nullptr;
 }

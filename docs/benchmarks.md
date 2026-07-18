@@ -461,9 +461,11 @@ dataset/k/backend block and includes recall columns so speed can be interpreted
 beside quality.
 CUDA NN-descent has one Benchmark #1 row:
 `faissR_cuda_cuvs_nndescent`, covering the direct RAPIDS cuVS
-Euclidean/normalized-metric route. Raw inner-product CUDA NN-descent is not
-benchmarked because direct cuVS NN-descent does not expose raw IP search and
-faissR does not provide a separate native CUDA NN-descent route.
+Euclidean/normalized-metric route. Raw inner product is unavailable for this
+method because the cuVS NN-descent graph-construction API accepts one symmetric
+L2 dataset, whereas an exact maximum-inner-product reduction requires distinct
+reference and query transforms. faissR reports this combination as unsupported
+rather than returning a low-recall result from an invalid symmetric transform.
 Direct cuVS brute force and direct cuVS IVF/PQ rows are also benchmarked for
 raw inner product where the route uses faissR's maximum-inner-product-to-L2
 transform before calling the cuVS L2 kernel or index.
@@ -799,6 +801,29 @@ Rscript benchmark_scripts/benchmark_nn_metrics.R \
   --recall_threshold=0.98 \
   --threads=12
 ```
+
+## Held-out publication evidence
+
+`benchmark_scripts/jmlr_mloss_publication/` separates calibration, exact
+reference construction, held-out CPU methods, held-out CUDA methods, systems
+ablations, and cross-method analysis. Each Slurm launcher tests one method and
+backend. Held-out runs use two validation seeds, three repetitions, metric-
+matched exact references, and a 2,000-second per-combination timeout.
+
+After all one-method jobs finish,
+`analysis/aggregate_publication_results.R` selects the newest run for each
+method/suite and requires complete seed/repetition coverage. A method enters a
+speed ranking only when every measured run reaches the requested recall. The
+output includes fastest and second-fastest methods, an exact baseline,
+`method = "auto"` versus the oracle qualifying method, recall-compliance counts,
+failure evidence, and successful route mismatches. CPU and CUDA have separate
+Slurm aggregation files and are never pooled into one ranking.
+
+The CPU and CUDA systems-ablation jobs compare double and float32 input,
+disabled and warm fitted-index/transformation caches, compiled and R-side
+self-neighbour removal, and GPU-resident exact output with explicit host-copy
+time. CUDA NN-descent raw inner product remains an expected unsupported row; it
+is not substituted with another algorithm.
 
 Example CUDA run:
 

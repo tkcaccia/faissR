@@ -485,6 +485,106 @@ List normalized_float32_transform_cpp(SEXP x, std::string metric) {
 }
 
 // [[Rcpp::export]]
+List mips_l2_float32_transform_cpp(SEXP data, SEXP points, bool self_query) {
+  NumericOrFloatMatrixView data_view = make_numeric_or_float_view(data, "data");
+  NumericOrFloatMatrixView points_view = make_numeric_or_float_view(points, "points");
+  if (data_view.ncol != points_view.ncol) {
+    Rcpp::stop("data and points must have the same number of columns");
+  }
+
+  const int n = data_view.nrow;
+  const int nq = points_view.nrow;
+  const int p = data_view.ncol;
+  const int transformed_p = p + 1;
+  std::vector<double> data_norm2(static_cast<std::size_t>(n), 0.0);
+  NumericVector points_norm2(nq);
+  double radius2 = 0.0;
+  bool finite = true;
+
+  for (int row = 0; row < n; ++row) {
+    double norm2 = 0.0;
+    for (int col = 0; col < p; ++col) {
+      const double value = matrix_value(data_view, row, col);
+      if (!std::isfinite(value)) {
+        finite = false;
+        continue;
+      }
+      norm2 += value * value;
+    }
+    data_norm2[static_cast<std::size_t>(row)] = norm2;
+    if (norm2 > radius2) radius2 = norm2;
+  }
+
+  if (self_query && nq == n && data == points) {
+    for (int row = 0; row < nq; ++row) {
+      points_norm2[row] = data_norm2[static_cast<std::size_t>(row)];
+    }
+  } else {
+    for (int row = 0; row < nq; ++row) {
+      double norm2 = 0.0;
+      for (int col = 0; col < p; ++col) {
+        const double value = matrix_value(points_view, row, col);
+        if (!std::isfinite(value)) {
+          finite = false;
+          continue;
+        }
+        norm2 += value * value;
+      }
+      points_norm2[row] = norm2;
+    }
+  }
+
+  if (!finite || !std::isfinite(radius2)) {
+    Rcpp::stop("maximum-inner-product transforms require finite values");
+  }
+
+  std::vector<float> transformed_data(
+    static_cast<std::size_t>(n) * transformed_p, 0.0f
+  );
+  std::vector<float> transformed_points(
+    static_cast<std::size_t>(nq) * transformed_p, 0.0f
+  );
+  for (int row = 0; row < n; ++row) {
+    for (int col = 0; col < p; ++col) {
+      transformed_data[static_cast<std::size_t>(row) * transformed_p + col] =
+        static_cast<float>(matrix_value(data_view, row, col));
+    }
+    const double extra2 = std::max(
+      0.0, radius2 - data_norm2[static_cast<std::size_t>(row)]
+    );
+    transformed_data[static_cast<std::size_t>(row) * transformed_p + p] =
+      static_cast<float>(std::sqrt(extra2));
+  }
+  for (int row = 0; row < nq; ++row) {
+    for (int col = 0; col < p; ++col) {
+      transformed_points[static_cast<std::size_t>(row) * transformed_p + col] =
+        static_cast<float>(matrix_value(points_view, row, col));
+    }
+  }
+
+  Rcpp::S4 transformed_data_matrix("float32");
+  transformed_data_matrix.slot("Data") =
+    float_vector_as_integer_matrix_bits(transformed_data, n, transformed_p);
+  transformed_data_matrix.attr("faissR_row_major_float32") = true;
+  transformed_data_matrix.attr("faissR_metric_transform") = "inner_product";
+
+  Rcpp::S4 transformed_points_matrix("float32");
+  transformed_points_matrix.slot("Data") =
+    float_vector_as_integer_matrix_bits(transformed_points, nq, transformed_p);
+  transformed_points_matrix.attr("faissR_row_major_float32") = true;
+  transformed_points_matrix.attr("faissR_metric_transform") = "inner_product";
+
+  return List::create(
+    Rcpp::Named("data") = transformed_data_matrix,
+    Rcpp::Named("points") = transformed_points_matrix,
+    Rcpp::Named("radius2") = radius2,
+    Rcpp::Named("points_norm2") = points_norm2,
+    Rcpp::Named("row_major") = true,
+    Rcpp::Named("storage") = "float32"
+  );
+}
+
+// [[Rcpp::export]]
 List strip_self_neighbors_cpp(IntegerMatrix indices, NumericMatrix distances) {
   const int n = indices.nrow();
   const int k = indices.ncol();
