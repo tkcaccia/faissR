@@ -21,6 +21,8 @@ OUT_DIR="${OUT_DIR:-${BASE_DIR}/faissR_JMLR_MLOSS/ablations/cpu_${STAMP}}"
 
 mkdir -p "${OUT_DIR}" "${BASE_DIR}/benchmark_logs"
 singularity exec --bind "${BASE_DIR}:${BASE_DIR}" "${SINGULARITY_IMAGE}" \
+  Rscript -e 'library(faissR); stopifnot(faissR::faiss_available()); cat("faissR CPU preflight OK\n")'
+singularity exec --bind "${BASE_DIR}:${BASE_DIR}" "${SINGULARITY_IMAGE}" \
   Rscript "${SUITE_ROOT}/common/benchmark_jss_systems_ablations.R" \
   --manifest="${MANIFEST}" \
   --out_dir="${OUT_DIR}" \

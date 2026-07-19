@@ -60,6 +60,11 @@ else
   run_r() { "${R_BIN}" "$@"; }
 fi
 
+run_r -e 'library(faissR); stopifnot(faissR::faiss_available()); cat("faissR benchmark preflight OK\n")'
+if [[ "${BACKEND}" == "cuda" ]]; then
+  run_r -e 'library(faissR); stopifnot(faissR::cuda_available()); cat("faissR CUDA preflight OK\n")'
+fi
+
 if [[ ! -f "${REAL_MANIFEST}" && "${RUN_REAL}" == "TRUE" ]]; then
   run_r "${COMMON_DIR}/make_hpc_float32_manifest.R" \
     --data_root="${DATA_ROOT}" --out="${REAL_MANIFEST}"

@@ -43,7 +43,10 @@ prepare_input <- function(x, input_type) {
     if (is_float32(x)) return(x)
     return(float::fl(as.matrix(x)))
   }
-  if (is_float32(x)) x <- as.matrix(x)
+  if (is_float32(x)) {
+    if (!requireNamespace("float", quietly = TRUE)) stop("The float package is required.", call. = FALSE)
+    x <- float::dbl(x)
+  }
   if (!is.matrix(x)) x <- as.matrix(x)
   storage.mode(x) <- "double"
   x
@@ -256,7 +259,12 @@ worker_gpu_residency <- function(x, args) {
 }
 
 worker_main <- function(args) {
-  if (!requireNamespace("faissR", quietly = TRUE)) stop("faissR is not installed.", call. = FALSE)
+  tryCatch(
+    loadNamespace("faissR"),
+    error = function(e) {
+      stop("faissR cannot be loaded: ", conditionMessage(e), call. = FALSE)
+    }
+  )
   threads <- as.integer(args$threads)
   value <- as.character(threads)
   Sys.setenv(OMP_NUM_THREADS = value, OPENBLAS_NUM_THREADS = value,
@@ -294,6 +302,7 @@ driver_main <- function(args) {
   input_types <- split_values(args$input_types, "float32,double")
   out_dir <- normalizePath(args$out_dir %||% file.path(getwd(), paste0("faissR_JSS_ABLATION_", toupper(backend))), mustWork = FALSE)
   dir.create(file.path(out_dir, "worker_results"), recursive = TRUE, showWarnings = FALSE)
+  dir.create(file.path(out_dir, "worker_logs"), recursive = TRUE, showWarnings = FALSE)
   script <- normalizePath(sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[[1L]]), mustWork = TRUE)
   threads <- as.integer(args$threads %||% if (backend == "cpu") 12L else 2L)
   timeout <- as.integer(args$timeout %||% 2000L)
@@ -334,14 +343,24 @@ driver_main <- function(args) {
       paste0("--experiment=", job[["experiment"]]), paste0("--threads=", threads),
       paste0("--repeats=", repeats), paste0("--k=", k), paste0("--metric=", metric)
     )
-    status <- system2("timeout", command, stdout = file.path(out_dir, "worker_stdout.log"),
-                      stderr = file.path(out_dir, "worker_stderr.log"))
+    log_stem <- sub("[.]csv$", "", basename(result_path))
+    stdout_path <- file.path(out_dir, "worker_logs", paste0(log_stem, ".out"))
+    stderr_path <- file.path(out_dir, "worker_logs", paste0(log_stem, ".err"))
+    status <- system2("timeout", command, stdout = stdout_path, stderr = stderr_path)
     if (!file.exists(result_path)) {
+      detail <- if (file.exists(stderr_path)) {
+        paste(tail(readLines(stderr_path, warn = FALSE), 20L), collapse = " | ")
+      } else {
+        ""
+      }
       write.csv(data.frame(
         dataset = job[["dataset"]], backend = backend, method = job[["method"]],
         input_type = job[["input_type"]], experiment = job[["experiment"]],
         status = if (identical(status, 124L)) "timeout" else "failed",
-        error = paste("worker exit status", status), stringsAsFactors = FALSE
+        error = paste0("worker exit status ", status,
+                       if (nzchar(detail)) paste0(": ", detail) else ""),
+        stdout_path = stdout_path, stderr_path = stderr_path,
+        stringsAsFactors = FALSE
       ), result_path, row.names = FALSE)
     }
   }

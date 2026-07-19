@@ -141,7 +141,8 @@ is_float32_input <- function(x) {
 as_double_matrix <- function(x) {
   if (is.data.frame(x)) x <- as.matrix(x)
   if (is_float32_input(x)) {
-    x <- as.matrix(x)
+    if (!available_pkg("float")) stop("The float package is required to convert float32 input.", call. = FALSE)
+    x <- float::dbl(x)
   }
   if (!is.matrix(x)) x <- as.matrix(x)
   storage.mode(x) <- "double"

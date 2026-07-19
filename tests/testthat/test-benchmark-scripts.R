@@ -2747,6 +2747,8 @@ test_that("publication systems-ablation scripts retain backend-specific headers"
   expect_true(any(grepl("^#SBATCH --partition=l40s$", cuda)))
   expect_true(any(grepl("^#SBATCH --gres=gpu:l40s:1$", cuda)))
   expect_true(any(grepl("singularity exec --nv", cuda, fixed = TRUE)))
+  expect_true(any(grepl("faissR CPU preflight OK", cpu, fixed = TRUE)))
+  expect_true(any(grepl("faissR CUDA preflight OK", cuda, fixed = TRUE)))
 
   old <- Sys.getenv("FAISSR_JSS_ABLATION_SOURCE_ONLY", unset = NA_character_)
   on.exit({
@@ -2755,6 +2757,10 @@ test_that("publication systems-ablation scripts retain backend-specific headers"
   }, add = TRUE)
   Sys.setenv(FAISSR_JSS_ABLATION_SOURCE_ONLY = "true")
   env <- new.env(parent = globalenv())
-  sys.source(file.path(root, "common", "benchmark_jss_systems_ablations.R"), envir = env)
+  common_path <- file.path(root, "common", "benchmark_jss_systems_ablations.R")
+  common <- readLines(common_path, warn = FALSE)
+  expect_true(any(grepl("float::dbl(x)", common, fixed = TRUE)))
+  expect_true(any(grepl('file.path(out_dir, "worker_logs")', common, fixed = TRUE)))
+  sys.source(common_path, envir = env)
   expect_true(all(c("worker_input_cache", "worker_self_processing", "worker_gpu_residency") %in% ls(env)))
 })

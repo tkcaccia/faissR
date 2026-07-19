@@ -85,6 +85,16 @@ an explicit device-to-host copy. They use COIL20, MNIST, and TabulaMuris at
 `k = 30` to cover three different dataset shapes without duplicating the full
 method grid.
 
+Every one-method and systems-ablation launcher performs a package/backend
+preflight inside the same Singularity invocation used for measurement. A stale
+image or missing shared library therefore fails once with the original R load
+diagnostic before method workers are launched. Systems-ablation worker output
+is retained separately under `worker_logs/`.
+
+The double-input ablation converts a `float::float32` dataset explicitly with
+`float::dbl()`. Calling `as.matrix()` on a float object retains its S4 float32
+class and is not a valid double-input control.
+
 Reference files are saved in their dataset directories and reused by every
 method. Synthetic data are generated only when their manifest is absent.
 
