@@ -35,8 +35,9 @@ read_union <- function(files) {
 }
 
 latest_method_runs <- function(x) {
+  if (!"dataset_md5" %in% names(x)) x$dataset_md5 <- NA_character_
   suite <- ifelse(is.na(x$dataset_suite) | !nzchar(x$dataset_suite), "real", x$dataset_suite)
-  key <- paste(x$backend, x$method_id, suite, sep = "\r")
+  key <- paste(x$backend, x$method_id, suite, x$dataset, sep = "\r")
   selected <- unlist(lapply(split(seq_len(nrow(x)), key), function(ii) {
     roots <- unique(x$run_root[ii])
     root_time <- vapply(roots, function(root) max(x$source_mtime[ii][x$run_root[ii] == root]), numeric(1))
@@ -72,8 +73,9 @@ group_apply <- function(x, columns, fun) {
 }
 
 robust_summary <- function(x, expected_seeds, expected_repeats) {
+  if (!"dataset_md5" %in% names(x)) x$dataset_md5 <- NA_character_
   columns <- c(
-    "dataset", "dataset_suite", "backend", "metric", "k", "target_recall",
+    "dataset", "dataset_md5", "dataset_suite", "backend", "metric", "k", "target_recall",
     "implementation", "method_id", "public_method", "kind", "n_threads"
   )
   group_apply(x, columns, function(part) {
@@ -108,7 +110,7 @@ robust_summary <- function(x, expected_seeds, expected_repeats) {
 }
 
 rank_qualifying <- function(summary) {
-  keys <- c("dataset", "dataset_suite", "backend", "metric", "k", "target_recall")
+  keys <- c("dataset", "dataset_md5", "dataset_suite", "backend", "metric", "k", "target_recall")
   group_apply(summary, keys, function(part) {
     qualifying <- part[part$complete_validation & part$target_met_all_runs & is.finite(part$median_time_sec), , drop = FALSE]
     qualifying <- qualifying[order(qualifying$median_time_sec, qualifying$method_id), , drop = FALSE]
@@ -231,7 +233,7 @@ main <- function() {
   write.csv(combined[combined$status != "success", , drop = FALSE], file.path(out_dir, "jss_failures_and_unsupported.csv"), row.names = FALSE)
   write.csv(summary, file.path(out_dir, "jss_robust_method_summary.csv"), row.names = FALSE)
   write.csv(best, file.path(out_dir, "jss_fastest_second_exact_and_auto.csv"), row.names = FALSE)
-  write.csv(best[, c("dataset", "dataset_suite", "backend", "metric", "k", "target_recall",
+  write.csv(best[, c("dataset", "dataset_md5", "dataset_suite", "backend", "metric", "k", "target_recall",
                      "fastest_method", "fastest_time_sec", "auto_method", "auto_time_sec",
                      "auto_recall", "auto_over_oracle"), drop = FALSE],
             file.path(out_dir, "jss_auto_vs_oracle.csv"), row.names = FALSE)

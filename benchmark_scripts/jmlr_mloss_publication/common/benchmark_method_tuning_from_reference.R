@@ -196,7 +196,8 @@ reference_file <- function(dataset_path, k, quality_n, seed, metric = "euclidean
   ))
 }
 
-load_reference <- function(dataset_path, k, reference_k, quality_n, seed, metric = "euclidean") {
+load_reference <- function(dataset_path, k, reference_k, quality_n, seed,
+                           metric = "euclidean", dataset_md5) {
   metric <- normalize_metric_arg(metric)
   paths <- reference_file(dataset_path, reference_k, quality_n, seed, metric = metric)
   if (!identical(as.integer(k), as.integer(reference_k))) {
@@ -227,6 +228,13 @@ load_reference <- function(dataset_path, k, reference_k, quality_n, seed, metric
     return(list(status = "bad_reference", path = path, error = "object `faissR_reference` not found"))
   }
   ref <- get("faissR_reference", envir = env, inherits = FALSE)
+  if (!identical(as.character(ref$dataset_md5 %||% NA_character_), as.character(dataset_md5))) {
+    return(list(
+      status = "stale_reference",
+      path = path,
+      error = "reference dataset fingerprint does not match the current dataset file"
+    ))
+  }
   if (is.null(ref$indices) || !is.matrix(ref$indices)) {
     return(list(status = "bad_reference", path = path, error = "reference object has no `indices` matrix"))
   }
@@ -831,7 +839,8 @@ apply_candidate <- function(candidate) {
 base_row <- function(config, status = "success", error = NA_character_) {
   candidate <- config$candidate
   out <- data.frame(
-    dataset = config$dataset, n = as.integer(config$n), p = as.integer(config$p),
+    dataset = config$dataset, dataset_md5 = config$dataset_md5,
+    n = as.integer(config$n), p = as.integer(config$p),
     shape_group = shape_group(config$n, config$p), backend = config$backend,
     method = config$method, metric = config$metric, k = as.integer(config$k),
     candidate_id = candidate$candidate_id, candidate_kind = candidate$candidate_kind,
@@ -984,7 +993,8 @@ completed_keys <- function(path, resume_statuses = c("success", "unsupported", "
   }
   if (!nrow(x)) return(character())
   metric <- if ("metric" %in% names(x)) x$metric else rep("euclidean", nrow(x))
-  paste(x$dataset, x$backend, x$method, metric, x$k, x$candidate_id, sep = "\r")
+  md5 <- if ("dataset_md5" %in% names(x)) x$dataset_md5 else rep("<NA>", nrow(x))
+  paste(x$dataset, md5, x$backend, x$method, metric, x$k, x$candidate_id, sep = "\r")
 }
 
 timeout_skip_keys <- function(paths) {
@@ -1010,7 +1020,8 @@ timeout_skip_keys <- function(paths) {
     if (!all(needed %in% names(x))) next
     x <- x[x[[status_col]] == "timeout", , drop = FALSE]
     if (!nrow(x)) next
-    keys <- c(keys, paste(x$dataset, x$backend, x$method, x$k, x$candidate_id, sep = "\r"))
+    md5 <- if ("dataset_md5" %in% names(x)) x$dataset_md5 else rep("<NA>", nrow(x))
+    keys <- c(keys, paste(x$dataset, md5, x$backend, x$method, x$k, x$candidate_id, sep = "\r"))
   }
   unique(keys)
 }
@@ -1020,10 +1031,11 @@ summarize_results <- function(out_dir, results_path, target_recalls, method) {
   x <- read.csv(results_path, stringsAsFactors = FALSE)
   success <- x[x$status == "success" & is.finite(x$recall_at_k) & is.finite(x$elapsed_sec), , drop = FALSE]
   rows <- list(); idx <- 0L
-  groups <- unique(success[c("dataset", "backend", "method", "metric", "k")])
+  groups <- unique(success[c("dataset", "dataset_md5", "backend", "method", "metric", "k")])
   for (g in seq_len(nrow(groups))) {
     part0 <- success[
       success$dataset == groups$dataset[[g]] &
+        success$dataset_md5 == groups$dataset_md5[[g]] &
         success$backend == groups$backend[[g]] &
         success$method == groups$method[[g]] &
         success$metric == groups$metric[[g]] &
@@ -1213,6 +1225,11 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   path_col <- dataset_path_column(manifest)
   datasets <- split_arg(args$datasets, paste(manifest$dataset, collapse = ","))
   manifest <- manifest[manifest$dataset %in% datasets, , drop = FALSE]
+  manifest$dataset_md5 <- vapply(
+    manifest[[path_col]],
+    function(path) unname(tools::md5sum(path)[[1L]]),
+    character(1)
+  )
   k_values <- as.integer(split_arg(args$k_values, "15,30,50,100"))
   k_values <- k_values[is.finite(k_values) & k_values > 0L]
   if (!length(k_values)) stop("`--k_values` must contain at least one positive integer.", call. = FALSE)
@@ -1320,9 +1337,13 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   for (i in seq_len(nrow(manifest))) {
     ds <- manifest[i, , drop = FALSE]
     dataset_path <- ds[[path_col]][[1L]]
+    dataset_md5 <- ds$dataset_md5[[1L]]
     for (k in k_values) {
       for (metric in metrics) {
-        ref <- load_reference(dataset_path, k, reference_k, quality_n, seed, metric = metric)
+        ref <- load_reference(
+          dataset_path, k, reference_k, quality_n, seed,
+          metric = metric, dataset_md5 = dataset_md5
+        )
         candidates <- candidate_grid(
           method, backend, as.integer(ds$n), as.integer(ds$p), k, metric,
           target_recalls, thread_values, output_values, grid_level,
@@ -1339,11 +1360,12 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
         )
         for (j in seq_len(nrow(candidates))) {
           cand <- candidates[j, , drop = FALSE]
-          key <- paste(ds$dataset[[1L]], backend, method, metric, as.integer(k), cand$candidate_id, sep = "\r")
-          timeout_key <- paste(ds$dataset[[1L]], backend, method, as.integer(k), cand$candidate_id, sep = "\r")
+          key <- paste(ds$dataset[[1L]], dataset_md5, backend, method, metric, as.integer(k), cand$candidate_id, sep = "\r")
+          timeout_key <- paste(ds$dataset[[1L]], dataset_md5, backend, method, as.integer(k), cand$candidate_id, sep = "\r")
           if (key %in% done) next
           cfg <- list(
             dataset = ds$dataset[[1L]], dataset_path = dataset_path,
+            dataset_md5 = dataset_md5,
             n = as.integer(ds$n), p = as.integer(ds$p), backend = backend,
             method = method, metric = metric, k = as.integer(k),
             target_recalls = target_recalls,

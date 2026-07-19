@@ -14,6 +14,7 @@ THREADS="${THREADS:-$(if [[ "${BACKEND}" == "cpu" ]]; then echo 12; else echo 2;
 THREAD_VALUES="${THREAD_VALUES:-${THREADS}}"
 K_VALUES="${K_VALUES:-15,30,50,100}"
 TARGET_RECALLS="${TARGET_RECALLS:-0.9,0.95,0.99}"
+METRICS="${METRICS:-inner_product}"
 TIMEOUT="${TIMEOUT:-2000}"
 QUALITY_N="${QUALITY_N:-1024}"
 CALIBRATION_SEED="${CALIBRATION_SEED:-4}"
@@ -62,7 +63,7 @@ TUNING_ARGS=(
   --out_dir="${OUT_DIR}"
   --method="${METHOD}"
   --backend="${BACKEND}"
-  --metrics=inner_product
+  --metrics="${METRICS}"
   --k_values="${K_VALUES}"
   --reference_k=100
   --target_recalls="${TARGET_RECALLS}"

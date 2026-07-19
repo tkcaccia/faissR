@@ -134,7 +134,8 @@ inspect_dataset_file <- function(path) {
     labels = !is.null(found$labels),
     data_class = paste(class(found$data), collapse = "|"),
     object_name = found$object_name,
-    file_size_gb = file.info(path)$size / 1024^3
+    file_size_gb = file.info(path)$size / 1024^3,
+    dataset_md5 = unname(tools::md5sum(path)[[1L]])
   )
 }
 
@@ -170,6 +171,7 @@ main <- function() {
       data_class = info$data_class %||% NA_character_,
       object_name = info$object_name %||% NA_character_,
       file_size_gb = as.numeric(info$file_size_gb %||% NA_real_),
+      dataset_md5 = info$dataset_md5 %||% NA_character_,
       status = info$status %||% "failed",
       error = info$error %||% NA_character_,
       stringsAsFactors = FALSE

@@ -2731,6 +2731,20 @@ test_that("publication aggregator requires complete held-out recall", {
   rows$recall_at_k <- 0.995
   summary <- env$robust_summary(rows, expected_seeds = 2L, expected_repeats = 3L)
   expect_true(summary$target_met_all_runs)
+
+  runs <- data.frame(
+    backend = "cpu",
+    method_id = "faissR_cpu_hnsw",
+    dataset_suite = "real",
+    dataset = c("COIL20", "TabulaMuris", "TabulaMuris"),
+    dataset_md5 = c("coil-v1", "tabula-v1", "tabula-v2"),
+    run_root = c("old", "old", "new"),
+    source_mtime = c(1, 1, 2),
+    stringsAsFactors = FALSE
+  )
+  newest <- env$latest_method_runs(runs)
+  expect_setequal(newest$dataset, c("COIL20", "TabulaMuris"))
+  expect_equal(newest$dataset_md5[newest$dataset == "TabulaMuris"], "tabula-v2")
 })
 
 test_that("publication systems-ablation scripts retain backend-specific headers", {
@@ -2763,4 +2777,47 @@ test_that("publication systems-ablation scripts retain backend-specific headers"
   expect_true(any(grepl('file.path(out_dir, "worker_logs")', common, fixed = TRUE)))
   sys.source(common_path, envir = env)
   expect_true(all(c("worker_input_cache", "worker_self_processing", "worker_gpu_residency") %in% ls(env)))
+
+  manifest <- readLines(file.path(root, "common", "make_hpc_float32_manifest.R"), warn = FALSE)
+  cpu_reference <- readLines(file.path(root, "common", "benchmark_precompute_exact_references.R"), warn = FALSE)
+  cuda_reference <- readLines(file.path(root, "common", "benchmark_precompute_exact_references_cuda.R"), warn = FALSE)
+  refresh <- readLines(file.path(root, "refresh_tabula_muris", "run_references_cuda.sh"), warn = FALSE)
+  expect_true(any(grepl("dataset_md5", manifest, fixed = TRUE)))
+  expect_true(any(grepl("dataset_md5", cpu_reference, fixed = TRUE)))
+  expect_true(any(grepl("dataset_md5", cuda_reference, fixed = TRUE)))
+  expect_true(any(grepl("--datasets=TabulaMuris", refresh, fixed = TRUE)))
+  expect_true(any(grepl("--resume=FALSE", refresh, fixed = TRUE)))
+})
+
+test_that("publication references reject a changed dataset fingerprint", {
+  root <- test_path("../../benchmark_scripts/jmlr_mloss_publication")
+  if (!dir.exists(root)) {
+    skip("Publication scripts are not available in this installed-package test context.")
+  }
+  td <- tempfile("faissR_dataset_fingerprint_")
+  dir.create(td)
+  data_path <- file.path(td, "TabulaMuris_float32.RData")
+  writeBin(charToRaw("tabula-v1"), data_path)
+  md5_v1 <- unname(tools::md5sum(data_path)[[1L]])
+
+  cpu_env <- new.env(parent = globalenv())
+  old_cpu <- Sys.getenv("FAISSR_CPU_REFERENCE_SOURCE_ONLY", unset = NA_character_)
+  on.exit({
+    if (is.na(old_cpu)) Sys.unsetenv("FAISSR_CPU_REFERENCE_SOURCE_ONLY") else
+      Sys.setenv(FAISSR_CPU_REFERENCE_SOURCE_ONLY = old_cpu)
+  }, add = TRUE)
+  Sys.setenv(FAISSR_CPU_REFERENCE_SOURCE_ONLY = "true")
+  sys.source(file.path(root, "common", "benchmark_precompute_exact_references.R"), envir = cpu_env)
+
+  ref_path <- file.path(td, "reference.RData")
+  faissR_reference <- list(
+    status = "success", dataset_md5 = md5_v1,
+    indices = matrix(1L, nrow = 2L, ncol = 3L)
+  )
+  save(faissR_reference, file = ref_path)
+  expect_true(cpu_env$reference_is_valid(ref_path, 3L, md5_v1))
+
+  writeBin(charToRaw("tabula-v2"), data_path)
+  md5_v2 <- unname(tools::md5sum(data_path)[[1L]])
+  expect_false(cpu_env$reference_is_valid(ref_path, 3L, md5_v2))
 })

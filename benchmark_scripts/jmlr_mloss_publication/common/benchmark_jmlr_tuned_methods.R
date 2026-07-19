@@ -461,7 +461,8 @@ choose_quality_rows <- function(n, p, max_n, max_ops, seed) {
   sort(sample.int(n, size))
 }
 
-load_precomputed_reference <- function(data_path, reference_k, quality_n, seed, metric, k) {
+load_precomputed_reference <- function(data_path, reference_k, quality_n, seed, metric, k,
+                                       dataset_md5) {
   path <- file.path(
     dirname(data_path),
     sprintf(
@@ -475,6 +476,7 @@ load_precomputed_reference <- function(data_path, reference_k, quality_n, seed, 
   if (!exists("faissR_reference", envir = env, inherits = FALSE)) return(NULL)
   ref <- get("faissR_reference", envir = env, inherits = FALSE)
   if (!identical(ref$status %||% "success", "success") ||
+      !identical(as.character(ref$dataset_md5 %||% NA_character_), as.character(dataset_md5)) ||
       is.null(ref$rows) || is.null(ref$indices) || ncol(ref$indices) < k) {
     return(NULL)
   }
@@ -605,7 +607,7 @@ write_one <- function(path, row) {
 
 aggregate_success_rows <- function(success) {
   group_cols <- c(
-    "dataset", "backend", "metric", "k", "target_recall",
+    "dataset", "dataset_md5", "backend", "metric", "k", "target_recall",
     "implementation", "method_id", "public_method", "kind", "n_threads"
   )
   key_frame <- lapply(success[group_cols], function(x) {
@@ -668,6 +670,7 @@ worker_main <- function(args) {
   base <- data.frame(
     dataset = args$dataset,
     data_path = args$data_path,
+    dataset_md5 = args$dataset_md5,
     object_name = ds$object_name,
     n = ds$n,
     p = ds$p,
@@ -723,7 +726,7 @@ worker_main <- function(args) {
       stop("grid is only applicable to 2D/3D datasets.", call. = FALSE)
     }
     reference <- load_precomputed_reference(
-      args$data_path, reference_k, quality_n, seed, metric, k
+      args$data_path, reference_k, quality_n, seed, metric, k, args$dataset_md5
     )
     if (is.null(reference)) {
       rows <- choose_quality_rows(ds$n, ds$p, quality_n, quality_max_ops, seed)
@@ -948,6 +951,11 @@ main <- function() {
   datasets <- split_arg(args$datasets, "")
   if (length(datasets)) manifest_df <- manifest_df[manifest_df$dataset %in% datasets, , drop = FALSE]
   if (!nrow(manifest_df)) stop("No datasets selected from manifest.", call. = FALSE)
+  manifest_df$dataset_md5 <- vapply(
+    manifest_df$path,
+    function(path) unname(tools::md5sum(path)[[1L]]),
+    character(1)
+  )
 
   methods <- method_table(backend, include_external = include_external, include_gpu_resident = include_gpu_resident)
   wanted_methods <- split_arg(args$methods, "")
@@ -1019,6 +1027,7 @@ main <- function() {
               "--worker=TRUE",
               paste0("--dataset=", manifest_df$dataset[[di]]),
               paste0("--data_path=", manifest_df$path[[di]]),
+              paste0("--dataset_md5=", manifest_df$dataset_md5[[di]]),
               paste0("--dataset_suite=", manifest_df$suite[[di]] %||% "real"),
               paste0("--norm_model=", manifest_df$norm_model[[di]] %||% NA_character_),
               paste0("--norm_cv=", manifest_df$norm_cv[[di]] %||% NA_real_),
@@ -1045,6 +1054,7 @@ main <- function() {
               row <- data.frame(
                 dataset = manifest_df$dataset[[di]],
                 data_path = manifest_df$path[[di]],
+                dataset_md5 = manifest_df$dataset_md5[[di]],
                 object_name = NA_character_,
                 n = manifest_df$n[[di]] %||% NA_integer_,
                 p = manifest_df$p[[di]] %||% NA_integer_,

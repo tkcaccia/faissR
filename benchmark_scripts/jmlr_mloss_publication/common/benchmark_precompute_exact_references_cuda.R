@@ -127,13 +127,14 @@ reference_file <- function(dataset_path, metric, k, quality_n, seed) {
   )
 }
 
-cuda_reference_is_valid <- function(path, k) {
+cuda_reference_is_valid <- function(path, k, dataset_md5) {
   if (!file.exists(path)) return(FALSE)
   env <- new.env(parent = emptyenv())
   tryCatch({
     load(path, envir = env)
     ref <- get("faissR_reference", envir = env, inherits = FALSE)
     identical(ref$status, "success") && identical(ref$backend, "cuda") &&
+      identical(as.character(ref$dataset_md5 %||% NA_character_), as.character(dataset_md5)) &&
       isTRUE(ref$cpu_audit_pass) && is.matrix(ref$indices) && ncol(ref$indices) >= k
   }, error = function(e) FALSE)
 }
@@ -252,6 +253,7 @@ compute_one <- function(config) {
     status = "success",
     dataset = config$dataset,
     dataset_path = config$dataset_path,
+    dataset_md5 = config$dataset_md5,
     n = n,
     p = p,
     metric = config$metric,
@@ -286,6 +288,7 @@ compute_one <- function(config) {
   save(faissR_reference, file = config$output_path, compress = "xz")
   data.frame(
     dataset = config$dataset,
+    dataset_md5 = config$dataset_md5,
     metric = config$metric,
     seed = config$seed,
     status = "success",
@@ -309,6 +312,7 @@ run_child <- function(args) {
     compute_one(config),
     error = function(e) data.frame(
       dataset = config$dataset,
+      dataset_md5 = config$dataset_md5,
       metric = config$metric,
       seed = config$seed,
       status = "failed",
@@ -341,6 +345,7 @@ run_task <- function(config, timeout, script) {
   if (file.exists(result)) return(readRDS(result))
   data.frame(
     dataset = config$dataset,
+    dataset_md5 = config$dataset_md5,
     metric = config$metric,
     seed = config$seed,
     status = if (identical(status, 124L)) "timeout" else "failed",
@@ -398,12 +403,14 @@ main <- function() {
 
   for (i in seq_len(nrow(manifest))) {
     dataset_path <- manifest[[path_col]][[i]]
+    dataset_md5 <- unname(tools::md5sum(dataset_path)[[1L]])
     for (metric in metrics) {
       for (seed in seeds) {
         output_path <- reference_file(dataset_path, metric, k, quality_n, seed)
-        if (resume && cuda_reference_is_valid(output_path, k)) {
+        if (resume && cuda_reference_is_valid(output_path, k, dataset_md5)) {
           append_csv(data.frame(
-            dataset = manifest$dataset[[i]], metric = metric, seed = seed,
+            dataset = manifest$dataset[[i]], dataset_md5 = dataset_md5,
+            metric = metric, seed = seed,
             status = "already_exists", reference_path = output_path,
             reference_backend_used = NA_character_, elapsed_sec = NA_real_,
             host_copy_sec = NA_real_, cpu_audit_n = audit_n,
@@ -417,6 +424,7 @@ main <- function() {
         row <- run_task(list(
           dataset = manifest$dataset[[i]],
           dataset_path = dataset_path,
+          dataset_md5 = dataset_md5,
           metric = metric,
           seed = seed,
           k = k,

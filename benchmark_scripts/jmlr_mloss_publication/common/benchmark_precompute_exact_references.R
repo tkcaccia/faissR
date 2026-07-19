@@ -165,7 +165,7 @@ reference_file <- function(dataset_path, k, quality_n, seed, metric = "euclidean
   )
 }
 
-reference_is_valid <- function(path, k) {
+reference_is_valid <- function(path, k, dataset_md5) {
   if (!file.exists(path)) return(FALSE)
   env <- new.env(parent = emptyenv())
   ok <- tryCatch({
@@ -174,6 +174,7 @@ reference_is_valid <- function(path, k) {
     ref <- get("faissR_reference", envir = env, inherits = FALSE)
     is.list(ref) &&
       identical(ref$status %||% "success", "success") &&
+      identical(as.character(ref$dataset_md5 %||% NA_character_), as.character(dataset_md5)) &&
       is.matrix(ref$indices) &&
       ncol(ref$indices) >= as.integer(k)
   }, error = function(e) FALSE)
@@ -274,6 +275,7 @@ compute_reference <- function(config) {
     status = "success",
     dataset = config$dataset,
     dataset_path = config$dataset_path,
+    dataset_md5 = config$dataset_md5,
     n = as.integer(n),
     p = as.integer(p),
     metric = config$metric,
@@ -299,6 +301,7 @@ compute_reference <- function(config) {
   save(faissR_reference, file = config$output_path, compress = "xz")
   data.frame(
     dataset = config$dataset,
+    dataset_md5 = config$dataset_md5,
     metric = config$metric,
     k = reference_k,
     status = "success",
@@ -321,6 +324,7 @@ run_child <- function() {
     error = function(e) {
       data.frame(
         dataset = config$dataset,
+        dataset_md5 = config$dataset_md5,
         metric = config$metric,
         k = as.integer(config$k),
         status = classify_error(conditionMessage(e)),
@@ -352,6 +356,7 @@ run_task <- function(config, timeout, bench_script) {
   if (file.exists(out) && !identical(as.integer(exit_status), 124L)) return(readRDS(out))
   data.frame(
     dataset = config$dataset,
+    dataset_md5 = config$dataset_md5,
     metric = config$metric,
     k = as.integer(config$k),
     status = if (identical(as.integer(exit_status), 124L)) "timeout" else classify_error(paste(status, collapse = "\n")),
@@ -398,11 +403,13 @@ main <- function() {
   for (i in seq_len(nrow(manifest))) {
     ds <- manifest[i, , drop = FALSE]
     dataset_path <- ds[[path_col]][[1L]]
+    dataset_md5 <- unname(tools::md5sum(dataset_path)[[1L]])
     for (metric in metrics) {
       ref_path <- reference_file(dataset_path, reference_k, quality_n, seed, metric = metric)
-      if (isTRUE(resume) && reference_is_valid(ref_path, reference_k)) {
+      if (isTRUE(resume) && reference_is_valid(ref_path, reference_k, dataset_md5)) {
         append_csv(data.frame(
-          dataset = ds$dataset[[1L]], metric = metric, k = as.integer(reference_k),
+          dataset = ds$dataset[[1L]], dataset_md5 = dataset_md5,
+          metric = metric, k = as.integer(reference_k),
           status = "already_exists",
           reference_path = ref_path,
           reference_method = NA_character_, reference_backend_used = NA_character_,
@@ -418,6 +425,7 @@ main <- function() {
       row <- run_task(list(
         dataset = ds$dataset[[1L]],
         dataset_path = dataset_path,
+        dataset_md5 = dataset_md5,
         metric = metric,
         k = as.integer(reference_k),
         requested_k_values = k_values,
@@ -433,4 +441,6 @@ main <- function() {
   message("DONE: ", results_path)
 }
 
-main()
+if (!identical(Sys.getenv("FAISSR_CPU_REFERENCE_SOURCE_ONLY", unset = ""), "true")) {
+  main()
+}

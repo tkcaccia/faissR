@@ -97,6 +97,11 @@ class and is not a valid double-input control.
 
 Reference files are saved in their dataset directories and reused by every
 method. Synthetic data are generated only when their manifest is absent.
+References and result rows include the source dataset MD5 fingerprint. A
+reference with a missing or different fingerprint is rejected, even when its
+matrix dimensions and `k` still match. For a changed TabulaMuris file, follow
+`refresh_tabula_muris/README.md`; targeted replacement runs are selected per
+dataset and do not displace newer evidence for unrelated datasets.
 
 ## Experimental Design
 

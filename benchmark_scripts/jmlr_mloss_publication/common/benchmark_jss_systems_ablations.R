@@ -129,6 +129,7 @@ r_remove_self <- function(result, k) {
 base_row <- function(args, x) data.frame(
   dataset = args$dataset,
   data_path = args$data_path,
+  dataset_md5 = args$dataset_md5,
   n = nrow(x), p = ncol(x),
   backend = args$backend,
   method = args$method,
@@ -298,6 +299,11 @@ driver_main <- function(args) {
   datasets <- split_values(args$datasets, "COIL20,MNIST,TabulaMuris")
   manifest <- manifest[manifest$dataset %in% datasets & file.exists(manifest$path), , drop = FALSE]
   if (!nrow(manifest)) stop("No selected datasets are available.", call. = FALSE)
+  manifest$dataset_md5 <- vapply(
+    manifest$path,
+    function(path) unname(tools::md5sum(path)[[1L]]),
+    character(1)
+  )
   methods <- split_values(args$methods, if (backend == "cpu") "flat,hnsw,ivf" else "flat,cagra,hnsw,ivf")
   input_types <- split_values(args$input_types, "float32,double")
   out_dir <- normalizePath(args$out_dir %||% file.path(getwd(), paste0("faissR_JSS_ABLATION_", toupper(backend))), mustWork = FALSE)
@@ -316,14 +322,17 @@ driver_main <- function(args) {
     for (method in methods) {
       for (input_type in input_types) {
         jobs[[length(jobs) + 1L]] <- c(dataset = manifest$dataset[[di]], data_path = manifest$path[[di]],
+          dataset_md5 = manifest$dataset_md5[[di]],
           method = method, input_type = input_type, experiment = "input_cache")
       }
     }
     for (input_type in input_types) {
       jobs[[length(jobs) + 1L]] <- c(dataset = manifest$dataset[[di]], data_path = manifest$path[[di]],
+        dataset_md5 = manifest$dataset_md5[[di]],
         method = "flat", input_type = input_type, experiment = "self_processing")
       if (backend == "cuda") jobs[[length(jobs) + 1L]] <- c(
         dataset = manifest$dataset[[di]], data_path = manifest$path[[di]],
+        dataset_md5 = manifest$dataset_md5[[di]],
         method = "exact", input_type = input_type, experiment = "gpu_residency"
       )
     }
@@ -339,6 +348,7 @@ driver_main <- function(args) {
       as.character(timeout), "Rscript", script, "--worker=TRUE",
       paste0("--result_path=", result_path), paste0("--dataset=", job[["dataset"]]),
       paste0("--data_path=", job[["data_path"]]), paste0("--backend=", backend),
+      paste0("--dataset_md5=", job[["dataset_md5"]]),
       paste0("--method=", job[["method"]]), paste0("--input_type=", job[["input_type"]]),
       paste0("--experiment=", job[["experiment"]]), paste0("--threads=", threads),
       paste0("--repeats=", repeats), paste0("--k=", k), paste0("--metric=", metric)
@@ -354,7 +364,8 @@ driver_main <- function(args) {
         ""
       }
       write.csv(data.frame(
-        dataset = job[["dataset"]], backend = backend, method = job[["method"]],
+        dataset = job[["dataset"]], dataset_md5 = job[["dataset_md5"]],
+        backend = backend, method = job[["method"]],
         input_type = job[["input_type"]], experiment = job[["experiment"]],
         status = if (identical(status, 124L)) "timeout" else "failed",
         error = paste0("worker exit status ", status,
