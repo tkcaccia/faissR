@@ -79,7 +79,7 @@ sudo cmake --install faiss-1.14.3/build
 FAISS_HOME=/opt/faiss \
 FAISSR_REQUIRE_FAISS=1 \
 FAISSR_USE_CUDA=0 FAISSR_USE_CUVS=0 \
-R CMD INSTALL faissR_0.99.47.tar.gz
+R CMD INSTALL faissR_0.99.48.tar.gz
 ```
 
 When the distribution supplies compatible development files, installing
@@ -95,7 +95,7 @@ the compiler/loader details in `config.log`.
 
 ```{bash, eval=FALSE}
 sudo apt-get install libfaiss-dev libblas-dev liblapack-dev
-FAISSR_NUMERICAL_LIBS="-llapack -lblas" R CMD INSTALL faissR_0.99.47.tar.gz
+FAISSR_NUMERICAL_LIBS="-llapack -lblas" R CMD INSTALL faissR_0.99.48.tar.gz
 ```
 
 The explicit `FAISSR_NUMERICAL_LIBS` setting is optional when automatic
@@ -142,7 +142,7 @@ system package manager:
 FAISS_HOME=/path/to/faiss \
 LIBOMP_HOME=/path/to/openmp \
 FAISSR_REQUIRE_FAISS=1 \
-R CMD INSTALL faissR_0.99.47.tar.gz
+R CMD INSTALL faissR_0.99.48.tar.gz
 ```
 
 Alternatively, pass separate FAISS paths with
@@ -164,7 +164,7 @@ R's `LAPACK_LIBS`, `BLAS_LIBS`, and `FLIBS` are retained.
 ```{r windows-install, eval=FALSE}
 Sys.setenv(FAISS_HOME = "C:/local/faiss", FAISSR_REQUIRE_FAISS = "1")
 install.packages("Rcpp")
-install.packages("faissR_0.99.47.tar.gz", repos = NULL, type = "source")
+install.packages("faissR_0.99.48.tar.gz", repos = NULL, type = "source")
 ```
 
 For nonstandard numerical libraries, set `FAISSR_NUMERICAL_LIBS` to the complete
@@ -197,7 +197,7 @@ FAISSR_REQUIRE_FAISS=1 \
 FAISSR_REQUIRE_CUDA=1 \
 FAISSR_REQUIRE_CUDA_RUNTIME=1 \
 FAISSR_REQUIRE_CUVS=1 \
-R CMD INSTALL faissR_0.99.47.tar.gz
+R CMD INSTALL faissR_0.99.48.tar.gz
 ```
 
 Configuration compiles and links a small CUDA probe and records the toolkit,
@@ -286,8 +286,8 @@ installation:
 ```{bash, eval=FALSE}
 R CMD build .
 FAISS_HOME=/opt/faiss FAISSR_REQUIRE_FAISS=1 \
-    R CMD check --as-cran faissR_0.99.47.tar.gz
-Rscript -e 'BiocCheck::BiocCheck("faissR_0.99.47.tar.gz", `new-package`=TRUE)'
+    R CMD check --as-cran faissR_0.99.48.tar.gz
+Rscript -e 'BiocCheck::BiocCheck("faissR_0.99.48.tar.gz", `new-package`=TRUE)'
 ```
 
 `faissR` and FAISS use the Expat License. R package metadata records this

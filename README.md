@@ -435,14 +435,14 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check --as-cran faissR_0.99.47.tar.gz
+R CMD check --as-cran faissR_0.99.48.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.47.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.48.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA and cuVS are
