@@ -255,6 +255,7 @@ typed getter functions rather than repeating function-pointer signatures.
 | `faissR_nn_float32_call` | `(x, k, backend, metric, include_self, n_threads)` | CPU FAISS Flat float32 KNN route. It accepts ordinary R double matrices or optional `float::fl()`/float32 matrices and returns the stable host `faissR_nn` list with double distances. |
 | `faissR_nn_float32_call_output` | `(x, k, backend, metric, include_self, n_threads, distances)` | Same CPU FAISS Flat float32 route, with `distances = "double"` or `"float"` to request host distance storage type. |
 | `faissR_nn_cuda_tuned_gpu_call` | `(x, k, method, metric, include_self, target_recall)` | CUDA self-KNN route that keeps result buffers on the GPU for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. It returns the same `faissR_gpu_knn` object shape as `nn_gpu()`, including CUDA device pointers and `device_to_host_result_copies = 0`. |
+| `faissR_hnsw_search_v1` | `(data, query, n, p, k, target_recall, n_threads, distance_storage)` | CPU FAISS HNSW search with shape-aware tuning. Pass `NULL` for `query` to exclude self-neighbors; otherwise supply query rows with the same storage type. `n` and `p` describe the reference matrix. The output includes the selected tuning rule. |
 
 The returned GPU handle owns its device buffers. It must remain protected from
 R garbage collection while downstream code uses `indices_ptr` or

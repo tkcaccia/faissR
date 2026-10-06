@@ -478,6 +478,15 @@ extern "C" SEXP faissR_nn_cuda_tuned_gpu_call(SEXP x,
                                               SEXP include_self,
                                               SEXP target_recall);
 
+extern "C" SEXP faissR_hnsw_search_v1(SEXP data,
+                                      SEXP query,
+                                      SEXP n,
+                                      SEXP p,
+                                      SEXP k,
+                                      SEXP target_recall,
+                                      SEXP n_threads,
+                                      SEXP distance_storage);
+
 extern "C" int faissR_c_api_version_impl() {
   return 1;
 }
@@ -504,6 +513,11 @@ void register_faissR_ccallables(DllInfo *dll) {
     "faissR",
     "faissR_nn_cuda_tuned_gpu_call",
     (DL_FUNC) &faissR_nn_cuda_tuned_gpu_call
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_hnsw_search_v1",
+    (DL_FUNC) &faissR_hnsw_search_v1
   );
 }
 
@@ -702,6 +716,54 @@ List nn_faiss_hnsw_float32_cpp(SEXP data,
     data, points, k, m, ef_construction, ef_search, metric, distance_output,
     exclude_self, n_threads, distance_storage
   );
+}
+
+List nn_tune_faiss_hnsw_cpp(int n, int p, int k, std::string metric,
+                            double target_recall, int m_option,
+                            int ef_construction_option,
+                            int ef_search_option, bool manual);
+
+extern "C" SEXP faissR_hnsw_search_v1(SEXP data,
+                                      SEXP query,
+                                      SEXP n,
+                                      SEXP p,
+                                      SEXP k,
+                                      SEXP target_recall,
+                                      SEXP n_threads,
+                                      SEXP distance_storage) {
+  BEGIN_RCPP
+  const bool self = Rf_isNull(query);
+  if (self) query = data;
+  const int neighbors = Rcpp::as<int>(k);
+  const int threads = Rcpp::as<int>(n_threads);
+  List params = nn_tune_faiss_hnsw_cpp(
+    Rcpp::as<int>(n), Rcpp::as<int>(p), neighbors, "euclidean",
+    Rcpp::as<double>(target_recall), NA_INTEGER, NA_INTEGER, NA_INTEGER,
+    false
+  );
+  const int m = Rcpp::as<int>(params["m"]);
+  const int ef_construction = Rcpp::as<int>(params["ef_construction"]);
+  const int ef_search = Rcpp::as<int>(params["ef_search"]);
+  List out;
+  if (Rf_inherits(data, "float32") && Rf_inherits(query, "float32")) {
+    out = nn_faiss_hnsw_float32_cpp(
+      data, query, neighbors, m, ef_construction, ef_search,
+      "euclidean", "euclidean", self, threads,
+      Rcpp::as<std::string>(distance_storage)
+    );
+  } else {
+    if (TYPEOF(data) != REALSXP || TYPEOF(query) != REALSXP) {
+      Rcpp::stop("HNSW inputs must have matching double or float32 storage");
+    }
+    out = nn_faiss_hnsw_cpp(
+      NumericMatrix(data), NumericMatrix(query), neighbors, m,
+      ef_construction, ef_search, "euclidean", "euclidean", self,
+      threads
+    );
+  }
+  out["tuning_rule"] = params["rule"];
+  return out;
+  END_RCPP
 }
 
 // [[Rcpp::export]]

@@ -45,6 +45,16 @@ typedef SEXP (*faissR_nn_cuda_tuned_gpu_fun)(
     SEXP include_self,
     SEXP target_recall);
 
+typedef SEXP (*faissR_hnsw_search_v1_fun)(
+    SEXP data,
+    SEXP query,
+    SEXP n,
+    SEXP p,
+    SEXP k,
+    SEXP target_recall,
+    SEXP n_threads,
+    SEXP distance_storage);
+
 /*
  * The GPU-resident callable accepts method values "auto", "exact", "flat",
  * and "bruteforce". The returned owner object must remain reachable while
@@ -73,6 +83,11 @@ static inline faissR_nn_cuda_tuned_gpu_fun
 faissR_get_nn_cuda_tuned_gpu(void) {
   return (faissR_nn_cuda_tuned_gpu_fun) R_GetCCallable(
       "faissR", "faissR_nn_cuda_tuned_gpu_call");
+}
+
+static inline faissR_hnsw_search_v1_fun faissR_get_hnsw_search_v1(void) {
+  return (faissR_hnsw_search_v1_fun) R_GetCCallable(
+      "faissR", "faissR_hnsw_search_v1");
 }
 
 #ifdef __cplusplus
