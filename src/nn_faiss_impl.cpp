@@ -189,6 +189,7 @@ struct FaissHnswIndexHandle {
   std::string metric = "euclidean";
   std::string input_layout = "unknown";
   bool input_owns_data = false;
+  std::uint64_t query_call_count = 0;
 
   FaissHnswIndexHandle(std::unique_ptr<faiss::IndexHNSWFlat>&& index_,
                        const int n_,
@@ -219,6 +220,10 @@ struct FaissHnswIndexHandle {
         input_layout(std::move(input_layout_)),
         input_owns_data(input_owns_data_) {}
 };
+
+SEXP faiss_hnsw_index_v1_tag() {
+  return Rf_install("faissR_hnsw_index_v1");
+}
 
 struct FaissFittedIndexHandle {
   std::unique_ptr<faiss::Index> index;
@@ -2236,6 +2241,7 @@ SEXP faiss_hnsw_index_build_float32_impl(SEXP data,
   const int requested_m = m;
   const int requested_ef_construction = ef_construction;
   const int requested_ef_search = ef_search;
+  const int requested_n_threads = n_threads;
   n_threads = std::max(1, n_threads);
   m = clamp_positive(m, 32, n_data);
   ef_construction = std::max(ef_construction, m);
@@ -2278,8 +2284,11 @@ SEXP faiss_hnsw_index_build_float32_impl(SEXP data,
       xb.layout,
       xb.owns_data
     );
-    Rcpp::XPtr<FaissHnswIndexHandle> ptr(handle, true);
+    Rcpp::XPtr<FaissHnswIndexHandle> ptr(
+      handle, true, faiss_hnsw_index_v1_tag()
+    );
     ptr.attr("class") = "faissR_faiss_hnsw_index";
+    ptr.attr("api_version") = 1;
     ptr.attr("n") = n_data;
     ptr.attr("p") = n_features;
     ptr.attr("m") = m;
@@ -2288,12 +2297,15 @@ SEXP faiss_hnsw_index_build_float32_impl(SEXP data,
     ptr.attr("requested_m") = requested_m;
     ptr.attr("requested_ef_construction") = requested_ef_construction;
     ptr.attr("requested_ef_search") = requested_ef_search;
-    ptr.attr("max_threads") = n_threads;
+    ptr.attr("requested_n_threads") = requested_n_threads;
+    ptr.attr("n_threads") = n_threads;
     ptr.attr("metric") = metric;
     ptr.attr("input_type") = "float32";
     ptr.attr("input_layout") = xb.layout;
     ptr.attr("input_owns_data") = xb.owns_data;
     ptr.attr("float32_compatibility_conversion") = xb.compatibility_conversion;
+    ptr.attr("serialization_supported") = false;
+    ptr.attr("concurrent_search_supported") = false;
     return ptr;
   } catch (const std::exception& e) {
     Rcpp::stop("FAISS HNSW fitted-index build failed: %s", e.what());
@@ -2310,6 +2322,12 @@ List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
   if (k < 1) {
     Rcpp::stop("k must be positive");
   }
+  if (TYPEOF(index_ptr) != EXTPTRSXP ||
+      R_ExternalPtrTag(index_ptr) != faiss_hnsw_index_v1_tag()) {
+    Rcpp::stop(
+      "FAISS HNSW index pointer is not a faissR version-1 handle"
+    );
+  }
   Rcpp::XPtr<FaissHnswIndexHandle> handle(index_ptr);
   if (handle.get() == nullptr || handle->index.get() == nullptr) {
     Rcpp::stop("FAISS HNSW index pointer is not valid");
@@ -2317,7 +2335,9 @@ List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
   if (k > handle->n) {
     Rcpp::stop("k must not exceed the fitted FAISS HNSW index size");
   }
-  n_threads = std::max(1, std::min(n_threads, handle->max_threads));
+  const int requested_n_threads = n_threads;
+  const int requested_ef_search = ef_search;
+  n_threads = std::max(1, n_threads);
   ef_search = std::max(k, ef_search);
   const bool wants_float_distances = distance_storage == "float" ||
     distance_storage == "float32";
@@ -2343,6 +2363,7 @@ List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
     Rcpp::stop("FAISS HNSW fitted-index search failed: %s", e.what());
   }
 
+  ++handle->query_call_count;
   List out = format_faiss_result(
     labels,
     distances,
@@ -2362,20 +2383,27 @@ List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
     wants_float_distances
   );
   out["m"] = handle->m;
+  out["api_version"] = 1;
   out["ef_construction"] = handle->ef_construction;
   out["ef_search"] = ef_search;
   out["requested_m"] = handle->requested_m;
   out["requested_ef_construction"] = handle->requested_ef_construction;
-  out["requested_ef_search"] = handle->requested_ef_search;
+  out["requested_ef_search"] = requested_ef_search;
+  out["requested_n_threads"] = requested_n_threads;
+  out["n_threads"] = n_threads;
+  out["build_n_threads"] = handle->max_threads;
+  out["k"] = k;
   out["hnsw_parameters_adjusted"] = handle->requested_m != handle->m ||
     handle->requested_ef_construction != handle->ef_construction ||
-    handle->requested_ef_search != ef_search;
+    requested_ef_search != ef_search || requested_n_threads != n_threads;
   out["index_reused"] = true;
   out["index_n"] = handle->n;
   out["index_p"] = handle->p;
   out["query_n"] = n_points;
   out["batch_query"] = true;
-  out["query_call_count"] = 1;
+  out["query_call_count"] = static_cast<double>(handle->query_call_count);
+  out["serialization_supported"] = false;
+  out["concurrent_search_supported"] = false;
   out["input_type"] = "float32";
   out["input_layout"] = handle->input_layout + ";fitted_index_query:" + xq.layout;
   out["input_owns_data"] = xq.owns_data;

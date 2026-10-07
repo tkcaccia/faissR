@@ -17,4 +17,6 @@ ENGINE=${CONTAINER_ENGINE:-singularity}
     --bind "$OUT/tmp:/tmp" \
     --env "PACKAGE_TEST_COMMIT=${PACKAGE_TEST_COMMIT:-UNRECORDED}" \
     --env "PACKAGE_TEST_IMAGE=$(basename "$IMAGE")" \
+    --env "PACKAGE_TEST_BOOTSTRAP_DEPENDENCIES=${PACKAGE_TEST_BOOTSTRAP_DEPENDENCIES:-false}" \
+    --env "PACKAGE_TEST_FORCE_SUGGESTS=${PACKAGE_TEST_FORCE_SUGGESTS:-false}" \
     "$IMAGE" Rscript /harness/run.R "$CONTAINER_ARCHIVE" /results "$PROFILE" /harness/faissR-smoke.R

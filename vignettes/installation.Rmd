@@ -79,7 +79,7 @@ sudo cmake --install faiss-1.14.3/build
 FAISS_HOME=/opt/faiss \
 FAISSR_REQUIRE_FAISS=1 \
 FAISSR_USE_CUDA=0 FAISSR_USE_CUVS=0 \
-R CMD INSTALL faissR_0.99.48.tar.gz
+R CMD INSTALL faissR_0.99.50.tar.gz
 ```
 
 When the distribution supplies compatible development files, installing
@@ -95,7 +95,7 @@ the compiler/loader details in `config.log`.
 
 ```{bash, eval=FALSE}
 sudo apt-get install libfaiss-dev libblas-dev liblapack-dev
-FAISSR_NUMERICAL_LIBS="-llapack -lblas" R CMD INSTALL faissR_0.99.48.tar.gz
+FAISSR_NUMERICAL_LIBS="-llapack -lblas" R CMD INSTALL faissR_0.99.50.tar.gz
 ```
 
 The explicit `FAISSR_NUMERICAL_LIBS` setting is optional when automatic
@@ -142,7 +142,7 @@ system package manager:
 FAISS_HOME=/path/to/faiss \
 LIBOMP_HOME=/path/to/openmp \
 FAISSR_REQUIRE_FAISS=1 \
-R CMD INSTALL faissR_0.99.48.tar.gz
+R CMD INSTALL faissR_0.99.50.tar.gz
 ```
 
 Alternatively, pass separate FAISS paths with
@@ -164,7 +164,7 @@ R's `LAPACK_LIBS`, `BLAS_LIBS`, and `FLIBS` are retained.
 ```{r windows-install, eval=FALSE}
 Sys.setenv(FAISS_HOME = "C:/local/faiss", FAISSR_REQUIRE_FAISS = "1")
 install.packages("Rcpp")
-install.packages("faissR_0.99.48.tar.gz", repos = NULL, type = "source")
+install.packages("faissR_0.99.50.tar.gz", repos = NULL, type = "source")
 ```
 
 For nonstandard numerical libraries, set `FAISSR_NUMERICAL_LIBS` to the complete
@@ -195,19 +195,22 @@ FAISS_HOME=/opt/faiss-gpu \
 CUVS_HOME=/opt/rapids \
 FAISSR_REQUIRE_FAISS=1 \
 FAISSR_REQUIRE_CUDA=1 \
-FAISSR_REQUIRE_CUDA_RUNTIME=1 \
 FAISSR_REQUIRE_CUVS=1 \
-R CMD INSTALL faissR_0.99.48.tar.gz
+R CMD INSTALL faissR_0.99.50.tar.gz
 ```
 
 Configuration compiles and links a small CUDA probe and records the toolkit,
-runtime, driver API, and device compute capability. A visible GPU is required
-at configuration only when `FAISSR_REQUIRE_CUDA_RUNTIME=1`; omit that switch
-for a build image that intentionally has no attached GPU. `FAISSR_CUDA_ARCH`
-accepts space-separated numeric capabilities such as `"80 90 120"`. The
-highest requested architecture is also retained as Parallel Thread Execution
-(PTX) code for forward compatibility; set `FAISSR_CUDA_PTX_ARCH` explicitly
-to choose another PTX target or to `none` to disable it.
+runtime, driver API, and device compute capability. `FAISSR_REQUIRE_CUDA=1`
+requires a visible, usable GPU as well as a successful compiler and linker
+probe. An image built intentionally without an attached GPU can set
+`FAISSR_SKIP_CUDA_RUNTIME_CHECK=1`; that advanced option does not establish
+that CUDA execution works. `FAISSR_REQUIRE_CUDA_RUNTIME` is deprecated.
+By default, configure reads the compute capabilities of all visible GPUs from
+the CUDA runtime, checks them against `nvcc`, and generates native code for
+each detected architecture. Parallel Thread Execution (PTX) code is retained
+for the highest architecture. Build-only hosts and cross-compilation can set
+`FAISSR_CUDA_ARCH` to space-separated numeric capabilities such as
+`"80 90 120"`; `FAISSR_CUDA_PTX_ARCH` can select another PTX target or `none`.
 
 CUDA compatibility is reported per component. Native faissR kernels, FAISS
 GPU, and direct cuVS are separate capabilities, and availability of one does
@@ -241,10 +244,13 @@ c(
     cuda = cuda_available(),
     cuvs = cuvs_available()
 )
+
+gpuinfo::hardware_info()$gpu
 ```
 
-Do not infer GPU support from `nvidia-smi` alone. The package must have been
-compiled against the provider and the runtime device must also be available.
+`gpuinfo` reports hardware and driver visibility. Do not infer faissR GPU
+support from hardware visibility alone: the package must also have been
+compiled against the provider and its runtime check must pass.
 
 # Common failures
 
@@ -270,10 +276,14 @@ compiled against the provider and the runtime device must also be available.
 * **The CUDA compiler/linker probe fails:** the selected compiler, headers,
     runtime libraries, or architecture flags do not form a coherent toolkit.
     Inspect `config.log`; do not repair this by replacing the host driver.
-* **The CUDA runtime probe reports no device:** run `nvidia-smi`, then compare
-    the compiled toolkit, runtime, driver API, and compute capability shown by
-    `backend_info()`. A build-only host may omit
-    `FAISSR_REQUIRE_CUDA_RUNTIME=1`.
+* **Architecture detection fails:** ensure that the GPU is visible and usable.
+    An intentional build-only host must set `FAISSR_CUDA_ARCH` explicitly and
+    may use `FAISSR_SKIP_CUDA_RUNTIME_CHECK=1`.
+* **The CUDA runtime probe reports no device:** inspect
+    `gpuinfo::gpu_sitrep()`, then compare the hardware report with faissR's
+    compiled toolkit and runtime state in `backend_info()`. An intentional
+    build-only host may set
+    `FAISSR_SKIP_CUDA_RUNTIME_CHECK=1`, but this does not validate execution.
 * **cuVS route unavailable:** cuVS was absent at compile time or cannot load at
     runtime. Set `CUVS_HOME`, use `FAISSR_REQUIRE_CUVS=1`, and repair the
     runtime library path.
@@ -286,8 +296,8 @@ installation:
 ```{bash, eval=FALSE}
 R CMD build .
 FAISS_HOME=/opt/faiss FAISSR_REQUIRE_FAISS=1 \
-    R CMD check --as-cran faissR_0.99.48.tar.gz
-Rscript -e 'BiocCheck::BiocCheck("faissR_0.99.48.tar.gz", `new-package`=TRUE)'
+    R CMD check --as-cran faissR_0.99.50.tar.gz
+Rscript -e 'BiocCheck::BiocCheck("faissR_0.99.50.tar.gz", `new-package`=TRUE)'
 ```
 
 `faissR` and FAISS use the Expat License. R package metadata records this

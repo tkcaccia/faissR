@@ -9,10 +9,10 @@
 #' was compiled with a compatible provider. `backend_info()` reports
 #' package-specific compiled and runtime capability; [cuda_available()] is
 #' likewise specific to the current `faissR` installation. Framework-neutral
-#' hardware discovery is a separate concern, as implemented by the development
-#' `gpuinfo` project at \url{https://github.com/tkcaccia/gpuinfo}. A hardware
-#' report from that project complements, but does not replace, these
-#' package-specific checks.
+#' hardware discovery is supplied by the CRAN package `gpuinfo`. faissR uses
+#' it for hardware, driver, memory, and device details, while its own native
+#' probes remain authoritative for deciding whether a compiled provider can
+#' execute.
 #'
 #' @return A data frame with one row per compiled/runtime backend family and
 #'   columns describing availability, public call hints, public backend names,
@@ -61,7 +61,13 @@ backend_info_flags <- function(summaries) {
 }
 
 backend_info_summaries <- function() {
-    list(cuda = cuda_summary(), faiss = faiss_summary(), cuvs = cuvs_summary())
+    hardware <- gpuinfo_hardware_info()
+    list(
+        hardware = hardware,
+        cuda = cuda_summary(hardware),
+        faiss = faiss_summary(),
+        cuvs = cuvs_summary()
+    )
 }
 
 backend_info_public_calls <- function() {
@@ -150,7 +156,13 @@ backend_info_resolved_routes <- function() {
 
 backend_info_devices <- function(summaries) {
     with(summaries, {
-        c(cpu_summary(), faiss$device, cuda$device, cuvs$device, cuda$device)
+        c(
+            cpu_summary(hardware),
+            faiss$device,
+            cuda$device,
+            cuda$device,
+            cuda$device
+        )
     })
 }
 
@@ -230,8 +242,54 @@ backend_flag <- function(fn) {
     tryCatch(isTRUE(fn()), error = function(e) FALSE)
 }
 
-cpu_summary <- function() {
-    cores <- faissr_quiet_warning(parallel::detectCores(logical = TRUE))
+gpuinfo_hardware_info <- function() {
+    tryCatch(gpuinfo::hardware_info(), error = function(e) NULL)
+}
+
+gpuinfo_cpu_model <- function(info = gpuinfo_hardware_info()) {
+    value <- if (is.list(info) && is.list(info$cpu)) {
+        info$cpu$model
+    } else {
+        NA_character_
+    }
+    value <- as.character(value)[1L]
+    if (is.na(value) || !nzchar(value)) NA_character_ else value
+}
+
+gpuinfo_cuda_device <- function(info = gpuinfo_hardware_info()) {
+    if (!is.list(info) || !is.data.frame(info$gpu) || !nrow(info$gpu)) {
+        return(NA_character_)
+    }
+    rows <- which(info$gpu$backend %in% "cuda")
+    if (!length(rows)) {
+        return(NA_character_)
+    }
+    value <- as.character(info$gpu$model[rows[1L]])
+    if (is.na(value) || !nzchar(value)) NA_character_ else value
+}
+
+gpuinfo_numeric_scalar <- function(value) {
+    if (!length(value)) {
+        return(NA_real_)
+    }
+    value <- value[[1L]]
+    if (is.numeric(value)) {
+        return(as.numeric(value))
+    }
+    parsed <- utils::type.convert(as.character(value), as.is = TRUE)
+    if (length(parsed) == 1L && is.numeric(parsed)) {
+        as.numeric(parsed)
+    } else {
+        NA_real_
+    }
+}
+
+cpu_summary <- function(info = gpuinfo_hardware_info()) {
+    cores <- if (is.list(info) && is.list(info$cpu)) {
+        gpuinfo_numeric_scalar(info$cpu$logical_cores)
+    } else {
+        NA_integer_
+    }
     if (length(cores) != 1L || is.na(cores) || !is.finite(cores)) {
         "CPU"
     } else {
@@ -239,108 +297,45 @@ cpu_summary <- function() {
     }
 }
 
-parse_nvidia_smi_summary <- function(out) {
-    valid <- !is.na(out) & nzchar(trimws(out))
-    if (!length(out) || !any(valid)) {
-        return(list(device = NA_character_, runtime = NA_character_))
-    }
-    first <- out[which(valid)[1L]]
-    parts <- trimws(strsplit(first, ",", fixed = TRUE)[[1L]])
-    device <- if (length(parts) >= 1L && nzchar(parts[1L])) {
-        parts[1L]
-    } else {
-        NA_character_
-    }
-    driver <- if (length(parts) >= 2L) parts[2L] else NA_character_
-    memory <- if (length(parts) >= 3L) parts[3L] else NA_character_
-    runtime <- paste(
-        c(
-            if (!is.na(driver) && nzchar(driver)) {
-                paste0("driver ", driver)
-            } else {
-                NULL
-            },
-            if (!is.na(memory) && nzchar(memory)) {
-                paste0(memory, " MiB")
-            } else {
-                NULL
-            }
+cuda_summary <- function(info = gpuinfo_hardware_info()) {
+    package <- cuda_package_summary()
+    hardware <- gpuinfo_cuda_summary(info)
+    list(
+        device = first_nonempty(
+            hardware$device,
+            if (isTRUE(package$available)) "CUDA GPU" else NA_character_
         ),
-        collapse = ", "
+        runtime = combine_nonempty(package$runtime, hardware$runtime)
     )
-    if (!nzchar(runtime)) {
-        runtime <- NA_character_
-    }
-    list(device = device, runtime = runtime)
 }
 
-nvidia_smi_summary <- function() {
-    smi <- Sys.which("nvidia-smi")
-    if (!nzchar(smi)) {
-        return(list(device = NA_character_, runtime = NA_character_))
-    }
-    out <- tryCatch(
-        system2(
-            smi,
-            c(
-                "--query-gpu=name,driver_version,memory.total",
-                "--format=csv,noheader,nounits"
-            ),
-            stdout = TRUE,
-            stderr = FALSE
-        ),
-        error = function(e) character()
-    )
-    parse_nvidia_smi_summary(out)
-}
-
-cuda_summary <- function() {
-    native <- cuda_native_summary()
-    smi <- nvidia_smi_summary()
-
-    device <- first_nonempty(native$device, smi$device)
-    runtime <- combine_nonempty(native$runtime, smi$runtime)
-    list(device = device, runtime = runtime)
-}
-
-cuda_native_summary <- function() {
+cuda_package_summary <- function() {
     text <- tryCatch(
         cuda_device_info_json_cpp(),
         error = function(e) NA_character_
     )
     if (length(text) != 1L || is.na(text) || !nzchar(text)) {
-        return(list(device = NA_character_, runtime = NA_character_))
+        return(list(available = FALSE, runtime = NA_character_))
     }
 
     available <- json_get_bool(text, "available")
     if (isTRUE(available)) {
-        device <- json_get_string(text, "name")
-        compute <- json_get_string(text, "compute_capability")
         compiled_toolkit <- json_get_string(text, "compiled_toolkit")
         runtime_version <- json_get_string(text, "runtime_version")
         driver_version <- json_get_string(text, "driver_version")
-        total_memory <- json_get_number(text, "total_memory")
-        free_memory <- json_get_number(text, "free_memory")
-        memory <- cuda_memory_summary(free_memory, total_memory)
         runtime <- combine_nonempty(
             cuda_version_summary(
                 compiled_toolkit,
                 runtime_version,
                 driver_version
-            ),
-            if (!is.na(compute)) {
-                paste0("compute capability ", compute)
-            } else {
-                NA_character_
-            },
-            memory
+            )
         )
-        return(list(device = device, runtime = runtime))
+        return(list(available = TRUE, runtime = runtime))
     }
 
     reason <- json_get_string(text, "reason")
     list(
-        device = NA_character_,
+        available = FALSE,
         runtime = combine_nonempty(
             cuda_version_summary(
                 json_get_string(text, "compiled_toolkit"),
@@ -350,6 +345,41 @@ cuda_native_summary <- function() {
             reason
         )
     )
+}
+
+gpuinfo_cuda_summary <- function(info = gpuinfo_hardware_info()) {
+    if (!is.list(info)) {
+        return(list(device = NA_character_, runtime = NA_character_))
+    }
+    cuda <- if (is.list(info$cuda)) info$cuda else list()
+    device <- gpuinfo_cuda_device(info)
+    memory <- NA_real_
+    if (is.data.frame(info$gpu) && nrow(info$gpu)) {
+        rows <- which(info$gpu$backend %in% "cuda")
+        if (length(rows)) {
+            memory <- gpuinfo_numeric_scalar(
+                info$gpu$memory_mb[rows[1L]]
+            ) * 1024^2
+        }
+    }
+    runtime <- combine_nonempty(
+        gpuinfo_cuda_field(cuda$driver_version, "NVIDIA driver "),
+        gpuinfo_cuda_field(
+            cuda$compute_capability,
+            "compute capability "
+        ),
+        cuda_memory_summary(NA_real_, memory)
+    )
+    list(device = device, runtime = runtime)
+}
+
+gpuinfo_cuda_field <- function(value, prefix) {
+    value <- as.character(value)[1L]
+    if (is.na(value) || !nzchar(value)) {
+        NA_character_
+    } else {
+        paste0(prefix, value)
+    }
 }
 
 cuda_version_summary <- function(compiled, runtime, driver) {
@@ -430,25 +460,14 @@ cuvs_summary <- function() {
     )
     available <- json_get_bool(text, "available")
     reason <- json_get_string(text, "reason")
-    device <- json_get_string(text, "device")
-    compute <- json_get_string(text, "compute_capability")
-    total_memory <- json_get_number(text, "total_memory")
     runtime <- if (isTRUE(available)) {
-        combine_nonempty(
-            "RAPIDS cuVS C API",
-            if (!is.na(compute)) {
-                paste0("compute capability ", compute)
-            } else {
-                NA_character_
-            },
-            cuda_memory_summary(NA_real_, total_memory)
-        )
+        "RAPIDS cuVS C API"
     } else if (!is.na(reason)) {
         reason
     } else {
         NA_character_
     }
-    list(device = if (!is.na(device)) device else "CUDA GPU", runtime = runtime)
+    list(runtime = runtime)
 }
 
 json_get_bool <- function(text, key) {

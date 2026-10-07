@@ -48,9 +48,30 @@ fi
 config_log="$(pwd)/config.log"
 printf '%s\n' 'faissR native configuration probes' > "$config_log"
 
+require_cuda=${FAISSR_REQUIRE_CUDA:-0}
+skip_cuda_runtime_check=${FAISSR_SKIP_CUDA_RUNTIME_CHECK:-0}
+case "$skip_cuda_runtime_check" in
+  0|1) ;;
+  *)
+    echo "FAISSR_SKIP_CUDA_RUNTIME_CHECK must be 0 or 1." >&2
+    exit 1
+    ;;
+esac
+if [ "${FAISSR_REQUIRE_CUDA_RUNTIME+x}" = "x" ]; then
+  echo "FAISSR_REQUIRE_CUDA_RUNTIME is deprecated." >&2
+  echo "FAISSR_REQUIRE_CUDA=1 now includes CUDA runtime validation." >&2
+  if [ "${FAISSR_REQUIRE_CUDA_RUNTIME:-0}" = "1" ]; then
+    if [ "$skip_cuda_runtime_check" = "1" ]; then
+      echo "The deprecated runtime requirement conflicts with FAISSR_SKIP_CUDA_RUNTIME_CHECK=1." >&2
+      exit 1
+    fi
+    require_cuda=1
+  fi
+fi
+
 use_cuda=${FAISSR_USE_CUDA:-}
 if [ -z "$use_cuda" ]; then use_cuda=auto; fi
-if [ "${FAISSR_REQUIRE_CUDA:-0}" = "1" ]; then use_cuda=1; fi
+if [ "$require_cuda" = "1" ]; then use_cuda=1; fi
 cuda_home=${CUDA_HOME:-}
 nvcc=${NVCC:-}
 if [ -z "$nvcc" ]; then
@@ -296,6 +317,7 @@ cuda_rule=""
 if [ "$use_cuda" != "0" ] && [ -n "$nvcc" ] && [ -n "$cuda_home" ]; then
   cuda_cppflags="-I$cuda_home/include"
   cuda_ldflags="-L$cuda_home/lib64 -L$cuda_home/lib"
+  cuda_runtime_lib_path="$cuda_home/lib64:$cuda_home/lib"
   for cuda_target_include in "$cuda_home"/targets/*/include; do
     if [ -d "$cuda_target_include" ]; then
       cuda_cppflags="$cuda_cppflags -I$cuda_target_include"
@@ -304,32 +326,31 @@ if [ "$use_cuda" != "0" ] && [ -n "$nvcc" ] && [ -n "$cuda_home" ]; then
   for cuda_target_lib in "$cuda_home"/targets/*/lib; do
     if [ -d "$cuda_target_lib" ]; then
       cuda_ldflags="$cuda_ldflags -L$cuda_target_lib"
+      cuda_runtime_lib_path="$cuda_runtime_lib_path:$cuda_target_lib"
     fi
   done
-  cuda_arch_flags=""
-  cuda_max_arch=""
-  for arch in ${FAISSR_CUDA_ARCH:-}; do
-    case "$arch" in
-      *[!0-9]*|'')
-        echo "FAISSR_CUDA_ARCH must contain space-separated numeric compute capabilities, for example '80 90 120'." >&2
-        exit 1
-        ;;
-    esac
-    cuda_arch_flags="$cuda_arch_flags -gencode=arch=compute_$arch,code=sm_$arch"
-    if [ -z "$cuda_max_arch" ] || [ "$arch" -gt "$cuda_max_arch" ]; then
-      cuda_max_arch=$arch
-    fi
-  done
-  cuda_ptx_arch=${FAISSR_CUDA_PTX_ARCH:-$cuda_max_arch}
-  if [ -n "$cuda_ptx_arch" ] && [ "$cuda_ptx_arch" != "none" ]; then
-    case "$cuda_ptx_arch" in
-      *[!0-9]*)
-        echo "FAISSR_CUDA_PTX_ARCH must be a numeric compute capability or 'none'." >&2
-        exit 1
-        ;;
-    esac
-    cuda_arch_flags="$cuda_arch_flags -gencode=arch=compute_$cuda_ptx_arch,code=compute_$cuda_ptx_arch"
-  fi
+  cuda_arch_setting=${FAISSR_CUDA_ARCH:-auto}
+  case "$cuda_arch_setting" in
+    auto) ;;
+    *)
+      for arch in $cuda_arch_setting; do
+        case "$arch" in
+          *[!0-9]*|'')
+            echo "FAISSR_CUDA_ARCH must be 'auto' or contain space-separated numeric compute capabilities, for example '80 90 120'." >&2
+            exit 1
+            ;;
+        esac
+      done
+      ;;
+  esac
+  cuda_ptx_setting=${FAISSR_CUDA_PTX_ARCH:-auto}
+  case "$cuda_ptx_setting" in
+    auto|none) ;;
+    *[!0-9]*|'')
+      echo "FAISSR_CUDA_PTX_ARCH must be 'auto', a numeric compute capability, or 'none'." >&2
+      exit 1
+      ;;
+  esac
   cuda_extra_flags=${FAISSR_CUDA_FLAGS:-}
   cuda_probe_dir=$(mktemp -d "${TMPDIR:-/tmp}/faissR-cuda-XXXXXX")
   cat > "$cuda_probe_dir/conftest.cu" <<'EOF'
@@ -340,35 +361,40 @@ int main() {
   int driver = 0;
   int runtime = 0;
   int count = 0;
-  int compute_major = -1;
-  int compute_minor = -1;
   const cudaError_t driver_status = cudaDriverGetVersion(&driver);
   const cudaError_t runtime_status = cudaRuntimeGetVersion(&runtime);
   const cudaError_t device_status = cudaGetDeviceCount(&count);
-  cudaError_t property_status = cudaErrorNoDevice;
-  if (device_status == cudaSuccess && count > 0) {
-    cudaDeviceProp property{};
-    property_status = cudaGetDeviceProperties(&property, 0);
-    if (property_status == cudaSuccess) {
-      compute_major = property.major;
-      compute_minor = property.minor;
-    }
-  }
   std::printf(
     "compiled=%d driver_status=%d driver=%d runtime_status=%d "
-    "runtime=%d device_status=%d devices=%d property_status=%d "
-    "capability=%d.%d\n",
+    "runtime=%d device_status=%d devices=%d\n",
     CUDART_VERSION,
     static_cast<int>(driver_status),
     driver,
     static_cast<int>(runtime_status),
     runtime,
     static_cast<int>(device_status),
-    count,
-    static_cast<int>(property_status),
-    compute_major,
-    compute_minor
+    count
   );
+  if (device_status == cudaSuccess) {
+    for (int device = 0; device < count; ++device) {
+      int compute_major = -1;
+      int compute_minor = -1;
+      cudaDeviceProp property{};
+      const cudaError_t property_status =
+        cudaGetDeviceProperties(&property, device);
+      if (property_status == cudaSuccess) {
+        compute_major = property.major;
+        compute_minor = property.minor;
+      }
+      std::printf(
+        "device=%d property_status=%d capability=%d.%d\n",
+        device,
+        static_cast<int>(property_status),
+        compute_major,
+        compute_minor
+      );
+    }
+  }
   return 0;
 }
 EOF
@@ -377,10 +403,103 @@ EOF
     printf 'NVCC: %s\n' "$nvcc"
     printf 'CUDA_HOME: %s\n' "$cuda_home"
     printf 'Reported toolkit: %s\n' "${cuda_version:-unknown}"
+  } >> "$config_log"
+
+  cuda_detection_output=""
+  if "$nvcc" -std=c++17 $cuda_extra_flags \
+      "$cuda_probe_dir/conftest.cu" \
+      $cuda_ldflags -lcudart \
+      -o "$cuda_probe_dir/conftest-detect" >> "$config_log" 2>&1; then
+    cuda_detection_output=$(
+      LD_LIBRARY_PATH="$cuda_runtime_lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+        "$cuda_probe_dir/conftest-detect" 2>> "$config_log" || true
+    )
+  fi
+  printf 'Architecture detection probe: %s\n' \
+    "${cuda_detection_output:-unavailable}" >> "$config_log"
+
+  cuda_arch_source=explicit
+  cuda_archs=$cuda_arch_setting
+  if [ "$cuda_arch_setting" = "auto" ]; then
+    cuda_arch_source=runtime
+    cuda_archs=$(
+      printf '%s\n' "$cuda_detection_output" |
+        sed -n 's/.*capability=\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1\2/p' |
+        sort -n -u |
+        tr '\n' ' ' |
+        sed 's/[[:space:]]*$//'
+    )
+    if [ -z "$cuda_archs" ]; then
+      cuda_arch_source=nvcc-default
+      if [ "$require_cuda" = "1" ]; then
+        rm -rf "$cuda_probe_dir"
+        if [ "$skip_cuda_runtime_check" = "1" ]; then
+          echo "CUDA architecture auto-detection requires a visible GPU." >&2
+          echo "On an intentional build-only host, set FAISSR_CUDA_ARCH explicitly." >&2
+        else
+          echo "FAISSR_REQUIRE_CUDA=1, but no usable CUDA device was available for architecture detection." >&2
+          echo "Probe: ${cuda_detection_output:-unavailable}" >&2
+        fi
+        exit 1
+      fi
+      echo "CUDA architecture auto-detection was unavailable; using the nvcc default." >&2
+      echo "Set FAISSR_CUDA_ARCH explicitly on a build-only host." >&2
+    fi
+  fi
+
+  cuda_arch_flags=""
+  cuda_max_arch=""
+  for arch in $cuda_archs; do
+    cuda_arch_flags="$cuda_arch_flags -gencode=arch=compute_$arch,code=sm_$arch"
+    if [ -z "$cuda_max_arch" ] || [ "$arch" -gt "$cuda_max_arch" ]; then
+      cuda_max_arch=$arch
+    fi
+  done
+  cuda_ptx_arch=$cuda_ptx_setting
+  if [ "$cuda_ptx_arch" = "auto" ]; then
+    cuda_ptx_arch=$cuda_max_arch
+  fi
+  if [ -n "$cuda_ptx_arch" ] && [ "$cuda_ptx_arch" != "none" ]; then
+    cuda_arch_flags="$cuda_arch_flags -gencode=arch=compute_$cuda_ptx_arch,code=compute_$cuda_ptx_arch"
+  fi
+
+  cuda_arch_supported=1
+  cuda_supported_codes=$(
+    "$nvcc" --list-gpu-code 2>> "$config_log" |
+      sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || true
+  )
+  if [ -n "$cuda_supported_codes" ]; then
+    for arch in $cuda_archs; do
+      if ! printf '%s\n' "$cuda_supported_codes" |
+          grep -qx "sm_$arch"; then
+        echo "The selected nvcc does not support native architecture sm_$arch." >&2
+        cuda_arch_supported=0
+      fi
+    done
+  fi
+  cuda_supported_arches=$(
+    "$nvcc" --list-gpu-arch 2>> "$config_log" |
+      sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || true
+  )
+  if [ -n "$cuda_supported_arches" ] &&
+      [ -n "$cuda_ptx_arch" ] && [ "$cuda_ptx_arch" != "none" ]; then
+    if ! printf '%s\n' "$cuda_supported_arches" |
+        grep -qx "compute_$cuda_ptx_arch"; then
+      echo "The selected nvcc does not support PTX architecture compute_$cuda_ptx_arch." >&2
+      cuda_arch_supported=0
+    fi
+  fi
+  {
+    printf 'Architecture source: %s\n' "$cuda_arch_source"
+    printf 'Selected native architectures: %s\n' "${cuda_archs:-nvcc-default}"
+    printf 'Selected PTX architecture: %s\n' "${cuda_ptx_arch:-nvcc-default}"
     printf 'Architecture flags: %s\n' "${cuda_arch_flags:-nvcc-default}"
   } >> "$config_log"
+
   cuda_probe_ok=1
-  if ! "$nvcc" -std=c++17 $cuda_arch_flags $cuda_extra_flags \
+  if [ "$cuda_arch_supported" = "0" ]; then
+    cuda_probe_ok=0
+  elif ! "$nvcc" -std=c++17 $cuda_arch_flags $cuda_extra_flags \
       "$cuda_probe_dir/conftest.cu" \
       $cuda_ldflags -lcudart \
       -o "$cuda_probe_dir/conftest" >> "$config_log" 2>&1; then
@@ -389,7 +508,8 @@ EOF
   cuda_probe_output=""
   if [ "$cuda_probe_ok" = "1" ]; then
     cuda_probe_output=$(
-      "$cuda_probe_dir/conftest" 2>> "$config_log" || true
+      LD_LIBRARY_PATH="$cuda_runtime_lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+        "$cuda_probe_dir/conftest" 2>> "$config_log" || true
     )
     printf 'Runtime probe: %s\n' "${cuda_probe_output:-unavailable}" >> "$config_log"
   fi
@@ -404,17 +524,19 @@ EOF
     echo "A CUDA compiler was found, but its compile/link probe failed; building without CUDA." >&2
     echo "Set FAISSR_REQUIRE_CUDA=1 to make this condition fatal. See config.log." >&2
   else
-    if [ "${FAISSR_REQUIRE_CUDA_RUNTIME:-0}" = "1" ]; then
+    if [ "$require_cuda" = "1" ] && [ "$skip_cuda_runtime_check" != "1" ]; then
       case "$cuda_probe_output" in
         *"device_status=0 devices="[1-9]*) ;;
         *)
-          echo "FAISSR_REQUIRE_CUDA_RUNTIME=1, but no usable CUDA device was visible during configuration." >&2
+          echo "FAISSR_REQUIRE_CUDA=1, but no usable CUDA device was visible during configuration." >&2
           echo "Runtime probe: ${cuda_probe_output:-unavailable}" >&2
+          echo "For an intentional build-only host, set FAISSR_SKIP_CUDA_RUNTIME_CHECK=1." >&2
           exit 1
           ;;
       esac
     fi
     echo "CUDA compile/link probe passed (toolkit ${cuda_version:-unknown})."
+    echo "CUDA architectures: native ${cuda_archs:-nvcc-default}; PTX ${cuda_ptx_arch:-nvcc-default} ($cuda_arch_source)."
     if [ -n "$cuda_probe_output" ]; then
       echo "CUDA runtime probe: $cuda_probe_output"
     fi

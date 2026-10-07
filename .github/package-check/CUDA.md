@@ -58,7 +58,21 @@ Each row performs a strict source installation, an independent-reference CUDA
 smoke test, and `R CMD check --as-cran --no-manual`. `cuda-cuvs` additionally
 requires the direct cuVS provider. Results record the source and image SHA256,
 R session, `nvcc --version`, `nvidia-smi`, installation log, smoke log, and
-check log. A CPU fallback is a failure.
+check log. The matrix supplies explicit architecture overrides to exercise
+native and PTX compatibility rows; normal installations detect visible GPU
+architectures automatically. A CPU fallback is a failure.
+
+Images with nonstandard prefixes can be tested without rewriting them. Set
+`CONTAINER_R_BIN`, `CONTAINER_CUDA_HOME`, `CONTAINER_FAISS_HOME`, and
+`CONTAINER_CUVS_HOME` before calling `run-cuda.sh`. Leave
+`FAISSR_CUDA_ARCH` and `FAISSR_CUDA_PTX_ARCH` unset to test automatic
+architecture detection; set them only for a deliberate compatibility row.
+
+If a minimal image omits checking utilities, set
+`CONTAINER_CHECK_TOOLS_ROOT` to a read-only tree containing
+`usr/bin/checkbashisms`, `usr/bin/nm`, and any matching libraries under
+`usr/lib/x86_64-linux-gnu`. This tree is test infrastructure, not a package or
+runtime dependency.
 
 These tests establish only the exact rows that pass. They do not imply that an
 untested mixture of driver, toolkit, FAISS, cuVS, compiler, and GPU is supported.

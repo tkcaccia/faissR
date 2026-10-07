@@ -7020,25 +7020,7 @@ nn_runtime_cpu_model <- function() {
     ) {
         return(.faissR_auto_hardware_cache$cpu_model)
     }
-    value <- NA_character_
-    if (file.exists("/proc/cpuinfo")) {
-        lines <- tryCatch(
-            readLines("/proc/cpuinfo", warn = FALSE),
-            error = function(e) character()
-        )
-        hit <- grep("^model name\\s*:", lines, value = TRUE)
-        if (length(hit)) value <- trimws(sub("^[^:]+:", "", hit[[1L]]))
-    } else if (identical(Sys.info()[["sysname"]], "Darwin")) {
-        value <- tryCatch(
-            faissr_quiet_warning(trimws(system2(
-                "sysctl",
-                c("-n", "machdep.cpu.brand_string"),
-                stdout = TRUE,
-                stderr = FALSE
-            )[1L])),
-            error = function(e) NA_character_
-        )
-    }
+    value <- gpuinfo_cpu_model()
     if (length(value) != 1L || is.na(value) || !nzchar(value)) {
         value <- NA_character_
     }
@@ -7061,9 +7043,7 @@ nn_runtime_gpu_model <- function() {
     ) {
         return(.faissR_auto_hardware_cache$gpu_model)
     }
-    value <- tryCatch(cuda_native_summary()$device, error = function(e) {
-        NA_character_
-    })
+    value <- gpuinfo_cuda_device()
     value <- as.character(value)[1L]
     if (is.na(value) || !nzchar(value)) {
         value <- NA_character_

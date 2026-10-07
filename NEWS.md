@@ -1,4 +1,4 @@
-# faissR 0.99.48
+# faissR 0.99.50
 
 ## Initial Bioconductor submission
 
@@ -10,6 +10,9 @@
   candidate ranking, reusable kNN prediction models, and k-means helpers.
 * Provide GPU-resident nearest-neighbour results and a native C-callable
   interface for downstream packages.
+* Add version-1 C callables for building an owned CPU FAISS HNSW index once
+  and querying it repeatedly with explicit construction, search, and thread
+  settings.
 * Include reference documentation, installation guidance, and Biobase dataset
   examples in the vignette and help pages.
 * Reject sparse, delayed, file-backed, and other matrix-like inputs before

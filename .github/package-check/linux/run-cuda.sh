@@ -24,6 +24,20 @@ sha256sum "$IMAGE" "$ARCHIVE" > "$OUT/inputs.sha256"
 ENGINE=${CONTAINER_ENGINE:-singularity}
 CUDA_ROOT=${CONTAINER_CUDA_HOME:-/usr/local/cuda}
 CUVS_ROOT=${CONTAINER_CUVS_HOME:-/opt/cuvs}
+FAISS_ROOT=${CONTAINER_FAISS_HOME:-/usr/local}
+R_BIN=${CONTAINER_R_BIN:-/opt/R/bin}
+CHECK_TOOLS_ROOT=${CONTAINER_CHECK_TOOLS_ROOT:-}
+CHECK_TOOL_BIN=""
+CHECK_TOOL_LIB=""
+CHECK_TOOL_BIND=()
+if [ -n "$CHECK_TOOLS_ROOT" ]; then
+    CHECK_TOOLS_ROOT=$(realpath "$CHECK_TOOLS_ROOT")
+    test -x "$CHECK_TOOLS_ROOT/usr/bin/checkbashisms"
+    test -x "$CHECK_TOOLS_ROOT/usr/bin/nm"
+    CHECK_TOOL_BIND=(--bind "$CHECK_TOOLS_ROOT:/check-tools:ro")
+    CHECK_TOOL_BIN="/check-tools/usr/bin:"
+    CHECK_TOOL_LIB="/check-tools/usr/lib/x86_64-linux-gnu:"
+fi
 REQUIRE_CUVS=0
 USE_CUVS=0
 if [ "$PROFILE" = "cuda-cuvs" ]; then
@@ -36,18 +50,20 @@ fi
     --bind "$ARCHIVE:$CONTAINER_ARCHIVE:ro" \
     --bind "$OUT:/results" \
     --bind "$OUT/tmp:/tmp" \
+    "${CHECK_TOOL_BIND[@]}" \
     --env "PACKAGE_TEST_COMMIT=${PACKAGE_TEST_COMMIT:-UNRECORDED}" \
     --env "PACKAGE_TEST_IMAGE=$(basename "$IMAGE")" \
+    --env "PACKAGE_TEST_BOOTSTRAP_DEPENDENCIES=true" \
     --env "CUDA_HOME=$CUDA_ROOT" \
-    --env "PATH=/opt/R/bin:/usr/local/bin:/usr/bin:/bin:$CUDA_ROOT/bin" \
-    --env "LD_LIBRARY_PATH=$CUDA_ROOT/lib:$CUDA_ROOT/lib64:/usr/local/lib:$CUVS_ROOT/lib:$CUVS_ROOT/lib64" \
+    --env "PATH=${CHECK_TOOL_BIN}$R_BIN:/usr/local/bin:/usr/bin:/bin:$CUDA_ROOT/bin" \
+    --env "LD_LIBRARY_PATH=${CHECK_TOOL_LIB}$CUDA_ROOT/lib:$CUDA_ROOT/lib64:$FAISS_ROOT/lib:$FAISS_ROOT/lib64:$CUVS_ROOT/lib:$CUVS_ROOT/lib64" \
+    --env "FAISS_HOME=$FAISS_ROOT" \
     --env "CUVS_HOME=$CUVS_ROOT" \
     --env "FAISSR_REQUIRE_FAISS=1" \
     --env "FAISSR_REQUIRE_CUDA=1" \
-    --env "FAISSR_REQUIRE_CUDA_RUNTIME=1" \
     --env "FAISSR_USE_CUVS=$USE_CUVS" \
     --env "FAISSR_REQUIRE_CUVS=$REQUIRE_CUVS" \
     --env "FAISSR_CUDA_ARCH=${FAISSR_CUDA_ARCH:-}" \
     --env "FAISSR_CUDA_PTX_ARCH=${FAISSR_CUDA_PTX_ARCH:-}" \
-    "$IMAGE" Rscript /harness/run.R \
+    "$IMAGE" "$R_BIN/Rscript" /harness/run.R \
         "$CONTAINER_ARCHIVE" /results "$PROFILE" /harness/faissR-smoke.R

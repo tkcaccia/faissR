@@ -115,10 +115,10 @@ explicit memory budget.
 # Inspect execution capabilities
 
 Hardware visibility and package capability are different questions. The
-terminology here follows the framework-independent distinction used by the
-[`gpuinfo` project](https://github.com/tkcaccia/gpuinfo): a visible GPU or
-driver does not prove that a consuming R package was compiled with a usable
-GPU provider.
+terminology here follows the framework-independent distinction implemented by
+the CRAN package [`gpuinfo`](https://cran.r-project.org/package=gpuinfo): a
+visible GPU or driver does not prove that a consuming R package was compiled
+with a usable GPU provider.
 
 In `faissR`:
 
@@ -130,12 +130,15 @@ In `faissR`:
 - `cuda_available()` is package-specific: it requires both a CUDA-enabled
     `faissR` build and a runtime-visible device.
 
-The separate `gpuinfo` project can provide platform-level hardware diagnosis.
-`faissR` does not currently import it; package-specific provider checks remain
-authoritative for deciding whether a `faissR` call can execute.
+`faissR` uses `gpuinfo` for platform-level hardware diagnosis. Package-specific
+provider checks remain authoritative for deciding whether a `faissR` call can
+execute.
 
 ```{r backend-status}
 faissR_backend()
+
+hardware <- gpuinfo::hardware_info()
+hardware$gpu
 
 backend_info()[, c(
     "backend", "available", "device"

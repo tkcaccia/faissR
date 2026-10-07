@@ -20,6 +20,7 @@ if (file.exists(file.path(out, "status.csv"))) {
 }
 lib <- file.path(out, "library")
 dir.create(lib, showWarnings = FALSE)
+.libPaths(c(lib, .libPaths()))
 scratch <- tempfile("package-check-")
 dir.create(scratch, showWarnings = FALSE)
 if (grepl(" ", scratch, fixed = TRUE)) {
@@ -30,16 +31,38 @@ r <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "
 smoke <- if (length(args) >= 4L) normalizePath(args[[4]], mustWork = TRUE) else ""
 Sys.setenv(R_LIBS_USER = lib, OMP_NUM_THREADS = "2",
     OPENBLAS_NUM_THREADS = "1", MKL_NUM_THREADS = "1")
+force_suggests <- tolower(Sys.getenv(
+    "PACKAGE_TEST_FORCE_SUGGESTS",
+    "false"
+)) %in% c("1", "true", "yes")
+bootstrap_dependencies <- tolower(Sys.getenv(
+    "PACKAGE_TEST_BOOTSTRAP_DEPENDENCIES",
+    "false"
+)) %in% c("1", "true", "yes")
 # Incoming repository checks are network-dependent submission checks, not
-# portability tests. Keep the rest of --as-cran, with all Suggests required.
+# portability tests. Full submission checks can require every Suggests package;
+# the default portability matrix records missing Suggests as NOTEs.
 Sys.setenv(`_R_CHECK_CRAN_INCOMING_REMOTE_` = "false",
-    `_R_CHECK_FORCE_SUGGESTS_` = "true")
-# Keep dependency libraries, but always install the package under test separately.
-Sys.setenv(R_LIBS = paste(.libPaths(), collapse = .Platform$path.sep))
+    `_R_CHECK_FORCE_SUGGESTS_` = if (force_suggests) "true" else "false")
+# Keep the isolated dependency library visible to child R CMD processes, but
+# always install the package under test separately.
+library_path <- paste(.libPaths(), collapse = .Platform$path.sep)
+renviron_user <- file.path(out, "test-Renviron")
+writeLines(c(
+    paste0("R_LIBS=", encodeString(library_path, quote = '"')),
+    paste0("R_LIBS_USER=", encodeString(lib, quote = '"'))
+), renviron_user)
+Sys.setenv(
+    R_ENVIRON_USER = renviron_user,
+    R_LIBS = library_path
+)
 writeLines(c(capture.output(sessionInfo()), capture.output(Sys.info()),
     paste("source:", source_archive), paste("profile:", profile),
     paste("commit:", Sys.getenv("PACKAGE_TEST_COMMIT", "UNRECORDED")),
-    paste("image:", Sys.getenv("PACKAGE_TEST_IMAGE", "native"))),
+    paste("image:", Sys.getenv("PACKAGE_TEST_IMAGE", "native")),
+    paste("library_paths:", library_path),
+    paste("force_suggests:", force_suggests),
+    paste("bootstrap_dependencies:", bootstrap_dependencies)),
     file.path(out, "environment.txt"))
 native_commands <- c("nvcc", "nvidia-smi")
 for (command in native_commands) {
@@ -71,6 +94,20 @@ run <- function(stage, argv) {
     code
 }
 setwd(out)
+dependency_script <- if (nzchar(smoke)) {
+    file.path(dirname(smoke), "dependencies.R")
+} else {
+    ""
+}
+if (bootstrap_dependencies && nzchar(dependency_script) &&
+        file.exists(dependency_script)) {
+    code <- run("dependencies", c(
+        "--vanilla", "--slave", "-f", shQuote(dependency_script),
+        "--args", shQuote(lib), shQuote(source_archive),
+        if (force_suggests) "all" else "required"
+    ))
+    if (code != 0L) quit(status = 1L)
+}
 code <- run("install", c("CMD", "INSTALL", "--install-tests",
     paste0("--library=", shQuote(lib)), shQuote(source_archive)))
 if (code != 0L) quit(status = 1L)
@@ -79,9 +116,18 @@ if (nzchar(smoke)) {
     code <- run("smoke", c("--vanilla", "--slave", "-f", shQuote(smoke)))
     if (code != 0L) quit(status = 1L)
 }
-# --no-manual avoids requiring TeX on every host; vignettes/examples/tests run.
-code <- run("check", c("CMD", "check", "--as-cran", "--no-manual",
-    paste0("--library=", shQuote(lib)), shQuote(source_archive)))
+# --no-manual avoids requiring TeX on every host. A portability run without
+# all Suggests checks the prebuilt vignette but does not rebuild it.
+check_args <- c("CMD", "check", "--as-cran", "--no-manual")
+if (!force_suggests) {
+    check_args <- c(check_args, "--no-vignettes")
+}
+check_args <- c(
+    check_args,
+    paste0("--library=", shQuote(lib)),
+    shQuote(source_archive)
+)
+code <- run("check", check_args)
 checks <- list.files(out, "00check.log$", recursive = TRUE, full.names = TRUE)
 if (length(checks) != 1L) {
     record("check_log", 1L)

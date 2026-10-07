@@ -32,7 +32,23 @@ compatible.
 `faissR_get_nn_float32_output()` additionally accepts a distance-storage
 selector. `faissR_get_nn_cuda_tuned_gpu()` retrieves the CUDA-resident
 self-KNN callable for `"auto"`, `"exact"`, `"flat"`, and `"bruteforce"`.
-The exact signatures are declared in `faissR_api.h`.
+`faissR_get_hnsw_index_build_v1()` builds an owned CPU FAISS HNSW index,
+and `faissR_get_hnsw_index_search_v1()` queries that index repeatedly.
+The exact version-1 signatures are declared in `faissR_api_v1.h`;
+`faissR_api.h` includes the current versioned header for source
+compatibility.
+}
+
+\section{Persistent HNSW ownership}{
+
+The HNSW build callable accepts a float32 reference matrix plus explicit
+`M`, `efConstruction`, and thread settings. Its external pointer owns the
+native index and must remain reachable until all searches finish. The
+search callable accepts explicit `k`, `efSearch`, and thread settings and
+returns one-based identifiers, Euclidean distances, requested/effective
+settings, and a cumulative query-call count. The pointer is neither
+serializable nor safe for concurrent search calls. Its registered
+finalizer releases the index when the pointer is garbage-collected.
 }
 
 \section{Self-neighbour polarity and indices}{

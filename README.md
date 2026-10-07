@@ -195,7 +195,7 @@ headers and libraries discovered by `configure`.
   These are package-specific checks: a visible accelerator does not prove that
   faissR was compiled with a compatible provider. Framework-neutral hardware
   discovery is handled separately by the
-  [gpuinfo project](https://github.com/tkcaccia/gpuinfo).
+  [gpuinfo](https://cran.r-project.org/package=gpuinfo).
 - `nn_capabilities()` to report supported nearest-neighbour
   method/backend/metric combinations for benchmark preflight checks.
 - `nn_metric_preflight()` to identify non-finite rows, zero vectors for cosine,
@@ -256,10 +256,16 @@ typed getter functions rather than repeating function-pointer signatures.
 | `faissR_nn_float32_call_output` | `(x, k, backend, metric, include_self, n_threads, distances)` | Same CPU FAISS Flat float32 route, with `distances = "double"` or `"float"` to request host distance storage type. |
 | `faissR_nn_cuda_tuned_gpu_call` | `(x, k, method, metric, include_self, target_recall)` | CUDA self-KNN route that keeps result buffers on the GPU for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. It returns the same `faissR_gpu_knn` object shape as `nn_gpu()`, including CUDA device pointers and `device_to_host_result_copies = 0`. |
 | `faissR_hnsw_search_v1` | `(data, query, n, p, k, target_recall, n_threads, distance_storage)` | CPU FAISS HNSW search with shape-aware tuning. Pass `NULL` for `query` to exclude self-neighbors; otherwise supply query rows with the same storage type. `n` and `p` describe the reference matrix. The output includes the selected tuning rule. |
+| `faissR_hnsw_index_build_v1` | `(data, M, efConstruction, n_threads)` | Build an owned CPU FAISS HNSW index from float32 reference data. The returned external pointer retains the index until finalization and records the effective construction settings. |
+| `faissR_hnsw_index_search_v1` | `(index, query, k, efSearch, n_threads)` | Query an owned HNSW pointer without rebuilding it. The result contains one-based identifiers, Euclidean distances, requested/effective settings, and a cumulative query-call count. |
 
 The returned GPU handle owns its device buffers. It must remain protected from
 R garbage collection while downstream code uses `indices_ptr` or
 `distances_ptr`; releasing the handle invalidates those pointers.
+The persistent HNSW pointer follows the same ownership principle: keep it
+reachable for every query. It cannot be serialized or queried concurrently.
+Include `<faissR_api_v1.h>` to bind explicitly to ABI version 1, or include
+`<faissR_api.h>` to use the current compatibility header.
 Host and GPU C-callable results include the same machine-readable distance
 contract as the R API.
 
@@ -436,21 +442,25 @@ tarball:
 
 ```sh
 R CMD build .
-R CMD check --as-cran faissR_0.99.48.tar.gz
+R CMD check --as-cran faissR_0.99.50.tar.gz
 ```
 
 and then:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.48.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.50.tar.gz", `new-package` = TRUE)
 ```
 
 FAISS is a required external system dependency. CUDA and cuVS are
 optional for CPU-only Bioconductor builds and must not be required there.
 NVIDIA GPU builds should use `FAISSR_REQUIRE_CUDA=1` and, as needed,
 `FAISSR_REQUIRE_CUVS=1` so missing GPU libraries
-fail during configuration. Maintainer Support Site registration and bioc-devel
+or an unusable CUDA device fail during configuration. An intentional
+build-only host can set `FAISSR_SKIP_CUDA_RUNTIME_CHECK=1`, without claiming a
+functional CUDA test. GPU architectures are detected from the visible devices;
+explicit architecture variables are needed only for build-only hosts or
+cross-compilation. Maintainer Support Site registration and bioc-devel
 subscription are external submission steps.
 
 On Debian/Ubuntu CPU builders, FAISS should be supplied by the FAISS

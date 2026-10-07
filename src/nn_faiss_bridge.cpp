@@ -487,6 +487,11 @@ extern "C" SEXP faissR_hnsw_search_v1(SEXP data,
                                       SEXP n_threads,
                                       SEXP distance_storage);
 
+extern "C" SEXP faissR_hnsw_index_build_v1(SEXP data, SEXP m,
+    SEXP ef_construction, SEXP n_threads);
+extern "C" SEXP faissR_hnsw_index_search_v1(SEXP index, SEXP query,
+    SEXP k, SEXP ef_search, SEXP n_threads);
+
 extern "C" int faissR_c_api_version_impl() {
   return 1;
 }
@@ -518,6 +523,16 @@ void register_faissR_ccallables(DllInfo *dll) {
     "faissR",
     "faissR_hnsw_search_v1",
     (DL_FUNC) &faissR_hnsw_search_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_hnsw_index_build_v1",
+    (DL_FUNC) &faissR_hnsw_index_build_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_hnsw_index_search_v1",
+    (DL_FUNC) &faissR_hnsw_index_search_v1
   );
 }
 
@@ -763,6 +778,36 @@ extern "C" SEXP faissR_hnsw_search_v1(SEXP data,
   }
   out["tuning_rule"] = params["rule"];
   return out;
+  END_RCPP
+}
+
+extern "C" SEXP faissR_hnsw_index_build_v1(SEXP data, SEXP m,
+    SEXP ef_construction, SEXP n_threads) {
+  BEGIN_RCPP
+  if (!Rf_inherits(data, "float32")) {
+    Rcpp::stop(
+      "faissR_hnsw_index_build_v1 requires a float::fl()/float32 matrix"
+    );
+  }
+  return faiss_hnsw_index_build_float32_impl(
+    data, Rcpp::as<int>(m), Rcpp::as<int>(ef_construction),
+    1, "euclidean", "euclidean", Rcpp::as<int>(n_threads)
+  );
+  END_RCPP
+}
+
+extern "C" SEXP faissR_hnsw_index_search_v1(SEXP index, SEXP query,
+    SEXP k, SEXP ef_search, SEXP n_threads) {
+  BEGIN_RCPP
+  if (!Rf_inherits(query, "float32")) {
+    Rcpp::stop(
+      "faissR_hnsw_index_search_v1 requires a float::fl()/float32 query"
+    );
+  }
+  return faiss_hnsw_index_search_float32_impl(
+    index, query, Rcpp::as<int>(k), false,
+    Rcpp::as<int>(ef_search), Rcpp::as<int>(n_threads), "double"
+  );
   END_RCPP
 }
 

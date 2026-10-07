@@ -16,7 +16,7 @@ internal_nn <- function(data,
     n_threads = n_threads,
     metric = metric,
     tuning = tuning
-  )
+    )
 }
 internal_nn_exclude_self <- function(data,
                                      k,
@@ -34,7 +34,7 @@ internal_nn_exclude_self <- function(data,
     n_threads = n_threads,
     metric = metric,
     tuning = tuning
-  )
+    )
 }
 
 
@@ -656,22 +656,138 @@ test_that("float32 cuVS input can return float distances directly", {
 })
 
 test_that("installed C API header exposes versioned callable entry points", {
-  skip_if_not_installed("Rcpp")
-  header <- system.file("include", "faissR_api.h", package = "faissR")
-  expect_true(nzchar(header))
-  expect_true(file.exists(header))
-  Rcpp::cppFunction(
-    code = '
+    skip_if_not_installed("Rcpp")
+    header <- system.file("include", "faissR_api.h", package = "faissR")
+    versioned_header <- system.file(
+        "include", "faissR_api_v1.h", package = "faissR"
+    )
+    expect_true(nzchar(header))
+    expect_true(file.exists(header))
+    expect_true(nzchar(versioned_header))
+    expect_true(file.exists(versioned_header))
+    Rcpp::cppFunction(
+        code = '
     bool faissR_test_float32_callable_registered() {
       return faissR_c_api_version() == 1 &&
         faissR_get_nn_float32() != NULL &&
         faissR_get_nn_float32_output() != NULL &&
-        faissR_get_nn_cuda_tuned_gpu() != NULL;
+        faissR_get_nn_cuda_tuned_gpu() != NULL &&
+        faissR_get_hnsw_index_build_v1() != NULL &&
+        faissR_get_hnsw_index_search_v1() != NULL;
     }
   ',
-    includes = paste0('#include "', header, '"')
-  )
-  expect_true(faissR_test_float32_callable_registered())
+        includes = paste0('#include "', header, '"')
+    )
+    expect_true(faissR_test_float32_callable_registered())
+})
+
+test_that("persistent HNSW C callables own and reuse a versioned index", {
+    skip_if_not_installed("Rcpp")
+    skip_if_not_installed("float")
+    skip_if_not(faiss_available(), "FAISS is required for persistent HNSW")
+    header <- system.file("include", "faissR_api_v1.h", package = "faissR")
+
+    Rcpp::cppFunction(
+        code = '
+    SEXP faissR_test_hnsw_index_build(SEXP data) {
+      faissR_hnsw_index_build_v1_fun fn =
+        faissR_get_hnsw_index_build_v1();
+      Rcpp::Shield<SEXP> m(Rcpp::wrap(8));
+      Rcpp::Shield<SEXP> ef_construction(Rcpp::wrap(40));
+      Rcpp::Shield<SEXP> n_threads(Rcpp::wrap(2));
+      return fn(data, m, ef_construction, n_threads);
+    }
+  ',
+        includes = paste0('#include "', header, '"')
+    )
+    Rcpp::cppFunction(
+        code = '
+    SEXP faissR_test_hnsw_index_search(
+        SEXP index, SEXP query, int k, int ef_search, int n_threads) {
+      faissR_hnsw_index_search_v1_fun fn =
+        faissR_get_hnsw_index_search_v1();
+      Rcpp::Shield<SEXP> k_arg(Rcpp::wrap(k));
+      Rcpp::Shield<SEXP> ef_arg(Rcpp::wrap(ef_search));
+      Rcpp::Shield<SEXP> threads_arg(Rcpp::wrap(n_threads));
+      return fn(index, query, k_arg, ef_arg, threads_arg);
+    }
+  ',
+        includes = paste0('#include "', header, '"')
+    )
+    Rcpp::cppFunction(
+        code = '
+    SEXP faissR_test_null_externalptr() {
+      return R_MakeExternalPtr(NULL, R_NilValue, R_NilValue);
+    }
+  '
+    )
+
+    set.seed(20261007L)
+    data <- matrix(stats::rnorm(96L * 6L), nrow = 96L, ncol = 6L)
+    query_one <- float::fl(data[1:7, , drop = FALSE])
+    query_two <- float::fl(data[8:12, , drop = FALSE])
+    index <- faissR_test_hnsw_index_build(float::fl(data))
+
+    expect_type(index, "externalptr")
+    expect_s3_class(index, "faissR_faiss_hnsw_index")
+    expect_equal(attr(index, "api_version"), 1L)
+    expect_equal(attr(index, "m"), 8L)
+    expect_equal(attr(index, "ef_construction"), 40L)
+    expect_equal(attr(index, "n_threads"), 2L)
+    expect_false(attr(index, "serialization_supported"))
+    expect_false(attr(index, "concurrent_search_supported"))
+
+    rm(data)
+    gc()
+    first <- faissR_test_hnsw_index_search(index, query_one, 5L, 3L, 2L)
+    second <- faissR_test_hnsw_index_search(index, query_two, 4L, 24L, 3L)
+
+    expect_equal(dim(first$indices), c(7L, 5L))
+    expect_true(all(first$indices >= 1L & first$indices <= 96L))
+    expect_true(all(is.finite(first$distances)))
+    expect_equal(first$indices[, 1L], seq_len(7L))
+    expect_equal(first$distances[, 1L], rep(0, 7L), tolerance = 1e-6)
+    expect_equal(first$m, 8L)
+    expect_equal(first$api_version, 1L)
+    expect_equal(first$ef_construction, 40L)
+    expect_equal(first$requested_ef_search, 3L)
+    expect_equal(first$ef_search, 5L)
+    expect_equal(first$n_threads, 2L)
+    expect_equal(first$build_n_threads, 2L)
+    expect_equal(first$query_call_count, 1)
+    expect_true(first$index_reused)
+    expect_false(first$serialization_supported)
+    expect_false(first$concurrent_search_supported)
+
+    expect_error(
+        faissR_test_hnsw_index_build(matrix(1, nrow = 4L, ncol = 2L)),
+        "requires a float::fl()/float32 matrix",
+        fixed = TRUE
+    )
+    expect_error(
+        faissR_test_hnsw_index_search(
+            index, matrix(1, nrow = 1L, ncol = 6L), 2L, 8L, 1L
+        ),
+        "requires a float::fl()/float32 query",
+        fixed = TRUE
+    )
+
+    expect_equal(dim(second$indices), c(5L, 4L))
+    expect_equal(second$indices[, 1L], 8:12)
+    expect_equal(second$ef_search, 24L)
+    expect_equal(second$n_threads, 3L)
+    expect_equal(second$query_call_count, 2)
+
+    bad_pointer <- faissR_test_null_externalptr()
+    expect_error(
+        faissR_test_hnsw_index_search(
+            bad_pointer, query_one, 2L, 8L, 1L
+        ),
+        "version-1 handle",
+        fixed = TRUE
+    )
+    rm(index)
+    gc()
 })
 
 test_that("float32 C-callable returns stable KNN metadata", {
@@ -2778,17 +2894,34 @@ test_that("cuvs availability helper returns a logical scalar", {
 })
 
 
-test_that("nvidia-smi output parsing is platform and device independent", {
-  summary <- faissR:::parse_nvidia_smi_summary(
-    "Example CUDA accelerator, 999.1, 12345"
+test_that("gpuinfo hardware summaries replace local GPU probing", {
+  info <- list(
+    cpu = list(model = "Example CPU", logical_cores = 16L),
+    gpu = data.frame(
+      id = 0L,
+      vendor = "NVIDIA",
+      model = "Example CUDA accelerator",
+      memory_mb = 12345,
+      backend = "cuda",
+      compute_capability = "12.0",
+      stringsAsFactors = FALSE
+    ),
+    cuda = list(
+      driver_version = "999.1",
+      compute_capability = "12.0"
+    )
   )
-  expect_equal(summary$device, "Example CUDA accelerator")
-  expect_match(summary$runtime, "driver 999.1")
-  expect_match(summary$runtime, "12345 MiB")
 
-  unavailable <- faissR:::parse_nvidia_smi_summary(character())
-  expect_true(is.na(unavailable$device))
-  expect_true(is.na(unavailable$runtime))
+  expect_equal(faissR:::gpuinfo_cpu_model(info), "Example CPU")
+  expect_equal(
+    faissR:::gpuinfo_cuda_device(info),
+    "Example CUDA accelerator"
+  )
+  summary <- faissR:::gpuinfo_cuda_summary(info)
+  expect_equal(summary$device, "Example CUDA accelerator")
+  expect_match(summary$runtime, "NVIDIA driver 999.1")
+  expect_match(summary$runtime, "compute capability 12.0")
+  expect_match(summary$runtime, "GiB total")
 })
 
 test_that("CUDA grid auto does not silently fall back to CPU", {

@@ -176,11 +176,20 @@ validate portability/error reporting but must not be advertised as useful FAISS.
 
 Each run installs into its own library, checks that the smoke test loaded that
 installation, records session/capability information, and executes
-`R CMD check --as-cran --no-manual` with every Suggests package required.
-Examples, unit tests and vignette checks remain enabled. PDF reference-manual
-generation is not part of this portable matrix and needs a separate TeX-enabled
-`R CMD check --as-cran` run. Network-dependent CRAN incoming checks are disabled;
-this matrix does not replace submission checks or BiocCheck.
+`R CMD check --as-cran --no-manual`. The default portability matrix permits an
+unavailable `Suggests` package and records the resulting NOTE, because optional
+Bioconductor data and analysis stacks are not necessarily available on every
+native architecture. Examples and unit tests remain enabled; vignette source
+and installed outputs are inspected, but vignette code is not executed in this
+mode. Set
+`PACKAGE_TEST_BOOTSTRAP_DEPENDENCIES=true` and
+`PACKAGE_TEST_FORCE_SUGGESTS=true` for a networked full-dependency run. A full
+submission check with every `Suggests` package remains mandatory on at least one
+properly provisioned environment and in Bioconductor infrastructure. PDF
+reference-manual generation is not part of this portable matrix and needs a
+separate TeX-enabled `R CMD check --as-cran` run. Network-dependent CRAN incoming
+checks are disabled; this matrix does not replace submission checks or
+`BiocCheck`.
 
 Read `status.csv`, `check-summary.txt`, `00check.log`, install logs, smoke logs,
 and failing test output. The smoke profile asserts functional capability and

@@ -36,8 +36,12 @@ at runtime, faissR errors instead of silently falling back to CPU.
 
 For submission/build systems such as Bioconductor, the intended CPU build
 requires FAISS but not NVIDIA libraries. For NVIDIA GPU users, the intended
-strict build uses `FAISSR_REQUIRE_CUDA=1` and, where relevant,
-`FAISSR_REQUIRE_CUVS=1`.
+strict build uses `FAISSR_REQUIRE_CUDA=1`, which checks both the CUDA build
+stack and execution on a visible GPU, and, where relevant,
+`FAISSR_REQUIRE_CUVS=1`. An intentional build-only host can set
+`FAISSR_SKIP_CUDA_RUNTIME_CHECK=1`. Configure obtains the compute capabilities
+of all visible GPUs from the CUDA runtime and generates native code plus PTX
+for those architectures.
 
 On Debian/Ubuntu builders, the mandatory CPU dependency is the FAISS
 development package, typically `libfaiss-dev`, and complete LP64 BLAS/LAPACK
@@ -128,7 +132,7 @@ dependencies to be linked by the package using them.
 
 ```sh
 sudo apt-get install libfaiss-dev libblas-dev liblapack-dev
-R CMD INSTALL faissR_0.99.48.tar.gz
+R CMD INSTALL faissR_0.99.50.tar.gz
 ```
 
 On Linux, configure compiles a small FAISS client and loads it in a fresh R
@@ -141,7 +145,7 @@ availability, not every possible provider ABI or numerical operation.
 An administrator can explicitly select an ABI-compatible LP64 provider:
 
 ```sh
-FAISSR_NUMERICAL_LIBS="-llapack -lblas" R CMD INSTALL faissR_0.99.48.tar.gz
+FAISSR_NUMERICAL_LIBS="-llapack -lblas" R CMD INSTALL faissR_0.99.50.tar.gz
 ```
 
 For nonstandard prefixes, include `-L` and runtime-search-path flags in that
@@ -272,15 +276,28 @@ CUDA_HOME=/usr/local/cuda \
 FAISS_HOME=/path/to/faiss-gpu \
 CUVS_HOME=/path/to/rapids \
 FAISSR_REQUIRE_CUDA=1 \
-FAISSR_REQUIRE_CUDA_RUNTIME=1 \
 FAISSR_REQUIRE_CUVS=1 \
 R CMD INSTALL .
 ```
 
-`FAISSR_REQUIRE_CUDA_RUNTIME=1` additionally requires a usable GPU during
-configuration. Omit it for a build container with no attached device. The
-installed package reports compiled-toolkit, runtime, driver API, and compute
-capability information through `backend_info()`.
+`FAISSR_REQUIRE_CUDA=1` requires the CUDA build dependencies and a usable GPU
+during configuration. For an intentional build container with no attached
+device, set `FAISSR_SKIP_CUDA_RUNTIME_CHECK=1`; that advanced override verifies
+only compilation and linking, not CUDA execution. `FAISSR_REQUIRE_CUDA_RUNTIME`
+is deprecated. The installed package reports provider-specific compiled and
+runtime state through `backend_info()`. Hardware, driver, memory, and compute
+capability details in that table come from the CRAN package `gpuinfo`; use
+`gpuinfo::gpu_sitrep()` for the complete hardware report.
+
+When `FAISSR_CUDA_ARCH` is unset or `auto`, configure first compiles a small
+host-side CUDA runtime probe. It reads the compute capabilities of all visible
+devices, removes duplicates, confirms that `nvcc` supports them, and compiles
+native cubins for every detected architecture. PTX for the highest detected
+architecture is retained by default. This uses the CUDA runtime rather than
+parsing model names, so new cards such as compute capability 12.0 devices do
+not require a package change. On a build-only host with no visible GPU, set
+`FAISSR_CUDA_ARCH` explicitly; `FAISSR_CUDA_PTX_ARCH` defaults to its highest
+value.
 
 Set only the features you actually have. For example, FAISS GPU without direct
 cuVS:
@@ -402,6 +419,7 @@ Validate inside WSL2:
 
 ```sh
 nvidia-smi
+Rscript -e 'gpuinfo::gpu_sitrep()'
 Rscript -e 'library(faissR); print(backend_info())'
 ```
 
@@ -429,14 +447,15 @@ Linux and macOS source builds still require real FAISS.
 | `CONDA_PREFIX` | Active conda/mamba prefix. Used only as a passive fallback when `faiss-cpu` and `libomp` are already installed there. |
 | `FAISSR_USE_CUDA` | Set to `1` to request CUDA native/FAISS GPU build paths; set to `0` to force CPU-only stubs. |
 | `FAISSR_USE_CUVS` | Set to `1` to request direct RAPIDS cuVS build paths; set to `0` to force cuVS stubs. |
-| `FAISSR_REQUIRE_CUDA` | Strict alias for a NVIDIA GPU build. Set to `1` to make missing CUDA toolkit/`nvcc` fatal at configure time. |
-| `FAISSR_REQUIRE_CUDA_RUNTIME` | Set to `1` to require a visible, usable CUDA device during configuration as well as a successful compiler/linker probe. Leave unset on build-only hosts. |
+| `FAISSR_REQUIRE_CUDA` | Strict NVIDIA GPU build. Set to `1` to require the CUDA toolkit, a successful compiler/linker probe, and a visible, usable GPU during configuration. |
+| `FAISSR_SKIP_CUDA_RUNTIME_CHECK` | Advanced build-only override. Set to `1` only when deliberately compiling without an attached GPU; the resulting build has not passed a CUDA execution test. |
+| `FAISSR_REQUIRE_CUDA_RUNTIME` | Deprecated compatibility variable. `FAISSR_REQUIRE_CUDA=1` now includes runtime validation. |
 | `FAISSR_REQUIRE_CUVS` | Strict direct cuVS request. Set to `1` to make missing RAPIDS cuVS fatal at configure time. |
 | `CUDA_HOME` | CUDA toolkit prefix, for example `/usr/local/cuda`. |
 | `CUVS_HOME` | RAPIDS cuVS prefix containing headers and `libcuvs`. |
 | `NVCC` | Optional explicit CUDA compiler path. |
-| `FAISSR_CUDA_ARCH` | Optional space-separated numeric CUDA architectures passed to `nvcc`, for example `80 89 120`. |
-| `FAISSR_CUDA_PTX_ARCH` | Optional PTX target. By default, the highest value in `FAISSR_CUDA_ARCH` is also retained as forward-compatible PTX. Use `none` only when PTX must be disabled deliberately. |
+| `FAISSR_CUDA_ARCH` | CUDA architectures passed to `nvcc`. The default, `auto`, detects all visible GPU capabilities. A build-only host can provide space-separated numeric values such as `80 89 120`. |
+| `FAISSR_CUDA_PTX_ARCH` | PTX target. The default, `auto`, retains PTX for the highest detected or explicitly requested architecture. Use a numeric capability to override it or `none` to disable PTX deliberately. |
 | `FAISSR_CUDA_FLAGS` | Optional extra flags appended to CUDA compilation. |
 | `PKG_CONFIG_PATH` | Helps locate FAISS/cuVS `.pc` files. |
 | `LD_LIBRARY_PATH` | Linux runtime library search path. |
@@ -529,7 +548,8 @@ available at runtime.
 | `GLIBCXX_* not found` on Linux | R loaded an older system `libstdc++` before FAISS/RAPIDS libraries | Use a consistent compiler/runtime stack; set `LD_LIBRARY_PATH` and, if necessary for benchmarks, `LD_PRELOAD` to the intended `libstdc++.so.6`. |
 | CUDA build cannot find `nvcc` | CUDA toolkit is missing or not on path | Set `CUDA_HOME` and/or `NVCC`; check `nvcc --version`. |
 | CUDA compiler/linker probe fails | Compiler, headers, runtime libraries, or architecture flags come from incompatible toolkit installations | Select one `CUDA_HOME`, inspect `config.log`, and do not replace the host driver as a package-install workaround. |
-| CUDA runtime probe reports no device | The build host has no passed-through GPU, or the driver cannot use the selected runtime | Use `nvidia-smi`; compare toolkit/runtime/driver metadata in `backend_info()`. Omit `FAISSR_REQUIRE_CUDA_RUNTIME=1` only for an intentional build-only host. |
+| Automatic CUDA architecture detection fails | No usable GPU is visible, or the selected toolkit cannot query it | On a functional installation, repair GPU visibility. On an intentional build-only host, set `FAISSR_SKIP_CUDA_RUNTIME_CHECK=1` and provide `FAISSR_CUDA_ARCH` explicitly. |
+| CUDA runtime probe reports no device | The build host has no passed-through GPU, or the driver cannot use the selected runtime | Run `gpuinfo::gpu_sitrep()` and compare it with faissR's provider state in `backend_info()`. An intentional build-only host may set `FAISSR_SKIP_CUDA_RUNTIME_CHECK=1`, but this does not validate CUDA execution. |
 | cuVS routes unavailable | cuVS headers/library were not found at build time | Set `CUVS_HOME`, `FAISSR_USE_CUVS=1`, and runtime `LD_LIBRARY_PATH`. |
 | Windows GPU build is difficult | Native RAPIDS/cuVS C++ libraries are Linux-oriented | Use WSL2 and follow the Linux CUDA instructions. |
 
@@ -543,14 +563,14 @@ itself is valid.
 ```sh
 R CMD build .
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-R CMD check --as-cran faissR_0.99.48.tar.gz
+R CMD check --as-cran faissR_0.99.50.tar.gz
 ```
 
 Bioconductor submission checks are run in addition to `R CMD check`:
 
 ```r
 BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.48.tar.gz", `new-package` = TRUE)
+BiocCheck::BiocCheck("faissR_0.99.50.tar.gz", `new-package` = TRUE)
 ```
 
 A CPU-only check should still finish with `Status: OK` once FAISS is installed;

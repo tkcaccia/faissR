@@ -24,10 +24,10 @@ A visible accelerator or installed driver does not establish that `faissR`
 was compiled with a compatible provider. `backend_info()` reports
 package-specific compiled and runtime capability; [cuda_available()] is
 likewise specific to the current `faissR` installation. Framework-neutral
-hardware discovery is a separate concern, as implemented by the development
-`gpuinfo` project at \url{https://github.com/tkcaccia/gpuinfo}. A hardware
-report from that project complements, but does not replace, these
-package-specific checks.
+hardware discovery is supplied by the CRAN package `gpuinfo`. faissR uses
+it for hardware, driver, memory, and device details, while its own native
+probes remain authoritative for deciding whether a compiled provider can
+execute.
 }
 
 \examples{

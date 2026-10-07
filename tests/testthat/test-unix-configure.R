@@ -78,8 +78,31 @@ test_that("Unix CUDA configuration probes the selected toolkit", {
     configure_text <- paste(readLines(configure, warn = FALSE), collapse = "\n")
     expect_match(configure_text, "nvcc\" --version", fixed = TRUE)
     expect_match(configure_text, "CUDA compiler/linker probe failed", fixed = TRUE)
-    expect_match(configure_text, "FAISSR_REQUIRE_CUDA_RUNTIME", fixed = TRUE)
+    expect_match(
+        configure_text,
+        "FAISSR_REQUIRE_CUDA=1, but no usable CUDA device",
+        fixed = TRUE
+    )
+    expect_match(
+        configure_text,
+        "FAISSR_SKIP_CUDA_RUNTIME_CHECK",
+        fixed = TRUE
+    )
+    expect_match(
+        configure_text,
+        "FAISSR_REQUIRE_CUDA_RUNTIME is deprecated",
+        fixed = TRUE
+    )
     expect_match(configure_text, "FAISSR_CUDA_PTX_ARCH", fixed = TRUE)
+    expect_match(configure_text, "FAISSR_CUDA_ARCH:-auto", fixed = TRUE)
+    expect_match(configure_text, "Architecture detection probe", fixed = TRUE)
+    expect_match(configure_text, "--list-gpu-code", fixed = TRUE)
+    expect_match(configure_text, "--list-gpu-arch", fixed = TRUE)
+    expect_match(
+        configure_text,
+        "Selected native architectures",
+        fixed = TRUE
+    )
     expect_match(configure_text, "code=compute_$cuda_ptx_arch", fixed = TRUE)
     expect_match(configure_text, "all: \\$(SHLIB)", fixed = TRUE)
     expect_false(grepl(".DEFAULT_GOAL", configure_text, fixed = TRUE))
@@ -108,12 +131,12 @@ test_that("Unix CUDA architecture settings reject malformed values", {
     configure_text <- paste(readLines(configure, warn = FALSE), collapse = "\n")
     expect_match(
         configure_text,
-        "FAISSR_CUDA_ARCH must contain space-separated numeric",
+        "FAISSR_CUDA_ARCH must be 'auto' or contain space-separated numeric",
         fixed = TRUE
     )
     expect_match(
         configure_text,
-        "FAISSR_CUDA_PTX_ARCH must be a numeric compute capability",
+        "FAISSR_CUDA_PTX_ARCH must be 'auto', a numeric compute capability",
         fixed = TRUE
     )
 })

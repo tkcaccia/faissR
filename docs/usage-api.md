@@ -38,7 +38,8 @@ expected to set. For the full R help page after installation, use
 faissR registers a small stable ABI for downstream R packages that need to call
 nearest-neighbour code from C/C++ without going through the R wrapper layer.
 Downstream packages should list `faissR` in `LinkingTo`, include
-`<faissR_api.h>`, and use its typed getter functions.
+`<faissR_api_v1.h>`, and use its typed getter functions. The compatibility
+header `<faissR_api.h>` includes the current versioned header.
 
 | Name | Signature | Description |
 | --- | --- | --- |
@@ -46,6 +47,14 @@ Downstream packages should list `faissR` in `LinkingTo`, include
 | `faissR_nn_float32_call` | `(SEXP x, SEXP k, SEXP backend, SEXP metric, SEXP include_self, SEXP n_threads)` | CPU FAISS Flat float32 KNN. Accepts ordinary R double matrices or optional `float::fl()`/float32 matrices. Returns the stable host KNN list with double distances. |
 | `faissR_nn_float32_call_output` | `(SEXP x, SEXP k, SEXP backend, SEXP metric, SEXP include_self, SEXP n_threads, SEXP distances)` | Same CPU FAISS Flat float32 route, with `distances = "double"` or `"float"` for the returned host distance matrix. |
 | `faissR_nn_cuda_tuned_gpu_call` | `(SEXP x, SEXP k, SEXP method, SEXP metric, SEXP include_self, SEXP target_recall)` | CUDA self-KNN route for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. Returns a `faissR_gpu_knn` object with CUDA-device `indices_ptr` and `distances_ptr`, `result_residency = "cuda"`, and `device_to_host_result_copies = 0`. |
+| `faissR_hnsw_search_v1` | `(SEXP data, SEXP query, SEXP n, SEXP p, SEXP k, SEXP target_recall, SEXP n_threads, SEXP distance_storage)` | One-shot CPU FAISS HNSW search with shape-aware parameter selection. |
+| `faissR_hnsw_index_build_v1` | `(SEXP data, SEXP M, SEXP efConstruction, SEXP n_threads)` | Build and return an owning external pointer to a CPU FAISS HNSW index from float32 reference data. |
+| `faissR_hnsw_index_search_v1` | `(SEXP index, SEXP query, SEXP k, SEXP efSearch, SEXP n_threads)` | Search an owned HNSW index repeatedly without rebuilding it. Returns one-based identifiers, Euclidean distances, and the requested and effective settings. |
+
+The HNSW index pointer owns its native allocation through an R finalizer. Keep
+the pointer reachable for the complete query workload. It is process-local,
+not serializable, and not safe for concurrent calls. Each search reports a
+cumulative `query_call_count`, making index reuse explicit.
 
 The GPU-resident ABI is intentionally exact-family only at present. Approximate
 CUDA methods such as IVF, CAGRA, HNSW, NN-descent, NSG, Vamana, and IVFPQ

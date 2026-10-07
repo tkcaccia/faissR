@@ -55,9 +55,12 @@ performance claims.
 FAISS is the required compiled vector-search dependency. CUDA, FAISS GPU, and
 RAPIDS cuVS are optional for CPU-only builds [1-3,13-16].
 For a NVIDIA GPU build, set `FAISSR_REQUIRE_CUDA=1` and, as needed,
-`FAISSR_REQUIRE_CUVS=1`; then missing GPU
-libraries are fatal at configure time. The package does not call Python and
-does not silently replace an explicit CUDA request with CPU work.
+`FAISSR_REQUIRE_CUVS=1`; then missing GPU libraries or an unusable CUDA device
+are fatal at configure time. An intentional build-only host can set
+`FAISSR_SKIP_CUDA_RUNTIME_CHECK=1`, but that does not validate CUDA execution.
+With a visible GPU, configure automatically compiles native code and PTX for
+the detected compute capabilities. The package does not call Python and does
+not silently replace an explicit CUDA request with CPU work.
 For Bioconductor, faissR declares the `GPU` biocView and opts into optional GPU
 builders with `.BBSoptions` set to `GPU_reliance: optional`; this advertises GPU
 capability without making NVIDIA libraries required for CPU-only builders.
@@ -131,6 +134,7 @@ Use these helpers to inspect the build/runtime state:
 
 ```r
 backend_info()
+gpuinfo::hardware_info()$gpu
 nn_capabilities()
 faiss_available()
 faiss_gpu_available()

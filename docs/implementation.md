@@ -740,10 +740,21 @@ backend for ordinary `nn()` output, `nn_gpu()` also records
 `auto_preferred_tuning` so downstream packages can inspect the shape/k/metric
 while still receiving device-resident exact-family buffers.
 
-faissR installs `<faissR_api.h>` and registers the zero-argument
+faissR installs `<faissR_api.h>` and the frozen version-1 header
+`<faissR_api_v1.h>`, and registers the zero-argument
 `faissR_c_api_version` callable, which returns ABI version `1`. Downstream
 packages should list faissR in `LinkingTo`, include this header, verify the ABI,
 and use its typed getters rather than duplicating callable signatures.
+
+The version-1 API also separates CPU FAISS HNSW construction from search.
+`faissR_hnsw_index_build_v1` accepts float32 reference data, `M`,
+`efConstruction`, and a construction thread count, and returns an external
+pointer that owns the native index. `faissR_hnsw_index_search_v1` accepts that
+pointer, query data, `k`, `efSearch`, and a search thread count. It returns
+one-based row identifiers, Euclidean distances, requested and effective
+settings, and a cumulative query count. The registered finalizer releases the
+index; the pointer is process-local, non-serializable, and must not be searched
+concurrently.
 
 faissR also registers the C-callable
 `faissR_nn_cuda_tuned_gpu_call`. Downstream packages can retrieve it with

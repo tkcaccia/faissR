@@ -1,7 +1,7 @@
 Package: faissR
 Type: Package
 Title: FAISS-Backed Nearest Neighbours, kNN Models, and k-Means
-Version: 0.99.49
+Version: 0.99.50
 Authors@R: person(given = "Stefano",
     family = "Cacciatore",
     role = c("aut", "cre"),
@@ -43,6 +43,7 @@ Depends:
     R (>= 4.6.0)
 Imports:
     Biobase,
+    gpuinfo (>= 0.1.0),
     methods,
     Rcpp (>= 1.1.0)
 Suggests:
@@ -73,6 +74,5 @@ SystemRequirements: C++20, Fortran on Unix, FAISS C++ development library
     single-precision routines on Linux and Windows. Optional CUDA and cuVS
     libraries are used only when a GPU-enabled build is explicitly requested.
 VignetteBuilder: knitr
-RoxygenNote: 8.1.0
 Config/roxygen2/version: 8.1.0
 Config/testthat/edition: 3

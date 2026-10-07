@@ -92,6 +92,15 @@ Strict direct cuVS build:
 The FAISSR_REQUIRE_* variables require the corresponding FAISS, CUDA, or cuVS
 feature at configure time. If a required component is missing, installation
 fails rather than producing a diagnostic or CPU-only build.
+FAISSR_REQUIRE_CUDA=1 also requires a visible, usable GPU. An intentional
+build-only host without an attached GPU can set
+FAISSR_SKIP_CUDA_RUNTIME_CHECK=1, but that override does not validate CUDA
+execution. FAISSR_REQUIRE_CUDA_RUNTIME is deprecated.
+
+When a GPU is visible, configure detects the compute capabilities of all
+visible devices and builds native code plus PTX for the detected architectures.
+FAISSR_CUDA_ARCH and FAISSR_CUDA_PTX_ARCH remain available as expert overrides
+for build-only hosts and cross-compilation.
 
 macOS
 -----
