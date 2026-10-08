@@ -87,11 +87,14 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Stefano Cacciatore \email{tkcaccia@gmail.com} (\href{https://orcid.org/0000-0001-7052-7156}{ORCID})
+\strong{Maintainer}: Stefano Cacciatore
+\email{tkcaccia@gmail.com}
+(\href{https://orcid.org/0000-0001-7052-7156}{ORCID})
 
 Authors:
 \itemize{
-  \item Stefano Cacciatore \email{tkcaccia@gmail.com} (\href{https://orcid.org/0000-0001-7052-7156}{ORCID})
+  \item Stefano Cacciatore \email{tkcaccia@gmail.com}
+  (\href{https://orcid.org/0000-0001-7052-7156}{ORCID})
 }
 
 }

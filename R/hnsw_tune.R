@@ -448,12 +448,12 @@ hnsw_tune_build_case <- function(request, sample, row) {
     built <- hnsw_tune_repeated_build(request, sample, setting)
     index <- built$index
     on.exit(rm(index), add = TRUE)
-    order <- with_rng_seed(request$seed + 100L + row, sample(
-        request$grid$search,
-        length(request$grid$search),
-        replace = FALSE
-    ))
-    lapply(order, function(ef) hnsw_tune_search_case(
+    positions <- with_rng_seed(
+        request$seed + 100L + row,
+        sample.int(length(request$grid$search))
+    )
+    search_order <- request$grid$search[positions]
+    lapply(search_order, function(ef) hnsw_tune_search_case(
         request, sample, index, setting, ef, built$times, estimate
     ))
 }
@@ -647,12 +647,7 @@ hnsw_tune_select <- function(request, sweep) {
     eligible <- tune[!is.na(tune$lower_95_recall) &
         tune$lower_95_recall >= threshold, , drop = FALSE]
     if (!nrow(eligible)) return(NULL)
-    eligible <- eligible[order(
-        eligible$projected_workload_seconds,
-        eligible$projected_query_batch_seconds,
-        eligible$projected_build_seconds,
-        eligible$m, eligible$ef_construction, eligible$ef_search
-    ), , drop = FALSE]
+    eligible <- eligible[hnsw_tune_candidate_order(eligible), , drop = FALSE]
     selected <- eligible[1L, , drop = FALSE]
     holdout <- hnsw_tune_matching_holdout(sweep$diagnostics, selected)
     list(
@@ -671,6 +666,17 @@ hnsw_tune_select <- function(request, sweep) {
         holdout_confirmed = nrow(holdout) == 1L &&
             holdout$lower_95_recall[[1L]] >= request$target_recall
     )
+}
+
+hnsw_tune_candidate_order <- function(candidates) {
+    fields <- c(
+        "projected_workload_seconds", "projected_query_batch_seconds",
+        "projected_build_seconds", "m", "ef_construction", "ef_search"
+    )
+    values <- lapply(fields, function(field) {
+        as.numeric(candidates[[field]])
+    })
+    do.call(order, values)
 }
 
 hnsw_tune_matching_holdout <- function(diagnostics, selected) {

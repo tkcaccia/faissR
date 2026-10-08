@@ -77,6 +77,7 @@ test_that("data-aware HNSW tuning is deterministic and reuses its index", {
     expect_equal(first$diagnostics$mean_recall,
         second$diagnostics$mean_recall)
     expect_equal(first$selected$m, 12L)
+    expect_equal(first$selected$ef_search, 80L)
     expect_match(first$selected$selection_rule,
         "minimum_median_projected")
     expect_true(first$selected$projected_workload_seconds >= 0)
@@ -147,4 +148,17 @@ test_that("HNSW tuning selects the fastest recall-qualified workload", {
     expect_equal(selected$projected_workload_seconds, 1)
     expect_true(selected$holdout_confirmed)
     expect_match(selected$selection_rule, "projected_build")
+})
+
+test_that("HNSW candidate ordering accepts matrix-like timing columns", {
+    candidates <- data.frame(
+        projected_workload_seconds = I(matrix(c(2, 1), ncol = 1L)),
+        projected_query_batch_seconds = c(1, 0.5),
+        projected_build_seconds = c(1, 0.5),
+        m = c(8L, 16L),
+        ef_construction = c(40L, 80L),
+        ef_search = c(40L, 80L)
+    )
+
+    expect_equal(faissR:::hnsw_tune_candidate_order(candidates), c(2L, 1L))
 })
