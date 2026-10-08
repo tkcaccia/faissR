@@ -66,12 +66,12 @@ test_that("CUDA package checks prefer the system compiler toolchain", {
     runner_text <- paste(readLines(runner, warn = FALSE), collapse = "\n")
     expect_match(
         runner_text,
-        "PATH=/opt/R/bin:/usr/local/bin:/usr/bin:/bin:$CUDA_ROOT/bin",
+        "PATH=${CHECK_TOOL_BIN}$R_BIN:/usr/local/bin:/usr/bin:/bin:$CUDA_ROOT/bin",
         fixed = TRUE
     )
     expect_match(
         runner_text,
-        "LD_LIBRARY_PATH=$CUDA_ROOT/lib:$CUDA_ROOT/lib64",
+        "LD_LIBRARY_PATH=${CHECK_TOOL_LIB}$CUDA_ROOT/lib:$CUDA_ROOT/lib64",
         fixed = TRUE
     )
 })

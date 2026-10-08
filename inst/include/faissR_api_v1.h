@@ -56,6 +56,18 @@ typedef SEXP (*faissR_hnsw_search_v1_fun)(
     SEXP distance_storage);
 
 /*
+ * Return faissR's deterministic shape-based CPU HNSW policy without
+ * constructing an index. The result contains M, efConstruction, efSearch,
+ * and the rule and benchmark provenance used to choose them.
+ */
+typedef SEXP (*faissR_hnsw_tune_v1_fun)(
+    SEXP n,
+    SEXP p,
+    SEXP k,
+    SEXP metric,
+    SEXP target_recall);
+
+/*
  * Build and query inputs must be float::fl()/float32 matrices. The build
  * result owns a CPU FAISS HNSW index. Keep the external pointer reachable for
  * every search. It is not serializable or safe for concurrent calls. Search
@@ -108,6 +120,11 @@ faissR_get_nn_cuda_tuned_gpu(void) {
 static inline faissR_hnsw_search_v1_fun faissR_get_hnsw_search_v1(void) {
   return (faissR_hnsw_search_v1_fun) R_GetCCallable(
       "faissR", "faissR_hnsw_search_v1");
+}
+
+static inline faissR_hnsw_tune_v1_fun faissR_get_hnsw_tune_v1(void) {
+  return (faissR_hnsw_tune_v1_fun) R_GetCCallable(
+      "faissR", "faissR_hnsw_tune_v1");
 }
 
 static inline faissR_hnsw_index_build_v1_fun

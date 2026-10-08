@@ -28,9 +28,8 @@ direct float32 adapters.}
 \item{k}{Number of neighbours.}
 
 \item{backend}{Device backend used for this prediction call: `"cpu"` or
-`"cuda"`. `NULL` follows the package backend configuration. The fitted
-model's method and metric are always
-reused.}
+`"cuda"`. The fitted model's method and metric are always reused. `NULL`
+follows the package backend configuration.}
 
 \item{tuning}{Tuning policy used for this prediction call. `"auto"` uses the
 deterministic default for the resolved method; pilot/cache tuning is

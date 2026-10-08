@@ -346,9 +346,8 @@ new_knn_model <- function(x, response, args, index) {
 #'   direct float32 adapters.
 #' @param k Number of neighbours.
 #' @param backend Device backend used for this prediction call: `"cpu"` or
-#'   `"cuda"`. `NULL` follows the package backend configuration. The fitted
-#'   model's method and metric are always
-#'   reused.
+#'   `"cuda"`. The fitted model's method and metric are always reused. `NULL`
+#'   follows the package backend configuration.
 #' @param tuning Tuning policy used for this prediction call. `"auto"` uses the
 #'   deterministic default for the resolved method; pilot/cache tuning is
 #'   opt-in where implemented. FAISS GPU IVF pilot/cache tuning is

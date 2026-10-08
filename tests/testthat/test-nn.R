@@ -672,6 +672,7 @@ test_that("installed C API header exposes versioned callable entry points", {
         faissR_get_nn_float32() != NULL &&
         faissR_get_nn_float32_output() != NULL &&
         faissR_get_nn_cuda_tuned_gpu() != NULL &&
+        faissR_get_hnsw_tune_v1() != NULL &&
         faissR_get_hnsw_index_build_v1() != NULL &&
         faissR_get_hnsw_index_search_v1() != NULL;
     }
@@ -679,6 +680,36 @@ test_that("installed C API header exposes versioned callable entry points", {
         includes = paste0('#include "', header, '"')
     )
     expect_true(faissR_test_float32_callable_registered())
+})
+
+test_that("HNSW C callable exposes the package shape policy", {
+    skip_if_not_installed("Rcpp")
+    header <- system.file("include", "faissR_api_v1.h", package = "faissR")
+    Rcpp::cppFunction(
+        code = '
+    SEXP faissR_test_hnsw_tune(
+        int n, int p, int k, std::string metric, double target) {
+      faissR_hnsw_tune_v1_fun fn = faissR_get_hnsw_tune_v1();
+      Rcpp::Shield<SEXP> n_arg(Rcpp::wrap(n));
+      Rcpp::Shield<SEXP> p_arg(Rcpp::wrap(p));
+      Rcpp::Shield<SEXP> k_arg(Rcpp::wrap(k));
+      Rcpp::Shield<SEXP> metric_arg(Rcpp::wrap(metric));
+      Rcpp::Shield<SEXP> target_arg(Rcpp::wrap(target));
+      return fn(n_arg, p_arg, k_arg, metric_arg, target_arg);
+    }
+  ',
+        includes = paste0('#include "', header, '"')
+    )
+
+    observed <- faissR_test_hnsw_tune(50000L, 64L, 30L, "euclidean", 0.99)
+    expected <- faissR:::faiss_hnsw_auto_policy(
+        n = 50000L, p = 64L, k = 30L,
+        metric = "euclidean", target_recall = 0.99
+    )
+    expect_equal(observed$m, expected$m)
+    expect_equal(observed$ef_construction, expected$ef_construction)
+    expect_equal(observed$ef_search, expected$ef_search)
+    expect_equal(observed$rule, expected$rule)
 })
 
 test_that("persistent HNSW C callables own and reuse a versioned index", {

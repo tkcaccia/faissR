@@ -405,6 +405,60 @@ manifest records their checksums. These materials specify the actual values
 for every dataset, device, method, and $k$, including adjustments needed to
 satisfy library constraints such as a valid product-quantizer dimension.
 
+\subsection{Local HNSW pre-tuning protocol} \label{sec:local-hnsw}
+
+The optional \code{hnsw\_tune()} workflow is separate from the bundled
+shape-based policy and from the publication calibration. Its initial scope is
+CPU FAISS HNSW with Euclidean distance. Sparse or delayed inputs, unsupported
+metrics, and unavailable FAISS support produce errors; the procedure does not
+substitute another method or device.
+
+The procedure samples at most 20,000 reference rows without using a prefix of
+the input. It then draws disjoint tuning and confirmation query sets from that
+reference. Exact FAISS Flat search supplies the neighbor reference. Recall is
+tie-aware: an alternative identifier at the $k$th boundary is accepted when
+its distance is within $10^{-5}+10^{-4}|d_k|$ of the exact boundary distance.
+The caller prespecifies query rows per batch and the expected number of batches
+served by one index. For each candidate pair of $M$ and construction effort,
+graph construction is repeated and the final graph is queried repeatedly at
+each candidate search effort on the same host. The output reports mean,
+fifth-percentile, tenth-percentile, and minimum query recall, together with an
+empirical 95\% query-bootstrap lower bound.
+
+Eligibility on the tuning queries requires the lower bound to reach the
+requested tier plus a prespecified safety margin, capped at one. Among eligible
+candidates, selection minimizes the projected workload time. This objective is
+the median pilot construction time, scaled by the full-to-pilot reference-row
+ratio, plus median query time scaled by the requested-to-timed query-row ratio
+and multiplied by the expected number of batches. Median query time,
+construction time, and then $(M,$ construction effort, search effort$)$ provide
+deterministic tie breaking. This is an explicit linear projection from a
+bounded pilot, not a claim that HNSW construction scales exactly linearly. The
+selected setting must independently reach the requested
+lower bound on the untouched confirmation queries before a full-data index is
+built. The returned object records sampled row identifiers, selected settings,
+the workload objective, timing dispersion, lower-tail recall, exact-reference
+and pilot timing, provider information, and whether confirmation succeeded.
+Its owned index pointer can be queried
+repeatedly with \code{predict()} and is valid only within the creating R
+session.
+
+The disjoint query split evaluates within-dataset confirmation. It does not
+test whether a rule developed on one dataset transfers to another dataset with
+similar dimensions but different neighborhood geometry. Unless the complete
+reference is used, it also estimates recall on the sampled reference rather
+than proving recall against the full collection.
+
+The default sweep is bounded by the number of graph builds, elapsed pilot
+time, and an optional estimate-based memory limit. The time limit is a soft
+cutoff checked between graph candidates; an active build or search is not
+interrupted. If the sweep stops early, no deployable setting is returned. For
+comparative performance, adaptive end-to-end time comprises
+exact-reference generation, all pilot builds and searches, final index
+construction, and the application query. Fitted-index query time is a separate
+quantity, and no speed ratio is defined when the requested recall criterion is
+not met.
+
 \subsection{Completion and timing sensitivity}
 
 Table~\ref{tab:calibration-missing} disaggregates the unavailable operating

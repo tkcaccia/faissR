@@ -672,6 +672,26 @@ validation are reported in Supplementary Tables~\ref{supp-tab:grid},
 \ref{supp-tab:calibration-missing}, \ref{supp-tab:calibration-stability}, and
 \ref{supp-tab:calibration-validation}.
 
+Shape alone does not describe neighborhood geometry. For applications that
+need settings adapted to the observed data, \fct{hnsw\_tune} provides a
+separate, opt-in CPU workflow for Euclidean HNSW. It draws a bounded random
+reference subset, uses disjoint tuning and confirmation queries, and compares
+candidate searches with exact neighbors. The caller specifies the expected
+query rows per batch and the number of batches served by one fitted index.
+Graph construction and query execution are repeated on the same host, and
+their medians are projected to this workload. A candidate is retained only
+when an empirical
+query-bootstrap lower bound reaches the requested recall tier on the tuning
+queries and again on the untouched confirmation queries. The final full-data
+index is built only after confirmation. Among recall-qualified candidates,
+the procedure minimizes projected construction plus repeated-query time;
+deterministic parameter ordering resolves timing ties. It returns the workload,
+timing, sampling, recall, budget, and provider provenance.
+This is a within-dataset query split, not validation of transfer to a new
+dataset. When a subset is used, its recall estimate also does not establish
+recall against the full reference collection. Supplementary
+Section~\ref{supp-sec:local-hnsw} gives the full protocol.
+
 \section{Evaluation} \label{sec:evaluation}
 
 \subsection{Datasets and query sampling}
@@ -806,6 +826,15 @@ implementation using a prespecified calibration sample and evaluated it on an
 independent validation sample. It measured cold calls, direct index
 construction, and fitted-index queries separately over five validation
 repetitions.
+
+We distinguish fixed and adaptive timing claims. A fixed arm uses settings
+declared before the timed application call. An adaptive arm must include the
+exact-reference search, pilot graph construction and searches, final index
+construction, and application query in its end-to-end time. Query-only timing
+against the fitted index is reported separately. A speed ratio is not reported
+when either route fails its recall criterion. The experiments reported below
+use their prespecified protocols; they do not retrospectively apply
+\fct{hnsw\_tune}.
 
 The broader comparison included \pkg{FNN}, \pkg{RANN}, \pkg{Rnanoflann},
 \pkg{rnndescent}, \pkg{BiocNeighbors}, \pkg{RcppAnnoy}, and \pkg{RcppHNSW}.
@@ -1008,14 +1037,17 @@ derived-route comparison is confined to the supplement. The narrower HNSW
 study tuned each implementation independently. Timeouts and failures are
 reported alongside the ratios.
 
-The optional automatic method policy remains experimental. Its CUDA calibration used
-the cold self-search workload described in Section~\ref{sec:tuning}, while CPU
-automatic method selection was not independently validated. The policy has no memory
-budget or expected-reuse input. Shape descriptors capture size and dimension
-but omit other aspects of data geometry, and one timing per calibration
-configuration leaves selection sensitive to timing noise. The holdout analyses
-cover the measured domains and computing environment. Exact search remains a
-useful baseline for application-specific comparisons beyond that scope.
+The optional automatic method policy remains experimental. Its CUDA
+calibration used the cold self-search workload described in
+Section~\ref{sec:tuning}, while CPU automatic method selection was not
+independently validated. The policy has no memory-budget or expected-reuse
+input. Datasets with the same size and dimension can have different
+neighborhood geometry, and one timing per calibration configuration leaves
+selection sensitive to timing noise. The opt-in \fct{hnsw\_tune} workflow can
+adapt CPU HNSW settings to local Euclidean data, but it was not used to produce
+the benchmark results in this article and does not establish a new package
+default. Exact search remains a useful baseline for application-specific
+comparisons beyond the measured domains and computing environment.
 
 GPU-resident output exposes neighbor buffers to another compiled package
 without a mandatory host copy. The reported tests cover ownership and transfer

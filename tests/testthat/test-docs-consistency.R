@@ -169,6 +169,7 @@ test_that("public API excludes retired wrapper and platform-specific helper name
     "faissR_backend",
     "fast_kmeans",
     "gpu_knn_to_host",
+    "hnsw_tune",
     "knn",
     "nn",
     "nn_gpu",

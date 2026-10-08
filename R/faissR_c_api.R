@@ -18,6 +18,9 @@
 #' self-KNN callable for `"auto"`, `"exact"`, `"flat"`, and `"bruteforce"`.
 #' `faissR_get_hnsw_index_build_v1()` builds an owned CPU FAISS HNSW index,
 #' and `faissR_get_hnsw_index_search_v1()` queries that index repeatedly.
+#' `faissR_get_hnsw_tune_v1()` returns the deterministic shape-based HNSW
+#' settings without building an index. This policy lookup is distinct from
+#' the opt-in, data-aware [hnsw_tune()] workflow.
 #' The exact version-1 signatures are declared in `faissR_api_v1.h`;
 #' `faissR_api.h` includes the current versioned header for source
 #' compatibility.

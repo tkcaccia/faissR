@@ -486,6 +486,8 @@ extern "C" SEXP faissR_hnsw_search_v1(SEXP data,
                                       SEXP target_recall,
                                       SEXP n_threads,
                                       SEXP distance_storage);
+extern "C" SEXP faissR_hnsw_tune_v1(SEXP n, SEXP p, SEXP k,
+    SEXP metric, SEXP target_recall);
 
 extern "C" SEXP faissR_hnsw_index_build_v1(SEXP data, SEXP m,
     SEXP ef_construction, SEXP n_threads);
@@ -523,6 +525,11 @@ void register_faissR_ccallables(DllInfo *dll) {
     "faissR",
     "faissR_hnsw_search_v1",
     (DL_FUNC) &faissR_hnsw_search_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_hnsw_tune_v1",
+    (DL_FUNC) &faissR_hnsw_tune_v1
   );
   R_RegisterCCallable(
     "faissR",
@@ -737,6 +744,17 @@ List nn_tune_faiss_hnsw_cpp(int n, int p, int k, std::string metric,
                             double target_recall, int m_option,
                             int ef_construction_option,
                             int ef_search_option, bool manual);
+
+extern "C" SEXP faissR_hnsw_tune_v1(SEXP n, SEXP p, SEXP k,
+    SEXP metric, SEXP target_recall) {
+  BEGIN_RCPP
+  return nn_tune_faiss_hnsw_cpp(
+    Rcpp::as<int>(n), Rcpp::as<int>(p), Rcpp::as<int>(k),
+    Rcpp::as<std::string>(metric), Rcpp::as<double>(target_recall),
+    NA_INTEGER, NA_INTEGER, NA_INTEGER, false
+  );
+  END_RCPP
+}
 
 extern "C" SEXP faissR_hnsw_search_v1(SEXP data,
                                       SEXP query,
