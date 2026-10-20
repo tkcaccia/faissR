@@ -1,0 +1,24 @@
+faissR interface code: Stefano Cacciatore, Expat License (MIT template).
+
+Bundled component: FAISS 1.11.0
+Copyright (c) Meta Platforms, Inc. and affiliates (including Facebook, Inc.).
+Source: https://github.com/facebookresearch/faiss/tree/v1.11.0
+License: Expat License (MIT template); see FAISS-LICENSE.
+
+The source archive src/vendor/faiss-1.11.0.tar.gz is unmodified upstream source.
+All upstream file-level copyright and license notices remain in that archive.
+NVIDIA Corporation holds copyright in contributed build/GPU infrastructure
+with Apache-2.0 notices; see FAISS-APACHE-LICENSE for that license text. These
+components are retained as source, not compiled by the CPU fallback.
+The package compiles only its generic CPU library, not Python or GPU code.
+The documented r-compat.patch supplies static Windows linkage and converts
+FAISS fatal assertions/output errors to C++ exceptions for embedding in R,
+corrects compiler compatibility diagnostics and quantizer initialization order,
+and removes unused global C RNG
+seeding. The package-local console adapter buffers FAISS diagnostics for R's
+console without calling R's API from FAISS worker threads.
+See src/vendor/README for provenance, checksum and build details.
+
+CUDA, cuVS, OpenMP and numerical libraries are external dependencies and are
+not included in the bundled archive. Linking to them does not transfer their
+copyright to the faissR authors.

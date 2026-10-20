@@ -1,0 +1,127 @@
+# CPU source list from FAISS 1.11.0 faiss/CMakeLists.txt. No CMake or download
+# is needed during installation. R supplies the compiler, flags and tools.
+include faissR-config.mk
+include $(R_MAKECONF)
+-include $(R_HOME)/etc/Makevars.site
+ifneq ($(R_MAKEVARS_USER),)
+-include $(R_MAKEVARS_USER)
+endif
+include faissR-toolchain.mk
+
+CXX = $(CXX20) $(CXX20STD)
+FAISS_FLAGS = $(CPPFLAGS) $(CXX20FLAGS) $(CXX20PICFLAGS) \
+  $(SHLIB_OPENMP_CXXFLAGS) $(FAISS_CPPFLAGS) $(FAISS_CXXFLAGS) \
+  -I. -DFINTEGER=int -DFAISS_STATIC -DFAISSR_R_SAFE_ASSERTS -DNDEBUG \
+  -DFAISSR_CONSOLE_REMAP -include ../../../faissr_console.hpp
+
+SOURCES = \
+  faiss/AutoTune.cpp \
+  faiss/Clustering.cpp \
+  faiss/IVFlib.cpp \
+  faiss/Index.cpp \
+  faiss/Index2Layer.cpp \
+  faiss/IndexAdditiveQuantizer.cpp \
+  faiss/IndexBinary.cpp \
+  faiss/IndexBinaryFlat.cpp \
+  faiss/IndexBinaryFromFloat.cpp \
+  faiss/IndexBinaryHNSW.cpp \
+  faiss/IndexBinaryHash.cpp \
+  faiss/IndexBinaryIVF.cpp \
+  faiss/IndexFlat.cpp \
+  faiss/IndexFlatCodes.cpp \
+  faiss/IndexHNSW.cpp \
+  faiss/IndexIDMap.cpp \
+  faiss/IndexIVF.cpp \
+  faiss/IndexIVFAdditiveQuantizer.cpp \
+  faiss/IndexIVFFlat.cpp \
+  faiss/IndexIVFPQ.cpp \
+  faiss/IndexIVFFastScan.cpp \
+  faiss/IndexIVFAdditiveQuantizerFastScan.cpp \
+  faiss/IndexIVFPQFastScan.cpp \
+  faiss/IndexIVFPQR.cpp \
+  faiss/IndexIVFRaBitQ.cpp \
+  faiss/IndexIVFSpectralHash.cpp \
+  faiss/IndexLSH.cpp \
+  faiss/IndexNNDescent.cpp \
+  faiss/IndexLattice.cpp \
+  faiss/IndexNSG.cpp \
+  faiss/IndexPQ.cpp \
+  faiss/IndexFastScan.cpp \
+  faiss/IndexAdditiveQuantizerFastScan.cpp \
+  faiss/IndexIVFIndependentQuantizer.cpp \
+  faiss/IndexPQFastScan.cpp \
+  faiss/IndexPreTransform.cpp \
+  faiss/IndexRaBitQ.cpp \
+  faiss/IndexRefine.cpp \
+  faiss/IndexReplicas.cpp \
+  faiss/IndexRowwiseMinMax.cpp \
+  faiss/IndexScalarQuantizer.cpp \
+  faiss/IndexShards.cpp \
+  faiss/IndexShardsIVF.cpp \
+  faiss/IndexNeuralNetCodec.cpp \
+  faiss/MatrixStats.cpp \
+  faiss/MetaIndexes.cpp \
+  faiss/VectorTransform.cpp \
+  faiss/clone_index.cpp \
+  faiss/index_factory.cpp \
+  faiss/impl/AuxIndexStructures.cpp \
+  faiss/impl/CodePacker.cpp \
+  faiss/impl/IDSelector.cpp \
+  faiss/impl/FaissException.cpp \
+  faiss/impl/HNSW.cpp \
+  faiss/impl/NSG.cpp \
+  faiss/impl/PolysemousTraining.cpp \
+  faiss/impl/ProductQuantizer.cpp \
+  faiss/impl/AdditiveQuantizer.cpp \
+  faiss/impl/RaBitQuantizer.cpp \
+  faiss/impl/ResidualQuantizer.cpp \
+  faiss/impl/LocalSearchQuantizer.cpp \
+  faiss/impl/ProductAdditiveQuantizer.cpp \
+  faiss/impl/ScalarQuantizer.cpp \
+  faiss/impl/index_read.cpp \
+  faiss/impl/index_write.cpp \
+  faiss/impl/io.cpp \
+  faiss/impl/kmeans1d.cpp \
+  faiss/impl/lattice_Zn.cpp \
+  faiss/impl/mapped_io.cpp \
+  faiss/impl/pq4_fast_scan.cpp \
+  faiss/impl/pq4_fast_scan_search_1.cpp \
+  faiss/impl/pq4_fast_scan_search_qbs.cpp \
+  faiss/impl/residual_quantizer_encode_steps.cpp \
+  faiss/impl/zerocopy_io.cpp \
+  faiss/impl/NNDescent.cpp \
+  faiss/invlists/BlockInvertedLists.cpp \
+  faiss/invlists/DirectMap.cpp \
+  faiss/invlists/InvertedLists.cpp \
+  faiss/invlists/InvertedListsIOHook.cpp \
+  faiss/utils/Heap.cpp \
+  faiss/utils/NeuralNet.cpp \
+  faiss/utils/WorkerThread.cpp \
+  faiss/utils/distances.cpp \
+  faiss/utils/distances_simd.cpp \
+  faiss/utils/extra_distances.cpp \
+  faiss/utils/hamming.cpp \
+  faiss/utils/partitioning.cpp \
+  faiss/utils/quantize_lut.cpp \
+  faiss/utils/random.cpp \
+  faiss/utils/sorting.cpp \
+  faiss/utils/utils.cpp \
+  faiss/utils/distances_fused/avx512.cpp \
+  faiss/utils/distances_fused/distances_fused.cpp \
+  faiss/utils/distances_fused/simdlib_based.cpp
+
+ifeq ($(FAISS_WINDOWS),0)
+SOURCES += faiss/invlists/OnDiskInvertedLists.cpp
+endif
+
+OBJECTS = $(SOURCES:.cpp=.o)
+
+.PHONY: all
+all: libfaiss.a
+
+libfaiss.a: $(OBJECTS)
+	$(AR) cr $@ $(OBJECTS)
+	$(RANLIB) $@
+
+%.o: %.cpp
+	$(CXX) $(FAISS_FLAGS) -c $< -o $@

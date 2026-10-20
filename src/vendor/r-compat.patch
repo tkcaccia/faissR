@@ -1,0 +1,501 @@
+--- a/faiss/AutoTune.cpp
++++ b/faiss/AutoTune.cpp
+@@ -191,9 +191,7 @@
+ void OperatingPoints::all_to_gnuplot(const char* fname) const {
+     FILE* f = fopen(fname, "w");
+     if (!f) {
+-        fprintf(stderr, "cannot open %s", fname);
+-        perror("");
+-        abort();
++        FAISS_THROW_FMT("cannot open %s", fname);
+     }
+     for (int i = 0; i < all_pts.size(); i++) {
+         const OperatingPoint& op = all_pts[i];
+@@ -205,9 +203,7 @@
+ void OperatingPoints::optimal_to_gnuplot(const char* fname) const {
+     FILE* f = fopen(fname, "w");
+     if (!f) {
+-        fprintf(stderr, "cannot open %s", fname);
+-        perror("");
+-        abort();
++        FAISS_THROW_FMT("cannot open %s", fname);
+     }
+     double prev_perf = 0.0;
+     for (int i = 0; i < optimal_pts.size(); i++) {
+--- a/faiss/impl/FaissAssert.h
++++ b/faiss/impl/FaissAssert.h
+@@ -110,4 +110,15 @@
+         }                                                                 \
+     } while (false)
+ 
++// R integrations must report errors without terminating the embedding process.
++#ifdef FAISSR_R_SAFE_ASSERTS
++#undef FAISS_ASSERT
++#undef FAISS_ASSERT_MSG
++#undef FAISS_ASSERT_FMT
++#define FAISS_ASSERT(X) FAISS_THROW_IF_NOT(X)
++#define FAISS_ASSERT_MSG(X, MSG) FAISS_THROW_IF_NOT_MSG(X, MSG)
++#define FAISS_ASSERT_FMT(X, FMT, ...) \
++    FAISS_THROW_IF_NOT_FMT(X, FMT, __VA_ARGS__)
+ #endif
++
++#endif
+--- a/faiss/impl/index_read.cpp
++++ b/faiss/impl/index_read.cpp
+@@ -10,6 +10,7 @@
+ 
+ #include <faiss/impl/io_macros.h>
+ 
++#include <cerrno>
+ #include <cstdio>
+ #include <cstdlib>
+ #include <optional>
+@@ -1131,9 +1132,9 @@
+         IndexNSG* idxnsg;
+         if (h == fourcc("INSf"))
+             idxnsg = new IndexNSGFlat();
+-        if (h == fourcc("INSp"))
++        else if (h == fourcc("INSp"))
+             idxnsg = new IndexNSGPQ();
+-        if (h == fourcc("INSs"))
++        else
+             idxnsg = new IndexNSGSQ();
+         read_index_header(idxnsg, f);
+         READ1(idxnsg->GK);
+--- a/faiss/impl/io_macros.h
++++ b/faiss/impl/io_macros.h
+@@ -7,6 +7,9 @@
+ 
+ #pragma once
+ 
++#include <cerrno>
++#include <cstring>
++
+ #include <faiss/impl/maybe_owned_vector.h>
+ 
+ /*************************************************************
+@@ -26,7 +29,7 @@
+                 f->name.c_str(),                     \
+                 ret,                                 \
+                 size_t(n),                           \
+-                strerror(errno));                    \
++                std::strerror(errno));               \
+     }
+ 
+ #define READ1(x) READANDCHECK(&(x), 1)
+@@ -56,7 +59,7 @@
+                 f->name.c_str(),                      \
+                 ret,                                  \
+                 size_t(n),                            \
+-                strerror(errno));                     \
++                std::strerror(errno));                \
+     }
+ 
+ #define WRITE1(x) WRITEANDCHECK(&(x), 1)
+--- a/faiss/impl/io.cpp
++++ b/faiss/impl/io.cpp
+@@ -9,6 +9,7 @@
+ 
+ #include <algorithm>
+ #include <cassert>
++#include <cerrno>
+ #include <cstring>
+ 
+ #include <faiss/impl/FaissAssert.h>
+--- a/faiss/impl/LocalSearchQuantizer.cpp
++++ b/faiss/impl/LocalSearchQuantizer.cpp
+@@ -160,7 +160,7 @@
+         Search_type_t search_type)
+         : AdditiveQuantizer(d, std::vector<size_t>(M, nbits), search_type) {
+     K = (1 << nbits);
+-    std::srand(random_seed);
++    // LSQ uses its local generators, not the process-global C RNG.
+ }
+ 
+ LocalSearchQuantizer::~LocalSearchQuantizer() {
+--- a/faiss/impl/mapped_io.cpp
++++ b/faiss/impl/mapped_io.cpp
+@@ -23,6 +23,7 @@
+ 
+ #endif
+ 
++#include <cerrno>
+ #include <cstring>
+ 
+ #include <faiss/impl/FaissAssert.h>
+@@ -37,7 +38,7 @@
+     size_t ptr_size = 0;
+ 
+     PImpl(const std::string& filename) {
+-        auto f = std::unique_ptr<FILE, decltype(&fclose)>(
++        auto f = std::unique_ptr<FILE, int (*)(FILE*)>(
+                 fopen(filename.c_str(), "r"), &fclose);
+         FAISS_THROW_IF_NOT_FMT(
+                 f.get(),
+@@ -115,7 +116,7 @@
+         if (file_handle == INVALID_HANDLE_VALUE) {
+             const auto error = GetLastError();
+             FAISS_THROW_FMT(
+-                    "could not open the file, %s (error %d)",
++                    "could not open the file, %s (error %lu)",
+                     filename.c_str(),
+                     error);
+         }
+@@ -128,7 +129,7 @@
+             CloseHandle(file_handle);
+ 
+             FAISS_THROW_FMT(
+-                    "could not get the file size, %s (error %d)",
++                    "could not get the file size, %s (error %lu)",
+                     filename.c_str(),
+                     error);
+         }
+@@ -142,7 +143,7 @@
+             CloseHandle(file_handle);
+ 
+             FAISS_THROW_FMT(
+-                    "could not create a file mapping, %s (error %d)",
++                    "could not create a file mapping, %s (error %lu)",
+                     filename.c_str(),
+                     error);
+         }
+@@ -157,7 +158,7 @@
+             mapping_handle = INVALID_HANDLE_VALUE;
+ 
+             FAISS_THROW_FMT(
+-                    "could not get map the file, %s (error %d)",
++                    "could not get map the file, %s (error %lu)",
+                     filename.c_str(),
+                     error);
+         }
+@@ -171,19 +172,19 @@
+         const int fd = _fileno(f);
+         if (fd == -1) {
+             // no good
+-            FAISS_THROW_FMT("could not get a HANDLE");
++            FAISS_THROW_MSG("could not get a HANDLE");
+         }
+ 
+         HANDLE file_handle = (HANDLE)_get_osfhandle(fd);
+         if (file_handle == INVALID_HANDLE_VALUE) {
+-            FAISS_THROW_FMT("could not get an OS HANDLE");
++            FAISS_THROW_MSG("could not get an OS HANDLE");
+         }
+ 
+         // get the size of the file
+         LARGE_INTEGER len_li;
+         if (GetFileSizeEx(file_handle, &len_li) == 0) {
+             const auto error = GetLastError();
+-            FAISS_THROW_FMT("could not get the file size (error %d)", error);
++            FAISS_THROW_FMT("could not get the file size (error %lu)", error);
+         }
+ 
+         // create a mapping
+@@ -192,7 +193,7 @@
+         if (mapping_handle == 0) {
+             const auto error = GetLastError();
+             FAISS_THROW_FMT(
+-                    "could not create a file mapping, (error %d)", error);
++                    "could not create a file mapping, (error %lu)", error);
+         }
+ 
+         // the handle is provided externally, so this is not our business
+@@ -206,7 +207,7 @@
+             CloseHandle(mapping_handle);
+             mapping_handle = INVALID_HANDLE_VALUE;
+ 
+-            FAISS_THROW_FMT("could not get map the file, (error %d)", error);
++            FAISS_THROW_FMT("could not get map the file, (error %lu)", error);
+         }
+ 
+         ptr = data;
+--- a/faiss/impl/NSG.cpp
++++ b/faiss/impl/NSG.cpp
+@@ -112,7 +112,7 @@
+ NSG::NSG(int R) : R(R), rng(0x0903) {
+     L = R + 32;
+     C = R + 100;
+-    srand(0x1998);
++    // NSG uses its rng member, not the process-global C RNG.
+ }
+ 
+ void NSG::search(
+--- a/faiss/impl/platform_macros.h
++++ b/faiss/impl/platform_macros.h
+@@ -9,6 +9,7 @@
+ 
+ // basic int types and size_t
+ #include <cstdint>
++#include <cerrno>
+ #include <cstdio>
+ 
+ #ifdef _WIN32
+@@ -17,7 +18,9 @@
+  * Windows specific macros
+  *******************************************************/
+ 
+-#ifdef FAISS_MAIN_LIB
++#if defined(FAISS_STATIC)
++#define FAISS_API
++#elif defined(FAISS_MAIN_LIB)
+ #define FAISS_API __declspec(dllexport)
+ #else // _FAISS_MAIN_LIB
+ #define FAISS_API __declspec(dllimport)
+@@ -34,7 +37,7 @@
+ #define posix_memalign_free _aligned_free
+ 
+ // aligned should be in front of the declaration
+-#define ALIGNED(x) __declspec(align(x))
++#define ALIGNED(x) alignas(x)
+ 
+ // redefine the GCC intrinsics with Windows equivalents
+ #ifdef _MSC_VER
+--- a/faiss/impl/ScalarQuantizer.cpp
++++ b/faiss/impl/ScalarQuantizer.cpp
+@@ -56,7 +56,7 @@
+ #endif
+ 
+ #if defined(__aarch64__)
+-#if defined(__GNUC__) && __GNUC__ < 8
++#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 8
+ #warning \
+         "Cannot enable NEON optimizations in scalar quantizer if the compiler is GCC<8"
+ #else
+--- a/faiss/impl/ThreadedIndex-inl.h
++++ b/faiss/impl/ThreadedIndex-inl.h
+@@ -23,16 +23,10 @@
+ template <typename IndexT>
+ ThreadedIndex<IndexT>::~ThreadedIndex() {
+     for (auto& p : indices_) {
+-        if (isThreaded_) {
+-            // should have worker thread
+-            FAISS_ASSERT((bool)p.second);
+-
++        if (p.second) {
+             // This will also flush all pending work
+             p.second->stop();
+             p.second->waitForThreadExit();
+-        } else {
+-            // should not have worker thread
+-            FAISS_ASSERT(!(bool)p.second);
+         }
+ 
+         if (own_indices) {
+@@ -177,7 +171,7 @@
+         auto& fut = v[i];
+ 
+         try {
+-            fut.get();
++            (void)fut.get();
+         } catch (...) {
+             exceptions.emplace_back(
+                     std::make_pair(i, std::current_exception()));
+--- a/faiss/IndexAdditiveQuantizer.cpp
++++ b/faiss/IndexAdditiveQuantizer.cpp
+@@ -27,7 +27,7 @@
+         idx_t d,
+         AdditiveQuantizer* aq,
+         MetricType metric)
+-        : IndexFlatCodes(aq->code_size, d, metric), aq(aq) {
++        : IndexFlatCodes(aq ? aq->code_size : 0, d, metric), aq(aq) {
+     FAISS_THROW_IF_NOT(metric == METRIC_INNER_PRODUCT || metric == METRIC_L2);
+ }
+ 
+@@ -319,7 +319,8 @@
+         const std::vector<size_t>& nbits,
+         MetricType metric,
+         Search_type_t search_type)
+-        : IndexAdditiveQuantizer(d, &rq, metric), rq(d, nbits, search_type) {
++        : IndexAdditiveQuantizer(d, nullptr, metric), rq(d, nbits, search_type) {
++    aq = &rq;
+     code_size = rq.code_size;
+     is_trained = false;
+ }
+@@ -342,8 +343,9 @@
+         size_t nbits, ///< number of bit per subvector index
+         MetricType metric,
+         Search_type_t search_type)
+-        : IndexAdditiveQuantizer(d, &lsq, metric),
++        : IndexAdditiveQuantizer(d, nullptr, metric),
+           lsq(d, M, nbits, search_type) {
++    aq = &lsq;
+     code_size = lsq.code_size;
+     is_trained = false;
+ }
+@@ -367,8 +369,9 @@
+         size_t nbits,   ///< number of bit per subvector index
+         MetricType metric,
+         Search_type_t search_type)
+-        : IndexAdditiveQuantizer(d, &prq, metric),
++        : IndexAdditiveQuantizer(d, nullptr, metric),
+           prq(d, nsplits, Msub, nbits, search_type) {
++    aq = &prq;
+     code_size = prq.code_size;
+     is_trained = false;
+ }
+@@ -392,8 +395,9 @@
+         size_t nbits,   ///< number of bit per subvector index
+         MetricType metric,
+         Search_type_t search_type)
+-        : IndexAdditiveQuantizer(d, &plsq, metric),
++        : IndexAdditiveQuantizer(d, nullptr, metric),
+           plsq(d, nsplits, Msub, nbits, search_type) {
++    aq = &plsq;
+     code_size = plsq.code_size;
+     is_trained = false;
+ }
+--- a/faiss/invlists/OnDiskInvertedLists.cpp
++++ b/faiss/invlists/OnDiskInvertedLists.cpp
+@@ -11,6 +11,7 @@
+ 
+ #include <pthread.h>
+ 
++#include <cerrno>
+ #include <unordered_set>
+ 
+ #include <sys/mman.h>
+--- a/faiss/MetaIndexes.cpp
++++ b/faiss/MetaIndexes.cpp
+@@ -117,7 +117,7 @@
+ 
+         // Blocking wait for completion
+         for (auto& func : v) {
+-            func.get();
++            (void)func.get();
+         }
+     }
+ 
+--- a/faiss/utils/distances_simd.cpp
++++ b/faiss/utils/distances_simd.cpp
+@@ -3457,7 +3457,7 @@
+ 
+ #endif
+ 
+-static inline int fvec_madd_and_argmin_ref(
++[[maybe_unused]] static inline int fvec_madd_and_argmin_ref(
+         size_t n,
+         const float* a,
+         float bf,
+--- a/faiss/utils/hamming_distance/generic-inl.h
++++ b/faiss/utils/hamming_distance/generic-inl.h
+@@ -312,7 +312,6 @@
+             const uint8_t* a = a8 + 8 * quotient8;
+             const uint8_t* b = b8 + 8 * quotient8;
+             switch (remainder8) {
+-                [[fallthrough]];
+                 case 7:
+                     accu += hamdis_tab_ham_bytes[a[6] ^ b[6]];
+                     [[fallthrough]];
+--- a/faiss/utils/partitioning.cpp
++++ b/faiss/utils/partitioning.cpp
+@@ -387,7 +387,7 @@
+ 
+ // #define MICRO_BENCHMARK
+ 
+-static uint64_t get_cy() {
++[[maybe_unused]] static uint64_t get_cy() {
+ #ifdef MICRO_BENCHMARK
+     uint32_t high, low;
+     asm volatile("rdtsc \n\t" : "=a"(low), "=d"(high));
+--- a/faiss/utils/simdlib_emulated.h
++++ b/faiss/utils/simdlib_emulated.h
+@@ -896,7 +896,7 @@
+ namespace {
+ 
+ // get even float32's of a and b, interleaved
+-simd8float32 geteven(const simd8float32& a, const simd8float32& b) {
++inline simd8float32 geteven(const simd8float32& a, const simd8float32& b) {
+     simd8float32 c;
+ 
+     c.f32[0] = a.f32[0];
+@@ -913,7 +913,7 @@
+ }
+ 
+ // get odd float32's of a and b, interleaved
+-simd8float32 getodd(const simd8float32& a, const simd8float32& b) {
++inline simd8float32 getodd(const simd8float32& a, const simd8float32& b) {
+     simd8float32 c;
+ 
+     c.f32[0] = a.f32[1];
+@@ -931,7 +931,7 @@
+ 
+ // 3 cycles
+ // if the lanes are a = [a0 a1] and b = [b0 b1], return [a0 b0]
+-simd8float32 getlow128(const simd8float32& a, const simd8float32& b) {
++inline simd8float32 getlow128(const simd8float32& a, const simd8float32& b) {
+     simd8float32 c;
+ 
+     c.f32[0] = a.f32[0];
+@@ -947,7 +947,7 @@
+     return c;
+ }
+ 
+-simd8float32 gethigh128(const simd8float32& a, const simd8float32& b) {
++inline simd8float32 gethigh128(const simd8float32& a, const simd8float32& b) {
+     simd8float32 c;
+ 
+     c.f32[0] = a.f32[4];
+--- a/faiss/utils/simdlib_neon.h
++++ b/faiss/utils/simdlib_neon.h
+@@ -1334,24 +1334,24 @@
+ namespace {
+ 
+ // get even float32's of a and b, interleaved
+-simd8float32 geteven(const simd8float32& a, const simd8float32& b) {
++inline simd8float32 geteven(const simd8float32& a, const simd8float32& b) {
+     return simd8float32{
+             detail::simdlib::binary_func(a.data, b.data).call<&vuzp1q_f32>()};
+ }
+ 
+ // get odd float32's of a and b, interleaved
+-simd8float32 getodd(const simd8float32& a, const simd8float32& b) {
++inline simd8float32 getodd(const simd8float32& a, const simd8float32& b) {
+     return simd8float32{
+             detail::simdlib::binary_func(a.data, b.data).call<&vuzp2q_f32>()};
+ }
+ 
+ // 3 cycles
+ // if the lanes are a = [a0 a1] and b = [b0 b1], return [a0 b0]
+-simd8float32 getlow128(const simd8float32& a, const simd8float32& b) {
++inline simd8float32 getlow128(const simd8float32& a, const simd8float32& b) {
+     return simd8float32{float32x4x2_t{a.data.val[0], b.data.val[0]}};
+ }
+ 
+-simd8float32 gethigh128(const simd8float32& a, const simd8float32& b) {
++inline simd8float32 gethigh128(const simd8float32& a, const simd8float32& b) {
+     return simd8float32{float32x4x2_t{a.data.val[1], b.data.val[1]}};
+ }
+ 
+--- a/faiss/utils/sorting.cpp
++++ b/faiss/utils/sorting.cpp
+@@ -166,8 +166,8 @@
+         std::sort(permA + seg.i0, permA + seg.i1, comp);
+         segs[t] = seg;
+     }
+-    int prev_nested = omp_get_nested();
+-    omp_set_nested(1);
++    int prev_levels = omp_get_max_active_levels();
++    omp_set_max_active_levels(std::max(2, prev_levels));
+ 
+     int nseg = nt;
+     while (nseg > 1) {
+@@ -196,7 +196,7 @@
+         std::swap(permA, permB);
+     }
+     assert(permA == perm);
+-    omp_set_nested(prev_nested);
++    omp_set_max_active_levels(prev_levels);
+     delete[] perm2;
+ }
+ 
+--- a/faiss/utils/WorkerThread.cpp
++++ b/faiss/utils/WorkerThread.cpp
+@@ -29,7 +29,7 @@
+     startThread();
+ 
+     // Make sure that the thread has started before continuing
+-    add([]() {}).get();
++    (void)add([]() {}).get();
+ }
+ 
+ WorkerThread::~WorkerThread() {

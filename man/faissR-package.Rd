@@ -23,7 +23,7 @@ pointer plus non-owning int32/float32 CUDA buffer views; use
 `faissR_knn_model` when `Xtest` is omitted, and `fast_kmeans()` returns a
 `faissR_kmeans` object.
 
-Search input is dense: numeric matrices, numeric data frames, and optional
+Search input is dense: numeric matrices, numeric data frames, and
 `float::fl()` matrices are supported. Sparse, delayed, file-backed, and
 other matrix-like representations are rejected before conversion so that
 faissR cannot accidentally materialize a large dense copy. Compute a
@@ -47,10 +47,11 @@ cold full-self-search, not a general hardware or query-workload policy.
 Automatic selection does not accept memory, build-time, or latency budgets;
 request an explicit method when those constraints govern execution.
 
-FAISS is a required system dependency for every functional native build.
-Diagnostic-only builds on explicitly unsupported WebAssembly or Bioconductor
-staging platforms cannot execute nearest-neighbour methods. RAPIDS cuVS/CUDA
-is
+A functional native build uses compatible installed FAISS or compiles the
+included CPU source with R's toolchain. OpenMP and complete LP64 BLAS/LAPACK
+remain system dependencies. Windows and macOS use static FAISS. Explicit
+diagnostic-only Windows and unsupported WebAssembly builds do not provide
+FAISS methods. RAPIDS cuVS/CUDA is
 optional for CPU-only builds, so CPU-only machines can compile and use FAISS
 CPU indexes without NVIDIA libraries. For NVIDIA GPU builds, users should
 request the GPU features explicitly so missing CUDA/cuVS libraries
@@ -87,14 +88,19 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Stefano Cacciatore
-\email{tkcaccia@gmail.com}
+\strong{Maintainer}: Stefano Cacciatore \email{tkcaccia@gmail.com}
 (\href{https://orcid.org/0000-0001-7052-7156}{ORCID})
 
 Authors:
 \itemize{
   \item Stefano Cacciatore \email{tkcaccia@gmail.com}
-  (\href{https://orcid.org/0000-0001-7052-7156}{ORCID})
+    (\href{https://orcid.org/0000-0001-7052-7156}{ORCID})
+}
+
+Other contributors:
+\itemize{
+  \item Meta Platforms, Inc. and affiliates
+    (Bundled FAISS source; see inst/COPYRIGHTS) [copyright holder]
 }
 
 }

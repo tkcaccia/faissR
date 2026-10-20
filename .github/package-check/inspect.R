@@ -1,6 +1,6 @@
 print(sessionInfo())
 print(.libPaths())
 p <- installed.packages()
-print(p[intersect(c("Rcpp", "Biobase", "testthat", "withr", "float",
-    "Matrix", "knitr", "rmarkdown", "BiocStyle"), rownames(p)),
+print(p[intersect(c("Rcpp", "gpuinfo", "testthat", "withr", "float",
+    "Matrix", "knitr", "rmarkdown"), rownames(p)),
     c("Package", "Version", "Built")])

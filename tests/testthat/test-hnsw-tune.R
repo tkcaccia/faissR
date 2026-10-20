@@ -12,7 +12,6 @@ test_that("HNSW tuning grids are bounded and include the static baseline", {
 })
 
 test_that("HNSW tuning validation rejects unsupported or unbounded requests", {
-    skip_if_not_installed("float")
     skip_if_not(faiss_available())
     x <- matrix(stats::rnorm(300), nrow = 50L)
 
@@ -45,7 +44,6 @@ test_that("HNSW tuning validation rejects unsupported or unbounded requests", {
 })
 
 test_that("data-aware HNSW tuning is deterministic and reuses its index", {
-    skip_if_not_installed("float")
     skip_if_not(faiss_available())
     set.seed(20261008L)
     x <- matrix(stats::rnorm(180L * 6L), nrow = 180L, ncol = 6L)

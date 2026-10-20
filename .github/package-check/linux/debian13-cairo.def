@@ -1,7 +1,7 @@
 Bootstrap: localimage
 From: @UBUNTU_BASE@
 
-# Complete the minimal bundled-BLAS R image for BiocStyle vignette checks.
+# Complete the minimal bundled-BLAS R image for rendered-vignette checks.
 # UBUNTU_BASE_IMAGE is the build.sh local-image placeholder, here a Debian SIF.
 %post
     export DEBIAN_FRONTEND=noninteractive
@@ -17,4 +17,4 @@ From: @UBUNTU_BASE@
     rm -rf /tmp/R-4.6.0 /tmp/R.tar.gz /var/lib/apt/lists/*
 
 %test
-    /opt/R/bin/Rscript -e 'stopifnot(capabilities("cairo")); stopifnot(all(vapply(c("Rcpp","Biobase","testthat","BiocStyle","rmarkdown"),requireNamespace,logical(1),quietly=TRUE))); print(sessionInfo())'
+    /opt/R/bin/Rscript -e 'stopifnot(capabilities("cairo")); stopifnot(all(vapply(c("Rcpp","gpuinfo","testthat","rmarkdown"),requireNamespace,logical(1),quietly=TRUE))); print(sessionInfo())'

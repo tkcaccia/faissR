@@ -41,22 +41,30 @@ if (profile %in% c("cuda-native", "cuda-cuvs")) {
         stopifnot(isTRUE(faissR::cuvs_available()))
     }
     gpu_x <- matrix(rnorm(512L * 16L), 512L, 16L)
+    gpu_q <- matrix(rnorm(32L * 16L), 32L, 16L)
     gpu <- nn(
         gpu_x,
+        points = gpu_q,
         k = 5L,
-        method = "flat",
+        method = "bruteforce",
         backend = "cuda",
         metric = "euclidean",
-        exclude_self = TRUE
+        exclude_self = FALSE
     )
     stopifnot(
-        identical(dim(gpu$indices), c(512L, 5L)),
+        identical(dim(gpu$indices), c(32L, 5L)),
         all(is.finite(gpu$distances)),
-        !any(gpu$indices == row(gpu$indices))
+        all(gpu$indices >= 1L & gpu$indices <= nrow(gpu_x))
     )
+    route <- attr(gpu, "backend_used")
+    if (profile == "cuda-cuvs") {
+        stopifnot(identical(route, "cuda_cuvs_bruteforce"))
+    } else {
+        stopifnot(!isTRUE(faissR::cuvs_available()), identical(route, "cuda"))
+    }
+    cat("Verified CUDA route:", route, "\n")
     for (i in seq_len(5L)) {
-        distance <- sqrt(rowSums(sweep(gpu_x, 2L, gpu_x[i, ], "-")^2))
-        distance[i] <- Inf
+        distance <- sqrt(rowSums(sweep(gpu_x, 2L, gpu_q[i, ], "-")^2))
         stopifnot(identical(
             as.integer(gpu$indices[i, ]),
             as.integer(order(distance)[seq_len(5L)])

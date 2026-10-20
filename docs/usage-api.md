@@ -44,7 +44,7 @@ header `<faissR_api.h>` includes the current versioned header.
 | Name | Signature | Description |
 | --- | --- | --- |
 | `faissR_c_api_version` | `int(void)` | Returns `1` for the installed callable ABI. Call the header helper before using the remaining entry points. |
-| `faissR_nn_float32_call` | `(SEXP x, SEXP k, SEXP backend, SEXP metric, SEXP include_self, SEXP n_threads)` | CPU FAISS Flat float32 KNN. Accepts ordinary R double matrices or optional `float::fl()`/float32 matrices. Returns the stable host KNN list with double distances. |
+| `faissR_nn_float32_call` | `(SEXP x, SEXP k, SEXP backend, SEXP metric, SEXP include_self, SEXP n_threads)` | CPU FAISS Flat float32 KNN. Accepts ordinary R double matrices or `float::fl()`/float32 matrices. Returns the stable host KNN list with double distances. |
 | `faissR_nn_float32_call_output` | `(SEXP x, SEXP k, SEXP backend, SEXP metric, SEXP include_self, SEXP n_threads, SEXP distances)` | Same CPU FAISS Flat float32 route, with `distances = "double"` or `"float"` for the returned host distance matrix. |
 | `faissR_nn_cuda_tuned_gpu_call` | `(SEXP x, SEXP k, SEXP method, SEXP metric, SEXP include_self, SEXP target_recall)` | CUDA self-KNN route for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. Returns a `faissR_gpu_knn` object with CUDA-device `indices_ptr` and `distances_ptr`, `result_residency = "cuda"`, and `device_to_host_result_copies = 0`. |
 | `faissR_hnsw_search_v1` | `(SEXP data, SEXP query, SEXP n, SEXP p, SEXP k, SEXP target_recall, SEXP n_threads, SEXP distance_storage)` | One-shot CPU FAISS HNSW search with shape-aware parameter selection. |
@@ -79,7 +79,7 @@ nn(data, points = data, k = NULL, exclude_self = FALSE, backend = NULL,
 
 | Argument | Description |
 | --- | --- |
-| `data` | Numeric matrix, data frame, or optional `float::fl()`/`float32` matrix with reference observations in rows and features in columns. FAISS CPU/GPU and RAPIDS cuVS nearest-neighbour routes use direct float-pointer input adapters without converting the float32 source object to an R double matrix. Resolved native routes without a direct float32 adapter fail clearly instead of silently converting benchmark input back to double. |
+| `data` | Numeric matrix, data frame, or `float::fl()`/`float32` matrix with reference observations in rows and features in columns. FAISS CPU/GPU and RAPIDS cuVS nearest-neighbour routes use direct float-pointer input adapters without converting the float32 source object to an R double matrix. Resolved native routes without a direct float32 adapter fail clearly instead of silently converting benchmark input back to double. |
 | `points` | Optional query matrix/data frame/float32 matrix with the same number of columns as `data`. Defaults to `data` for self-search. Float32 reference/query inputs can be mixed with ordinary R double matrices; direct FAISS/cuVS adapters convert only the double side once to row-major float32. |
 | `k` | Number of neighbours to return. If `NULL`, faissR chooses an automatic neighbourhood size. |
 | `exclude_self` | Logical; if `TRUE`, remove each query row from its own neighbour list. This is valid only for self-query calls where `points` is omitted or identical to `data`. The flag is passed into the compiled backend path, so self-neighbour removal is handled in C++/CUDA rather than by R-side row filtering. |
@@ -90,7 +90,7 @@ nn(data, points = data, k = NULL, exclude_self = FALSE, backend = NULL,
 | `target_recall` | Requested recall tier: exactly `0.9`, `0.95`, or `0.99`. Other values error; faissR does not round or interpolate. The tier is not a guarantee for a new dataset. |
 | `cagra_implementation` | CUDA CAGRA provider for this call. `NULL` uses `options(faissR.cagra_implementation = ...)`; `"auto"` uses a deterministic shape-aware provider rule, selecting direct cuVS CAGRA for compact high-dimensional self-KNN and otherwise keeping FAISS GPU CAGRA as the default when both providers are available; `"faiss_gpu"` or `"cuvs"` force one provider for benchmark rows. This affects `backend = "cuda", method = "cagra"` and CUDA `method = "auto"` routes that select CAGRA. |
 | `cagra_build_algo` | Direct RAPIDS cuVS CAGRA graph-build algorithm for this call. `NULL` uses `options(faissR.cuvs_cagra_build_algo = "auto")`; for direct cuVS CAGRA, `"auto"` applies faissR's deterministic shape-aware build rule, choosing iterative CAGRA construction for compact high-dimensional self-KNN cases and IVF-PQ construction otherwise. `"ivf_pq"` requests the IVF-PQ graph builder, `"nn_descent"` requests cuVS NN-descent graph construction, and `"iterative_cagra_search"` requests cuVS iterative CAGRA graph building. This is a CAGRA construction parameter, not a fallback to a different public method, and successful results record it in `route_parameters`. |
-| `output` | Distance storage type: `"double"` returns the default R numeric matrix; `"float"` returns `distances` as a `float::fl()`/`float32` matrix and records `distance_type = "float32"` plus `attr(result, "distance_type") = "float32"`. Direct FAISS/cuVS float routes can construct float distances without first materializing an R double distance matrix, including CPU FAISS Flat/IVF/IVFPQ/FastScan, cached CPU FAISS fitted indexes, FAISS GPU Flat/IVF/IVFPQ, and direct Euclidean RAPIDS cuVS routes. Float32-route results expose `input_layout`, `input_owns_data`, and `float32_compatibility_conversion` so callers can distinguish direct float payload use from one-time double-to-float adaptation; unsupported native float32 routes error. The `float` package is optional and used only when this output is requested or a float32 input object is supplied. |
+| `output` | Distance storage type: `"double"` returns the default R numeric matrix; `"float"` returns `distances` as a `float::fl()`/`float32` matrix and records `distance_type = "float32"` plus `attr(result, "distance_type") = "float32"`. Direct FAISS/cuVS float routes can construct float distances without first materializing an R double distance matrix, including CPU FAISS Flat/IVF/IVFPQ/FastScan, cached CPU FAISS fitted indexes, FAISS GPU Flat/IVF/IVFPQ, and direct Euclidean RAPIDS cuVS routes. Float32-route results expose `input_layout`, `input_owns_data`, and `float32_compatibility_conversion` so callers can distinguish direct float payload use from one-time double-to-float adaptation; unsupported native float32 routes error. The `float` package is a required dependency installed with faissR. |
 | `distances` | Optional alias for `output`; use `distances = "float"` when downstream code wants the returned distance matrix to remain float32. |
 | `n_threads` | Number of CPU worker threads for CPU/FAISS CPU backends. GPU backends ignore this argument. |
 
@@ -149,7 +149,7 @@ nn_gpu(data, points = data, k = NULL, exclude_self = FALSE,
 
 | Argument | Description |
 | --- | --- |
-| `data` | Numeric matrix, data frame, or optional `float::fl()`/float32 reference matrix. |
+| `data` | Numeric matrix, data frame, or `float::fl()`/float32 reference matrix. |
 | `points` | Optional query matrix/data frame/float32 matrix with the same number of columns as `data`; defaults to `data` for self-search. |
 | `k` | Number of neighbours. If `NULL`, faissR chooses an automatic neighbourhood size. |
 | `exclude_self` | Logical; if `TRUE`, remove each query row from its own neighbour list in the CUDA kernel. This is valid only for self-query calls. |
@@ -343,7 +343,7 @@ prob  <- knn(Xtrain, Ytrain, Xtest, type = "prob")
 
 | Argument | Description |
 | --- | --- |
-| `Xtrain` | Numeric training matrix or optional `float::fl()`/`float32` matrix with observations in rows. Float32 training data is preserved for `nn()` methods with direct float32 adapters. |
+| `Xtrain` | Numeric training matrix or `float::fl()`/`float32` matrix with observations in rows. Float32 training data is preserved for `nn()` methods with direct float32 adapters. |
 | `Ytrain` | Training labels for classification or numeric response for regression. Must have one value per row of `Xtrain`. |
 | `Xtest` | Optional query matrix. If supplied, `knn()` fits and predicts immediately; otherwise it returns a reusable model. |
 | `backend` | Device backend passed to `nn()`: `"cpu"` or `"cuda"`. `NULL` follows the package backend configuration. |
@@ -406,7 +406,7 @@ predict(object, newdata, k = NULL,
 | Argument | Description |
 | --- | --- |
 | `object` | A fitted model returned by `knn(Xtrain, Ytrain, ...)`. |
-| `newdata` | Numeric query matrix or optional `float::fl()`/`float32` matrix with the same number of columns as the training matrix. Float32 query data is preserved for direct-adapter NN methods. |
+| `newdata` | Numeric query matrix or `float::fl()`/`float32` matrix with the same number of columns as the training matrix. Float32 query data is preserved for direct-adapter NN methods. |
 | `k` | Number of neighbours for this prediction call. If `NULL`, uses the model default. |
 | `backend` | Device backend for the prediction-time neighbour search: `"cpu"` or `"cuda"`. `NULL` follows the package backend configuration. The fitted model's method and metric are reused. |
 | `tuning` | Tuning policy: `"auto"`, `"cache"`, `"pilot"`, `"fixed"`, `"off"`, or `"none"`. Automatic policies are selected in compiled code. |

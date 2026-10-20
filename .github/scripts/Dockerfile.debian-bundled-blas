@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpcre2-dev libcurl4-openssl-dev libbz2-dev liblzma-dev zlib1g-dev \
     libfaiss-dev libblas-dev liblapack-dev libcairo2-dev libxt-dev \
     libjpeg-dev libpng-dev libtiff-dev \
-    r-cran-rcpp r-bioc-biobase r-cran-testthat r-cran-withr \
+    r-cran-rcpp r-cran-testthat r-cran-withr \
     && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL "https://cran.r-project.org/src/base/R-4/R-${R_VERSION}.tar.gz" \
       -o /tmp/R.tar.gz \
@@ -20,7 +20,7 @@ RUN curl -fsSL "https://cran.r-project.org/src/base/R-4/R-${R_VERSION}.tar.gz" \
 ENV PATH="/opt/R/bin:${PATH}"
 ENV R_LIBS_SITE=/usr/lib/R/site-library
 RUN R --vanilla --slave -e \
-    'install.packages(c("Rcpp", "BiocManager"), repos="https://cloud.r-project.org"); BiocManager::install("Biobase", ask=FALSE, update=FALSE, force=TRUE)'
+    'install.packages(c("Rcpp", "float", "gpuinfo"), repos="https://cloud.r-project.org")'
 ENV FAISSR_USE_CUDA=0 FAISSR_USE_CUVS=0 FAISSR_REQUIRE_FAISS=1
 ENV OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=2
 WORKDIR /work

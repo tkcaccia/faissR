@@ -1,0 +1,24 @@
+Bootstrap: localimage
+From: @UBUNTU_BASE@
+
+%post
+    set -eu
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends unzip
+    curl -fL --retry 3 https://mirrors.ctan.org/install/fonts/inconsolata.tds.zip -o /tmp/inconsolata.zip
+    printf '%s  /tmp/inconsolata.zip\n' d8d67b93f0510debc527fcb627e8610533287005295d3f62660461a41b7e47f3 | sha256sum -c -
+    mkdir -p /opt/test-texmf
+    unzip -q /tmp/inconsolata.zip -d /opt/test-texmf
+    export TEXMFHOME=/opt/test-texmf
+    mktexlsr /opt/test-texmf
+    updmap-sys --enable Map=zi4.map
+    Rscript --vanilla -e 'install.packages("curl", lib="/opt/test-library", repos="https://cloud.r-project.org"); stopifnot(requireNamespace("curl", quietly=TRUE))'
+    apt-get clean
+
+%environment
+    export TEXMFHOME=/opt/test-texmf
+
+%test
+    kpsewhich inconsolata.sty
+    Rscript --vanilla -e 'stopifnot(requireNamespace("curl", quietly=TRUE))'

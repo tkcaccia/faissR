@@ -14,6 +14,9 @@
 
 #include "faissr_size_utils.hpp"
 #include "faissr_normalize.hpp"
+#ifdef FAISSR_FAISS_CPU_ONLY
+#include "faissr_console.hpp"
+#endif
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -37,7 +40,8 @@
 #include <faiss/IndexRefine.h>
 #endif
 
-#if __has_include(<faiss/gpu/StandardGpuResources.h>) && \
+#if !defined(FAISSR_FAISS_CPU_ONLY) && \
+    __has_include(<faiss/gpu/StandardGpuResources.h>) && \
     __has_include(<faiss/gpu/GpuIndexFlat.h>) && \
     __has_include(<faiss/gpu/GpuIndexIVFFlat.h>) && \
     __has_include(<faiss/gpu/GpuIndexIVFPQ.h>)
@@ -674,6 +678,9 @@ class OmpThreadScope {
   }
 
  private:
+#ifdef FAISSR_FAISS_CPU_ONLY
+  faissr::ConsoleScope console_;
+#endif
 #ifdef _OPENMP
   int previous_ = 0;
 #endif
@@ -893,14 +900,6 @@ List format_faiss_result(const std::vector<faiss::idx_t>& labels,
 
   SEXP distance_sexp = dists;
   if (float_distances) {
-    Rcpp::Environment base = Rcpp::Environment::namespace_env("base");
-    Rcpp::Function require_namespace = base["requireNamespace"];
-    const bool ok = Rcpp::as<bool>(
-      require_namespace("float", Rcpp::Named("quietly") = true)
-    );
-    if (!ok) {
-      Rcpp::stop("`output = \"float\"` requires the optional float package");
-    }
     Rcpp::S4 float_matrix("float32");
     float_matrix.slot("Data") = float_dists;
     distance_sexp = float_matrix;

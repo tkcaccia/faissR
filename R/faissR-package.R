@@ -16,7 +16,7 @@
 #' `faissR_knn_model` when `Xtest` is omitted, and `fast_kmeans()` returns a
 #' `faissR_kmeans` object.
 #'
-#' Search input is dense: numeric matrices, numeric data frames, and optional
+#' Search input is dense: numeric matrices, numeric data frames, and
 #' `float::fl()` matrices are supported. Sparse, delayed, file-backed, and
 #' other matrix-like representations are rejected before conversion so that
 #' faissR cannot accidentally materialize a large dense copy. Compute a
@@ -40,10 +40,11 @@
 #' Automatic selection does not accept memory, build-time, or latency budgets;
 #' request an explicit method when those constraints govern execution.
 #'
-#' FAISS is a required system dependency for every functional native build.
-#' Diagnostic-only builds on explicitly unsupported WebAssembly or Bioconductor
-#' staging platforms cannot execute nearest-neighbour methods. RAPIDS cuVS/CUDA
-#' is
+#' A functional native build uses compatible installed FAISS or compiles the
+#' included CPU source with R's toolchain. OpenMP and complete LP64 BLAS/LAPACK
+#' remain system dependencies. Windows and macOS use static FAISS. Explicit
+#' diagnostic-only Windows and unsupported WebAssembly builds do not provide
+#' FAISS methods. RAPIDS cuVS/CUDA is
 #' optional for CPU-only builds, so CPU-only machines can compile and use FAISS
 #' CPU indexes without NVIDIA libraries. For NVIDIA GPU builds, users should
 #' request the GPU features explicitly so missing CUDA/cuVS libraries
@@ -72,4 +73,5 @@
 #' rather than treating the pointer as a portable serialization.
 #'
 #' @keywords internal
+#' @importClassesFrom float float32
 "_PACKAGE"

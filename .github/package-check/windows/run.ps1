@@ -5,7 +5,8 @@ param(
     [string]$Rtools = 'C:\rtools45',
     [ValidateSet('functional','diagnostic')][string]$Profile = 'functional',
     [string]$FaissHome = '',
-    [string]$DependencyLibrary = ''
+    [string]$DependencyLibrary = '',
+    [ValidateSet('auto','system','bundled','none')][string]$FaissSource = 'auto'
 )
 $ErrorActionPreference = 'Stop'
 $env:PATH = "$RHome\bin;$Rtools\usr\bin;$Rtools\x86_64-w64-mingw32.static.posix\bin;$env:PATH"
@@ -22,6 +23,8 @@ $env:FAISSR_USE_CUVS = '0'
 $env:FAISSR_REQUIRE_CUDA = '0'
 $env:FAISSR_REQUIRE_CUVS = '0'
 $env:FAISSR_REQUIRE_FAISS = $(if ($Profile -eq 'functional') { '1' } else { '0' })
+$env:FAISSR_FAISS_SOURCE = $(if ($Profile -eq 'diagnostic') { 'none' } else { $FaissSource })
+$env:MAKEFLAGS = '-j2'
 $here = Split-Path $PSScriptRoot -Parent
 New-Item -ItemType Directory -Force -Path $Output | Out-Null
 Get-FileHash -Algorithm SHA256 $Archive | Format-List | Out-File "$Output\inputs.sha256.txt"

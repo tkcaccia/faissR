@@ -1,0 +1,63 @@
+name: CRAN source toolchains
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    env:
+      FAISSR_FAISS_SOURCE: bundled
+      FAISSR_USE_CUDA: 0
+      FAISSR_USE_CUVS: 0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: devel
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          needs: check
+      - run: sudo apt-get update && sudo apt-get install -y libblas-dev liblapack-dev gfortran patch
+      - name: Build one source archive with evaluated vignettes
+        run: |
+          R CMD build .
+          sha256sum faissR_*.tar.gz > source.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source
+          path: |
+            faissR_*.tar.gz
+            source.sha256
+
+  clang-flang:
+    needs: source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: source
+          path: source-input
+      - name: Run R-devel Clang/Flang without system FAISS
+        run: |
+          (cd source-input && sha256sum -c source.sha256)
+          docker build -f .github/package-check/linux/Dockerfile.clang-devel -t package-clang .
+          mkdir -p check-results
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -e R_MAKEVARS_USER=/opt/test-config/Makevars \
+            -e R_LIBS_SITE=/opt/test-library \
+            -e FAISSR_FAISS_SOURCE=bundled \
+            -e FAISSR_USE_CUDA=0 -e FAISSR_USE_CUVS=0 \
+            -e PACKAGE_TEST_FORCE_SUGGESTS=true \
+            -e PACKAGE_TEST_MANUAL=true \
+            -v "$PWD:/work" -w /work package-clang \
+            Rscript .github/package-check/run.R \
+            /work/source-input/faissR_0.1.tar.gz /work/check-results \
+            functional /work/.github/package-check/faissR-smoke.R
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: clang-flang-results
+          path: check-results

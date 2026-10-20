@@ -6,6 +6,7 @@ Targets run sequentially. Failure is recorded and does not prevent later tests.
 """
 import argparse
 import base64
+import csv
 import hashlib
 import json
 import os
@@ -57,7 +58,8 @@ def execute(target, archive, output, harness, digest, commit):
     kind = target["kind"]
     with (dest / "controller.log").open("w") as log:
         if kind == "macos":
-            code = run(["bash", str(harness / "macos.sh"), str(archive),
+            code = run(["env", "FAISSR_FAISS_SOURCE=" + target.get("faiss_source", "auto"),
+                        "bash", str(harness / "macos.sh"), str(archive),
                         str(dest / "results")], log, check=False)
         else:
             root = target["root"].rstrip("/\\")
@@ -82,6 +84,16 @@ def execute(target, archive, output, harness, digest, commit):
             if kind == "linux":
                 command = ("printf '%s  %s\\n' " + shlex.quote(digest) + " " +
                            shlex.quote(remote_archive) + " | sha256sum -c - && " +
+                           "PACKAGE_TEST_FORCE_SUGGESTS=" + shlex.quote(
+                               os.environ.get("PACKAGE_TEST_FORCE_SUGGESTS", "false")) + " " +
+                           "PACKAGE_TEST_BOOTSTRAP_DEPENDENCIES=" + shlex.quote(
+                               os.environ.get("PACKAGE_TEST_BOOTSTRAP_DEPENDENCIES", "false")) + " " +
+                           "PACKAGE_TEST_FAISS_SOURCE=" + shlex.quote(
+                               target.get("faiss_source", "auto")) + " " +
+                           "PACKAGE_TEST_MANUAL=" + shlex.quote(
+                               os.environ.get("PACKAGE_TEST_MANUAL", "false")) + " " +
+                           "PACKAGE_TEST_INCOMING_REMOTE=" + shlex.quote(
+                               os.environ.get("PACKAGE_TEST_INCOMING_REMOTE", "false")) + " " +
                            "PACKAGE_TEST_COMMIT=" + shlex.quote(commit) + " bash " +
                            shlex.join([folder + "/harness/linux/run.sh", target["image"],
                                        remote_archive, folder + "/results", "functional"]))
@@ -90,12 +102,21 @@ def execute(target, archive, output, harness, digest, commit):
                 command = ("$ErrorActionPreference='Stop'; "
                            f"if((Get-FileHash {ps_quote(remote_archive)}).Hash -ne {ps_quote(digest)})"
                            "{throw 'Source checksum mismatch'}; "
+                           "$env:PACKAGE_TEST_FORCE_SUGGESTS=" + ps_quote(
+                               os.environ.get("PACKAGE_TEST_FORCE_SUGGESTS", "false")) + "; " +
+                           "$env:PACKAGE_TEST_BOOTSTRAP_DEPENDENCIES=" + ps_quote(
+                               os.environ.get("PACKAGE_TEST_BOOTSTRAP_DEPENDENCIES", "false")) + "; " +
+                           "$env:PACKAGE_TEST_MANUAL=" + ps_quote(
+                               os.environ.get("PACKAGE_TEST_MANUAL", "false")) + "; " +
+                           "$env:PACKAGE_TEST_INCOMING_REMOTE=" + ps_quote(
+                               os.environ.get("PACKAGE_TEST_INCOMING_REMOTE", "false")) + "; " +
                            f"$env:PACKAGE_TEST_COMMIT={ps_quote(commit)}; & " +
                            ps_quote(folder + "/harness/windows/run.ps1") +
                            " -Archive " + ps_quote(remote_archive) +
                            " -Output " + ps_quote(folder + "/results") +
                            " -Profile " + ps_quote(target.get("profile", "functional")) +
                            " -FaissHome " + ps_quote(target.get("faiss_home", "")) +
+                           " -FaissSource " + ps_quote(target.get("faiss_source", "auto")) +
                            " -DependencyLibrary " + ps_quote(target.get("dependency_library", "")) +
                            " -RHome " + ps_quote(target["r_home"]) +
                            " -Rtools " + ps_quote(target["rtools"]) + "; exit $LASTEXITCODE")
@@ -103,9 +124,18 @@ def execute(target, archive, output, harness, digest, commit):
             # Copy complete artifacts, including the tested private installation.
             # This is intentionally read-only; no remote cleanup is implicit.
             copy(target, target["host"] + ":" + transfer_folder + "/results", dest, log, True)
+    diagnostics = {}
+    for filename in ("compiler-diagnostics.csv", "check-notes.csv"):
+        path = dest / "results" / filename
+        if path.exists():
+            with path.open(newline="") as handle:
+                for row in csv.DictReader(handle):
+                    category = row["classification"]
+                    diagnostics[category] = diagnostics.get(category, 0) + 1
     return {"target": name, "exit_code": code,
             "profile": target.get("profile", "functional"),
-            "status": "PASS" if code == 0 else "FAIL"}
+            "status": "PASS" if code == 0 else "FAIL",
+            "diagnostics": diagnostics}
 
 
 def main():
@@ -118,6 +148,12 @@ def main():
     opts = parser.parse_args()
     archive = opts.archive.resolve(strict=True)
     output = opts.output.resolve()
+    required_space = float(os.environ.get("PACKAGE_TEST_MIN_FREE_GIB", "4")) * 1024**3
+    ancestor = output.parent
+    while not ancestor.exists():
+        ancestor = ancestor.parent
+    if shutil.disk_usage(ancestor).free < required_space:
+        parser.error("Insufficient controller disk space; retain existing evidence and free space before a new matrix")
     output.mkdir(parents=True, exist_ok=False)
     source_dir = output / "source"
     source_dir.mkdir()

@@ -1,0 +1,10 @@
+Bootstrap: localimage
+From: @UBUNTU_BASE@
+
+%post
+    set -eu
+    dnf install -y --setopt=install_weak_deps=False devscripts-checkbashisms
+    dnf clean all
+
+%test
+    checkbashisms --version

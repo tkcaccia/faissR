@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
 # Rcpp emits wrapper signatures on one line. Reformat the generated wrappers
-# after Rcpp::compileAttributes() so they satisfy Bioconductor line-width and
+# after Rcpp::compileAttributes() so they satisfy package-check line-width and
 # four-space indentation recommendations.
 
 path <- "R/RcppExports.R"

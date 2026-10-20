@@ -1,4 +1,4 @@
-test_that("Bioconductor-checked sources fit within 80 columns", {
+test_that("package sources fit within 80 columns", {
     root <- test_path("../../")
     directories <- file.path(root, c("R", "man", "vignettes"))
     if (!all(dir.exists(directories))) {

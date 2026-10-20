@@ -61,9 +61,11 @@ are fatal at configure time. An intentional build-only host can set
 With a visible GPU, configure automatically compiles native code and PTX for
 the detected compute capabilities. The package does not call Python and does
 not silently replace an explicit CUDA request with CPU work.
-For Bioconductor, faissR declares the `GPU` biocView and opts into optional GPU
-builders with `.BBSoptions` set to `GPU_reliance: optional`; this advertises GPU
-capability without making NVIDIA libraries required for CPU-only builders.
+General hardware, driver, device-memory, and CUDA-library discovery is delegated
+to the CRAN package `gpuinfo`. The faissR predicates in this document remain
+package-specific: they verify that this installation was compiled with a usable
+provider and can execute it. A positive `gpuinfo::has_cuda()` result alone does
+not establish that faissR has CUDA support.
 
 ## Public Backend Policy
 

@@ -1,63 +1,37 @@
-# Install only missing test dependencies into a dedicated lab library.
+# Install required dependency versions only into a dedicated lab library.
 args <- commandArgs(TRUE)
 stopifnot(length(args) %in% 1:3)
+runner <- sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE))
+if (!length(runner)) runner <- commandArgs()[match("-f", commandArgs()) + 1L]
+stopifnot(length(runner) == 1L, !is.na(runner))
+runner <- gsub("~+~", " ", runner, fixed = TRUE)
+source(file.path(dirname(normalizePath(runner)), "dependency-requirements.R"))
 dir.create(args[[1]], recursive = TRUE, showWarnings = FALSE)
 .libPaths(c(normalizePath(args[[1]]), .libPaths()))
 options(repos = c(CRAN = "https://cloud.r-project.org"))
-
-archive_dependencies <- function(archive, include_suggests = TRUE) {
-    entries <- utils::untar(archive, list = TRUE)
-    description <- entries[grepl("^[^/]+/DESCRIPTION$", entries)]
-    stopifnot(length(description) == 1L)
-    scratch <- tempfile("package-description-")
-    dir.create(scratch)
-    on.exit(unlink(scratch, recursive = TRUE), add = TRUE)
-    utils::untar(archive, files = description, exdir = scratch)
-    metadata <- read.dcf(file.path(scratch, description))
-    requested <- c("Depends", "Imports", "LinkingTo")
-    if (include_suggests) requested <- c(requested, "Suggests")
-    fields <- intersect(requested, colnames(metadata))
-    values <- unlist(strsplit(metadata[1L, fields], ",", fixed = TRUE))
-    packages <- trimws(sub("[[:space:]]*\\(.*$", "", values))
-    setdiff(packages[nzchar(packages)], c("R", rownames(installed.packages(
-        priority = c("base", "recommended")
-    ))))
+requirements <- if (length(args) >= 2L) {
+    archive_requirements(normalizePath(args[[2L]]),
+        length(args) < 3L || identical(args[[3L]], "all"))
+} else {
+    tools:::.split_dependencies(paste(
+        "gpuinfo (>= 0.2.0), Rcpp (>= 1.1.0), testthat, withr, float,",
+        "Matrix, knitr, rmarkdown"))
 }
-
-packages <- "Rcpp"
-if (length(args) == 1L) {
-    packages <- c(
-        "Biobase", "BiocStyle", "Rcpp", "testthat", "withr", "float",
-        "Matrix", "knitr", "rmarkdown"
-    )
+status <- dependency_status(requirements)
+if (tolower(Sys.getenv("PACKAGE_TEST_INCOMING_REMOTE", "false")) %in%
+        c("true", "1", "yes")) {
+    requirements <- c(requirements, tools:::.split_dependencies("curl"))
+    status <- dependency_status(requirements)
 }
-if (length(args) == 2L) {
-    packages <- union(
-        packages,
-        archive_dependencies(normalizePath(args[[2L]]))
-    )
-}
-if (length(args) == 3L) {
-    mode <- match.arg(args[[3L]], c("required", "all"))
-    packages <- union(
-        packages,
-        archive_dependencies(
-            normalizePath(args[[2L]]),
-            include_suggests = identical(mode, "all")
-        )
-    )
-}
-if (!requireNamespace("BiocManager", quietly = TRUE)) {
-    install.packages("BiocManager", lib = .libPaths()[1L])
-}
-missing <- packages[
-    !vapply(packages, requireNamespace, logical(1), quietly = TRUE)
-]
-if (requireNamespace("Rcpp", quietly = TRUE) && packageVersion("Rcpp") < "1.1.0") {
-    missing <- union(missing, "Rcpp")
-}
+missing <- unique(status$package[!status$satisfied & status$package != "R"])
+if (length(missing)) install.packages(missing, lib = .libPaths()[1L])
+status <- dependency_status(requirements)
+# A newly released source version may precede its Windows/macOS binary.
+missing <- unique(status$package[!status$satisfied & status$package != "R"])
 if (length(missing)) {
-    BiocManager::install(missing, lib = .libPaths()[1L], update = FALSE, ask = FALSE)
+    install.packages(missing, lib = .libPaths()[1L], type = "source")
 }
-stopifnot(all(vapply(packages, requireNamespace, logical(1), quietly = TRUE)))
+status <- dependency_status(requirements)
+print(status, row.names = FALSE)
+stopifnot(all(status$satisfied))
 print(sessionInfo())

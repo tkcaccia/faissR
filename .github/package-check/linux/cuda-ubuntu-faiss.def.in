@@ -33,17 +33,9 @@ From: @CUDA_IMAGE@
     make install
 
     /opt/R/bin/Rscript -e \
-        'packages <- c("BiocManager", "Rcpp", "float", "knitr",
+        'packages <- c("gpuinfo", "Rcpp", "float", "knitr",
         "rmarkdown", "testthat", "withr", "Matrix");
         install.packages(packages, repos = "https://cloud.r-project.org");
-        stopifnot(all(vapply(packages, requireNamespace, logical(1),
-        quietly = TRUE)))'
-    /opt/R/bin/Rscript -e \
-        'packages <- c("Biobase", "BiocNeighbors",
-        "BiocSingular", "BiocStyle", "S4Vectors",
-        "SingleCellExperiment", "SummarizedExperiment", "scater",
-        "scRNAseq", "scran", "scuttle");
-        BiocManager::install(packages, update = FALSE, ask = FALSE);
         stopifnot(all(vapply(packages, requireNamespace, logical(1),
         quietly = TRUE)))'
 
@@ -81,7 +73,6 @@ From: @CUDA_IMAGE@
 %test
     /opt/R/bin/Rscript -e \
         'stopifnot(getRversion() >= "4.6.0", requireNamespace("Rcpp"),
-        requireNamespace("Biobase"), requireNamespace("scRNAseq"),
-        requireNamespace("testthat"))'
+        requireNamespace("gpuinfo"), requireNamespace("testthat"))'
     test -x /usr/local/cuda/bin/nvcc
     test -f /usr/local/include/faiss/IndexFlat.h

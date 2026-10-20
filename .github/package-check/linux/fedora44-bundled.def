@@ -1,0 +1,30 @@
+Bootstrap: docker
+From: registry.fedoraproject.org/fedora:44
+
+%labels
+    Purpose "Isolated faissR CPU source installation without system FAISS"
+    Distribution "Fedora 44"
+
+%post
+    set -eu
+    dnf install -y --setopt=install_weak_deps=False --setopt=tsflags= \
+        R-core R-core-devel gcc-c++ gcc-gfortran make patch \
+        blas-devel lapack-devel libgomp pkgconf-pkg-config \
+        libcurl-devel openssl-devel libxml2-devel libuv-devel \
+        pandoc qpdf perl file binutils which ca-certificates \
+        devscripts-checkbashisms
+    dnf clean all
+    mkdir -p /opt/test-library
+    export R_LIBS_SITE=/opt/test-library
+    Rscript --vanilla -e 'install.packages(c("Rcpp", "float", "gpuinfo", "testthat", "withr", "knitr", "rmarkdown", "Matrix"), lib="/opt/test-library", repos="https://cloud.r-project.org", Ncpus=2)'
+    Rscript --vanilla -e 'stopifnot(getRversion() >= "4.6.0"); for(p in c("Rcpp", "float", "gpuinfo", "testthat", "withr", "knitr", "rmarkdown", "Matrix")) stopifnot(requireNamespace(p, quietly=TRUE))'
+    test ! -f /usr/include/faiss/IndexFlat.h
+
+%environment
+    export R_LIBS_SITE=/opt/test-library
+    export OMP_NUM_THREADS=2
+    export OPENBLAS_NUM_THREADS=1
+    export LC_ALL=C.UTF-8
+
+%test
+    Rscript --vanilla -e 'cat(R.version.string, "\n"); stopifnot(getRversion() >= "4.6.0")'

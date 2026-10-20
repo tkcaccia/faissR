@@ -645,7 +645,7 @@ buffers. For moderate datasets this overhead is small relative to KNN search;
 for very large datasets it can dominate memory use.
 
 The core FAISS KNN implementation is being moved toward float-pointer entry
-points. The first direct public slice accepts optional `float::fl()`/`float32`
+points. The first direct public slice accepts `float::fl()`/`float32`
 matrices in `nn()` for the CPU FAISS Flat route across
 the three public metrics: Euclidean, cosine, and correlation.
 Cosine and correlation are normalized in the float32 row-major buffer before
@@ -782,9 +782,9 @@ sort or repair FastScan rows after the search.
 
 KNN results also expose stable list fields for downstream packages:
 `index_base`, `metric`, `backend_used`, and, on the float32 route,
-`input_layout`/`input_owns_data`. The `float` package is in `Suggests`; faissR
-does not require it unless a user supplies a float32 object or requests float32
-distance output.
+`input_layout`/`input_owns_data`. The `float` package is a required dependency
+in `Imports`; it supplies float32 input and distance-output objects and is
+installed with faissR.
 
 Raw `nn()` also keeps a bounded session-local fitted-index
 cache for CPU FAISS Flat, HNSW, IVF-Flat, IVFPQ, and IVFPQ FastScan routes. The cache key includes
@@ -815,8 +815,8 @@ seventh string argument, `distances`, with values `"double"` or `"float"`.
 The original six-argument callable is kept as the stable double-output ABI.
 Both callables return a stable KNN list with `indices`, `distances`,
 `index_base = 1L`, `distance_type`, `metric`, and `backend_used`. When
-`distances = "float"`, the optional `float` package is required at runtime and
-the returned `distances` component is a `float::fl()`/`float32` matrix.
+`distances = "float"`, the returned `distances` component is a
+`float::fl()`/`float32` matrix from the imported `float` package.
 
 product, faissR uses an exact augmented-space reduction. The C++ adapter reads
 an ordinary R matrix once into float32 or consumes the payload of a

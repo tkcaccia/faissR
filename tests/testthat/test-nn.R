@@ -115,34 +115,27 @@ test_that("nn output distance storage can be requested explicitly", {
   expect_equal(out$backend_used, attr(out, "resolved_backend"))
   expect_equal(attr(out, "distance_type"), "double")
 
-  if (requireNamespace("float", quietly = TRUE)) {
-    fout <- nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "float")
-    expect_true(inherits(fout$distances, "float32"))
-    expect_equal(fout$distance_type, "float32")
-    expect_equal(fout$index_base, 1L)
-    expect_equal(attr(fout, "distance_type"), "float32")
+  fout <- nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "float")
+  expect_true(inherits(fout$distances, "float32"))
+  expect_equal(fout$distance_type, "float32")
+  expect_equal(fout$index_base, 1L)
+  expect_equal(attr(fout, "distance_type"), "float32")
 
-    if (faiss_available()) {
-      dout <- nn(exclude_self = TRUE,
-        x,
-        k = 2L,
-        backend = "cpu",
-        method = "flat",
-        distances = "float"
-      )
-      expect_true(inherits(dout$distances, "float32"))
-      expect_equal(dout$input_type, "float32")
-      expect_match(dout$input_layout, "r_double_column_major_to_row_major_float32", fixed = TRUE)
-      expect_true(dout$input_owns_data)
-      expect_equal(dout$backend_used, "faiss_flat_l2")
-      expect_equal(dout$distance_type, "float32")
-      expect_equal(attr(dout, "distance_type"), "float32")
-    }
-  } else {
-    expect_error(
-      nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "float"),
-      "requires the optional float package"
+  if (faiss_available()) {
+    dout <- nn(exclude_self = TRUE,
+      x,
+      k = 2L,
+      backend = "cpu",
+      method = "flat",
+      distances = "float"
     )
+    expect_true(inherits(dout$distances, "float32"))
+    expect_equal(dout$input_type, "float32")
+    expect_match(dout$input_layout, "r_double_column_major_to_row_major_float32", fixed = TRUE)
+    expect_true(dout$input_owns_data)
+    expect_equal(dout$backend_used, "faiss_flat_l2")
+    expect_equal(dout$distance_type, "float32")
+    expect_equal(attr(dout, "distance_type"), "float32")
   }
 
   expect_error(
@@ -158,7 +151,6 @@ test_that("nn output distance storage can be requested explicitly", {
 
 
 test_that("ordinary double FAISS routes can stay float32 through output", {
-  skip_if_not_installed("float")
   skip_if_not(faiss_available(), "FAISS is required for direct float32 FAISS output")
 
   old_cache <- getOption("faissR.cache_fitted_nn_indexes", NULL)
@@ -206,7 +198,6 @@ test_that("ordinary double FAISS routes can stay float32 through output", {
 })
 
 test_that("CPU IVFPQ FastScan uses the float32 adapter for double and float32 inputs", {
-  skip_if_not_installed("float")
   skip_if_not(faiss_available(), "FAISS is required for direct FastScan tests")
   skip_if_not(faissR:::faiss_fastscan_available(), "FAISS FastScan support is required")
 
@@ -250,7 +241,6 @@ test_that("CPU IVFPQ FastScan uses the float32 adapter for double and float32 in
 })
 
 test_that("float32 input routes through FAISS Flat when float is installed", {
-  skip_if_not_installed("float")
   skip_if_not(faiss_available(), "FAISS is required for float32 input")
 
   x <- matrix(c(
@@ -305,7 +295,6 @@ test_that("float32 input routes through FAISS Flat when float is installed", {
 })
 
 test_that("float32 FAISS Flat input accepts mixed double and float32 query matrices", {
-  skip_if_not_installed("float")
   skip_if_not(faiss_available(), "FAISS is required for float32 input")
 
   x <- matrix(c(
@@ -342,7 +331,6 @@ test_that("float32 FAISS Flat input accepts mixed double and float32 query matri
 })
 
 test_that("float32 input can run non-Flat methods through direct adapters", {
-  skip_if_not_installed("float")
   skip_if_not(faiss_available(), "FAISS is required for this float32 compatibility test")
 
   x <- matrix(c(
@@ -440,7 +428,6 @@ test_that("raw nn exclude_self reuses fitted CPU FAISS indexes", {
 })
 
 test_that("row-compatible float32 inputs can use the direct payload route", {
-  skip_if_not_installed("float")
   skip_if_not(faiss_available(), "FAISS is required for float32 input")
 
   x <- float::fl(matrix(c(0, 1, 3, 7, 8), ncol = 1))
@@ -453,7 +440,6 @@ test_that("row-compatible float32 inputs can use the direct payload route", {
 })
 
 test_that("float32 FAISS Flat input supports normalized metrics", {
-  skip_if_not_installed("float")
   skip_if_not(faiss_available(), "FAISS is required for float32 input")
 
   x <- matrix(c(
@@ -493,7 +479,6 @@ test_that("float32 FAISS Flat input supports normalized metrics", {
 
 
 test_that("normalized FAISS Flat routes reuse cached float32 transforms", {
-  skip_if_not_installed("float")
   skip_if_not(faiss_available(), "FAISS is required for cached transformed input")
 
   old_cache <- getOption("faissR.cache_transformed_float32")
@@ -626,7 +611,6 @@ test_that("cuVS float32 wrappers expose direct distance storage", {
 })
 
 test_that("float32 cuVS input can return float distances directly", {
-  skip_if_not_installed("float")
   skip_if_not(cuvs_available(), "cuVS is required for direct CUDA float32 input")
 
   x <- float::fl(matrix(c(
@@ -714,7 +698,6 @@ test_that("HNSW C callable exposes the package shape policy", {
 
 test_that("persistent HNSW C callables own and reuse a versioned index", {
     skip_if_not_installed("Rcpp")
-    skip_if_not_installed("float")
     skip_if_not(faiss_available(), "FAISS is required for persistent HNSW")
     header <- system.file("include", "faissR_api_v1.h", package = "faissR")
 
@@ -823,7 +806,6 @@ test_that("persistent HNSW C callables own and reuse a versioned index", {
 
 test_that("float32 C-callable returns stable KNN metadata", {
   skip_if_not_installed("Rcpp")
-  skip_if_not_installed("float")
   skip_if_not(faiss_available(), "FAISS is required for float32 input")
   Rcpp::cppFunction(
     code = '
@@ -884,7 +866,6 @@ test_that("float32 C-callable returns stable KNN metadata", {
 
 test_that("float32 C-callable can return float distances", {
   skip_if_not_installed("Rcpp")
-  skip_if_not_installed("float")
   skip_if_not(faiss_available(), "FAISS is required for float32 input")
   Rcpp::cppFunction(
     code = '
@@ -1780,7 +1761,6 @@ test_that("grid self KNN supports normalized cosine and correlation metrics", {
 })
 
 test_that("grid self KNN accepts direct float32 input", {
-  skip_if_not_installed("float")
   set.seed(12141)
 
   for (p in c(2L, 3L)) {
@@ -2980,10 +2960,17 @@ test_that("CUDA nn backend matches CPU euclidean results", {
   data <- matrix(rnorm(500), ncol = 10)
   points <- matrix(rnorm(230), ncol = 10)
 
-  cpu <- nn(data, points, k = 6, backend = "cpu")
-  gpu <- nn(data, points, k = 6, backend = "cuda")
+  cpu <- nn(data, points, k = 6, backend = "cpu", method = "exact")
+  gpu <- nn(data, points, k = 6, backend = "cuda", method = "exact")
 
-  expect_true(attr(gpu, "backend") %in% c("cuda", "faiss_gpu_flat_l2"))
+  expected_backend <- if (faiss_gpu_available()) {
+    "faiss_gpu_flat_l2"
+  } else if (cuvs_available()) {
+    "cuda_cuvs_bruteforce"
+  } else {
+    "cuda"
+  }
+  expect_identical(attr(gpu, "backend"), expected_backend)
   expect_equal(gpu$indices, cpu$indices)
   expect_equal(gpu$distances, cpu$distances, tolerance = 1e-5)
 })
@@ -3024,7 +3011,14 @@ test_that("GPU-resident 2D exact search is cancellation resistant", {
   expect_false(resident$serialization_supported)
   expect_false(resident$interprocess_sharing_supported)
   expect_equal(gpu$indices, cpu$indices)
-  expect_equal(gpu$distances, cpu$distances, tolerance = 1e-6)
+  # Check cancellation resistance against direct differences, not FAISS BLAS
+  # distances, which can lose precision when subtracting nearly equal norms.
+  x32 <- float::dbl(float::fl(x))
+  expected <- vapply(seq_len(nrow(x32)), function(i) {
+    delta <- sweep(x32, 2L, x32[i, ], "-")
+    sqrt(rowSums(delta * delta))[gpu$indices[i, ]]
+  }, numeric(15L))
+  expect_equal(gpu$distances, t(expected), tolerance = 1e-6)
 })
 
 test_that("CUDA grid auto matches exact CPU grid results", {

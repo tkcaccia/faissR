@@ -346,14 +346,6 @@ bool wants_float_distance_storage(const std::string& distance_storage) {
 }
 
 SEXP make_float32_distance_matrix(IntegerMatrix& float_dists) {
-  Rcpp::Environment base = Rcpp::Environment::namespace_env("base");
-  Rcpp::Function require_namespace = base["requireNamespace"];
-  const bool ok = Rcpp::as<bool>(
-    require_namespace("float", Rcpp::Named("quietly") = true)
-  );
-  if (!ok) {
-    Rcpp::stop("`output = \"float\"` requires the optional float package");
-  }
   Rcpp::S4 float_matrix("float32");
   float_matrix.slot("Data") = float_dists;
   return float_matrix;

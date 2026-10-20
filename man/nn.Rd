@@ -10,10 +10,9 @@ nn(
   k = NULL,
   exclude_self = FALSE,
   backend = NULL,
-  method = c(
-    "auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
-    "vamana_style", "nsg_style", "nndescent_style", "ivfpq_fastscan", "cagra"
-  ),
+  method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf",
+    "ivfpq",
+    "vamana_style", "nsg_style", "nndescent_style", "ivfpq_fastscan", "cagra"),
   metric = c("euclidean", "cosine", "correlation"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
   target_recall = 0.99,
@@ -25,7 +24,7 @@ nn(
 )
 }
 \arguments{
-\item{data}{Numeric matrix/data frame or optional `float::fl()`/`float32`
+\item{data}{Numeric matrix/data frame or `float::fl()`/`float32`
 object of reference observations in rows. FAISS CPU/GPU and RAPIDS cuVS
 nearest-neighbour routes use direct float-pointer adapters for float32
 inputs. Native routes without a direct float32 adapter fail clearly instead
@@ -35,7 +34,7 @@ to prevent accidental dense materialization; compute a dense
 low-dimensional representation or explicitly materialize a manageable
 block first.}
 
-\item{points}{Numeric matrix/data frame or optional `float::fl()`/`float32`
+\item{points}{Numeric matrix/data frame or `float::fl()`/`float32`
 query object with observations in rows. Defaults to `data`. A float32
 query can be paired with an ordinary R double reference matrix on direct
 FAISS/cuVS float32 routes.}
@@ -170,8 +169,8 @@ public method; successful results record the selected value in
  returns the default R numeric distance matrix. `"float"` returns
  `distances` as a `float::fl()`/`float32` object and records
  `distance_type = "float32"` plus
- `attr(result, "distance_type") = "float32"`; this requires the optional
- `float` package. When either `data` or `points` is a `float::fl()` matrix,
+ `attr(result, "distance_type") = "float32"` using the imported `float`
+ package. When either `data` or `points` is a `float::fl()` matrix,
 FAISS Flat/IVF/IVFPQ/HNSW/FastScan/NSG/NNDescent, FAISS GPU
 Flat/IVF/IVFPQ/CAGRA,
  and RAPIDS cuVS brute-force/CAGRA/IVF/IVFPQ/NN-descent routes consume
@@ -324,19 +323,9 @@ knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu")
 knn_cosine <- nn(x, k = 16, metric = "cosine", backend = "cpu")
 knn_correlation <- nn(x, k = 16, metric = "correlation", backend = "cpu")
 
-if (faiss_available() && requireNamespace("Biobase", quietly = TRUE)) {
-    data("sample.ExpressionSet", package = "Biobase")
-    expression_data <- Biobase::exprs(sample.ExpressionSet)
-    x_biobase <- scale(t(expression_data[seq_len(32L), , drop = FALSE]))
-    expression_knn <- nn(
-        x_biobase,
-        k = 3,
-        backend = "cpu",
-        method = "exact",
-        exclude_self = TRUE
-    )
-    dim(expression_knn$indices)
-}
+labels <- datasets::iris$Species
+fitted <- knn(x, labels, k = 5, method = "exact", backend = "cpu")
+head(predict(fitted, x))
 }
 \references{
 Johnson J, Douze M, Jegou H. Billion-scale similarity search with GPUs. IEEE

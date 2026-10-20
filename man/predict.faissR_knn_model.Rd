@@ -21,7 +21,7 @@
 \arguments{
 \item{object}{A model returned by \code{\link{knn}()}.}
 
-\item{newdata}{Numeric or optional `float::fl()`/`float32` query matrix with
+\item{newdata}{Numeric or `float::fl()`/`float32` query matrix with
 observations in rows. Float32 queries are preserved for methods with
 direct float32 adapters.}
 

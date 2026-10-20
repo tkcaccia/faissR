@@ -343,16 +343,6 @@ void maybe_convert_float32_distances(List& out, const std::string& distances) {
     Rcpp::stop("`distances` must be either \"double\" or \"float\"");
   }
   if (value == "float") {
-    Rcpp::Environment base = Rcpp::Environment::namespace_env("base");
-    Rcpp::Function require_namespace = base["requireNamespace"];
-    const bool ok = Rcpp::as<bool>(
-      require_namespace("float", Rcpp::Named("quietly") = true)
-    );
-    if (!ok) {
-      Rcpp::stop(
-        "`distances = \"float\"` requires the optional float package"
-      );
-    }
     Rcpp::Environment float_ns = Rcpp::Environment::namespace_env("float");
     Rcpp::Function fl = float_ns["fl"];
     if (!Rf_inherits(out["distances"], "float32")) {

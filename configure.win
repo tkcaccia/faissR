@@ -2,6 +2,14 @@
 
 set -eu
 
+. ./src/build-faiss.sh
+faissr_source_mode "$@"
+faiss_bundled=0
+faiss_cppflags=""
+faiss_windows=1
+faiss_r_bin="${R_HOME:?R_HOME must identify the active R}/bin${R_ARCH:-}/R.exe"
+if [ ! -x "$faiss_r_bin" ]; then faiss_r_bin="$R_HOME/bin/R.exe"; fi
+
 write_diagnostic_makevars() {
   cat > src/Makevars.win <<EOF
 CXX_STD = CXX20
@@ -15,6 +23,18 @@ EOF
 faiss_prefix=${FAISS_HOME:-${CONDA_PREFIX:-}}
 faiss_include=${INCLUDE_DIR:-}
 faiss_libdir=${LIB_DIR:-}
+
+if [ "$faiss_source_mode" = none ]; then
+  echo "Explicit diagnostic-only Windows build: FAISS is disabled." >&2
+  write_diagnostic_makevars
+  exit 0
+fi
+faissr_configure_openmp
+if [ "$faiss_source_mode" = bundled ]; then
+  faiss_prefix=""
+  faiss_include=""
+  faiss_libdir=""
+fi
 
 if { [ -n "$faiss_include" ] && [ -z "$faiss_libdir" ]; } || \
    { [ -z "$faiss_include" ] && [ -n "$faiss_libdir" ]; }; then
@@ -35,8 +55,7 @@ if [ -z "$faiss_include" ] && [ -z "$faiss_libdir" ] && \
     "$faiss_prefix/lib" \
     "$faiss_prefix/lib64" \
     "$faiss_prefix/Library/lib"; do
-    if [ -f "$candidate/libfaiss.a" ] || \
-       [ -f "$candidate/libfaiss.dll.a" ]; then
+    if [ -f "$candidate/libfaiss.a" ]; then
       faiss_libdir=$candidate
       break
     fi
@@ -44,87 +63,44 @@ if [ -z "$faiss_include" ] && [ -z "$faiss_libdir" ] && \
 fi
 
 if [ -n "$faiss_include" ] && [ -n "$faiss_libdir" ]; then
-  # R's Windows numerical libraries omit single-precision FAISS routines.
-  # Verify the active toolchain and DLL loader before enabling native methods.
-  r_bin="${R_HOME:?R_HOME must identify the active R}/bin${R_ARCH:-}/R.exe"
-  if [ ! -x "$r_bin" ]; then r_bin="$R_HOME/bin/R.exe"; fi
-  probe_dir=$(mktemp -d "${TMPDIR:-/tmp}/faissR-link-XXXXXX")
-  trap 'rm -rf "$probe_dir"' 0
-  trap 'exit 1' HUP INT QUIT TERM
-  probe_log="$(pwd)/config.log"
-  printf '%s\n' 'Windows FAISS numerical-library compile/load probes' > "$probe_log"
-  cat > "$probe_dir/conftest.cpp" <<'EOF'
-#include <faiss/IndexFlat.h>
-extern "C" {
-void sgemm_(); void ssyrk_(); void sgeqrf_(); void sorgqr_();
-void sgesvd_(); void sgelsd_(); void sgetrf_(); void sgetri_();
-void dgemm_(); void dsyev_(); void dgesvd_(); void dgetrf_(); void dgetri_();
-void (*volatile faissr_numerical_symbols[])() = {
-    sgemm_, ssyrk_, sgeqrf_, sorgqr_, sgesvd_, sgelsd_, sgetrf_, sgetri_,
-    dgemm_, dsyev_, dgesvd_, dgetrf_, dgetri_
-};
-void *faissr_link_probe() { return new faiss::IndexFlatL2(2); }
-}
-EOF
-  try_numerical_libs() {
-    candidate_libs=$1
-    cat > "$probe_dir/Makevars.win" <<EOF
-CXX_STD = CXX20
-PKG_CXXFLAGS = \$(SHLIB_OPENMP_CXXFLAGS)
-PKG_CPPFLAGS = -I"$faiss_include"
-PKG_LIBS = \$(SHLIB_OPENMP_CXXFLAGS) -L"$faiss_libdir" -lfaiss $candidate_libs \$(LAPACK_LIBS) \$(BLAS_LIBS) \$(FLIBS)
-EOF
-    rm -f "$probe_dir/conftest.o" "$probe_dir/conftest.dll"
-    printf '\nExtra numerical libraries: %s\n' "${candidate_libs:-(none)}" >> "$probe_log"
-    if (cd "$probe_dir" && "$r_bin" CMD SHLIB conftest.cpp && \
-        "$r_bin" --vanilla --slave -e \
-        'dyn.load("conftest.dll", local = TRUE, now = TRUE)') >> "$probe_log" 2>&1; then
-      faiss_numerical_libs=$candidate_libs
-      return 0
+  faiss_cppflags="-I\"$faiss_include\""
+  faiss_libs="\"$faiss_libdir/libfaiss.a\""
+  if ! faissr_probe_library; then
+    if [ "$faiss_source_mode" = system ] || \
+       [ -n "${FAISSR_NUMERICAL_LIBS:-}" ]; then
+      echo "The requested installed FAISS/numerical libraries are unusable." >&2
+      exit 1
     fi
-    return 1
-  }
-  faiss_numerical_libs=${FAISSR_NUMERICAL_LIBS:-}
-  numerical_ok=0
-  if [ -n "$faiss_numerical_libs" ]; then
-    if try_numerical_libs "$faiss_numerical_libs"; then numerical_ok=1; fi
-  else
-    for numerical_candidate in '' '-llapack -lblas' '-lopenblas'; do
-      if try_numerical_libs "$numerical_candidate"; then
-        numerical_ok=1
-        break
-      fi
-    done
+    echo "Installed FAISS is unsuitable; trying the bundled CPU source."
+    faiss_include=""
+    faiss_libdir=""
   fi
-  if [ "$numerical_ok" = "0" ]; then
-    echo "Windows FAISS was found, but its numerical-library compile/load check failed." >&2
-    echo "Use complete Rtools-compatible LP64 BLAS/LAPACK, including single-precision routines." >&2
-    echo "Set FAISSR_NUMERICAL_LIBS for a nonstandard library location; see config.log." >&2
+fi
+if [ -z "$faiss_include" ] || [ -z "$faiss_libdir" ]; then
+  if [ "$faiss_source_mode" != system ]; then
+    faissr_build_bundled
+    faiss_include="$faiss_source_dir"
+    faiss_libdir="$faiss_source_dir"
+    if ! faissr_probe_library; then
+      echo "Complete Rtools-compatible LP64 BLAS/LAPACK are required." >&2
+      echo "Set FAISSR_NUMERICAL_LIBS for a nonstandard prefix; see config.log." >&2
+      exit 1
+    fi
+  else
+    echo "No Rtools-compatible static FAISS was found (--with-faiss=system)." >&2
+    echo "Use --with-faiss=auto or bundled to compile the included CPU source." >&2
     exit 1
   fi
-  echo "Windows FAISS compile/load check passed; extra numerical libraries: ${faiss_numerical_libs:-(none)}"
-  rm -rf "$probe_dir"
-  trap - 0 HUP INT QUIT TERM
+fi
+
+if [ -n "$faiss_include" ] && [ -n "$faiss_libdir" ]; then
   cat > src/Makevars.win <<EOF
 CXX_STD = CXX20
-PKG_CXXFLAGS = \$(SHLIB_OPENMP_CXXFLAGS)
-PKG_CPPFLAGS = -DFAISSR_HAS_FAISS -DFAISSR_NO_FORTRAN_NN -I"$faiss_include"
-PKG_LIBS = \$(SHLIB_OPENMP_CXXFLAGS) -L"$faiss_libdir" -lfaiss $faiss_numerical_libs \$(LAPACK_LIBS) \$(BLAS_LIBS) \$(FLIBS)
-OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_faiss_bridge.o nn_faiss_impl.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o
+PKG_CXXFLAGS = \$(SHLIB_OPENMP_CXXFLAGS) $extra_cxxflags
+PKG_CPPFLAGS = -DFAISSR_HAS_FAISS -DFAISSR_NO_FORTRAN_NN -I"$faiss_include" $faiss_cppflags
+PKG_LIBS = \$(SHLIB_OPENMP_CXXFLAGS) $faiss_openmp_flags $faiss_libs $faiss_numerical_libs \$(LAPACK_LIBS) \$(BLAS_LIBS) \$(FLIBS)
+OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o faissr_console.o nn_faiss_bridge.o nn_faiss_impl.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o
 EOF
-  echo "Windows CPU FAISS build enabled from $faiss_prefix." >&2
+  echo "Windows CPU FAISS build enabled from $faiss_libdir." >&2
   exit 0
 fi
-
-if [ "${FAISSR_REQUIRE_FAISS:-0}" = "1" ]; then
-  echo "FAISSR_REQUIRE_FAISS=1, but a compatible Windows FAISS CPU build was not found." >&2
-  echo "Set FAISS_HOME to a prefix containing include/faiss/IndexFlat.h and" >&2
-  echo "lib/libfaiss.a (or libfaiss.dll.a) built for the active Rtools toolchain." >&2
-  echo "Alternatively set INCLUDE_DIR and LIB_DIR to those two directories." >&2
-  exit 1
-fi
-
-echo "Windows FAISS development files were not found; building diagnostic stubs." >&2
-echo "For functional CPU FAISS methods, provide an Rtools-compatible FAISS build" >&2
-echo "through FAISS_HOME and set FAISSR_REQUIRE_FAISS=1." >&2
-write_diagnostic_makevars

@@ -1,6 +1,13 @@
 #!/usr/bin/env Rscript
 # Shared, isolated source-package check. No default R library is modified.
 args <- commandArgs(TRUE)
+runner_file <- sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE))
+if (!length(runner_file)) stop("Run this harness with Rscript.")
+if (!file.exists(runner_file)) {
+    runner_file <- gsub("~+~", " ", runner_file, fixed = TRUE)
+}
+source(file.path(dirname(normalizePath(runner_file)), "audit.R"))
+source(file.path(dirname(normalizePath(runner_file)), "dependency-requirements.R"))
 if (length(args) < 3L) {
     stop(paste(
         "Usage: run.R SOURCE.tar.gz OUTPUT",
@@ -31,6 +38,7 @@ r <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "
 smoke <- if (length(args) >= 4L) normalizePath(args[[4]], mustWork = TRUE) else ""
 Sys.setenv(R_LIBS_USER = lib, OMP_NUM_THREADS = "2",
     OPENBLAS_NUM_THREADS = "1", MKL_NUM_THREADS = "1")
+Sys.setenv(MAKEFLAGS = "-j2")
 force_suggests <- tolower(Sys.getenv(
     "PACKAGE_TEST_FORCE_SUGGESTS",
     "false"
@@ -39,10 +47,14 @@ bootstrap_dependencies <- tolower(Sys.getenv(
     "PACKAGE_TEST_BOOTSTRAP_DEPENDENCIES",
     "false"
 )) %in% c("1", "true", "yes")
+manual <- tolower(Sys.getenv("PACKAGE_TEST_MANUAL", "false")) %in%
+    c("1", "true", "yes")
+incoming <- tolower(Sys.getenv("PACKAGE_TEST_INCOMING_REMOTE", "false")) %in%
+    c("1", "true", "yes")
 # Incoming repository checks are network-dependent submission checks, not
 # portability tests. Full submission checks can require every Suggests package;
 # the default portability matrix records missing Suggests as NOTEs.
-Sys.setenv(`_R_CHECK_CRAN_INCOMING_REMOTE_` = "false",
+Sys.setenv(`_R_CHECK_CRAN_INCOMING_REMOTE_` = if (incoming) "true" else "false",
     `_R_CHECK_FORCE_SUGGESTS_` = if (force_suggests) "true" else "false")
 # Keep the isolated dependency library visible to child R CMD processes, but
 # always install the package under test separately.
@@ -62,8 +74,16 @@ writeLines(c(capture.output(sessionInfo()), capture.output(Sys.info()),
     paste("image:", Sys.getenv("PACKAGE_TEST_IMAGE", "native")),
     paste("library_paths:", library_path),
     paste("force_suggests:", force_suggests),
-    paste("bootstrap_dependencies:", bootstrap_dependencies)),
+    paste("bootstrap_dependencies:", bootstrap_dependencies),
+    paste("manual:", manual), paste("incoming_remote:", incoming),
+    paste("faiss_source:", Sys.getenv("FAISSR_FAISS_SOURCE", "auto"))),
     file.path(out, "environment.txt"))
+config <- system2(r, c("CMD", "config", "--all"), stdout = TRUE, stderr = TRUE)
+writeLines(config, file.path(out, "R-config.txt"))
+user_makevars <- Sys.getenv("R_MAKEVARS_USER")
+if (nzchar(user_makevars) && file.exists(user_makevars)) {
+    file.copy(user_makevars, file.path(out, "Makevars.user"))
+}
 native_commands <- c("nvcc", "nvidia-smi")
 for (command in native_commands) {
     executable <- Sys.which(command)
@@ -108,8 +128,21 @@ if (bootstrap_dependencies && nzchar(dependency_script) &&
     ))
     if (code != 0L) quit(status = 1L)
 }
+requirements <- archive_requirements(source_archive, force_suggests)
+if (incoming) requirements <- c(requirements, tools:::.split_dependencies("curl"))
+dependency_table <- dependency_status(requirements)
+write.csv(dependency_table, file.path(out, "dependencies.csv"), row.names = FALSE)
+record("dependency_versions", as.integer(!all(dependency_table$satisfied)))
+if (!all(dependency_table$satisfied)) quit(status = 1L)
+# Retain configure output and the extracted source even if installation fails.
+install_source <- file.path(out, "install-source")
+dir.create(install_source)
+utils::untar(source_archive, exdir = install_source)
+roots <- list.dirs(install_source, recursive = FALSE, full.names = TRUE)
+roots <- roots[file.exists(file.path(roots, "DESCRIPTION"))]
+if (length(roots) != 1L) stop("Archive must contain exactly one source package.")
 code <- run("install", c("CMD", "INSTALL", "--install-tests",
-    paste0("--library=", shQuote(lib)), shQuote(source_archive)))
+    paste0("--library=", shQuote(lib)), shQuote(roots)))
 if (code != 0L) quit(status = 1L)
 if (nzchar(smoke)) {
     Sys.setenv(PACKAGE_TEST_LIBRARY = lib, PACKAGE_TEST_PROFILE = profile)
@@ -118,7 +151,8 @@ if (nzchar(smoke)) {
 }
 # --no-manual avoids requiring TeX on every host. A portability run without
 # all Suggests checks the prebuilt vignette but does not rebuild it.
-check_args <- c("CMD", "check", "--as-cran", "--no-manual")
+check_args <- c("CMD", "check", "--as-cran")
+if (!manual) check_args <- c(check_args, "--no-manual")
 if (!force_suggests) {
     check_args <- c(check_args, "--no-vignettes")
 }
@@ -139,4 +173,11 @@ has_problem <- any(grepl("^Status:.*(ERROR|WARNING)", lines))
 complete <- any(grepl("^\\* DONE", lines))
 record("check_complete", as.integer(!complete))
 record("check_errors_warnings", as.integer(has_problem))
-quit(status = as.integer(code != 0L || has_problem || !complete))
+install_logs <- c(file.path(out, "install.log"),
+    list.files(out, "00install.out$", recursive = TRUE, full.names = TRUE))
+native_ok <- audit_native_logs(install_logs, file.path(out, "compiler-diagnostics.csv"))
+notes_ok <- audit_check_notes(lines, file.path(out, "check-notes.csv"), config)
+record("compiler_diagnostics", as.integer(!native_ok))
+record("check_notes_reviewed", as.integer(!notes_ok))
+quit(status = as.integer(code != 0L || has_problem || !complete ||
+    !native_ok || !notes_ok))

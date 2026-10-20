@@ -1,46 +1,104 @@
-# Cross-platform CPU validation: 10 September 2026
+# Earlier faissR 0.1 portability validation
 
-Tested faissR 0.99.41 working tree based on commit
-`ccf983c770adb9e09b307ebb64167f7ff45ad7b8`, with the local portability fixes.
-This report does not imply a published release or a GitHub push.
+This page records an earlier archive. The current CRAN resubmission corrections
+and final source identity are described in
+[the incoming-check report](cran-incoming-20261020.md). Do not transfer results
+between archives solely because their package version is the same.
 
-Identical source archive SHA256 on all targets:
-`4caddbff0e405c40178181e4dd9909b0be20435a39ed4b973f42111e46c9e22a`.
+Test date: 20 October 2026. These are local validation results, not CRAN
+acceptance or a published release. No commit or push was made for this run.
 
-| Platform | R | Profile | Errors | Warnings | Notes |
-|---|---|---|---:|---:|---:|
-| macOS 14.5 arm64, Homebrew FAISS 1.14.3 | 4.6.0 | Functional CPU | 0 | 0 | 0 |
-| Ubuntu 24.04 x86_64, FAISS 1.11.0, Rcpp 1.1.0 | 4.3.3 | Functional CPU | 0 | 0 | 4 |
-| Debian 13 x86_64, FAISS 1.11.0-3, bundled R BLAS | 4.6.0 | Functional CPU | 0 | 0 | 0 |
-| Windows 10 x64, Rtools-compatible patched FAISS 1.11.0 | 4.6.1 | Functional CPU | 0 | 0 | 0 |
-| Windows 10 x64, FAISS absent | 4.6.1 | Diagnostic-only | 0 | 0 | 0 |
+The identical source archive was used on every platform:
 
-All five profiles passed installation, capability smoke tests and
-`R CMD check --as-cran --no-manual`, including examples and vignette rebuilding.
-Each functional profile reported 3,055 passing assertions and 119 skips.
-The diagnostic profile reported 2,018 passing assertions and 144 skips.
-All had zero failed assertions and zero test warnings. Skips include GPU-only
-tests and repository-only scripts absent from the source-package archive.
+`d55e95106c8b2bff180c4a74d49f2bbc16a4c760a47ed624727dd82536ec051b`
 
-Fixes: Windows now probes complete numerical libraries before enabling FAISS;
-Rcpp >= 1.1.0 is declared in both Imports and LinkingTo; FAISS-dependent vignette
-examples are capability-aware. Negative tests confirm rejection of old Rcpp,
-invalid explicit numerical flags and missing required FAISS. Native search
-algorithms and public API behavior were not changed.
+The archive contains 1,577,144 bytes (about 1.5 MiB). It includes the pristine
+FAISS 1.11.0 source archive (about 1.1 MiB), its licenses and a documented
+compatibility patch. No precompiled native library is shipped. Only CPU FAISS
+is built from that source; NVIDIA libraries remain optional external providers.
 
-BiocCheck 1.49.30 reports 0 errors, 0 warnings and 2 notes: its recommendation to
-raise the minimum R version to 4.6.0, and inability to verify Bioc-Devel mailing
-list subscription without administrator credentials. The former was retained
-to avoid excluding the successfully tested R 4.3.3 configuration. R >= 3.0.2
-declares the feature needed for versioned LinkingTo, not a tested R 3.0.2 build.
+## Completed functional checks
 
-Ubuntu's four notes concern debug-library size, network time verification,
-ORCID author formatting differences between R versions, and a distribution
-compiler flag. No checks were disabled to suppress those notes.
+Each row passed installation, an independent-reference search smoke test and
+`R CMD check --as-cran --no-manual`, with every suggested R package available
+and both vignettes rebuilt. Remote CRAN incoming checks were disabled; this
+matrix does not replace CRAN's incoming service.
 
-See [test-lab instructions](package-testing.md) for recipes, command entry
-points, artifact layout and interpretation. Local operators retain the source,
-patch, SIF checksums, environment metadata and complete logs under the private
-lab's `runs/verified-041-20260910` directory. Raw private-machine logs are not
-published automatically. Windows ARM64, macOS Intel, CUDA/cuVS, sanitizers,
-performance measurements and PDF manual generation were not validated here.
+| Platform | R | FAISS/provider configuration | Errors | Warnings | Notes |
+| --- | --- | --- | ---: | ---: | ---: |
+| macOS 14.5 arm64 | 4.6.0 | Bundled CPU FAISS | 0 | 0 | 0 |
+| Ubuntu 24.04 x86_64 | 4.6.0 | Bundled CPU FAISS, OpenBLAS | 0 | 0 | 0 |
+| Debian 13 x86_64 | 4.6.0 | Installed FAISS, bundled R BLAS | 0 | 0 | 0 |
+| Debian 13 x86_64 | 4.6.0 | Bundled CPU FAISS, bundled R BLAS | 0 | 0 | 0 |
+| Fedora 44 x86_64 | 4.6.1 | Default fallback, no installed FAISS | 0 | 0 | 1 |
+| Windows x64 | 4.6.1 | Default fallback, no FAISS prefix | 0 | 0 | 1 |
+| Windows x64 | 4.6.1 | Installed Rtools-compatible FAISS | 0 | 0 | 0 |
+| Debian 13, NVIDIA RTX 5060 Ti | 4.6.1 | Bundled CPU FAISS + native CUDA 13.2 | 0 | 0 | 0 |
+| Debian 13, NVIDIA RTX 5060 Ti | 4.6.1 | Bundled CPU FAISS + direct cuVS/CUDA 13.2 | 0 | 0 | 0 |
+
+The Fedora and Windows default rows used `FAISSR_FAISS_SOURCE=auto`; their
+installation logs confirm that the included source was compiled. The other
+bundled rows explicitly selected `bundled`, including hosts with installed
+FAISS. The Debian and Windows installed-library rows selected `system`.
+Linux distribution tests use isolated user-space images on one host kernel.
+
+CPU rows passed 2,905-2,908 assertions each, with 130-131 skips. Native CUDA
+passed 2,942 assertions with 126 skips; direct cuVS passed 2,961 assertions with
+124 skips. Every row had zero failed assertions and zero test warnings. Skips
+cover unavailable providers and repository-only checks. CUDA smoke tests assert
+the resolved GPU provider and compare identifiers with an independent R
+reference; a CPU fallback cannot pass them.
+
+## Notes and supplementary tests
+
+A separate Windows `--with-faiss=none` diagnostic profile also completed with
+zero errors, warnings or notes: 1,805 assertions passed and 159 tests skipped.
+Its FAISS capability is false; this is not a functional FAISS installation and
+is not counted among the functional rows above.
+
+Fedora's NOTE concerns flags supplied by its distribution R build, including
+`-march=x86-64`, `-mtls-dialect=gnu2` and hardening flags. The package preserves
+R's compiler configuration; no warning or NOTE check was disabled to conceal it.
+
+Windows's default-fallback NOTE reports a 5.56-second `backend_info()` example
+(0.33 seconds of R user/system CPU time). The installed-library check was
+clean. This is an example-timing NOTE, not an installation or search failure.
+
+Separate repository-only configure tests passed 63 assertions. Negative Windows
+tests confirmed that invalid explicit numerical flags and missing FAISS under
+`--with-faiss=system` are rejected. An additional Windows runtime smoke passed
+with Rtools removed from `PATH`. macOS linkage inspection confirmed no runtime
+dependency on a separate FAISS dynamic library.
+
+The PDF reference manual compiled successfully (27 pages). Installed package
+sizes were about 7.5 MiB on macOS, 7.7 MiB on Windows and 56 MiB on Ubuntu;
+the Linux installation retains the active R toolchain's debug information.
+These installed sizes are not source-download sizes. Source compilation adds
+build time, but requires neither CMake nor a native-library download.
+
+## Changes and scope
+
+The installation first probes suitable installed FAISS, including its version,
+ABI and complete LP64 single/double-precision numerical dependencies. Otherwise
+it builds the included generic CPU static library with R's compiler and GNU
+make. Compilation failure is fatal, not an automatic diagnostic fallback.
+
+The documented upstream patch fixes static Windows declarations, error-message
+formats, quantizer initialization, ARM compiler detection and deprecated OpenMP
+controls. FAISS diagnostics are buffered from worker threads and emitted through
+R's console on the calling thread. Numerical-library settings are tested by
+loading a compiled probe, addressing missing symbols such as `ssyrk_` without
+replacing R's BLAS. The GPU vignette uses a supported external-query workflow
+when only native CUDA is available.
+
+Complete BLAS/LAPACK, OpenMP and the appropriate R development toolchain remain
+external requirements. CUDA/cuVS results apply to the prepared provider stack
+tested here, not every toolkit, GPU or operating system. No NVIDIA driver,
+system R, system BLAS or SSH authorization was changed. No HPC job or manuscript
+benchmark was run. Windows ARM64, macOS Intel, Windows NVIDIA GPU, sanitizers and
+performance comparisons were not validated in this run.
+
+Reproduction instructions and artifact interpretation are in
+[the test-lab guide](package-testing.md). Private host configuration, raw logs,
+source snapshots and image checksums remain in the operator's local test lab;
+they are not published automatically.

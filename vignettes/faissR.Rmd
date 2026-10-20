@@ -1,11 +1,10 @@
 ---
-title: "faissR: nearest-neighbor search for Bioconductor workflows"
+title: "faissR: nearest-neighbor search in R"
 author: "Stefano Cacciatore"
 package: faissR
 output:
-    BiocStyle::html_document:
+    rmarkdown::html_vignette:
         toc: true
-        toc_float: true
 vignette: >
     %\VignetteIndexEntry{faissR nearest-neighbor workflow}
     %\VignetteEngine{knitr::rmarkdown}
@@ -55,47 +54,38 @@ The same metric and result conventions are used through the public R API.
 
 This vignette follows one practical workflow:
 
-1. load a dense single-cell representation;
+1. prepare a dense numeric matrix;
 2. inspect the installed capabilities;
 3. run exact and HNSW searches;
 4. compare observed HNSW recall with an exact reference;
 5. reuse an index for prediction; and
 6. preflight input and metric edge cases.
 
-All computational chunks are evaluated. CUDA code is evaluated conditionally
-and prints a skip message when the package was built without CUDA support.
+All computational chunks are evaluated. FAISS and CUDA examples check their
+provider availability and print a message when the provider is unavailable.
 Detailed build instructions are available in
 `vignette("installation", package = "faissR")`.
 
 # Example data
 
-The installed example is derived from the public Zeisel mouse-brain
-single-cell RNA-sequencing data distributed by `scRNAseq`. It contains 50 PCA
-coordinates and cell annotations for 3,005 cells, but no expression matrix.
-The source URLs, complete preprocessing procedure, seed, and package versions
-are recorded by `inst/scripts/prepare_zeisel_brain_pca.R` and documented in
-`?zeisel_brain_pca`.
+The examples use the `iris` dataset distributed with R. Its four numeric
+measurements form a dense matrix with observations in rows, and the species
+factor supplies labels for the fitted k-nearest-neighbor example. Scaling puts
+the measurements on comparable numerical ranges.
 
 ```{r data, message=FALSE, warning=FALSE}
 library("faissR")
-library("SingleCellExperiment")
-
-example_file <- system.file(
-    "extdata", "zeisel_brain_pca.rds", package = "faissR"
-)
-sce <- readRDS(example_file)
-x <- reducedDim(sce, "PCA")
-storage.mode(x) <- "double"
-groups <- droplevels(factor(colData(sce)$level1class))
+x <- scale(as.matrix(datasets::iris[, 1:4]))
+groups <- datasets::iris$Species
 
 dim(x)
-head(table(groups), 6L)
+table(groups)
 ```
 
 Nearest-neighbor search should normally receive a dense low-dimensional
-representation such as PCA scores, not a full sparse gene-by-cell count
-matrix. The following table estimates the principal host allocations for 50
-PCs and `k = 30` without allocating the larger matrices.
+representation rather than a full sparse high-dimensional assay. The following
+table estimates the principal host allocations for 50 dense coordinates and
+`k = 30` without allocating the larger matrices.
 
 ```{r memory-budget}
 cells <- c(3005, 100000, 1000000)
@@ -223,33 +213,40 @@ tiers 0.90, 0.95, and 0.99; it is not interpolated. For a new application,
 measure observed recall on representative queries against an exact reference.
 
 ```{r hnsw-search}
-hnsw_time <- system.time(
-    hnsw <- nn(
-        x,
-        k = 15,
-        backend = "cpu",
-        method = "hnsw",
-        metric = "euclidean",
-        tuning = "auto",
-        target_recall = 0.99,
-        exclude_self = TRUE,
-        n_threads = 2
+hnsw_ready <- isTRUE(cpu_euclidean$runtime_available[
+    cpu_euclidean$method == "hnsw"
+])
+if (hnsw_ready) {
+    hnsw_time <- system.time(
+        hnsw <- nn(
+            x,
+            k = 15,
+            backend = "cpu",
+            method = "hnsw",
+            metric = "euclidean",
+            tuning = "auto",
+            target_recall = 0.99,
+            exclude_self = TRUE,
+            n_threads = 2
+        )
+    )[["elapsed"]]
+
+    query_recall <- vapply(
+        seq_len(nrow(exact$indices)),
+        function(i) mean(hnsw$indices[i, ] %in% exact$indices[i, ]),
+        numeric(1L)
     )
-)[["elapsed"]]
 
-query_recall <- vapply(
-    seq_len(nrow(exact$indices)),
-    function(i) mean(hnsw$indices[i, ] %in% exact$indices[i, ]),
-    numeric(1L)
-)
-
-c(
-    elapsed_seconds = unname(hnsw_time),
-    mean_recall = mean(query_recall),
-    fifth_percentile_recall = unname(quantile(query_recall, 0.05)),
-    minimum_recall = min(query_recall),
-    backend_used = attr(hnsw, "backend_used")
-)
+    print(c(
+        elapsed_seconds = unname(hnsw_time),
+        mean_recall = mean(query_recall),
+        fifth_percentile_recall = unname(quantile(query_recall, 0.05)),
+        minimum_recall = min(query_recall),
+        backend_used = attr(hnsw, "backend_used")
+    ))
+} else {
+    cat("HNSW requires a faissR installation compiled with FAISS.\n")
+}
 ```
 
 # Automatic selection
@@ -324,7 +321,7 @@ tryCatch(
 # Dense input contract
 
 `faissR` searches dense, two-dimensional numeric data only. Accepted inputs
-are numeric matrices, numeric data frames, and optional `float::fl()`
+are numeric matrices, numeric data frames, and `float::fl()`
 matrices, with observations in rows. It does not implement sparse nearest-
 neighbor search. Sparse, delayed, file-backed, and other matrix-like objects
 are rejected before conversion and are never silently materialized with
@@ -338,11 +335,11 @@ tryCatch(
 )
 ```
 
-For single-cell data, keep the expression or count assay sparse during
-normalization and dimension reduction, then pass a dense, size-checked cell
-embedding such as PCA coordinates to `faissR`. If direct materialization is
-appropriate for another workflow, it must be performed explicitly by the
-caller before the `faissR` call.
+For sparse high-dimensional data, keep the original object sparse during
+preprocessing and dimension reduction, then pass a dense, size-checked
+embedding such as principal-component coordinates to `faissR`. Any direct
+materialization must be performed explicitly by the caller before the
+`faissR` call.
 
 Ordinary R double matrices are converted internally to contiguous float32
 storage for FAISS and cuVS. This numeric conversion applies only after the
@@ -384,38 +381,26 @@ c(
 head(as.vector(prediction))
 ```
 
-The imported `Biobase` package is supported for conventional
-`ExpressionSet` workflows. Samples are stored in columns, so transpose the
-assay before search.
-
-```{r biobase-example}
-data("sample.ExpressionSet", package = "Biobase")
-biobase_x <- t(Biobase::exprs(sample.ExpressionSet)[seq_len(32L), ])
-biobase_result <- nn(
-    biobase_x,
-    k = 3,
-    backend = "cpu",
-    method = "exact",
-    exclude_self = TRUE
-)
-dim(biobase_result$indices)
-```
-
 # Optional CUDA execution
 
 Guard CUDA work with the package-specific `cuda_available()` predicate. The
 conditional code below is evaluated on every builder; only the GPU operation
-is skipped when CUDA is unavailable.
+is skipped when CUDA is unavailable. It searches 12 query observations against
+the remaining reference rows. No self-neighbor removal is needed because the
+query rows are not part of the reference matrix. Native-only CUDA supports
+this external-query workflow; host-returning self-search with self-neighbor
+removal requires cuVS or FAISS GPU.
 
 ```{r cuda-example}
 if (cuda_available()) {
     cuda_result <- nn(
-        x,
+        x[-seq_len(12), , drop = FALSE],
+        points = x[seq_len(12), , drop = FALSE],
         k = 15,
         backend = "cuda",
         method = "exact",
         metric = "euclidean",
-        exclude_self = TRUE
+        exclude_self = FALSE
     )
     c(
         backend_used = attr(cuda_result, "backend_used"),

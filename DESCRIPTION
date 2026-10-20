@@ -1,78 +1,51 @@
 Package: faissR
 Type: Package
-Title: FAISS-Backed Nearest Neighbours, kNN Models, and k-Means
-Version: 0.99.52
-Authors@R: person(given = "Stefano",
+Title: Nearest Neighbours, Prediction, and Clustering with 'FAISS'
+Version: 0.1
+Authors@R: c(person(given = "Stefano",
     family = "Cacciatore",
     role = c("aut", "cre"),
     email = "tkcaccia@gmail.com",
-    comment = c(ORCID = "0000-0001-7052-7156"))
-Description: Native nearest-neighbour search, k-nearest neighbour prediction,
-    and k-means helpers for large dimensionality
-    reduction workflows in high-throughput biological data analysis, including
-    single-cell, flow cytometry, imaging, and mass spectrometry applications.
-    Functional native builds require the FAISS C++ library, including
-    CPU-only indexes, and can optionally use FAISS GPU indexes with NVIDIA
-    cuVS integration or direct RAPIDS cuVS/CUDA indexes on NVIDIA machines.
-    CPU-only systems do not need NVIDIA libraries, but NVIDIA CUDA/cuVS
-    libraries are mandatory when a GPU-enabled build is explicitly requested.
-    Unsupported WebAssembly and Bioconductor staging platforms may build
-    diagnostic-only stubs that report the unavailable native functionality.
-    Supervised kNN models use
-    knn(Xtrain, Ytrain) and predict(), or knn(Xtrain, Ytrain, Xtest) for
-    immediate prediction. Class probabilities are returned through
-    predict(type = "prob") for kNN classification models.
+    comment = c(ORCID = "0000-0001-7052-7156")),
+    person("Meta Platforms, Inc. and affiliates", role = "cph",
+        comment = "Bundled FAISS source; see inst/COPYRIGHTS"))
+Description: Provides exact and approximate nearest-neighbour search,
+    k-nearest neighbour prediction, and k-means clustering for dense data.
+    Uses the Facebook AI Similarity Search ('FAISS') C++ library for CPU
+    indexes, with optional 'NVIDIA CUDA' and 'RAPIDS cuVS' providers for GPU
+    execution. Supports Euclidean, cosine, and correlation distances,
+    reusable fitted indexes, and single-precision input and output.
+    Classification models return predicted labels and class probabilities;
+    regression models return predicted responses. Uses a compatible installed
+    'FAISS' library or builds the included CPU source. CPU builds do not
+    require GPU libraries.
 License: MIT + file LICENSE
 URL: https://github.com/tkcaccia/faissR
 BugReports: https://github.com/tkcaccia/faissR/issues
-biocViews:
-    Software,
-    Infrastructure,
-    GPU,
-    SingleCell,
-    FlowCytometry,
-    MassSpectrometry,
-    ImagingMassSpectrometry,
-    Proteomics,
-    Clustering,
-    DimensionReduction,
-    Classification,
-    FunctionalPrediction
 Encoding: UTF-8
 Depends:
     R (>= 4.6.0)
 Imports:
-    Biobase,
-    gpuinfo (>= 0.1.0),
+    float,
+    gpuinfo (>= 0.2.0),
     methods,
     Rcpp (>= 1.1.0)
 Suggests:
-    BiocNeighbors,
-    BiocSingular,
-    BiocStyle,
-    S4Vectors,
-    SingleCellExperiment,
-    SummarizedExperiment,
     knitr,
     Matrix,
-    float,
     rmarkdown,
-    scater,
-    scRNAseq,
-    scran,
-    scuttle,
     testthat,
     withr
 LinkingTo:
     Rcpp (>= 1.1.0)
-SystemRequirements: C++20, Fortran on Unix, FAISS C++ development library
-    (Debian/Ubuntu: libfaiss-dev, libblas-dev, liblapack-dev;
-    RPM distributions: faiss-devel, blas-devel, lapack-devel where
-    available; macOS: static FAISS and OpenMP supplied through the R-macos
-    recipes/toolchain or a compatible local prefix; Windows: an
-    Rtools-compatible FAISS CPU build), complete LP64 BLAS and LAPACK with
-    single-precision routines on Linux and Windows. Optional CUDA and cuVS
-    libraries are used only when a GPU-enabled build is explicitly requested.
+SystemRequirements: C++20, GNU make, patch, OpenMP, Fortran on Unix,
+    complete LP64
+    BLAS and LAPACK including single-precision routines (Debian/Ubuntu:
+    libblas-dev, liblapack-dev; Fedora: blas-devel, lapack-devel; Windows:
+    Rtools numerical libraries; macOS: R-compatible OpenMP and numerical
+    libraries). FAISS >= 1.11.0 is used when available; otherwise the bundled
+    CPU source is compiled. Optional CUDA and cuVS libraries are needed only
+    for GPU-enabled builds.
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.1.0
 Config/testthat/edition: 3

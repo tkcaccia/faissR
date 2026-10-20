@@ -341,7 +341,7 @@ new_knn_model <- function(x, response, args, index) {
 #' Predict from a faissR kNN model
 #'
 #' @param object A model returned by \code{\link{knn}()}.
-#' @param newdata Numeric or optional `float::fl()`/`float32` query matrix with
+#' @param newdata Numeric or `float::fl()`/`float32` query matrix with
 #'   observations in rows. Float32 queries are preserved for methods with
 #'   direct float32 adapters.
 #' @param k Number of neighbours.
@@ -1538,12 +1538,6 @@ prepare_knn_model_matrix <- function(
 coerce_knn_model_matrix <- function(x, arg_name) {
     validate_dense_matrix_input(x, arg_name)
     if (is_float32_matrix_input(x)) {
-        if (!requireNamespace("float", quietly = TRUE)) {
-            stop(
-                "`", arg_name, "` is a float32 object but the optional ",
-                "float package is not installed.", call. = FALSE
-            )
-        }
         out <- as.matrix(x)
         return(list(data = out, dims = float32_matrix_dims(out, arg_name)))
     }

@@ -1,0 +1,64 @@
+FAISS 1.11.0 CPU fallback
+========================
+
+Source: https://github.com/facebookresearch/faiss/releases/tag/v1.11.0
+Archive: https://codeload.github.com/facebookresearch/faiss/tar.gz/refs/tags/v1.11.0
+SHA256: c5d517da6deb6a6d74290d7145331fc7474426025e2d826fa4a6d40670f4493c
+
+faiss-1.11.0.tar.gz is the unmodified upstream source archive. Its LICENSE and
+all file-level notices are retained. Only the generic CPU library is compiled;
+Python, CUDA, cuVS, benchmarks and upstream tests are not built. Installation
+does not download software or invoke a system package manager.
+
+Makefile.static lists exactly the upstream generic CPU target's sources and
+uses the active R toolchain. It omits OnDiskInvertedLists on Windows, as does
+upstream CMake. NDEBUG matches the upstream Release build. R's optimization
+and debug flags are retained; no machine-specific instruction set is forced.
+
+r-compat.patch is applied only to the extracted package-local build tree:
+- Two MinGW error messages use FAISS_THROW_MSG rather than an empty variadic
+  FAISS_THROW_FMT invocation; Windows error codes use unsigned-long formats.
+- FAISS_STATIC avoids DLL import/export decoration for the static library.
+- FAISS assertion failures and two gnuplot-output failures throw FAISS
+  exceptions instead of calling abort. Threaded-index cleanup checks the
+  worker pointer without throwing from a noexcept destructor.
+- Discarded future results are marked explicitly; an unused microbenchmark
+  helper is annotated, and Clang is not mistaken for GCC < 8 on ARM.
+- Two unused process-global srand calls are removed. FAISS's own local random
+  generators and seeds remain unchanged.
+- Derived additive-quantizer indexes attach their quantizer only after its
+  construction, avoiding an uninitialized read in the base constructor. The
+  configure probe checks all four quantizer families after linking.
+- Parallel sorting uses OpenMP active-level controls instead of the deprecated
+  nested-parallelism API and restores the caller's previous setting.
+- Header-only emulated SIMD helpers are inline; MinGW alignment uses standard
+  alignas, a spurious leading fallthrough annotation is removed, and NSG index
+  deserialization uses exhaustive conditional construction.
+- FAISS file I/O includes cerrno explicitly rather than depending on a
+  transitive include from a particular C++ standard library.
+- The mapped-file owner uses an explicit fclose deleter type, avoiding a GCC
+  diagnostic about function attributes used as a template argument.
+
+configure compiles and loads a small OpenMP probe first. If R supplies no
+working OpenMP flag, it tests -fopenmp and uses the successful flags consistently
+for the bundled library, the linkage probe and the package. It never replaces
+the user's compiler or the system OpenMP installation. Failed final probes
+print their compiler/linker diagnostics into the installation log.
+
+The upstream CPU source uses the Expat License. NVIDIA-contributed build/GPU
+infrastructure in the unmodified source archive also carries Apache-2.0
+notices; a complete copy of that license is provided as FAISS-APACHE-LICENSE.
+Those GPU/build-system components are not compiled by this CPU fallback.
+
+FAISS console output is buffered by faissr_console.cpp, including messages
+from OpenMP workers, and emitted with Rprintf/REprintf on the calling R thread.
+Ordinary file writes remain file writes. Diagnostic buffering is bounded to
+1 MiB per outer call and reports truncation. Search algorithms are unchanged.
+
+To force this path, use --configure-args='--with-faiss=bundled' or set
+FAISSR_FAISS_SOURCE=bundled. The default auto uses suitable installed FAISS
+first; system disables the fallback. Windows alone also supports none for an
+explicit diagnostic-only test, never as an automatic substitute for FAISS.
+
+The generated build/ directory is removed by cleanup and excluded from the
+source package. No precompiled library is shipped in the source archive.

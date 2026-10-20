@@ -20,7 +20,7 @@ toolchain on native hosts; Singularity with working fakeroot on Linux. Existing
 SSH authorization is used without changing server settings. Keep a local copy
 of `hosts.example.json` outside the repository with actual host paths.
 
-On macOS, use a compatible R, compiler, Fortran, FAISS and OpenMP installation
+On macOS, use a compatible R, compiler, Fortran and OpenMP installation
 as described in the installation documentation. Install missing R dependencies
 without changing the default library:
 
@@ -29,7 +29,7 @@ Rscript .github/package-check/dependencies.R /absolute/lab/dependencies
 export R_LIBS_USER=/absolute/lab/dependencies
 ```
 
-For Bioconductor/CRAN-style macOS dependency testing, use the candidate recipe
+For CRAN-style macOS dependency testing, use the candidate recipe
 in `.github/package-check/macos-recipes/` with the public R-macos recipes build
 system. Test both arm64 and x86_64 in its **Cook from Recipes** workflow before
 proposing the recipe upstream. The resulting prefix is `/opt/R/<architecture>`;
@@ -37,16 +37,20 @@ faissR detects it without `FAISS_HOME`. Keep local package-manager testing as a
 separate compatibility row, not as the installation path recommended to users.
 
 On Windows, transfer the harness to `r-package-test-lab/harness` in the user's
-home and run `windows/prepare.ps1`, then `windows/build-faiss.ps1` in PowerShell.
+home and run `windows/prepare.ps1` in PowerShell. Normal installation compiles
+the included CPU FAISS source if no compatible installed static library is
+found. `windows/build-faiss.ps1` is needed only for a separate installed-library
+test row, not for using the package's bundled fallback.
 For the default lab location:
 
 ```powershell
 cd "$HOME/r-package-test-lab/harness"
 powershell -NoProfile -ExecutionPolicy Bypass -File windows/prepare.ps1
+# Optional: prepare the independent installed-library test row.
 powershell -NoProfile -ExecutionPolicy Bypass -File windows/build-faiss.ps1
 ```
 
-The latter builds CPU FAISS 1.11.0 with the existing Rtools45 MinGW compiler,
+The optional latter command builds CPU FAISS 1.11.0 with Rtools45 MinGW,
 not MSVC. It changes PATH only for its process and installs under the lab.
 FAISS 1.11.0 requires the included `faiss-1.11.0-mingw.patch`: two Windows-only
 plain error messages use `FAISS_THROW_MSG` instead of the variadic formatting
@@ -87,11 +91,16 @@ Point the Ubuntu matrix entry at this image. The distribution's older Rcpp is
 intentionally retained in the base image for negative dependency testing;
 faissR requires Rcpp >= 1.1.0 in both Imports and LinkingTo. The latter is
 essential to reject old headers before compilation. The package currently
-declares R >= 4.6.0 because it targets the Bioconductor 3.24 development
-branch; this is a submission baseline rather than an algorithmic requirement.
+declares R >= 4.6.0 as its tested submission baseline; this is not an
+algorithmic requirement.
 The recipes install `checkbashisms` (devscripts) and qpdf for complete checks.
+`linux/fedora44-bundled.def` supplies a separate Fedora environment without
+installed FAISS. It installs `devscripts-checkbashisms`, the Fedora package
+name for that check tool. `linux/fedora-check-tools.def` adds the checker to an
+older Fedora image without replacing it. Keep distribution-supplied R compiler
+flags intact; record any compiler-flag NOTE separately from package warnings.
 `check-tools.def` adds these to an older image without replacing the original.
-The Debian custom R must have Cairo support for BiocStyle's SVG device. The
+The Debian custom R must have Cairo support for rendered vignette figures. The
 current Docker base recipe includes the development libraries; for an existing
 minimal Debian SIF use the following overlay (the variable name is shared with
 the Ubuntu local-image builder):
@@ -106,6 +115,10 @@ to conceal missing R graphics capabilities.
 
 ## Run the complete matrix
 
+The controller requires at least 4 GiB free before a new matrix starts.
+`PACKAGE_TEST_MIN_FREE_GIB` sets the operator's budget. Full native artifacts
+can be large; this guard never deletes earlier evidence automatically.
+
 After changing an `Rcpp::export` declaration, regenerate and format the native
 wrappers before building the source archive:
 
@@ -115,8 +128,8 @@ Rscript .github/scripts/format-rcpp-exports.R
 ```
 
 The second command changes layout only. It keeps generated wrapper signatures
-within Bioconductor's 80-column recommendation without changing their parsed R
-expressions.
+within the package's 80-column source convention without changing their parsed
+R expressions.
 
 Build the package using `R CMD build` first. Run from the controller:
 
@@ -138,6 +151,11 @@ Each remote run gets a private harness copy, avoiding Windows file locks and
 changes to scripts belonging to an active test. Windows `scp_root` is the
 SFTP-visible path corresponding to `root` (usually relative to the SSH home).
 Use `--only target1,target2` to rerun selected targets in a new output directory.
+Each target can specify `"faiss_source": "bundled"` or `"system"` to test
+both paths even on a host with installed FAISS. The default is `auto`.
+Use an image without FAISS for at least one Linux row. The Windows diagnostic
+profile explicitly selects `none`; it cannot silently replace a failed
+functional installation.
 SSH keepalives detect an unresponsive connection after three missed 30-second
 probes. A transport failure is not evidence of a package failure: inspect the
 remote `status.csv` and `00check.log` before rerunning or stopping anything.
@@ -168,28 +186,73 @@ runtime, and rejects CPU fallback. Never install or replace the host NVIDIA
 driver as part of a package check.
 
 For Windows use `windows/run.ps1 -Archive ... -Output ... -FaissHome ...
--DependencyLibrary ...`. The `diagnostic` profile expects FAISS to be absent;
-the default `functional` profile requires it. A Windows diagnostic check can
+-DependencyLibrary ... -FaissSource bundled`. The `diagnostic` profile explicitly
+disables FAISS; the default `functional` profile requires installed or bundled
+FAISS. A Windows diagnostic check can
 validate portability/error reporting but must not be advertised as useful FAISS.
 
 ## Evidence and interpretation
 
+### CRAN Compiler And Diagnostic Gates
+
+Include the R-devel Clang/Flang profile in
+`linux/debian-clang-devel.def`, not only Debian GCC/GFortran. It intentionally
+clears R's OpenMP C++ flag to exercise compiler-based detection. The `float`
+dependency is built using the base R GCC toolchain because its own Fortran
+flags are not accepted by Flang; faissR itself is compiled with Clang/Flang.
+Record both toolchains. The mutable R-hub base must be identified by the
+completed SIF checksum and exact R/compiler versions.
+
+`run.R` now retains `install-source/`, including `config.log`, on installation
+failure, and records `R-config.txt` and an explicit user Makevars file. It writes
+`dependencies.csv` with all declared version constraints before compilation.
+The dependency bootstrap checks versions, not only namespace availability,
+and retries a required source version if the platform binary is too old.
+It writes
+`compiler-diagnostics.csv` from raw installation logs and `check-notes.csv`
+from every NOTE block. Unreviewed diagnostics and NOTEs fail the harness even
+when `R CMD check` returns zero. No warning flag is disabled. Two narrow
+compiler classifications are retained visibly: upstream FAISS signedness
+comparisons, and macOS's duplicate R Fortran-runtime library list. Neither
+initialization nor ABI diagnostics are exempt. These reviewed diagnostics must
+still appear in the final report; do not call such a run compiler-warning-free.
+
+Set `PACKAGE_TEST_MANUAL=true` on a TeX-enabled profile for PDF/HTML manual
+checks, and `PACKAGE_TEST_INCOMING_REMOTE=true` for network-enabled incoming
+checks. Run both, with every Suggests package, before resubmission. They are
+off in the default portability mode. Incoming checks also require the R package
+`curl` in the test library; it is a checker dependency, not a faissR runtime
+dependency. Bootstrap installs it when incoming checks are enabled. These modes are
+separate, so a portability PASS is not a full
+submission PASS. The initial-submission NOTE is expected; spelling/URL NOTEs
+are not exempt. Test these gates with:
+
+```sh
+Rscript .github/package-check/test-audit.R
+```
+
+The source-only OpenMP configure regression test covers usable R flags,
+successful compiler-based flags, and a failed probe with visible diagnostics.
+
 Each run installs into its own library, checks that the smoke test loaded that
 installation, records session/capability information, and executes
-`R CMD check --as-cran --no-manual`. The default portability matrix permits an
-unavailable `Suggests` package and records the resulting NOTE, because optional
-Bioconductor data and analysis stacks are not necessarily available on every
-native architecture. Examples and unit tests remain enabled; vignette source
+`R CMD check --as-cran --no-manual`. The default exploratory portability mode
+sets `_R_CHECK_FORCE_SUGGESTS_=false`, because suggested packages are not
+necessarily available on every architecture. Any resulting NOTE is still
+reported and fails the unreviewed-NOTE gate; it is not a submission PASS.
+Examples and unit tests remain enabled; vignette source
 and installed outputs are inspected, but vignette code is not executed in this
 mode. Set
 `PACKAGE_TEST_BOOTSTRAP_DEPENDENCIES=true` and
 `PACKAGE_TEST_FORCE_SUGGESTS=true` for a networked full-dependency run. A full
 submission check with every `Suggests` package remains mandatory on at least one
-properly provisioned environment and in Bioconductor infrastructure. PDF
-reference-manual generation is not part of this portable matrix and needs a
-separate TeX-enabled `R CMD check --as-cran` run. Network-dependent CRAN incoming
-checks are disabled; this matrix does not replace submission checks or
-`BiocCheck`.
+properly provisioned environment. PDF reference-manual generation needs a
+TeX-enabled run with `PACKAGE_TEST_MANUAL=true`. Use
+`linux/debian-clang-check-tools.def` on the Clang base image to add the checked
+Inconsolata font archive and the R `curl` checker dependency. A missing font
+must be provisioned, not worked around with `--no-manual` in the full run.
+Network-dependent incoming checks are off unless
+`PACKAGE_TEST_INCOMING_REMOTE=true`; local checks do not replace CRAN's service.
 
 Read `status.csv`, `check-summary.txt`, `00check.log`, install logs, smoke logs,
 and failing test output. The smoke profile asserts functional capability and
@@ -202,6 +265,16 @@ failure evidence, the patch, and a new successful run after fixing a bug.
 PASS with `diagnostic` means diagnostic-only success, never functional success.
 Record package version, source SHA256, Git state, SIF SHA256, FAISS/R versions,
 compiler, BLAS/LAPACK, OS/architecture and date in the final report.
+Before reporting a complete matrix, verify the final logs, stages, expected
+profile set and shared archive identity with:
+
+```sh
+python3 .github/package-check/summarize.py /lab/run-a /lab/run-b \
+  --expect target-a,target-b
+```
+
+This fails on pending/missing results, unreviewed diagnostics, failed stages,
+mixed archives or an omitted target. Keep diagnostic profiles labelled as such.
 
 ## Negative regression tests
 

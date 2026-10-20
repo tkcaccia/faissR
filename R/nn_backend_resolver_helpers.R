@@ -46,7 +46,7 @@ resolve_cpu_nn_backend <- function(method, metric) {
         bruteforce = exact_backend,
         flat = faiss_flat_backend(metric),
         grid = "cpu_grid",
-        hnsw = if (isTRUE(faiss_available())) "faiss_hnsw" else "hnsw",
+        hnsw = "faiss_hnsw",
         ivf = "faiss_ivf",
         ivfpq = "faiss_ivfpq",
         vamana = "cpu_vamana",

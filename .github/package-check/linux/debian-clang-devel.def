@@ -1,0 +1,39 @@
+Bootstrap: docker
+From: ghcr.io/r-hub/containers/debian-clang:latest
+
+%labels
+    Purpose "R-devel Clang/Flang source installation without system FAISS"
+
+%post
+    set -eu
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        libblas-dev liblapack-dev libomp-23-dev patch make \
+        libcurl4-openssl-dev libssl-dev libxml2-dev libuv1-dev \
+        pandoc qpdf devscripts texlive-latex-base texlive-latex-recommended \
+        texlive-fonts-recommended
+    mkdir -p /opt/test-config /opt/test-library
+    cp /root/.R/Makevars /opt/test-config/Makevars
+    # Exercise a compiler with working OpenMP even when R supplies no flag.
+    printf '\nSHLIB_OPENMP_CXXFLAGS =\n' >> /opt/test-config/Makevars
+    export R_MAKEVARS_USER=/opt/test-config/Makevars
+    export R_LIBS_SITE=/opt/test-library
+    # float supplies GCC-only Fortran flags; compile that dependency with the
+    # base R toolchain, not by patching its source or changing host compilers.
+    R_MAKEVARS_USER=/dev/null /opt/R/devel/bin/Rscript --vanilla -e 'install.packages("float", lib="/opt/test-library", repos="https://cloud.r-project.org", Ncpus=2)'
+    /opt/R/devel/bin/Rscript --vanilla -e 'install.packages(c("Rcpp", "gpuinfo", "curl", "testthat", "withr", "knitr", "rmarkdown", "Matrix"), lib="/opt/test-library", repos="https://cloud.r-project.org", Ncpus=2)'
+    /opt/R/devel/bin/Rscript --vanilla -e 'for(p in c("Rcpp", "float", "gpuinfo", "testthat", "withr", "knitr", "rmarkdown", "Matrix")) stopifnot(requireNamespace(p, quietly=TRUE))'
+    test ! -f /usr/include/faiss/IndexFlat.h
+    apt-get clean
+
+%environment
+    export PATH=/opt/R/devel/bin:$PATH
+    export R_MAKEVARS_USER=/opt/test-config/Makevars
+    export R_LIBS_SITE=/opt/test-library
+    export OMP_NUM_THREADS=2
+    export OPENBLAS_NUM_THREADS=1
+    export LC_ALL=C.UTF-8
+
+%test
+    /opt/R/devel/bin/Rscript --vanilla -e 'cat(R.version.string, "\n"); stopifnot(getRversion() >= "4.6.0")'

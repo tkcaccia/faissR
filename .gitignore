@@ -5,6 +5,8 @@
 *.Rcheck/
 *.BiocCheck/
 *.tar.gz
+!src/vendor/faiss-1.11.0.tar.gz
+src/vendor/build/
 faissR_recall_inference_campaign.tar.gz.sha256
 Rplots.pdf
 cache/

@@ -1,22 +1,23 @@
 # faissR
 
 **Home** |
-[Installation](docs/installation.md) |
-[Implementation](docs/implementation.md) |
-[Examples](docs/examples.md) |
-[Benchmarks](docs/benchmarks.md) |
-[Autotuning](docs/autotuning.md) |
-[API](docs/usage-api.md) |
-[NN Methods](docs/nn-methods.md) |
-[Backends](docs/backend-capabilities.md) |
-[References](docs/references.md) |
-[JSS Manuscript](manuscript/jss/README.md)
+[Installation](https://github.com/tkcaccia/faissR/blob/main/docs/installation.md) |
+[Implementation](https://github.com/tkcaccia/faissR/blob/main/docs/implementation.md) |
+[Examples](https://github.com/tkcaccia/faissR/blob/main/docs/examples.md) |
+[Benchmarks](https://github.com/tkcaccia/faissR/blob/main/docs/benchmarks.md) |
+[Autotuning](https://github.com/tkcaccia/faissR/blob/main/docs/autotuning.md) |
+[API](https://github.com/tkcaccia/faissR/blob/main/docs/usage-api.md) |
+[NN Methods](https://github.com/tkcaccia/faissR/blob/main/docs/nn-methods.md) |
+[Backends](https://github.com/tkcaccia/faissR/blob/main/docs/backend-capabilities.md) |
+[References](https://github.com/tkcaccia/faissR/blob/main/docs/references.md) |
+[JSS Manuscript](https://github.com/tkcaccia/faissR/blob/main/manuscript/jss/README.md)
 
 Numbered citations in this README refer to the bibliography in
-[References](docs/references.md).
+[References](https://github.com/tkcaccia/faissR/blob/main/docs/references.md).
 
 The Journal of Statistical Software article and replication sources are in
-[`manuscript/jss`](manuscript/jss/README.md). Reported comparisons include
+[`manuscript/jss`](https://github.com/tkcaccia/faissR/blob/main/manuscript/jss/README.md).
+Reported comparisons include
 completed matched-node experiments with seven R interfaces; timings are
 conditional on the recorded configurations, recall screen, and workload.
 
@@ -91,12 +92,12 @@ headers and libraries discovered by `configure`.
   `method = "ivfpq_fastscan"` route through FAISS FastScan on CPU and cuVS
   4-bit IVF-PQ on CUDA. Repeated raw CUDA FastScan calls reuse a fitted cuVS
   IVF-PQ index and cuVS resources in a bounded session cache [1-6,13-16,22-23,34].
-- Optional float32 KNN data flow: `nn()` accepts
+- Float32 KNN data flow: `nn()` accepts
   `float::fl()` matrices. FAISS CPU/GPU and RAPIDS cuVS NN routes consume
   float32 input through direct C++ adapters, and unsupported native routes now
   fail clearly instead of silently converting benchmark input back to R double.
-  `output = "float"` returns float32 distance matrices when the optional
-  `float` package is installed. The float32 FAISS routes construct returned
+  `output = "float"` returns float32 distance matrices using the imported
+  `float` package. The float32 FAISS routes construct returned
   float distances directly instead of materializing an intermediate R double
   matrix for CPU FAISS Flat/IVF/IVFPQ/FastScan, cached CPU FAISS fitted
   indexes, FAISS GPU Flat/IVF/IVFPQ, and direct Euclidean RAPIDS cuVS routes.
@@ -220,9 +221,10 @@ headers and libraries discovered by `configure`.
 ## Available Functions
 
 The table below summarizes the public R functions shown on GitHub. Full
-argument-level details are in the [API reference](docs/usage-api.md), and the
+argument-level details are in the
+[API reference](https://github.com/tkcaccia/faissR/blob/main/docs/usage-api.md), and the
 method/backend/metric matrix is in the
-[backend-capabilities page](docs/backend-capabilities.md).
+[backend-capabilities page](https://github.com/tkcaccia/faissR/blob/main/docs/backend-capabilities.md).
 
 | Function | Main use | Backends | Return |
 | --- | --- | --- | --- |
@@ -252,7 +254,7 @@ typed getter functions rather than repeating function-pointer signatures.
 | C-callable name | ABI | Purpose |
 | --- | --- | --- |
 | `faissR_c_api_version` | `int(void)` | Returns `1` for the current callable ABI. The header helper `faissR_c_api_version()` lets downstream packages reject an incompatible future ABI before dispatch. |
-| `faissR_nn_float32_call` | `(x, k, backend, metric, include_self, n_threads)` | CPU FAISS Flat float32 KNN route. It accepts ordinary R double matrices or optional `float::fl()`/float32 matrices and returns the stable host `faissR_nn` list with double distances. |
+| `faissR_nn_float32_call` | `(x, k, backend, metric, include_self, n_threads)` | CPU FAISS Flat float32 KNN route. It accepts ordinary R double matrices or `float::fl()`/float32 matrices and returns the stable host `faissR_nn` list with double distances. |
 | `faissR_nn_float32_call_output` | `(x, k, backend, metric, include_self, n_threads, distances)` | Same CPU FAISS Flat float32 route, with `distances = "double"` or `"float"` to request host distance storage type. |
 | `faissR_nn_cuda_tuned_gpu_call` | `(x, k, method, metric, include_self, target_recall)` | CUDA self-KNN route that keeps result buffers on the GPU for `method = "auto"`, `"exact"`, `"flat"`, or `"bruteforce"`. It returns the same `faissR_gpu_knn` object shape as `nn_gpu()`, including CUDA device pointers and `device_to_host_result_copies = 0`. |
 | `faissR_hnsw_search_v1` | `(data, query, n, p, k, target_recall, n_threads, distance_storage)` | CPU FAISS HNSW search with shape-aware tuning. Pass `NULL` for `query` to exclude self-neighbors; otherwise supply query rows with the same storage type. `n` and `p` describe the reference matrix. The output includes the selected tuning rule. |
@@ -322,7 +324,8 @@ Every KNN result makes the value contract machine-readable through
 `distance_comparable_across_queries`, and `distance_order`. GPU-resident
 `nn_gpu()` results expose the same contract metadata without copying result
 buffers to the host.
-The [NN methods guide](docs/nn-methods.md) describes each nearest-neighbour
+The [NN methods guide](https://github.com/tkcaccia/faissR/blob/main/docs/nn-methods.md)
+describes each nearest-neighbour
 method and cites the relevant algorithm/software references.
 
 The preferred public spellings for faissR-owned candidate-graph refinements
@@ -341,25 +344,27 @@ NN-descent. Native results report
 `implementation_label`, and `canonical_reimplementation = FALSE`; `print()`
 also states that the route is experimental and package-owned. Direct cuVS
 NN-descent is labeled separately as an external-provider implementation.
-The [Autotuning guide](docs/autotuning.md) explains how the HPC target-recall
+The [Autotuning guide](https://github.com/tkcaccia/faissR/blob/main/docs/autotuning.md)
+explains how the HPC target-recall
 sweeps convert speed, recall, failure, and shape-summary tables into
 deterministic C++ defaults for each method and backend.
 
 ## Installation
 
-Install the native FAISS dependency using the platform instructions below or
-the complete [installation guide](docs/installation.md). Then install the R
-dependencies and faissR:
+Install R's development toolchain, OpenMP and complete BLAS/LAPACK development
+libraries as described in the
+[installation guide](https://github.com/tkcaccia/faissR/blob/main/docs/installation.md).
+A compatible installed FAISS library is used when available; otherwise the
+included FAISS 1.11.0 CPU source is compiled automatically. Then install faissR:
 
 ```r
-if (!requireNamespace("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-BiocManager::install("Biobase")
 install.packages("remotes")
 remotes::install_github("tkcaccia/faissR")
 ```
 
-FAISS is required and is not vendored. Rcpp >= 1.1.0 is required; update an
+No separate FAISS build or CMake installation is needed for the bundled CPU
+fallback, and installation does not download native software. The required R packages are `Rcpp`,
+`float`, and `gpuinfo`. Rcpp >= 1.1.0 is required; update an
 older distribution-provided Rcpp before compiling. `faissR` compiles with C++20 because
 recent FAISS headers use C++20 syntax. On systems where FAISS is not visible
 through `pkg-config` or standard compiler paths, set `FAISS_HOME`, or provide
@@ -375,25 +380,28 @@ On Debian/Ubuntu, also install `libblas-dev` and `liblapack-dev` alongside
 routines FAISS needs (for example `ssyrk_`). Linux configure now verifies both
 linking and loading and, when needed, adds a complete external LP64 BLAS/LAPACK
 provider. For custom installations use `FAISSR_NUMERICAL_LIBS`; see the
-[Debian installation instructions](docs/installation.md#debian-with-rs-bundled-numerical-libraries).
+[Debian installation instructions](https://github.com/tkcaccia/faissR/blob/main/docs/installation.md#debian-with-rs-bundled-numerical-libraries).
 R's own BLAS/LAPACK libraries do not need to be replaced.
 
 Linux, macOS, and Windows are eligible package platforms. Native Windows CPU
-builds require an Rtools-compatible FAISS library supplied through
-`FAISS_HOME` and complete single-precision BLAS/LAPACK routines. Windows
+builds compile the included FAISS source with Rtools when no compatible static
+FAISS is found. They require complete single-precision BLAS/LAPACK routines. Windows
 configure verifies a compiled DLL can load and selects compatible Rtools
 numerical libraries where needed; `FAISSR_NUMERICAL_LIBS` allows explicit
-configuration. WSL2 remains the practical route for CUDA/cuVS. Automated
-Windows builders that do not provide FAISS compile a diagnostic build that
-loads and reports the missing system capability. Set
-`FAISSR_REQUIRE_FAISS=1` when installation must fail unless a functional FAISS
-backend is linked. macOS binary builders should obtain a static FAISS library
-through the [R-macos recipes](https://github.com/R-macos/recipes) system.
-`configure` detects recipe installations under `/opt/R/<architecture>` before
-generic system locations. Source builds can use any ABI-compatible prefix.
+configuration. WSL2 remains the practical route for CUDA/cuVS.
+A failed CPU build is an installation error, not a silent diagnostic fallback.
+macOS and Windows use static FAISS libraries. macOS can also use a compatible
+library supplied through the [R-macos recipes](https://github.com/R-macos/recipes)
+system; recipe availability must not be assumed without a completed upstream
+build. An R-compatible OpenMP runtime is still required.
+
+The default is `--configure-args='--with-faiss=auto'`. Use `bundled` to force
+the included source, or `system` to require installed FAISS. Set the same
+choice with `FAISSR_FAISS_SOURCE` when installing through another R installer.
 
 For repeatable native Windows/macOS and multi-distribution Linux checks, see
-the [cross-platform test lab](docs/package-testing.md). Functional and
+the [cross-platform test lab](https://github.com/tkcaccia/faissR/blob/main/docs/package-testing.md).
+Functional and
 diagnostic-only results are reported separately.
 
 For a macOS source build outside the binary-builder environment, point
@@ -408,8 +416,8 @@ R CMD INSTALL .
 ```
 
 `configure` detects `CONDA_PREFIX` passively when FAISS and libomp are already
-installed there. It never invokes a system package manager. This keeps
-Bioconductor and shared-machine builds explicit and reproducible.
+installed there. It never invokes a system package manager, which keeps
+shared-machine builds explicit and reproducible.
 
 Optional CUDA/cuVS builds are enabled only when requested or auto-detected:
 
@@ -418,7 +426,8 @@ CUDA_HOME=/path/to/cuda CUVS_HOME=/path/to/cuvs \
 FAISSR_REQUIRE_CUDA=1 FAISSR_REQUIRE_CUVS=1 R CMD INSTALL .
 ```
 
-See [Installation](docs/installation.md) for CRAN/source-build details.
+See [Installation](https://github.com/tkcaccia/faissR/blob/main/docs/installation.md)
+for CRAN/source-build details.
 The installed package also includes an installation and portability vignette:
 
 ```r
@@ -426,59 +435,38 @@ vignette("installation", package = "faissR")
 ```
 
 A functional build is one for which `faiss_available()` is `TRUE` and a CPU
-smoke search completes. Diagnostic-only builds are used only on unsupported
-automated targets that lack FAISS; they load so that capability diagnostics can
-be inspected, but they do not provide nearest-neighbour computation.
+smoke search completes. Windows diagnostic tests explicitly use
+`--with-faiss=none`; WebAssembly remains diagnostic-only. Neither is a
+functional FAISS result.
 
-## Bioconductor Readiness
+## CRAN checks
 
-`faissR` includes the `GPU` `biocViews` term, a `BiocStyle` vignette,
-the R-standard `License: MIT + file LICENSE` identifier for the Expat
-License, and a top-level
-`.BBSoptions` file with `GPU_reliance: optional`. This opts the package into
-Bioconductor GPU builders without making NVIDIA libraries mandatory for the
-regular CPU/FAISS build. Local submission checks should be run from a source
-tarball:
+The package uses the R-standard `License: MIT + file LICENSE` identifier for
+the Expat License. Its R dependencies, including `gpuinfo`, are available from
+CRAN. Local submission checks should be run from a source tarball:
 
 ```sh
 R CMD build .
-R CMD check --as-cran faissR_0.99.50.tar.gz
+R CMD check --as-cran faissR_*.tar.gz
 ```
 
-and then:
-
-```r
-BiocCheck::BiocCheckGitClone(".")
-BiocCheck::BiocCheck("faissR_0.99.50.tar.gz", `new-package` = TRUE)
-```
-
-FAISS is a required external system dependency. CUDA and cuVS are
-optional for CPU-only Bioconductor builds and must not be required there.
+FAISS is supplied by the system or built from included CPU source. CUDA and
+cuVS are optional for CPU-only builds and must not be required there.
 NVIDIA GPU builds should use `FAISSR_REQUIRE_CUDA=1` and, as needed,
 `FAISSR_REQUIRE_CUVS=1` so missing GPU libraries
 or an unusable CUDA device fail during configuration. An intentional
 build-only host can set `FAISSR_SKIP_CUDA_RUNTIME_CHECK=1`, without claiming a
 functional CUDA test. GPU architectures are detected from the visible devices;
 explicit architecture variables are needed only for build-only hosts or
-cross-compilation. Maintainer Support Site registration and bioc-devel
-subscription are external submission steps.
+cross-compilation.
 
-On Debian/Ubuntu CPU builders, FAISS should be supplied by the FAISS
-development package, typically `libfaiss-dev`, together with `libblas-dev`
-and `liblapack-dev`. If a BiocStaging/r-universe log
-installs NVIDIA CUDA packages but not `libfaiss-dev`, the failing step is the
-automated system-requirements resolution: FAISS is mandatory for faissR, while
-CUDA/RAPIDS libraries are optional unless a GPU build is explicitly requested.
-Until the upstream r-universe resolver includes FAISS, the repository-level
-`.prepare` hook installs those three development packages for r-universe source builds and is
-excluded from the package tarball.
-
-For macOS binary builds, the intended solution is a static FAISS dependency
-from the R-macos recipes system. Until that dependency is available on a given
-r-universe/BiocStaging worker, the configure script builds diagnostic stubs only
-for that explicitly recognized worker. `backend_info()` then reports FAISS as
-unavailable with reason `runiverse_macos_diagnostic_stub_no_faiss`. Functional
-Linux and macOS builds still require real FAISS.
+On Debian/Ubuntu, `libfaiss-dev` can avoid rebuilding FAISS; complete
+`libblas-dev` and `liblapack-dev` numerical libraries are still needed when
+R's bundled libraries omit single-precision routines. On Fedora, the bundled
+FAISS fallback avoids dependence on a distribution `faiss-devel` package.
+Requests for new external software on CRAN builders must be agreed with CRAN
+before submission. Copyright and license information is included in the source
+and installed package; no precompiled FAISS library is shipped in the tarball.
 
 For r-universe/WebAssembly, `configure` detects the
 `wasm32-unknown-emscripten` target and builds diagnostic stubs rather than
@@ -642,7 +630,7 @@ kernel launch fixed the full COIL20 `1440 x 16384` case and MNIST70k on the
 test machine. faissR does not vendor this cuVS patch or silently fall back to
 CPU; affected users should update to a cuVS release containing the fix or build
 cuVS with the patch. See the copy-ready upstream report in
-[docs/cuvs-nndescent-shared-memory-issue.md](docs/cuvs-nndescent-shared-memory-issue.md).
+[cuVS shared-memory notes](https://github.com/tkcaccia/faissR/blob/main/docs/cuvs-nndescent-shared-memory-issue.md).
 
 ## Quick Example
 
@@ -659,9 +647,8 @@ nn_res$indices[1:3, 1:5]
 `faissR` is distributed under the Expat License, a permissive,
 GPL-compatible free-software license. R package metadata identifies this
 standard license template as `MIT + file LICENSE`. FAISS also uses the Expat
-License, while cuVS uses Apache-2.0; both are supplied by the user's system and
-are not vendored. The CUDA toolkit and driver remain subject to NVIDIA's CUDA
+License; its CPU source is included as an installation fallback. cuVS uses
+Apache-2.0 and is supplied externally. The CUDA toolkit and driver remain subject to NVIDIA's CUDA
 SDK license. See `LICENSE.note` and `inst/THIRD_PARTY_LICENSES.md` for links
-and the distribution boundary. External libraries such as FAISS
-and RAPIDS cuVS are linked as system dependencies and are not vendored into
-the R package [1-3,13-16].
+and the distribution boundary. FAISS source attribution is in `inst/COPYRIGHTS`;
+RAPIDS cuVS and NVIDIA libraries remain external dependencies [1-3,13-16].

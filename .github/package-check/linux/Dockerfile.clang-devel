@@ -1,0 +1,22 @@
+FROM ghcr.io/r-hub/containers/debian-clang:latest
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libblas-dev liblapack-dev libomp-23-dev patch make \
+    libcurl4-openssl-dev libssl-dev libxml2-dev libuv1-dev \
+    pandoc qpdf devscripts texlive-latex-base texlive-latex-recommended \
+    texlive-fonts-recommended unzip && apt-get clean
+RUN curl -fL --retry 3 https://mirrors.ctan.org/install/fonts/inconsolata.tds.zip -o /tmp/inconsolata.zip && \
+    printf '%s  /tmp/inconsolata.zip\n' d8d67b93f0510debc527fcb627e8610533287005295d3f62660461a41b7e47f3 | sha256sum -c - && \
+    mkdir -p /opt/test-texmf && unzip -q /tmp/inconsolata.zip -d /opt/test-texmf && \
+    mktexlsr /opt/test-texmf
+ENV TEXMFHOME=/opt/test-texmf
+RUN updmap-sys --enable Map=zi4.map
+RUN mkdir -p /opt/test-config /opt/test-library && \
+    cp /root/.R/Makevars /opt/test-config/Makevars && \
+    printf '\nSHLIB_OPENMP_CXXFLAGS =\n' >> /opt/test-config/Makevars
+ENV R_LIBS_SITE=/opt/test-library
+RUN R_MAKEVARS_USER=/dev/null /opt/R/devel/bin/Rscript --vanilla -e \
+    'install.packages("float", lib="/opt/test-library", repos="https://cloud.r-project.org", Ncpus=2)'
+ENV R_MAKEVARS_USER=/opt/test-config/Makevars
+RUN /opt/R/devel/bin/Rscript --vanilla -e \
+    'install.packages(c("Rcpp", "gpuinfo", "curl", "testthat", "withr", "knitr", "rmarkdown", "Matrix"), lib="/opt/test-library", repos="https://cloud.r-project.org", Ncpus=2); for(p in c("Rcpp", "float", "gpuinfo", "curl", "testthat", "withr", "knitr", "rmarkdown", "Matrix")) stopifnot(requireNamespace(p, quietly=TRUE))'

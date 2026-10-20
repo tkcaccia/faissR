@@ -25,7 +25,7 @@ jobs:
           use-public-rspm: true
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck, any::BiocManager
+          extra-packages: any::rcmdcheck
           needs: check
       - uses: r-lib/actions/setup-tinytex@v2
       - name: Install Linux build tools
@@ -69,6 +69,33 @@ jobs:
           FAISSR_JSS_MODE=compact \
           FAISSR_JSS_DERIVED_DIR="$RUNNER_TEMP/jss-compact" \
           Rscript manuscript/jss/replication_article.R
+
+  windows-bundled-faiss:
+    runs-on: windows-latest
+    env:
+      FAISS_HOME: ''
+      CONDA_PREFIX: ''
+      FAISSR_REQUIRE_FAISS: 1
+      FAISSR_FAISS_SOURCE: bundled
+      FAISSR_USE_CUDA: 0
+      FAISSR_USE_CUVS: 0
+      R_KEEP_PKG_SOURCE: yes
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: devel
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::rcmdcheck
+          needs: check
+      - name: Check functional bundled FAISS and rebuild vignettes
+        shell: Rscript {0}
+        run: |
+          rcmdcheck::rcmdcheck(
+            args = c("--as-cran", "--no-manual"),
+            error_on = "warning"
+          )
 
   archive-replication:
     runs-on: ubuntu-latest

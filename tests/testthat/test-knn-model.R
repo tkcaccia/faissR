@@ -78,7 +78,6 @@ test_that("predict preserves nearest-neighbour route metadata", {
 })
 
 test_that("knn preserves float32 input for direct NN backends", {
-  skip_if_not_installed("float")
   skip_if_not(faiss_available())
 
   set.seed(19)
@@ -112,7 +111,6 @@ test_that("knn preserves float32 input for direct NN backends", {
 })
 
 test_that("knn reuses fitted FAISS HNSW index for matching predictions", {
-  skip_if_not_installed("float")
   skip_if_not(faiss_available())
 
   set.seed(23)
@@ -167,7 +165,6 @@ test_that("knn reuses fitted FAISS HNSW index for matching predictions", {
 })
 
 test_that("knn reuses fitted FAISS Flat index for matching predictions", {
-  skip_if_not_installed("float")
   skip_if_not(faiss_available())
 
   set.seed(25)

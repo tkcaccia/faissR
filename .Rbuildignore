@@ -3,7 +3,6 @@
 ^\.github/
 ^\.gitignore$
 ^air[.]toml$
-^\.BBSoptions$
 ^\.prepare$
 ^[.]Rproj[.]user$
 ^[.]Rproj[.]user/
@@ -12,8 +11,6 @@
 ^[.]Ruserdata$
 ^[A-Za-z0-9_.-]+[.]Rcheck$
 ^[A-Za-z0-9_.-]+[.]Rcheck/
-^[A-Za-z0-9_.-]+[.]BiocCheck$
-^[A-Za-z0-9_.-]+[.]BiocCheck/
 ^faissR_[0-9.]+[.]tar[.]gz$
 ^faissR_recall_inference_campaign[.]tar[.]gz$
 ^faissR_recall_inference_campaign[.]tar[.]gz[.]sha256$
@@ -42,6 +39,8 @@
 ^src/.*[.]dylib$
 ^src/Makevars$
 ^src/symbols[.]rds$
+^src/vendor/build$
+^src/vendor/build/
 ^\.DS_Store$
 ^\.pytest_cache$
 ^\.pytest_cache/
@@ -53,3 +52,4 @@
 ^faiss_hnsw_mnist70k_.*[.]csv$
 ^mnist70k_knn_predict_speed.*[.]csv$
 ^AGENTS\.md$
+^cran-comments[.]md$

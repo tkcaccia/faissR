@@ -48,7 +48,7 @@
 #'   for repeated external-query searches. Candidate and prediction identifiers
 #'   are one-based.
 #' @examples
-#' if (faiss_available() && requireNamespace("float", quietly = TRUE)) {
+#' if (faiss_available()) {
 #'     set.seed(1)
 #'     x <- matrix(rnorm(600), nrow = 100)
 #'     fit <- hnsw_tune(
@@ -142,10 +142,6 @@ hnsw_tune_requirements <- function(data, metric) {
     }
     if (!isTRUE(faiss_available())) {
         stop("`hnsw_tune()` requires a functional CPU FAISS build.",
-            call. = FALSE)
-    }
-    if (!requireNamespace("float", quietly = TRUE)) {
-        stop("`hnsw_tune()` requires the optional `float` package.",
             call. = FALSE)
     }
     invisible(TRUE)

@@ -9,9 +9,9 @@ From: @BASE_ARCHIVE@
     export R_LIBS_SITE=/opt/test-library
     mkdir -p /opt/test-library
     apt-get update
-    apt-get install -y --no-install-recommends libuv1-dev devscripts qpdf r-cran-codetools r-bioc-biocstyle r-cran-knitr r-cran-rmarkdown r-cran-matrix
+    apt-get install -y --no-install-recommends libuv1-dev devscripts qpdf r-cran-codetools r-cran-knitr r-cran-rmarkdown r-cran-matrix
     # Do not mix any Debian R binaries with this custom R ABI.
-    /opt/R/bin/Rscript -e 'options(repos=c(CRAN="https://cloud.r-project.org")); install.packages(c("Rcpp","float","testthat","withr","knitr","rmarkdown","Matrix","codetools","BiocManager"),lib="/opt/test-library"); BiocManager::install(c("Biobase","BiocStyle"),lib="/opt/test-library",ask=FALSE,update=FALSE)'
+    /opt/R/bin/Rscript -e 'options(repos=c(CRAN="https://cloud.r-project.org")); install.packages(c("Rcpp","gpuinfo","float","testthat","withr","knitr","rmarkdown","Matrix","codetools"),lib="/opt/test-library")'
     rm -rf /var/lib/apt/lists/*
 
 %environment
@@ -25,4 +25,4 @@ From: @BASE_ARCHIVE@
     export LANG=C.UTF-8
 
 %test
-    /opt/R/bin/Rscript -e 'print(.libPaths()); ok<-vapply(c("Rcpp","Biobase","testthat","withr","float","knitr","rmarkdown","Matrix","BiocStyle","codetools"),requireNamespace,logical(1),quietly=FALSE); print(ok); stopifnot(all(ok))'
+    /opt/R/bin/Rscript -e 'print(.libPaths()); ok<-vapply(c("Rcpp","gpuinfo","testthat","withr","float","knitr","rmarkdown","Matrix","codetools"),requireNamespace,logical(1),quietly=FALSE); print(ok); stopifnot(all(ok))'

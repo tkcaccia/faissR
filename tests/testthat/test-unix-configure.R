@@ -8,8 +8,11 @@ test_that("strict FAISS mode rejects a diagnostic WebAssembly build", {
     }
 
     root <- tempfile("faissR-configure-unix-")
-    dir.create(root)
+    dir.create(file.path(root, "src"), recursive = TRUE)
     file.copy(configure, file.path(root, "configure"))
+    file.copy(test_path("../../src/build-faiss.sh"),
+        file.path(root, "src", "build-faiss.sh"))
+    withr::local_envvar(c(R_HOME = R.home()))
 
     old <- setwd(root)
     on.exit(setwd(old), add = TRUE)
@@ -35,7 +38,8 @@ test_that("Unix FAISS builds link R numerical and Fortran libraries", {
         skip("configure is unavailable in the installed-package context.")
     }
 
-    configure_source <- readLines(configure, warn = FALSE)
+    configure_source <- c(readLines(configure, warn = FALSE),
+        readLines(test_path("../../src/build-faiss.sh"), warn = FALSE))
     configure_text <- paste(configure_source, collapse = "\n")
 
     expect_true(grepl(
@@ -49,7 +53,7 @@ test_that("Unix FAISS builds link R numerical and Fortran libraries", {
     expect_match(configure_text, "void ssyrk_()", fixed = TRUE)
     expect_match(configure_text, "void sgeqrf_()", fixed = TRUE)
     expect_match(configure_text, "LD_BIND_NOW=1", fixed = TRUE)
-    expect_match(configure_text, "local = TRUE, now = TRUE", fixed = TRUE)
+    expect_match(configure_text, "local=TRUE, now=TRUE", fixed = TRUE)
 })
 
 test_that("Unix configure uses system-library conventions without installation", {

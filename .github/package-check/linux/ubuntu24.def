@@ -4,13 +4,13 @@ From: ubuntu:24.04
 %post
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
-    apt-get install -y --no-install-recommends ca-certificates curl build-essential gfortran cmake pkg-config git r-base-dev libopenblas-dev liblapack-dev libcurl4-openssl-dev libssl-dev libxml2-dev r-cran-rcpp r-bioc-biobase r-bioc-biocstyle r-cran-knitr r-cran-rmarkdown r-cran-testthat r-cran-withr r-cran-matrix
+    apt-get install -y --no-install-recommends ca-certificates curl build-essential gfortran cmake pkg-config git r-base-dev libopenblas-dev liblapack-dev libcurl4-openssl-dev libssl-dev libxml2-dev r-cran-rcpp r-cran-knitr r-cran-rmarkdown r-cran-testthat r-cran-withr r-cran-matrix
     curl -fsSL https://github.com/facebookresearch/faiss/archive/refs/tags/v1.11.0.tar.gz -o /tmp/faiss.tar.gz
     tar -xzf /tmp/faiss.tar.gz -C /tmp
     cmake -S /tmp/faiss-1.11.0 -B /tmp/faiss-build -DFAISS_ENABLE_GPU=OFF -DFAISS_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release -DFAISS_OPT_LEVEL=generic
     cmake --build /tmp/faiss-build --target install -j2
     ldconfig
-    Rscript -e 'install.packages("float", repos="https://cloud.r-project.org")'
+    Rscript -e 'install.packages(c("float", "gpuinfo"), repos="https://cloud.r-project.org")'
     rm -rf /tmp/faiss* /var/lib/apt/lists/*
 
 %environment
@@ -22,4 +22,4 @@ From: ubuntu:24.04
     export LANG=C.UTF-8
 
 %test
-    Rscript -e 'stopifnot(requireNamespace("Rcpp"), requireNamespace("Biobase"), requireNamespace("testthat"))'
+    Rscript -e 'stopifnot(requireNamespace("Rcpp"), requireNamespace("gpuinfo"), requireNamespace("testthat"))'

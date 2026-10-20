@@ -1,11 +1,15 @@
 External system requirements
 ============================
 
-faissR requires the FAISS C++ library for a functional installation, including
-CPU-only installations. The package does not vendor FAISS. Explicitly
-recognized package-staging and WebAssembly targets can produce diagnostic-only
-artifacts without FAISS; those artifacts cannot perform nearest-neighbour
-search.
+faissR uses a compatible installed FAISS library (>= 1.11.0) when available.
+Otherwise it compiles the included FAISS 1.11.0 source into a static CPU library
+with the active R toolchain. This needs no download, administrator access,
+CMake, Python, or separate FAISS installation. CUDA/cuVS are not bundled.
+
+The default is --configure-args='--with-faiss=auto'. Select bundled to force
+the included source or system to require an installed FAISS library. The
+equivalent environment variable is FAISSR_FAISS_SOURCE. A failed bundled build
+is an error, not an automatic diagnostic-only installation.
 
 NVIDIA CUDA and RAPIDS cuVS are not required for a CPU-only FAISS build. They
 are required when the user explicitly requests the corresponding GPU features.
@@ -17,23 +21,27 @@ Required for all platforms
 - A C++20-capable compiler.
 - A Fortran compiler for Unix functional builds. Windows uses the package's
   C++ exact fallback and does not compile the Fortran source.
-- FAISS C++ headers and library.
+- GNU make, OpenMP, and complete LP64 BLAS/LAPACK development libraries.
+- Either installed FAISS or the included CPU source (selected automatically).
 
 The Unix package shared library links against the LAPACK, BLAS, and Fortran
 libraries reported by R. No separate BLAS implementation is required when R's
-own BLAS/LAPACK libraries provide these symbols.
+own BLAS/LAPACK libraries provide these symbols. Otherwise configure locates
+complete numerical libraries, including single-precision routines, without
+replacing R's BLAS. The bundled build uses portable CPU instructions rather
+than forcing the build machine's instruction set on binary users.
 
-The mandatory R packages are `Rcpp` and the Bioconductor package `Biobase`;
-`methods` ships with R. R package installers normally resolve these
-dependencies automatically. Building the vignettes additionally requires
-`BiocStyle`, `knitr`, and `rmarkdown`.
+The mandatory non-base R packages are `Rcpp`, `float`, and `gpuinfo`;
+`methods` ships with R. R package installers normally resolve these dependencies
+automatically. Building the vignettes additionally requires `knitr` and
+`rmarkdown`.
 
 If FAISS is not in a standard compiler/linker path or visible through
 pkg-config, set FAISS_HOME to a prefix containing:
 
   include/faiss/IndexFlat.h
   lib/libfaiss.so      on Linux
-  lib/libfaiss.dylib   on macOS
+  lib/libfaiss.a       on macOS or Windows (static libraries are required)
 
 Example:
 
@@ -51,11 +59,10 @@ On Debian or Ubuntu, the usual development packages are:
 
   sudo apt-get install libfaiss-dev libblas-dev liblapack-dev
 
-On RPM-based distributions, the corresponding names are commonly
-faiss-devel, blas-devel, and lapack-devel when FAISS is packaged by the
-enabled repositories. Not every RPM or Alpine repository supplies FAISS. In
-that case, build FAISS separately and set FAISS_HOME rather than asking the R
-package installation to change the operating system.
+libfaiss-dev is optional: when absent, faissR builds its included CPU source.
+On Fedora, install gcc-c++, gcc-gfortran, make, blas-devel and lapack-devel;
+the bundled fallback does not require a faiss-devel package. No package
+installation invokes apt, dnf or another operating-system package manager.
 
 After installing or building a CPU-only FAISS library, install faissR with:
 
@@ -106,10 +113,10 @@ macOS
 -----
 
 macOS builds are expected to be CPU/FAISS builds. NVIDIA CUDA is not supported
-on modern macOS/Apple Silicon systems. Bioconductor and CRAN macOS binary
-builders should obtain a static CPU FAISS library through the R-macos recipes
-system. The configure script detects recipe installations under
-/opt/R/arm64 and /opt/R/x86_64.
+on modern macOS/Apple Silicon systems. Installation uses a compatible static
+CPU FAISS library, including R-macos recipes prefixes under /opt/R/arm64 and
+/opt/R/x86_64, or compiles the included CPU source. OpenMP and Fortran must
+match the active R toolchain; the fallback does not supply those runtimes.
 
 For a source build outside that environment, provide compatible FAISS and
 OpenMP prefixes explicitly:
@@ -125,30 +132,29 @@ Windows
 -------
 
 faissR is eligible for native Windows builds and is not restricted by an
-`OS_type` field. FAISS remains mandatory for a functional build. When an
-automated builder does not provide compatible FAISS development files,
-`configure.win` builds diagnostic stubs so package portability checks can run;
-those stubs report that native nearest-neighbour functionality is unavailable.
+`OS_type` field. Normal installation uses a compatible installed static FAISS
+or compiles the bundled CPU source with Rtools. Diagnostic-only installation
+requires an explicit --with-faiss=none and is not a functional FAISS result.
 
-Use Rtools and a FAISS CPU build compiled with a compatible toolchain for a
-functional native Windows installation, or use WSL2 for Linux-style builds.
+Use the matching Rtools toolchain for a functional native CPU installation;
+no separate FAISS build is necessary. WSL2 supports Linux-style builds.
 Native RAPIDS cuVS C++ builds are generally Linux-oriented; for NVIDIA GPU
 support on Windows, WSL2 is the recommended route.
 
-Bioconductor notes
-------------------
+Automated-builder notes
+-----------------------
 
-Bioconductor and r-universe CPU builders need FAISS installed or FAISS_HOME set.
+CRAN and r-universe CPU builders can use installed or bundled CPU FAISS.
 CUDA/cuVS should not be required on CPU-only builders. If NVIDIA GPU support is
 required for a particular build environment, use the strict FAISSR_REQUIRE_*
 variables above.
 
-The repository declares optional GPU testing in .BBSoptions:
-
-  GPU_reliance: optional
-
-This keeps CUDA optional on ordinary CPU builders while allowing the
-Bioconductor GPU platform to exercise GPU-aware checks.
+The SystemRequirements field documents external libraries; R CMD INSTALL does
+not install operating-system packages. Any new external requirements on CRAN
+builders must be agreed with CRAN before submission. Debian's libfaiss-dev
+can avoid rebuilding FAISS, but it is not needed for the bundled fallback.
+No precompiled FAISS archive is shipped in the source package. Copyright,
+license and patch information is in inst/COPYRIGHTS and src/vendor/README.
 
 Functional verification
 -----------------------
@@ -159,9 +165,9 @@ run:
 
   Rscript -e 'library(faissR); stopifnot(faiss_available()); x <- matrix(rnorm(240), 40); z <- nn(x, 3, method="exact", backend="cpu"); stopifnot(identical(dim(z$indices), c(40L, 3L)))'
 
-Diagnostic-only artifacts can be produced on explicitly recognized automated
-targets without FAISS. They load and report provider availability, but they do
-not perform nearest-neighbour search and are not functional platform results.
+Windows diagnostic-only tests must explicitly use --with-faiss=none; the
+normal Windows installation builds FAISS. WebAssembly remains diagnostic-only.
+These profiles are not evidence of functional FAISS support.
 
 The installed vignette gives pinned, tested commands, provider/toolchain
 combinations, capability checks, license boundaries, and troubleshooting:

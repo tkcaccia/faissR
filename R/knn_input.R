@@ -445,7 +445,7 @@ validate_dense_matrix_input <- function(x, arg_name = "data") {
     stop(
         "`", arg_name, "` is a ", class_label,
         " object. faissR accepts dense numeric matrices, numeric data ",
-        "frames, and optional float::fl() matrices only. Sparse, delayed, ",
+        "frames, and float::fl() matrices only. Sparse, delayed, ",
         "and file-backed objects are not converted implicitly because ",
         "`as.matrix()` can allocate a dense copy. Compute a size-checked ",
         "dense representation such as PCA scores, or explicitly materialize ",
@@ -488,15 +488,6 @@ float32_to_numeric_matrix <- function(x, arg_name = "data") {
         storage.mode(x) <- "double"
         return(x)
     }
-    if (!requireNamespace("float", quietly = TRUE)) {
-        stop(
-            "`",
-            arg_name,
-            "` is a float32 object but the optional float package ",
-            "is not installed.",
-            call. = FALSE
-        )
-    }
     out <- float::dbl(x)
     out <- as.matrix(out)
     storage.mode(out) <- "double"
@@ -504,14 +495,6 @@ float32_to_numeric_matrix <- function(x, arg_name = "data") {
 }
 
 as_float_distances <- function(x) {
-    if (!requireNamespace("float", quietly = TRUE)) {
-        stop(
-            "`output = \"float\"` requires the optional float package. ",
-            "Install it with `install.packages(\"float\")`, or use ",
-            "`output = \"double\"`.",
-            call. = FALSE
-        )
-    }
     float::fl(x)
 }
 
@@ -519,8 +502,7 @@ as_float_distances <- function(x) {
 .faissR_transformed_float32_cache$.keys <- character()
 
 transformed_float32_cache_enabled <- function() {
-    isTRUE(faissr_option("cache_transformed_float32", TRUE)) &&
-        requireNamespace("float", quietly = TRUE)
+    isTRUE(faissr_option("cache_transformed_float32", TRUE))
 }
 
 transformed_float32_cache_limit <- function() {
@@ -584,10 +566,6 @@ normalized_float32_transform_cached <- function(x, metric, role = "data") {
             call. = FALSE
         )
     }
-    if (!requireNamespace("float", quietly = TRUE)) {
-        return(NULL)
-    }
-
     dims <- if (is_float32_matrix_input(x)) {
         float32_matrix_dims(x, role)
     } else {

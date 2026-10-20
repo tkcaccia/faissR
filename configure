@@ -2,6 +2,12 @@
 
 set -eu
 
+. ./src/build-faiss.sh
+faissr_source_mode "$@"
+faiss_bundled=0
+faiss_windows=0
+faiss_r_bin="${R_HOME:?R_HOME must identify the active R}/bin/R"
+
 # System-library metadata follows the common R "anticonf" convention. These
 # names are used only in diagnostics; configure never invokes a package manager.
 PKG_CONFIG_NAME="faiss"
@@ -139,22 +145,6 @@ if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
   fi
 fi
 
-runiverse_macos_diagnostic_stubs_allowed() {
-  if [ "$(uname -s 2>/dev/null || echo unknown)" != "Darwin" ]; then
-    return 1
-  fi
-  if [ "${FAISSR_RUNIVERSE_MACOS_STUBS:-1}" = "0" ]; then
-    return 1
-  fi
-  if [ "$require_faiss" = "1" ]; then
-    return 1
-  fi
-  if [ -n "${UNIVERSE_NAME:-}" ] || [ -n "${MY_UNIVERSE:-}" ]; then
-    return 0
-  fi
-  return 1
-}
-
 try_libomp_prefix() {
   libomp_prefix=$1
   if [ -n "$libomp_prefix" ] && [ -f "$libomp_prefix/include/omp.h" ]; then
@@ -189,7 +179,12 @@ try_faiss_dirs() {
   fi
   candidate_faiss_file=""
   candidate_faiss_rpath=""
-  if [ -f "$candidate_faiss_libdir/libfaiss.dylib" ]; then
+  if [ "$(uname -s 2>/dev/null || echo unknown)" = Darwin ] && \
+     [ -f "$candidate_faiss_libdir/libfaiss.a" ]; then
+    candidate_faiss_file="$candidate_faiss_libdir/libfaiss.a"
+  elif [ "$(uname -s 2>/dev/null || echo unknown)" = Darwin ]; then
+    return 1
+  elif [ -f "$candidate_faiss_libdir/libfaiss.dylib" ]; then
     candidate_faiss_file="$candidate_faiss_libdir/libfaiss.dylib"
     candidate_faiss_rpath="-Wl,-rpath,$candidate_faiss_libdir"
   elif [ -f "$candidate_faiss_libdir/libfaiss.so" ]; then
@@ -201,7 +196,11 @@ try_faiss_dirs() {
   if [ -n "$candidate_faiss_file" ]; then
     faiss_cppflags="-I$faiss_include_dir"
     faiss_libdir="$candidate_faiss_libdir"
-    faiss_libs="-L$faiss_libdir $candidate_faiss_rpath $PKG_LIBS"
+    if [ "$(uname -s 2>/dev/null || echo unknown)" = Darwin ]; then
+      faiss_libs="\"$candidate_faiss_file\""
+    else
+      faiss_libs="-L$faiss_libdir $candidate_faiss_rpath $PKG_LIBS"
+    fi
     return 0
   fi
   return 1
@@ -231,12 +230,18 @@ try_faiss_system() {
   return 1
 }
 
-if try_faiss_prefix "$faiss_home"; then
+if [ "$faiss_source_mode" = bundled ]; then
+  :
+elif [ "$faiss_source_mode" = none ]; then
+  echo "--with-faiss=none is supported only for Windows diagnostic tests." >&2
+  exit 1
+elif try_faiss_prefix "$faiss_home"; then
   :
 elif [ -n "${INCLUDE_DIR:-}" ] && [ -n "${LIB_DIR:-}" ] && \
      try_faiss_dirs "$INCLUDE_DIR" "$LIB_DIR"; then
   :
-elif command -v pkg-config >/dev/null 2>&1 && \
+elif [ "$(uname -s 2>/dev/null || echo unknown)" != Darwin ] && \
+     command -v pkg-config >/dev/null 2>&1 && \
      pkg-config --exists "$PKG_CONFIG_NAME" 2>/dev/null; then
   faiss_cppflags=$(pkg-config --cflags "$PKG_CONFIG_NAME")
   faiss_libs=$(pkg-config --libs "$PKG_CONFIG_NAME")
@@ -252,32 +257,17 @@ elif try_faiss_system; then
   :
 fi
 
-if [ -z "$faiss_cppflags" ] || [ -z "$faiss_libs" ]; then
-  if runiverse_macos_diagnostic_stubs_allowed; then
-    echo "r-universe/BiocStaging macOS binary worker detected without FAISS." >&2
-    echo "Building diagnostic stubs because this worker does not provide FAISS." >&2
-    echo "Linux and user macOS source builds still require real FAISS." >&2
-    write_diagnostic_makevars "-DFAISSR_MACOS_CI_NO_FAISS"
-    exit 0
-  fi
-  echo "FAISS is required to build faissR, but FAISS headers/library were not found." >&2
-  if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
-    echo "Bioconductor/macOS binaries should use the static FAISS dependency supplied" >&2
-    echo "through the R-macos recipes system. For a source build, set FAISS_HOME" >&2
-    echo "or INCLUDE_DIR and LIB_DIR to a compatible FAISS installation." >&2
-  elif [ -f /etc/debian_version ]; then
-    echo "On Debian/Ubuntu, install: $PKG_DEB_NAME" >&2
-  elif command -v dnf >/dev/null 2>&1 || command -v rpm >/dev/null 2>&1; then
-    echo "On RPM-based systems, install when available: $PKG_RPM_NAME" >&2
-  elif command -v apk >/dev/null 2>&1; then
-    echo "On Alpine, $PKG_APK_NAME; build FAISS and set FAISS_HOME." >&2
+if [ -z "$faiss_libs" ]; then
+  if [ "$faiss_source_mode" != system ]; then
+    faiss_bundled=1
   else
-    echo "Install FAISS or set FAISS_HOME to a prefix containing include/faiss and lib/libfaiss." >&2
+    echo "--with-faiss=system requested, but no suitable FAISS library was found." >&2
+    echo "Use --with-faiss=auto (default) to compile the bundled CPU source." >&2
+    echo "For an installed library set FAISS_HOME or INCLUDE_DIR and LIB_DIR." >&2
+    echo "On Debian/Ubuntu the development packages are: $PKG_DEB_NAME" >&2
+    echo "On RPM systems, when available: $PKG_RPM_NAME" >&2
+    exit 1
   fi
-  echo "Alternatively use R CMD INSTALL --configure-vars='INCLUDE_DIR=... LIB_DIR=...'." >&2
-  echo "NVIDIA CUDA/cuVS libraries are not required for a CPU-only FAISS build." >&2
-  echo "For a NVIDIA GPU build, set FAISSR_REQUIRE_CUDA=1 and, if needed, FAISSR_REQUIRE_CUVS=1 so missing GPU libraries are fatal." >&2
-  exit 1
 fi
 
 if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
@@ -307,6 +297,27 @@ if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
   fi
 
   extra_cxxflags="$extra_cxxflags -Xpreprocessor -fopenmp"
+fi
+
+faissr_configure_openmp
+
+if [ "$faiss_bundled" = 0 ] && ! faissr_probe_library; then
+  if [ "$faiss_source_mode" = system ] || \
+     [ -n "${FAISSR_NUMERICAL_LIBS:-}" ]; then
+    echo "The requested installed FAISS/numerical libraries are unusable." >&2
+    exit 1
+  fi
+  echo "Installed FAISS is unsuitable; trying the bundled CPU source."
+  faiss_bundled=1
+fi
+if [ "$faiss_bundled" = 1 ]; then
+  faissr_build_bundled
+  if ! faissr_probe_library; then
+    echo "Complete LP64 BLAS/LAPACK and OpenMP development files are required." >&2
+    echo "On Debian/Ubuntu: libblas-dev liblapack-dev; FAISS itself is bundled." >&2
+    echo "Set FAISSR_NUMERICAL_LIBS for a nonstandard numerical library prefix." >&2
+    exit 1
+  fi
 fi
 
 cppflags="$cppflags -DFAISSR_HAS_FAISS $faiss_cppflags $libomp_cppflags"
@@ -652,97 +663,6 @@ if [ "$use_cuvs" != "0" ]; then
   fi
 fi
 
-faiss_numerical_libs=${FAISSR_NUMERICAL_LIBS:-}
-if [ "$(uname -s 2>/dev/null || echo unknown)" = "Linux" ]; then
-  # R's bundled BLAS/LAPACK omit single-precision routines used by FAISS.
-  # A shared-library link alone permits unresolved symbols, so also load it
-  # in a fresh R process with immediate symbol resolution.
-  if [ -n "${R_HOME:-}" ]; then
-    r_bin="$R_HOME/bin/R"
-  else
-    r_bin=$(command -v R || true)
-  fi
-  if [ ! -x "$r_bin" ]; then
-    echo "R was not found for the FAISS numerical-library check." >&2
-    exit 1
-  fi
-  probe_dir=$(mktemp -d "${TMPDIR:-/tmp}/faissR-link-XXXXXX")
-  trap 'rm -rf "$probe_dir"' 0
-  trap 'exit 1' HUP INT QUIT TERM
-  probe_log="$config_log"
-  printf '\n%s\n' 'FAISS numerical-library compile/load probes' >> "$probe_log"
-  cat > "$probe_dir/conftest.cpp" <<'EOF'
-#include <faiss/IndexFlat.h>
-extern "C" {
-void sgemm_(); void ssyrk_(); void sgeqrf_(); void sorgqr_();
-void sgesvd_(); void sgelsd_(); void sgetrf_(); void sgetri_();
-void dgemm_(); void dsyev_(); void dgesvd_(); void dgetrf_(); void dgetri_();
-void (*volatile faissr_numerical_symbols[])() = {
-    sgemm_, ssyrk_, sgeqrf_, sorgqr_, sgesvd_, sgelsd_, sgetrf_, sgetri_,
-    dgemm_, dsyev_, dgesvd_, dgetrf_, dgetri_
-};
-void *faissr_link_probe() { return new faiss::IndexFlatL2(2); }
-}
-EOF
-
-  try_numerical_libs() {
-    probe_libs=$1
-    {
-      echo 'CXX_STD = CXX20'
-      echo "PKG_CPPFLAGS = $cppflags"
-      printf '%s%s\n' 'PKG_CXXFLAGS = -pthread $(SHLIB_OPENMP_CXXFLAGS)' "$extra_cxxflags"
-      printf '%s%s\n' 'PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) ' \
-        "$libs $probe_libs \$(LAPACK_LIBS) \$(BLAS_LIBS) \$(FLIBS)"
-    } > "$probe_dir/Makevars"
-    rm -f "$probe_dir/conftest.o" "$probe_dir/conftest.so"
-    printf '\nExtra numerical libraries: %s\n' "${probe_libs:-(none)}" >> "$probe_log"
-    if (cd "$probe_dir" && "$r_bin" CMD SHLIB conftest.cpp && \
-        LD_BIND_NOW=1 "$r_bin" --vanilla --slave -e \
-        'dyn.load("conftest.so", local = TRUE, now = TRUE)') >> "$probe_log" 2>&1; then
-      faiss_numerical_libs=$probe_libs
-      return 0
-    fi
-    return 1
-  }
-
-  numerical_ok=0
-  if [ -n "$faiss_numerical_libs" ]; then
-    if try_numerical_libs "$faiss_numerical_libs"; then numerical_ok=1; fi
-  elif try_numerical_libs ""; then
-    numerical_ok=1
-  else
-    for numerical_pc in 'lapack blas' openblas; do
-      if command -v pkg-config >/dev/null 2>&1 && \
-          pkg-config --exists $numerical_pc; then
-        numerical_candidate=$(pkg-config --libs $numerical_pc)
-        if try_numerical_libs "$numerical_candidate"; then
-          numerical_ok=1
-          break
-        fi
-      fi
-    done
-    if [ "$numerical_ok" = "0" ]; then
-      for numerical_candidate in '-llapack -lblas' '-lopenblas'; do
-        if try_numerical_libs "$numerical_candidate"; then
-          numerical_ok=1
-          break
-        fi
-      done
-    fi
-  fi
-  if [ "$numerical_ok" = "0" ]; then
-    echo "FAISS was found, but its numerical-library compile/load check failed." >&2
-    echo "FAISS needs complete, ABI-compatible LP64 BLAS and LAPACK, including single precision." >&2
-    echo "On Debian/Ubuntu: apt-get install libfaiss-dev libblas-dev liblapack-dev" >&2
-    echo "For a custom provider, set FAISSR_NUMERICAL_LIBS (for example '-llapack -lblas')." >&2
-    echo "Do not replace R's libRblas/libRlapack. See config.log for the compiler/loader error." >&2
-    exit 1
-  fi
-  echo "FAISS compile/load check passed; extra numerical libraries: ${faiss_numerical_libs:-(none)}"
-  rm -rf "$probe_dir"
-  trap - 0 HUP INT QUIT TERM
-fi
-
 {
   echo "CXX_STD = CXX20"
   printf '%s%s\n' 'PKG_CXXFLAGS = -pthread $(SHLIB_OPENMP_CXXFLAGS)' "$extra_cxxflags"
@@ -750,10 +670,10 @@ fi
     echo "PKG_CPPFLAGS = $cppflags"
   fi
   printf '%s%s\n' 'PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) ' \
-    "$libs $faiss_numerical_libs \$(LAPACK_LIBS) \$(BLAS_LIBS) \$(FLIBS)"
+    "$faiss_openmp_flags $libs $faiss_numerical_libs \$(LAPACK_LIBS) \$(BLAS_LIBS) \$(FLIBS)"
   if [ "$cuda_objects" != "nn_cuda_stub.o" ]; then
     echo "NVCC = $nvcc"
     printf "%s" "$cuda_rule"
   fi
-    echo "OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_fortran.o $faiss_objects $cuvs_objects nn_cuda_bridge.o $cuda_objects"
+    echo "OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_fortran.o faissr_console.o $faiss_objects $cuvs_objects nn_cuda_bridge.o $cuda_objects"
 } > src/Makevars

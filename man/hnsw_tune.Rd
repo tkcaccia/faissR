@@ -97,7 +97,7 @@ from a representative reference subset. The existing shape-based defaults
 used by [nn()] are not changed.
 }
 \examples{
-if (faiss_available() && requireNamespace("float", quietly = TRUE)) {
+if (faiss_available()) {
     set.seed(1)
     x <- matrix(rnorm(600), nrow = 100)
     fit <- hnsw_tune(

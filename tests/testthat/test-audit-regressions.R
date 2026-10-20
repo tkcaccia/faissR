@@ -61,7 +61,6 @@ test_that("scaled normalization retains genuine degenerate rows", {
 
 test_that("direct float32 normalization and conversion are checked", {
     skip_if_not(faiss_available())
-    skip_if_not_installed("float")
     x <- matrix(c(1, 2, 4, 1, -2, 3, -1, 3, 2), 3, 3)
     for (metric in c("cosine", "correlation")) {
         expected <- nn_faiss_flat_float32_cpp(
