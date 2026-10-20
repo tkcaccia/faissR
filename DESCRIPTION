@@ -33,6 +33,7 @@ Imports:
 Suggests:
     knitr,
     Matrix,
+    RhpcBLASctl,
     rmarkdown,
     testthat,
     withr

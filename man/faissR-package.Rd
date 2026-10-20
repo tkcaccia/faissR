@@ -94,13 +94,13 @@ Useful links:
 Authors:
 \itemize{
   \item Stefano Cacciatore \email{tkcaccia@gmail.com}
-    (\href{https://orcid.org/0000-0001-7052-7156}{ORCID})
+  (\href{https://orcid.org/0000-0001-7052-7156}{ORCID})
 }
 
 Other contributors:
 \itemize{
   \item Meta Platforms, Inc. and affiliates
-    (Bundled FAISS source; see inst/COPYRIGHTS) [copyright holder]
+  (Bundled FAISS source; see inst/COPYRIGHTS) [copyright holder]
 }
 
 }

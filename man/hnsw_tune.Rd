@@ -110,7 +110,8 @@ if (faiss_available()) {
         build_grid = data.frame(m = 8L, ef_construction = 40L),
         ef_search = 20L,
         bootstrap_repetitions = 25L,
-        timing_repetitions = 1L
+        timing_repetitions = 1L,
+        n_threads = 1
     )
     fit
 }

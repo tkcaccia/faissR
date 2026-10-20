@@ -1,54 +1,58 @@
-## Initial submission, corrected faissR 0.1
+## Resubmission of faissR 0.1
 
 The initial-submission version remains 0.1.
 
-### Installation corrections
+### CPU-time corrections
 
-The Debian incoming log compiled the bundled FAISS source using Clang without
-OpenMP flags. Configure now compiles and loads an OpenMP probe and reuses the
-successful flags throughout FAISS and package compilation/linkage. Failed final
-probes print their diagnostics into 00install.out.
+Small examples and vignette calculations now explicitly request one search
+worker. Tests use the same budget, including internal helper calls and child R
+processes; explicit two-thread correctness tests remain enabled. The test entry
+point restores prior BLAS, OpenMP and environment settings, including on failure.
+RhpcBLASctl is suggested for controlling the independent numerical-library pool
+in tests and vignette rendering. Normal search-thread defaults are unchanged.
 
-The included FAISS 1.11.0 source fallback is CPU-only and uses the active R
-toolchain and GNU make. It requires no CMake, precompiled binary or native-library
-download during installation. A suitable installed FAISS library is preferred.
-Complete LP64 BLAS/LAPACK and OpenMP remain system requirements; R's BLAS and
-the host NVIDIA driver are never replaced. CUDA/cuVS are optional.
-
-The documented compatibility patch also fixes explicit standard-header
-requirements under libc++, header-only helpers, MinGW alignment and GCC
-diagnostics concerning initialization and a file-handle deleter type.
-
-### Incoming NOTE
-
-The previous Windows incoming check completed without errors or warnings.
-The title now quotes FAISS and spells out prediction/clustering rather than
-using kNN. The expected new-submission NOTE remains.
+Native float32 validation and matrix-layout conversion now have explicit thread
+budgets; small buffers are processed serially. Recall diagnostics also request
+one worker. Numerical and metadata regression tests exercise these changes.
 
 ### Validation
 
-Source archive: 1,579,976 bytes. SHA256:
+The source archive is 1,583,854 bytes. SHA256:
 
-    77fd0e3dc7cd1d5c0bbd892466f5c37c547a38b4b3fcfee8d0ac719553d41842
+    14a1fdc5df188c9082297e4e82fadc91380acb46e975394607625bd92508edec
 
-Seven functional profiles completed R CMD check --as-cran with zero errors
-and zero warnings: R-devel Debian Clang/Flang 23 with libc++, Ubuntu GCC,
-Debian GCC with both installed/bundled FAISS, macOS arm64, and Windows x64
-with both installed/bundled FAISS. Every profile rebuilt both vignettes and
-ran examples, unit tests and independent-reference search smoke tests.
+Four functional profiles completed R CMD check --as-cran with zero errors,
+zero warnings and no CPU-timing NOTEs:
 
-The R-devel profile also completed network incoming/URL checks and PDF/HTML
-manual generation. Its two NOTEs are the initial submission and the test
-toolchain's inherited -Wp,-D_FORTIFY_SOURCE=3 flag. Other functional profiles
-reported no R check NOTEs. Upstream FAISS signedness compiler diagnostics
-remain visible and documented separately from R check WARNINGs; warning flags
-were not disabled. No fresh CUDA, Windows ARM64 or macOS Intel claim is made
-for this archive.
+- macOS arm64: tests used 16 CPU seconds over 20 elapsed seconds.
+- Ubuntu 24.04, GCC/GFortran: 23 CPU seconds over 22 elapsed seconds.
+- Debian R-devel, Clang/Flang 23 and libc++: 21 CPU seconds over 20 elapsed.
+- Windows x64, Rtools: tests completed in 97 elapsed seconds.
 
-The explicit Windows diagnostic-only profile also completed with zero errors,
-warnings and NOTEs. FAISS is disabled there; it is not counted as functional
-FAISS support.
+Every profile ran examples, unit tests, independent-reference search smoke
+tests, both evaluated vignettes, incoming checks, and PDF/HTML manual checks.
+All suggested dependencies were present. The example, test and vignette
+CPU-to-elapsed thresholds were explicitly enabled at 2.5. The final check
+environment left OpenMP unrestricted and selected one BLAS worker before
+starting R. A retained fully uncapped control showed that even a `1 + 1`
+vignette could trigger excess CPU use during BLAS startup on the high-core
+Linux image. Timing NOTEs were not exempted from the checker.
 
-The checker now validates dependency versions, preserves configure diagnostics,
-audits compiler logs and each NOTE, and verifies completed profiles and identical
-source checksums before producing its summary.
+The new-submission NOTE is expected. The R-hub Clang image additionally reports
+its inherited -Wp,-D_FORTIFY_SOURCE=3 flag; this is recorded as a toolchain NOTE.
+Raw upstream FAISS signedness diagnostics and macOS duplicate Fortran-runtime
+link diagnostics remain visible and are audited separately from R check
+WARNINGs. Warning flags were not disabled.
+
+### Native installation
+
+The previously corrected configure logic continues to compile/load an OpenMP
+probe and reuse the successful flags with the active R toolchain. A compatible
+installed FAISS is preferred; the included FAISS 1.11.0 CPU source fallback
+requires no native-library download or precompiled binary during installation.
+Complete LP64 BLAS/LAPACK and OpenMP remain system requirements. CUDA/cuVS are
+optional; system R, BLAS and NVIDIA drivers are never replaced.
+
+No fresh CUDA, Windows ARM64, macOS Intel or diagnostic-only result is claimed
+for this archive. Source identities, native-library hashes and final check
+completion were verified before producing the report.

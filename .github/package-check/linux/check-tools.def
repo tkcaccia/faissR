@@ -5,9 +5,10 @@ From: @UBUNTU_BASE@
 %post
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
-    apt-get install -y --no-install-recommends devscripts qpdf
+    apt-get install -y --no-install-recommends devscripts qpdf tidy
     rm -rf /var/lib/apt/lists/*
 
 %test
     command -v checkbashisms
     qpdf --version
+    tidy --version

@@ -22,7 +22,7 @@ test_that("HNSW tuning validation rejects unsupported or unbounded requests", {
             metric = "cosine",
             reference_size = 50L,
             tune_queries = 10L,
-            holdout_queries = 10L
+            holdout_queries = 10L, n_threads = 1L
         ),
         "euclidean"
     )
@@ -37,7 +37,7 @@ test_that("HNSW tuning validation rejects unsupported or unbounded requests", {
                 m = c(4L, 8L),
                 ef_construction = c(20L, 40L)
             ),
-            max_builds = 1L
+            max_builds = 1L, n_threads = 1L
         ),
         "max_builds"
     )

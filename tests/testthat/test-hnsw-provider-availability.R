@@ -11,7 +11,7 @@ test_that("CPU HNSW reports a missing FAISS provider without legacy dispatch", {
         )
         expect_error(
             nn(x, k = 3, backend = "cpu", method = "hnsw",
-                metric = metric, tuning = "none"),
+                metric = metric, tuning = "none", n_threads = 1L),
             "FAISS.*not.*available"
         )
     }
@@ -23,5 +23,5 @@ test_that("CPU HNSW reports a missing FAISS provider without legacy dispatch", {
     expect_false(any(caps$runtime_available))
     expect_true(all(caps$runtime_reason == "missing_faiss"))
 
-    expect_no_error(nn(x, k = 3, backend = "cpu", method = "exact"))
+    expect_no_error(nn(x, k = 3, backend = "cpu", method = "exact", n_threads = 1L))
 })

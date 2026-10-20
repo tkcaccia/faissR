@@ -25,6 +25,25 @@ stopifnot(!audit_check_notes(c("* checking CRAN incoming feasibility ... NOTE",
     "New submission", "Previously unknown incoming diagnostic", "* DONE"), out))
 stopifnot(!audit_check_notes(c("* checking examples ... NOTE",
     "Examples with CPU or elapsed time > 5s", "* DONE"), out))
+timing_notes <- c(
+    "* checking examples ... [18s/2s] NOTE",
+    "Examples with CPU time > 2.5 times elapsed time",
+    "                 user system elapsed ratio",
+    "nn              1.051 0.041   0.035   31.2",
+    "* checking tests ... [409s/37s] NOTE",
+    "Running R code in 'testthat.R' had CPU time 11.2 times elapsed time",
+    "* checking re-building of vignette outputs ... [26s/6s] NOTE",
+    "Re-building vignettes had CPU time 4.1 times elapsed time",
+    "* DONE", "Status: 3 NOTEs")
+stopifnot(!audit_check_notes(timing_notes, out))
+stopifnot(nrow(read.csv(out)) == 3L)
+runner_text <- readLines(file.path(".github", "package-check", "run.R"))
+for (stage in c("EXAMPLE", "TEST", "VIGNETTE")) {
+    variable <- paste0("_R_CHECK_", stage,
+        "_TIMING_CPU_TO_ELAPSED_THRESHOLD_")
+    stopifnot(any(grepl(paste0(variable, "` = \"2.5\""),
+        runner_text, fixed = TRUE)))
+}
 hardening <- c("* checking compilation flags used ... NOTE",
     "Compilation used the following non-portable flag(s):",
     "  '-Wp,-D_FORTIFY_SOURCE=3'", "* DONE")

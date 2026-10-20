@@ -103,11 +103,12 @@ void validate_inputs(const NumericMatrix& data,
   }
 }
 
-void copy_row_major_float(const NumericMatrix& src, std::vector<float>& dest) {
+void copy_row_major_float(const NumericMatrix& src, std::vector<float>& dest,
+                          const int n_threads = 1) {
   const int nrow = src.nrow();
   const int ncol = src.ncol();
   const bool finite = faissr::copy_column_major_to_row_major_float(
-    src.begin(), dest, nrow, ncol
+    src.begin(), dest, nrow, ncol, true, n_threads
   );
   if (!finite) {
     Rcpp::stop("FAISS backend requires finite numeric input");
@@ -331,10 +332,13 @@ const float* float32_slot_ptr(SEXP slot,
   return nullptr;
 }
 
-bool finite_float32_payload(const float* ptr, const R_xlen_t length) {
+bool finite_float32_payload(const float* ptr, const R_xlen_t length,
+                            const int n_threads) {
   bool finite = true;
 #ifdef _OPENMP
-#pragma omp parallel for schedule(static) reduction(&& : finite)
+#pragma omp parallel for num_threads(n_threads > 0 ? n_threads : 1) if(length >= 65536 && n_threads > 1) schedule(static) reduction(&& : finite)
+#else
+  (void)n_threads;
 #endif
   for (R_xlen_t i = 0; i < length; ++i) {
     if (!std::isfinite(ptr[i])) finite = false;
@@ -343,7 +347,8 @@ bool finite_float32_payload(const float* ptr, const R_xlen_t length) {
 }
 
 MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name,
-                                      const std::string& metric = "euclidean") {
+                                      const std::string& metric = "euclidean",
+                                      const int n_threads = 1) {
   Rcpp::IntegerVector dims = matrix_dims_from_object(x, name);
   MatrixViewF32 view;
   view.nrow = dims[0];
@@ -368,14 +373,14 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name,
       );
     } else {
       finite = faissr::copy_column_major_to_row_major_float(
-        REAL(x), view.buffer, view.nrow, view.ncol
+        REAL(x), view.buffer, view.nrow, view.ncol, true, n_threads
       );
     }
   } else if (Rf_isS4(x)) {
     SEXP slot = R_do_slot(x, Rf_install("Data"));
     const float* col_major = float32_slot_ptr(slot, expected_length, name);
     if (col_major != nullptr) {
-      finite = finite_float32_payload(col_major, expected_length);
+      finite = finite_float32_payload(col_major, expected_length, n_threads);
       const bool row_major_payload =
         Rf_asLogical(Rf_getAttrib(x, Rf_install("faissR_row_major_float32"))) == TRUE;
       if (row_major_payload) {
@@ -393,7 +398,7 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name,
         view.row_major = true;
         view.layout = "float32_column_major_payload_to_row_major";
         faissr::copy_column_major_to_row_major_float(
-          col_major, view.buffer, view.nrow, view.ncol, false
+          col_major, view.buffer, view.nrow, view.ncol, false, n_threads
         );
       }
     } else if (TYPEOF(slot) == REALSXP) {
@@ -413,7 +418,7 @@ MatrixViewF32 make_float32_matrix_view(SEXP x, const char* name,
         );
       } else {
         finite = faissr::copy_column_major_to_row_major_float(
-          col_major_double, view.buffer, view.nrow, view.ncol
+          col_major_double, view.buffer, view.nrow, view.ncol, true, n_threads
         );
       }
     } else {
@@ -1038,11 +1043,11 @@ List search_faiss_index(faiss::Index& index,
 
   std::vector<float> xb;
   std::vector<float> xq;
-  copy_row_major_float(data, xb);
+  copy_row_major_float(data, xb, n_threads);
   if (same_storage) {
     xq.clear();
   } else {
-    copy_row_major_float(points, xq);
+    copy_row_major_float(points, xq, n_threads);
   }
   const float* query_ptr = same_storage ? xb.data() : xq.data();
 
@@ -1103,10 +1108,10 @@ List search_faiss_index_float32(faiss::Index& index,
                                 int graph_degree = NA_INTEGER,
                                 int search_width = NA_INTEGER,
                                 bool use_ivf_search_params = false) {
-  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data", "euclidean", n_threads);
   const bool same_storage = same_float32_object(data, points);
   MatrixViewF32 xq = same_storage ? MatrixViewF32() :
-    make_float32_matrix_view(points, "points");
+    make_float32_matrix_view(points, "points", "euclidean", n_threads);
   if (!same_storage && xq.ncol != xb.ncol) {
     Rcpp::stop("data and points must have the same number of columns");
   }
@@ -1272,10 +1277,10 @@ List search_faiss_flat_float32(SEXP data,
                                int n_threads,
                                const std::string& metric,
                                const std::string& distance_storage = "double") {
-  MatrixViewF32 xb = make_float32_matrix_view(data, "data", metric);
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data", metric, n_threads);
   MatrixViewF32 xq = same_float32_object(data, points) ?
     MatrixViewF32() :
-    make_float32_matrix_view(points, "points", metric);
+    make_float32_matrix_view(points, "points", metric, n_threads);
   const bool same_storage = same_float32_object(data, points);
   const bool self_query = exclude_self || same_storage;
   if (xb.ncol < 1 || xb.nrow < 1) {
@@ -1494,10 +1499,10 @@ List faiss_flat_pretransformed_float32_knn_impl(SEXP data,
                                                 bool exclude_self,
                                                 int n_threads,
                                                 std::string distance_storage) {
-  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data", "euclidean", n_threads);
   MatrixViewF32 xq = same_float32_object(data, points) ?
     MatrixViewF32() :
-    make_float32_matrix_view(points, "points");
+    make_float32_matrix_view(points, "points", "euclidean", n_threads);
   const bool same_storage = same_float32_object(data, points);
   const bool self_query = exclude_self || same_storage;
   if (!same_storage && (xq.nrow < 1 || xq.ncol != xb.ncol)) {
@@ -2253,7 +2258,7 @@ SEXP faiss_hnsw_index_build_float32_impl(SEXP data,
     Rcpp::stop("FAISS HNSW fitted index supports metric = 'euclidean' or 'inner_product'");
   }
   const DistanceOutput output = parse_distance_output(distance_output, "HNSW");
-  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data", "euclidean", n_threads);
 
   try {
     std::unique_ptr<faiss::IndexHNSWFlat> index(
@@ -2344,7 +2349,7 @@ List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
     Rcpp::stop("`distance_storage` must be \"double\" or \"float\"");
   }
 
-  MatrixViewF32 xq = make_float32_matrix_view(points, "points");
+  MatrixViewF32 xq = make_float32_matrix_view(points, "points", "euclidean", n_threads);
   if (xq.ncol != handle->p) {
     Rcpp::stop("points must have the same number of columns as the fitted FAISS HNSW index");
   }
@@ -2434,7 +2439,7 @@ SEXP faiss_index_build_float32_impl(SEXP data,
   if (kind == "ivf_pq") kind = "ivfpq";
   if (kind == "fastscan") kind = "ivfpq_fastscan";
   const DistanceOutput output = parse_distance_output(distance_output, "fitted FAISS index");
-  MatrixViewF32 xb = make_float32_matrix_view(data, "data");
+  MatrixViewF32 xb = make_float32_matrix_view(data, "data", "euclidean", n_threads);
 
   std::unique_ptr<faiss::Index> index;
   std::string index_type;
@@ -2758,7 +2763,7 @@ List faiss_index_search_float32_impl(SEXP index_ptr,
     nnd->nndescent.search_L = effective_search_width;
   }
 
-  MatrixViewF32 xq = make_float32_matrix_view(points, "points");
+  MatrixViewF32 xq = make_float32_matrix_view(points, "points", "euclidean", n_threads);
   if (xq.ncol != handle->p) {
     Rcpp::stop("points must have the same number of columns as the fitted FAISS index");
   }
@@ -3624,7 +3629,7 @@ List faiss_kmeans_impl(NumericMatrix data,
   if (!std::isfinite(tol) || tol < 0.0) tol = 1e-4;
 
   std::vector<float> xb;
-  copy_row_major_float(data, xb);
+  copy_row_major_float(data, xb, n_threads);
 
   faiss::ClusteringParameters cp;
   cp.niter = max_iter;

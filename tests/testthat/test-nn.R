@@ -3,7 +3,7 @@ internal_nn <- function(data,
                         k,
                         backend,
                         exclude_self = FALSE,
-                        n_threads = NULL,
+                        n_threads = 1L,
                         metric = "euclidean",
                         tuning = "auto") {
   faissR:::nn_compute(
@@ -21,7 +21,7 @@ internal_nn <- function(data,
 internal_nn_exclude_self <- function(data,
                                      k,
                                      backend,
-                                     n_threads = NULL,
+                                     n_threads = 1L,
                                      metric = "euclidean",
                                      tuning = "auto") {
   faissR:::nn_compute(
@@ -83,7 +83,7 @@ test_that("nn returns exact euclidean neighbors", {
     3, 0
   ), ncol = 2, byrow = TRUE)
 
-  out <- nn(x, x, k = 3)
+  out <- nn(x, x, k = 3, n_threads = 1L)
   expect_equal(dim(out$indices), c(4L, 3L))
   expect_equal(dim(out$distances), c(4L, 3L))
   expect_equal(out$indices[, 1], seq_len(nrow(x)))
@@ -107,7 +107,7 @@ test_that("nn output distance storage can be requested explicitly", {
     2, 2
   ), ncol = 2, byrow = TRUE)
 
-  out <- nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "double")
+  out <- nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "double", n_threads = 1L)
   expect_true(is.matrix(out$distances))
   expect_equal(out$index_base, 1L)
   expect_equal(out$distance_type, "double")
@@ -115,7 +115,7 @@ test_that("nn output distance storage can be requested explicitly", {
   expect_equal(out$backend_used, attr(out, "resolved_backend"))
   expect_equal(attr(out, "distance_type"), "double")
 
-  fout <- nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "float")
+  fout <- nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "float", n_threads = 1L)
   expect_true(inherits(fout$distances, "float32"))
   expect_equal(fout$distance_type, "float32")
   expect_equal(fout$index_base, 1L)
@@ -127,7 +127,8 @@ test_that("nn output distance storage can be requested explicitly", {
       k = 2L,
       backend = "cpu",
       method = "flat",
-      distances = "float"
+      distances = "float",
+        n_threads = 1L
     )
     expect_true(inherits(dout$distances, "float32"))
     expect_equal(dout$input_type, "float32")
@@ -139,11 +140,11 @@ test_that("nn output distance storage can be requested explicitly", {
   }
 
   expect_error(
-    nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "single"),
+    nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "single", n_threads = 1L),
     "`output`"
   )
   expect_error(
-    nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "float", distances = "double"),
+    nn(x, x, k = 2L, backend = "cpu", method = "exact", output = "float", distances = "double", n_threads = 1L),
     "`output` and `distances`"
   )
 })
@@ -629,7 +630,8 @@ test_that("float32 cuVS input can return float distances directly", {
     points_missing = TRUE,
     exclude_self = TRUE,
     metric = "euclidean",
-    output = "float"
+    output = "float",
+    n_threads = 1L
   )
 
   expect_true(inherits(out$distances, "float32"))
@@ -976,7 +978,7 @@ test_that("method auto records a decision within an explicit backend", {
   x <- matrix(rnorm(80), ncol = 4)
   q <- x[1:3, , drop = FALSE]
 
-  cpu_auto <- nn(x, q, k = 3L, backend = "cpu", method = "auto", metric = "cosine")
+  cpu_auto <- nn(x, q, k = 3L, backend = "cpu", method = "auto", metric = "cosine", n_threads = 1L)
   expect_equal(attr(cpu_auto, "backend"), "faiss_flat_cosine")
   expect_equal(attr(cpu_auto, "metric"), "cosine")
   expect_equal(attr(cpu_auto, "requested_backend"), "cpu")
@@ -1003,7 +1005,7 @@ test_that("method auto records a decision within an explicit backend", {
 
 test_that("automatic device selection is rejected", {
   x <- matrix(rnorm(24), ncol = 3)
-  expect_error(nn(x, k = 2L, backend = "auto"), "backend")
+  expect_error(nn(x, k = 2L, backend = "auto", n_threads = 1L), "backend")
 })
 
 test_that("auto metadata labels hardware extrapolation without changing selection", {
@@ -1090,7 +1092,7 @@ test_that("CUDA auto hardware extrapolation warns once and can be silenced", {
 test_that("explicit NN routes do not attach auto selection metadata", {
   set.seed(1044)
   x <- matrix(rnorm(80), ncol = 4)
-  out <- nn(x, k = 3L, backend = "cpu", method = "exact", tuning = "off")
+  out <- nn(x, k = 3L, backend = "cpu", method = "exact", tuning = "off", n_threads = 1L)
 
   expect_null(attr(out, "auto_selection"))
 })
@@ -1100,7 +1102,7 @@ test_that("NN auto-selection metadata distinguishes explicit backend and method 
   set.seed(1045)
   x <- matrix(rnorm(80), ncol = 4)
 
-  cpu_auto_method <- nn(x, k = 3L, backend = "cpu", method = "auto", tuning = "off")
+  cpu_auto_method <- nn(x, k = 3L, backend = "cpu", method = "auto", tuning = "off", n_threads = 1L)
   auto_meta <- attr(cpu_auto_method, "auto_selection")
 
   expect_true(auto_meta$explicit_backend)
@@ -1143,7 +1145,8 @@ test_that("nn_compute consumes the C++ auto route decision for execution", {
       auto_selection = list(
         error = "compiled route unavailable",
         selected_backend = "cuda_auto"
-      )
+      ),
+      n_threads = 1L
     ),
     "compiled route unavailable"
   )
@@ -1172,24 +1175,24 @@ test_that("public NN APIs require scalar backend method metric and tuning choice
   x <- matrix(rnorm(40), ncol = 4)
   y <- factor(rep(c("a", "b"), each = 5L))
 
-  expect_no_error(nn(x, k = 2L))
-  expect_no_error(nn(exclude_self = TRUE, x, k = 2L))
-  expect_error(nn(x, k = c(2L, 3L), backend = "cpu"), "`k` must be NULL or a positive integer")
-  expect_error(nn(x, k = 2.5, backend = "cpu"), "`k` must be NULL or a positive integer")
-  expect_error(nn(exclude_self = TRUE, x, k = 1.5, backend = "cpu"), "`k` must be NULL or a positive integer")
+  expect_no_error(nn(x, k = 2L, n_threads = 1L))
+  expect_no_error(nn(exclude_self = TRUE, x, k = 2L, n_threads = 1L))
+  expect_error(nn(x, k = c(2L, 3L), backend = "cpu", n_threads = 1L), "`k` must be NULL or a positive integer")
+  expect_error(nn(x, k = 2.5, backend = "cpu", n_threads = 1L), "`k` must be NULL or a positive integer")
+  expect_error(nn(exclude_self = TRUE, x, k = 1.5, backend = "cpu", n_threads = 1L), "`k` must be NULL or a positive integer")
   expect_error(nn(x, k = 2L, backend = "cpu", n_threads = c(1L, 2L)), "`n_threads` must be NULL or a single positive integer")
   expect_error(nn(x, k = 2L, backend = "cpu", n_threads = 1.5), "`n_threads` must be NULL or a single positive integer")
   expect_error(nn(exclude_self = TRUE, x, k = 2L, backend = "cpu", n_threads = 0L), "`n_threads` must be NULL or a single positive integer")
   expect_equal(faissR:::normalize_nn_threads(128L), 64L)
-  expect_error(nn(x, k = 2L, backend = c("cpu", "cuda")), "`backend` must be a single value")
-  expect_error(nn(x, k = 2L, method = c("exact", "hnsw")), "`method` must be a single value")
-  expect_error(nn(x, k = 2L, metric = c("cosine", "correlation")), "`metric` must be a single value")
-  expect_error(nn(x, k = 2L, tuning = c("auto", "off")), "`tuning` must be a single value")
+  expect_error(nn(x, k = 2L, backend = c("cpu", "cuda"), n_threads = 1L), "`backend` must be a single value")
+  expect_error(nn(x, k = 2L, method = c("exact", "hnsw"), n_threads = 1L), "`method` must be a single value")
+  expect_error(nn(x, k = 2L, metric = c("cosine", "correlation"), n_threads = 1L), "`metric` must be a single value")
+  expect_error(nn(x, k = 2L, tuning = c("auto", "off"), n_threads = 1L), "`tuning` must be a single value")
   internal_routes <- c("faiss_hnsw", "faiss_ivf", "faiss_gpu_cagra", "cuda_cuvs_nndescent", "cuda_cuvs_hnsw")
   for (route in internal_routes) {
-    expect_error(nn(x, k = 2L, method = route), "canonical lowercase", info = route)
-    expect_error(nn(exclude_self = TRUE, x, k = 2L, method = route), "canonical lowercase", info = route)
-    expect_error(knn(x, y, method = route), "canonical lowercase", info = route)
+    expect_error(nn(x, k = 2L, method = route, n_threads = 1L), "canonical lowercase", info = route)
+    expect_error(nn(exclude_self = TRUE, x, k = 2L, method = route, n_threads = 1L), "canonical lowercase", info = route)
+    expect_error(knn(x, y, method = route, n_threads = 1L), "canonical lowercase", info = route)
   }
   expect_error(
     faissR:::resolve_public_nn_backend(c("cpu", "cuda"), "exact", "euclidean"),
@@ -1200,10 +1203,10 @@ test_that("public NN APIs require scalar backend method metric and tuning choice
 test_that("public NN APIs validate tuning at the exported boundary", {
   x <- matrix(rnorm(40), ncol = 4)
 
-  expect_no_error(nn(x, k = 2L, backend = "cpu", method = "exact", tuning = "none"))
-  expect_no_error(nn(exclude_self = TRUE, x, k = 2L, backend = "cpu", method = "exact", tuning = "none"))
-  expect_error(nn(x, k = 2L, backend = "cpu", tuning = "aggressive"), "tuning")
-  expect_error(nn(exclude_self = TRUE, x, k = 2L, backend = "cpu", tuning = "aggressive"), "tuning")
+  expect_no_error(nn(x, k = 2L, backend = "cpu", method = "exact", tuning = "none", n_threads = 1L))
+  expect_no_error(nn(exclude_self = TRUE, x, k = 2L, backend = "cpu", method = "exact", tuning = "none", n_threads = 1L))
+  expect_error(nn(x, k = 2L, backend = "cpu", tuning = "aggressive", n_threads = 1L), "tuning")
+  expect_error(nn(exclude_self = TRUE, x, k = 2L, backend = "cpu", tuning = "aggressive", n_threads = 1L), "tuning")
 })
 
 
@@ -1481,7 +1484,7 @@ test_that("nn returns exact cosine neighbors on CPU", {
     1, 1
   ), ncol = 2, byrow = TRUE)
 
-  out <- nn(x, k = 3L, backend = "cpu", metric = "cosine")
+  out <- nn(x, k = 3L, backend = "cpu", metric = "cosine", n_threads = 1L)
 
   expect_equal(attr(out, "backend"), "cpu")
   expect_equal(attr(out, "metric"), "cosine")
@@ -1511,7 +1514,7 @@ test_that("nn returns exact correlation neighbors on CPU", {
     corr_dist(x[i, ], x[j, ])
   }))
 
-  out <- nn(x, k = 4L, backend = "cpu", metric = "correlation")
+  out <- nn(x, k = 4L, backend = "cpu", metric = "correlation", n_threads = 1L)
 
   expect_equal(attr(out, "backend"), "cpu")
   expect_equal(attr(out, "metric"), "correlation")
@@ -1617,7 +1620,7 @@ test_that("nn chooses a practical default k and prints clearly", {
   set.seed(101)
   x <- matrix(rnorm(60), nrow = 20L)
 
-  out <- nn(x, backend = "cpu")
+  out <- nn(x, backend = "cpu", n_threads = 1L)
 
   expect_s3_class(out, "faissR_nn")
   expect_equal(dim(out$indices), c(nrow(x), faissR:::auto_k(x, include_self = TRUE)))
@@ -1632,8 +1635,8 @@ test_that("automatic nn is deterministic", {
   data <- matrix(rnorm(200), ncol = 5)
   points <- matrix(rnorm(75), ncol = 5)
 
-  first <- nn(data, points, k = 4)
-  second <- nn(data, points, k = 4)
+  first <- nn(data, points, k = 4, n_threads = 1L)
+  second <- nn(data, points, k = 4, n_threads = 1L)
 
   expect_equal(second$indices, first$indices)
   expect_equal(second$distances, first$distances)
@@ -1644,7 +1647,7 @@ test_that("CPU nn handles non-small Euclidean work", {
   data <- matrix(rnorm(200L * 30L), nrow = 200L)
   points <- matrix(rnorm(200L * 30L), nrow = 200L)
 
-  out <- nn(data, points, k = 12L, backend = "cpu")
+  out <- nn(data, points, k = 12L, backend = "cpu", n_threads = 1L)
 
   expect_equal(dim(out$indices), c(nrow(points), 12L))
   expect_true(all(is.finite(out$distances)))
@@ -1832,8 +1835,8 @@ test_that("clustered self KNN reports approximation and preserves useful neighbo
   x <- x + matrix(rep(centers[labels], 6L), ncol = 6L)
   k <- 12L
 
-  exact <- faissR:::nn(exclude_self = TRUE, x, k = k, backend = "cpu")
-  clustered <- faissR:::clustered_self_knn(x, k = k, exclude_self = TRUE, seed = 122L)
+  exact <- faissR:::nn(exclude_self = TRUE, x, k = k, backend = "cpu", n_threads = 1L)
+  clustered <- faissR:::clustered_self_knn(x, k = k, exclude_self = TRUE, seed = 122L, n_threads = 1L)
   clustered <- faissR:::finish_nn_result(
     clustered,
     "cpu_clustered",
@@ -1862,7 +1865,7 @@ test_that("approximate landmark projection KNN matches exact when window covers 
   queries <- matrix(rnorm(35L * 6L), nrow = 35L)
   k <- 7L
 
-  exact <- nn(landmarks, queries, k = k, backend = "cpu")
+  exact <- nn(landmarks, queries, k = k, backend = "cpu", n_threads = 1L)
   approx <- faissR:::landmark_projection_knn_approx_cpp(
     landmarks,
     queries,
@@ -1887,7 +1890,7 @@ test_that("subset landmark candidate KNN matches full candidate rows", {
   set.seed(125)
   x <- matrix(rnorm(48L * 5L), nrow = 48L, ncol = 5L)
   landmark_rows <- seq(1L, 48L, length.out = 12L)
-  projection <- nn(x[landmark_rows, , drop = FALSE], x, k = 5L, backend = "cpu")
+  projection <- nn(x[landmark_rows, , drop = FALSE], x, k = 5L, backend = "cpu", n_threads = 1L)
   rows <- c(3L, 11L, 24L, 39L)
   k <- 6L
 
@@ -1945,10 +1948,10 @@ test_that("clustered self KNN is not selected automatically", {
 
 test_that("removed CPU approximation backends are not public nn choices", {
   x <- matrix(rnorm(120L), nrow = 30L)
-  expect_error(nn(x, k = 5L, backend = "cpu_clustered"), "must be one of")
-  expect_error(nn(x, k = 5L, backend = "cpu_nndescent"), "must be one of")
-  expect_error(nn(x, k = 5L, backend = "cpu_ivf"), "must be one of")
-  expect_error(nn(x, k = 5L, backend = "hnsw"), "must be one of")
+  expect_error(nn(x, k = 5L, backend = "cpu_clustered", n_threads = 1L), "must be one of")
+  expect_error(nn(x, k = 5L, backend = "cpu_nndescent", n_threads = 1L), "must be one of")
+  expect_error(nn(x, k = 5L, backend = "cpu_ivf", n_threads = 1L), "must be one of")
+  expect_error(nn(x, k = 5L, backend = "hnsw", n_threads = 1L), "must be one of")
 })
 
 test_that("CPU approximate selector chooses FAISS HNSW or native CPU", {
@@ -2150,7 +2153,7 @@ test_that("CUDA CAGRA implementation can be selected per call", {
       matrix(rnorm(20), ncol = 4),
       k = 2L,
       backend = "cpu",
-      cagra_implementation = "invalid_provider"
+      cagra_implementation = "invalid_provider", n_threads = 1L
     ),
     "cagra_implementation"
   )
@@ -2777,7 +2780,7 @@ test_that("FAISS GPU backends are explicit and do not fall back to CPU", {
 test_that("approximate KNN recall metadata is attached against exact subset", {
   set.seed(131)
   x <- matrix(rnorm(80L * 5L), nrow = 80L)
-  exact <- faissR:::nn(exclude_self = TRUE, x, k = 6L, backend = "cpu")
+  exact <- faissR:::nn(exclude_self = TRUE, x, k = 6L, backend = "cpu", n_threads = 1L)
   approx <- faissR:::finish_nn_result(exact, "test_approx", 6L, TRUE, exact = FALSE)
   approx <- faissR:::attach_knn_recall_subset(
     approx,
@@ -2830,7 +2833,7 @@ test_that("nn matches brute-force euclidean neighbors for query points", {
   data <- matrix(rnorm(120), ncol = 6)
   points <- matrix(rnorm(60), ncol = 6)
 
-  ours <- nn(data, points, k = 5)
+  ours <- nn(data, points, k = 5, n_threads = 1L)
   d <- matrix(0, nrow(points), nrow(data))
   for (i in seq_len(nrow(points))) {
     d[i, ] <- rowSums((data - matrix(points[i, ], nrow(data), ncol(data), byrow = TRUE))^2)
@@ -2860,17 +2863,17 @@ test_that("Fortran CPU nn path matches C++ fallback", {
   points <- matrix(rnorm(90), nrow = 15L)
 
   Sys.setenv(FAISSR_USE_FORTRAN_NN = "1")
-  fortran <- nn(data, points, k = 7L, backend = "cpu")
+  fortran <- nn(data, points, k = 7L, backend = "cpu", n_threads = 1L)
   Sys.setenv(FAISSR_USE_FORTRAN_NN = "0")
-  cpp <- nn(data, points, k = 7L, backend = "cpu")
+  cpp <- nn(data, points, k = 7L, backend = "cpu", n_threads = 1L)
 
   expect_equal(fortran$indices, cpp$indices)
   expect_equal(fortran$distances, cpp$distances, tolerance = 1e-12)
 
   Sys.setenv(FAISSR_USE_FORTRAN_NN = "1")
-  fortran_self <- faissR:::nn(exclude_self = TRUE, data, k = 6L, backend = "cpu")
+  fortran_self <- faissR:::nn(exclude_self = TRUE, data, k = 6L, backend = "cpu", n_threads = 1L)
   Sys.setenv(FAISSR_USE_FORTRAN_NN = "0")
-  cpp_self <- faissR:::nn(exclude_self = TRUE, data, k = 6L, backend = "cpu")
+  cpp_self <- faissR:::nn(exclude_self = TRUE, data, k = 6L, backend = "cpu", n_threads = 1L)
 
   expect_equal(fortran_self$indices, cpp_self$indices)
   expect_equal(fortran_self$distances, cpp_self$distances, tolerance = 1e-12)
@@ -2880,8 +2883,8 @@ test_that("removed nn compatibility options are not accepted", {
   data <- matrix(c(0, 0, 2, 0, 0, 3), ncol = 2, byrow = TRUE)
   point <- matrix(c(0, 0), nrow = 1)
 
-  expect_error(nn(data, point, k = 3, square = TRUE), "unused")
-  expect_error(nn(data, point, k = 3, method = "not_a_method"), "must be one of")
+  expect_error(nn(data, point, k = 3, square = TRUE, n_threads = 1L), "unused")
+  expect_error(nn(data, point, k = 3, method = "not_a_method", n_threads = 1L), "must be one of")
 })
 
 test_that("cuda availability helper returns a logical scalar", {
@@ -2960,8 +2963,8 @@ test_that("CUDA nn backend matches CPU euclidean results", {
   data <- matrix(rnorm(500), ncol = 10)
   points <- matrix(rnorm(230), ncol = 10)
 
-  cpu <- nn(data, points, k = 6, backend = "cpu", method = "exact")
-  gpu <- nn(data, points, k = 6, backend = "cuda", method = "exact")
+  cpu <- nn(data, points, k = 6, backend = "cpu", method = "exact", n_threads = 1L)
+  gpu <- nn(data, points, k = 6, backend = "cuda", method = "exact", n_threads = 1L)
 
   expected_backend <- if (faiss_gpu_available()) {
     "faiss_gpu_flat_l2"
@@ -3094,12 +3097,12 @@ test_that("CUDA backend reports unavailable runtime clearly", {
 
   x <- matrix(rnorm(30), ncol = 3)
   expect_error(
-    nn(x, x, k = 2, backend = "cuda", method = "exact"),
+    nn(x, x, k = 2, backend = "cuda", method = "exact", n_threads = 1L),
     "No CUDA GPU backend"
   )
-  expect_error(nn(x, x, k = 2, backend = "gpu"), "must be one of")
-  expect_error(nn(x, x, k = 2, backend = "cuda_ivf"), "must be one of")
-  expect_error(nn(x, x, k = 2, backend = "cuda_faiss"), "must be one of")
+  expect_error(nn(x, x, k = 2, backend = "gpu", n_threads = 1L), "must be one of")
+  expect_error(nn(x, x, k = 2, backend = "cuda_ivf", n_threads = 1L), "must be one of")
+  expect_error(nn(x, x, k = 2, backend = "cuda_faiss", n_threads = 1L), "must be one of")
 })
 
 test_that("CAGRA tuning cache can round-trip without CUDA", {
@@ -3177,7 +3180,7 @@ test_that("FAISS GPU IVF tuner calls the current metric-aware C++ signature", {
 test_that("removed metrics are rejected by the public API", {
   x <- matrix(seq_len(24), nrow = 6)
   expect_error(
-    nn(x, k = 2L, metric = "inner_product"),
+    nn(x, k = 2L, metric = "inner_product", n_threads = 1L),
     "euclidean.*cosine.*correlation"
   )
   expect_error(
@@ -3193,7 +3196,8 @@ test_that("CPU auto reports its calibration-informed evidence scope", {
     k = 2L,
     backend = "cpu",
     method = "auto",
-    exclude_self = TRUE
+    exclude_self = TRUE,
+      n_threads = 1L
   )
   selection <- attr(out, "auto_selection")
   expect_equal(
@@ -3238,7 +3242,7 @@ test_that("CUDA auto metadata reports its narrow experimental scope", {
 test_that("requested recall tiers are discrete and not interpolated", {
   x <- matrix(seq_len(24), nrow = 6)
   expect_error(
-    nn(x, k = 2L, target_recall = 0.97),
+    nn(x, k = 2L, target_recall = 0.97, n_threads = 1L),
     "one of 0.9, 0.95, or 0.99"
   )
 })

@@ -2,7 +2,7 @@ test_that("candidate_knn matches exact self-KNN with full candidate rows", {
   set.seed(301)
   x <- matrix(rnorm(30 * 4), nrow = 30)
   candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
-  exact <- nn(x, k = 5L, backend = "cpu")
+  exact <- nn(x, k = 5L, backend = "cpu", n_threads = 1L)
   cand <- candidate_knn(x, candidates, k = 5L, backend = "cpu", n_threads = 2L)
 
   expect_s3_class(cand, "faissR_nn")
@@ -29,7 +29,7 @@ test_that("candidate_knn supports query candidates", {
     2L, 3L, 4L
   ), nrow = 2, byrow = TRUE)
 
-  out <- candidate_knn(data, candidates, points = points, k = 2L, backend = "cpu")
+  out <- candidate_knn(data, candidates, points = points, k = 2L, backend = "cpu", n_threads = 1L)
 
   expect_equal(out$indices[1, ], c(1L, 2L))
   expect_equal(out$indices[2, ], c(4L, 3L))
@@ -42,8 +42,8 @@ test_that("candidate_knn exclude_self matches exact CPU without self", {
   x <- matrix(rnorm(25 * 3), nrow = 25)
   candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
 
-  exact <- faissR:::nn(exclude_self = TRUE, x, k = 4L, backend = "cpu")
-  cand <- candidate_knn(x, candidates, k = 4L, backend = "cpu", exclude_self = TRUE)
+  exact <- faissR:::nn(exclude_self = TRUE, x, k = 4L, backend = "cpu", n_threads = 1L)
+  cand <- candidate_knn(x, candidates, k = 4L, backend = "cpu", exclude_self = TRUE, n_threads = 1L)
 
   expect_equal(cand$indices, exact$indices)
   expect_equal(cand$distances, exact$distances, tolerance = 1e-12)
@@ -63,7 +63,7 @@ test_that("candidate_knn ignores duplicate and invalid candidates", {
     3L, 2L, 1L, 1L
   ), nrow = 3, byrow = TRUE)
 
-  out <- candidate_knn(x, candidates, k = 2L, backend = "cpu")
+  out <- candidate_knn(x, candidates, k = 2L, backend = "cpu", n_threads = 1L)
 
   expect_equal(out$indices[1, ], c(1L, NA_integer_))
   expect_equal(out$distances[1, ], c(0, Inf))
@@ -79,7 +79,7 @@ test_that("candidate_knn supports CPU cosine candidates", {
   ), ncol = 2, byrow = TRUE)
   candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
 
-  out <- candidate_knn(x, candidates, k = 2L, backend = "cpu", metric = "cosine")
+  out <- candidate_knn(x, candidates, k = 2L, backend = "cpu", metric = "cosine", n_threads = 1L)
 
   expect_equal(attr(out, "metric"), "cosine")
   expect_equal(out$indices[1, ], c(1L, 3L))
@@ -89,19 +89,19 @@ test_that("candidate_knn uses strict public backend labels", {
   x <- matrix(rnorm(30), ncol = 3)
   candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
 
-  expect_error(candidate_knn(x, candidates, k = 2L, backend = "auto"), "backend")
-  expect_error(candidate_knn(x, candidates, k = 2L, backend = "a"), "backend")
-  expect_error(candidate_knn(x, candidates, k = 2L, backend = "cuda_cuvs"), "backend")
+  expect_error(candidate_knn(x, candidates, k = 2L, backend = "auto", n_threads = 1L), "backend")
+  expect_error(candidate_knn(x, candidates, k = 2L, backend = "a", n_threads = 1L), "backend")
+  expect_error(candidate_knn(x, candidates, k = 2L, backend = "cuda_cuvs", n_threads = 1L), "backend")
 })
 
 test_that("candidate_knn validates k strictly", {
   x <- matrix(rnorm(30), ncol = 3)
   candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
 
-  expect_error(candidate_knn(x, candidates, k = 2.5, backend = "cpu"), "integer in")
-  expect_error(candidate_knn(x, candidates, k = c(1L, 2L), backend = "cpu"), "integer in")
-  expect_error(candidate_knn(x, candidates, k = 0L, backend = "cpu"), "integer in")
-  expect_error(candidate_knn(x, candidates, k = ncol(candidates) + 1L, backend = "cpu"), "integer in")
+  expect_error(candidate_knn(x, candidates, k = 2.5, backend = "cpu", n_threads = 1L), "integer in")
+  expect_error(candidate_knn(x, candidates, k = c(1L, 2L), backend = "cpu", n_threads = 1L), "integer in")
+  expect_error(candidate_knn(x, candidates, k = 0L, backend = "cpu", n_threads = 1L), "integer in")
+  expect_error(candidate_knn(x, candidates, k = ncol(candidates) + 1L, backend = "cpu", n_threads = 1L), "integer in")
 })
 
 test_that("candidate_knn requires scalar logical exclude_self", {
@@ -119,7 +119,7 @@ test_that("candidate_knn requires scalar logical exclude_self", {
     "single TRUE or FALSE"
   )
   expect_error(
-    candidate_knn(x, candidates, k = 2L, backend = "cpu", exclude_self = c(TRUE, FALSE)),
+    candidate_knn(x, candidates, k = 2L, backend = "cpu", exclude_self = c(TRUE, FALSE), n_threads = 1L),
     "exclude_self"
   )
 })
@@ -132,7 +132,7 @@ test_that("candidate_knn supports CPU correlation candidates", {
   ), ncol = 3, byrow = TRUE)
   candidates <- matrix(rep(seq_len(nrow(x)), times = nrow(x)), nrow = nrow(x), byrow = TRUE)
 
-  out <- candidate_knn(x, candidates, k = 2L, backend = "cpu", metric = "correlation")
+  out <- candidate_knn(x, candidates, k = 2L, backend = "cpu", metric = "correlation", n_threads = 1L)
 
   expect_equal(attr(out, "metric"), "correlation")
   expect_equal(out$indices[1, ], c(1L, 2L))

@@ -15,6 +15,11 @@ if (Test-Path "$pandoc\pandoc.exe") {
     $env:RSTUDIO_PANDOC = $pandoc
     $env:PATH = "$pandoc;$env:PATH"
 }
+$texmf = "$env:USERPROFILE\r-package-test-lab\check-texmf"
+if (Test-Path $texmf) { $env:TEXMFHOME = $texmf }
+if (Test-Path "$texmf\bin\windows") {
+    $env:PATH = "$texmf\bin\windows;$env:PATH"
+}
 if ($DependencyLibrary) { $env:R_LIBS = "$DependencyLibrary;$env:R_LIBS" }
 $env:FAISS_HOME = $FaissHome
 $env:CONDA_PREFIX = ''

@@ -44,7 +44,8 @@ test_that("scaled normalization retains genuine degenerate rows", {
             method = "flat",
             metric = metric,
             backend = "cpu",
-            exclude_self = TRUE
+            exclude_self = TRUE,
+            n_threads = 1L
         )
         actual <- nn(
             x * 1e160,
@@ -52,7 +53,8 @@ test_that("scaled normalization retains genuine degenerate rows", {
             method = "flat",
             metric = metric,
             backend = "cpu",
-            exclude_self = TRUE
+            exclude_self = TRUE,
+            n_threads = 1L
         )
         expect_equal(actual$distances, expected$distances, tolerance = 2e-6)
         expect_true(all(is.finite(actual$distances)))
@@ -87,7 +89,7 @@ test_that("direct float32 normalization and conversion are checked", {
         }
     }
     expect_error(
-        nn(x * 1e40, k = 2, method = "flat", backend = "cpu"),
+        nn(x * 1e40, k = 2, method = "flat", backend = "cpu", n_threads = 1L),
         "finite values.*float32"
     )
 })
@@ -152,7 +154,8 @@ test_that("CUDA candidate scoring keeps insufficient candidate sets restricted",
                 k = k,
                 backend = "cpu",
                 metric = metric,
-                exclude_self = TRUE
+                exclude_self = TRUE,
+                n_threads = 1L
             )
             gpu <- candidate_knn(
                 x,
@@ -160,7 +163,8 @@ test_that("CUDA candidate scoring keeps insufficient candidate sets restricted",
                 k = k,
                 backend = "cuda",
                 metric = metric,
-                exclude_self = TRUE
+                exclude_self = TRUE,
+                n_threads = 1L
             )
             expect_equal(gpu$indices, cpu$indices)
             expect_equal(gpu$distances, cpu$distances, tolerance = 2e-6)
@@ -174,7 +178,7 @@ test_that("CUDA candidate scoring keeps insufficient candidate sets restricted",
             k = 2,
             backend = "cuda",
             metric = "cosine",
-            exclude_self = TRUE
+            exclude_self = TRUE, n_threads = 1L
         ),
         "all-zero"
     )
@@ -190,7 +194,8 @@ test_that("GPU-resident normalization accepts finite extreme scales", {
             method = "flat",
             backend = "cpu",
             metric = metric,
-            exclude_self = TRUE
+            exclude_self = TRUE,
+            n_threads = 1L
         )
         for (scale in c(1e-300, 1e300)) {
             actual <- gpu_knn_to_host(nn_gpu(

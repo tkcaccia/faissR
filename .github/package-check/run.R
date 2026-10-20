@@ -36,8 +36,26 @@ if (grepl(" ", scratch, fixed = TRUE)) {
 Sys.setenv(TMPDIR = scratch, TMP = scratch, TEMP = scratch)
 r <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R")
 smoke <- if (length(args) >= 4L) normalizePath(args[[4]], mustWork = TRUE) else ""
-Sys.setenv(R_LIBS_USER = lib, OMP_NUM_THREADS = "2",
-    OPENBLAS_NUM_THREADS = "1", MKL_NUM_THREADS = "1")
+Sys.setenv(R_LIBS_USER = lib)
+thread_mode <- match.arg(Sys.getenv("PACKAGE_TEST_THREAD_MODE", "openmp-unrestricted"),
+    c("openmp-unrestricted", "unrestricted", "bounded"))
+thread_variables <- c("OMP_NUM_THREADS", "OMP_THREAD_LIMIT", "OMP_WAIT_POLICY",
+    "OPENBLAS_NUM_THREADS", "GOTO_NUM_THREADS", "MKL_NUM_THREADS",
+    "BLIS_NUM_THREADS", "VECLIB_MAXIMUM_THREADS")
+Sys.unsetenv(thread_variables)
+if (thread_mode != "unrestricted") {
+    # BLAS may start its worker pool before any package/vignette code executes.
+    Sys.setenv(OPENBLAS_NUM_THREADS = "1", GOTO_NUM_THREADS = "1",
+        MKL_NUM_THREADS = "1", BLIS_NUM_THREADS = "1",
+        VECLIB_MAXIMUM_THREADS = "1")
+}
+if (thread_mode == "bounded") {
+    Sys.setenv(OMP_NUM_THREADS = "2")
+}
+Sys.setenv(
+    `_R_CHECK_EXAMPLE_TIMING_CPU_TO_ELAPSED_THRESHOLD_` = "2.5",
+    `_R_CHECK_TEST_TIMING_CPU_TO_ELAPSED_THRESHOLD_` = "2.5",
+    `_R_CHECK_VIGNETTE_TIMING_CPU_TO_ELAPSED_THRESHOLD_` = "2.5")
 Sys.setenv(MAKEFLAGS = "-j2")
 force_suggests <- tolower(Sys.getenv(
     "PACKAGE_TEST_FORCE_SUGGESTS",
@@ -76,6 +94,11 @@ writeLines(c(capture.output(sessionInfo()), capture.output(Sys.info()),
     paste("force_suggests:", force_suggests),
     paste("bootstrap_dependencies:", bootstrap_dependencies),
     paste("manual:", manual), paste("incoming_remote:", incoming),
+    paste("thread_mode:", thread_mode),
+    paste("thread_environment:", paste(thread_variables,
+        Sys.getenv(thread_variables, unset = "UNSET"), sep = "=",
+        collapse = "; ")),
+    "CPU_to_elapsed_threshold: 2.5",
     paste("faiss_source:", Sys.getenv("FAISSR_FAISS_SOURCE", "auto"))),
     file.path(out, "environment.txt"))
 config <- system2(r, c("CMD", "config", "--all"), stdout = TRUE, stderr = TRUE)

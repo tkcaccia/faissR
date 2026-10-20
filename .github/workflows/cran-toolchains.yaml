@@ -22,6 +22,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libblas-dev liblapack-dev gfortran patch
       - name: Build one source archive with evaluated vignettes
         run: |
+          Rscript .github/scripts/limit-check-threads.R --check
           R CMD build .
           sha256sum faissR_*.tar.gz > source.sha256
       - uses: actions/upload-artifact@v4

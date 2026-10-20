@@ -241,9 +241,6 @@ const float* float32_slot_ptr(SEXP slot,
 
 bool finite_float32_payload(const float* ptr, const R_xlen_t length) {
   bool finite = true;
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static) reduction(&& : finite)
-#endif
   for (R_xlen_t i = 0; i < length; ++i) {
     if (!std::isfinite(ptr[i])) finite = false;
   }

@@ -1,5 +1,9 @@
 # CRAN incoming-check corrections
 
+This report covers the earlier installation-correction archive. The current
+source archive and timing-check results are in the
+[CPU-time correction report](cran-timing-20261020.md).
+
 Date: 20 October 2026. Package version remains **0.1**. This report documents
 maintainer validation of the corrections; it is not a CRAN acceptance result.
 

@@ -8943,7 +8943,8 @@ attach_knn_recall_subset <- function(result, data, k, exclude_self, seed) {
         k = min(n, compare_k + 1L),
         backend = "cpu",
         points_missing = FALSE,
-        exclude_self = FALSE
+        exclude_self = FALSE,
+        n_threads = 1L
     )
     exact_idx <- matrix(0L, nrow = sample_size, ncol = compare_k)
     for (i in seq_along(rows)) {
@@ -11610,12 +11611,16 @@ grid_self_knn <- function(
 #'   rows report `tuning_benchmark_target_met = FALSE`.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
-#' knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu")
-#' knn_cosine <- nn(x, k = 16, metric = "cosine", backend = "cpu")
-#' knn_correlation <- nn(x, k = 16, metric = "correlation", backend = "cpu")
+#' knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu",
+#'     n_threads = 1)
+#' knn_cosine <- nn(x, k = 16, metric = "cosine", backend = "cpu",
+#'     n_threads = 1)
+#' knn_correlation <- nn(x, k = 16, metric = "correlation", backend = "cpu",
+#'     n_threads = 1)
 #'
 #' labels <- datasets::iris$Species
-#' fitted <- knn(x, labels, k = 5, method = "exact", backend = "cpu")
+#' fitted <- knn(x, labels, k = 5, method = "exact", backend = "cpu",
+#'     n_threads = 1)
 #' head(predict(fitted, x))
 #' @export
 nn <- function(

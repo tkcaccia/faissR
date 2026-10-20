@@ -21,6 +21,7 @@ ENGINE=${CONTAINER_ENGINE:-singularity}
     --env "PACKAGE_TEST_FORCE_SUGGESTS=${PACKAGE_TEST_FORCE_SUGGESTS:-false}" \
     --env "PACKAGE_TEST_MANUAL=${PACKAGE_TEST_MANUAL:-false}" \
     --env "PACKAGE_TEST_INCOMING_REMOTE=${PACKAGE_TEST_INCOMING_REMOTE:-false}" \
+    --env "PACKAGE_TEST_THREAD_MODE=${PACKAGE_TEST_THREAD_MODE:-openmp-unrestricted}" \
     --env "FAISSR_FAISS_SOURCE=${PACKAGE_TEST_FAISS_SOURCE:-auto}" \
     --env "MAKEFLAGS=-j2" \
     "$IMAGE" Rscript /harness/run.R "$CONTAINER_ARCHIVE" /results "$PROFILE" /harness/faissR-smoke.R

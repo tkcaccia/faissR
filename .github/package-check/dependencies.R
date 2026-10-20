@@ -15,7 +15,7 @@ requirements <- if (length(args) >= 2L) {
 } else {
     tools:::.split_dependencies(paste(
         "gpuinfo (>= 0.2.0), Rcpp (>= 1.1.0), testthat, withr, float,",
-        "Matrix, knitr, rmarkdown"))
+        "Matrix, RhpcBLASctl, knitr, rmarkdown"))
 }
 status <- dependency_status(requirements)
 if (tolower(Sys.getenv("PACKAGE_TEST_INCOMING_REMOTE", "false")) %in%

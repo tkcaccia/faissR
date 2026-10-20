@@ -91,7 +91,7 @@ test_that("fast_kmeans records deterministic auto tuning policy", {
   expect_false(auto$parameters$tuning$selection$backend_policy_prefer_cuda)
 
   expect_error(
-    fast_kmeans(x, centers = 3, backend = "auto", seed = 12),
+    fast_kmeans(x, centers = 3, backend = "auto", seed = 12, n_threads = 1L),
     "backend"
   )
 
@@ -584,11 +584,11 @@ test_that("k-means selection metadata retains shape diagnostics", {
 test_that("fast_kmeans rejects implementation backend labels", {
   x <- matrix(rnorm(40), ncol = 4)
   expect_error(
-    fast_kmeans(x, centers = 2, backend = "faiss"),
+    fast_kmeans(x, centers = 2, backend = "faiss", n_threads = 1L),
     "must be one of"
   )
   expect_error(
-    fast_kmeans(x, centers = 2, backend = "cuda_cuvs"),
+    fast_kmeans(x, centers = 2, backend = "cuda_cuvs", n_threads = 1L),
     "must be one of"
   )
 })
@@ -694,7 +694,7 @@ test_that("fast_kmeans rejects invalid explicit tolerance values", {
 test_that("fast_kmeans CUDA requests never silently use CPU", {
   x <- matrix(rnorm(80), ncol = 4)
   out <- tryCatch(
-    fast_kmeans(x, centers = 2, backend = "cuda", max_iter = 2),
+    fast_kmeans(x, centers = 2, backend = "cuda", max_iter = 2, n_threads = 1L),
     error = identity
   )
   if (inherits(out, "error")) {

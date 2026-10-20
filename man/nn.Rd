@@ -319,12 +319,16 @@ combinations fail instead of silently changing method, metric, or device.
 }
 \examples{
 x <- scale(as.matrix(iris[, 1:4]))
-knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu")
-knn_cosine <- nn(x, k = 16, metric = "cosine", backend = "cpu")
-knn_correlation <- nn(x, k = 16, metric = "correlation", backend = "cpu")
+knn_euclidean <- nn(x, k = 16, metric = "euclidean", backend = "cpu",
+    n_threads = 1)
+knn_cosine <- nn(x, k = 16, metric = "cosine", backend = "cpu",
+    n_threads = 1)
+knn_correlation <- nn(x, k = 16, metric = "correlation", backend = "cpu",
+    n_threads = 1)
 
 labels <- datasets::iris$Species
-fitted <- knn(x, labels, k = 5, method = "exact", backend = "cpu")
+fitted <- knn(x, labels, k = 5, method = "exact", backend = "cpu",
+    n_threads = 1)
 head(predict(fitted, x))
 }
 \references{

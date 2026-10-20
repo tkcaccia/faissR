@@ -76,7 +76,7 @@
 #'   benchmark summaries.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
-#' fit <- fast_kmeans(x, centers = 3, backend = "cpu", n_threads = 2)
+#' fit <- fast_kmeans(x, centers = 3, backend = "cpu", n_threads = 1)
 #' table(fit$cluster)
 #' @export
 fast_kmeans <- function(

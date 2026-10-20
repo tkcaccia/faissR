@@ -13,6 +13,10 @@ vignette: >
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
+    # Keep the whole rendering session single-threaded, including formatting.
+    RhpcBLASctl::blas_set_num_threads(1L)
+}
 ```
 
 # Build contract

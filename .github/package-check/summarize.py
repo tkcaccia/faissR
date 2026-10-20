@@ -8,13 +8,17 @@ import json
 from pathlib import Path
 
 
-def summarize(run):
+def summarize(run, selected=None):
     manifest = (run / "source.sha256").read_text().split()
     archive = run / "source" / manifest[1]
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     if digest != manifest[0]:
         raise ValueError(f"Source checksum mismatch: {run.name}")
     matrix = json.loads((run / "matrix.json").read_text())
+    if selected is not None:
+        matrix = [row for row in matrix if row["target"] == selected]
+        if len(matrix) != 1:
+            raise ValueError(f"Expected exactly one selected target: {selected}")
     result = []
     for target in matrix:
         if target["status"] != "PASS":
@@ -50,10 +54,20 @@ def summarize(run):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("runs", type=Path, nargs="+")
+    parser.add_argument("runs", type=Path, nargs="*")
+    parser.add_argument("--select", action="append", default=[],
+                        metavar="TARGET=RUN",
+                        help="Select an explicit successful profile after a retry; retain failed runs")
     parser.add_argument("--expect", required=True, help="Comma-separated expected target names")
     args = parser.parse_args()
+    if not args.runs and not args.select:
+        parser.error("Supply runs or explicit TARGET=RUN selections")
     rows = [row for run in args.runs for row in summarize(run)]
+    for selection in args.select:
+        name, separator, path = selection.partition("=")
+        if not separator or not name or not path:
+            parser.error("Selections must use TARGET=RUN")
+        rows.extend(summarize(Path(path), selected=name))
     names = [row["target"] for row in rows]
     if len(names) != len(set(names)) or set(names) != set(args.expect.split(",")):
         raise ValueError("Missing, duplicate or unexpected profiles in the supplied runs")

@@ -84,11 +84,11 @@
 #'   \code{\link{nn}()} call.
 #' @examples
 #' x <- scale(as.matrix(iris[, 1:4]))
-#' model <- knn(x, iris$Species, backend = "cpu", k = 5)
+#' model <- knn(x, iris$Species, backend = "cpu", k = 5, n_threads = 1)
 #' head(predict(model, x, k = 5))
 #' head(predict(model, x, k = 5, type = "prob"))
 #'
-#' pred <- knn(x, iris$Species, x, backend = "cpu", k = 5)
+#' pred <- knn(x, iris$Species, x, backend = "cpu", k = 5, n_threads = 1)
 #' head(pred)
 #' @export
 knn <- function(

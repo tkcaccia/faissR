@@ -94,6 +94,8 @@ def execute(target, archive, output, harness, digest, commit):
                                os.environ.get("PACKAGE_TEST_MANUAL", "false")) + " " +
                            "PACKAGE_TEST_INCOMING_REMOTE=" + shlex.quote(
                                os.environ.get("PACKAGE_TEST_INCOMING_REMOTE", "false")) + " " +
+                           "PACKAGE_TEST_THREAD_MODE=" + shlex.quote(
+                               os.environ.get("PACKAGE_TEST_THREAD_MODE", "openmp-unrestricted")) + " " +
                            "PACKAGE_TEST_COMMIT=" + shlex.quote(commit) + " bash " +
                            shlex.join([folder + "/harness/linux/run.sh", target["image"],
                                        remote_archive, folder + "/results", "functional"]))
@@ -108,6 +110,8 @@ def execute(target, archive, output, harness, digest, commit):
                                os.environ.get("PACKAGE_TEST_BOOTSTRAP_DEPENDENCIES", "false")) + "; " +
                            "$env:PACKAGE_TEST_MANUAL=" + ps_quote(
                                os.environ.get("PACKAGE_TEST_MANUAL", "false")) + "; " +
+                           "$env:PACKAGE_TEST_THREAD_MODE=" + ps_quote(
+                               os.environ.get("PACKAGE_TEST_THREAD_MODE", "openmp-unrestricted")) + "; " +
                            "$env:PACKAGE_TEST_INCOMING_REMOTE=" + ps_quote(
                                os.environ.get("PACKAGE_TEST_INCOMING_REMOTE", "false")) + "; " +
                            f"$env:PACKAGE_TEST_COMMIT={ps_quote(commit)}; & " +

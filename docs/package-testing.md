@@ -1,5 +1,9 @@
 # Cross-platform source-package test lab
 
+The latest maintainer results are in the
+[CPU-time correction report](cran-timing-20261020.md). Archive checksums
+distinguish candidates even when their package version is unchanged.
+
 ## Scope and entry points
 
 `.github/package-check/` contains the reusable runner, Linux image definitions,
@@ -60,6 +64,11 @@ report the patched FAISS build rather than calling it an unmodified binary.
 failures when Windows lacks short names for Program Files) and installs a
 private portable Pandoc 3.6.4 for vignette rendering. It does not replace system R.
 Adjust paths in the scripts/config for another installed R/Rtools version.
+For PDF manual checks, provide a working TeX installation with the R manual's
+fonts. `windows/prepare-check-fonts.ps1` adds missing Courier metrics and
+MakeIndex to a private lab TeX tree from checksum-verified archives. It does
+not update a shared TinyTeX installation. The Windows runner uses that tree
+when present; the preparation script also checks a minimal index fixture.
 Do not install or replace R, Rtools, or machine-wide numerical libraries blindly.
 
 On Linux, put images, temporary files, caches and results on a disk with at least
@@ -100,6 +109,7 @@ name for that check tool. `linux/fedora-check-tools.def` adds the checker to an
 older Fedora image without replacing it. Keep distribution-supplied R compiler
 flags intact; record any compiler-flag NOTE separately from package warnings.
 `check-tools.def` adds these to an older image without replacing the original.
+The checker overlay also installs HTML Tidy for incoming HTML validation.
 The Debian custom R must have Cairo support for rendered vignette figures. The
 current Docker base recipe includes the development libraries; for an existing
 minimal Debian SIF use the following overlay (the variable name is shared with
@@ -193,6 +203,46 @@ validate portability/error reporting but must not be advertised as useful FAISS.
 
 ## Evidence and interpretation
 
+### CPU Budgets
+
+The harness enables R's example, test, and vignette CPU-to-elapsed thresholds
+at 2.5. `--as-cran` alone does not necessarily enable these local checks.
+Timing NOTEs fail the gate; the initial-submission NOTE is classified separately.
+Read `*-Ex.timings` as well as the test and vignette timing lines. Short wall
+times do not justify excessive aggregate CPU use.
+
+`PACKAGE_TEST_THREAD_MODE=openmp-unrestricted` is the default: inherited
+OpenMP controls are removed so they cannot mask unbounded native loops, while
+BLAS starts with one worker. BLAS can initialize its pool before vignette code
+runs: a control containing only `1 + 1` also exceeded the timing threshold with
+unrestricted BLAS on the high-core Linux test image. This is an environment
+control, not an exemption for a timing NOTE.
+`unrestricted` removes both OpenMP and BLAS controls for diagnostic probes.
+`bounded` sets two OpenMP workers and one BLAS worker for controlled comparisons.
+Keep failed uncapped evidence and test a minimal control before attributing
+runtime startup CPU to package calculations. The mode and environment are in
+`environment.txt`; the Linux and Windows matrix runners propagate the mode.
+
+Small examples, tests and the vignette explicitly use one faissR worker;
+existing bounded parallel tests remain. Native float32 validation and layout
+conversion must obey the requested budget too. The suggested `RhpcBLASctl`
+package separately limits the BLAS pool during tests and vignette rendering,
+and the test entry point restores its previous size. The vignette uses one
+BLAS worker throughout the rendering session, including document formatting;
+restoring a large worker pool mid-render can itself cause excess CPU use.
+Test child processes inherit explicit one-worker defaults, while the existing
+two-thread native tests retain their explicit settings. This does not change
+package defaults or the host BLAS installation. Search threads and BLAS
+threads are separate budgets.
+Check small test calls with:
+
+```sh
+Rscript .github/scripts/limit-check-threads.R --check
+```
+
+The script uses R's parser and can add missing explicit budgets mechanically;
+review its diff and keep tests intended to exercise explicit parallel settings.
+
 ### CRAN Compiler And Diagnostic Gates
 
 Include the R-devel Clang/Flang profile in
@@ -275,6 +325,19 @@ python3 .github/package-check/summarize.py /lab/run-a /lab/run-b \
 
 This fails on pending/missing results, unreviewed diagnostics, failed stages,
 mixed archives or an omitted target. Keep diagnostic profiles labelled as such.
+
+When a profile is rerun in a new directory, keep the failed attempt unchanged.
+Select the successful evidence for each expected profile explicitly:
+
+```sh
+python3 .github/package-check/summarize.py \
+  --select target-a=/lab/original-run \
+  --select target-b=/lab/corrected-run --expect target-a,target-b
+```
+
+Selections do not turn a failed profile into a pass. The collector still checks
+completion, every stage, exact profile coverage, native-library hashes, and
+identical source archive checksums.
 
 ## Negative regression tests
 

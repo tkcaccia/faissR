@@ -5,7 +5,8 @@ test_that("nearest-neighbor summaries expose stable metadata", {
     k = 2L,
     exclude_self = TRUE,
     backend = "cpu",
-    method = "exact"
+    method = "exact",
+      n_threads = 1L
   )
 
   info <- summary(result)
@@ -33,7 +34,8 @@ test_that("fitted kNN models have print and summary methods", {
     iris$Species,
     k = 3L,
     backend = "cpu",
-    method = "flat"
+    method = "flat",
+      n_threads = 1L
   )
 
   info <- summary(model)

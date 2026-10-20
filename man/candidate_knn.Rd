@@ -63,7 +63,8 @@ ranks the candidates that you pass in.
 }
 \examples{
 x <- scale(as.matrix(iris[, 1:4]))
-rough <- nn(x, k = 10, backend = "cpu")
-refined <- candidate_knn(x, rough$indices, k = 5, exclude_self = TRUE)
+rough <- nn(x, k = 10, backend = "cpu", n_threads = 1)
+refined <- candidate_knn(x, rough$indices, k = 5, exclude_self = TRUE,
+    n_threads = 1)
 refined
 }

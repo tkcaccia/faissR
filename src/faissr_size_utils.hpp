@@ -49,7 +49,8 @@ bool copy_column_major_to_row_major_float(
     std::vector<float>& destination,
     const int nrow,
     const int ncol,
-    const bool check_finite = true) {
+    const bool check_finite = true,
+    const int n_threads = 1) {
   constexpr long long tile = 32;
   const long long rows = nrow;
   const long long columns = ncol;
@@ -57,7 +58,9 @@ bool copy_column_major_to_row_major_float(
   destination.assign(static_cast<std::size_t>(elements), 0.0f);
   bool finite = true;
 #ifdef _OPENMP
-#pragma omp parallel for schedule(static) reduction(&& : finite)
+#pragma omp parallel for num_threads(n_threads > 0 ? n_threads : 1) if(elements >= 65536 && n_threads > 1) schedule(static) reduction(&& : finite)
+#else
+  (void)n_threads;
 #endif
   for (long long row_begin = 0; row_begin < rows; row_begin += tile) {
     const long long row_end =

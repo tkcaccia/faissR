@@ -6,6 +6,16 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  OPENBLAS_NUM_THREADS: '1'
+  GOTO_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  BLIS_NUM_THREADS: '1'
+  VECLIB_MAXIMUM_THREADS: '1'
+  _R_CHECK_EXAMPLE_TIMING_CPU_TO_ELAPSED_THRESHOLD_: '2.5'
+  _R_CHECK_TEST_TIMING_CPU_TO_ELAPSED_THRESHOLD_: '2.5'
+  _R_CHECK_VIGNETTE_TIMING_CPU_TO_ELAPSED_THRESHOLD_: '2.5'
+
 jobs:
   check:
     strategy:
@@ -59,13 +69,14 @@ jobs:
           cmake --version
       - name: Build and check
         run: |
+          Rscript .github/scripts/limit-check-threads.R --check
           R CMD build .
           tarball=$(find . -maxdepth 1 -name 'faissR_*.tar.gz' -print -quit)
-          Rscript -e 'rcmdcheck::rcmdcheck(path=commandArgs(TRUE)[[1]], args="--as-cran", error_on="warning")' "$tarball"
+          Rscript -e 'x <- rcmdcheck::rcmdcheck(path=commandArgs(TRUE)[[1]], args="--as-cran", error_on="warning"); stopifnot(!any(grepl("CPU.*elapsed", x$notes)))' "$tarball"
           R CMD INSTALL "$tarball"
       - name: Functional smoke and compact replication
         run: |
-          Rscript -e 'library(faissR); stopifnot(faiss_available()); x <- matrix(rnorm(240), 40); z <- nn(x, k=3, method="exact", backend="cpu"); stopifnot(identical(dim(z$indices), c(40L, 3L)))'
+          Rscript -e 'library(faissR); stopifnot(faiss_available()); x <- matrix(rnorm(240), 40); z <- nn(x, k=3, method="exact", backend="cpu", n_threads=1); stopifnot(identical(dim(z$indices), c(40L, 3L)))'
           FAISSR_JSS_MODE=compact \
           FAISSR_JSS_DERIVED_DIR="$RUNNER_TEMP/jss-compact" \
           Rscript manuscript/jss/replication_article.R
@@ -92,10 +103,12 @@ jobs:
       - name: Check functional bundled FAISS and rebuild vignettes
         shell: Rscript {0}
         run: |
-          rcmdcheck::rcmdcheck(
+          result <- rcmdcheck::rcmdcheck(
             args = c("--as-cran", "--no-manual"),
             error_on = "warning"
           )
+          stopifnot(!any(grepl(
+            "CPU.*elapsed", result$notes)))
 
   archive-replication:
     runs-on: ubuntu-latest
