@@ -62,7 +62,8 @@ if FAISSR_NUMERICAL_LIBS=-lfaissr_missing_blas sh configure \
   echo 'An invalid explicit numerical provider was accepted.' >&2
   exit 1
 fi
-grep 'numerical-library compile/load check failed' "$log_dir/invalid-override.log"
+grep 'FAISS version, ABI or numerical-library probe failed' \
+  "$log_dir/invalid-override.log"
 FAISSR_NUMERICAL_LIBS='-llapack -lblas' sh configure \
   > "$log_dir/valid-override.log" 2>&1
 grep -- '-llapack -lblas' src/Makevars
