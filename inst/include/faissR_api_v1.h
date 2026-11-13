@@ -102,6 +102,11 @@ typedef SEXP (*faissR_gpu_index_search_v1_fun)(
     SEXP k,
     SEXP distance_storage);
 
+/* Change IVF search width on every resident GPU member without rebuilding. */
+typedef SEXP (*faissR_gpu_index_set_nprobe_v1_fun)(
+    SEXP index,
+    SEXP nprobe);
+
 /* Copy at most 256 selected one-based query rows from an owned CUDA result. */
 typedef SEXP (*faissR_gpu_knn_sample_v1_fun)(SEXP result, SEXP rows);
 
@@ -231,6 +236,12 @@ static inline faissR_gpu_index_search_v1_fun
 faissR_get_gpu_index_search_v1(void) {
   return (faissR_gpu_index_search_v1_fun) R_GetCCallable(
       "faissR", "faissR_gpu_index_search_v1");
+}
+
+static inline faissR_gpu_index_set_nprobe_v1_fun
+faissR_get_gpu_index_set_nprobe_v1(void) {
+  return (faissR_gpu_index_set_nprobe_v1_fun) R_GetCCallable(
+      "faissR", "faissR_gpu_index_set_nprobe_v1");
 }
 
 static inline faissR_gpu_knn_sample_v1_fun

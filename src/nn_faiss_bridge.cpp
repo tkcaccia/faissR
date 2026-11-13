@@ -257,6 +257,7 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
                                 int nlist,
                                 int nprobe,
                                 bool shard);
+SEXP faiss_gpu_index_set_nprobe_impl(SEXP index, int nprobe);
 List faiss_gpu_index_search_impl(SEXP index,
                                  SEXP points,
                                  int k,
@@ -571,6 +572,15 @@ extern "C" SEXP faissR_gpu_index_search_v1(SEXP index,
   END_RCPP
 }
 
+extern "C" SEXP faissR_gpu_index_set_nprobe_v1(SEXP index,
+                                                SEXP nprobe) {
+  BEGIN_RCPP
+  return faiss_gpu_index_set_nprobe_impl(
+    index, Rcpp::as<int>(nprobe)
+  );
+  END_RCPP
+}
+
 extern "C" SEXP faissR_metal_knn_v1(SEXP data,
                                     SEXP k,
                                     SEXP method,
@@ -686,6 +696,11 @@ void register_faissR_ccallables(DllInfo *dll) {
     "faissR",
     "faissR_gpu_index_search_v1",
     (DL_FUNC) &faissR_gpu_index_search_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_gpu_index_set_nprobe_v1",
+    (DL_FUNC) &faissR_gpu_index_set_nprobe_v1
   );
   R_RegisterCCallable(
     "faissR",

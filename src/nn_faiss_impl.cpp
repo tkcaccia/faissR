@@ -3553,6 +3553,45 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
 #endif
 }
 
+SEXP faiss_gpu_index_set_nprobe_impl(SEXP pointer, int nprobe) {
+#if defined(FAISSR_HAS_FAISS_GPU) && \
+    defined(FAISSR_HAS_FAISS_GPU_MULTI)
+  Rcpp::XPtr<FaissPersistentGpuIndex> state(pointer);
+  if (state.get() == nullptr || state->gpu_index == nullptr ||
+      state->method != "ivf") {
+    Rcpp::stop("A persistent FAISS GPU IVF index is required.");
+  }
+  if (nprobe < 1 || nprobe > state->nlist) {
+    Rcpp::stop("IVF nprobe must be between 1 and nlist.");
+  }
+  auto update = [nprobe](int, faiss::Index* child) {
+    auto* ivf = dynamic_cast<faiss::gpu::GpuIndexIVF*>(child);
+    if (ivf == nullptr) {
+      throw std::runtime_error("FAISS GPU IVF member changed type.");
+    }
+    ivf->nprobe = nprobe;
+  };
+  try {
+    if (auto* replicas = dynamic_cast<faiss::IndexReplicas*>(
+          state->gpu_index.get())) {
+      replicas->runOnIndex(update);
+    } else if (auto* shards = dynamic_cast<faiss::IndexShards*>(
+          state->gpu_index.get())) {
+      shards->runOnIndex(update);
+    } else {
+      update(0, state->gpu_index.get());
+    }
+  } catch (const std::exception& e) {
+    Rcpp::stop("Setting FAISS GPU IVF nprobe failed: %s", e.what());
+  }
+  state->nprobe = nprobe;
+  return Rcpp::wrap(nprobe);
+#else
+  (void)pointer; (void)nprobe;
+  Rcpp::stop("Persistent FAISS GPU IVF is unavailable in this build.");
+#endif
+}
+
 List faiss_gpu_index_search_gpu_impl(SEXP pointer,
                                      SEXP points,
                                      int k,
