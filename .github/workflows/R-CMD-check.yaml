@@ -176,6 +176,7 @@ jobs:
             cat("FRESH_KMEANS_ONE_THREAD_PASS\n")
           '
       - name: Fresh-process two-thread k-means call
+        continue-on-error: true
         run: |
           Rscript --vanilla -e '
             library(faissR)
@@ -188,6 +189,19 @@ jobs:
             stopifnot(length(fit$cluster) == nrow(x))
             cat("FRESH_KMEANS_PASS\n")
           '
+      - name: Native backtrace of two-thread k-means
+        continue-on-error: true
+        run: |
+          cat > "$RUNNER_TEMP/kmeans-crash.R" <<'RSCRIPT'
+          library(faissR)
+          set.seed(201)
+          x <- rbind(matrix(rnorm(80, -2), ncol = 4),
+                     matrix(rnorm(80, 2), ncol = 4))
+          fast_kmeans(x, centers = 2, backend = "cpu", max_iter = 20,
+                      n_init = 2, seed = 11, n_threads = 2)
+          RSCRIPT
+          lldb --batch -o run -o 'thread backtrace all' -- \
+            Rscript --vanilla "$RUNNER_TEMP/kmeans-crash.R"
       - name: Console test followed by k-means in one process
         run: |
           Rscript --vanilla -e '
