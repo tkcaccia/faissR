@@ -1,0 +1,60 @@
+name: macOS k-means diagnostic
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bundled-faiss:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      FAISSR_FAISS_SOURCE: bundled
+      FAISSR_REQUIRE_FAISS: '1'
+      FAISSR_USE_CUDA: '0'
+      FAISSR_USE_CUVS: '0'
+      OMP_NUM_THREADS: '1'
+      VECLIB_MAXIMUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          needs: check
+      - name: Install native toolchain
+        run: |
+          brew install libomp gcc
+          echo "LIBOMP_HOME=$(brew --prefix libomp)" >> "$GITHUB_ENV"
+      - name: Build identical source archive and install privately
+        run: |
+          R --version
+          R CMD build --no-build-vignettes .
+          tarball=$(find . -maxdepth 1 -name 'faissR_*.tar.gz' -print -quit)
+          shasum -a 256 "$tarball"
+          mkdir -p "$RUNNER_TEMP/faissr-lib"
+          R CMD INSTALL -l "$RUNNER_TEMP/faissr-lib" "$tarball"
+          echo "R_LIBS=$RUNNER_TEMP/faissr-lib" >> "$GITHUB_ENV"
+      - name: Fresh-process k-means call
+        run: |
+          Rscript --vanilla -e '
+            library(faissR)
+            set.seed(201)
+            x <- rbind(matrix(rnorm(80, -2), ncol = 4),
+                       matrix(rnorm(80, 2), ncol = 4))
+            fit <- fast_kmeans(x, centers = 2, backend = "cpu",
+                               max_iter = 20, n_init = 2,
+                               seed = 11, n_threads = 2)
+            stopifnot(length(fit$cluster) == nrow(x))
+            cat("FRESH_KMEANS_PASS\n")
+          '
+      - name: Console test followed by k-means in one process
+        run: |
+          Rscript --vanilla -e '
+            library(testthat)
+            library(faissR)
+            test_file("tests/testthat/test-bundled-faiss-console.R",
+                      reporter = "summary")
+            cat("CONSOLE_TEST_RETURNED\n")
+            test_file("tests/testthat/test-kmeans.R",
+                      reporter = "summary")
+            cat("ORDERED_KMEANS_PASS\n")
+          '
