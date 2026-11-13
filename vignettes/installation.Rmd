@@ -250,12 +250,16 @@ c(
     cuvs = cuvs_available()
 )
 
-gpuinfo::hardware_info()$gpu
+if (interactive()) {
+    gpuinfo::hardware_info()$gpu
+}
 ```
 
 `gpuinfo` reports hardware and driver visibility. Do not infer faissR GPU
 support from hardware visibility alone: the package must also have been
 compiled against the provider and its runtime check must pass.
+Run the hardware inventory interactively on the target machine; headless
+package builders need not expose a usable display or GPU device.
 
 # Common failures
 
