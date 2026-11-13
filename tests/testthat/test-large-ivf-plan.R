@@ -9,6 +9,17 @@ test_that("large IVF candidates remain bounded", {
                     ten_million$nprobe == 512L))
 })
 
+test_that("untested large IVF defaults do not claim audited recall", {
+    for (n in c(1e7, 1e8, 1e9)) {
+        plan <- faissR:::cuda_ivf_params(
+            n, 96L, 30L, "euclidean", 0.99)
+        expect_identical(plan$tuning_benchmark_source,
+                         "heuristic_fallback")
+        expect_false(plan$tuning_benchmark_target_met)
+        expect_lte(plan$nprobe, plan$nlist)
+    }
+})
+
 test_that("billion-row projection requires audited matching anchors", {
     observations <- data.frame(
         n = c(1e7, 1e7, 1e8, 1e8),

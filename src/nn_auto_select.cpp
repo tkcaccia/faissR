@@ -2588,6 +2588,9 @@ List nn_tune_cuda_ivf_cpp(int n,
   const int nprobe = option_int(nprobe_option, default_nprobe, 1, nlist);
   const std::string tuning_rule_prefix = metric == "euclidean" ?
     "cuda_ivf_" : ("cuda_ivf_" + metric + "_");
+  if (benchmark_source == "heuristic_fallback") {
+    benchmark_target_met = false;
+  }
 
   return List::create(
     _["nlist"] = nlist,
