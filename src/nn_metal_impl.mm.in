@@ -49,7 +49,7 @@ constexpr int kMaxLists = 1024;
 // Keep enough local top-k storage for compact t-SNE and UMAP neighborhoods
 // without routing an explicit Metal request through a host fallback.
 constexpr int kMaxK = 128;
-constexpr int kMaxProbe = 256;
+constexpr int kMaxProbe = 512;
 constexpr int kMaxShortlistPerGroup = 128;
 constexpr int kInitialShortlistPerGroup = 72;
 constexpr int kProjectionDim = 128;
@@ -64,7 +64,7 @@ constant uint SIMD_WIDTH = 32;
 constant uint MAX_P = 1024;
 constant uint MAX_Q = 128;
 constant uint MAX_K = 128;
-constant uint MAX_PROBE = 256;
+constant uint MAX_PROBE = 512;
 constant uint MAX_SHORTLIST = 128;
 
 struct ProjectParams {
