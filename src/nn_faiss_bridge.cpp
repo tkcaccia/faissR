@@ -1,6 +1,7 @@
 #include <Rcpp.h>
 
 #include <string>
+#include <vector>
 
 using Rcpp::List;
 using Rcpp::NumericMatrix;
@@ -230,6 +231,14 @@ List faiss_gpu_ivf_flat_float32_knn_impl(SEXP data,
                                          std::string distance_output,
                                          bool exclude_self,
                                          std::string distance_storage);
+List faiss_gpu_multi_knn_impl(SEXP data,
+                              int k,
+                              const std::string& method,
+                              const std::vector<int>& devices,
+                              int nlist,
+                              int nprobe,
+                              bool shard,
+                              const std::string& distance_storage);
 List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,
                               NumericMatrix points,
                               int k,
@@ -468,6 +477,51 @@ extern "C" SEXP faissR_nn_cuda_tuned_gpu_call(SEXP x,
                                               SEXP include_self,
                                               SEXP target_recall);
 
+extern "C" SEXP faissR_gpu_multi_knn_v1(SEXP data,
+                                        SEXP k,
+                                        SEXP method,
+                                        SEXP devices,
+                                        SEXP nlist,
+                                        SEXP nprobe,
+                                        SEXP shard,
+                                        SEXP distance_storage) {
+  BEGIN_RCPP
+  return faiss_gpu_multi_knn_impl(
+    data, Rcpp::as<int>(k), Rcpp::as<std::string>(method),
+    Rcpp::as<std::vector<int>>(devices), Rcpp::as<int>(nlist),
+    Rcpp::as<int>(nprobe), Rcpp::as<bool>(shard),
+    Rcpp::as<std::string>(distance_storage)
+  );
+  END_RCPP
+}
+
+extern "C" SEXP faissR_metal_knn_v1(SEXP data,
+                                    SEXP k,
+                                    SEXP method,
+                                    SEXP metric,
+                                    SEXP target_recall);
+extern "C" SEXP faissR_metal_query_knn_v1(SEXP data,
+                                          SEXP query,
+                                          SEXP k,
+                                          SEXP method,
+                                          SEXP metric,
+                                          SEXP target_recall);
+
+// [[Rcpp::export]]
+List nn_faiss_gpu_multi_cpp(SEXP data,
+                            int k,
+                            std::string method,
+                            Rcpp::IntegerVector devices,
+                            int nlist,
+                            int nprobe,
+                            bool shard = false,
+                            std::string distance_storage = "float") {
+  return faiss_gpu_multi_knn_impl(
+    data, k, method, Rcpp::as<std::vector<int>>(devices),
+    nlist, nprobe, shard, distance_storage
+  );
+}
+
 extern "C" SEXP faissR_hnsw_search_v1(SEXP data,
                                       SEXP query,
                                       SEXP n,
@@ -510,6 +564,21 @@ void register_faissR_ccallables(DllInfo *dll) {
     "faissR",
     "faissR_nn_cuda_tuned_gpu_call",
     (DL_FUNC) &faissR_nn_cuda_tuned_gpu_call
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_gpu_multi_knn_v1",
+    (DL_FUNC) &faissR_gpu_multi_knn_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_metal_knn_v1",
+    (DL_FUNC) &faissR_metal_knn_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_metal_query_knn_v1",
+    (DL_FUNC) &faissR_metal_query_knn_v1
   );
   R_RegisterCCallable(
     "faissR",

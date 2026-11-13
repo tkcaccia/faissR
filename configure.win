@@ -16,7 +16,7 @@ CXX_STD = CXX20
 PKG_CXXFLAGS = \$(SHLIB_OPENMP_CXXFLAGS)
 PKG_CPPFLAGS = -DFAISSR_WINDOWS_NO_FAISS -DFAISSR_NO_FORTRAN_NN
 PKG_LIBS = \$(SHLIB_OPENMP_CXXFLAGS)
-OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_faiss_bridge.o nn_faiss_stub.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o
+OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_faiss_bridge.o nn_faiss_stub.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o nn_metal_bridge.o nn_metal_stub.o
 EOF
 }
 
@@ -99,7 +99,7 @@ CXX_STD = CXX20
 PKG_CXXFLAGS = \$(SHLIB_OPENMP_CXXFLAGS) $extra_cxxflags
 PKG_CPPFLAGS = -DFAISSR_HAS_FAISS -DFAISSR_NO_FORTRAN_NN -I"$faiss_include" $faiss_cppflags
 PKG_LIBS = \$(SHLIB_OPENMP_CXXFLAGS) $faiss_openmp_flags $faiss_libs $faiss_numerical_libs \$(LAPACK_LIBS) \$(BLAS_LIBS) \$(FLIBS)
-OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o faissr_console.o nn_faiss_bridge.o nn_faiss_impl.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o
+OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o faissr_console.o nn_faiss_bridge.o nn_faiss_impl.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o nn_metal_bridge.o nn_metal_stub.o
 EOF
   echo "Windows CPU FAISS build enabled from $faiss_libdir." >&2
   exit 0

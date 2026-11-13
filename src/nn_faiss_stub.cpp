@@ -1,6 +1,7 @@
 #include <Rcpp.h>
 
 #include <string>
+#include <vector>
 
 using Rcpp::List;
 using Rcpp::NumericMatrix;
@@ -402,6 +403,17 @@ List faiss_gpu_ivf_flat_knn_impl(NumericMatrix,
     "a FAISS GPU/cuVS library visible to configure, for example "
     "FAISS_HOME=/path/to/faiss-gpu."
   );
+}
+
+List faiss_gpu_multi_knn_impl(SEXP,
+                              int,
+                              const std::string&,
+                              const std::vector<int>&,
+                              int,
+                              int,
+                              bool,
+                              const std::string&) {
+  Rcpp::stop("FAISS multi-GPU KNN is unavailable in this build.");
 }
 
 List faiss_gpu_ivf_flat_float32_knn_impl(SEXP,

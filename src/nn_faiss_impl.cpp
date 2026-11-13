@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -50,6 +51,15 @@
 #include <faiss/gpu/GpuIndexFlat.h>
 #include <faiss/gpu/GpuIndexIVFFlat.h>
 #include <faiss/gpu/GpuIndexIVFPQ.h>
+#if defined(FAISSR_HAS_CUDA) && \
+    __has_include(<faiss/gpu/GpuCloner.h>) && \
+    __has_include(<cuda_runtime_api.h>)
+#define FAISSR_HAS_FAISS_GPU_MULTI 1
+#include <faiss/gpu/GpuCloner.h>
+#include <faiss/IndexReplicas.h>
+#include <faiss/IndexShards.h>
+#include <cuda_runtime_api.h>
+#endif
 #endif
 
 #if defined(FAISSR_HAS_FAISS_GPU) && defined(FAISSR_HAS_CUDA) && \
@@ -3201,6 +3211,160 @@ List faiss_gpu_ivf_flat_float32_knn_impl(SEXP data,
     "FAISS GPU IVF Flat backend is not available in this build. "
     "Install FAISS GPU/cuVS headers and rebuild faissR with FAISS_HOME set."
   );
+#endif
+}
+
+List faiss_gpu_multi_knn_impl(SEXP data,
+                              int k,
+                              const std::string& method,
+                              const std::vector<int>& devices,
+                              int nlist,
+                              int nprobe,
+                              bool shard,
+                              const std::string& distance_storage) {
+#if defined(FAISSR_HAS_FAISS_GPU) && \
+    defined(FAISSR_HAS_FAISS_GPU_MULTI)
+  if (method != "ivf" && method != "flat") {
+    Rcpp::stop("Multi-GPU FAISS KNN supports only `ivf` or `flat`.");
+  }
+  if (devices.size() < 2) {
+    Rcpp::stop("Multi-GPU FAISS KNN needs at least two devices.");
+  }
+  int device_count = 0;
+  if (cudaGetDeviceCount(&device_count) != cudaSuccess) {
+    Rcpp::stop("Could not enumerate CUDA devices.");
+  }
+  for (std::size_t i = 0; i < devices.size(); ++i) {
+    if (devices[i] < 0 || devices[i] >= device_count ||
+        std::find(devices.begin(), devices.begin() + i, devices[i]) !=
+          devices.begin() + i) {
+      Rcpp::stop("Invalid or repeated CUDA device ordinal.");
+    }
+  }
+  const auto t0 = std::chrono::steady_clock::now();
+  MatrixViewF32 xb = make_float32_matrix_view(
+    data, "data", "euclidean", 1
+  );
+  const auto t_convert = std::chrono::steady_clock::now();
+  if (xb.nrow < 2 || xb.ncol < 1 || k < 1 || k >= xb.nrow) {
+    Rcpp::stop("Invalid multi-GPU KNN dimensions or k.");
+  }
+  if (distance_storage != "float" && distance_storage != "double") {
+    Rcpp::stop("distance_storage must be `float` or `double`.");
+  }
+  if (method == "ivf" && (nlist < 1 || nlist > xb.nrow ||
+                            nprobe < 1 || nprobe > nlist)) {
+    Rcpp::stop("Invalid IVF nlist or nprobe.");
+  }
+  const int search_k = k + 1;
+  if (static_cast<double>(xb.nrow) * search_k >
+      std::numeric_limits<int>::max()) {
+    Rcpp::stop("Multi-GPU KNN result exceeds the supported matrix size.");
+  }
+  std::unique_ptr<faiss::IndexFlatL2> quantizer;
+  std::unique_ptr<faiss::Index> cpu_index;
+  if (method == "ivf") {
+    quantizer.reset(new faiss::IndexFlatL2(xb.ncol));
+    auto ivf = std::unique_ptr<faiss::IndexIVFFlat>(
+      new faiss::IndexIVFFlat(
+        quantizer.get(), xb.ncol, nlist, faiss::METRIC_L2
+      )
+    );
+    ivf->own_fields = false;
+    ivf->nprobe = nprobe;
+    cpu_index = std::move(ivf);
+  } else {
+    cpu_index.reset(new faiss::IndexFlatL2(xb.ncol));
+  }
+  try {
+    if (!cpu_index->is_trained) cpu_index->train(xb.nrow, xb.data);
+  } catch (const std::exception& e) {
+    Rcpp::stop("FAISS multi-GPU CPU index training failed: %s", e.what());
+  }
+  const auto t_build = std::chrono::steady_clock::now();
+  std::vector<std::unique_ptr<faiss::gpu::StandardGpuResources>> owners;
+  std::vector<faiss::gpu::GpuResourcesProvider*> providers;
+  owners.reserve(devices.size());
+  providers.reserve(devices.size());
+  for (std::size_t i = 0; i < devices.size(); ++i) {
+    owners.emplace_back(new faiss::gpu::StandardGpuResources());
+    providers.push_back(owners.back().get());
+  }
+  std::vector<int> chosen = devices;
+  faiss::gpu::GpuMultipleClonerOptions options;
+  options.shard = shard;
+  options.shard_type = 1;
+  options.useFloat16 = false;
+  options.useFloat16CoarseQuantizer = false;
+  options.allowCpuCoarseQuantizer = false;
+  std::unique_ptr<faiss::Index> gpu_index;
+  std::vector<float> distances(static_cast<std::size_t>(xb.nrow) * search_k);
+  std::vector<faiss::idx_t> labels(
+    static_cast<std::size_t>(xb.nrow) * search_k
+  );
+  FaissBatchSearchInfo batch_info;
+  std::chrono::steady_clock::time_point t_clone;
+  std::chrono::steady_clock::time_point t_add;
+  try {
+    gpu_index.reset(faiss::gpu::index_cpu_to_gpu_multiple(
+      providers, chosen, cpu_index.get(), &options
+    ));
+    if (shard && dynamic_cast<faiss::IndexShards*>(gpu_index.get()) == nullptr) {
+      Rcpp::stop("FAISS did not create a sharded GPU index.");
+    }
+    if (!shard &&
+        dynamic_cast<faiss::IndexReplicas*>(gpu_index.get()) == nullptr) {
+      Rcpp::stop("FAISS did not create a replicated GPU index.");
+    }
+    t_clone = std::chrono::steady_clock::now();
+    gpu_index->add(xb.nrow, xb.data);
+    t_add = std::chrono::steady_clock::now();
+    batch_info = search_faiss_queries(
+      *gpu_index, xb.data, xb.nrow, xb.ncol, search_k,
+      false, NA_INTEGER, true, distances, labels
+    );
+  } catch (const std::exception& e) {
+    Rcpp::stop("FAISS multi-GPU search failed: %s", e.what());
+  }
+  const auto t_search = std::chrono::steady_clock::now();
+  List out = format_faiss_result(
+    labels, distances, xb.nrow, search_k, k, true, true,
+    shard ? "GpuIndexShards" : "GpuIndexReplicas",
+    method == "flat", DistanceOutput::L2Squared, 1,
+    method == "ivf" ? nlist : NA_INTEGER,
+    method == "ivf" ? nprobe : NA_INTEGER,
+    NA_INTEGER, NA_INTEGER, distance_storage == "float"
+  );
+  out["backend_used"] = shard ? "faiss_gpu_multi_shard" :
+    "faiss_gpu_multi_replicate";
+  out["accelerator"] = "cuda";
+  out["gpu_provider"] = "faiss_gpu";
+  out["cpu_fallback"] = false;
+  out["result_residency"] = "host";
+  out["index_base"] = 1;
+  out["devices"] = Rcpp::wrap(devices);
+  out["gpu_count"] = static_cast<int>(devices.size());
+  out["multi_gpu_mode"] = shard ? "shard" : "replicate";
+  out["search_batch_size"] = batch_info.batch_size;
+  out["search_batches"] = batch_info.batches;
+  out["input_type"] = "float32";
+  out["input_layout"] = xb.layout;
+  const auto t_done = std::chrono::steady_clock::now();
+  const auto seconds = [](auto a, auto b) {
+    return std::chrono::duration<double>(b - a).count();
+  };
+  out["input_conversion_seconds"] = seconds(t0, t_convert);
+  out["cpu_build_seconds"] = seconds(t_convert, t_build);
+  out["gpu_clone_seconds"] = seconds(t_build, t_clone);
+  out["gpu_add_seconds"] = seconds(t_clone, t_add);
+  out["gpu_search_seconds"] = seconds(t_add, t_search);
+  out["result_format_seconds"] = seconds(t_search, t_done);
+  out["total_native_seconds"] = seconds(t0, t_done);
+  return out;
+#else
+  (void)data; (void)k; (void)method; (void)devices;
+  (void)nlist; (void)nprobe; (void)shard; (void)distance_storage;
+  Rcpp::stop("FAISS multi-GPU KNN is unavailable in this build.");
 #endif
 }
 

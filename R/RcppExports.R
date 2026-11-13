@@ -588,6 +588,12 @@ nn_faiss_flat_pretransformed_float32_cpp <- function(data, points, k,
         exclude_self, n_threads, distance_storage)
 }
 
+nn_faiss_gpu_multi_cpp <- function(data, k, method, devices, nlist, nprobe,
+    shard = FALSE, distance_storage = "float") {
+    .Call(`_faissR_nn_faiss_gpu_multi_cpp`, data, k, method, devices, nlist,
+        nprobe, shard, distance_storage)
+}
+
 nn_faiss_ivf_cpp <- function(data, points, k, nlist, nprobe, metric,
     distance_output, exclude_self, n_threads) {
     .Call(`_faissR_nn_faiss_ivf_cpp`, data, points, k, nlist, nprobe, metric,
@@ -775,4 +781,19 @@ kmeans_faiss_gpu_cpp <- function(data, centers, max_iter, nredo, tol, seed,
     kmeans_plus_plus) {
     .Call(`_faissR_kmeans_faiss_gpu_cpp`, data, centers, max_iter, nredo, tol,
         seed, kmeans_plus_plus)
+}
+
+nn_metal_available_cpp <- function() {
+    .Call(`_faissR_nn_metal_available_cpp`)
+}
+
+nn_metal_cpp <- function(data, k, method = "auto", metric = "euclidean",
+    target_recall = 0.99) {
+    .Call(`_faissR_nn_metal_cpp`, data, k, method, metric, target_recall)
+}
+
+nn_metal_query_cpp <- function(data, query, k, method = "auto",
+    metric = "euclidean", target_recall = 0.99) {
+    .Call(`_faissR_nn_metal_query_cpp`, data, query, k, method, metric,
+        target_recall)
 }

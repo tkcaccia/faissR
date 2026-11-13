@@ -22,3 +22,10 @@ See src/vendor/README for provenance, checksum and build details.
 CUDA, cuVS, OpenMP and numerical libraries are external dependencies and are
 not included in the bundled archive. Linking to them does not transfer their
 copyright to the faissR authors.
+
+Native Metal KNN in src/nn_metal_impl.mm and its input helper in
+src/faissr_metal_common.h are ported from fastEmbedR's native implementation
+by Stefano Cacciatore (2026). Its FAISS-inspired portions retain the Meta
+Platforms MIT notice, and its Faiss-mlx-derived search organization retains
+Sydney Bach's Apache-2.0 notice. See FAISS-METAL-LICENSE and
+FAISS-MLX-LICENSE. No Python code is included in this Metal implementation.

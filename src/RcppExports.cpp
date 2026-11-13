@@ -1563,6 +1563,24 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nn_faiss_gpu_multi_cpp
+List nn_faiss_gpu_multi_cpp(SEXP data, int k, std::string method, Rcpp::IntegerVector devices, int nlist, int nprobe, bool shard, std::string distance_storage);
+RcppExport SEXP _faissR_nn_faiss_gpu_multi_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP methodSEXP, SEXP devicesSEXP, SEXP nlistSEXP, SEXP nprobeSEXP, SEXP shardSEXP, SEXP distance_storageSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< std::string >::type method(methodSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type devices(devicesSEXP);
+    Rcpp::traits::input_parameter< int >::type nlist(nlistSEXP);
+    Rcpp::traits::input_parameter< int >::type nprobe(nprobeSEXP);
+    Rcpp::traits::input_parameter< bool >::type shard(shardSEXP);
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_gpu_multi_cpp(data, k, method, devices, nlist, nprobe, shard, distance_storage));
+    return rcpp_result_gen;
+END_RCPP
+}
 // nn_faiss_ivf_cpp
 List nn_faiss_ivf_cpp(NumericMatrix data, NumericMatrix points, int k, int nlist, int nprobe, std::string metric, std::string distance_output, bool exclude_self, int n_threads);
 RcppExport SEXP _faissR_nn_faiss_ivf_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP nlistSEXP, SEXP nprobeSEXP, SEXP metricSEXP, SEXP distance_outputSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP) {
@@ -2121,6 +2139,47 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nn_metal_available_cpp
+bool nn_metal_available_cpp();
+RcppExport SEXP _faissR_nn_metal_available_cpp() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(nn_metal_available_cpp());
+    return rcpp_result_gen;
+END_RCPP
+}
+// nn_metal_cpp
+Rcpp::List nn_metal_cpp(SEXP data, int k, std::string method, std::string metric, double target_recall);
+RcppExport SEXP _faissR_nn_metal_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP methodSEXP, SEXP metricSEXP, SEXP target_recallSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< std::string >::type method(methodSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< double >::type target_recall(target_recallSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_metal_cpp(data, k, method, metric, target_recall));
+    return rcpp_result_gen;
+END_RCPP
+}
+// nn_metal_query_cpp
+Rcpp::List nn_metal_query_cpp(SEXP data, SEXP query, int k, std::string method, std::string metric, double target_recall);
+RcppExport SEXP _faissR_nn_metal_query_cpp(SEXP dataSEXP, SEXP querySEXP, SEXP kSEXP, SEXP methodSEXP, SEXP metricSEXP, SEXP target_recallSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type query(querySEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< std::string >::type method(methodSEXP);
+    Rcpp::traits::input_parameter< std::string >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< double >::type target_recall(target_recallSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_metal_query_cpp(data, query, k, method, metric, target_recall));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_faissR_standardize_cpu_cpp", (DL_FUNC) &_faissR_standardize_cpu_cpp, 1},
@@ -2221,6 +2280,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_faiss_flat_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_cpp, 5},
     {"_faissR_nn_faiss_flat_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_float32_cpp, 7},
     {"_faissR_nn_faiss_flat_pretransformed_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_pretransformed_float32_cpp, 6},
+    {"_faissR_nn_faiss_gpu_multi_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_multi_cpp, 8},
     {"_faissR_nn_faiss_ivf_cpp", (DL_FUNC) &_faissR_nn_faiss_ivf_cpp, 9},
     {"_faissR_nn_faiss_ivf_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_ivf_float32_cpp, 10},
     {"_faissR_nn_faiss_flat_ip_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_ip_cpp, 5},
@@ -2251,6 +2311,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_faiss_gpu_cagra_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_cagra_float32_cpp, 9},
     {"_faissR_kmeans_faiss_cpp", (DL_FUNC) &_faissR_kmeans_faiss_cpp, 8},
     {"_faissR_kmeans_faiss_gpu_cpp", (DL_FUNC) &_faissR_kmeans_faiss_gpu_cpp, 7},
+    {"_faissR_nn_metal_available_cpp", (DL_FUNC) &_faissR_nn_metal_available_cpp, 0},
+    {"_faissR_nn_metal_cpp", (DL_FUNC) &_faissR_nn_metal_cpp, 5},
+    {"_faissR_nn_metal_query_cpp", (DL_FUNC) &_faissR_nn_metal_query_cpp, 6},
     {NULL, NULL, 0}
 };
 

@@ -35,7 +35,7 @@ write_diagnostic_makevars() {
     echo "PKG_CXXFLAGS ="
     echo "PKG_CPPFLAGS = $diagnostic_cppflags"
     echo "PKG_LIBS ="
-    echo "OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_fortran.o nn_faiss_bridge.o nn_faiss_stub.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o"
+    echo "OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_fortran.o nn_faiss_bridge.o nn_faiss_stub.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o nn_metal_bridge.o nn_metal_stub.o"
   } > src/Makevars
 }
 
@@ -666,6 +666,13 @@ fi
 {
   echo "CXX_STD = CXX20"
   printf '%s%s\n' 'PKG_CXXFLAGS = -pthread $(SHLIB_OPENMP_CXXFLAGS)' "$extra_cxxflags"
+  if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
+    echo 'PKG_OBJCXXFLAGS = $(CXXFLAGS) -pthread'
+    libs="$libs -framework Foundation -framework Metal"
+    metal_objects="nn_metal_impl.o"
+  else
+    metal_objects="nn_metal_stub.o"
+  fi
   if [ -n "$cppflags" ]; then
     echo "PKG_CPPFLAGS = $cppflags"
   fi
@@ -675,5 +682,5 @@ fi
     echo "NVCC = $nvcc"
     printf "%s" "$cuda_rule"
   fi
-    echo "OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_fortran.o faissr_console.o $faiss_objects $cuvs_objects nn_cuda_bridge.o $cuda_objects"
+    echo "OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_fortran.o faissr_console.o $faiss_objects $cuvs_objects nn_cuda_bridge.o $cuda_objects nn_metal_bridge.o $metal_objects"
 } > src/Makevars

@@ -45,6 +45,36 @@ typedef SEXP (*faissR_nn_cuda_tuned_gpu_fun)(
     SEXP include_self,
     SEXP target_recall);
 
+/*
+ * Private multi-GPU FAISS self-KNN entry point. The host result contains
+ * one-based indices, Euclidean distances, actual device IDs and mode.
+ * `devices` must contain at least two distinct visible CUDA ordinals.
+ */
+typedef SEXP (*faissR_gpu_multi_knn_v1_fun)(
+    SEXP data,
+    SEXP k,
+    SEXP method,
+    SEXP devices,
+    SEXP nlist,
+    SEXP nprobe,
+    SEXP shard,
+    SEXP distance_storage);
+
+typedef SEXP (*faissR_metal_knn_v1_fun)(
+    SEXP data,
+    SEXP k,
+    SEXP method,
+    SEXP metric,
+    SEXP target_recall);
+
+typedef SEXP (*faissR_metal_query_knn_v1_fun)(
+    SEXP data,
+    SEXP query,
+    SEXP k,
+    SEXP method,
+    SEXP metric,
+    SEXP target_recall);
+
 typedef SEXP (*faissR_hnsw_search_v1_fun)(
     SEXP data,
     SEXP query,
@@ -115,6 +145,24 @@ static inline faissR_nn_cuda_tuned_gpu_fun
 faissR_get_nn_cuda_tuned_gpu(void) {
   return (faissR_nn_cuda_tuned_gpu_fun) R_GetCCallable(
       "faissR", "faissR_nn_cuda_tuned_gpu_call");
+}
+
+static inline faissR_gpu_multi_knn_v1_fun
+faissR_get_gpu_multi_knn_v1(void) {
+  return (faissR_gpu_multi_knn_v1_fun) R_GetCCallable(
+      "faissR", "faissR_gpu_multi_knn_v1");
+}
+
+static inline faissR_metal_knn_v1_fun
+faissR_get_metal_knn_v1(void) {
+  return (faissR_metal_knn_v1_fun) R_GetCCallable(
+      "faissR", "faissR_metal_knn_v1");
+}
+
+static inline faissR_metal_query_knn_v1_fun
+faissR_get_metal_query_knn_v1(void) {
+  return (faissR_metal_query_knn_v1_fun) R_GetCCallable(
+      "faissR", "faissR_metal_query_knn_v1");
 }
 
 static inline faissR_hnsw_search_v1_fun faissR_get_hnsw_search_v1(void) {
