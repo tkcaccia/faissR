@@ -129,6 +129,17 @@ typedef SEXP (*faissR_hnsw_index_search_v1_fun)(
     SEXP ef_search,
     SEXP n_threads);
 
+/* Private persistent CPU Flat index for bounded query batches. */
+typedef SEXP (*faissR_flat_index_build_v1_fun)(
+    SEXP data,
+    SEXP n_threads);
+
+typedef SEXP (*faissR_flat_index_search_v1_fun)(
+    SEXP index,
+    SEXP query,
+    SEXP k,
+    SEXP n_threads);
+
 /*
  * The GPU-resident callable accepts method values "auto", "exact", "flat",
  * and "bruteforce". The returned owner object must remain reachable while
@@ -203,6 +214,18 @@ static inline faissR_hnsw_index_search_v1_fun
 faissR_get_hnsw_index_search_v1(void) {
   return (faissR_hnsw_index_search_v1_fun) R_GetCCallable(
       "faissR", "faissR_hnsw_index_search_v1");
+}
+
+static inline faissR_flat_index_build_v1_fun
+faissR_get_flat_index_build_v1(void) {
+  return (faissR_flat_index_build_v1_fun) R_GetCCallable(
+      "faissR", "faissR_flat_index_build_v1");
+}
+
+static inline faissR_flat_index_search_v1_fun
+faissR_get_flat_index_search_v1(void) {
+  return (faissR_flat_index_search_v1_fun) R_GetCCallable(
+      "faissR", "faissR_flat_index_search_v1");
 }
 
 #ifdef __cplusplus

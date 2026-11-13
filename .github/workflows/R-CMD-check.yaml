@@ -200,7 +200,8 @@ jobs:
           fast_kmeans(x, centers = 2, backend = "cpu", max_iter = 20,
                       n_init = 2, seed = 11, n_threads = 2)
           RSCRIPT
-          lldb --batch -o run -o 'thread backtrace all' -- \
+          R_HOME="$(R RHOME)" lldb --batch -o run \
+            -o 'thread backtrace all' -- \
             "$(R RHOME)/bin/exec/R" --vanilla \
             -f "$RUNNER_TEMP/kmeans-crash.R"
       - name: Console test followed by k-means in one process
