@@ -176,6 +176,7 @@ extern "C" SEXP faissR_nn_cuda_tuned_gpu_call(SEXP x,
   out["tuning"] = "auto";
   out["tuning_note"] =
     "exact GPU-resident route; target_recall is recorded but recall is exact by construction";
+  out.attr("class") = Rcpp::CharacterVector::create("faissR_gpu_knn", "list");
   out.attr("target_recall") = target_recall_value;
   return out;
   END_RCPP

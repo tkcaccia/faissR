@@ -10,6 +10,7 @@
 
 #include "faissr_size_utils.hpp"
 #include "faissr_normalize.hpp"
+#include "faissr_gpu_knn_handle.hpp"
 
 using Rcpp::IntegerMatrix;
 using Rcpp::IntegerVector;
@@ -102,13 +103,7 @@ namespace {
 
 constexpr int kMaxCudaK = 256;
 
-struct CudaGpuKnnHandle {
-  int* indices = nullptr;
-  float* distances = nullptr;
-  int n_points = 0;
-  int k = 0;
-  int device = 0;
-};
+using CudaGpuKnnHandle = FaissRGpuKnnHandle;
 
 struct CudaMatrixViewF32 {
   const float* data = nullptr;

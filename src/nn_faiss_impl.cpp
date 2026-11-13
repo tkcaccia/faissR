@@ -15,6 +15,7 @@
 
 #include "faissr_size_utils.hpp"
 #include "faissr_normalize.hpp"
+#include "faissr_gpu_knn_handle.hpp"
 #ifdef FAISSR_FAISS_CPU_ONLY
 #include "faissr_console.hpp"
 #endif
@@ -489,13 +490,7 @@ extern "C" int faissr_cuda_convert_faiss_knn_gpu_result(const int64_t* in_indice
                                                         float* out_distances);
 extern "C" const char* faissr_cuda_last_error();
 
-struct FaissGpuKnnHandle {
-  int* indices = nullptr;
-  float* distances = nullptr;
-  int n_points = 0;
-  int k = 0;
-  int device = 0;
-};
+using FaissGpuKnnHandle = FaissRGpuKnnHandle;
 
 const char* faiss_cuda_error_message() {
   const char* msg = faissr_cuda_last_error();
