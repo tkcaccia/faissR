@@ -2,7 +2,6 @@
 #include "faissr_console.hpp"
 
 #include <R_ext/Print.h>
-#include <cstdint>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -45,12 +44,11 @@ int buffer_message(FILE* stream, const char* format, va_list arguments) {
 }
 }
 
-// These sentinels are never passed to the C stdio implementation.
 FILE* faissr_console_stdout() {
-  return reinterpret_cast<FILE*>(static_cast<std::intptr_t>(-1));
+  return stdout;
 }
 FILE* faissr_console_stderr() {
-  return reinterpret_cast<FILE*>(static_cast<std::intptr_t>(-2));
+  return stderr;
 }
 
 int faissr_console_printf(const char* format, ...) {

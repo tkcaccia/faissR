@@ -3,7 +3,8 @@
 
 nn_cuda_ivf_large_candidates <- function(
     n, k, nlist_multiplier = c(1, 2, 4, 8),
-    probe_fraction = c(0.05, 0.1, 0.2, 0.4, 0.8, 1)
+    probe_fraction = c(1 / 32, 1 / 16, 1 / 8, 1 / 4,
+                       1 / 2, 3 / 4, 1)
 ) {
     if (length(n) != 1L || !is.finite(n) || n < 2 || n > .Machine$integer.max ||
         length(k) != 1L || !is.finite(k) || k < 1 || k >= n) {
@@ -15,8 +16,8 @@ nn_cuda_ivf_large_candidates <- function(
         stop("Invalid IVF candidate multipliers.", call. = FALSE)
     }
     max_lists <- min(n, 65536)
-    lists <- unique(as.integer(pmax(1, pmin(
-        max_lists, round(sqrt(n) * nlist_multiplier)
+    lists <- unique(as.integer(pmax(1, pmin(max_lists,
+        2^round(log2(sqrt(n) * nlist_multiplier))
     ))))
     grid <- expand.grid(
         nlist = lists, probe_fraction = probe_fraction,
