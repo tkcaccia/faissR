@@ -38,7 +38,8 @@ nn_cuda_ivf_large_extrapolate <- function(
     required <- c(
         "n", "p", "k", "gpu_count", "mode", "nlist", "nprobe",
         "recall", "knn_seconds", "device_memory_bytes", "audit_pass",
-        "reference_scope", "timing_scope", "query_count", "source_sha"
+        "reference_scope", "timing_scope", "query_count", "source_sha",
+        "input_sha256"
     )
     if (!is.data.frame(observations) ||
         !all(required %in% names(observations))) {
@@ -73,8 +74,10 @@ nn_cuda_ivf_large_extrapolate <- function(
         , drop = FALSE
     ]
     if (!nrow(rows) || length(unique(rows$source_sha)) != 1L ||
-        is.na(rows$source_sha[[1L]]) || !nzchar(rows$source_sha[[1L]])) {
-        stop("A single source-locked passing recall cohort is required.",
+        length(unique(rows$input_sha256)) != 1L ||
+        !grepl("^[0-9a-f]{40}$", rows$source_sha[[1L]]) ||
+        !grepl("^[0-9a-f]{64}$", rows$input_sha256[[1L]])) {
+        stop("A single source- and input-locked recall cohort is required.",
              call. = FALSE)
     }
     if (length(unique(rows$timing_scope)) != 1L ||
@@ -113,6 +116,7 @@ nn_cuda_ivf_large_extrapolate <- function(
     list(
         status = "extrapolated_not_validated",
         source_sha = selected$source_sha[[1L]],
+        input_sha256 = selected$input_sha256[[1L]],
         timing_scope = selected$timing_scope[[1L]],
         query_count = selected$query_count[[1L]],
         target_n = target_n, p = p, k = k,
