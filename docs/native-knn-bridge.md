@@ -9,13 +9,25 @@ the callables. No Python code is used.
 
 | Getter | Operation | Result |
 | --- | --- | --- |
-| `faissR_get_gpu_multi_knn_v1()` | FAISS GPU Flat or IVF-Flat self KNN on two or more distinct CUDA ordinals; `shard = FALSE` replicates the index, `TRUE` shards it | Host R list: one-based indices, ordinary Euclidean distances, device IDs, mode, FAISS backend |
+| `faissR_get_gpu_multi_knn_v1()` | FAISS GPU Flat or IVF-Flat self KNN on one or more distinct CUDA ordinals; `shard = FALSE` replicates the index, `TRUE` shards it for multiple devices | Host R list: one-based indices, ordinary Euclidean distances, device IDs, mode, FAISS backend |
+| `faissR_get_gpu_multi_query_knn_v1()` | Search a fixed query matrix against the full multi GPU index, without self exclusion | Host R list with query count, stage times, device IDs, and one-based neighbors |
 | `faissR_get_metal_knn_v1()` | Native Metal exact or IVF self KNN | Host R list with indices, distances, method and recall metadata |
 | `faissR_get_metal_query_knn_v1()` | Native Metal fixed-reference query KNN | Host R list with indices, distances and method metadata |
 
 The CUDA function currently accepts Euclidean data only and an explicit
 `nlist`/`nprobe` for IVF. The consumer must use a frozen tuning policy and
-audit recall. GPU resources belong to the call and are destroyed on return.
+audit recall. The fixed-query entry point permits bounded exact-reference
+recall sweeps at 10–100 million database rows without allocating an all-row
+KNN result for every candidate. GPU resources belong to the call and are
+destroyed on return.
+
+The private R helpers `nn_cuda_ivf_large_candidates()` and
+`nn_cuda_ivf_large_extrapolate()` generate a bounded parameter grid and a
+power-law projection from passing, source-matched 10M and 100M observations.
+The extrapolator requires exact neighbors from the full database, records
+one timing scope and query count, records device-memory admission, and leaves
+projected recall unknown. It does not
+turn an extrapolation into a verified billion-row capacity claim.
 There is no persistent multi GPU output handle yet. The implementation has
 compiled on CUDA 13/FAISS 1.14.3, but an actual two or eight GPU correctness
 and speed run is still required before production use.

@@ -3214,8 +3214,10 @@ List faiss_gpu_ivf_flat_float32_knn_impl(SEXP data,
 #endif
 }
 
-List faiss_gpu_multi_knn_impl(SEXP data,
-                              int k,
+List faiss_gpu_multi_query_knn_impl(SEXP data,
+                                    SEXP points,
+                                    int k,
+                                    bool exclude_self,
                               const std::string& method,
                               const std::vector<int>& devices,
                               int nlist,
@@ -3227,8 +3229,8 @@ List faiss_gpu_multi_knn_impl(SEXP data,
   if (method != "ivf" && method != "flat") {
     Rcpp::stop("Multi-GPU FAISS KNN supports only `ivf` or `flat`.");
   }
-  if (devices.size() < 2) {
-    Rcpp::stop("Multi-GPU FAISS KNN needs at least two devices.");
+  if (devices.empty()) {
+    Rcpp::stop("FAISS GPU KNN needs a nonempty device selection.");
   }
   int device_count = 0;
   if (cudaGetDeviceCount(&device_count) != cudaSuccess) {
@@ -3245,8 +3247,17 @@ List faiss_gpu_multi_knn_impl(SEXP data,
   MatrixViewF32 xb = make_float32_matrix_view(
     data, "data", "euclidean", 1
   );
+  MatrixViewF32 xq;
+  const bool self_query = data == points;
+  if (!self_query) {
+    xq = make_float32_matrix_view(points, "points", "euclidean", 1);
+  }
+  const MatrixViewF32& query = self_query ? xb : xq;
   const auto t_convert = std::chrono::steady_clock::now();
-  if (xb.nrow < 2 || xb.ncol < 1 || k < 1 || k >= xb.nrow) {
+  if (xb.nrow < 2 || xb.ncol < 1 || query.nrow < 1 ||
+      query.ncol != xb.ncol || k < 1 ||
+      k > xb.nrow - (exclude_self ? 1 : 0) ||
+      (exclude_self && !self_query)) {
     Rcpp::stop("Invalid multi-GPU KNN dimensions or k.");
   }
   if (distance_storage != "float" && distance_storage != "double") {
@@ -3256,8 +3267,8 @@ List faiss_gpu_multi_knn_impl(SEXP data,
                             nprobe < 1 || nprobe > nlist)) {
     Rcpp::stop("Invalid IVF nlist or nprobe.");
   }
-  const int search_k = k + 1;
-  if (static_cast<double>(xb.nrow) * search_k >
+  const int search_k = k + (exclude_self ? 1 : 0);
+  if (static_cast<double>(query.nrow) * search_k >
       std::numeric_limits<int>::max()) {
     Rcpp::stop("Multi-GPU KNN result exceeds the supported matrix size.");
   }
@@ -3298,9 +3309,9 @@ List faiss_gpu_multi_knn_impl(SEXP data,
   options.useFloat16CoarseQuantizer = false;
   options.allowCpuCoarseQuantizer = false;
   std::unique_ptr<faiss::Index> gpu_index;
-  std::vector<float> distances(static_cast<std::size_t>(xb.nrow) * search_k);
+  std::vector<float> distances(static_cast<std::size_t>(query.nrow) * search_k);
   std::vector<faiss::idx_t> labels(
-    static_cast<std::size_t>(xb.nrow) * search_k
+    static_cast<std::size_t>(query.nrow) * search_k
   );
   FaissBatchSearchInfo batch_info;
   std::chrono::steady_clock::time_point t_clone;
@@ -3309,10 +3320,11 @@ List faiss_gpu_multi_knn_impl(SEXP data,
     gpu_index.reset(faiss::gpu::index_cpu_to_gpu_multiple(
       providers, chosen, cpu_index.get(), &options
     ));
-    if (shard && dynamic_cast<faiss::IndexShards*>(gpu_index.get()) == nullptr) {
+    if (devices.size() > 1 && shard &&
+        dynamic_cast<faiss::IndexShards*>(gpu_index.get()) == nullptr) {
       Rcpp::stop("FAISS did not create a sharded GPU index.");
     }
-    if (!shard &&
+    if (devices.size() > 1 && !shard &&
         dynamic_cast<faiss::IndexReplicas*>(gpu_index.get()) == nullptr) {
       Rcpp::stop("FAISS did not create a replicated GPU index.");
     }
@@ -3320,7 +3332,7 @@ List faiss_gpu_multi_knn_impl(SEXP data,
     gpu_index->add(xb.nrow, xb.data);
     t_add = std::chrono::steady_clock::now();
     batch_info = search_faiss_queries(
-      *gpu_index, xb.data, xb.nrow, xb.ncol, search_k,
+      *gpu_index, query.data, query.nrow, query.ncol, search_k,
       false, NA_INTEGER, true, distances, labels
     );
   } catch (const std::exception& e) {
@@ -3328,15 +3340,19 @@ List faiss_gpu_multi_knn_impl(SEXP data,
   }
   const auto t_search = std::chrono::steady_clock::now();
   List out = format_faiss_result(
-    labels, distances, xb.nrow, search_k, k, true, true,
-    shard ? "GpuIndexShards" : "GpuIndexReplicas",
+    labels, distances, query.nrow, search_k, k, self_query, exclude_self,
+    devices.size() == 1 ?
+      (method == "flat" ? "GpuIndexFlat" : "GpuIndexIVFFlat") :
+      (shard ? "GpuIndexShards" : "GpuIndexReplicas"),
     method == "flat", DistanceOutput::L2Squared, 1,
     method == "ivf" ? nlist : NA_INTEGER,
     method == "ivf" ? nprobe : NA_INTEGER,
     NA_INTEGER, NA_INTEGER, distance_storage == "float"
   );
-  out["backend_used"] = shard ? "faiss_gpu_multi_shard" :
-    "faiss_gpu_multi_replicate";
+  out["backend_used"] = devices.size() == 1 ?
+    (exclude_self ? "faiss_gpu_single_self" : "faiss_gpu_single_query") :
+    (shard ? "faiss_gpu_multi_shard" :
+    "faiss_gpu_multi_replicate");
   out["accelerator"] = "cuda";
   out["gpu_provider"] = "faiss_gpu";
   out["cpu_fallback"] = false;
@@ -3344,11 +3360,16 @@ List faiss_gpu_multi_knn_impl(SEXP data,
   out["index_base"] = 1;
   out["devices"] = Rcpp::wrap(devices);
   out["gpu_count"] = static_cast<int>(devices.size());
-  out["multi_gpu_mode"] = shard ? "shard" : "replicate";
+  out["multi_gpu_mode"] = devices.size() == 1 ? "single" :
+    (shard ? "shard" : "replicate");
   out["search_batch_size"] = batch_info.batch_size;
   out["search_batches"] = batch_info.batches;
   out["input_type"] = "float32";
   out["input_layout"] = xb.layout;
+  out["query_layout"] = query.layout;
+  out["query_count"] = query.nrow;
+  out["self_query"] = self_query;
+  out["exclude_self"] = exclude_self;
   const auto t_done = std::chrono::steady_clock::now();
   const auto seconds = [](auto a, auto b) {
     return std::chrono::duration<double>(b - a).count();
@@ -3362,10 +3383,25 @@ List faiss_gpu_multi_knn_impl(SEXP data,
   out["total_native_seconds"] = seconds(t0, t_done);
   return out;
 #else
-  (void)data; (void)k; (void)method; (void)devices;
+  (void)data; (void)points; (void)k; (void)exclude_self;
+  (void)method; (void)devices;
   (void)nlist; (void)nprobe; (void)shard; (void)distance_storage;
   Rcpp::stop("FAISS multi-GPU KNN is unavailable in this build.");
 #endif
+}
+
+List faiss_gpu_multi_knn_impl(SEXP data,
+                              int k,
+                              const std::string& method,
+                              const std::vector<int>& devices,
+                              int nlist,
+                              int nprobe,
+                              bool shard,
+                              const std::string& distance_storage) {
+  return faiss_gpu_multi_query_knn_impl(
+    data, data, k, true, method, devices, nlist, nprobe,
+    shard, distance_storage
+  );
 }
 
 List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,

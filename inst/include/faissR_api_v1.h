@@ -48,10 +48,22 @@ typedef SEXP (*faissR_nn_cuda_tuned_gpu_fun)(
 /*
  * Private multi-GPU FAISS self-KNN entry point. The host result contains
  * one-based indices, Euclidean distances, actual device IDs and mode.
- * `devices` must contain at least two distinct visible CUDA ordinals.
+ * `devices` contains one or more distinct visible CUDA ordinals. The
+ * one-device route provides a source-matched scaling baseline.
  */
 typedef SEXP (*faissR_gpu_multi_knn_v1_fun)(
     SEXP data,
+    SEXP k,
+    SEXP method,
+    SEXP devices,
+    SEXP nlist,
+    SEXP nprobe,
+    SEXP shard,
+    SEXP distance_storage);
+
+typedef SEXP (*faissR_gpu_multi_query_knn_v1_fun)(
+    SEXP data,
+    SEXP points,
     SEXP k,
     SEXP method,
     SEXP devices,
@@ -151,6 +163,12 @@ static inline faissR_gpu_multi_knn_v1_fun
 faissR_get_gpu_multi_knn_v1(void) {
   return (faissR_gpu_multi_knn_v1_fun) R_GetCCallable(
       "faissR", "faissR_gpu_multi_knn_v1");
+}
+
+static inline faissR_gpu_multi_query_knn_v1_fun
+faissR_get_gpu_multi_query_knn_v1(void) {
+  return (faissR_gpu_multi_query_knn_v1_fun) R_GetCCallable(
+      "faissR", "faissR_gpu_multi_query_knn_v1");
 }
 
 static inline faissR_metal_knn_v1_fun

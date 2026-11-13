@@ -33,38 +33,28 @@ sort_knn_rows_cpp <- function(indices, distances) {
     .Call(`_faissR_sort_knn_rows_cpp`, indices, distances)
 }
 
-restore_zero_normalized_ip_distances_cpp <- function(indices, distances,
-    data_zero, points_zero, self_query, exclude_self) {
-    .Call(`_faissR_restore_zero_normalized_ip_distances_cpp`, indices,
-        distances, data_zero, points_zero, self_query, exclude_self)
+restore_zero_normalized_ip_distances_cpp <- function(indices, distances, data_zero, points_zero, self_query, exclude_self) {
+    .Call(`_faissR_restore_zero_normalized_ip_distances_cpp`, indices, distances, data_zero, points_zero, self_query, exclude_self)
 }
 
-normalized_euclidean_to_similarity_distance_cpp <- function(indices, distances,
-    data_zero, points_zero) {
-    .Call(`_faissR_normalized_euclidean_to_similarity_distance_cpp`, indices,
-        distances, data_zero, points_zero)
+normalized_euclidean_to_similarity_distance_cpp <- function(indices, distances, data_zero, points_zero) {
+    .Call(`_faissR_normalized_euclidean_to_similarity_distance_cpp`, indices, distances, data_zero, points_zero)
 }
 
-mips_l2_to_shifted_inner_product_distance_cpp <- function(distances,
-    points_norm2, radius2) {
-    .Call(`_faissR_mips_l2_to_shifted_inner_product_distance_cpp`, distances,
-        points_norm2, radius2)
+mips_l2_to_shifted_inner_product_distance_cpp <- function(distances, points_norm2, radius2) {
+    .Call(`_faissR_mips_l2_to_shifted_inner_product_distance_cpp`, distances, points_norm2, radius2)
 }
 
 validate_projection_knn_cpp <- function(indices, distances, n_reference, k) {
-    .Call(`_faissR_validate_projection_knn_cpp`, indices, distances,
-        n_reference, k)
+    .Call(`_faissR_validate_projection_knn_cpp`, indices, distances, n_reference, k)
 }
 
 mean_neighbor_rank_error_cpp <- function(high_indices, embed_indices, k) {
-    .Call(`_faissR_mean_neighbor_rank_error_cpp`, high_indices, embed_indices,
-        k)
+    .Call(`_faissR_mean_neighbor_rank_error_cpp`, high_indices, embed_indices, k)
 }
 
-majority_vote_knn_labels_cpp <- function(embed_indices, labels, k,
-    n_label_levels) {
-    .Call(`_faissR_majority_vote_knn_labels_cpp`, embed_indices, labels, k,
-        n_label_levels)
+majority_vote_knn_labels_cpp <- function(embed_indices, labels, k, n_label_levels) {
+    .Call(`_faissR_majority_vote_knn_labels_cpp`, embed_indices, labels, k, n_label_levels)
 }
 
 batch_entropy_cpp <- function(embed_indices, batch, k, n_batch_levels) {
@@ -75,341 +65,204 @@ sampled_pair_distances_cpp <- function(x, a, b, n_threads) {
     .Call(`_faissR_sampled_pair_distances_cpp`, x, a, b, n_threads)
 }
 
-knn_structure_score_cpp <- function(layout, indices, keep, preserve_k, labels,
-    n_label_levels) {
-    .Call(`_faissR_knn_structure_score_cpp`, layout, indices, keep, preserve_k,
-        labels, n_label_levels)
+knn_structure_score_cpp <- function(layout, indices, keep, preserve_k, labels, n_label_levels) {
+    .Call(`_faissR_knn_structure_score_cpp`, layout, indices, keep, preserve_k, labels, n_label_levels)
 }
 
 silhouette_score_cpp <- function(layout, labels) {
     .Call(`_faissR_silhouette_score_cpp`, layout, labels)
 }
 
-interpolate_landmark_layout_cpp <- function(landmark_layout, landmark_indices,
-    projection_indices, projection_distances, n) {
-    .Call(`_faissR_interpolate_landmark_layout_cpp`, landmark_layout,
-        landmark_indices, projection_indices, projection_distances, n)
+interpolate_landmark_layout_cpp <- function(landmark_layout, landmark_indices, projection_indices, projection_distances, n) {
+    .Call(`_faissR_interpolate_landmark_layout_cpp`, landmark_layout, landmark_indices, projection_indices, projection_distances, n)
 }
 
-select_low_confidence_rows_cpp <- function(confidence, landmark_indices,
-    fraction) {
-    .Call(`_faissR_select_low_confidence_rows_cpp`, confidence,
-        landmark_indices, fraction)
+select_low_confidence_rows_cpp <- function(confidence, landmark_indices, fraction) {
+    .Call(`_faissR_select_low_confidence_rows_cpp`, confidence, landmark_indices, fraction)
 }
 
-project_embedding_knn_cpp <- function(reference_layout, projection_indices,
-    projection_distances) {
-    .Call(`_faissR_project_embedding_knn_cpp`, reference_layout,
-        projection_indices, projection_distances)
+project_embedding_knn_cpp <- function(reference_layout, projection_indices, projection_distances) {
+    .Call(`_faissR_project_embedding_knn_cpp`, reference_layout, projection_indices, projection_distances)
 }
 
-project_embedding_affine_cpp <- function(reference_data, query_data,
-    reference_layout, projection_indices, projection_distances,
-    max_neighbors = 12L, ridge = 0.001, max_extrapolation = 2.5) {
-    .Call(`_faissR_project_embedding_affine_cpp`, reference_data, query_data,
-        reference_layout, projection_indices, projection_distances,
-        max_neighbors, ridge, max_extrapolation)
+project_embedding_affine_cpp <- function(reference_data, query_data, reference_layout, projection_indices, projection_distances, max_neighbors = 12L, ridge = 1e-3, max_extrapolation = 2.5) {
+    .Call(`_faissR_project_embedding_affine_cpp`, reference_data, query_data, reference_layout, projection_indices, projection_distances, max_neighbors, ridge, max_extrapolation)
 }
 
-project_embedding_affine_parallel_cpp <- function(reference_data, query_data,
-    reference_layout, projection_indices, projection_distances,
-    max_neighbors = 12L, ridge = 0.001, max_extrapolation = 2.5,
-    n_threads = 1L) {
-    .Call(`_faissR_project_embedding_affine_parallel_cpp`, reference_data,
-        query_data, reference_layout, projection_indices, projection_distances,
-        max_neighbors, ridge, max_extrapolation, n_threads)
+project_embedding_affine_parallel_cpp <- function(reference_data, query_data, reference_layout, projection_indices, projection_distances, max_neighbors = 12L, ridge = 1e-3, max_extrapolation = 2.5, n_threads = 1L) {
+    .Call(`_faissR_project_embedding_affine_parallel_cpp`, reference_data, query_data, reference_layout, projection_indices, projection_distances, max_neighbors, ridge, max_extrapolation, n_threads)
 }
 
 inner_product_scores_float32_cpp <- function(data, points, indices, cores) {
-    .Call(`_faissR_inner_product_scores_float32_cpp`, data, points, indices,
-        cores)
+    .Call(`_faissR_inner_product_scores_float32_cpp`, data, points, indices, cores)
 }
 
-nn_cpp <- function(data, points, k, method, square, sorted, p, parallel, cores,
-    exclude_self) {
-    .Call(`_faissR_nn_cpp`, data, points, k, method, square, sorted, p,
-        parallel, cores, exclude_self)
+nn_cpp <- function(data, points, k, method, square, sorted, p, parallel, cores, exclude_self) {
+    .Call(`_faissR_nn_cpp`, data, points, k, method, square, sorted, p, parallel, cores, exclude_self)
 }
 
 nndescent_candidate_matrix_cpp <- function(indices, n_sources, n_neighbors) {
-    .Call(`_faissR_nndescent_candidate_matrix_cpp`, indices, n_sources,
-        n_neighbors)
+    .Call(`_faissR_nndescent_candidate_matrix_cpp`, indices, n_sources, n_neighbors)
 }
 
-nndescent_candidate_matrix_adaptive_cpp <- function(indices, flags, n_sources,
-    n_neighbors, use_reverse, active_only) {
-    .Call(`_faissR_nndescent_candidate_matrix_adaptive_cpp`, indices, flags,
-        n_sources, n_neighbors, use_reverse, active_only)
+nndescent_candidate_matrix_adaptive_cpp <- function(indices, flags, n_sources, n_neighbors, use_reverse, active_only) {
+    .Call(`_faissR_nndescent_candidate_matrix_adaptive_cpp`, indices, flags, n_sources, n_neighbors, use_reverse, active_only)
 }
 
-nndescent_candidate_matrix_adaptive_subset_cpp <- function(indices, flags,
-    n_sources, n_neighbors, use_reverse) {
-    .Call(`_faissR_nndescent_candidate_matrix_adaptive_subset_cpp`, indices,
-        flags, n_sources, n_neighbors, use_reverse)
+nndescent_candidate_matrix_adaptive_subset_cpp <- function(indices, flags, n_sources, n_neighbors, use_reverse) {
+    .Call(`_faissR_nndescent_candidate_matrix_adaptive_subset_cpp`, indices, flags, n_sources, n_neighbors, use_reverse)
 }
 
-graph_prune_candidate_graph_cpp <- function(data, seed_indices, r, alpha,
-    metric, protect_top, max_exact_work, robust_vamana) {
-    .Call(`_faissR_graph_prune_candidate_graph_cpp`, data, seed_indices, r,
-        alpha, metric, protect_top, max_exact_work, robust_vamana)
+graph_prune_candidate_graph_cpp <- function(data, seed_indices, r, alpha, metric, protect_top, max_exact_work, robust_vamana) {
+    .Call(`_faissR_graph_prune_candidate_graph_cpp`, data, seed_indices, r, alpha, metric, protect_top, max_exact_work, robust_vamana)
 }
 
-graph_prune_candidate_graph_float32_cpp <- function(data, seed_indices, r,
-    alpha, metric, protect_top, max_exact_work, robust_vamana) {
-    .Call(`_faissR_graph_prune_candidate_graph_float32_cpp`, data, seed_indices,
-        r, alpha, metric, protect_top, max_exact_work, robust_vamana)
+graph_prune_candidate_graph_float32_cpp <- function(data, seed_indices, r, alpha, metric, protect_top, max_exact_work, robust_vamana) {
+    .Call(`_faissR_graph_prune_candidate_graph_float32_cpp`, data, seed_indices, r, alpha, metric, protect_top, max_exact_work, robust_vamana)
 }
 
-landmark_candidate_knn_cpp <- function(data, projection_indices, k, bucket_cols,
-    query_cols, parallel, cores) {
-    .Call(`_faissR_landmark_candidate_knn_cpp`, data, projection_indices, k,
-        bucket_cols, query_cols, parallel, cores)
+landmark_candidate_knn_cpp <- function(data, projection_indices, k, bucket_cols, query_cols, parallel, cores) {
+    .Call(`_faissR_landmark_candidate_knn_cpp`, data, projection_indices, k, bucket_cols, query_cols, parallel, cores)
 }
 
-landmark_candidate_knn_subset_cpp <- function(data, projection_indices,
-    query_rows, k, bucket_cols, query_cols, parallel, cores) {
-    .Call(`_faissR_landmark_candidate_knn_subset_cpp`, data, projection_indices,
-        query_rows, k, bucket_cols, query_cols, parallel, cores)
+landmark_candidate_knn_subset_cpp <- function(data, projection_indices, query_rows, k, bucket_cols, query_cols, parallel, cores) {
+    .Call(`_faissR_landmark_candidate_knn_subset_cpp`, data, projection_indices, query_rows, k, bucket_cols, query_cols, parallel, cores)
 }
 
-landmark_projection_knn_approx_cpp <- function(landmarks, queries, k,
-    n_projections, window, seed, parallel, cores) {
-    .Call(`_faissR_landmark_projection_knn_approx_cpp`, landmarks, queries, k,
-        n_projections, window, seed, parallel, cores)
+landmark_projection_knn_approx_cpp <- function(landmarks, queries, k, n_projections, window, seed, parallel, cores) {
+    .Call(`_faissR_landmark_projection_knn_approx_cpp`, landmarks, queries, k, n_projections, window, seed, parallel, cores)
 }
 
-nndescent_self_knn_cpp <- function(data, k, pool_size, n_iters, max_candidates,
-    n_random_projections, seed, parallel, cores, metric) {
-    .Call(`_faissR_nndescent_self_knn_cpp`, data, k, pool_size, n_iters,
-        max_candidates, n_random_projections, seed, parallel, cores, metric)
+nndescent_self_knn_cpp <- function(data, k, pool_size, n_iters, max_candidates, n_random_projections, seed, parallel, cores, metric) {
+    .Call(`_faissR_nndescent_self_knn_cpp`, data, k, pool_size, n_iters, max_candidates, n_random_projections, seed, parallel, cores, metric)
 }
 
-nndescent_self_knn_float32_cpp <- function(data, k, pool_size, n_iters,
-    max_candidates, n_random_projections, seed, parallel, cores, metric) {
-    .Call(`_faissR_nndescent_self_knn_float32_cpp`, data, k, pool_size, n_iters,
-        max_candidates, n_random_projections, seed, parallel, cores, metric)
+nndescent_self_knn_float32_cpp <- function(data, k, pool_size, n_iters, max_candidates, n_random_projections, seed, parallel, cores, metric) {
+    .Call(`_faissR_nndescent_self_knn_float32_cpp`, data, k, pool_size, n_iters, max_candidates, n_random_projections, seed, parallel, cores, metric)
 }
 
 ivf_self_knn_cpp <- function(data, k, nlist, nprobe, seed, parallel, cores) {
-    .Call(`_faissR_ivf_self_knn_cpp`, data, k, nlist, nprobe, seed, parallel,
-        cores)
+    .Call(`_faissR_ivf_self_knn_cpp`, data, k, nlist, nprobe, seed, parallel, cores)
 }
 
-grid2d_self_knn_cpp <- function(data, k, parallel, cores, bins_per_dim,
-    include_self) {
-    .Call(`_faissR_grid2d_self_knn_cpp`, data, k, parallel, cores, bins_per_dim,
-        include_self)
+grid2d_self_knn_cpp <- function(data, k, parallel, cores, bins_per_dim, include_self) {
+    .Call(`_faissR_grid2d_self_knn_cpp`, data, k, parallel, cores, bins_per_dim, include_self)
 }
 
-grid3d_self_knn_cpp <- function(data, k, parallel, cores, bins_per_dim,
-    include_self) {
-    .Call(`_faissR_grid3d_self_knn_cpp`, data, k, parallel, cores, bins_per_dim,
-        include_self)
+grid3d_self_knn_cpp <- function(data, k, parallel, cores, bins_per_dim, include_self) {
+    .Call(`_faissR_grid3d_self_knn_cpp`, data, k, parallel, cores, bins_per_dim, include_self)
 }
 
-grid2d_self_knn_float32_cpp <- function(data, k, parallel, cores, bins_per_dim,
-    include_self) {
-    .Call(`_faissR_grid2d_self_knn_float32_cpp`, data, k, parallel, cores,
-        bins_per_dim, include_self)
+grid2d_self_knn_float32_cpp <- function(data, k, parallel, cores, bins_per_dim, include_self) {
+    .Call(`_faissR_grid2d_self_knn_float32_cpp`, data, k, parallel, cores, bins_per_dim, include_self)
 }
 
-grid3d_self_knn_float32_cpp <- function(data, k, parallel, cores, bins_per_dim,
-    include_self) {
-    .Call(`_faissR_grid3d_self_knn_float32_cpp`, data, k, parallel, cores,
-        bins_per_dim, include_self)
+grid3d_self_knn_float32_cpp <- function(data, k, parallel, cores, bins_per_dim, include_self) {
+    .Call(`_faissR_grid3d_self_knn_float32_cpp`, data, k, parallel, cores, bins_per_dim, include_self)
 }
 
-candidate_knn_cpp <- function(data, points, candidate_indices, k, method,
-    square, exclude_self, parallel, cores) {
-    .Call(`_faissR_candidate_knn_cpp`, data, points, candidate_indices, k,
-        method, square, exclude_self, parallel, cores)
+candidate_knn_cpp <- function(data, points, candidate_indices, k, method, square, exclude_self, parallel, cores) {
+    .Call(`_faissR_candidate_knn_cpp`, data, points, candidate_indices, k, method, square, exclude_self, parallel, cores)
 }
 
-candidate_knn_float32_cpp <- function(data, points, candidate_indices, k,
-    method, square, exclude_self, parallel, cores) {
-    .Call(`_faissR_candidate_knn_float32_cpp`, data, points, candidate_indices,
-        k, method, square, exclude_self, parallel, cores)
+candidate_knn_float32_cpp <- function(data, points, candidate_indices, k, method, square, exclude_self, parallel, cores) {
+    .Call(`_faissR_candidate_knn_float32_cpp`, data, points, candidate_indices, k, method, square, exclude_self, parallel, cores)
 }
 
-nn_auto_select_backend_cpp <- function(resolved_backend, requested_backend,
-    requested_method, metric, n, p, n_points, k, self_query, exclude_self,
-    cuda_available, cuvs_available, faiss_available, faiss_gpu_available,
-    cagra_preference, cuda_exact_n, cuda_exact_work, metric_graph_n,
-    metric_graph_min_k, metric_graph_work, cagra_compact_n, cagra_high_dim_p,
-    cagra_compact_max_k, cuvs_bruteforce_work_threshold, cpu_exact_work,
-    cpu_faiss_flat_work, target_recall_option, tuning) {
-    .Call(`_faissR_nn_auto_select_backend_cpp`, resolved_backend,
-        requested_backend, requested_method, metric, n, p, n_points, k,
-        self_query, exclude_self, cuda_available, cuvs_available,
-        faiss_available, faiss_gpu_available, cagra_preference, cuda_exact_n,
-        cuda_exact_work, metric_graph_n, metric_graph_min_k, metric_graph_work,
-        cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k,
-        cuvs_bruteforce_work_threshold, cpu_exact_work, cpu_faiss_flat_work,
-        target_recall_option, tuning)
+nn_auto_select_backend_cpp <- function(resolved_backend, requested_backend, requested_method, metric, n, p, n_points, k, self_query, exclude_self, cuda_available, cuvs_available, faiss_available, faiss_gpu_available, cagra_preference, cuda_exact_n, cuda_exact_work, metric_graph_n, metric_graph_min_k, metric_graph_work, cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k, cuvs_bruteforce_work_threshold, cpu_exact_work, cpu_faiss_flat_work, target_recall_option, tuning) {
+    .Call(`_faissR_nn_auto_select_backend_cpp`, resolved_backend, requested_backend, requested_method, metric, n, p, n_points, k, self_query, exclude_self, cuda_available, cuvs_available, faiss_available, faiss_gpu_available, cagra_preference, cuda_exact_n, cuda_exact_work, metric_graph_n, metric_graph_min_k, metric_graph_work, cagra_compact_n, cagra_high_dim_p, cagra_compact_max_k, cuvs_bruteforce_work_threshold, cpu_exact_work, cpu_faiss_flat_work, target_recall_option, tuning)
 }
 
-nn_tune_cpu_exact_cpp <- function(n, p, k, metric = "euclidean",
-    target_recall_option = NA_real_) {
-    .Call(`_faissR_nn_tune_cpu_exact_cpp`, n, p, k, metric,
-        target_recall_option)
+nn_tune_cpu_exact_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_) {
+    .Call(`_faissR_nn_tune_cpu_exact_cpp`, n, p, k, metric, target_recall_option)
 }
 
-nn_tune_cuda_exact_cpp <- function(n, p, k, metric = "euclidean",
-    target_recall_option = NA_real_) {
-    .Call(`_faissR_nn_tune_cuda_exact_cpp`, n, p, k, metric,
-        target_recall_option)
+nn_tune_cuda_exact_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_) {
+    .Call(`_faissR_nn_tune_cuda_exact_cpp`, n, p, k, metric, target_recall_option)
 }
 
-nn_tune_cuda_flat_cpp <- function(n, p, k, metric = "euclidean",
-    target_recall_option = NA_real_) {
-    .Call(`_faissR_nn_tune_cuda_flat_cpp`, n, p, k, metric,
-        target_recall_option)
+nn_tune_cuda_flat_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_) {
+    .Call(`_faissR_nn_tune_cuda_flat_cpp`, n, p, k, metric, target_recall_option)
 }
 
-nn_tune_cuda_bruteforce_cpp <- function(n, p, k, metric = "euclidean",
-    target_recall_option = NA_real_) {
-    .Call(`_faissR_nn_tune_cuda_bruteforce_cpp`, n, p, k, metric,
-        target_recall_option)
+nn_tune_cuda_bruteforce_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_) {
+    .Call(`_faissR_nn_tune_cuda_bruteforce_cpp`, n, p, k, metric, target_recall_option)
 }
 
-nn_tune_cpu_flat_cpp <- function(n, p, k, metric = "euclidean",
-    target_recall_option = NA_real_) {
+nn_tune_cpu_flat_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_) {
     .Call(`_faissR_nn_tune_cpu_flat_cpp`, n, p, k, metric, target_recall_option)
 }
 
-nn_tune_cpu_bruteforce_cpp <- function(n, p, k, metric = "euclidean",
-    target_recall_option = NA_real_) {
-    .Call(`_faissR_nn_tune_cpu_bruteforce_cpp`, n, p, k, metric,
-        target_recall_option)
+nn_tune_cpu_bruteforce_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_) {
+    .Call(`_faissR_nn_tune_cpu_bruteforce_cpp`, n, p, k, metric, target_recall_option)
 }
 
-nn_tune_faiss_ivf_cpp <- function(n, p, k, metric,
-    target_recall_option = NA_real_, backend = "cpu", method = "ivf",
-    nlist_option = NA_integer_, nprobe_option = NA_integer_, manual = FALSE) {
-    .Call(`_faissR_nn_tune_faiss_ivf_cpp`, n, p, k, metric,
-        target_recall_option, backend, method, nlist_option, nprobe_option,
-        manual)
+nn_tune_faiss_ivf_cpp <- function(n, p, k, metric, target_recall_option = NA_real_, backend = "cpu", method = "ivf", nlist_option = NA_integer_, nprobe_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_faiss_ivf_cpp`, n, p, k, metric, target_recall_option, backend, method, nlist_option, nprobe_option, manual)
 }
 
-nn_tune_cuda_ivf_cpp <- function(n, p, k, metric,
-    target_recall_option = NA_real_, nlist_option = NA_integer_,
-    nprobe_option = NA_integer_, manual = FALSE) {
-    .Call(`_faissR_nn_tune_cuda_ivf_cpp`, n, p, k, metric, target_recall_option,
-        nlist_option, nprobe_option, manual)
+nn_tune_cuda_ivf_cpp <- function(n, p, k, metric, target_recall_option = NA_real_, nlist_option = NA_integer_, nprobe_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_cuda_ivf_cpp`, n, p, k, metric, target_recall_option, nlist_option, nprobe_option, manual)
 }
 
-nn_tune_faiss_pq_cpp <- function(p, n = NA_integer_, m_option = NA_integer_,
-    nbits_option = NA_integer_, manual = FALSE, manual_nbits = FALSE) {
-    .Call(`_faissR_nn_tune_faiss_pq_cpp`, p, n, m_option, nbits_option, manual,
-        manual_nbits)
+nn_tune_faiss_pq_cpp <- function(p, n = NA_integer_, m_option = NA_integer_, nbits_option = NA_integer_, manual = FALSE, manual_nbits = FALSE) {
+    .Call(`_faissR_nn_tune_faiss_pq_cpp`, p, n, m_option, nbits_option, manual, manual_nbits)
 }
 
-nn_tune_cuvs_ivfpq_cpp <- function(p, n = NA_integer_,
-    pq_dim_option = NA_integer_, pq_bits_option = NA_integer_, manual = FALSE) {
-    .Call(`_faissR_nn_tune_cuvs_ivfpq_cpp`, p, n, pq_dim_option, pq_bits_option,
-        manual)
+nn_tune_cuvs_ivfpq_cpp <- function(p, n = NA_integer_, pq_dim_option = NA_integer_, pq_bits_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_cuvs_ivfpq_cpp`, p, n, pq_dim_option, pq_bits_option, manual)
 }
 
-nn_tune_faiss_hnsw_cpp <- function(n, p, k, metric, target_recall = 0.99,
-    m_option = NA_integer_, ef_construction_option = NA_integer_,
-    ef_search_option = NA_integer_, manual = FALSE) {
-    .Call(`_faissR_nn_tune_faiss_hnsw_cpp`, n, p, k, metric, target_recall,
-        m_option, ef_construction_option, ef_search_option, manual)
+nn_tune_faiss_hnsw_cpp <- function(n, p, k, metric, target_recall = 0.99, m_option = NA_integer_, ef_construction_option = NA_integer_, ef_search_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_faiss_hnsw_cpp`, n, p, k, metric, target_recall, m_option, ef_construction_option, ef_search_option, manual)
 }
 
-nn_tune_faiss_nsg_cpp <- function(k, r_option = NA_integer_,
-    search_l_option = NA_integer_, build_type_option = NA_integer_,
-    manual = FALSE) {
-    .Call(`_faissR_nn_tune_faiss_nsg_cpp`, k, r_option, search_l_option,
-        build_type_option, manual)
+nn_tune_faiss_nsg_cpp <- function(k, r_option = NA_integer_, search_l_option = NA_integer_, build_type_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_faiss_nsg_cpp`, k, r_option, search_l_option, build_type_option, manual)
 }
 
-nn_tune_faiss_nndescent_cpp <- function(k, graph_k_option = NA_integer_,
-    n_iter_option = NA_integer_, search_l_option = NA_integer_,
-    manual = FALSE) {
-    .Call(`_faissR_nn_tune_faiss_nndescent_cpp`, k, graph_k_option,
-        n_iter_option, search_l_option, manual)
+nn_tune_faiss_nndescent_cpp <- function(k, graph_k_option = NA_integer_, n_iter_option = NA_integer_, search_l_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_faiss_nndescent_cpp`, k, graph_k_option, n_iter_option, search_l_option, manual)
 }
 
-nn_tune_cpu_nndescent_cpp <- function(n, p, k, metric = "euclidean",
-    target_recall_option = NA_real_) {
-    .Call(`_faissR_nn_tune_cpu_nndescent_cpp`, n, p, k, metric,
-        target_recall_option)
+nn_tune_cpu_nndescent_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_) {
+    .Call(`_faissR_nn_tune_cpu_nndescent_cpp`, n, p, k, metric, target_recall_option)
 }
 
-nn_tune_cuvs_cagra_cpp <- function(n, p, k, metric = "euclidean",
-    target_recall_option = NA_real_, graph_degree_option = NA_integer_,
-    intermediate_graph_degree_option = NA_integer_,
-    search_width_option = NA_integer_, itopk_size_option = NA_integer_,
-    manual = FALSE) {
-    .Call(`_faissR_nn_tune_cuvs_cagra_cpp`, n, p, k, metric,
-        target_recall_option, graph_degree_option,
-        intermediate_graph_degree_option, search_width_option,
-        itopk_size_option, manual)
+nn_tune_cuvs_cagra_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_, graph_degree_option = NA_integer_, intermediate_graph_degree_option = NA_integer_, search_width_option = NA_integer_, itopk_size_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_cuvs_cagra_cpp`, n, p, k, metric, target_recall_option, graph_degree_option, intermediate_graph_degree_option, search_width_option, itopk_size_option, manual)
 }
 
-nn_tune_cuvs_cagra_build_algo_cpp <- function(n, p, k, self_query, compact,
-    requested = "auto") {
-    .Call(`_faissR_nn_tune_cuvs_cagra_build_algo_cpp`, n, p, k, self_query,
-        compact, requested)
+nn_tune_cuvs_cagra_build_algo_cpp <- function(n, p, k, self_query, compact, requested = "auto") {
+    .Call(`_faissR_nn_tune_cuvs_cagra_build_algo_cpp`, n, p, k, self_query, compact, requested)
 }
 
-nn_tune_cuvs_hnsw_cpp <- function(n, p, k, n_threads,
-    build_algo_preference = "auto", target_recall_option = 0.99,
-    graph_degree_option = NA_integer_,
-    intermediate_graph_degree_option = NA_integer_,
-    search_width_option = NA_integer_, itopk_size_option = NA_integer_,
-    ef_option = NA_integer_, manual_cagra = FALSE, metric = "euclidean") {
-    .Call(`_faissR_nn_tune_cuvs_hnsw_cpp`, n, p, k, n_threads,
-        build_algo_preference, target_recall_option, graph_degree_option,
-        intermediate_graph_degree_option, search_width_option,
-        itopk_size_option, ef_option, manual_cagra, metric)
+nn_tune_cuvs_hnsw_cpp <- function(n, p, k, n_threads, build_algo_preference = "auto", target_recall_option = 0.99, graph_degree_option = NA_integer_, intermediate_graph_degree_option = NA_integer_, search_width_option = NA_integer_, itopk_size_option = NA_integer_, ef_option = NA_integer_, manual_cagra = FALSE, metric = "euclidean") {
+    .Call(`_faissR_nn_tune_cuvs_hnsw_cpp`, n, p, k, n_threads, build_algo_preference, target_recall_option, graph_degree_option, intermediate_graph_degree_option, search_width_option, itopk_size_option, ef_option, manual_cagra, metric)
 }
 
-nn_tune_cuvs_nndescent_cpp <- function(n, p, k, metric = "euclidean",
-    target_recall_option = NA_real_, graph_degree_option = NA_integer_,
-    intermediate_graph_degree_option = NA_integer_,
-    max_iterations_option = NA_integer_, manual = FALSE) {
-    .Call(`_faissR_nn_tune_cuvs_nndescent_cpp`, n, p, k, metric,
-        target_recall_option, graph_degree_option,
-        intermediate_graph_degree_option, max_iterations_option, manual)
+nn_tune_cuvs_nndescent_cpp <- function(n, p, k, metric = "euclidean", target_recall_option = NA_real_, graph_degree_option = NA_integer_, intermediate_graph_degree_option = NA_integer_, max_iterations_option = NA_integer_, manual = FALSE) {
+    .Call(`_faissR_nn_tune_cuvs_nndescent_cpp`, n, p, k, metric, target_recall_option, graph_degree_option, intermediate_graph_degree_option, max_iterations_option, manual)
 }
 
-nn_tune_native_nsg_cpp <- function(n, p, k, metric, backend,
-    target_recall_option = NA_real_, r_option = NA_integer_,
-    graph_k_option = NA_integer_) {
-    .Call(`_faissR_nn_tune_native_nsg_cpp`, n, p, k, metric, backend,
-        target_recall_option, r_option, graph_k_option)
+nn_tune_native_nsg_cpp <- function(n, p, k, metric, backend, target_recall_option = NA_real_, r_option = NA_integer_, graph_k_option = NA_integer_) {
+    .Call(`_faissR_nn_tune_native_nsg_cpp`, n, p, k, metric, backend, target_recall_option, r_option, graph_k_option)
 }
 
-nn_tune_vamana_cpp <- function(n, p, k, metric, backend = "cpu",
-    target_recall_option = NA_real_, r_option = NA_integer_,
-    search_l_option = NA_integer_, alpha_option = NA_real_) {
-    .Call(`_faissR_nn_tune_vamana_cpp`, n, p, k, metric, backend,
-        target_recall_option, r_option, search_l_option, alpha_option)
+nn_tune_vamana_cpp <- function(n, p, k, metric, backend = "cpu", target_recall_option = NA_real_, r_option = NA_integer_, search_l_option = NA_integer_, alpha_option = NA_real_) {
+    .Call(`_faissR_nn_tune_vamana_cpp`, n, p, k, metric, backend, target_recall_option, r_option, search_l_option, alpha_option)
 }
 
 kmeans_auto_params_cpp <- function(n, p, centers, tuning) {
     .Call(`_faissR_kmeans_auto_params_cpp`, n, p, centers, tuning)
 }
 
-kmeans_auto_backend_policy_cpp <- function(n, p, centers, work_threshold,
-    nbytes_threshold, large_n_threshold, large_p_threshold, min_n_per_center) {
-    .Call(`_faissR_kmeans_auto_backend_policy_cpp`, n, p, centers,
-        work_threshold, nbytes_threshold, large_n_threshold, large_p_threshold,
-        min_n_per_center)
+kmeans_auto_backend_policy_cpp <- function(n, p, centers, work_threshold, nbytes_threshold, large_n_threshold, large_p_threshold, min_n_per_center) {
+    .Call(`_faissR_kmeans_auto_backend_policy_cpp`, n, p, centers, work_threshold, nbytes_threshold, large_n_threshold, large_p_threshold, min_n_per_center)
 }
 
-kmeans_auto_select_backend_cpp <- function(requested_backend, n, p, centers,
-    work_threshold, nbytes_threshold, large_n_threshold, large_p_threshold,
-    min_n_per_center, cuda_available, faiss_gpu_available, cuvs_available,
-    effective_max_iter = NA_integer_, effective_n_init = NA_integer_,
-    effective_tol = NA_real_, tuning = "auto") {
-    .Call(`_faissR_kmeans_auto_select_backend_cpp`, requested_backend, n, p,
-        centers, work_threshold, nbytes_threshold, large_n_threshold,
-        large_p_threshold, min_n_per_center, cuda_available,
-        faiss_gpu_available, cuvs_available, effective_max_iter,
-        effective_n_init, effective_tol, tuning)
+kmeans_auto_select_backend_cpp <- function(requested_backend, n, p, centers, work_threshold, nbytes_threshold, large_n_threshold, large_p_threshold, min_n_per_center, cuda_available, faiss_gpu_available, cuvs_available, effective_max_iter = NA_integer_, effective_n_init = NA_integer_, effective_tol = NA_real_, tuning = "auto") {
+    .Call(`_faissR_kmeans_auto_select_backend_cpp`, requested_backend, n, p, centers, work_threshold, nbytes_threshold, large_n_threshold, large_p_threshold, min_n_per_center, cuda_available, faiss_gpu_available, cuvs_available, effective_max_iter, effective_n_init, effective_tol, tuning)
 }
 
 cuda_available_cpp <- function() {
@@ -428,36 +281,28 @@ nn_cuda_float32_cpp <- function(data, points, k, square) {
     .Call(`_faissR_nn_cuda_float32_cpp`, data, points, k, square)
 }
 
-nn_cuda_float32_gpu_cpp <- function(data, points, k, exclude_self, metric,
-    backend_used, method) {
-    .Call(`_faissR_nn_cuda_float32_gpu_cpp`, data, points, k, exclude_self,
-        metric, backend_used, method)
+nn_cuda_float32_gpu_cpp <- function(data, points, k, exclude_self, metric, backend_used, method) {
+    .Call(`_faissR_nn_cuda_float32_gpu_cpp`, data, points, k, exclude_self, metric, backend_used, method)
 }
 
 gpu_knn_to_host_cpp <- function(result) {
     .Call(`_faissR_gpu_knn_to_host_cpp`, result)
 }
 
-row_candidate_knn_cuda_cpp <- function(data, candidate_indices, k, metric,
-    fill_missing = TRUE) {
-    .Call(`_faissR_row_candidate_knn_cuda_cpp`, data, candidate_indices, k,
-        metric, fill_missing)
+row_candidate_knn_cuda_cpp <- function(data, candidate_indices, k, metric, fill_missing = TRUE) {
+    .Call(`_faissR_row_candidate_knn_cuda_cpp`, data, candidate_indices, k, metric, fill_missing)
 }
 
-row_candidate_knn_cuda_float32_cpp <- function(data, candidate_indices, k,
-    metric) {
-    .Call(`_faissR_row_candidate_knn_cuda_float32_cpp`, data, candidate_indices,
-        k, metric)
+row_candidate_knn_cuda_float32_cpp <- function(data, candidate_indices, k, metric) {
+    .Call(`_faissR_row_candidate_knn_cuda_float32_cpp`, data, candidate_indices, k, metric)
 }
 
 cuda_grid_self_knn_cpp <- function(data, k, bins_per_dim, include_self) {
     .Call(`_faissR_cuda_grid_self_knn_cpp`, data, k, bins_per_dim, include_self)
 }
 
-cuda_grid_self_knn_float32_cpp <- function(data, k, bins_per_dim,
-    include_self) {
-    .Call(`_faissR_cuda_grid_self_knn_float32_cpp`, data, k, bins_per_dim,
-        include_self)
+cuda_grid_self_knn_float32_cpp <- function(data, k, bins_per_dim, include_self) {
+    .Call(`_faissR_cuda_grid_self_knn_float32_cpp`, data, k, bins_per_dim, include_self)
 }
 
 cuvs_available_cpp <- function() {
@@ -472,96 +317,60 @@ nn_cuvs_bruteforce_cpp <- function(data, points, k, exclude_self) {
     .Call(`_faissR_nn_cuvs_bruteforce_cpp`, data, points, k, exclude_self)
 }
 
-nn_cuvs_bruteforce_float32_cpp <- function(data, points, k, exclude_self,
-    distance_storage) {
-    .Call(`_faissR_nn_cuvs_bruteforce_float32_cpp`, data, points, k,
-        exclude_self, distance_storage)
+nn_cuvs_bruteforce_float32_cpp <- function(data, points, k, exclude_self, distance_storage) {
+    .Call(`_faissR_nn_cuvs_bruteforce_float32_cpp`, data, points, k, exclude_self, distance_storage)
 }
 
-nn_cuvs_cagra_cpp <- function(data, points, k, exclude_self, graph_degree,
-    intermediate_graph_degree, search_width, itopk_size, build_algo) {
-    .Call(`_faissR_nn_cuvs_cagra_cpp`, data, points, k, exclude_self,
-        graph_degree, intermediate_graph_degree, search_width, itopk_size,
-        build_algo)
+nn_cuvs_cagra_cpp <- function(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size, build_algo) {
+    .Call(`_faissR_nn_cuvs_cagra_cpp`, data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size, build_algo)
 }
 
-nn_cuvs_cagra_float32_cpp <- function(data, points, k, exclude_self,
-    graph_degree, intermediate_graph_degree, search_width, itopk_size,
-    build_algo, distance_storage) {
-    .Call(`_faissR_nn_cuvs_cagra_float32_cpp`, data, points, k, exclude_self,
-        graph_degree, intermediate_graph_degree, search_width, itopk_size,
-        build_algo, distance_storage)
+nn_cuvs_cagra_float32_cpp <- function(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size, build_algo, distance_storage) {
+    .Call(`_faissR_nn_cuvs_cagra_float32_cpp`, data, points, k, exclude_self, graph_degree, intermediate_graph_degree, search_width, itopk_size, build_algo, distance_storage)
 }
 
-nn_cuvs_nndescent_self_cpp <- function(data, k, graph_degree,
-    intermediate_graph_degree, max_iterations) {
-    .Call(`_faissR_nn_cuvs_nndescent_self_cpp`, data, k, graph_degree,
-        intermediate_graph_degree, max_iterations)
+nn_cuvs_nndescent_self_cpp <- function(data, k, graph_degree, intermediate_graph_degree, max_iterations) {
+    .Call(`_faissR_nn_cuvs_nndescent_self_cpp`, data, k, graph_degree, intermediate_graph_degree, max_iterations)
 }
 
-nn_cuvs_nndescent_self_float32_cpp <- function(data, k, graph_degree,
-    intermediate_graph_degree, max_iterations, distance_storage) {
-    .Call(`_faissR_nn_cuvs_nndescent_self_float32_cpp`, data, k, graph_degree,
-        intermediate_graph_degree, max_iterations, distance_storage)
+nn_cuvs_nndescent_self_float32_cpp <- function(data, k, graph_degree, intermediate_graph_degree, max_iterations, distance_storage) {
+    .Call(`_faissR_nn_cuvs_nndescent_self_float32_cpp`, data, k, graph_degree, intermediate_graph_degree, max_iterations, distance_storage)
 }
 
-nn_cuvs_hnsw_cpp <- function(data, points, k, exclude_self, graph_degree,
-    intermediate_graph_degree, ef, n_threads, cagra_build_algo) {
-    .Call(`_faissR_nn_cuvs_hnsw_cpp`, data, points, k, exclude_self,
-        graph_degree, intermediate_graph_degree, ef, n_threads,
-        cagra_build_algo)
+nn_cuvs_hnsw_cpp <- function(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, ef, n_threads, cagra_build_algo) {
+    .Call(`_faissR_nn_cuvs_hnsw_cpp`, data, points, k, exclude_self, graph_degree, intermediate_graph_degree, ef, n_threads, cagra_build_algo)
 }
 
-nn_cuvs_hnsw_float32_cpp <- function(data, points, k, exclude_self,
-    graph_degree, intermediate_graph_degree, ef, n_threads, cagra_build_algo,
-    distance_storage) {
-    .Call(`_faissR_nn_cuvs_hnsw_float32_cpp`, data, points, k, exclude_self,
-        graph_degree, intermediate_graph_degree, ef, n_threads,
-        cagra_build_algo, distance_storage)
+nn_cuvs_hnsw_float32_cpp <- function(data, points, k, exclude_self, graph_degree, intermediate_graph_degree, ef, n_threads, cagra_build_algo, distance_storage) {
+    .Call(`_faissR_nn_cuvs_hnsw_float32_cpp`, data, points, k, exclude_self, graph_degree, intermediate_graph_degree, ef, n_threads, cagra_build_algo, distance_storage)
 }
 
-nn_cuvs_ivf_flat_cpp <- function(data, points, k, n_lists, n_probes,
-    exclude_self) {
-    .Call(`_faissR_nn_cuvs_ivf_flat_cpp`, data, points, k, n_lists, n_probes,
-        exclude_self)
+nn_cuvs_ivf_flat_cpp <- function(data, points, k, n_lists, n_probes, exclude_self) {
+    .Call(`_faissR_nn_cuvs_ivf_flat_cpp`, data, points, k, n_lists, n_probes, exclude_self)
 }
 
-nn_cuvs_ivf_flat_float32_cpp <- function(data, points, k, n_lists, n_probes,
-    exclude_self, distance_storage) {
-    .Call(`_faissR_nn_cuvs_ivf_flat_float32_cpp`, data, points, k, n_lists,
-        n_probes, exclude_self, distance_storage)
+nn_cuvs_ivf_flat_float32_cpp <- function(data, points, k, n_lists, n_probes, exclude_self, distance_storage) {
+    .Call(`_faissR_nn_cuvs_ivf_flat_float32_cpp`, data, points, k, n_lists, n_probes, exclude_self, distance_storage)
 }
 
-nn_cuvs_ivf_pq_cpp <- function(data, points, k, n_lists, n_probes, pq_dim,
-    pq_bits, exclude_self) {
-    .Call(`_faissR_nn_cuvs_ivf_pq_cpp`, data, points, k, n_lists, n_probes,
-        pq_dim, pq_bits, exclude_self)
+nn_cuvs_ivf_pq_cpp <- function(data, points, k, n_lists, n_probes, pq_dim, pq_bits, exclude_self) {
+    .Call(`_faissR_nn_cuvs_ivf_pq_cpp`, data, points, k, n_lists, n_probes, pq_dim, pq_bits, exclude_self)
 }
 
-nn_cuvs_ivf_pq_float32_cpp <- function(data, points, k, n_lists, n_probes,
-    pq_dim, pq_bits, exclude_self, distance_storage) {
-    .Call(`_faissR_nn_cuvs_ivf_pq_float32_cpp`, data, points, k, n_lists,
-        n_probes, pq_dim, pq_bits, exclude_self, distance_storage)
+nn_cuvs_ivf_pq_float32_cpp <- function(data, points, k, n_lists, n_probes, pq_dim, pq_bits, exclude_self, distance_storage) {
+    .Call(`_faissR_nn_cuvs_ivf_pq_float32_cpp`, data, points, k, n_lists, n_probes, pq_dim, pq_bits, exclude_self, distance_storage)
 }
 
-nn_cuvs_ivf_pq_index_build_float32_cpp <- function(data, n_lists, n_probes,
-    pq_dim, pq_bits) {
-    .Call(`_faissR_nn_cuvs_ivf_pq_index_build_float32_cpp`, data, n_lists,
-        n_probes, pq_dim, pq_bits)
+nn_cuvs_ivf_pq_index_build_float32_cpp <- function(data, n_lists, n_probes, pq_dim, pq_bits) {
+    .Call(`_faissR_nn_cuvs_ivf_pq_index_build_float32_cpp`, data, n_lists, n_probes, pq_dim, pq_bits)
 }
 
-nn_cuvs_ivf_pq_index_search_float32_cpp <- function(index_ptr, points, k,
-    exclude_self, n_probes, query_is_index_data, cache_query_device_buffer,
-    query_cache_key, distance_storage) {
-    .Call(`_faissR_nn_cuvs_ivf_pq_index_search_float32_cpp`, index_ptr, points,
-        k, exclude_self, n_probes, query_is_index_data,
-        cache_query_device_buffer, query_cache_key, distance_storage)
+nn_cuvs_ivf_pq_index_search_float32_cpp <- function(index_ptr, points, k, exclude_self, n_probes, query_is_index_data, cache_query_device_buffer, query_cache_key, distance_storage) {
+    .Call(`_faissR_nn_cuvs_ivf_pq_index_search_float32_cpp`, index_ptr, points, k, exclude_self, n_probes, query_is_index_data, cache_query_device_buffer, query_cache_key, distance_storage)
 }
 
-kmeans_cuvs_cpp <- function(data, centers, max_iter, n_init, tol,
-    streaming_batch_size, kmeans_plus_plus) {
-    .Call(`_faissR_kmeans_cuvs_cpp`, data, centers, max_iter, n_init, tol,
-        streaming_batch_size, kmeans_plus_plus)
+kmeans_cuvs_cpp <- function(data, centers, max_iter, n_init, tol, streaming_batch_size, kmeans_plus_plus) {
+    .Call(`_faissR_kmeans_cuvs_cpp`, data, centers, max_iter, n_init, tol, streaming_batch_size, kmeans_plus_plus)
 }
 
 faiss_available_cpp <- function() {
@@ -576,224 +385,150 @@ nn_faiss_flat_cpp <- function(data, points, k, exclude_self, n_threads) {
     .Call(`_faissR_nn_faiss_flat_cpp`, data, points, k, exclude_self, n_threads)
 }
 
-nn_faiss_flat_float32_cpp <- function(data, points, k, exclude_self, n_threads,
-    metric, distance_storage) {
-    .Call(`_faissR_nn_faiss_flat_float32_cpp`, data, points, k, exclude_self,
-        n_threads, metric, distance_storage)
+nn_faiss_flat_float32_cpp <- function(data, points, k, exclude_self, n_threads, metric, distance_storage) {
+    .Call(`_faissR_nn_faiss_flat_float32_cpp`, data, points, k, exclude_self, n_threads, metric, distance_storage)
 }
 
-nn_faiss_flat_pretransformed_float32_cpp <- function(data, points, k,
-    exclude_self, n_threads, distance_storage) {
-    .Call(`_faissR_nn_faiss_flat_pretransformed_float32_cpp`, data, points, k,
-        exclude_self, n_threads, distance_storage)
+nn_faiss_flat_pretransformed_float32_cpp <- function(data, points, k, exclude_self, n_threads, distance_storage) {
+    .Call(`_faissR_nn_faiss_flat_pretransformed_float32_cpp`, data, points, k, exclude_self, n_threads, distance_storage)
 }
 
-nn_faiss_gpu_multi_cpp <- function(data, k, method, devices, nlist, nprobe,
-    shard = FALSE, distance_storage = "float") {
-    .Call(`_faissR_nn_faiss_gpu_multi_cpp`, data, k, method, devices, nlist,
-        nprobe, shard, distance_storage)
+nn_faiss_gpu_multi_cpp <- function(data, k, method, devices, nlist, nprobe, shard = FALSE, distance_storage = "float") {
+    .Call(`_faissR_nn_faiss_gpu_multi_cpp`, data, k, method, devices, nlist, nprobe, shard, distance_storage)
 }
 
-nn_faiss_ivf_cpp <- function(data, points, k, nlist, nprobe, metric,
-    distance_output, exclude_self, n_threads) {
-    .Call(`_faissR_nn_faiss_ivf_cpp`, data, points, k, nlist, nprobe, metric,
-        distance_output, exclude_self, n_threads)
+nn_faiss_gpu_multi_query_cpp <- function(data, points, k, method, devices, nlist, nprobe, shard = FALSE, distance_storage = "float") {
+    .Call(`_faissR_nn_faiss_gpu_multi_query_cpp`, data, points, k, method, devices, nlist, nprobe, shard, distance_storage)
 }
 
-nn_faiss_ivf_float32_cpp <- function(data, points, k, nlist, nprobe, metric,
-    distance_output, exclude_self, n_threads, distance_storage) {
-    .Call(`_faissR_nn_faiss_ivf_float32_cpp`, data, points, k, nlist, nprobe,
-        metric, distance_output, exclude_self, n_threads, distance_storage)
+nn_faiss_ivf_cpp <- function(data, points, k, nlist, nprobe, metric, distance_output, exclude_self, n_threads) {
+    .Call(`_faissR_nn_faiss_ivf_cpp`, data, points, k, nlist, nprobe, metric, distance_output, exclude_self, n_threads)
+}
+
+nn_faiss_ivf_float32_cpp <- function(data, points, k, nlist, nprobe, metric, distance_output, exclude_self, n_threads, distance_storage) {
+    .Call(`_faissR_nn_faiss_ivf_float32_cpp`, data, points, k, nlist, nprobe, metric, distance_output, exclude_self, n_threads, distance_storage)
 }
 
 nn_faiss_flat_ip_cpp <- function(data, points, k, exclude_self, n_threads) {
-    .Call(`_faissR_nn_faiss_flat_ip_cpp`, data, points, k, exclude_self,
-        n_threads)
+    .Call(`_faissR_nn_faiss_flat_ip_cpp`, data, points, k, exclude_self, n_threads)
 }
 
-nn_faiss_flat_normalized_ip_distance_cpp <- function(data, points, k,
-    exclude_self, n_threads) {
-    .Call(`_faissR_nn_faiss_flat_normalized_ip_distance_cpp`, data, points, k,
-        exclude_self, n_threads)
+nn_faiss_flat_normalized_ip_distance_cpp <- function(data, points, k, exclude_self, n_threads) {
+    .Call(`_faissR_nn_faiss_flat_normalized_ip_distance_cpp`, data, points, k, exclude_self, n_threads)
 }
 
 nn_faiss_gpu_flat_cpp <- function(data, points, k, exclude_self) {
     .Call(`_faissR_nn_faiss_gpu_flat_cpp`, data, points, k, exclude_self)
 }
 
-nn_faiss_gpu_flat_float32_cpp <- function(data, points, k, exclude_self, metric,
-    distance_output, distance_storage) {
-    .Call(`_faissR_nn_faiss_gpu_flat_float32_cpp`, data, points, k,
-        exclude_self, metric, distance_output, distance_storage)
+nn_faiss_gpu_flat_float32_cpp <- function(data, points, k, exclude_self, metric, distance_output, distance_storage) {
+    .Call(`_faissR_nn_faiss_gpu_flat_float32_cpp`, data, points, k, exclude_self, metric, distance_output, distance_storage)
 }
 
-nn_faiss_gpu_bfknn_float32_gpu_cpp <- function(data, points, k, exclude_self,
-    metric, backend_used, method) {
-    .Call(`_faissR_nn_faiss_gpu_bfknn_float32_gpu_cpp`, data, points, k,
-        exclude_self, metric, backend_used, method)
+nn_faiss_gpu_bfknn_float32_gpu_cpp <- function(data, points, k, exclude_self, metric, backend_used, method) {
+    .Call(`_faissR_nn_faiss_gpu_bfknn_float32_gpu_cpp`, data, points, k, exclude_self, metric, backend_used, method)
 }
 
 nn_faiss_gpu_flat_ip_cpp <- function(data, points, k, exclude_self) {
     .Call(`_faissR_nn_faiss_gpu_flat_ip_cpp`, data, points, k, exclude_self)
 }
 
-nn_faiss_gpu_flat_normalized_ip_distance_cpp <- function(data, points, k,
-    exclude_self) {
-    .Call(`_faissR_nn_faiss_gpu_flat_normalized_ip_distance_cpp`, data, points,
-        k, exclude_self)
+nn_faiss_gpu_flat_normalized_ip_distance_cpp <- function(data, points, k, exclude_self) {
+    .Call(`_faissR_nn_faiss_gpu_flat_normalized_ip_distance_cpp`, data, points, k, exclude_self)
 }
 
-nn_faiss_ivfpq_cpp <- function(data, points, k, nlist, nprobe, pq_m, pq_nbits,
-    metric, distance_output, exclude_self, n_threads) {
-    .Call(`_faissR_nn_faiss_ivfpq_cpp`, data, points, k, nlist, nprobe, pq_m,
-        pq_nbits, metric, distance_output, exclude_self, n_threads)
+nn_faiss_ivfpq_cpp <- function(data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self, n_threads) {
+    .Call(`_faissR_nn_faiss_ivfpq_cpp`, data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self, n_threads)
 }
 
-nn_faiss_ivfpq_float32_cpp <- function(data, points, k, nlist, nprobe, pq_m,
-    pq_nbits, metric, distance_output, exclude_self, n_threads,
-    distance_storage) {
-    .Call(`_faissR_nn_faiss_ivfpq_float32_cpp`, data, points, k, nlist, nprobe,
-        pq_m, pq_nbits, metric, distance_output, exclude_self, n_threads,
-        distance_storage)
+nn_faiss_ivfpq_float32_cpp <- function(data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self, n_threads, distance_storage) {
+    .Call(`_faissR_nn_faiss_ivfpq_float32_cpp`, data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self, n_threads, distance_storage)
 }
 
-nn_faiss_ivfpq_fastscan_float32_cpp <- function(data, points, k, nlist, nprobe,
-    pq_m, metric, distance_output, refine_factor, bbs, exclude_self, n_threads,
-    distance_storage) {
-    .Call(`_faissR_nn_faiss_ivfpq_fastscan_float32_cpp`, data, points, k, nlist,
-        nprobe, pq_m, metric, distance_output, refine_factor, bbs, exclude_self,
-        n_threads, distance_storage)
+nn_faiss_ivfpq_fastscan_float32_cpp <- function(data, points, k, nlist, nprobe, pq_m, metric, distance_output, refine_factor, bbs, exclude_self, n_threads, distance_storage) {
+    .Call(`_faissR_nn_faiss_ivfpq_fastscan_float32_cpp`, data, points, k, nlist, nprobe, pq_m, metric, distance_output, refine_factor, bbs, exclude_self, n_threads, distance_storage)
 }
 
-nn_faiss_hnsw_cpp <- function(data, points, k, m, ef_construction, ef_search,
-    metric, distance_output, exclude_self, n_threads) {
-    .Call(`_faissR_nn_faiss_hnsw_cpp`, data, points, k, m, ef_construction,
-        ef_search, metric, distance_output, exclude_self, n_threads)
+nn_faiss_hnsw_cpp <- function(data, points, k, m, ef_construction, ef_search, metric, distance_output, exclude_self, n_threads) {
+    .Call(`_faissR_nn_faiss_hnsw_cpp`, data, points, k, m, ef_construction, ef_search, metric, distance_output, exclude_self, n_threads)
 }
 
-nn_faiss_hnsw_float32_cpp <- function(data, points, k, m, ef_construction,
-    ef_search, metric, distance_output, exclude_self, n_threads,
-    distance_storage) {
-    .Call(`_faissR_nn_faiss_hnsw_float32_cpp`, data, points, k, m,
-        ef_construction, ef_search, metric, distance_output, exclude_self,
-        n_threads, distance_storage)
+nn_faiss_hnsw_float32_cpp <- function(data, points, k, m, ef_construction, ef_search, metric, distance_output, exclude_self, n_threads, distance_storage) {
+    .Call(`_faissR_nn_faiss_hnsw_float32_cpp`, data, points, k, m, ef_construction, ef_search, metric, distance_output, exclude_self, n_threads, distance_storage)
 }
 
-nn_faiss_hnsw_index_build_float32_cpp <- function(data, m, ef_construction,
-    ef_search, metric, distance_output, n_threads) {
-    .Call(`_faissR_nn_faiss_hnsw_index_build_float32_cpp`, data, m,
-        ef_construction, ef_search, metric, distance_output, n_threads)
+nn_faiss_hnsw_index_build_float32_cpp <- function(data, m, ef_construction, ef_search, metric, distance_output, n_threads) {
+    .Call(`_faissR_nn_faiss_hnsw_index_build_float32_cpp`, data, m, ef_construction, ef_search, metric, distance_output, n_threads)
 }
 
-nn_faiss_hnsw_index_search_float32_cpp <- function(index_ptr, points, k,
-    exclude_self, ef_search, n_threads, distance_storage) {
-    .Call(`_faissR_nn_faiss_hnsw_index_search_float32_cpp`, index_ptr, points,
-        k, exclude_self, ef_search, n_threads, distance_storage)
+nn_faiss_hnsw_index_search_float32_cpp <- function(index_ptr, points, k, exclude_self, ef_search, n_threads, distance_storage) {
+    .Call(`_faissR_nn_faiss_hnsw_index_search_float32_cpp`, index_ptr, points, k, exclude_self, ef_search, n_threads, distance_storage)
 }
 
-nn_faiss_index_build_float32_cpp <- function(data, kind, nlist, nprobe, pq_m,
-    pq_nbits, graph_degree, search_width, build_type, n_iter, metric,
-    distance_output, n_threads) {
-    .Call(`_faissR_nn_faiss_index_build_float32_cpp`, data, kind, nlist, nprobe,
-        pq_m, pq_nbits, graph_degree, search_width, build_type, n_iter, metric,
-        distance_output, n_threads)
+nn_faiss_index_build_float32_cpp <- function(data, kind, nlist, nprobe, pq_m, pq_nbits, graph_degree, search_width, build_type, n_iter, metric, distance_output, n_threads) {
+    .Call(`_faissR_nn_faiss_index_build_float32_cpp`, data, kind, nlist, nprobe, pq_m, pq_nbits, graph_degree, search_width, build_type, n_iter, metric, distance_output, n_threads)
 }
 
-nn_faiss_index_search_float32_cpp <- function(index_ptr, points, k,
-    exclude_self, search_width, n_threads, distance_storage) {
-    .Call(`_faissR_nn_faiss_index_search_float32_cpp`, index_ptr, points, k,
-        exclude_self, search_width, n_threads, distance_storage)
+nn_faiss_index_search_float32_cpp <- function(index_ptr, points, k, exclude_self, search_width, n_threads, distance_storage) {
+    .Call(`_faissR_nn_faiss_index_search_float32_cpp`, index_ptr, points, k, exclude_self, search_width, n_threads, distance_storage)
 }
 
-nn_faiss_nsg_cpp <- function(data, points, k, r, search_l, build_type, metric,
-    distance_output, exclude_self, n_threads) {
-    .Call(`_faissR_nn_faiss_nsg_cpp`, data, points, k, r, search_l, build_type,
-        metric, distance_output, exclude_self, n_threads)
+nn_faiss_nsg_cpp <- function(data, points, k, r, search_l, build_type, metric, distance_output, exclude_self, n_threads) {
+    .Call(`_faissR_nn_faiss_nsg_cpp`, data, points, k, r, search_l, build_type, metric, distance_output, exclude_self, n_threads)
 }
 
-nn_faiss_nsg_float32_cpp <- function(data, points, k, r, search_l, build_type,
-    metric, distance_output, exclude_self, n_threads, distance_storage) {
-    .Call(`_faissR_nn_faiss_nsg_float32_cpp`, data, points, k, r, search_l,
-        build_type, metric, distance_output, exclude_self, n_threads,
-        distance_storage)
+nn_faiss_nsg_float32_cpp <- function(data, points, k, r, search_l, build_type, metric, distance_output, exclude_self, n_threads, distance_storage) {
+    .Call(`_faissR_nn_faiss_nsg_float32_cpp`, data, points, k, r, search_l, build_type, metric, distance_output, exclude_self, n_threads, distance_storage)
 }
 
-nn_faiss_nndescent_cpp <- function(data, points, k, graph_k, n_iter, search_l,
-    metric, distance_output, exclude_self, n_threads) {
-    .Call(`_faissR_nn_faiss_nndescent_cpp`, data, points, k, graph_k, n_iter,
-        search_l, metric, distance_output, exclude_self, n_threads)
+nn_faiss_nndescent_cpp <- function(data, points, k, graph_k, n_iter, search_l, metric, distance_output, exclude_self, n_threads) {
+    .Call(`_faissR_nn_faiss_nndescent_cpp`, data, points, k, graph_k, n_iter, search_l, metric, distance_output, exclude_self, n_threads)
 }
 
-nn_faiss_nndescent_float32_cpp <- function(data, points, k, graph_k, n_iter,
-    search_l, metric, distance_output, exclude_self, n_threads,
-    distance_storage) {
-    .Call(`_faissR_nn_faiss_nndescent_float32_cpp`, data, points, k, graph_k,
-        n_iter, search_l, metric, distance_output, exclude_self, n_threads,
-        distance_storage)
+nn_faiss_nndescent_float32_cpp <- function(data, points, k, graph_k, n_iter, search_l, metric, distance_output, exclude_self, n_threads, distance_storage) {
+    .Call(`_faissR_nn_faiss_nndescent_float32_cpp`, data, points, k, graph_k, n_iter, search_l, metric, distance_output, exclude_self, n_threads, distance_storage)
 }
 
-nn_faiss_gpu_ivf_flat_cpp <- function(data, points, k, nlist, nprobe, metric,
-    distance_output, exclude_self) {
-    .Call(`_faissR_nn_faiss_gpu_ivf_flat_cpp`, data, points, k, nlist, nprobe,
-        metric, distance_output, exclude_self)
+nn_faiss_gpu_ivf_flat_cpp <- function(data, points, k, nlist, nprobe, metric, distance_output, exclude_self) {
+    .Call(`_faissR_nn_faiss_gpu_ivf_flat_cpp`, data, points, k, nlist, nprobe, metric, distance_output, exclude_self)
 }
 
-nn_faiss_gpu_ivf_flat_float32_cpp <- function(data, points, k, nlist, nprobe,
-    metric, distance_output, exclude_self, distance_storage) {
-    .Call(`_faissR_nn_faiss_gpu_ivf_flat_float32_cpp`, data, points, k, nlist,
-        nprobe, metric, distance_output, exclude_self, distance_storage)
+nn_faiss_gpu_ivf_flat_float32_cpp <- function(data, points, k, nlist, nprobe, metric, distance_output, exclude_self, distance_storage) {
+    .Call(`_faissR_nn_faiss_gpu_ivf_flat_float32_cpp`, data, points, k, nlist, nprobe, metric, distance_output, exclude_self, distance_storage)
 }
 
-nn_faiss_gpu_ivfpq_cpp <- function(data, points, k, nlist, nprobe, pq_m,
-    pq_nbits, metric, distance_output, exclude_self) {
-    .Call(`_faissR_nn_faiss_gpu_ivfpq_cpp`, data, points, k, nlist, nprobe,
-        pq_m, pq_nbits, metric, distance_output, exclude_self)
+nn_faiss_gpu_ivfpq_cpp <- function(data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self) {
+    .Call(`_faissR_nn_faiss_gpu_ivfpq_cpp`, data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self)
 }
 
-nn_faiss_gpu_ivfpq_float32_cpp <- function(data, points, k, nlist, nprobe, pq_m,
-    pq_nbits, metric, distance_output, exclude_self, distance_storage) {
-    .Call(`_faissR_nn_faiss_gpu_ivfpq_float32_cpp`, data, points, k, nlist,
-        nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self,
-        distance_storage)
+nn_faiss_gpu_ivfpq_float32_cpp <- function(data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self, distance_storage) {
+    .Call(`_faissR_nn_faiss_gpu_ivfpq_float32_cpp`, data, points, k, nlist, nprobe, pq_m, pq_nbits, metric, distance_output, exclude_self, distance_storage)
 }
 
-nn_faiss_gpu_cagra_cpp <- function(data, points, k, graph_degree,
-    intermediate_graph_degree, search_width, itopk_size, exclude_self) {
-    .Call(`_faissR_nn_faiss_gpu_cagra_cpp`, data, points, k, graph_degree,
-        intermediate_graph_degree, search_width, itopk_size, exclude_self)
+nn_faiss_gpu_cagra_cpp <- function(data, points, k, graph_degree, intermediate_graph_degree, search_width, itopk_size, exclude_self) {
+    .Call(`_faissR_nn_faiss_gpu_cagra_cpp`, data, points, k, graph_degree, intermediate_graph_degree, search_width, itopk_size, exclude_self)
 }
 
-nn_faiss_gpu_cagra_float32_cpp <- function(data, points, k, graph_degree,
-    intermediate_graph_degree, search_width, itopk_size, exclude_self,
-    distance_storage) {
-    .Call(`_faissR_nn_faiss_gpu_cagra_float32_cpp`, data, points, k,
-        graph_degree, intermediate_graph_degree, search_width, itopk_size,
-        exclude_self, distance_storage)
+nn_faiss_gpu_cagra_float32_cpp <- function(data, points, k, graph_degree, intermediate_graph_degree, search_width, itopk_size, exclude_self, distance_storage) {
+    .Call(`_faissR_nn_faiss_gpu_cagra_float32_cpp`, data, points, k, graph_degree, intermediate_graph_degree, search_width, itopk_size, exclude_self, distance_storage)
 }
 
-kmeans_faiss_cpp <- function(data, centers, max_iter, nredo, tol, seed,
-    n_threads, kmeans_plus_plus) {
-    .Call(`_faissR_kmeans_faiss_cpp`, data, centers, max_iter, nredo, tol, seed,
-        n_threads, kmeans_plus_plus)
+kmeans_faiss_cpp <- function(data, centers, max_iter, nredo, tol, seed, n_threads, kmeans_plus_plus) {
+    .Call(`_faissR_kmeans_faiss_cpp`, data, centers, max_iter, nredo, tol, seed, n_threads, kmeans_plus_plus)
 }
 
-kmeans_faiss_gpu_cpp <- function(data, centers, max_iter, nredo, tol, seed,
-    kmeans_plus_plus) {
-    .Call(`_faissR_kmeans_faiss_gpu_cpp`, data, centers, max_iter, nredo, tol,
-        seed, kmeans_plus_plus)
+kmeans_faiss_gpu_cpp <- function(data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus) {
+    .Call(`_faissR_kmeans_faiss_gpu_cpp`, data, centers, max_iter, nredo, tol, seed, kmeans_plus_plus)
 }
 
 nn_metal_available_cpp <- function() {
     .Call(`_faissR_nn_metal_available_cpp`)
 }
 
-nn_metal_cpp <- function(data, k, method = "auto", metric = "euclidean",
-    target_recall = 0.99) {
+nn_metal_cpp <- function(data, k, method = "auto", metric = "euclidean", target_recall = 0.99) {
     .Call(`_faissR_nn_metal_cpp`, data, k, method, metric, target_recall)
 }
 
-nn_metal_query_cpp <- function(data, query, k, method = "auto",
-    metric = "euclidean", target_recall = 0.99) {
-    .Call(`_faissR_nn_metal_query_cpp`, data, query, k, method, metric,
-        target_recall)
+nn_metal_query_cpp <- function(data, query, k, method = "auto", metric = "euclidean", target_recall = 0.99) {
+    .Call(`_faissR_nn_metal_query_cpp`, data, query, k, method, metric, target_recall)
 }

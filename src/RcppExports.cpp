@@ -1581,6 +1581,25 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nn_faiss_gpu_multi_query_cpp
+List nn_faiss_gpu_multi_query_cpp(SEXP data, SEXP points, int k, std::string method, Rcpp::IntegerVector devices, int nlist, int nprobe, bool shard, std::string distance_storage);
+RcppExport SEXP _faissR_nn_faiss_gpu_multi_query_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP methodSEXP, SEXP devicesSEXP, SEXP nlistSEXP, SEXP nprobeSEXP, SEXP shardSEXP, SEXP distance_storageSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< std::string >::type method(methodSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type devices(devicesSEXP);
+    Rcpp::traits::input_parameter< int >::type nlist(nlistSEXP);
+    Rcpp::traits::input_parameter< int >::type nprobe(nprobeSEXP);
+    Rcpp::traits::input_parameter< bool >::type shard(shardSEXP);
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_gpu_multi_query_cpp(data, points, k, method, devices, nlist, nprobe, shard, distance_storage));
+    return rcpp_result_gen;
+END_RCPP
+}
 // nn_faiss_ivf_cpp
 List nn_faiss_ivf_cpp(NumericMatrix data, NumericMatrix points, int k, int nlist, int nprobe, std::string metric, std::string distance_output, bool exclude_self, int n_threads);
 RcppExport SEXP _faissR_nn_faiss_ivf_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP nlistSEXP, SEXP nprobeSEXP, SEXP metricSEXP, SEXP distance_outputSEXP, SEXP exclude_selfSEXP, SEXP n_threadsSEXP) {
@@ -2281,6 +2300,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_faiss_flat_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_float32_cpp, 7},
     {"_faissR_nn_faiss_flat_pretransformed_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_pretransformed_float32_cpp, 6},
     {"_faissR_nn_faiss_gpu_multi_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_multi_cpp, 8},
+    {"_faissR_nn_faiss_gpu_multi_query_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_multi_query_cpp, 9},
     {"_faissR_nn_faiss_ivf_cpp", (DL_FUNC) &_faissR_nn_faiss_ivf_cpp, 9},
     {"_faissR_nn_faiss_ivf_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_ivf_float32_cpp, 10},
     {"_faissR_nn_faiss_flat_ip_cpp", (DL_FUNC) &_faissR_nn_faiss_flat_ip_cpp, 5},

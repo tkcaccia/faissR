@@ -667,6 +667,7 @@ fi
   echo "CXX_STD = CXX20"
   printf '%s%s\n' 'PKG_CXXFLAGS = -pthread $(SHLIB_OPENMP_CXXFLAGS)' "$extra_cxxflags"
   if [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
+    cp src/nn_metal_impl.mm.in src/nn_metal_impl.mm
     echo 'PKG_OBJCXXFLAGS = $(CXXFLAGS) -pthread'
     libs="$libs -framework Foundation -framework Metal"
     metal_objects="nn_metal_impl.o"

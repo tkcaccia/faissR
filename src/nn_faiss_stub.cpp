@@ -416,6 +416,19 @@ List faiss_gpu_multi_knn_impl(SEXP,
   Rcpp::stop("FAISS multi-GPU KNN is unavailable in this build.");
 }
 
+List faiss_gpu_multi_query_knn_impl(SEXP,
+                                    SEXP,
+                                    int,
+                                    bool,
+                                    const std::string&,
+                                    const std::vector<int>&,
+                                    int,
+                                    int,
+                                    bool,
+                                    const std::string&) {
+  Rcpp::stop("FAISS multi-GPU KNN is unavailable in this build.");
+}
+
 List faiss_gpu_ivf_flat_float32_knn_impl(SEXP,
                                          SEXP,
                                          int,
