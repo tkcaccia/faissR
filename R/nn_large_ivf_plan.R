@@ -41,7 +41,8 @@ nn_cuda_ivf_large_extrapolate <- function(
         "recall", "knn_seconds", "device_memory_bytes",
         "peak_rss_bytes", "full_self_performed", "audit_pass",
         "reference_scope", "timing_scope", "query_count", "source_sha",
-        "input_sha256"
+        "input_sha256", "query_rows_sha256", "query_rows_max",
+        "database_selection"
     )
     if (!is.data.frame(observations) ||
         !all(required %in% names(observations))) {
@@ -85,6 +86,16 @@ nn_cuda_ivf_large_extrapolate <- function(
         stop("A single source- and input-locked recall cohort is required.",
              call. = FALSE)
     }
+    if (length(unique(rows$query_rows_sha256)) != 1L ||
+        !grepl("^[0-9a-f]{64}$", rows$query_rows_sha256[[1L]]) ||
+        length(unique(rows$database_selection)) != 1L ||
+        rows$database_selection[[1L]] != "prefix_first_n_rows" ||
+        any(!is.finite(rows$query_rows_max)) ||
+        any(rows$query_rows_max < 1) ||
+        any(rows$query_rows_max > min(rows$n))) {
+        stop("Anchors require identical query rows within nested input prefixes.",
+             call. = FALSE)
+    }
     if (length(unique(rows$timing_scope)) != 1L ||
         length(unique(rows$query_count)) != 1L ||
         rows$query_count[[1L]] < 1L) {
@@ -122,6 +133,8 @@ nn_cuda_ivf_large_extrapolate <- function(
         status = "extrapolated_not_validated",
         source_sha = selected$source_sha[[1L]],
         input_sha256 = selected$input_sha256[[1L]],
+        query_rows_sha256 = selected$query_rows_sha256[[1L]],
+        database_selection = selected$database_selection[[1L]],
         timing_scope = selected$timing_scope[[1L]],
         query_count = selected$query_count[[1L]],
         target_n = target_n, p = p, k = k,

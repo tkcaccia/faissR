@@ -26,6 +26,9 @@ test_that("billion-row projection requires audited matching anchors", {
         query_count = 256L,
         source_sha = paste(rep("a", 40L), collapse = ""),
         input_sha256 = paste(rep("b", 64L), collapse = ""),
+        query_rows_sha256 = paste(rep("c", 64L), collapse = ""),
+        query_rows_max = 9000000L,
+        database_selection = "prefix_first_n_rows",
         stringsAsFactors = FALSE
     )
     plan <- faissR:::nn_cuda_ivf_large_extrapolate(
@@ -38,6 +41,8 @@ test_that("billion-row projection requires audited matching anchors", {
     expect_true(is.na(plan$recall_at_target))
     expect_true(plan$projected_peak_host_bytes > 0)
     expect_identical(plan$input_sha256, observations$input_sha256[[1L]])
+    expect_identical(plan$query_rows_sha256,
+                     observations$query_rows_sha256[[1L]])
     mixed <- observations
     mixed$input_sha256[mixed$n == 1e8] <- paste(rep("c", 64L), collapse = "")
     expect_error(
@@ -47,6 +52,23 @@ test_that("billion-row projection requires audited matching anchors", {
         "input-locked"
     )
     mixed$input_sha256 <- observations$input_sha256
+    mixed$query_rows_sha256[mixed$n == 1e8] <-
+        paste(rep("d", 64L), collapse = "")
+    expect_error(
+        faissR:::nn_cuda_ivf_large_extrapolate(
+            mixed, 1e9, 96L, 30L, 4L, "shard", 96e9
+        ),
+        "identical query rows"
+    )
+    mixed$query_rows_sha256 <- observations$query_rows_sha256
+    mixed$query_rows_max[mixed$n == 1e8] <- 11000000L
+    expect_error(
+        faissR:::nn_cuda_ivf_large_extrapolate(
+            mixed, 1e9, 96L, 30L, 4L, "shard", 96e9
+        ),
+        "nested input prefixes"
+    )
+    mixed$query_rows_max <- observations$query_rows_max
     mixed$full_self_performed[mixed$n == 1e8] <- TRUE
     expect_error(
         faissR:::nn_cuda_ivf_large_extrapolate(
