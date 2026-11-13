@@ -72,5 +72,6 @@ grep -- '-llapack -lblas' src/Makevars
 printf 'LAPACK_LIBS = -llapack\nBLAS_LIBS = -lblas\n' > "$work/external-Makevars"
 R_MAKEVARS_USER="$work/external-Makevars" sh configure \
   > "$log_dir/external-config.log" 2>&1
-grep 'extra numerical libraries: (none)' "$log_dir/external-config.log"
+grep 'extra numerical libraries: (R libraries)' \
+  "$log_dir/external-config.log"
 echo 'DEBIAN BUNDLED-BLAS REGRESSION PASSED'
