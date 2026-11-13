@@ -201,7 +201,8 @@ jobs:
                       n_init = 2, seed = 11, n_threads = 2)
           RSCRIPT
           lldb --batch -o run -o 'thread backtrace all' -- \
-            Rscript --vanilla "$RUNNER_TEMP/kmeans-crash.R"
+            "$(R RHOME)/bin/exec/R" --vanilla \
+            -f "$RUNNER_TEMP/kmeans-crash.R"
       - name: Console test followed by k-means in one process
         run: |
           Rscript --vanilla -e '
