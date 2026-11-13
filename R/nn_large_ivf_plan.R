@@ -93,8 +93,8 @@ nn_cuda_ivf_large_extrapolate <- function(
         any(!is.finite(rows$query_rows_max)) ||
         any(rows$query_rows_max < 1) ||
         any(rows$query_rows_max > min(rows$n))) {
-        stop("Anchors require identical query rows within nested input prefixes.",
-             call. = FALSE)
+        stop(paste("Anchors require identical query rows within",
+                   "nested input prefixes."), call. = FALSE)
     }
     if (length(unique(rows$timing_scope)) != 1L ||
         length(unique(rows$query_count)) != 1L ||
