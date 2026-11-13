@@ -3024,6 +3024,34 @@ test_that("GPU-resident 2D exact search is cancellation resistant", {
   expect_equal(gpu$distances, t(expected), tolerance = 1e-6)
 })
 
+test_that("resident FAISS L2 remains L2 after inner-product search", {
+  skip_if_not(faiss_gpu_available())
+  set.seed(2217)
+  x <- matrix(rnorm(43L * 5L), ncol = 5L)
+  distance <- as.matrix(stats::dist(x))
+  diag(distance) <- Inf
+  l2 <- t(vapply(seq_len(nrow(x)), function(i) {
+    order(distance[i, ])[seq_len(5L)]
+  }, integer(5L)))
+  scores <- tcrossprod(x)
+  diag(scores) <- -Inf
+  ip <- t(vapply(seq_len(nrow(x)), function(i) {
+    order(scores[i, ], decreasing = TRUE)[seq_len(5L)]
+  }, integer(5L)))
+  for (trial in seq_len(3L)) {
+    prior <- nn_faiss_gpu_bfknn_float32_gpu_cpp(
+      x, x, 5L, TRUE, "inner_product", "faiss_gpu_flat_ip", "exact"
+    )
+    expect_identical(prior$backend_used, "faiss_gpu_flat_ip")
+    expect_equal(gpu_knn_to_host_cpp(prior)$indices, ip)
+    current <- nn_gpu(x, k = 5L, method = "exact",
+                      metric = "euclidean", exclude_self = TRUE)
+    expect_identical(current$backend_used, "faiss_gpu_bfknn_l2")
+    expect_identical(current$metric, "euclidean")
+    expect_equal(gpu_knn_to_host(current)$indices, l2)
+  }
+})
+
 test_that("CUDA grid auto matches exact CPU grid results", {
   skip_if_not(cuda_available())
 
