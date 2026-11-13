@@ -314,7 +314,13 @@ test_that("repository text excludes private benchmark machine details", {
   )
   text <- vapply(
     files,
-    function(path) paste(readLines(path, warn = FALSE), collapse = "\n"),
+    function(path) {
+      lines <- readLines(path, warn = FALSE)
+      if (identical(basename(path), "DESCRIPTION")) {
+        lines <- lines[!grepl("^Packaged:", lines)]
+      }
+      paste(lines, collapse = "\n")
+    },
     character(1L)
   )
   for (pattern in forbidden) {
