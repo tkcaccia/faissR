@@ -6,6 +6,8 @@ archive=$1
 work=$(mktemp -d)
 trap 'rm -rf "$work"' 0
 log_dir=${FAISSR_TEST_LOG_DIR:-$(pwd)}
+R_HOME=$(R RHOME)
+export R_HOME
 mkdir -p "$log_dir" "$work/library"
 R CMD config BLAS_LIBS | grep -- '-lRblas'
 R CMD config LAPACK_LIBS | grep -- '-lRlapack'

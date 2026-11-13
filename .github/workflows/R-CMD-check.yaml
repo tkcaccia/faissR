@@ -35,7 +35,7 @@ jobs:
           use-public-rspm: true
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck
+          extra-packages: any::rcmdcheck bioc::Biobase
           needs: check
       - uses: r-lib/actions/setup-tinytex@v2
       - name: Install Linux build tools
@@ -98,7 +98,7 @@ jobs:
           r-version: devel
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck
+          extra-packages: any::rcmdcheck bioc::Biobase
           needs: check
       - name: Check functional bundled FAISS and rebuild vignettes
         shell: Rscript {0}
