@@ -3283,6 +3283,10 @@ List faiss_gpu_multi_query_knn_impl(SEXP data,
     );
     ivf->own_fields = false;
     ivf->nprobe = nprobe;
+    if (xb.nrow >= 1000000) {
+      ivf->cp.niter = 15;
+      ivf->cp.max_points_per_centroid = 64;
+    }
     cpu_index = std::move(ivf);
   } else {
     cpu_index.reset(new faiss::IndexFlatL2(xb.ncol));
@@ -3360,6 +3364,11 @@ List faiss_gpu_multi_query_knn_impl(SEXP data,
   out["index_base"] = 1;
   out["devices"] = Rcpp::wrap(devices);
   out["gpu_count"] = static_cast<int>(devices.size());
+  out["ivf_training_iterations"] = method == "ivf" ?
+    static_cast<faiss::IndexIVF*>(cpu_index.get())->cp.niter : NA_INTEGER;
+  out["ivf_max_points_per_centroid"] = method == "ivf" ?
+    static_cast<faiss::IndexIVF*>(cpu_index.get())->cp.max_points_per_centroid :
+    NA_INTEGER;
   out["multi_gpu_mode"] = devices.size() == 1 ? "single" :
     (shard ? "shard" : "replicate");
   out["search_batch_size"] = batch_info.batch_size;
