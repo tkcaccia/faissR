@@ -55,11 +55,11 @@ jobs:
           cmake --install /tmp/faiss-build
           echo "FAISS_HOME=/tmp/faiss" >> "$GITHUB_ENV"
           echo "LD_LIBRARY_PATH=/tmp/faiss/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
-      - name: Install FAISS on macOS
+      - name: Install macOS native toolchain
         if: runner.os == 'macOS'
         run: |
-          brew install faiss libomp gcc
-          echo "FAISS_HOME=$(brew --prefix faiss)" >> "$GITHUB_ENV"
+          brew install libomp gcc
+          echo "FAISSR_FAISS_SOURCE=bundled" >> "$GITHUB_ENV"
           echo "LIBOMP_HOME=$(brew --prefix libomp)" >> "$GITHUB_ENV"
       - name: Record toolchain
         run: |
