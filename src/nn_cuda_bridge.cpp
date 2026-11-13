@@ -32,6 +32,8 @@ List faiss_gpu_bfknn_float32_gpu_impl(SEXP data,
                                       std::string backend_used,
                                       std::string method);
 List cuda_gpu_knn_to_host_impl(SEXP result);
+List cuda_gpu_knn_sample_to_host_impl(SEXP result,
+                                      Rcpp::IntegerVector rows);
 List cuda_row_candidate_knn_impl(NumericMatrix data,
                                  IntegerMatrix candidate_indices,
                                  int k,
@@ -122,6 +124,14 @@ List nn_cuda_float32_gpu_cpp(SEXP data,
 // [[Rcpp::export]]
 List gpu_knn_to_host_cpp(SEXP result) {
   return cuda_gpu_knn_to_host_impl(result);
+}
+
+extern "C" SEXP faissR_gpu_knn_sample_v1(SEXP result, SEXP rows) {
+  BEGIN_RCPP
+  return cuda_gpu_knn_sample_to_host_impl(
+    result, Rcpp::as<Rcpp::IntegerVector>(rows)
+  );
+  END_RCPP
 }
 
 extern "C" SEXP faissR_nn_cuda_tuned_gpu_call(SEXP x,

@@ -754,6 +754,66 @@ List cuda_gpu_knn_to_host_impl(SEXP result) {
   return out;
 }
 
+List cuda_gpu_knn_sample_to_host_impl(SEXP result,
+                                      Rcpp::IntegerVector rows) {
+  CudaGpuKnnHandle* handle = gpu_knn_handle_from_result(result);
+  if (rows.size() < 1 || rows.size() > 256) {
+    Rcpp::stop("GPU KNN sample requires 1 to 256 row IDs.");
+  }
+  for (int row : rows) {
+    if (row == NA_INTEGER || row < 1 || row > handle->n_points) {
+      Rcpp::stop("GPU KNN sample row ID is out of range.");
+    }
+  }
+  IntegerMatrix indices(rows.size(), handle->k);
+  NumericMatrix distances(rows.size(), handle->k);
+#ifdef FAISSR_HAS_CUDA
+  int previous_device = -1;
+  cudaGetDevice(&previous_device);
+  if (cudaSetDevice(handle->device) != cudaSuccess) {
+    Rcpp::stop("Could not select the GPU holding the KNN sample.");
+  }
+  cudaError_t status = cudaSuccess;
+  for (int column = 0; column < handle->k && status == cudaSuccess;
+       ++column) {
+    for (int sample = 0; sample < rows.size(); ++sample) {
+      const std::size_t offset =
+        static_cast<std::size_t>(column) * handle->n_points + rows[sample] - 1;
+      int index = 0;
+      float distance = 0.0f;
+      status = cudaMemcpy(&index, handle->indices + offset, sizeof(index),
+                          cudaMemcpyDeviceToHost);
+      if (status != cudaSuccess) break;
+      status = cudaMemcpy(&distance, handle->distances + offset,
+                          sizeof(distance), cudaMemcpyDeviceToHost);
+      if (status != cudaSuccess) break;
+      indices(sample, column) = index;
+      distances(sample, column) = distance;
+    }
+  }
+  if (previous_device >= 0 && previous_device != handle->device) {
+    cudaSetDevice(previous_device);
+  }
+  if (status != cudaSuccess) {
+    Rcpp::stop("CUDA KNN sample copy failed: %s",
+               cudaGetErrorString(status));
+  }
+#endif
+  Rcpp::List source(result);
+  List out = List::create(
+    Rcpp::Named("indices") = indices,
+    Rcpp::Named("distances") = distances,
+    Rcpp::Named("rows") = rows,
+    Rcpp::Named("index_base") = source["index_base"],
+    Rcpp::Named("metric") = source["metric"],
+    Rcpp::Named("backend_used") = source["backend_used"],
+    Rcpp::Named("copied_from_residency") = "cuda"
+  );
+  out.attr("class") =
+    Rcpp::CharacterVector::create("faissR_gpu_knn_sample", "list");
+  return out;
+}
+
 List cuda_row_candidate_knn_impl(NumericMatrix data,
                                  IntegerMatrix candidate_indices,
                                  int k,

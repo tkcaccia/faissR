@@ -99,6 +99,9 @@ typedef SEXP (*faissR_gpu_index_search_v1_fun)(
     SEXP k,
     SEXP distance_storage);
 
+/* Copy at most 256 selected one-based query rows from an owned CUDA result. */
+typedef SEXP (*faissR_gpu_knn_sample_v1_fun)(SEXP result, SEXP rows);
+
 typedef SEXP (*faissR_metal_knn_v1_fun)(
     SEXP data,
     SEXP k,
@@ -219,6 +222,12 @@ static inline faissR_gpu_index_search_v1_fun
 faissR_get_gpu_index_search_v1(void) {
   return (faissR_gpu_index_search_v1_fun) R_GetCCallable(
       "faissR", "faissR_gpu_index_search_v1");
+}
+
+static inline faissR_gpu_knn_sample_v1_fun
+faissR_get_gpu_knn_sample_v1(void) {
+  return (faissR_gpu_knn_sample_v1_fun) R_GetCCallable(
+      "faissR", "faissR_gpu_knn_sample_v1");
 }
 
 static inline faissR_metal_knn_v1_fun

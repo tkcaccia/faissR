@@ -42,6 +42,10 @@ List cuda_gpu_knn_to_host_impl(SEXP) {
   Rcpp::stop("GPU-resident CUDA KNN output is available only when the package is built with CUDA support.");
 }
 
+List cuda_gpu_knn_sample_to_host_impl(SEXP, Rcpp::IntegerVector) {
+  Rcpp::stop("GPU-resident CUDA KNN sampling requires CUDA support.");
+}
+
 List cuda_row_candidate_knn_impl(NumericMatrix,
                                  IntegerMatrix,
                                  int,
