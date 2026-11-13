@@ -72,6 +72,27 @@ typedef SEXP (*faissR_gpu_multi_query_knn_v1_fun)(
     SEXP shard,
     SEXP distance_storage);
 
+/*
+ * Private persistent CUDA index for bounded query batches. The build result
+ * owns the index; keep its `pointer` member reachable for every search. The
+ * pointer is process-local, nonserializable, and not safe for concurrent calls.
+ * Search accepts float32 matrices and returns one-based IDs on the host.
+ */
+typedef SEXP (*faissR_gpu_index_build_v1_fun)(
+    SEXP data,
+    SEXP k,
+    SEXP method,
+    SEXP devices,
+    SEXP nlist,
+    SEXP nprobe,
+    SEXP shard);
+
+typedef SEXP (*faissR_gpu_index_search_v1_fun)(
+    SEXP index,
+    SEXP points,
+    SEXP k,
+    SEXP distance_storage);
+
 typedef SEXP (*faissR_metal_knn_v1_fun)(
     SEXP data,
     SEXP k,
@@ -180,6 +201,18 @@ static inline faissR_gpu_multi_query_knn_v1_fun
 faissR_get_gpu_multi_query_knn_v1(void) {
   return (faissR_gpu_multi_query_knn_v1_fun) R_GetCCallable(
       "faissR", "faissR_gpu_multi_query_knn_v1");
+}
+
+static inline faissR_gpu_index_build_v1_fun
+faissR_get_gpu_index_build_v1(void) {
+  return (faissR_gpu_index_build_v1_fun) R_GetCCallable(
+      "faissR", "faissR_gpu_index_build_v1");
+}
+
+static inline faissR_gpu_index_search_v1_fun
+faissR_get_gpu_index_search_v1(void) {
+  return (faissR_gpu_index_search_v1_fun) R_GetCCallable(
+      "faissR", "faissR_gpu_index_search_v1");
 }
 
 static inline faissR_metal_knn_v1_fun

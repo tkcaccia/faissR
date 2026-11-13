@@ -3399,6 +3399,234 @@ List faiss_gpu_multi_query_knn_impl(SEXP data,
 #endif
 }
 
+#if defined(FAISSR_HAS_FAISS_GPU) && \
+    defined(FAISSR_HAS_FAISS_GPU_MULTI)
+struct FaissPersistentGpuIndex {
+  std::unique_ptr<faiss::IndexFlatL2> quantizer;
+  std::unique_ptr<faiss::Index> cpu_index;
+  std::vector<std::unique_ptr<faiss::gpu::StandardGpuResources>> owners;
+  std::unique_ptr<faiss::Index> gpu_index;
+  std::vector<int> devices;
+  std::string method;
+  int rows = 0;
+  int columns = 0;
+  int k = 0;
+  int nlist = 0;
+  int nprobe = 0;
+  bool shard = false;
+};
+#endif
+
+SEXP faiss_gpu_index_build_impl(SEXP data,
+                                int k,
+                                const std::string& method,
+                                const std::vector<int>& devices,
+                                int nlist,
+                                int nprobe,
+                                bool shard) {
+#if defined(FAISSR_HAS_FAISS_GPU) && \
+    defined(FAISSR_HAS_FAISS_GPU_MULTI)
+  if (method != "flat" && method != "ivf") {
+    Rcpp::stop("Persistent FAISS GPU KNN requires Flat or IVF-Flat.");
+  }
+  if (devices.empty()) {
+    Rcpp::stop("Persistent FAISS GPU KNN needs a device selection.");
+  }
+  int device_count = 0;
+  if (cudaGetDeviceCount(&device_count) != cudaSuccess) {
+    Rcpp::stop("Could not enumerate CUDA devices.");
+  }
+  for (std::size_t i = 0; i < devices.size(); ++i) {
+    if (devices[i] < 0 || devices[i] >= device_count ||
+        std::find(devices.begin(), devices.begin() + i, devices[i]) !=
+          devices.begin() + i) {
+      Rcpp::stop("Invalid or repeated CUDA device ordinal.");
+    }
+  }
+  const auto t0 = std::chrono::steady_clock::now();
+  MatrixViewF32 xb = make_float32_matrix_view(
+    data, "data", "euclidean", 1
+  );
+  if (xb.nrow < 2 || xb.ncol < 1 || k < 1 || k > xb.nrow ||
+      (method == "ivf" &&
+       (nlist < 1 || nlist > xb.nrow || nprobe < 1 || nprobe > nlist))) {
+    Rcpp::stop("Invalid persistent FAISS GPU index dimensions or IVF settings.");
+  }
+  const auto t_convert = std::chrono::steady_clock::now();
+  Rcpp::XPtr<FaissPersistentGpuIndex> state(
+    new FaissPersistentGpuIndex(), true
+  );
+  state->devices = devices;
+  state->method = method;
+  state->rows = xb.nrow;
+  state->columns = xb.ncol;
+  state->k = k;
+  state->nlist = method == "ivf" ? nlist : NA_INTEGER;
+  state->nprobe = method == "ivf" ? nprobe : NA_INTEGER;
+  state->shard = shard;
+  if (method == "ivf") {
+    state->quantizer.reset(new faiss::IndexFlatL2(xb.ncol));
+    auto ivf = std::unique_ptr<faiss::IndexIVFFlat>(
+      new faiss::IndexIVFFlat(
+        state->quantizer.get(), xb.ncol, nlist, faiss::METRIC_L2
+      )
+    );
+    ivf->own_fields = false;
+    ivf->nprobe = nprobe;
+    if (xb.nrow >= 1000000) {
+      ivf->cp.niter = 15;
+      ivf->cp.max_points_per_centroid = 64;
+    }
+    state->cpu_index = std::move(ivf);
+  } else {
+    state->cpu_index.reset(new faiss::IndexFlatL2(xb.ncol));
+  }
+  try {
+    if (!state->cpu_index->is_trained) {
+      state->cpu_index->train(xb.nrow, xb.data);
+    }
+  } catch (const std::exception& e) {
+    Rcpp::stop("Persistent FAISS GPU CPU training failed: %s", e.what());
+  }
+  const auto t_train = std::chrono::steady_clock::now();
+  std::vector<faiss::gpu::GpuResourcesProvider*> providers;
+  state->owners.reserve(devices.size());
+  providers.reserve(devices.size());
+  for (std::size_t i = 0; i < devices.size(); ++i) {
+    state->owners.emplace_back(new faiss::gpu::StandardGpuResources());
+    providers.push_back(state->owners.back().get());
+  }
+  faiss::gpu::GpuMultipleClonerOptions options;
+  options.shard = shard;
+  options.shard_type = 1;
+  options.useFloat16 = false;
+  options.useFloat16CoarseQuantizer = false;
+  options.allowCpuCoarseQuantizer = false;
+  try {
+    state->gpu_index.reset(faiss::gpu::index_cpu_to_gpu_multiple(
+      providers, state->devices, state->cpu_index.get(), &options
+    ));
+    if (devices.size() > 1 && shard &&
+        dynamic_cast<faiss::IndexShards*>(state->gpu_index.get()) == nullptr) {
+      Rcpp::stop("FAISS did not create a sharded GPU index.");
+    }
+    if (devices.size() > 1 && !shard &&
+        dynamic_cast<faiss::IndexReplicas*>(state->gpu_index.get()) == nullptr) {
+      Rcpp::stop("FAISS did not create a replicated GPU index.");
+    }
+    const auto t_clone = std::chrono::steady_clock::now();
+    state->gpu_index->add(xb.nrow, xb.data);
+    const auto t_add = std::chrono::steady_clock::now();
+    const auto seconds = [](auto a, auto b) {
+      return std::chrono::duration<double>(b - a).count();
+    };
+    return List::create(
+      Rcpp::Named("pointer") = state,
+      Rcpp::Named("rows") = state->rows,
+      Rcpp::Named("columns") = state->columns,
+      Rcpp::Named("k") = state->k,
+      Rcpp::Named("method") = method,
+      Rcpp::Named("devices") = Rcpp::wrap(devices),
+      Rcpp::Named("gpu_count") = static_cast<int>(devices.size()),
+      Rcpp::Named("multi_gpu_mode") = devices.size() == 1 ? "single" :
+        (shard ? "shard" : "replicate"),
+      Rcpp::Named("nlist") = state->nlist,
+      Rcpp::Named("nprobe") = state->nprobe,
+      Rcpp::Named("input_conversion_seconds") = seconds(t0, t_convert),
+      Rcpp::Named("cpu_training_seconds") = seconds(t_convert, t_train),
+      Rcpp::Named("gpu_clone_seconds") = seconds(t_train, t_clone),
+      Rcpp::Named("gpu_add_seconds") = seconds(t_clone, t_add),
+      Rcpp::Named("index_reused") = true,
+      Rcpp::Named("backend_used") = "faiss_gpu_persistent"
+    );
+  } catch (const std::exception& e) {
+    Rcpp::stop("Persistent FAISS GPU index build failed: %s", e.what());
+  }
+#else
+  (void)data; (void)k; (void)method; (void)devices;
+  (void)nlist; (void)nprobe; (void)shard;
+  Rcpp::stop("Persistent FAISS GPU KNN is unavailable in this build.");
+#endif
+}
+
+List faiss_gpu_index_search_impl(SEXP pointer,
+                                 SEXP points,
+                                 int k,
+                                 const std::string& distance_storage) {
+#if defined(FAISSR_HAS_FAISS_GPU) && \
+    defined(FAISSR_HAS_FAISS_GPU_MULTI)
+  Rcpp::XPtr<FaissPersistentGpuIndex> state(pointer);
+  if (state.get() == nullptr || state->gpu_index == nullptr) {
+    Rcpp::stop("Persistent FAISS GPU index is invalid.");
+  }
+  if (distance_storage != "float" && distance_storage != "double") {
+    Rcpp::stop("distance_storage must be `float` or `double`.");
+  }
+  const auto t0 = std::chrono::steady_clock::now();
+  MatrixViewF32 query = make_float32_matrix_view(
+    points, "points", "euclidean", 1
+  );
+  if (query.nrow < 1 || query.ncol != state->columns || k != state->k ||
+      static_cast<double>(query.nrow) * k >
+        std::numeric_limits<int>::max()) {
+    Rcpp::stop("Invalid persistent FAISS GPU query dimensions or k.");
+  }
+  const auto t_convert = std::chrono::steady_clock::now();
+  std::vector<float> distances(static_cast<std::size_t>(query.nrow) * k);
+  std::vector<faiss::idx_t> labels(
+    static_cast<std::size_t>(query.nrow) * k
+  );
+  FaissBatchSearchInfo batch_info;
+  try {
+    batch_info = search_faiss_queries(
+      *state->gpu_index, query.data, query.nrow, query.ncol, k,
+      false, NA_INTEGER, true, distances, labels
+    );
+  } catch (const std::exception& e) {
+    Rcpp::stop("Persistent FAISS GPU search failed: %s", e.what());
+  }
+  const auto t_search = std::chrono::steady_clock::now();
+  List out = format_faiss_result(
+    labels, distances, query.nrow, k, k, false, false,
+    state->devices.size() == 1 ?
+      (state->method == "flat" ? "GpuIndexFlat" : "GpuIndexIVFFlat") :
+      (state->shard ? "GpuIndexShards" : "GpuIndexReplicas"),
+    state->method == "flat", DistanceOutput::L2Squared, 1,
+    state->nlist, state->nprobe, NA_INTEGER, NA_INTEGER,
+    distance_storage == "float"
+  );
+  const auto t_done = std::chrono::steady_clock::now();
+  const auto seconds = [](auto a, auto b) {
+    return std::chrono::duration<double>(b - a).count();
+  };
+  out["backend_used"] = "faiss_gpu_persistent_query";
+  out["accelerator"] = "cuda";
+  out["gpu_provider"] = "faiss_gpu";
+  out["cpu_fallback"] = false;
+  out["result_residency"] = "host";
+  out["index_base"] = 1;
+  out["device_residency"] = "cuda";
+  out["index_residency"] = "gpu_persistent";
+  out["gpu_index_resident"] = true;
+  out["gpu_index_persistent"] = true;
+  out["devices"] = Rcpp::wrap(state->devices);
+  out["gpu_count"] = static_cast<int>(state->devices.size());
+  out["multi_gpu_mode"] = state->devices.size() == 1 ? "single" :
+    (state->shard ? "shard" : "replicate");
+  out["index_reused"] = true;
+  out["search_batch_size"] = batch_info.batch_size;
+  out["search_batches"] = batch_info.batches;
+  out["input_conversion_seconds"] = seconds(t0, t_convert);
+  out["gpu_search_seconds"] = seconds(t_convert, t_search);
+  out["result_format_seconds"] = seconds(t_search, t_done);
+  out["total_native_seconds"] = seconds(t0, t_done);
+  return out;
+#else
+  (void)pointer; (void)points; (void)k; (void)distance_storage;
+  Rcpp::stop("Persistent FAISS GPU KNN is unavailable in this build.");
+#endif
+}
+
 List faiss_gpu_multi_knn_impl(SEXP data,
                               int k,
                               const std::string& method,
