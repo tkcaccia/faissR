@@ -6,11 +6,13 @@ nn_cuda_ivf_large_candidates <- function(
     probe_fraction = c(1 / 32, 1 / 16, 1 / 8, 1 / 4,
                        1 / 2, 3 / 4, 1)
 ) {
-    if (length(n) != 1L || !is.finite(n) || n < 2 || n > .Machine$integer.max ||
-        length(k) != 1L || !is.finite(k) || k < 1 || k >= n) {
+    if (length(n) != 1L || !is.finite(n) || n < 2 || n != floor(n) ||
+        n > .Machine$integer.max || length(k) != 1L || !is.finite(k) ||
+        k < 1 || k != floor(k) || k >= n) {
         stop("Invalid n or k for CUDA IVF candidate planning.", call. = FALSE)
     }
-    if (any(!is.finite(nlist_multiplier) | nlist_multiplier <= 0) ||
+    if (!length(nlist_multiplier) || !length(probe_fraction) ||
+        any(!is.finite(nlist_multiplier) | nlist_multiplier <= 0) ||
         any(!is.finite(probe_fraction) | probe_fraction <= 0 |
             probe_fraction > 1)) {
         stop("Invalid IVF candidate multipliers.", call. = FALSE)
@@ -49,10 +51,13 @@ nn_cuda_ivf_large_extrapolate <- function(
         stop("Missing audited IVF observation columns.", call. = FALSE)
     }
     if (length(target_n) != 1L || !is.finite(target_n) ||
-        target_n < 1e8 || target_n > .Machine$integer.max ||
-        length(p) != 1L || !is.finite(p) || p < 1 ||
+        target_n < 1e8 || target_n != floor(target_n) ||
+        target_n > .Machine$integer.max ||
+        length(p) != 1L || !is.finite(p) || p < 1 || p != floor(p) ||
         length(k) != 1L || !is.finite(k) || k < 1 ||
-        length(gpu_count) != 1L || !is.finite(gpu_count) || gpu_count < 1 ||
+        k != floor(k) || k >= target_n ||
+        length(gpu_count) != 1L || !is.finite(gpu_count) ||
+        gpu_count < 1 || gpu_count != floor(gpu_count) ||
         length(mode) != 1L || !mode %in% c("replicate", "shard") ||
         length(gpu_memory_bytes) != 1L ||
         !is.finite(gpu_memory_bytes) || gpu_memory_bytes <= 0 ||
@@ -75,8 +80,16 @@ nn_cuda_ivf_large_extrapolate <- function(
         is.finite(observations$peak_rss_bytes) &
         observations$peak_rss_bytes > 0 &
         !observations$full_self_performed &
+        is.finite(observations$n) &
+        observations$n == floor(observations$n) &
         is.finite(observations$nlist) & observations$nlist >= 1 &
-        is.finite(observations$nprobe) & observations$nprobe >= 1,
+        observations$nlist == floor(observations$nlist) &
+        observations$nlist <= observations$n &
+        is.finite(observations$nprobe) & observations$nprobe >= 1 &
+        observations$nprobe == floor(observations$nprobe) &
+        observations$nprobe <= observations$nlist &
+        is.finite(observations$query_count) &
+        observations$query_count == floor(observations$query_count),
         , drop = FALSE
     ]
     if (!nrow(rows) || length(unique(rows$source_sha)) != 1L ||
@@ -91,6 +104,7 @@ nn_cuda_ivf_large_extrapolate <- function(
         length(unique(rows$database_selection)) != 1L ||
         rows$database_selection[[1L]] != "prefix_first_n_rows" ||
         any(!is.finite(rows$query_rows_max)) ||
+        any(rows$query_rows_max != floor(rows$query_rows_max)) ||
         any(rows$query_rows_max < 1) ||
         any(rows$query_rows_max > min(rows$n))) {
         stop(paste("Anchors require identical query rows within",

@@ -7,6 +7,13 @@ test_that("large IVF candidates remain bounded", {
     ten_million <- faissR:::nn_cuda_ivf_large_candidates(1e7, 30L)
     expect_true(any(ten_million$nlist == 4096L &
                     ten_million$nprobe == 512L))
+    expect_error(faissR:::nn_cuda_ivf_large_candidates(1e7 + 0.5, 30L),
+                 "Invalid n or k")
+    expect_error(faissR:::nn_cuda_ivf_large_candidates(1e7, 30.5),
+                 "Invalid n or k")
+    expect_error(faissR:::nn_cuda_ivf_large_candidates(
+        1e7, 30L, probe_fraction = numeric()),
+        "Invalid IVF candidate multipliers")
 })
 
 test_that("untested large IVF defaults do not claim audited recall", {
@@ -54,6 +61,30 @@ test_that("billion-row projection requires audited matching anchors", {
     expect_identical(plan$input_sha256, observations$input_sha256[[1L]])
     expect_identical(plan$query_rows_sha256,
                      observations$query_rows_sha256[[1L]])
+    expect_error(
+        faissR:::nn_cuda_ivf_large_extrapolate(
+            observations, 1e9 + 0.5, 96L, 30L, 4L, "shard", 96e9
+        ), "Invalid large IVF extrapolation inputs"
+    )
+    expect_error(
+        faissR:::nn_cuda_ivf_large_extrapolate(
+            observations, 1e9, 96L, 30L, 1.5, "shard", 96e9
+        ), "Invalid large IVF extrapolation inputs"
+    )
+    invalid_ivf <- observations
+    invalid_ivf$nprobe[invalid_ivf$n == 1e8] <- 20000L
+    expect_error(
+        faissR:::nn_cuda_ivf_large_extrapolate(
+            invalid_ivf, 1e9, 96L, 30L, 4L, "shard", 96e9
+        ), "10M and 100M"
+    )
+    invalid_ivf <- observations
+    invalid_ivf$nlist[invalid_ivf$n == 1e8] <- 10000.5
+    expect_error(
+        faissR:::nn_cuda_ivf_large_extrapolate(
+            invalid_ivf, 1e9, 96L, 30L, 4L, "shard", 96e9
+        ), "10M and 100M"
+    )
     mixed <- observations
     mixed$input_sha256[mixed$n == 1e8] <- paste(rep("c", 64L), collapse = "")
     expect_error(
