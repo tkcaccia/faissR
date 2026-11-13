@@ -12,6 +12,10 @@
 #include "faissr_normalize.hpp"
 #include "faissr_gpu_knn_handle.hpp"
 
+#ifdef FAISSR_HAS_CUDA
+#include <cuda_runtime_api.h>
+#endif
+
 using Rcpp::IntegerMatrix;
 using Rcpp::IntegerVector;
 using Rcpp::List;
@@ -125,8 +129,18 @@ void gpu_knn_handle_finalizer(SEXP ptr) {
   if (TYPEOF(ptr) != EXTPTRSXP) return;
   CudaGpuKnnHandle* handle = static_cast<CudaGpuKnnHandle*>(R_ExternalPtrAddr(ptr));
   if (handle == nullptr) return;
+#ifdef FAISSR_HAS_CUDA
+  int previous_device = -1;
+  cudaGetDevice(&previous_device);
+  cudaSetDevice(handle->device);
+#endif
   faissr_cuda_free_device(handle->indices);
   faissr_cuda_free_device(handle->distances);
+#ifdef FAISSR_HAS_CUDA
+  if (previous_device >= 0 && previous_device != handle->device) {
+    cudaSetDevice(previous_device);
+  }
+#endif
   handle->indices = nullptr;
   handle->distances = nullptr;
   delete handle;
@@ -698,6 +712,13 @@ List cuda_gpu_knn_to_host_impl(SEXP result) {
   CudaGpuKnnHandle* handle = gpu_knn_handle_from_result(result);
   IntegerMatrix indices(handle->n_points, handle->k);
   NumericMatrix distances(handle->n_points, handle->k);
+#ifdef FAISSR_HAS_CUDA
+  int previous_device = -1;
+  cudaGetDevice(&previous_device);
+  if (cudaSetDevice(handle->device) != cudaSuccess) {
+    Rcpp::stop("Could not select the GPU holding the KNN result.");
+  }
+#endif
   const int status = faissr_cuda_knn_gpu_result_to_host(
     handle->indices,
     handle->distances,
@@ -706,6 +727,11 @@ List cuda_gpu_knn_to_host_impl(SEXP result) {
     indices.begin(),
     distances.begin()
   );
+#ifdef FAISSR_HAS_CUDA
+  if (previous_device >= 0 && previous_device != handle->device) {
+    cudaSetDevice(previous_device);
+  }
+#endif
   if (status != 0) {
     Rcpp::stop("CUDA GPU KNN result copy failed: %s", cuda_error_message());
   }

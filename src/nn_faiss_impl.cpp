@@ -57,6 +57,7 @@
     __has_include(<cuda_runtime_api.h>)
 #define FAISSR_HAS_FAISS_GPU_MULTI 1
 #include <faiss/gpu/GpuCloner.h>
+#include <faiss/gpu/GpuIndex.h>
 #include <faiss/IndexReplicas.h>
 #include <faiss/IndexShards.h>
 #include <cuda_runtime_api.h>
@@ -502,8 +503,14 @@ void faiss_gpu_knn_handle_finalizer(SEXP ptr) {
   FaissGpuKnnHandle* handle =
     static_cast<FaissGpuKnnHandle*>(R_ExternalPtrAddr(ptr));
   if (handle == nullptr) return;
+  int previous_device = -1;
+  cudaGetDevice(&previous_device);
+  cudaSetDevice(handle->device);
   cudaFree(handle->indices);
   cudaFree(handle->distances);
+  if (previous_device >= 0 && previous_device != handle->device) {
+    cudaSetDevice(previous_device);
+  }
   handle->indices = nullptr;
   handle->distances = nullptr;
   delete handle;
@@ -3544,12 +3551,110 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
 #endif
 }
 
+List faiss_gpu_index_search_gpu_impl(SEXP pointer,
+                                     SEXP points,
+                                     int k,
+                                     bool exclude_self) {
+#if defined(FAISSR_HAS_FAISS_GPU_MULTI) && \
+    defined(FAISSR_HAS_FAISS_GPU_BFKNN)
+  Rcpp::XPtr<FaissPersistentGpuIndex> state(pointer);
+  if (state.get() == nullptr || state->gpu_index == nullptr ||
+      state->devices.size() != 1) {
+    Rcpp::stop("GPU-resident persistent search requires one valid GPU index.");
+  }
+  MatrixViewF32 query = make_float32_matrix_view(
+    points, "points", "euclidean", 1
+  );
+  if (query.nrow < 1 || query.ncol != state->columns || k != state->k ||
+      k > state->rows || (exclude_self &&
+      (query.nrow != state->rows || k >= state->rows))) {
+    Rcpp::stop("Invalid GPU-resident persistent query dimensions or k.");
+  }
+  faiss::gpu::GpuIndex* gpu =
+    dynamic_cast<faiss::gpu::GpuIndex*>(state->gpu_index.get());
+  if (gpu == nullptr) {
+    Rcpp::stop("FAISS did not provide a single GPU index.");
+  }
+  const int device = state->devices.front();
+  cuda_runtime_check(cudaSetDevice(device), "cudaSetDevice(persistent GPU search)");
+  const int search_k = exclude_self ? k + 1 : k;
+  const std::size_t query_items =
+    static_cast<std::size_t>(query.nrow) * query.ncol;
+  const std::size_t raw_items =
+    static_cast<std::size_t>(query.nrow) * search_k;
+  const std::size_t out_items = static_cast<std::size_t>(query.nrow) * k;
+  CudaDeviceAllocation d_query(query_items * sizeof(float),
+                               "cudaMalloc(persistent query)");
+  cuda_runtime_check(cudaMemcpy(d_query.ptr, query.data,
+      query_items * sizeof(float), cudaMemcpyHostToDevice),
+      "cudaMemcpy(persistent query)");
+  CudaDeviceAllocation d_raw_indices(raw_items * sizeof(faiss::idx_t),
+                                     "cudaMalloc(persistent raw indices)");
+  CudaDeviceAllocation d_raw_distances(raw_items * sizeof(float),
+                                       "cudaMalloc(persistent raw distances)");
+  CudaDeviceAllocation d_out_indices(out_items * sizeof(int),
+                                     "cudaMalloc(persistent output indices)");
+  CudaDeviceAllocation d_out_distances(out_items * sizeof(float),
+                                       "cudaMalloc(persistent output distances)");
+  try {
+    gpu->search(query.nrow, d_query.as<float>(), search_k,
+                d_raw_distances.as<float>(),
+                d_raw_indices.as<faiss::idx_t>());
+  } catch (const std::exception& e) {
+    Rcpp::stop("Persistent FAISS GPU device search failed: %s", e.what());
+  }
+  cuda_runtime_check(cudaDeviceSynchronize(),
+                     "cudaDeviceSynchronize(persistent GPU search)");
+  const int converted = faissr_cuda_convert_faiss_knn_gpu_result(
+    d_raw_indices.as<int64_t>(), d_raw_distances.as<float>(),
+    query.nrow, search_k, k, exclude_self ? 1 : 0, 1,
+    d_out_indices.as<int>(), d_out_distances.as<float>()
+  );
+  if (converted != 0) {
+    Rcpp::stop("Persistent GPU-result conversion failed: %s",
+               faiss_cuda_error_message());
+  }
+  FaissGpuKnnHandle* handle = new FaissGpuKnnHandle();
+  handle->indices = d_out_indices.as<int>();
+  handle->distances = d_out_distances.as<float>();
+  handle->n_points = query.nrow;
+  handle->k = k;
+  handle->device = device;
+  d_out_indices.release();
+  d_out_distances.release();
+  MatrixViewF32 indexed;
+  indexed.nrow = state->rows;
+  indexed.ncol = state->columns;
+  indexed.layout = "persistent_faiss_gpu_index";
+  List out = make_faiss_gpu_knn_result(
+    handle, "euclidean", "faiss_gpu_persistent_query", state->method,
+    exclude_self, state->method == "flat", search_k,
+    indexed, query, false, false
+  );
+  out["gpu_index_persistent"] = true;
+  out["index_reused"] = true;
+  out["index_residency"] = "gpu_persistent";
+  out["host_to_device_data_copies"] = 0;
+  out.attr("class") = Rcpp::CharacterVector::create("faissR_gpu_knn", "list");
+  return out;
+#else
+  (void)pointer; (void)points; (void)k; (void)exclude_self;
+  Rcpp::stop("GPU-resident persistent search is unavailable in this build.");
+#endif
+}
+
 List faiss_gpu_index_search_impl(SEXP pointer,
                                  SEXP points,
                                  int k,
                                  const std::string& distance_storage) {
 #if defined(FAISSR_HAS_FAISS_GPU) && \
     defined(FAISSR_HAS_FAISS_GPU_MULTI)
+  if (distance_storage == "gpu" ||
+      distance_storage == "gpu_self_exclude") {
+    return faiss_gpu_index_search_gpu_impl(
+      pointer, points, k, distance_storage == "gpu_self_exclude"
+    );
+  }
   Rcpp::XPtr<FaissPersistentGpuIndex> state(pointer);
   if (state.get() == nullptr || state->gpu_index == nullptr) {
     Rcpp::stop("Persistent FAISS GPU index is invalid.");
@@ -3630,6 +3735,21 @@ List faiss_gpu_multi_knn_impl(SEXP data,
                               int nprobe,
                               bool shard,
                               const std::string& distance_storage) {
+  if (distance_storage == "gpu") {
+    SEXP index = PROTECT(faiss_gpu_index_build_impl(
+      data, k, method, devices, nlist, nprobe, shard
+    ));
+    Rcpp::List built(index);
+    List out = faiss_gpu_index_search_gpu_impl(
+      built["pointer"], data, k, true
+    );
+    out["gpu_index_persistent"] = false;
+    out["index_reused"] = false;
+    out["index_residency"] = "transient_gpu_index_during_call";
+    out.attr("class") = Rcpp::CharacterVector::create("faissR_gpu_knn", "list");
+    UNPROTECT(1);
+    return out;
+  }
   return faiss_gpu_multi_query_knn_impl(
     data, data, k, true, method, devices, nlist, nprobe,
     shard, distance_storage

@@ -50,6 +50,9 @@ typedef SEXP (*faissR_nn_cuda_tuned_gpu_fun)(
  * one-based indices, Euclidean distances, actual device IDs and mode.
  * `devices` contains one or more distinct visible CUDA ordinals. The
  * one-device route provides a source-matched scaling baseline.
+ * `distance_storage = "gpu"` privately returns an owned CUDA result for
+ * one device, with the query row excluded from its own neighbours. Multi-GPU
+ * results currently require host output (`"float"` or `"double"`).
  */
 typedef SEXP (*faissR_gpu_multi_knn_v1_fun)(
     SEXP data,
@@ -77,6 +80,9 @@ typedef SEXP (*faissR_gpu_multi_query_knn_v1_fun)(
  * owns the index; keep its `pointer` member reachable for every search. The
  * pointer is process-local, nonserializable, and not safe for concurrent calls.
  * Search accepts float32 matrices and returns one-based IDs on the host.
+ * With one GPU, `distance_storage = "gpu"` returns an owned device result.
+ * `"gpu_self_exclude"` additionally removes each query's same-row ID and
+ * requires the query rows to correspond exactly to the indexed rows.
  */
 typedef SEXP (*faissR_gpu_index_build_v1_fun)(
     SEXP data,
