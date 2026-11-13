@@ -3,7 +3,8 @@ local({
         MKL_NUM_THREADS = "1", BLIS_NUM_THREADS = "1",
         VECLIB_MAXIMUM_THREADS = "1"))
     # BLAS has a separate worker pool from the search's n_threads argument.
-    if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
+    if (!identical(Sys.info()[["sysname"]], "Darwin") &&
+            requireNamespace("RhpcBLASctl", quietly = TRUE)) {
         previous <- RhpcBLASctl::blas_get_num_procs()
         on.exit(RhpcBLASctl::blas_set_num_threads(previous), add = TRUE)
         RhpcBLASctl::blas_set_num_threads(1L)

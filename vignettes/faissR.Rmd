@@ -18,7 +18,8 @@ knitr::opts_chunk$set(
     fig.width = 6,
     fig.height = 4
 )
-if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
+if (!identical(Sys.info()[["sysname"]], "Darwin") &&
+        requireNamespace("RhpcBLASctl", quietly = TRUE)) {
     # Keep the whole rendering session single-threaded, including formatting.
     RhpcBLASctl::blas_set_num_threads(1L)
 }
@@ -69,8 +70,10 @@ All computational chunks are evaluated. FAISS and CUDA examples check their
 provider availability and print a message when the provider is unavailable.
 Detailed build instructions are available in
 `vignette("installation", package = "faissR")`.
-These small examples use one search worker. When `RhpcBLASctl` is installed,
-the rendering session also sets BLAS to one worker.
+These small examples use one search worker. On Linux, when `RhpcBLASctl` is
+installed, the rendering session also sets BLAS to one worker. On macOS,
+the package-check environment sets `VECLIB_MAXIMUM_THREADS=1` without
+loading a second native thread controller into the R process.
 
 # Example data
 
