@@ -2,7 +2,7 @@
 # They do not claim target recall without an exact-reference audit.
 
 nn_cuda_ivf_large_candidates <- function(
-    n, k, nlist_multiplier = c(1, 2, 4, 8),
+    n, k, nlist_multiplier = c(0.5, 1, 2, 4, 8),
     probe_fraction = c(1 / 32, 1 / 16, 1 / 8, 1 / 4,
                        1 / 2, 3 / 4, 1)
 ) {

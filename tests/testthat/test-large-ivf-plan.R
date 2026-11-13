@@ -3,6 +3,7 @@ test_that("large IVF candidates remain bounded", {
     expect_true(nrow(grid) > 0L)
     expect_true(all(grid$nlist >= 1L & grid$nlist <= 65536L))
     expect_true(all(grid$nprobe >= 1L & grid$nprobe <= grid$nlist))
+    expect_true(any(grid$nlist == 4096L & grid$nprobe == 512L))
     ten_million <- faissR:::nn_cuda_ivf_large_candidates(1e7, 30L)
     expect_true(any(ten_million$nlist == 4096L &
                     ten_million$nprobe == 512L))
