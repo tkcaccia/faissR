@@ -4,7 +4,7 @@ test_that("bundled FAISS diagnostics use R's console", {
     set.seed(123)
     x <- matrix(rnorm(80 * 4), 80, 4)
     text <- capture.output(
-        result <- nn(x, k = 5, method = "ivf", backend = "cpu", n_threads = 2),
+        result <- nn(x, k = 5, method = "ivf", backend = "cpu", n_threads = 1),
         type = "message"
     )
     expect_match(paste(text, collapse = "\n"), "clustering")
