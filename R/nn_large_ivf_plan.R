@@ -1,5 +1,5 @@
 # Private planning helpers for measured, fixed-query CUDA IVF campaigns.
-# They do not claim that a target recall is met without an exact-reference audit.
+# They do not claim target recall without an exact-reference audit.
 
 nn_cuda_ivf_large_candidates <- function(
     n, k, nlist_multiplier = c(1, 2, 4, 8),
@@ -98,7 +98,7 @@ nn_cuda_ivf_large_extrapolate <- function(
     if (nrow(selected) < 2L || min(selected$n) > 1e7 ||
         max(selected$n) < 1e8 || target_n <= max(selected$n) ||
         target_n > 10 * max(selected$n)) {
-        stop("Passing 10M and 100M anchors are required for this extrapolation.",
+        stop("Passing 10M and 100M anchors are required for extrapolation.",
              call. = FALSE)
     }
     # Log-linear power-law projection; no predicted recall is inferred.

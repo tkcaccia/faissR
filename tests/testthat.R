@@ -17,5 +17,5 @@ local({
     }
     library(testthat)
     library(faissR)
-    test_check("faissR")
+    test_check("faissR", reporter = "summary")
 })
