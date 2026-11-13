@@ -416,6 +416,10 @@ List faiss_gpu_multi_knn_impl(SEXP,
   Rcpp::stop("FAISS multi-GPU KNN is unavailable in this build.");
 }
 
+List faiss_gpu_knn_retain_data_impl(SEXP, SEXP) {
+  Rcpp::stop("Retained CUDA KNN data are unavailable in this build.");
+}
+
 List faiss_gpu_multi_query_knn_impl(SEXP,
                                     SEXP,
                                     int,

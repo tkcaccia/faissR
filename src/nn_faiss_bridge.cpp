@@ -239,6 +239,7 @@ List faiss_gpu_multi_knn_impl(SEXP data,
                               int nprobe,
                               bool shard,
                               const std::string& distance_storage);
+List faiss_gpu_knn_retain_data_impl(SEXP result, SEXP data);
 List faiss_gpu_multi_query_knn_impl(SEXP data,
                                     SEXP points,
                                     int k,
@@ -516,6 +517,12 @@ extern "C" SEXP faissR_gpu_multi_knn_v1(SEXP data,
   END_RCPP
 }
 
+extern "C" SEXP faissR_gpu_knn_retain_data_v1(SEXP result, SEXP data) {
+  BEGIN_RCPP
+  return faiss_gpu_knn_retain_data_impl(result, data);
+  END_RCPP
+}
+
 extern "C" SEXP faissR_gpu_multi_query_knn_v1(SEXP data,
                                               SEXP points,
                                               SEXP k,
@@ -659,6 +666,11 @@ void register_faissR_ccallables(DllInfo *dll) {
     "faissR",
     "faissR_gpu_multi_knn_v1",
     (DL_FUNC) &faissR_gpu_multi_knn_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_gpu_knn_retain_data_v1",
+    (DL_FUNC) &faissR_gpu_knn_retain_data_v1
   );
   R_RegisterCCallable(
     "faissR",

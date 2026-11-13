@@ -64,6 +64,9 @@ typedef SEXP (*faissR_gpu_multi_knn_v1_fun)(
     SEXP shard,
     SEXP distance_storage);
 
+typedef SEXP (*faissR_gpu_knn_retain_data_v1_fun)(
+    SEXP result, SEXP data);
+
 typedef SEXP (*faissR_gpu_multi_query_knn_v1_fun)(
     SEXP data,
     SEXP points,
@@ -204,6 +207,12 @@ static inline faissR_gpu_multi_knn_v1_fun
 faissR_get_gpu_multi_knn_v1(void) {
   return (faissR_gpu_multi_knn_v1_fun) R_GetCCallable(
       "faissR", "faissR_gpu_multi_knn_v1");
+}
+
+static inline faissR_gpu_knn_retain_data_v1_fun
+faissR_get_gpu_knn_retain_data_v1(void) {
+  return (faissR_gpu_knn_retain_data_v1_fun) R_GetCCallable(
+      "faissR", "faissR_gpu_knn_retain_data_v1");
 }
 
 static inline faissR_gpu_multi_query_knn_v1_fun

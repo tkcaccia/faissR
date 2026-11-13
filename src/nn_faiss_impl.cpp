@@ -508,11 +508,13 @@ void faiss_gpu_knn_handle_finalizer(SEXP ptr) {
   cudaSetDevice(handle->device);
   cudaFree(handle->indices);
   cudaFree(handle->distances);
+  cudaFree(handle->data);
   if (previous_device >= 0 && previous_device != handle->device) {
     cudaSetDevice(previous_device);
   }
   handle->indices = nullptr;
   handle->distances = nullptr;
+  handle->data = nullptr;
   delete handle;
   R_ClearExternalPtr(ptr);
 }
@@ -3754,6 +3756,67 @@ List faiss_gpu_multi_knn_impl(SEXP data,
     data, data, k, true, method, devices, nlist, nprobe,
     shard, distance_storage
   );
+}
+
+List faiss_gpu_knn_retain_data_impl(SEXP result, SEXP data) {
+#if defined(FAISSR_HAS_FAISS_GPU_BFKNN)
+  if (!Rf_isNewList(result)) {
+    Rcpp::stop("GPU KNN result must be a list.");
+  }
+  List out(result);
+  if (!out.inherits("faissR_gpu_knn") ||
+      !out.containsElementNamed("handle") ||
+      Rcpp::as<std::string>(out["metric"]) != "euclidean") {
+    Rcpp::stop("Retained GPU data require Euclidean faissR KNN.");
+  }
+  SEXP owner = out["handle"];
+  if (TYPEOF(owner) != EXTPTRSXP) {
+    Rcpp::stop("GPU KNN owner is invalid.");
+  }
+  auto* handle = static_cast<FaissGpuKnnHandle*>(R_ExternalPtrAddr(owner));
+  if (handle == nullptr || handle->indices == nullptr ||
+      handle->distances == nullptr || handle->data != nullptr) {
+    Rcpp::stop("GPU KNN owner is invalid or already retains data.");
+  }
+  MatrixViewF32 view = make_float32_matrix_view(
+    data, "data", "euclidean", 1
+  );
+  if (view.nrow != handle->n_points || view.ncol < 1) {
+    Rcpp::stop("Retained data dimensions do not match the KNN result.");
+  }
+  int previous_device = -1;
+  cuda_runtime_check(cudaGetDevice(&previous_device),
+                     "cudaGetDevice(retained KNN data)");
+  cuda_runtime_check(cudaSetDevice(handle->device),
+                     "cudaSetDevice(retained KNN data)");
+  const std::size_t bytes = static_cast<std::size_t>(view.nrow) *
+    view.ncol * sizeof(float);
+  CudaDeviceAllocation copied(bytes, "cudaMalloc(retained KNN data)");
+  cuda_runtime_check(cudaMemcpy(copied.ptr, view.data, bytes,
+                               cudaMemcpyHostToDevice),
+                     "cudaMemcpy(retained KNN data)");
+  SEXP data_ptr = PROTECT(R_MakeExternalPtr(copied.ptr, R_NilValue, owner));
+  out["data_ptr"] = data_ptr;
+  out["n_features"] = view.ncol;
+  out["data_residency"] = "cuda_device";
+  out["data_layout"] = "row_major_observation_by_feature";
+  out["pca_data_compatible"] = true;
+  out["retained_data_bytes"] = static_cast<double>(bytes);
+  out.attr("class") =
+    Rcpp::CharacterVector::create("faissR_gpu_knn", "list");
+  handle->data = copied.as<float>();
+  handle->n_features = view.ncol;
+  copied.release();
+  UNPROTECT(1);
+  if (previous_device != handle->device) {
+    cuda_runtime_check(cudaSetDevice(previous_device),
+                       "cudaSetDevice(restore after retained KNN data)");
+  }
+  return out;
+#else
+  (void)result; (void)data;
+  Rcpp::stop("Retained CUDA KNN data are unavailable in this build.");
+#endif
 }
 
 List faiss_gpu_ivfpq_knn_impl(NumericMatrix data,

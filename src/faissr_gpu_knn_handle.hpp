@@ -5,7 +5,9 @@
 struct FaissRGpuKnnHandle {
   int* indices = nullptr;
   float* distances = nullptr;
+  float* data = nullptr;
   int n_points = 0;
+  int n_features = 0;
   int k = 0;
   int device = 0;
 };

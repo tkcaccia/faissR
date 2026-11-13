@@ -136,6 +136,7 @@ void gpu_knn_handle_finalizer(SEXP ptr) {
 #endif
   faissr_cuda_free_device(handle->indices);
   faissr_cuda_free_device(handle->distances);
+  faissr_cuda_free_device(handle->data);
 #ifdef FAISSR_HAS_CUDA
   if (previous_device >= 0 && previous_device != handle->device) {
     cudaSetDevice(previous_device);
@@ -143,6 +144,7 @@ void gpu_knn_handle_finalizer(SEXP ptr) {
 #endif
   handle->indices = nullptr;
   handle->distances = nullptr;
+  handle->data = nullptr;
   delete handle;
   R_ClearExternalPtr(ptr);
 }
