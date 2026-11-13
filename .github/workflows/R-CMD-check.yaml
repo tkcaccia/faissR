@@ -162,6 +162,20 @@ jobs:
           R CMD INSTALL -l "$RUNNER_TEMP/faissr-lib" "$tarball"
           echo "R_LIBS=$RUNNER_TEMP/faissr-lib" >> "$GITHUB_ENV"
       - name: Fresh-process k-means call
+        continue-on-error: true
+        run: |
+          Rscript --vanilla -e '
+            library(faissR)
+            set.seed(201)
+            x <- rbind(matrix(rnorm(80, -2), ncol = 4),
+                       matrix(rnorm(80, 2), ncol = 4))
+            fit <- fast_kmeans(x, centers = 2, backend = "cpu",
+                               max_iter = 20, n_init = 2,
+                               seed = 11, n_threads = 1)
+            stopifnot(length(fit$cluster) == nrow(x))
+            cat("FRESH_KMEANS_ONE_THREAD_PASS\n")
+          '
+      - name: Fresh-process two-thread k-means call
         run: |
           Rscript --vanilla -e '
             library(faissR)
