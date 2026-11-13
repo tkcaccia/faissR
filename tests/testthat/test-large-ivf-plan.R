@@ -14,6 +14,8 @@ test_that("billion-row projection requires audited matching anchors", {
         recall = c(0.985, 0.995, 0.991, 0.998),
         knn_seconds = c(100, 120, 900, 1300),
         device_memory_bytes = c(2e9, 2e9, 15e9, 15e9),
+        peak_rss_bytes = c(6e9, 6e9, 60e9, 60e9),
+        full_self_performed = FALSE,
         audit_pass = TRUE,
         reference_scope = "full_database_exact",
         timing_scope = "fixed_query_private_r_call",
@@ -30,6 +32,7 @@ test_that("billion-row projection requires audited matching anchors", {
     expect_true(plan$nprobe <= plan$nlist)
     expect_false(plan$full_self_output_supported)
     expect_true(is.na(plan$recall_at_target))
+    expect_true(plan$projected_peak_host_bytes > 0)
     expect_identical(plan$input_sha256, observations$input_sha256[[1L]])
     mixed <- observations
     mixed$input_sha256[mixed$n == 1e8] <- paste(rep("c", 64L), collapse = "")
@@ -38,6 +41,14 @@ test_that("billion-row projection requires audited matching anchors", {
             mixed, 1e9, 96L, 30L, 4L, "shard", 96e9
         ),
         "input-locked"
+    )
+    mixed$input_sha256 <- observations$input_sha256
+    mixed$full_self_performed[mixed$n == 1e8] <- TRUE
+    expect_error(
+        faissR:::nn_cuda_ivf_large_extrapolate(
+            mixed, 1e9, 96L, 30L, 4L, "shard", 96e9
+        ),
+        "10M and 100M"
     )
     observations$audit_pass[observations$n == 1e8] <- FALSE
     expect_error(

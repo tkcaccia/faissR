@@ -37,7 +37,8 @@ nn_cuda_ivf_large_extrapolate <- function(
 ) {
     required <- c(
         "n", "p", "k", "gpu_count", "mode", "nlist", "nprobe",
-        "recall", "knn_seconds", "device_memory_bytes", "audit_pass",
+        "recall", "knn_seconds", "device_memory_bytes",
+        "peak_rss_bytes", "full_self_performed", "audit_pass",
         "reference_scope", "timing_scope", "query_count", "source_sha",
         "input_sha256"
     )
@@ -69,6 +70,9 @@ nn_cuda_ivf_large_extrapolate <- function(
         observations$knn_seconds > 0 &
         is.finite(observations$device_memory_bytes) &
         observations$device_memory_bytes > 0 &
+        is.finite(observations$peak_rss_bytes) &
+        observations$peak_rss_bytes > 0 &
+        !observations$full_self_performed &
         is.finite(observations$nlist) & observations$nlist >= 1 &
         is.finite(observations$nprobe) & observations$nprobe >= 1,
         , drop = FALSE
@@ -124,6 +128,7 @@ nn_cuda_ivf_large_extrapolate <- function(
         target_recall = target_recall,
         nlist = nlist, nprobe = nprobe,
         projected_knn_seconds = log_project(selected$knn_seconds),
+        projected_peak_host_bytes = log_project(selected$peak_rss_bytes),
         raw_index_bytes_per_device = raw_bytes,
         projected_peak_device_bytes = estimated_peak,
         gpu_memory_bytes = gpu_memory_bytes,
@@ -134,7 +139,7 @@ nn_cuda_ivf_large_extrapolate <- function(
             .Machine$integer.max,
         anchor_rows = selected[, c(
             "n", "nlist", "nprobe", "recall", "knn_seconds",
-            "device_memory_bytes"
+            "device_memory_bytes", "peak_rss_bytes"
         ), drop = FALSE],
         recall_at_target = NA_real_
     )
