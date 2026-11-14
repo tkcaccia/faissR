@@ -58,6 +58,19 @@ test_that("billion-row projection requires audited matching anchors", {
     expect_false(plan$full_self_output_supported)
     expect_true(is.na(plan$recall_at_target))
     expect_true(plan$projected_peak_host_bytes > 0)
+    expect_true(is.na(plan$projected_knn_seconds))
+    expect_identical(plan$time_projection_status,
+                     "device_memory_exceeded")
+    expect_identical(plan$device_memory_admission,
+                     "projection_exceeds_capacity")
+    expect_gte(plan$projected_peak_device_bytes,
+               plan$raw_index_bytes_per_device)
+    admitted <- faissR:::nn_cuda_ivf_large_extrapolate(
+        observations, 1e9, 96L, 30L, 4L, "shard", 1e12
+    )
+    expect_true(is.finite(admitted$projected_knn_seconds))
+    expect_identical(admitted$time_projection_status,
+                     "conditional_extrapolation")
     expect_identical(plan$input_sha256, observations$input_sha256[[1L]])
     expect_identical(plan$query_rows_sha256,
                      observations$query_rows_sha256[[1L]])

@@ -141,8 +141,9 @@ nn_cuda_ivf_large_extrapolate <- function(
         if (identical(mode, "shard")) gpu_count else 1
     observed_raw <- (4 * selected$n * p + 8 * selected$n) /
         if (identical(mode, "shard")) gpu_count else 1
-    peak_factor <- max(selected$device_memory_bytes / observed_raw)
+    peak_factor <- max(1, selected$device_memory_bytes / observed_raw)
     estimated_peak <- raw_bytes * peak_factor
+    memory_admitted <- estimated_peak <= gpu_memory_bytes
     list(
         status = "extrapolated_not_validated",
         source_sha = selected$source_sha[[1L]],
@@ -155,12 +156,17 @@ nn_cuda_ivf_large_extrapolate <- function(
         gpu_count = gpu_count, mode = mode,
         target_recall = target_recall,
         nlist = nlist, nprobe = nprobe,
-        projected_knn_seconds = log_project(selected$knn_seconds),
+        projected_knn_seconds = if (memory_admitted) {
+            log_project(selected$knn_seconds)
+        } else NA_real_,
+        time_projection_status = if (memory_admitted) {
+            "conditional_extrapolation"
+        } else "device_memory_exceeded",
         projected_peak_host_bytes = log_project(selected$peak_rss_bytes),
         raw_index_bytes_per_device = raw_bytes,
         projected_peak_device_bytes = estimated_peak,
         gpu_memory_bytes = gpu_memory_bytes,
-        device_memory_admission = if (estimated_peak <= gpu_memory_bytes) {
+        device_memory_admission = if (memory_admitted) {
             "projection_within_capacity"
         } else "projection_exceeds_capacity",
         full_self_output_supported = target_n * (k + 1) <=
