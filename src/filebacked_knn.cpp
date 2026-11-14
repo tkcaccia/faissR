@@ -13,6 +13,9 @@
 #include <utility>
 #include <vector>
 
+extern "C" SEXP faissR_metal_query_knn_v1(SEXP data, SEXP query,
+    SEXP k, SEXP method, SEXP metric, SEXP target_recall);
+
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -189,6 +192,59 @@ void add_candidate(std::priority_queue<Candidate>& heap,
   }
 }
 
+Rcpp::NumericMatrix column_major_matrix(const std::vector<float>& values,
+                                        std::size_t rows,
+                                        std::size_t columns) {
+  Rcpp::NumericMatrix matrix(rows, columns);
+  for (std::size_t column = 0; column < columns; ++column) {
+    for (std::size_t row = 0; row < rows; ++row) {
+      matrix(row, column) = values[row * columns + column];
+    }
+  }
+  return matrix;
+}
+
+void metal_candidates(const std::vector<float>& reference,
+                      const Rcpp::NumericMatrix& query,
+                      std::uint64_t base, std::uint64_t rows,
+                      const std::vector<std::uint64_t>& selected,
+                      int k, bool exclude_self,
+                      std::vector<std::priority_queue<Candidate>>& heaps,
+                      std::size_t columns) {
+  const int local_k = static_cast<int>(std::min<std::uint64_t>(
+    rows, k + (exclude_self ? 1 : 0)));
+  Rcpp::NumericMatrix reference_matrix =
+    column_major_matrix(reference, rows, columns);
+  Rcpp::List found(faissR_metal_query_knn_v1(
+    reference_matrix, query, Rcpp::wrap(local_k),
+    Rcpp::wrap("exact"), Rcpp::wrap("euclidean"), Rcpp::wrap(0.99)));
+  if (Rcpp::as<std::string>(found["backend_used"]) !=
+      "faissr_native_metal_exact_query") {
+    Rcpp::stop("faissR Metal file-backed batch changed backend");
+  }
+  Rcpp::IntegerMatrix indices(found["indices"]);
+  Rcpp::NumericMatrix distances(found["distances"]);
+  if (indices.nrow() != query.nrow() || indices.ncol() != local_k ||
+      distances.nrow() != query.nrow() || distances.ncol() != local_k) {
+    Rcpp::stop("faissR Metal file-backed batch changed output shape");
+  }
+  for (std::size_t qi = 0; qi < selected.size(); ++qi) {
+    for (int rank = 0; rank < local_k; ++rank) {
+      const int id = indices(qi, rank);
+      const double distance = distances(qi, rank);
+      if (id < 1 || static_cast<std::uint64_t>(id) > rows ||
+          !std::isfinite(distance) || distance < 0) {
+        Rcpp::stop("faissR Metal file-backed batch returned invalid KNN");
+      }
+      const std::uint64_t global = base + id - 1;
+      if (exclude_self && selected[qi] == global) continue;
+      add_candidate(heaps[qi], Candidate{
+        static_cast<float>(distance * distance),
+        static_cast<std::uint32_t>(global + 1)}, k);
+    }
+  }
+}
+
 }  // namespace
 
 extern "C" SEXP faissR_matrix_knn_batch_v1(SEXP query_spec,
@@ -199,7 +255,9 @@ extern "C" SEXP faissR_matrix_knn_batch_v1(SEXP query_spec,
 #ifndef FAISSR_HAS_FAISS
   Rcpp::stop("File-backed KNN requires a functional FAISS build");
 #else
-  if (Rcpp::as<std::string>(backend) != "cpu" ||
+  const std::string requested_backend = Rcpp::as<std::string>(backend);
+  const bool metal = requested_backend == "metal";
+  if ((requested_backend != "cpu" && !metal) ||
       Rcpp::as<std::string>(method) != "stream_exact") {
     Rcpp::stop("Requested file-backed KNN backend/method is unavailable");
   }
@@ -225,6 +283,8 @@ extern "C" SEXP faissR_matrix_knn_batch_v1(SEXP query_spec,
       static_cast<std::uint64_t>(k) > reference.file.rows -
         (exclude_self ? 1u : 0u) ||
       reference_chunk < 1 || n_threads < 1 ||
+      (metal && (n_threads != 1 || k + (exclude_self ? 1 : 0) > 128 ||
+        query.file.columns > 16384)) ||
       (exclude_self && !same_source)) {
     Rcpp::stop("Invalid file-backed KNN batch dimensions or settings");
   }
@@ -236,6 +296,8 @@ extern "C" SEXP faissR_matrix_knn_batch_v1(SEXP query_spec,
   const double estimated = resident_bytes +
     4.0 * count * query.file.columns +
     4.0 * reference_chunk * reference.file.columns +
+    (metal ? 8.0 * (count + reference_chunk) *
+      query.file.columns : 0.0) +
     32.0 * count * k + 64.0 * 1024 * 1024;
   if (!std::isfinite(memory_limit) || memory_limit < estimated) {
     Rcpp::stop("File-backed KNN batch buffers exceed memory_limit");
@@ -287,12 +349,19 @@ extern "C" SEXP faissR_matrix_knn_batch_v1(SEXP query_spec,
   ThreadLimit threads(n_threads);
   std::vector<std::priority_queue<Candidate>> heaps(count);
   std::vector<float> reference_values;
+  Rcpp::NumericMatrix metal_query;
+  if (metal) metal_query = column_major_matrix(
+    query_values, count, query.file.columns);
   for (std::uint64_t base = 0; base < reference.file.rows;
        base += reference_chunk) {
     const auto rows = std::min<std::uint64_t>(reference_chunk,
                                               reference.file.rows - base);
     read_batch_rows(reference_file, reference, base, rows,
                     reference_values);
+    if (metal) {
+      metal_candidates(reference_values, metal_query, base, rows,
+        selected, k, exclude_self, heaps, query.file.columns);
+    } else {
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
 #endif
@@ -308,6 +377,7 @@ extern "C" SEXP faissR_matrix_knn_batch_v1(SEXP query_spec,
         add_candidate(heap, Candidate{distance,
           static_cast<std::uint32_t>(base + ri + 1)}, k);
       }
+    }
     }
     Rcpp::checkUserInterrupt();
   }
@@ -342,17 +412,23 @@ extern "C" SEXP faissR_matrix_knn_batch_v1(SEXP query_spec,
     Rcpp::Named("indices") = indices,
     Rcpp::Named("distances") = distances,
     Rcpp::Named("provider") = "faissR",
-    Rcpp::Named("backend_used") = "faiss_cpu_stream_exact",
+    Rcpp::Named("backend_used") = metal ?
+      "faissr_native_metal_exact_file_batch" : "faiss_cpu_stream_exact",
     Rcpp::Named("method") = "stream_exact",
     Rcpp::Named("residency") = query.memory && reference.memory ?
       "resident" : (query.memory || reference.memory ?
         "mixed" : "file-backed"),
-    Rcpp::Named("device_ids") = Rcpp::IntegerVector(),
+    Rcpp::Named("device_ids") = metal ?
+      Rcpp::IntegerVector::create(0) : Rcpp::IntegerVector(),
     Rcpp::Named("exact") = true,
     Rcpp::Named("index_build_seconds") = 0.0,
     Rcpp::Named("search_seconds") = seconds,
     Rcpp::Named("peak_ram_bytes_estimate") = estimated,
-    Rcpp::Named("peak_device_bytes") = 0.0);
+    Rcpp::Named("peak_device_bytes") = metal ?
+      4.0 * (count + reference_chunk) * query.file.columns +
+        8.0 * count * std::min<int>(k + 1, reference_chunk) : 0.0,
+    Rcpp::Named("device_memory_model") = metal ?
+      "unified_shared_estimate" : "none");
 #endif
   END_RCPP
 }

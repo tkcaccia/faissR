@@ -13,7 +13,8 @@ test_that("private bounded KNN preserves ties and self exclusion", {
             faissR_get_matrix_knn_batch_v1();
           return fn(query, reference, rows, Rcpp::wrap(k),
             Rcpp::wrap(backend), Rcpp::wrap("stream_exact"),
-            Rcpp::wrap(2), Rcpp::wrap(memory_limit), Rcpp::wrap(2),
+            Rcpp::wrap(2), Rcpp::wrap(memory_limit),
+            Rcpp::wrap(backend == "metal" ? 1 : 2),
             Rcpp::wrap(exclude_self));
         }',
         includes = paste0('#include "', header, '"')
@@ -71,6 +72,21 @@ test_that("private bounded KNN preserves ties and self exclusion", {
     expect_equal(unname(viewed$indices[2L, ]), c(3L, 4L, 1L))
     expect_error(faissR_test_file_batch(spec, spec, 1, 2L,
         "cuda", TRUE, 128 * 1024^2), "unavailable")
+    if (faissR:::nn_metal_available_cpp()) {
+        metal <- faissR_test_file_batch(spec, spec, c(1, 3, 5),
+            3L, "metal", TRUE, 128 * 1024^2)
+        expect_identical(metal$backend_used,
+            "faissr_native_metal_exact_file_batch")
+        expect_identical(metal$provider, "faissR")
+        expect_identical(metal$residency, "file-backed")
+        expect_identical(metal$device_ids, 0L)
+        expect_identical(metal$indices, observed$indices)
+        expect_equal(metal$distances, observed$distances,
+            tolerance = 1e-5)
+    } else {
+        expect_error(faissR_test_file_batch(spec, spec, 1, 2L,
+            "metal", TRUE, 128 * 1024^2), "Metal-enabled")
+    }
     expect_error(faissR_test_file_batch(resident, spec, 1, 2L,
         "cpu", TRUE, 128 * 1024^2), "dimensions or settings")
     expect_error(faissR_test_file_batch(spec, spec, 6, 2L,

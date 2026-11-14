@@ -187,7 +187,12 @@ typedef SEXP (*faissR_flat_index_search_v1_fun)(
     SEXP k,
     SEXP n_threads);
 
-/* Private bounded matrix KNN route; no faissR R-level export. */
+/*
+ * Private bounded matrix KNN route; no faissR R-level export. CPU and
+ * Metal support exact streamed reference batches. Metal uses the native
+ * Metal query kernel, one GPU, and requires n_threads = 1 and k <= 128
+ * (k <= 127 when excluding self). CUDA is rejected until implemented.
+ */
 typedef SEXP (*faissR_matrix_knn_batch_v1_fun)(
     SEXP query,
     SEXP reference,
