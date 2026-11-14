@@ -3406,12 +3406,13 @@ List faiss_gpu_multi_query_knn_impl(SEXP data,
 #if defined(FAISSR_HAS_FAISS_GPU) && \
     defined(FAISSR_HAS_FAISS_GPU_MULTI)
 struct FaissPersistentGpuIndex {
-  std::unique_ptr<faiss::IndexFlatL2> quantizer;
+  std::unique_ptr<faiss::IndexFlat> quantizer;
   std::unique_ptr<faiss::Index> cpu_index;
   std::vector<std::unique_ptr<faiss::gpu::StandardGpuResources>> owners;
   std::unique_ptr<faiss::Index> gpu_index;
   std::vector<int> devices;
   std::string method;
+  std::string metric;
   int rows = 0;
   int columns = 0;
   int k = 0;
@@ -3427,11 +3428,16 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
                                 const std::vector<int>& devices,
                                 int nlist,
                                 int nprobe,
-                                bool shard) {
+                                bool shard,
+                                const std::string& metric) {
 #if defined(FAISSR_HAS_FAISS_GPU) && \
     defined(FAISSR_HAS_FAISS_GPU_MULTI)
   if (method != "flat" && method != "ivf") {
     Rcpp::stop("Persistent FAISS GPU KNN requires Flat or IVF-Flat.");
+  }
+  if (metric != "euclidean" && metric != "cosine" &&
+      metric != "correlation") {
+    Rcpp::stop("Persistent FAISS GPU KNN metric is unsupported.");
   }
   if (devices.empty()) {
     Rcpp::stop("Persistent FAISS GPU KNN needs a device selection.");
@@ -3449,8 +3455,9 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
   }
   const auto t0 = std::chrono::steady_clock::now();
   MatrixViewF32 xb = make_float32_matrix_view(
-    data, "data", "euclidean", 1
+    data, "data", metric, 1
   );
+  normalize_float32_view(xb, metric);
   if (xb.nrow < 2 || xb.ncol < 1 || k < 1 || k > xb.nrow ||
       (method == "ivf" &&
        (nlist < 1 || nlist > xb.nrow || nprobe < 1 || nprobe > nlist))) {
@@ -3462,17 +3469,24 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
   );
   state->devices = devices;
   state->method = method;
+  state->metric = metric;
   state->rows = xb.nrow;
   state->columns = xb.ncol;
   state->k = k;
   state->nlist = method == "ivf" ? nlist : NA_INTEGER;
   state->nprobe = method == "ivf" ? nprobe : NA_INTEGER;
   state->shard = shard;
+  const bool normalized = metric != "euclidean";
   if (method == "ivf") {
-    state->quantizer.reset(new faiss::IndexFlatL2(xb.ncol));
+    if (normalized) {
+      state->quantizer.reset(new faiss::IndexFlatIP(xb.ncol));
+    } else {
+      state->quantizer.reset(new faiss::IndexFlatL2(xb.ncol));
+    }
     auto ivf = std::unique_ptr<faiss::IndexIVFFlat>(
       new faiss::IndexIVFFlat(
-        state->quantizer.get(), xb.ncol, nlist, faiss::METRIC_L2
+        state->quantizer.get(), xb.ncol, nlist,
+        normalized ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2
       )
     );
     ivf->own_fields = false;
@@ -3483,7 +3497,11 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
     }
     state->cpu_index = std::move(ivf);
   } else {
-    state->cpu_index.reset(new faiss::IndexFlatL2(xb.ncol));
+    if (normalized) {
+      state->cpu_index.reset(new faiss::IndexFlatIP(xb.ncol));
+    } else {
+      state->cpu_index.reset(new faiss::IndexFlatL2(xb.ncol));
+    }
   }
   try {
     if (!state->cpu_index->is_trained) {
@@ -3530,6 +3548,7 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
       Rcpp::Named("columns") = state->columns,
       Rcpp::Named("k") = state->k,
       Rcpp::Named("method") = method,
+      Rcpp::Named("metric") = metric,
       Rcpp::Named("devices") = Rcpp::wrap(devices),
       Rcpp::Named("gpu_count") = static_cast<int>(devices.size()),
       Rcpp::Named("multi_gpu_mode") = devices.size() == 1 ? "single" :
@@ -3548,7 +3567,7 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
   }
 #else
   (void)data; (void)k; (void)method; (void)devices;
-  (void)nlist; (void)nprobe; (void)shard;
+  (void)nlist; (void)nprobe; (void)shard; (void)metric;
   Rcpp::stop("Persistent FAISS GPU KNN is unavailable in this build.");
 #endif
 }
@@ -3604,8 +3623,9 @@ List faiss_gpu_index_search_gpu_impl(SEXP pointer,
     Rcpp::stop("GPU-resident persistent search requires one valid GPU index.");
   }
   MatrixViewF32 query = make_float32_matrix_view(
-    points, "points", "euclidean", 1
+    points, "points", state->metric, 1
   );
+  normalize_float32_view(query, state->metric);
   if (query.nrow < 1 || query.ncol != state->columns || k != state->k ||
       k > state->rows || (exclude_self &&
       (query.nrow != state->rows || k >= state->rows))) {
@@ -3648,7 +3668,8 @@ List faiss_gpu_index_search_gpu_impl(SEXP pointer,
                      "cudaDeviceSynchronize(persistent GPU search)");
   const int converted = faissr_cuda_convert_faiss_knn_gpu_result(
     d_raw_indices.as<int64_t>(), d_raw_distances.as<float>(),
-    query.nrow, search_k, k, exclude_self ? 1 : 0, 1,
+    query.nrow, search_k, k, exclude_self ? 1 : 0,
+    state->metric == "euclidean" ? 1 : 3,
     d_out_indices.as<int>(), d_out_distances.as<float>()
   );
   if (converted != 0) {
@@ -3668,13 +3689,18 @@ List faiss_gpu_index_search_gpu_impl(SEXP pointer,
   indexed.ncol = state->columns;
   indexed.layout = "persistent_faiss_gpu_index";
   List out = make_faiss_gpu_knn_result(
-    handle, "euclidean", "faiss_gpu_persistent_query", state->method,
+    handle, state->metric, "faiss_gpu_persistent_query", state->method,
     exclude_self, state->method == "flat", search_k,
     indexed, query, false, false
   );
   out["gpu_index_persistent"] = true;
   out["index_reused"] = true;
   out["index_residency"] = "gpu_persistent";
+  if (state->metric != "euclidean") {
+    out["metric_transform"] = state->metric == "correlation" ?
+      "row_center_l2_normalize_then_ivf_ip" :
+      "row_l2_normalize_then_ivf_ip";
+  }
   out["host_to_device_data_copies"] = 0;
   out.attr("class") = Rcpp::CharacterVector::create("faissR_gpu_knn", "list");
   return out;
@@ -3778,7 +3804,7 @@ List faiss_gpu_multi_knn_impl(SEXP data,
                               const std::string& distance_storage) {
   if (distance_storage == "gpu") {
     SEXP index = PROTECT(faiss_gpu_index_build_impl(
-      data, k, method, devices, nlist, nprobe, shard
+      data, k, method, devices, nlist, nprobe, shard, "euclidean"
     ));
     Rcpp::List built(index);
     List out = faiss_gpu_index_search_gpu_impl(
@@ -3795,6 +3821,33 @@ List faiss_gpu_multi_knn_impl(SEXP data,
     data, data, k, true, method, devices, nlist, nprobe,
     shard, distance_storage
   );
+}
+
+List faiss_gpu_metric_ivf_knn_impl(SEXP data,
+                                   int k,
+                                   const std::string& metric,
+                                   const std::vector<int>& devices,
+                                   int nlist,
+                                   int nprobe) {
+  if (devices.size() != 1) {
+    Rcpp::stop("GPU-resident metric IVF requires one selected GPU.");
+  }
+  if (metric != "cosine" && metric != "correlation") {
+    Rcpp::stop("GPU-resident metric IVF requires cosine or correlation.");
+  }
+  SEXP index = PROTECT(faiss_gpu_index_build_impl(
+    data, k, "ivf", devices, nlist, nprobe, false, metric
+  ));
+  Rcpp::List built(index);
+  List out = faiss_gpu_index_search_gpu_impl(
+    built["pointer"], data, k, true
+  );
+  out["gpu_index_persistent"] = false;
+  out["index_reused"] = false;
+  out["index_residency"] = "transient_gpu_index_during_call";
+  out.attr("class") = Rcpp::CharacterVector::create("faissR_gpu_knn", "list");
+  UNPROTECT(1);
+  return out;
 }
 
 List faiss_gpu_knn_retain_data_impl(SEXP result, SEXP data) {

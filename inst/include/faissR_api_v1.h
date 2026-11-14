@@ -64,6 +64,15 @@ typedef SEXP (*faissR_gpu_multi_knn_v1_fun)(
     SEXP shard,
     SEXP distance_storage);
 
+/* Private one-GPU cosine/correlation IVF result retained on the device. */
+typedef SEXP (*faissR_gpu_metric_ivf_knn_v1_fun)(
+    SEXP data,
+    SEXP k,
+    SEXP metric,
+    SEXP devices,
+    SEXP nlist,
+    SEXP nprobe);
+
 typedef SEXP (*faissR_gpu_knn_retain_data_v1_fun)(
     SEXP result, SEXP data);
 
@@ -212,6 +221,12 @@ static inline faissR_gpu_multi_knn_v1_fun
 faissR_get_gpu_multi_knn_v1(void) {
   return (faissR_gpu_multi_knn_v1_fun) R_GetCCallable(
       "faissR", "faissR_gpu_multi_knn_v1");
+}
+
+static inline faissR_gpu_metric_ivf_knn_v1_fun
+faissR_get_gpu_metric_ivf_knn_v1(void) {
+  return (faissR_gpu_metric_ivf_knn_v1_fun) R_GetCCallable(
+      "faissR", "faissR_gpu_metric_ivf_knn_v1");
 }
 
 static inline faissR_gpu_knn_retain_data_v1_fun

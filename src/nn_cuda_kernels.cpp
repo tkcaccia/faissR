@@ -586,6 +586,8 @@ __global__ void faiss_knn_rowmajor_to_column_kernel(const int64_t* in_idx,
       out_dist[out_offset] = sqrtf(fmaxf(raw, 0.0f));
     } else if (distance_mode == 2) {
       out_dist[out_offset] = fmaxf(row_best_ip - raw, 0.0f);
+    } else if (distance_mode == 3) {
+      out_dist[out_offset] = fmaxf(1.0f - raw, 0.0f);
     } else {
       out_dist[out_offset] = raw;
     }

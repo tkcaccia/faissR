@@ -239,6 +239,12 @@ List faiss_gpu_multi_knn_impl(SEXP data,
                               int nprobe,
                               bool shard,
                               const std::string& distance_storage);
+List faiss_gpu_metric_ivf_knn_impl(SEXP data,
+                                   int k,
+                                   const std::string& metric,
+                                   const std::vector<int>& devices,
+                                   int nlist,
+                                   int nprobe);
 List faiss_gpu_knn_retain_data_impl(SEXP result, SEXP data);
 List faiss_gpu_multi_query_knn_impl(SEXP data,
                                     SEXP points,
@@ -256,7 +262,8 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
                                 const std::vector<int>& devices,
                                 int nlist,
                                 int nprobe,
-                                bool shard);
+                                bool shard,
+                                const std::string& metric);
 SEXP faiss_gpu_index_set_nprobe_impl(SEXP index, int nprobe);
 List faiss_gpu_index_search_impl(SEXP index,
                                  SEXP points,
@@ -518,6 +525,21 @@ extern "C" SEXP faissR_gpu_multi_knn_v1(SEXP data,
   END_RCPP
 }
 
+extern "C" SEXP faissR_gpu_metric_ivf_knn_v1(SEXP data,
+                                               SEXP k,
+                                               SEXP metric,
+                                               SEXP devices,
+                                               SEXP nlist,
+                                               SEXP nprobe) {
+  BEGIN_RCPP
+  return faiss_gpu_metric_ivf_knn_impl(
+    data, Rcpp::as<int>(k), Rcpp::as<std::string>(metric),
+    Rcpp::as<std::vector<int>>(devices), Rcpp::as<int>(nlist),
+    Rcpp::as<int>(nprobe)
+  );
+  END_RCPP
+}
+
 extern "C" SEXP faissR_gpu_knn_retain_data_v1(SEXP result, SEXP data) {
   BEGIN_RCPP
   return faiss_gpu_knn_retain_data_impl(result, data);
@@ -555,7 +577,7 @@ extern "C" SEXP faissR_gpu_index_build_v1(SEXP data,
   return faiss_gpu_index_build_impl(
     data, Rcpp::as<int>(k), Rcpp::as<std::string>(method),
     Rcpp::as<std::vector<int>>(devices), Rcpp::as<int>(nlist),
-    Rcpp::as<int>(nprobe), Rcpp::as<bool>(shard)
+    Rcpp::as<int>(nprobe), Rcpp::as<bool>(shard), "euclidean"
   );
   END_RCPP
 }
@@ -676,6 +698,11 @@ void register_faissR_ccallables(DllInfo *dll) {
     "faissR",
     "faissR_gpu_multi_knn_v1",
     (DL_FUNC) &faissR_gpu_multi_knn_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_gpu_metric_ivf_knn_v1",
+    (DL_FUNC) &faissR_gpu_metric_ivf_knn_v1
   );
   R_RegisterCCallable(
     "faissR",
