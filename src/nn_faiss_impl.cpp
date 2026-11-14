@@ -3733,16 +3733,14 @@ List faiss_gpu_index_search_impl(SEXP pointer,
   MatrixViewF32 query = make_float32_matrix_view(
     points, "points", "euclidean", 1
   );
-  if (query.nrow < 1 || query.ncol != state->columns || k != state->k ||
-      static_cast<double>(query.nrow) * k >
-        std::numeric_limits<int>::max()) {
+  if (query.nrow < 1 || query.ncol != state->columns || k != state->k) {
     Rcpp::stop("Invalid persistent FAISS GPU query dimensions or k.");
   }
+  const R_xlen_t output_items =
+    faissr::matrix_element_count(query.nrow, k);
   const auto t_convert = std::chrono::steady_clock::now();
-  std::vector<float> distances(static_cast<std::size_t>(query.nrow) * k);
-  std::vector<faiss::idx_t> labels(
-    static_cast<std::size_t>(query.nrow) * k
-  );
+  std::vector<float> distances(static_cast<std::size_t>(output_items));
+  std::vector<faiss::idx_t> labels(static_cast<std::size_t>(output_items));
   FaissBatchSearchInfo batch_info;
   try {
     batch_info = search_faiss_queries(
