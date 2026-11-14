@@ -136,7 +136,12 @@ nn_cuda_ivf_large_extrapolate <- function(
     }
     nlist <- as.integer(max(1, min(65536, round(log_project(selected$nlist)))))
     fraction <- log_project(selected$nprobe / selected$nlist)
-    nprobe <- as.integer(max(1, min(nlist, ceiling(nlist * fraction))))
+    # A falling two-point trend is not evidence that a larger, unmeasured
+    # database can use fewer probes than both audited anchors. Keep the
+    # largest observed passing probe count as a conservative starting floor.
+    nprobe <- as.integer(max(1, min(nlist, max(
+        ceiling(nlist * fraction), selected$nprobe
+    ))))
     raw_bytes <- (4 * target_n * p + 8 * target_n) /
         if (identical(mode, "shard")) gpu_count else 1
     observed_raw <- (4 * selected$n * p + 8 * selected$n) /

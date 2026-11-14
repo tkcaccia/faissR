@@ -65,6 +65,12 @@ test_that("billion-row projection requires audited matching anchors", {
                      "projection_exceeds_capacity")
     expect_gte(plan$projected_peak_device_bytes,
                plan$raw_index_bytes_per_device)
+    falling <- observations
+    falling$nprobe <- c(512L, 1024L, 256L, 512L)
+    conservative <- faissR:::nn_cuda_ivf_large_extrapolate(
+        falling, 1e9, 96L, 30L, 4L, "shard", 1e12
+    )
+    expect_gte(conservative$nprobe, max(conservative$anchor_rows$nprobe))
     admitted <- faissR:::nn_cuda_ivf_large_extrapolate(
         observations, 1e9, 96L, 30L, 4L, "shard", 1e12
     )
