@@ -1,70 +1,80 @@
-test_that("private file-backed CPU KNN agrees with exact FAISS", {
+test_that("private bounded KNN preserves ties and self exclusion", {
     skip_if_not_installed("Rcpp")
     skip_if_not(faiss_available(), "FAISS is required")
-    expect_false("faissR_file_knn_v1" %in% getNamespaceExports("faissR"))
+    expect_false("faissR_matrix_knn_batch_v1" %in%
+        getNamespaceExports("faissR"))
     header <- system.file("include", "faissR_api_v1.h", package = "faissR")
     Rcpp::cppFunction(
         code = '
-        SEXP faissR_test_file_knn(SEXP query, SEXP reference,
-                                  int k, std::string output,
-                                  std::string backend, double memory_limit) {
-          faissR_file_knn_v1_fun fn = faissR_get_file_knn_v1();
-          return fn(query, reference, Rcpp::wrap(k), Rcpp::wrap(output),
+        SEXP faissR_test_file_batch(SEXP query, SEXP reference,
+             SEXP rows, int k, std::string backend, bool exclude_self,
+             double memory_limit) {
+          faissR_matrix_knn_batch_v1_fun fn =
+            faissR_get_matrix_knn_batch_v1();
+          return fn(query, reference, rows, Rcpp::wrap(k),
             Rcpp::wrap(backend), Rcpp::wrap("stream_exact"),
-            Rcpp::wrap(2), Rcpp::wrap(3), Rcpp::wrap(memory_limit),
-            Rcpp::wrap(1));
+            Rcpp::wrap(2), Rcpp::wrap(memory_limit), Rcpp::wrap(2),
+            Rcpp::wrap(exclude_self));
         }',
         includes = paste0('#include "', header, '"')
     )
-    x <- matrix(c(0, 0, 1, 2, 3, 1, 5, 4, 7, 2, 9, 8),
+    x <- matrix(c(0, 0, 0, 0, 1, 0, 1, 0, 2, 0),
         ncol = 2L, byrow = TRUE)
-    query <- matrix(c(0.5, 0.3, 6, 3), ncol = 2L, byrow = TRUE)
-    directory <- tempfile("faissr-file-knn-")
+    directory <- tempfile("faissr-file-batch-")
     dir.create(directory)
     on.exit(unlink(directory, recursive = TRUE), add = TRUE)
-    data_path <- file.path(directory, "reference.f32")
-    query_path <- file.path(directory, "query.f32")
-    writeBin(as.numeric(t(x)), data_path, size = 4L, endian = "little")
-    writeBin(as.numeric(t(query)), query_path,
-        size = 4L, endian = "little")
-    reference_spec <- list(format = "f32", path = data_path,
-        nrow = nrow(x), ncol = ncol(x))
-    query_spec <- list(format = "f32", path = query_path,
-        nrow = nrow(query), ncol = ncol(query))
-    prefix <- file.path(directory, "result")
-    observed <- faissR_test_file_knn(query_spec, reference_spec, 3L,
-        prefix, "cpu", 128 * 1024^2)
-    ids <- matrix(readBin(observed$indices_path, integer(), 6L,
-        size = 4L, endian = "little"),
-        nrow = 2L, byrow = TRUE)
-    distances <- matrix(readBin(observed$distances_path, numeric(), 6L,
-        size = 4L, endian = "little"), nrow = 2L, byrow = TRUE)
-    expected <- nn(x, query, k = 3L, backend = "cpu",
-        method = "flat", n_threads = 1L)
-    expect_equal(ids, expected$indices)
-    expect_equal(distances, expected$distances, tolerance = 1e-5)
+    path <- file.path(directory, "ties.f32")
+    writeBin(as.numeric(t(x)), path, size = 4L, endian = "little")
+    spec <- list(format = "f32", path = path, nrow = nrow(x),
+        ncol = ncol(x))
+    observed <- faissR_test_file_batch(spec, spec, c(1, 3, 5),
+        3L, "cpu", TRUE, 128 * 1024^2)
+    for (i in seq_along(c(1, 3, 5))) {
+        row <- c(1, 3, 5)[i]
+        distance <- sqrt(rowSums((sweep(x, 2L, x[row, ]))^2))
+        distance[row] <- Inf
+        expected <- order(distance, seq_len(nrow(x)))[seq_len(3L)]
+        expect_equal(unname(observed$indices[i, ]), expected)
+        expect_equal(unname(observed$distances[i, ]),
+            distance[expected], tolerance = 1e-6)
+    }
     expect_identical(observed$backend_used, "faiss_cpu_stream_exact")
+    expect_identical(observed$provider, "faissR")
     expect_true(observed$exact)
-    fbin_path <- file.path(directory, "reference.fbin")
+    expect_equal(length(observed$device_ids), 0L)
+    resident <- list(format = "memory", data = x,
+        nrow = nrow(x), ncol = ncol(x))
+    resident_result <- faissR_test_file_batch(resident, resident,
+        c(1, 3, 5), 3L, "cpu", TRUE, 128 * 1024^2)
+    expect_identical(resident_result$residency, "resident")
+    expect_identical(resident_result$indices, observed$indices)
+    expect_equal(resident_result$distances, observed$distances)
+    mixed <- faissR_test_file_batch(resident, spec, 1, 3L,
+        "cpu", FALSE, 128 * 1024^2)
+    expect_identical(mixed$residency, "mixed")
+    expect_equal(unname(mixed$indices[1L, ]), c(1L, 2L, 3L))
+    fbin_path <- file.path(directory, "ties.fbin")
     connection <- file(fbin_path, "wb")
     writeBin(as.integer(dim(x)), connection, size = 4L,
         endian = "little")
     writeBin(as.numeric(t(x)), connection, size = 4L,
         endian = "little")
     close(connection)
-    fbin_spec <- list(format = "fbin", path = fbin_path,
+    fbin <- list(format = "fbin", path = fbin_path,
         nrow = nrow(x), ncol = ncol(x))
-    view_spec <- list(format = "view", source = query_spec,
-        first = 2L, nrow = 1L, ncol = ncol(query))
-    view <- faissR_test_file_knn(view_spec, fbin_spec, 3L,
-        file.path(directory, "view"), "cpu", 128 * 1024^2)
-    view_ids <- readBin(view$indices_path, integer(), 3L,
-        size = 4L, endian = "little")
-    expect_equal(view_ids, as.integer(expected$indices[2L, ]))
-    expect_error(faissR_test_file_knn(query_spec, reference_spec, 3L,
-        file.path(directory, "cuda"), "cuda", 128 * 1024^2),
-        "unavailable")
-    expect_error(faissR_test_file_knn(query_spec, reference_spec, 3L,
-        file.path(directory, "low-memory"), "cpu", 1),
-        "memory_limit")
+    view <- list(format = "view", source = spec, first = 2L,
+        nrow = 2L, ncol = ncol(x))
+    viewed <- faissR_test_file_batch(view, fbin, c(1, 2), 3L,
+        "cpu", FALSE, 128 * 1024^2)
+    expect_identical(viewed$residency, "file-backed")
+    expect_equal(unname(viewed$indices[1L, ]), c(1L, 2L, 3L))
+    expect_equal(unname(viewed$indices[2L, ]), c(3L, 4L, 1L))
+    expect_error(faissR_test_file_batch(spec, spec, 1, 2L,
+        "cuda", TRUE, 128 * 1024^2), "unavailable")
+    expect_error(faissR_test_file_batch(resident, spec, 1, 2L,
+        "cpu", TRUE, 128 * 1024^2), "dimensions or settings")
+    expect_error(faissR_test_file_batch(spec, spec, 6, 2L,
+        "cpu", TRUE, 128 * 1024^2), "row_ids")
+    expect_error(faissR_test_file_batch(spec, spec, 1, 2L,
+        "cpu", TRUE, 1), "memory_limit")
 })

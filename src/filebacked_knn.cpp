@@ -1,6 +1,8 @@
 #include <Rcpp.h>
 
 #include <algorithm>
+#include <chrono>
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -16,7 +18,7 @@
 #endif
 
 #ifdef FAISSR_HAS_FAISS
-#include <faiss/IndexFlat.h>
+#include <faiss/utils/distances.h>
 #endif
 
 namespace {
@@ -27,6 +29,13 @@ struct FileMatrix {
   std::uint64_t columns;
   std::uint64_t first;
   std::uint64_t header;
+};
+
+struct BatchSource {
+  FileMatrix file;
+  Rcpp::NumericMatrix data;
+  SEXP owner = R_NilValue;
+  bool memory = false;
 };
 
 std::uint64_t positive_integer(SEXP value, const char* name) {
@@ -85,6 +94,39 @@ FileMatrix file_matrix(Rcpp::List spec) {
   return result;
 }
 
+BatchSource batch_source(Rcpp::List spec) {
+  const std::string format = Rcpp::as<std::string>(spec["format"]);
+  if (format == "view") {
+    BatchSource source = batch_source(
+      Rcpp::as<Rcpp::List>(spec["source"]));
+    const auto first = positive_integer(spec["first"], "view first");
+    const auto rows = positive_integer(spec["nrow"], "view nrow");
+    if (first > source.file.rows ||
+        rows > source.file.rows - first + 1) {
+      Rcpp::stop("KNN view exceeds its source");
+    }
+    source.file.first += first - 1;
+    source.file.rows = rows;
+    return source;
+  }
+  BatchSource source;
+  if (format == "memory") {
+    source.owner = spec["data"];
+    source.data = Rcpp::as<Rcpp::NumericMatrix>(source.owner);
+    source.file.rows = positive_integer(spec["nrow"], "nrow");
+    source.file.columns = positive_integer(spec["ncol"], "ncol");
+    if (source.data.nrow() != source.file.rows ||
+        source.data.ncol() != source.file.columns) {
+      Rcpp::stop("Resident KNN matrix differs from descriptor");
+    }
+    source.file.first = 0;
+    source.memory = true;
+  } else {
+    source.file = file_matrix(spec);
+  }
+  return source;
+}
+
 void read_rows(std::ifstream& input, const FileMatrix& spec,
                std::uint64_t first, std::uint64_t count,
                std::vector<float>& values) {
@@ -99,6 +141,26 @@ void read_rows(std::ifstream& input, const FileMatrix& spec,
   for (float value : values) {
     if (!std::isfinite(value)) {
       Rcpp::stop("File-backed KNN input contains nonfinite values");
+    }
+  }
+}
+
+void read_batch_rows(std::ifstream& input, const BatchSource& source,
+                     std::uint64_t first, std::uint64_t count,
+                     std::vector<float>& values) {
+  if (!source.memory) {
+    read_rows(input, source.file, first, count, values);
+    return;
+  }
+  values.resize(static_cast<std::size_t>(count * source.file.columns));
+  for (std::uint64_t row = 0; row < count; ++row) {
+    for (std::uint64_t col = 0; col < source.file.columns; ++col) {
+      const float value = static_cast<float>(source.data(
+        source.file.first + first + row, col));
+      if (!std::isfinite(value)) {
+        Rcpp::stop("Resident KNN input contains nonfinite float32 values");
+      }
+      values[row * source.file.columns + col] = value;
     }
   }
 }
@@ -127,160 +189,170 @@ void add_candidate(std::priority_queue<Candidate>& heap,
   }
 }
 
-void write_batch(std::ofstream& indices, std::ofstream& distances,
-                 std::vector<std::priority_queue<Candidate>>& heaps,
-                 std::size_t k) {
-  std::vector<std::uint32_t> ids(k);
-  std::vector<float> values(k);
-  for (auto& heap : heaps) {
-    if (heap.size() != k) Rcpp::stop("Incomplete file-backed KNN row");
-    for (std::size_t j = k; j > 0; --j) {
-      const Candidate candidate = heap.top();
-      heap.pop();
-      ids[j - 1] = candidate.second;
-      values[j - 1] = std::sqrt(std::max(0.0f, candidate.first));
-    }
-    indices.write(reinterpret_cast<const char*>(ids.data()),
-                  static_cast<std::streamsize>(k * 4));
-    distances.write(reinterpret_cast<const char*>(values.data()),
-                    static_cast<std::streamsize>(k * 4));
-    if (!indices || !distances) Rcpp::stop("KNN output write failed");
-  }
-}
+}  // namespace
 
-Rcpp::List stream_exact(Rcpp::List query_spec, Rcpp::List reference_spec,
-                        int k, const std::string& output,
-                        int query_chunk, int reference_chunk,
-                        double memory_limit, int n_threads) {
+extern "C" SEXP faissR_matrix_knn_batch_v1(SEXP query_spec,
+    SEXP reference_spec, SEXP row_ids, SEXP k_value, SEXP backend,
+    SEXP method, SEXP reference_chunk_value, SEXP memory_limit_value,
+    SEXP n_threads_value, SEXP exclude_self_value) {
+  BEGIN_RCPP
 #ifndef FAISSR_HAS_FAISS
   Rcpp::stop("File-backed KNN requires a functional FAISS build");
 #else
-  const FileMatrix query = file_matrix(query_spec);
-  const FileMatrix reference = file_matrix(reference_spec);
-  if (query.columns != reference.columns || k < 1 ||
-      static_cast<std::uint64_t>(k) > reference.rows ||
-      query_chunk < 1 || reference_chunk < 1 || n_threads < 1) {
-    Rcpp::stop("Invalid file-backed KNN dimensions or settings");
-  }
-  const double bytes = 4.0 * query_chunk * query.columns +
-    4.0 * reference_chunk * reference.columns +
-    32.0 * query_chunk * k + 64.0 * 1024 * 1024;
-  if (!std::isfinite(memory_limit) || memory_limit < bytes) {
-    Rcpp::stop("File-backed KNN buffers exceed memory_limit");
-  }
-  const std::string id_path = output + ".indices.u32";
-  const std::string distance_path = output + ".distances.f32";
-  const std::string id_part = id_path + ".part";
-  const std::string distance_part = distance_path + ".part";
-  const auto parent = std::filesystem::path(output).parent_path();
-  const auto directory = parent.empty() ? "." : parent;
-  const double output_bytes = 8.0 * query.rows * k;
-  if (!std::filesystem::is_directory(directory) ||
-      output_bytes > 0.9 * std::filesystem::space(directory).available) {
-    Rcpp::stop("File-backed KNN output exceeds available disk space");
-  }
-  for (const auto& path : {id_path, distance_path, id_part,
-                           distance_part}) {
-    if (std::filesystem::exists(path)) {
-      Rcpp::stop("File-backed KNN output already exists: %s",
-                 path.c_str());
-    }
-  }
-  std::ifstream query_file(query.path, std::ios::binary);
-  std::ifstream reference_file(reference.path, std::ios::binary);
-  std::ofstream ids(id_part, std::ios::binary | std::ios::trunc);
-  std::ofstream distances(distance_part,
-                          std::ios::binary | std::ios::trunc);
-  if (!query_file || !reference_file || !ids || !distances) {
-    Rcpp::stop("Could not open file-backed KNN input or output");
-  }
-  const auto query_mtime =
-    std::filesystem::last_write_time(query.path);
-  const auto reference_mtime =
-    std::filesystem::last_write_time(reference.path);
-  ThreadLimit threads(n_threads);
-  std::vector<float> query_values;
-  std::vector<float> reference_values;
-  for (std::uint64_t first = 0; first < query.rows;
-       first += query_chunk) {
-    Rcpp::checkUserInterrupt();
-    const auto rows = std::min<std::uint64_t>(query_chunk,
-                                              query.rows - first);
-    read_rows(query_file, query, first, rows, query_values);
-    std::vector<std::priority_queue<Candidate>> heaps(rows);
-    for (std::uint64_t base = 0; base < reference.rows;
-         base += reference_chunk) {
-      const auto count = std::min<std::uint64_t>(reference_chunk,
-                                                reference.rows - base);
-      read_rows(reference_file, reference, base, count,
-                reference_values);
-      faiss::IndexFlatL2 index(static_cast<int>(reference.columns));
-      index.add(count, reference_values.data());
-      const int width = static_cast<int>(std::min<std::uint64_t>(k,
-                                                                 count));
-      std::vector<float> found_distances(rows * width);
-      std::vector<faiss::idx_t> found_ids(rows * width);
-      index.search(rows, query_values.data(), width,
-                   found_distances.data(), found_ids.data());
-      for (std::uint64_t i = 0; i < rows; ++i) {
-        for (int j = 0; j < width; ++j) {
-          const std::size_t pos = i * width + j;
-          add_candidate(heaps[i], Candidate{
-            found_distances[pos], static_cast<std::uint32_t>(
-              base + found_ids[pos] + 1)}, k);
-        }
-      }
-    }
-    write_batch(ids, distances, heaps, k);
-  }
-  ids.close();
-  distances.close();
-  if (std::filesystem::last_write_time(query.path) != query_mtime ||
-      std::filesystem::last_write_time(reference.path) !=
-        reference_mtime) {
-    Rcpp::stop("File-backed KNN input changed during search");
-  }
-  const auto expected = query.rows * static_cast<std::uint64_t>(k) * 4;
-  if (std::filesystem::file_size(id_part) != expected ||
-      std::filesystem::file_size(distance_part) != expected) {
-    Rcpp::stop("File-backed KNN output has the wrong size");
-  }
-  std::filesystem::rename(id_part, id_path);
-  try {
-    std::filesystem::rename(distance_part, distance_path);
-  } catch (...) {
-    std::filesystem::rename(id_path, id_part);
-    throw;
-  }
-  return Rcpp::List::create(
-    Rcpp::Named("indices_path") = id_path,
-    Rcpp::Named("distances_path") = distance_path,
-    Rcpp::Named("nrow") = static_cast<double>(query.rows),
-    Rcpp::Named("ncol") = k,
-    Rcpp::Named("backend_used") = "faiss_cpu_stream_exact",
-    Rcpp::Named("exact") = true,
-    Rcpp::Named("index_reused") = false,
-    Rcpp::Named("query_chunk_rows") = query_chunk,
-    Rcpp::Named("reference_chunk_rows") = reference_chunk);
-#endif
-}
-
-}  // namespace
-
-extern "C" SEXP faissR_file_knn_v1(SEXP query, SEXP reference,
-    SEXP k, SEXP output, SEXP backend, SEXP method,
-    SEXP query_chunk, SEXP reference_chunk, SEXP memory_limit,
-    SEXP n_threads) {
-  BEGIN_RCPP
-  const std::string route = Rcpp::as<std::string>(backend);
-  const std::string algorithm = Rcpp::as<std::string>(method);
-  if (route != "cpu" || algorithm != "stream_exact") {
+  if (Rcpp::as<std::string>(backend) != "cpu" ||
+      Rcpp::as<std::string>(method) != "stream_exact") {
     Rcpp::stop("Requested file-backed KNN backend/method is unavailable");
   }
-  return stream_exact(Rcpp::as<Rcpp::List>(query),
-    Rcpp::as<Rcpp::List>(reference), Rcpp::as<int>(k),
-    Rcpp::as<std::string>(output), Rcpp::as<int>(query_chunk),
-    Rcpp::as<int>(reference_chunk), Rcpp::as<double>(memory_limit),
-    Rcpp::as<int>(n_threads));
+  const BatchSource query = batch_source(Rcpp::as<Rcpp::List>(query_spec));
+  const BatchSource reference = batch_source(
+    Rcpp::as<Rcpp::List>(reference_spec));
+  const Rcpp::NumericVector requested(row_ids);
+  const int k = Rcpp::as<int>(k_value);
+  const int reference_chunk = Rcpp::as<int>(reference_chunk_value);
+  const int n_threads = Rcpp::as<int>(n_threads_value);
+  const bool exclude_self = Rcpp::as<bool>(exclude_self_value);
+  const double memory_limit = Rcpp::as<double>(memory_limit_value);
+  const bool same_owner = query.memory == reference.memory &&
+    (query.memory ? query.owner == reference.owner :
+      query.file.path == reference.file.path);
+  const bool same_source = same_owner &&
+    query.file.first == reference.file.first &&
+    query.file.rows == reference.file.rows;
+  if (query.file.columns != reference.file.columns ||
+      reference.file.rows > static_cast<std::uint64_t>(INT_MAX) ||
+      requested.size() < 1 || requested.size() > 10000 ||
+      k < 1 || k > 65536 ||
+      static_cast<std::uint64_t>(k) > reference.file.rows -
+        (exclude_self ? 1u : 0u) ||
+      reference_chunk < 1 || n_threads < 1 ||
+      (exclude_self && !same_source)) {
+    Rcpp::stop("Invalid file-backed KNN batch dimensions or settings");
+  }
+  const std::size_t count = requested.size();
+  const double resident_bytes =
+    (query.memory ? 8.0 * query.data.nrow() * query.data.ncol() : 0.0) +
+    (reference.memory && (!query.memory || !same_owner) ?
+      8.0 * reference.data.nrow() * reference.data.ncol() : 0.0);
+  const double estimated = resident_bytes +
+    4.0 * count * query.file.columns +
+    4.0 * reference_chunk * reference.file.columns +
+    32.0 * count * k + 64.0 * 1024 * 1024;
+  if (!std::isfinite(memory_limit) || memory_limit < estimated) {
+    Rcpp::stop("File-backed KNN batch buffers exceed memory_limit");
+  }
+  std::vector<std::uint64_t> selected(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    const double value = requested[i];
+    if (!std::isfinite(value) || value < 1 ||
+        value != std::floor(value) || value > query.file.rows) {
+      Rcpp::stop("File-backed KNN row_ids must be valid one-based rows");
+    }
+    selected[i] = static_cast<std::uint64_t>(value) - 1;
+  }
+  const auto started = std::chrono::steady_clock::now();
+  const auto query_mtime = query.memory ?
+    std::filesystem::file_time_type{} :
+    std::filesystem::last_write_time(query.file.path);
+  const auto reference_mtime = reference.memory ?
+    std::filesystem::file_time_type{} :
+    std::filesystem::last_write_time(reference.file.path);
+  std::ifstream query_file;
+  std::ifstream reference_file;
+  if (!query.memory) query_file.open(query.file.path, std::ios::binary);
+  if (!reference.memory)
+    reference_file.open(reference.file.path, std::ios::binary);
+  if ((!query.memory && !query_file) ||
+      (!reference.memory && !reference_file)) {
+    Rcpp::stop("Could not open file-backed KNN input");
+  }
+  std::vector<float> query_values(count * query.file.columns);
+  std::vector<float> read_buffer;
+  bool contiguous = true;
+  for (std::size_t i = 1; i < count; ++i) {
+    if (selected[i] != selected[i - 1] + 1) {
+      contiguous = false;
+      break;
+    }
+  }
+  if (contiguous) {
+    read_batch_rows(query_file, query, selected[0], count,
+                    query_values);
+  } else {
+    for (std::size_t i = 0; i < count; ++i) {
+      read_batch_rows(query_file, query, selected[i], 1, read_buffer);
+      std::copy(read_buffer.begin(), read_buffer.end(),
+        query_values.begin() + i * query.file.columns);
+    }
+  }
+  ThreadLimit threads(n_threads);
+  std::vector<std::priority_queue<Candidate>> heaps(count);
+  std::vector<float> reference_values;
+  for (std::uint64_t base = 0; base < reference.file.rows;
+       base += reference_chunk) {
+    const auto rows = std::min<std::uint64_t>(reference_chunk,
+                                              reference.file.rows - base);
+    read_batch_rows(reference_file, reference, base, rows,
+                    reference_values);
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (std::int64_t qi = 0;
+         qi < static_cast<std::int64_t>(count); ++qi) {
+      const float* point = query_values.data() + qi * query.file.columns;
+      auto& heap = heaps[qi];
+      for (std::uint64_t ri = 0; ri < rows; ++ri) {
+        if (exclude_self && selected[qi] == base + ri) continue;
+        const float distance = faiss::fvec_L2sqr(point,
+          reference_values.data() + ri * reference.file.columns,
+          static_cast<std::size_t>(query.file.columns));
+        add_candidate(heap, Candidate{distance,
+          static_cast<std::uint32_t>(base + ri + 1)}, k);
+      }
+    }
+    Rcpp::checkUserInterrupt();
+  }
+  if ((!query.memory &&
+       std::filesystem::last_write_time(query.file.path) != query_mtime) ||
+      (!reference.memory &&
+       std::filesystem::last_write_time(reference.file.path) !=
+         reference_mtime)) {
+    Rcpp::stop("File-backed KNN input changed during search");
+  }
+  Rcpp::IntegerMatrix indices(count, k);
+  Rcpp::NumericMatrix distances(count, k);
+  for (std::size_t qi = 0; qi < count; ++qi) {
+    auto& heap = heaps[qi];
+    if (heap.size() != static_cast<std::size_t>(k)) {
+      Rcpp::stop("Incomplete file-backed KNN row");
+    }
+    for (int rank = k - 1; rank >= 0; --rank) {
+      const Candidate candidate = heap.top();
+      heap.pop();
+      if (!std::isfinite(candidate.first)) {
+        Rcpp::stop("File-backed KNN distance overflowed float32");
+      }
+      indices(qi, rank) = static_cast<int>(candidate.second);
+      distances(qi, rank) = std::sqrt(std::max(0.0f,
+        candidate.first));
+    }
+  }
+  const double seconds = std::chrono::duration<double>(
+    std::chrono::steady_clock::now() - started).count();
+  return Rcpp::List::create(
+    Rcpp::Named("indices") = indices,
+    Rcpp::Named("distances") = distances,
+    Rcpp::Named("provider") = "faissR",
+    Rcpp::Named("backend_used") = "faiss_cpu_stream_exact",
+    Rcpp::Named("method") = "stream_exact",
+    Rcpp::Named("residency") = query.memory && reference.memory ?
+      "resident" : (query.memory || reference.memory ?
+        "mixed" : "file-backed"),
+    Rcpp::Named("device_ids") = Rcpp::IntegerVector(),
+    Rcpp::Named("exact") = true,
+    Rcpp::Named("index_build_seconds") = 0.0,
+    Rcpp::Named("search_seconds") = seconds,
+    Rcpp::Named("peak_ram_bytes_estimate") = estimated,
+    Rcpp::Named("peak_device_bytes") = 0.0);
+#endif
   END_RCPP
 }
