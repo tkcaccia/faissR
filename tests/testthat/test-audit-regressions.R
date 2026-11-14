@@ -223,6 +223,7 @@ test_that("matrix size helpers check bounds without allocating matrices", {
                 faissr::matrix_element_count(INT_MAX, INT_MAX);
             } catch (const std::length_error&) {
                 return faissr::matrix_element_count(10, 20) == 200 &&
+                    faissr::matrix_element_count(100000000, 31) == 3100000000LL &&
                     faissr::matrix_element_count_wide(INT_MAX, 2) == 4294967294LL;
             }
             return false;

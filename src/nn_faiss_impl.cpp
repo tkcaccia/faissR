@@ -3272,10 +3272,10 @@ List faiss_gpu_multi_query_knn_impl(SEXP data,
     Rcpp::stop("Invalid IVF nlist or nprobe.");
   }
   const int search_k = k + (exclude_self ? 1 : 0);
-  if (static_cast<double>(query.nrow) * search_k >
-      std::numeric_limits<int>::max()) {
-    Rcpp::stop("Multi-GPU KNN result exceeds the supported matrix size.");
-  }
+  // Matrix dimensions are int-valued in R, but their product may be a long
+  // vector. Check the exact product before allocating search and R outputs.
+  faissr::matrix_element_count(query.nrow, search_k);
+  faissr::matrix_element_count(query.nrow, k);
   std::unique_ptr<faiss::IndexFlatL2> quantizer;
   std::unique_ptr<faiss::Index> cpu_index;
   if (method == "ivf") {
