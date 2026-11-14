@@ -187,6 +187,19 @@ typedef SEXP (*faissR_flat_index_search_v1_fun)(
     SEXP k,
     SEXP n_threads);
 
+/* Private bounded file-backed KNN route; no faissR R-level export. */
+typedef SEXP (*faissR_file_knn_v1_fun)(
+    SEXP query,
+    SEXP reference,
+    SEXP k,
+    SEXP output,
+    SEXP backend,
+    SEXP method,
+    SEXP query_chunk,
+    SEXP reference_chunk,
+    SEXP memory_limit,
+    SEXP n_threads);
+
 /*
  * The GPU-resident callable accepts method values "auto", "exact", "flat",
  * and "bruteforce". The returned owner object must remain reachable while
@@ -309,6 +322,12 @@ static inline faissR_flat_index_search_v1_fun
 faissR_get_flat_index_search_v1(void) {
   return (faissR_flat_index_search_v1_fun) R_GetCCallable(
       "faissR", "faissR_flat_index_search_v1");
+}
+
+static inline faissR_file_knn_v1_fun
+faissR_get_file_knn_v1(void) {
+  return (faissR_file_knn_v1_fun) R_GetCCallable(
+      "faissR", "faissR_file_knn_v1");
 }
 
 #ifdef __cplusplus

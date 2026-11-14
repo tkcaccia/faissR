@@ -35,7 +35,7 @@ write_diagnostic_makevars() {
     echo "PKG_CXXFLAGS ="
     echo "PKG_CPPFLAGS = $diagnostic_cppflags"
     echo "PKG_LIBS ="
-    echo "OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_fortran.o nn_faiss_bridge.o nn_faiss_stub.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o nn_metal_bridge.o nn_metal_stub.o"
+    echo "OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_fortran.o filebacked_knn.o nn_faiss_bridge.o nn_faiss_stub.o nn_cuvs_bridge.o nn_cuvs_stub.o nn_cuda_bridge.o nn_cuda_stub.o nn_metal_bridge.o nn_metal_stub.o"
   } > src/Makevars
 }
 
@@ -683,5 +683,5 @@ fi
     echo "NVCC = $nvcc"
     printf "%s" "$cuda_rule"
   fi
-    echo "OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_fortran.o faissr_console.o $faiss_objects $cuvs_objects nn_cuda_bridge.o $cuda_objects nn_metal_bridge.o $metal_objects"
+    echo "OBJECTS = RcppExports.o embedding_utils.o nn.o nn_auto_select.o nn_fortran.o filebacked_knn.o faissr_console.o $faiss_objects $cuvs_objects nn_cuda_bridge.o $cuda_objects nn_metal_bridge.o $metal_objects"
 } > src/Makevars

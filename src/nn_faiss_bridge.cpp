@@ -665,6 +665,10 @@ extern "C" SEXP faissR_hnsw_index_search_v1(SEXP index, SEXP query,
 extern "C" SEXP faissR_flat_index_build_v1(SEXP data, SEXP n_threads);
 extern "C" SEXP faissR_flat_index_search_v1(SEXP index, SEXP query,
     SEXP k, SEXP n_threads);
+extern "C" SEXP faissR_file_knn_v1(SEXP query, SEXP reference,
+    SEXP k, SEXP output, SEXP backend, SEXP method,
+    SEXP query_chunk, SEXP reference_chunk, SEXP memory_limit,
+    SEXP n_threads);
 extern "C" SEXP faissR_gpu_knn_sample_v1(SEXP result, SEXP rows);
 
 extern "C" int faissR_c_api_version_impl() {
@@ -773,6 +777,11 @@ void register_faissR_ccallables(DllInfo *dll) {
     "faissR",
     "faissR_flat_index_search_v1",
     (DL_FUNC) &faissR_flat_index_search_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_file_knn_v1",
+    (DL_FUNC) &faissR_file_knn_v1
   );
 }
 
