@@ -3804,9 +3804,8 @@ List faiss_gpu_knn_retain_data_impl(SEXP result, SEXP data) {
   }
   List out(result);
   if (!out.inherits("faissR_gpu_knn") ||
-      !out.containsElementNamed("handle") ||
-      Rcpp::as<std::string>(out["metric"]) != "euclidean") {
-    Rcpp::stop("Retained GPU data require Euclidean faissR KNN.");
+      !out.containsElementNamed("handle")) {
+    Rcpp::stop("Retained GPU data require a faissR GPU KNN result.");
   }
   SEXP owner = out["handle"];
   if (TYPEOF(owner) != EXTPTRSXP) {
