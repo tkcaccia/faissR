@@ -51,7 +51,7 @@
 #include <faiss/IndexRefine.h>
 #endif
 
-#if !defined(FAISSR_FAISS_CPU_ONLY) && \
+#if defined(FAISSR_HAS_CUDA) && !defined(FAISSR_FAISS_CPU_ONLY) && \
     __has_include(<faiss/gpu/StandardGpuResources.h>) && \
     __has_include(<faiss/gpu/GpuIndexFlat.h>) && \
     __has_include(<faiss/gpu/GpuIndexIVFFlat.h>) && \
