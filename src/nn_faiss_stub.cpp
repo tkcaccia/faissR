@@ -313,7 +313,7 @@ List faiss_hnsw_index_search_float32_impl(SEXP,
 }
 
 List faiss_hnsw_index_calibrate_impl(SEXP, SEXP, Rcpp::IntegerVector,
-                                     int, double, int, int) {
+                                     int, double, int, int, int) {
   Rcpp::stop("FAISS HNSW calibration requires a FAISS-enabled faissR build");
 }
 

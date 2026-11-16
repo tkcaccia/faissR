@@ -214,6 +214,17 @@ typedef SEXP (*faissR_hnsw_index_calibrate_v1_fun)(
     SEXP initial_ef_search,
     SEXP n_threads);
 
+/* Version 2 adds an explicit maximum efSearch for larger HNSW pilots. */
+typedef SEXP (*faissR_hnsw_index_calibrate_v2_fun)(
+    SEXP index,
+    SEXP query,
+    SEXP self_ids,
+    SEXP k,
+    SEXP target_recall,
+    SEXP initial_ef_search,
+    SEXP max_ef_search,
+    SEXP n_threads);
+
 /* Private persistent CPU Flat index for bounded query batches. */
 typedef SEXP (*faissR_flat_index_build_v1_fun)(
     SEXP data,
@@ -466,6 +477,12 @@ static inline faissR_hnsw_index_calibrate_v1_fun
 faissR_get_hnsw_index_calibrate_v1(void) {
   return (faissR_hnsw_index_calibrate_v1_fun) R_GetCCallable(
       "faissR", "faissR_hnsw_index_calibrate_v1");
+}
+
+static inline faissR_hnsw_index_calibrate_v2_fun
+faissR_get_hnsw_index_calibrate_v2(void) {
+  return (faissR_hnsw_index_calibrate_v2_fun) R_GetCCallable(
+      "faissR", "faissR_hnsw_index_calibrate_v2");
 }
 
 static inline faissR_flat_index_build_v1_fun

@@ -23,6 +23,9 @@
 #' `faissR_get_hnsw_index_calibrate_v1()` checks float32 pilot queries
 #' against the fitted index's full stored reference. It returns guarded
 #' recall and selected `efSearch`, or fails when the guard cannot be met.
+#' `faissR_get_hnsw_index_calibrate_v2()` adds a requested maximum
+#' `efSearch` for larger pilots; the effective maximum is bounded by the
+#' fitted reference size. The version-1 callable retains its 1024 cap.
 #' `faissR_get_hnsw_search_v2()` runs a private resident Euclidean HNSW
 #' search. It checks up to 256 seeded queries against the full reference,
 #' increases `efSearch` until a guarded pilot target is met, and fails

@@ -2938,7 +2938,7 @@ List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
 List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
                                      Rcpp::IntegerVector self_ids, int k,
                                      double target_recall, int initial_ef,
-                                     int n_threads) {
+                                     int n_threads, int max_ef_requested) {
   if (TYPEOF(index_ptr) != EXTPTRSXP ||
       R_ExternalPtrTag(index_ptr) != faiss_hnsw_index_v1_tag()) {
     Rcpp::stop("HNSW calibration requires a faissR version-1 index");
@@ -2949,6 +2949,7 @@ List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
     Rcpp::stop("HNSW calibration requires a valid Euclidean index");
   }
   if (k < 1 || k >= handle->n || initial_ef < 1 || n_threads < 1 ||
+      max_ef_requested < 1 ||
       self_ids.size() < 1) {
     Rcpp::stop("Invalid HNSW calibration dimensions or settings");
   }
@@ -2988,7 +2989,8 @@ List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
                      exact_dist.data(), exact_id.data());
   }
   int boundary_ties = 0;
-  const int max_ef = std::min(handle->n, std::max(1024, k));
+  const int max_ef = std::min(handle->n,
+    std::max(max_ef_requested, k));
   int ef = std::min(max_ef, std::max(k, initial_ef));
   const double standard_error = std::sqrt(
     target_recall * (1 - target_recall) / (xq.nrow * k)
@@ -3049,6 +3051,7 @@ List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
   }
   return List::create(
     Rcpp::Named("ef_search") = ef,
+    Rcpp::Named("max_ef_search") = max_ef,
     Rcpp::Named("pilot_recall") = recall,
     Rcpp::Named("pilot_guard_recall") = guard,
     Rcpp::Named("pilot_rows") = xq.nrow,
