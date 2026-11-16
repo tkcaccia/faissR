@@ -176,6 +176,14 @@ typedef SEXP (*faissR_hnsw_index_build_v1_fun)(
     SEXP ef_construction,
     SEXP n_threads);
 
+/* Build a resident CPU HNSW index by streaming f32/fbin reference chunks.
+ * The reference descriptor may be a bounded view of a file descriptor.
+ * The returned pointer is compatible with hnsw_index_search_v1 and must
+ * remain owned by the caller. This does not stream the index itself. */
+typedef SEXP (*faissR_hnsw_file_index_build_v1_fun)(
+    SEXP file_spec, SEXP m, SEXP ef_construction,
+    SEXP n_threads, SEXP chunk_rows);
+
 typedef SEXP (*faissR_hnsw_index_search_v1_fun)(
     SEXP index,
     SEXP query,
@@ -428,6 +436,12 @@ static inline faissR_hnsw_index_build_v1_fun
 faissR_get_hnsw_index_build_v1(void) {
   return (faissR_hnsw_index_build_v1_fun) R_GetCCallable(
       "faissR", "faissR_hnsw_index_build_v1");
+}
+
+static inline faissR_hnsw_file_index_build_v1_fun
+faissR_get_hnsw_file_index_build_v1(void) {
+  return (faissR_hnsw_file_index_build_v1_fun) R_GetCCallable(
+      "faissR", "faissR_hnsw_file_index_build_v1");
 }
 
 static inline faissR_hnsw_index_search_v1_fun

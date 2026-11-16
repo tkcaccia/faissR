@@ -8,6 +8,8 @@
 #include <climits>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 #include <memory>
 #include <numeric>
@@ -2588,6 +2590,172 @@ SEXP faiss_hnsw_index_build_float32_impl(SEXP data,
   }
 }
 
+struct HnswFileSource {
+  std::string path;
+  int rows = 0;
+  int columns = 0;
+  std::uint64_t first = 0;
+  std::uint64_t header_bytes = 0;
+  std::string format;
+};
+
+int hnsw_file_positive_int(SEXP value, const char* name) {
+  if (Rf_length(value) != 1) {
+    Rcpp::stop("%s must be a scalar integer", name);
+  }
+  const double number = Rcpp::as<double>(value);
+  if (!std::isfinite(number) || number < 1 ||
+      number != std::floor(number) || number > INT_MAX) {
+    Rcpp::stop("%s must be a positive integer within FAISS limits", name);
+  }
+  return static_cast<int>(number);
+}
+
+HnswFileSource hnsw_file_source(Rcpp::List spec) {
+  const std::string format = Rcpp::as<std::string>(spec["format"]);
+  if (format == "view") {
+    HnswFileSource source = hnsw_file_source(
+      Rcpp::as<Rcpp::List>(spec["source"]));
+    const int first = hnsw_file_positive_int(spec["first"], "view first");
+    const int rows = hnsw_file_positive_int(spec["nrow"], "view nrow");
+    if (first > source.rows || rows > source.rows - first + 1) {
+      Rcpp::stop("HNSW file-backed view exceeds its source");
+    }
+    source.first += static_cast<std::uint64_t>(first - 1);
+    source.rows = rows;
+    source.format = "view_" + source.format;
+    return source;
+  }
+  if (format != "f32" && format != "fbin") {
+    Rcpp::stop("HNSW file-backed input must be f32 or fbin");
+  }
+  HnswFileSource source;
+  source.path = Rcpp::as<std::string>(spec["path"]);
+  source.rows = hnsw_file_positive_int(spec["nrow"], "nrow");
+  source.columns = hnsw_file_positive_int(spec["ncol"], "ncol");
+  source.header_bytes = format == "fbin" ? 8u : 0u;
+  source.format = format;
+  if (static_cast<std::uint64_t>(source.rows) >
+      (std::numeric_limits<std::uint64_t>::max() -
+       source.header_bytes) / (4ULL * source.columns)) {
+    Rcpp::stop("HNSW file-backed dimensions exceed native limits");
+  }
+  const std::uint64_t expected = source.header_bytes +
+    4ULL * source.rows * source.columns;
+  if (source.path.empty() ||
+      !std::filesystem::is_regular_file(source.path) ||
+      std::filesystem::file_size(source.path) != expected) {
+    Rcpp::stop("HNSW file-backed source size differs from descriptor");
+  }
+  if (format == "fbin") {
+    std::ifstream input(source.path, std::ios::binary);
+    std::uint32_t shape[2] = {0, 0};
+    input.read(reinterpret_cast<char*>(shape), sizeof(shape));
+    if (!input || shape[0] != static_cast<std::uint32_t>(source.rows) ||
+        shape[1] != static_cast<std::uint32_t>(source.columns)) {
+      Rcpp::stop("HNSW fbin header differs from descriptor");
+    }
+  }
+  return source;
+}
+
+SEXP faiss_hnsw_file_index_build_impl(SEXP file_spec, int m,
+                                      int ef_construction,
+                                      int n_threads, int chunk_rows) {
+  if (m < 1 || ef_construction < m || n_threads < 1 ||
+      chunk_rows < 1 || chunk_rows > 1000000) {
+    Rcpp::stop("Invalid HNSW file-backed build settings");
+  }
+  HnswFileSource source = hnsw_file_source(
+    Rcpp::as<Rcpp::List>(file_spec));
+  const int requested_m = m;
+  m = std::min(m, source.rows);
+  if (static_cast<std::uint64_t>(chunk_rows) * source.columns >
+      std::numeric_limits<std::size_t>::max() / sizeof(float)) {
+    Rcpp::stop("HNSW file-backed chunk exceeds addressable memory");
+  }
+  try {
+    std::ifstream input(source.path, std::ios::binary);
+    if (!input) Rcpp::stop("Could not open HNSW file-backed source");
+    std::unique_ptr<faiss::IndexHNSWFlat> index(
+      new faiss::IndexHNSWFlat(source.columns, m, faiss::METRIC_L2));
+    index->hnsw.efConstruction = ef_construction;
+    index->hnsw.efSearch = 1;
+    std::vector<float> chunk;
+    double read_seconds = 0;
+    double build_seconds = 0;
+    for (int first = 0; first < source.rows; ) {
+      Rcpp::checkUserInterrupt();
+      const int take = std::min(chunk_rows, source.rows - first);
+      const std::size_t count = static_cast<std::size_t>(take) *
+        source.columns;
+      chunk.resize(count);
+      const std::uint64_t offset = source.header_bytes +
+        (source.first + static_cast<std::uint64_t>(first)) *
+        source.columns * sizeof(float);
+      const auto read_start = std::chrono::steady_clock::now();
+      input.seekg(static_cast<std::streamoff>(offset));
+      input.read(reinterpret_cast<char*>(chunk.data()),
+        static_cast<std::streamsize>(count * sizeof(float)));
+      if (!input) Rcpp::stop("Could not read HNSW file-backed rows");
+      for (float value : chunk) {
+        if (!std::isfinite(value)) {
+          Rcpp::stop("HNSW file-backed input contains nonfinite values");
+        }
+      }
+      const auto build_start = std::chrono::steady_clock::now();
+      read_seconds += std::chrono::duration<double>(
+        build_start - read_start).count();
+      {
+        OmpThreadScope threads(n_threads);
+        index->add(take, chunk.data());
+      }
+      build_seconds += std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - build_start).count();
+      first += take;
+    }
+    if (index->ntotal != source.rows) {
+      Rcpp::stop("HNSW file-backed index row count changed");
+    }
+    FaissHnswIndexHandle* handle = new FaissHnswIndexHandle(
+      std::move(index), source.rows, source.columns, m,
+      ef_construction, 1, requested_m, ef_construction, 1, n_threads,
+      DistanceOutput::L2Squared, "euclidean",
+      "file_backed_" + source.format, false);
+    Rcpp::XPtr<FaissHnswIndexHandle> ptr(
+      handle, true, faiss_hnsw_index_v1_tag());
+    ptr.attr("class") = "faissR_faiss_hnsw_index";
+    ptr.attr("api_version") = 1;
+    ptr.attr("n") = source.rows;
+    ptr.attr("p") = source.columns;
+    ptr.attr("m") = m;
+    ptr.attr("requested_m") = requested_m;
+    ptr.attr("hnsw_parameters_adjusted") = m != requested_m;
+    ptr.attr("ef_construction") = ef_construction;
+    ptr.attr("ef_search") = 1;
+    ptr.attr("n_threads") = n_threads;
+    ptr.attr("metric") = "euclidean";
+    ptr.attr("input_type") = "float32";
+    ptr.attr("input_layout") = "file_backed_" + source.format;
+    ptr.attr("input_owns_data") = false;
+    ptr.attr("provider") = "faissR";
+    ptr.attr("backend_used") = "faiss_cpu_hnsw_file_index";
+    ptr.attr("device_ids") = Rcpp::IntegerVector(0);
+    ptr.attr("residency") = "file_backed_reference_resident_index";
+    ptr.attr("reference_read_seconds") = read_seconds;
+    ptr.attr("reference_read_scope") =
+      "buffered_file_read_plus_finite_validation";
+    ptr.attr("index_build_seconds") = build_seconds;
+    ptr.attr("reference_chunk_rows") = chunk_rows;
+    ptr.attr("serialization_supported") = false;
+    ptr.attr("native_persistence_supported") = true;
+    ptr.attr("concurrent_search_supported") = false;
+    return ptr;
+  } catch (const std::exception& e) {
+    Rcpp::stop("FAISS HNSW file-backed index build failed: %s", e.what());
+  }
+}
+
 void faiss_hnsw_index_save_impl(SEXP index_ptr, const std::string& path) {
   if (path.empty() || TYPEOF(index_ptr) != EXTPTRSXP ||
       R_ExternalPtrTag(index_ptr) != faiss_hnsw_index_v1_tag()) {
@@ -2694,6 +2862,7 @@ List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
   std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
   std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
 
+  const auto search_started = std::chrono::steady_clock::now();
   try {
     OmpThreadScope threads(n_threads);
     handle->index->hnsw.efSearch = ef_search;
@@ -2701,6 +2870,8 @@ List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
   } catch (const std::exception& e) {
     Rcpp::stop("FAISS HNSW fitted-index search failed: %s", e.what());
   }
+  const double search_seconds = std::chrono::duration<double>(
+    std::chrono::steady_clock::now() - search_started).count();
 
   ++handle->query_call_count;
   List out = format_faiss_result(
@@ -2741,6 +2912,18 @@ List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
   out["query_n"] = n_points;
   out["batch_query"] = true;
   out["query_call_count"] = static_cast<double>(handle->query_call_count);
+  out["search_seconds"] = search_seconds;
+  if (handle->input_layout.rfind("file_backed_", 0) == 0) {
+    out["provider"] = "faissR";
+    out["backend_used"] = "faiss_cpu_hnsw_file_index";
+    out["device_ids"] = Rcpp::IntegerVector(0);
+    out["reference_residency"] = "file_backed";
+    out["index_residency"] = "resident_cpu";
+    out["index_build_seconds"] = Rcpp::as<double>(
+      Rf_getAttrib(index_ptr, Rf_install("index_build_seconds")));
+    out["reference_read_seconds"] = Rcpp::as<double>(
+      Rf_getAttrib(index_ptr, Rf_install("reference_read_seconds")));
+  }
   out["serialization_supported"] = false;
   out["concurrent_search_supported"] = false;
   out["input_type"] = "float32";

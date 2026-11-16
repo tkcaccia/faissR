@@ -287,6 +287,10 @@ SEXP faiss_hnsw_index_build_float32_impl(SEXP,
   );
 }
 
+SEXP faiss_hnsw_file_index_build_impl(SEXP, int, int, int, int) {
+  Rcpp::stop("FAISS HNSW file-backed build requires a FAISS-enabled faissR build");
+}
+
 void faiss_hnsw_index_save_impl(SEXP, const std::string&) {
   Rcpp::stop("FAISS HNSW persistence requires a FAISS-enabled faissR build");
 }

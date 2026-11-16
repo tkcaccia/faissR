@@ -153,6 +153,9 @@ SEXP faiss_hnsw_index_build_float32_impl(SEXP data,
                                          std::string metric,
                                          std::string distance_output,
                                          int n_threads);
+SEXP faiss_hnsw_file_index_build_impl(SEXP file_spec, int m,
+                                      int ef_construction,
+                                      int n_threads, int chunk_rows);
 void faiss_hnsw_index_save_impl(SEXP index_ptr, const std::string& path);
 SEXP faiss_hnsw_index_load_impl(const std::string& path, int n_threads);
 List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
@@ -677,6 +680,8 @@ extern "C" SEXP faissR_hnsw_tune_v1(SEXP n, SEXP p, SEXP k,
 
 extern "C" SEXP faissR_hnsw_index_build_v1(SEXP data, SEXP m,
     SEXP ef_construction, SEXP n_threads);
+extern "C" SEXP faissR_hnsw_file_index_build_v1(SEXP file_spec, SEXP m,
+    SEXP ef_construction, SEXP n_threads, SEXP chunk_rows);
 extern "C" SEXP faissR_hnsw_index_search_v1(SEXP index, SEXP query,
     SEXP k, SEXP ef_search, SEXP n_threads);
 extern "C" SEXP faissR_hnsw_index_save_v1(SEXP index, SEXP path);
@@ -802,6 +807,11 @@ void register_faissR_ccallables(DllInfo *dll) {
     "faissR",
     "faissR_hnsw_index_build_v1",
     (DL_FUNC) &faissR_hnsw_index_build_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_hnsw_file_index_build_v1",
+    (DL_FUNC) &faissR_hnsw_file_index_build_v1
   );
   R_RegisterCCallable(
     "faissR",
@@ -1165,6 +1175,15 @@ extern "C" SEXP faissR_hnsw_index_build_v1(SEXP data, SEXP m,
     data, Rcpp::as<int>(m), Rcpp::as<int>(ef_construction),
     1, "euclidean", "euclidean", Rcpp::as<int>(n_threads)
   );
+  END_RCPP
+}
+
+extern "C" SEXP faissR_hnsw_file_index_build_v1(SEXP file_spec, SEXP m,
+    SEXP ef_construction, SEXP n_threads, SEXP chunk_rows) {
+  BEGIN_RCPP
+  return faiss_hnsw_file_index_build_impl(
+    file_spec, Rcpp::as<int>(m), Rcpp::as<int>(ef_construction),
+    Rcpp::as<int>(n_threads), Rcpp::as<int>(chunk_rows));
   END_RCPP
 }
 
