@@ -3,6 +3,9 @@ make_hnsw_audit_case <- function(n, build, peak, ef, recall) {
          scope = "resident_hnsw_build_calibration_sampled_query_exact_audit",
          full_graph_performed = FALSE, hnsw_build_seconds = build,
          peak_memory_footprint_bytes = peak,
+         reference_scope = "full_database_exact", query_count = 256L,
+         pilot_rows = 128L, holdout_rows = 128L,
+         hnsw_m = 32L, ef_construction = 200L,
          cells = Map(function(tier, effort, measured) {
              list(target_recall = tier, ef_search = effort,
                   measured_id_recall = measured)
@@ -26,12 +29,19 @@ test_that("source-locked HNSW holdout yields conditional 1B ranges", {
     cases[[2L]]$build_prediction_relative_error <- 0.013471801560307028
     cases[[2L]]$peak_memory_prediction_relative_error <-
         0.0012309199941961113
+    for (i in seq_along(cases)) {
+        cases[[i]]$source_archive_sha256 <- strrep("a", 64L)
+        cases[[i]]$input_sha256 <- strrep("b", 64L)
+        cases[[i]]$audit_sha256 <- strrep(as.character(i), 64L)
+        cases[[i]]$query_rows_sha256 <- strrep(as.character(i + 3L), 64L)
+    }
     request <- list(n = 1e9, p = 96L, k = 30L,
         host_memory_bytes = 3e12, target_recall = 0.99,
         cases = cases,
         source_archive_sha256 = paste(rep("a", 64L), collapse = ""),
         input_sha256 = paste(rep("b", 64L), collapse = ""),
-        audit_sha256 = rep(paste(rep("c", 64L), collapse = ""), 3L))
+        audit_sha256 = vapply(cases, function(x) x$audit_sha256,
+                             character(1L)))
     plan <- do.call(faissR:::nn_large_hnsw_project_audited, request)
     expect_identical(plan$index_candidate, "hnsw")
     expect_identical(plan$storage_mode, "resident")
@@ -73,6 +83,23 @@ test_that("source-locked HNSW holdout yields conditional 1B ranges", {
     request$cases[[3L]]$p <- 95L
     expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
                  "mixed scope")
+    request$cases <- cases
+    request$cases[[3L]]$query_rows_sha256 <-
+        request$cases[[1L]]$query_rows_sha256
+    expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
+                 "mix source, input, query")
+    request$cases <- cases
+    request$cases[[3L]]$source_archive_sha256 <- strrep("f", 64L)
+    expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
+                 "mix source, input, query")
+    request$cases <- cases
+    request$cases[[2L]]$query_count <- 128L
+    expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
+                 "mix source, input, query")
+    request$cases <- cases
+    request$audit_sha256[[3L]] <- request$audit_sha256[[1L]]
+    expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
+                 "Three source-locked")
 })
 
 test_that("file-input HNSW projection preserves reference residency", {
@@ -87,6 +114,10 @@ test_that("file-input HNSW projection preserves reference residency", {
     for (i in seq_along(cases)) {
         cases[[i]]$scope <-
             "file_input_resident_hnsw_build_calibration_sampled_query_exact_audit"
+        cases[[i]]$source_archive_sha256 <- strrep("a", 64L)
+        cases[[i]]$input_sha256 <- strrep("b", 64L)
+        cases[[i]]$audit_sha256 <- strrep(as.character(i), 64L)
+        cases[[i]]$query_rows_sha256 <- strrep(as.character(i + 3L), 64L)
     }
     predicted <- 390 * 5^(log(5200 / 390) / log(10))
     cases[[2L]]$prediction_passed <- TRUE
@@ -97,7 +128,8 @@ test_that("file-input HNSW projection preserves reference residency", {
         cases = cases, storage_mode = "file_backed",
         source_archive_sha256 = paste(rep("a", 64L), collapse = ""),
         input_sha256 = paste(rep("b", 64L), collapse = ""),
-        audit_sha256 = rep(paste(rep("c", 64L), collapse = ""), 3L))
+        audit_sha256 = vapply(cases, function(x) x$audit_sha256,
+                             character(1L)))
     plan <- do.call(faissR:::nn_large_hnsw_project_audited, request)
     expect_identical(plan$storage_mode, "file_backed")
     expect_identical(plan$reference_residency, "file_backed")

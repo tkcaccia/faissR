@@ -32,8 +32,27 @@ nn_large_hnsw_project_audited <- function(
     if (!is.list(cases) || length(cases) != 3L ||
         !hash_ok(source_archive_sha256) || !hash_ok(input_sha256) ||
         length(audit_sha256) != 3L ||
-        !all(vapply(audit_sha256, hash_ok, logical(1L)))) {
+        !all(vapply(audit_sha256, hash_ok, logical(1L))) ||
+        anyDuplicated(audit_sha256)) {
         stop("Three source-locked HNSW audits are required.", call. = FALSE)
+    }
+    identities_ok <- vapply(seq_along(cases), function(i) {
+        x <- cases[[i]]
+        identical(x$source_archive_sha256, source_archive_sha256) &&
+            identical(x$input_sha256, input_sha256) &&
+            identical(x$audit_sha256, audit_sha256[[i]]) &&
+            hash_ok(x$query_rows_sha256) &&
+            identical(x$reference_scope, "full_database_exact") &&
+            identical(x$query_count, 256L) &&
+            identical(x$pilot_rows, 128L) &&
+            identical(x$holdout_rows, 128L) &&
+            identical(x$hnsw_m, 32L) &&
+            identical(x$ef_construction, 200L)
+    }, logical(1L))
+    if (!all(identities_ok) || anyDuplicated(vapply(cases, function(x)
+        x$query_rows_sha256, character(1L)))) {
+        stop("HNSW audits mix source, input, query, or index identity.",
+             call. = FALSE)
     }
     sizes <- vapply(cases, function(x) as.double(x$n), numeric(1L))
     expected_scope <- if (storage_mode == "file_backed") {
