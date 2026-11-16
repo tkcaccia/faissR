@@ -554,7 +554,7 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
 #endif
     } else {
 #ifdef _OPENMP
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static) num_threads(n_threads)
 #endif
     for (std::int64_t qi = 0;
          qi < static_cast<std::int64_t>(count); ++qi) {
@@ -867,7 +867,7 @@ Rcpp::List posting_search_impl(SEXP query_spec_value, SEXP feature_value,
         }
       }
 #ifdef _OPENMP
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static) num_threads(workers)
 #endif
       for (std::int64_t ai = 0;
            ai < static_cast<std::int64_t>(active[list].size()); ++ai) {

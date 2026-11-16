@@ -182,13 +182,14 @@ void direct_low_dim_flat_l2(faiss::IndexFlatL2& index,
                             const float* queries,
                             int n_points,
                             int search_k,
+                            int n_threads,
                             std::vector<float>& distances,
                             std::vector<faiss::idx_t>& labels) {
   const float* data = index.get_xb();
   const auto n_data = index.ntotal;
   const int p = index.d;
 #ifdef _OPENMP
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static) num_threads(n_threads > 0 ? n_threads : omp_get_max_threads())
 #endif
   for (std::int64_t qi = 0; qi < n_points; ++qi) {
     using Candidate = std::pair<float, faiss::idx_t>;
@@ -1152,7 +1153,7 @@ List search_faiss_index(faiss::Index& index,
     direct_low_dim_search = low_dim_flat != nullptr;
     if (direct_low_dim_search) {
       direct_low_dim_flat_l2(*low_dim_flat, query_ptr, n_points,
-        search_k, distances, labels);
+        search_k, n_threads, distances, labels);
       batch_info = FaissBatchSearchInfo{n_points, 1};
     } else {
       batch_info = search_faiss_queries(
@@ -3424,7 +3425,7 @@ List faiss_index_search_float32_impl(SEXP index_ptr,
       dynamic_cast<faiss::IndexFlatL2*>(handle->index.get()) : nullptr;
     if (low_dim_flat != nullptr) {
       direct_low_dim_flat_l2(*low_dim_flat, xq.data, n_points,
-        search_k, distances, labels);
+        search_k, n_threads, distances, labels);
     } else {
       handle->index->search(n_points, xq.data, search_k,
         distances.data(), labels.data());

@@ -11,7 +11,7 @@ test_that("CUDA IVF query pilot raises probes to meet each recall tier", {
   for (tier in c(0.90, 0.95, 0.99)) {
     out <- nn(reference, query, k = k, backend = "cuda",
               method = "ivf", tuning = "pilot",
-              target_recall = tier)
+              target_recall = tier, n_threads = 1L)
     recall <- mean(vapply(seq_len(nrow(query)), function(i)
       length(intersect(out$indices[i, ], exact[[i]])) / k,
       numeric(1L)))
