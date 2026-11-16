@@ -34,9 +34,39 @@ selector. `faissR_get_nn_cuda_tuned_gpu()` retrieves the CUDA-resident
 self-KNN callable for `"auto"`, `"exact"`, `"flat"`, and `"bruteforce"`.
 `faissR_get_hnsw_index_build_v1()` builds an owned CPU FAISS HNSW index,
 and `faissR_get_hnsw_index_search_v1()` queries that index repeatedly.
+`faissR_get_hnsw_index_save_v1()` and
+`faissR_get_hnsw_index_load_v1()` write and restore that native index.
+`faissR_get_hnsw_index_calibrate_v1()` checks float32 pilot queries
+against the fitted index's full stored reference. It returns guarded
+recall and selected `efSearch`, or fails when the guard cannot be met.
+`faissR_get_hnsw_search_v2()` runs a private resident Euclidean HNSW
+search. It checks up to 256 seeded queries against the full reference,
+increases `efSearch` until a guarded pilot target is met, and fails
+explicitly otherwise. The result reports selected effort and pilot recall.
 `faissR_get_hnsw_tune_v1()` returns the deterministic shape-based HNSW
 settings without building an index. This policy lookup is distinct from
 the opt-in, data-aware [hnsw_tune()] workflow.
+`faissR_get_gpu_multi_knn_v1()` and
+`faissR_get_gpu_multi_query_knn_v1()` use FAISS CUDA indexes on explicit
+visible device IDs. Their result identifies the actual devices and whether
+the index was sharded or replicated. A one-device request provides a matched
+route for comparisons; multi-device results use host output.
+`faissR_get_metal_knn_v1()` and
+`faissR_get_metal_query_knn_v1()` use the native Metal implementation on
+the single Apple GPU. An unavailable requested accelerator is an error,
+never an implicit CPU fallback. Metal results report build/search scopes
+and `MTLDevice.currentAllocatedSize` before buffer allocation and after
+search while output buffers are still live. The result also sums the
+`allocatedSize` of live KNN buffers at that point. Metal's process-level
+counter can remain unchanged for shared buffers; neither measure is a
+peak or an exclusive VRAM footprint on unified memory.
+`faissR_get_matrix_knn_batch_v1()` searches bounded resident or
+file-backed reference batches on CPU, CUDA, or Metal. Its v2 counterpart
+accepts explicit CUDA device IDs; multiple IDs require a sharded FAISS
+index. The returned provider, backend, residency, build/search times and
+resource fields describe the route actually used. The private posting,
+result-row reader, reorder and shard-merge callables support the
+file-backed graph pipeline without exporting KNN functions at R level.
 The exact version-1 signatures are declared in `faissR_api_v1.h`;
 `faissR_api.h` includes the current versioned header for source
 compatibility.
@@ -50,7 +80,10 @@ native index and must remain reachable until all searches finish. The
 search callable accepts explicit `k`, `efSearch`, and thread settings and
 returns one-based identifiers, Euclidean distances, requested/effective
 settings, and a cumulative query-call count. The pointer is neither
-serializable nor safe for concurrent search calls. Its registered
+serializable as an R object nor safe for concurrent search calls. The
+private native save/load functions write a FAISS file; a checkpointing
+client must verify its source and settings identity and file hash before
+loading it, and verify a search pilot afterward. Its registered
 finalizer releases the index when the pointer is garbage-collected.
 }
 

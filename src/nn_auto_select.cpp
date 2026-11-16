@@ -2467,7 +2467,10 @@ List nn_tune_cuda_ivf_cpp(int n,
       default_nprobe = 9;
     } else if (k_bucket <= 30) {
       default_nlist = root * 4;
-      default_nprobe = 99;
+      // The 99-probe setting missed the 0.99 tier on two 100k Deep1B
+      // selections. A 192-probe pilot passed both; other data still need
+      // their own exact-reference audit.
+      default_nprobe = target_code >= 99 ? 192 : 99;
     } else if (k_bucket <= 50) {
       default_nlist = half_root;
       default_nprobe = 9;

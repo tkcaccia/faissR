@@ -5,12 +5,17 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <climits>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <numeric>
+#include <queue>
+#include <random>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "faissr_size_utils.hpp"
@@ -27,11 +32,13 @@
 #include <faiss/IndexFlat.h>
 #include <faiss/Clustering.h>
 #include <faiss/IndexHNSW.h>
+#include <faiss/index_io.h>
 #include <faiss/IndexIVF.h>
 #include <faiss/IndexIVFFlat.h>
 #include <faiss/IndexIVFPQ.h>
 #include <faiss/IndexNNDescent.h>
 #include <faiss/IndexNSG.h>
+#include <faiss/utils/distances.h>
 
 #define FAISSR_STRINGIFY_IMPL(value) #value
 #define FAISSR_STRINGIFY(value) FAISSR_STRINGIFY_IMPL(value)
@@ -167,6 +174,47 @@ int faiss_query_batch_size(const int n_points,
     batch = std::max(1024, batch / 2);
   }
   return std::max(1, std::min(batch, n_points));
+}
+
+void direct_low_dim_flat_l2(faiss::IndexFlatL2& index,
+                            const float* queries,
+                            int n_points,
+                            int search_k,
+                            std::vector<float>& distances,
+                            std::vector<faiss::idx_t>& labels) {
+  const float* data = index.get_xb();
+  const auto n_data = index.ntotal;
+  const int p = index.d;
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+  for (std::int64_t qi = 0; qi < n_points; ++qi) {
+    using Candidate = std::pair<float, faiss::idx_t>;
+    std::priority_queue<Candidate> best;
+    const float* query = queries + qi * p;
+    for (faiss::idx_t row = 0; row < n_data; ++row) {
+      const float* reference = data + row * p;
+      float distance = 0.0f;
+      for (int column = 0; column < p; ++column) {
+        const float delta = query[column] - reference[column];
+        distance += delta * delta;
+      }
+      Candidate candidate{distance, row};
+      if (best.size() < static_cast<std::size_t>(search_k)) {
+        best.push(candidate);
+      } else if (candidate < best.top()) {
+        best.pop();
+        best.push(candidate);
+      }
+    }
+    for (int rank = search_k - 1; rank >= 0; --rank) {
+      const auto candidate = best.top();
+      best.pop();
+      const auto offset = qi * search_k + rank;
+      distances[offset] = candidate.first;
+      labels[offset] = candidate.second;
+    }
+  }
 }
 
 #ifdef FAISSR_HAS_FAISS_GPU
@@ -594,6 +642,9 @@ Rcpp::List make_faiss_gpu_knn_result(FaissGpuKnnHandle* handle,
     Rcpp::Named("distance_residency") = "cuda_device",
     Rcpp::Named("indices_residency") = "cuda_device",
     Rcpp::Named("result_residency") = "cuda",
+    Rcpp::Named("data_residency") = "unavailable",
+    Rcpp::Named("resident_result_bytes") =
+      static_cast<double>(handle->n_points) * handle->k * 8.0,
     Rcpp::Named("layout") = "column_major_query_by_k",
     Rcpp::Named("metric") = metric,
     Rcpp::Named("backend_used") = backend_used,
@@ -783,8 +834,14 @@ List search_faiss_flat_float32_ptr(const float* data,
   std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
   std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
   FaissBatchSearchInfo batch_info;
+  double index_build_seconds = 0.0;
+  double search_seconds = 0.0;
   try {
+    const auto build_started = std::chrono::steady_clock::now();
     index->add(n, data);
+    index_build_seconds = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - build_started).count();
+    const auto search_started = std::chrono::steady_clock::now();
     batch_info = search_faiss_queries(
       *index,
       points,
@@ -797,6 +854,8 @@ List search_faiss_flat_float32_ptr(const float* data,
       distances,
       labels
     );
+    search_seconds = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - search_started).count();
   } catch (const std::exception& e) {
     Rcpp::stop("FAISS float32 Flat search failed: %s", e.what());
   }
@@ -824,6 +883,10 @@ List search_faiss_flat_float32_ptr(const float* data,
   out["batch_query"] = true;
   out["query_n"] = n_points;
   out["query_call_count"] = batch_info.batches;
+  out["index_build_seconds"] = index_build_seconds;
+  out["index_build_seconds_scope"] = "faiss_index_train_add";
+  out["search_seconds"] = search_seconds;
+  out["search_seconds_scope"] = "faiss_index_search";
   return out;
 }
 
@@ -1068,24 +1131,43 @@ List search_faiss_index(faiss::Index& index,
   std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
   std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
   FaissBatchSearchInfo batch_info;
+  double index_build_seconds = 0.0;
+  double search_seconds = 0.0;
+  bool direct_low_dim_search = false;
 
   try {
+    const auto build_started = std::chrono::steady_clock::now();
     if (!index.is_trained) {
       index.train(n_data, xb.data());
     }
     index.add(n_data, xb.data());
-    batch_info = search_faiss_queries(
-      index,
-      query_ptr,
-      n_points,
-      data.ncol(),
-      search_k,
-      use_ivf_search_params,
-      nprobe,
-      is_faiss_gpu_index_type(index_type),
-      distances,
-      labels
-    );
+    index_build_seconds = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - build_started).count();
+    const auto search_started = std::chrono::steady_clock::now();
+    auto* low_dim_flat = index_type == "IndexFlatL2" &&
+      data.ncol() <= 3 ? dynamic_cast<faiss::IndexFlatL2*>(&index) :
+      nullptr;
+    direct_low_dim_search = low_dim_flat != nullptr;
+    if (direct_low_dim_search) {
+      direct_low_dim_flat_l2(*low_dim_flat, query_ptr, n_points,
+        search_k, distances, labels);
+      batch_info = FaissBatchSearchInfo{n_points, 1};
+    } else {
+      batch_info = search_faiss_queries(
+        index,
+        query_ptr,
+        n_points,
+        data.ncol(),
+        search_k,
+        use_ivf_search_params,
+        nprobe,
+        is_faiss_gpu_index_type(index_type),
+        distances,
+        labels
+      );
+    }
+    search_seconds = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - search_started).count();
   } catch (const std::exception& e) {
     Rcpp::stop("FAISS %s search failed: %s", index_type.c_str(), e.what());
   }
@@ -1099,6 +1181,11 @@ List search_faiss_index(faiss::Index& index,
   out["batch_query"] = true;
   out["query_n"] = n_points;
   out["query_call_count"] = batch_info.batches;
+  out["index_build_seconds"] = index_build_seconds;
+  out["index_build_seconds_scope"] = "faiss_index_train_add";
+  out["search_seconds"] = search_seconds;
+  out["search_seconds_scope"] = direct_low_dim_search ?
+    "direct_low_dim_flat_l2" : "faiss_index_search";
   if (is_faiss_gpu_index_type(index_type)) {
     annotate_faiss_gpu_residency(
       out, same_storage, n_data, n_points, data.ncol(), search_k
@@ -1149,12 +1236,18 @@ List search_faiss_index_float32(faiss::Index& index,
   std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
   std::vector<faiss::idx_t> labels(static_cast<std::size_t>(n_points) * search_k);
   FaissBatchSearchInfo batch_info;
+  double index_build_seconds = 0.0;
+  double search_seconds = 0.0;
 
   try {
+    const auto build_started = std::chrono::steady_clock::now();
     if (!index.is_trained) {
       index.train(xb.nrow, xb.data);
     }
     index.add(xb.nrow, xb.data);
+    index_build_seconds = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - build_started).count();
+    const auto search_started = std::chrono::steady_clock::now();
     batch_info = search_faiss_queries(
       index,
       query_ptr,
@@ -1167,6 +1260,8 @@ List search_faiss_index_float32(faiss::Index& index,
       distances,
       labels
     );
+    search_seconds = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - search_started).count();
   } catch (const std::exception& e) {
     Rcpp::stop("FAISS %s float32 search failed: %s", index_type.c_str(), e.what());
   }
@@ -1181,6 +1276,10 @@ List search_faiss_index_float32(faiss::Index& index,
   out["batch_query"] = true;
   out["query_n"] = n_points;
   out["query_call_count"] = batch_info.batches;
+  out["index_build_seconds"] = index_build_seconds;
+  out["index_build_seconds_scope"] = "faiss_index_train_add";
+  out["search_seconds"] = search_seconds;
+  out["search_seconds_scope"] = "faiss_index_search";
   out["input_type"] = "float32";
   out["input_layout"] = same_storage ?
     xb.layout :
@@ -2246,6 +2345,164 @@ List faiss_hnsw_float32_knn_impl(SEXP data,
   return out;
 }
 
+List faiss_hnsw_adaptive_knn_impl(SEXP data, SEXP query, int k,
+                                  int m, int ef_construction,
+                                  int initial_ef_search,
+                                  double target_recall, int n_threads,
+                                  std::string distance_storage,
+                                  bool exclude_self) {
+  if (target_recall != 0.90 && target_recall != 0.95 &&
+      target_recall != 0.99) {
+    Rcpp::stop("HNSW target_recall must be 0.90, 0.95, or 0.99");
+  }
+  if (n_threads < 1) Rcpp::stop("n_threads must be positive");
+  const bool same_storage = Rf_isNull(query);
+  if (same_storage) query = data;
+  if (exclude_self && !same_storage) {
+    Rcpp::stop("HNSW self-exclusion requires a self query");
+  }
+  MatrixViewF32 xb = make_float32_matrix_view(
+    data, "data", "euclidean", n_threads
+  );
+  MatrixViewF32 xq = same_storage ? MatrixViewF32() :
+    make_float32_matrix_view(query, "query", "euclidean", n_threads);
+  const int nq = same_storage ? xb.nrow : xq.nrow;
+  const float* query_ptr = same_storage ? xb.data : xq.data;
+  if (nq < 1 || (!same_storage && xq.ncol != xb.ncol) ||
+      k < 1 || k >= xb.nrow) {
+    Rcpp::stop("Invalid HNSW data, query, or k dimensions");
+  }
+  const bool float_distances = distance_storage == "float" ||
+    distance_storage == "float32";
+  if (!float_distances && distance_storage != "double") {
+    Rcpp::stop("HNSW distance_storage must be double or float");
+  }
+  m = clamp_positive(m, 32, xb.nrow);
+  ef_construction = std::max(m, ef_construction);
+  int ef = std::max(k + (exclude_self ? 1 : 0), initial_ef_search);
+  const int max_ef = std::max(ef, std::min(xb.nrow, 1024));
+  const int search_k = k + (exclude_self ? 1 : 0);
+  const int pilot_n = std::min(nq, 256);
+  const int truth_k = std::min(xb.nrow, search_k + 1);
+  OmpThreadScope threads(n_threads);
+  const auto started = std::chrono::steady_clock::now();
+  faiss::IndexHNSWFlat index(xb.ncol, m, faiss::METRIC_L2);
+  index.hnsw.efConstruction = ef_construction;
+  index.add(xb.nrow, xb.data);
+  const auto built = std::chrono::steady_clock::now();
+  std::vector<int> pilot_rows(pilot_n);
+  std::iota(pilot_rows.begin(), pilot_rows.end(), 0);
+  std::mt19937 rng(20261121u);
+  for (int i = pilot_n; i < nq; ++i) {
+    std::uniform_int_distribution<int> draw(0, i);
+    const int slot = draw(rng);
+    if (slot < pilot_n) pilot_rows[slot] = i;
+  }
+  std::vector<float> pilot(static_cast<std::size_t>(pilot_n) * xb.ncol);
+  for (int i = 0; i < pilot_n; ++i) {
+    std::copy_n(query_ptr + static_cast<std::size_t>(pilot_rows[i]) * xb.ncol,
+                xb.ncol, pilot.data() + static_cast<std::size_t>(i) * xb.ncol);
+  }
+  std::vector<float> truth_dist(static_cast<std::size_t>(pilot_n) * truth_k);
+  std::vector<faiss::idx_t> truth_id(
+    static_cast<std::size_t>(pilot_n) * truth_k
+  );
+  faiss::knn_L2sqr(
+    pilot.data(), xb.data, xb.ncol, pilot_n, xb.nrow, truth_k,
+    truth_dist.data(), truth_id.data()
+  );
+  const double guard = std::min(
+    1.0, target_recall + 2.58 * std::sqrt(
+      target_recall * (1.0 - target_recall) / (pilot_n * k)
+    )
+  );
+  double pilot_recall = 0.0;
+  int attempts = 0;
+  for (;;) {
+    index.hnsw.efSearch = ef;
+    std::vector<float> approx_dist(
+      static_cast<std::size_t>(pilot_n) * search_k
+    );
+    std::vector<faiss::idx_t> approx_id(
+      static_cast<std::size_t>(pilot_n) * search_k
+    );
+    index.search(pilot_n, pilot.data(), search_k,
+                 approx_dist.data(), approx_id.data());
+    std::size_t hits = 0;
+    for (int i = 0; i < pilot_n; ++i) {
+      int truth_seen = 0;
+      for (int j = 0; j < truth_k && truth_seen < k; ++j) {
+        const faiss::idx_t wanted = truth_id[
+          static_cast<std::size_t>(i) * truth_k + j
+        ];
+        if (exclude_self && wanted == pilot_rows[i]) continue;
+        ++truth_seen;
+        const auto begin = approx_id.begin() +
+          static_cast<std::size_t>(i) * search_k;
+        const auto end = begin + search_k;
+        if (std::find(begin, end, wanted) != end) ++hits;
+      }
+    }
+    pilot_recall = static_cast<double>(hits) / (pilot_n * k);
+    ++attempts;
+    if (pilot_recall >= guard || ef >= max_ef) break;
+    ef = std::min(max_ef, std::max(ef + 1, ef * 2));
+  }
+  const auto audited = std::chrono::steady_clock::now();
+  if (pilot_recall < guard) {
+    Rcpp::stop(
+      "HNSW pilot recall %.6f missed guard %.6f at efSearch=%d",
+      pilot_recall, guard, ef
+    );
+  }
+  std::vector<float> distances(static_cast<std::size_t>(nq) * search_k);
+  std::vector<faiss::idx_t> labels(static_cast<std::size_t>(nq) * search_k);
+  const FaissBatchSearchInfo batch = search_faiss_queries(
+    index, query_ptr, nq, xb.ncol, search_k, false, NA_INTEGER, false,
+    distances, labels
+  );
+  const auto finished = std::chrono::steady_clock::now();
+  List out = format_faiss_result(
+    labels, distances, nq, search_k, k, same_storage, exclude_self,
+    "IndexHNSWFlat", false, DistanceOutput::L2Squared, n_threads,
+    NA_INTEGER, NA_INTEGER, m, ef, float_distances
+  );
+  const auto seconds = [](auto from, auto to) {
+    return std::chrono::duration<double>(to - from).count();
+  };
+  out["m"] = m;
+  out["ef_construction"] = ef_construction;
+  out["ef_search"] = ef;
+  out["requested_m"] = m;
+  out["requested_ef_construction"] = ef_construction;
+  out["requested_ef_search"] = initial_ef_search;
+  out["hnsw_parameters_adjusted"] = ef != initial_ef_search;
+  out["pilot_recall"] = pilot_recall;
+  out["pilot_guard_recall"] = guard;
+  out["pilot_rows"] = pilot_n;
+  Rcpp::IntegerVector pilot_ids(pilot_n);
+  for (int i = 0; i < pilot_n; ++i) {
+    pilot_ids[i] = pilot_rows[i] + 1;
+  }
+  out["pilot_row_ids"] = pilot_ids;
+  out["pilot_seed"] = 20261121;
+  out["pilot_reference"] = "full_cpu_flat";
+  out["pilot_attempts"] = attempts;
+  out["target_recall"] = target_recall;
+  out["target_met"] = pilot_recall >= target_recall;
+  out["recall_audited"] = true;
+  out["recall_status"] = "pilot_exact_reference_passed";
+  out["build_seconds"] = seconds(started, built);
+  out["pilot_seconds"] = seconds(built, audited);
+  out["search_seconds"] = seconds(audited, finished);
+  out["search_batch_size"] = batch.batch_size;
+  out["search_batches"] = batch.batches;
+  out["batch_query"] = true;
+  out["query_n"] = nq;
+  out["query_call_count"] = batch.batches + attempts;
+  return out;
+}
+
 SEXP faiss_hnsw_index_build_float32_impl(SEXP data,
                                          int m,
                                          int ef_construction,
@@ -2323,10 +2580,74 @@ SEXP faiss_hnsw_index_build_float32_impl(SEXP data,
     ptr.attr("input_owns_data") = xb.owns_data;
     ptr.attr("float32_compatibility_conversion") = xb.compatibility_conversion;
     ptr.attr("serialization_supported") = false;
+    ptr.attr("native_persistence_supported") = true;
     ptr.attr("concurrent_search_supported") = false;
     return ptr;
   } catch (const std::exception& e) {
     Rcpp::stop("FAISS HNSW fitted-index build failed: %s", e.what());
+  }
+}
+
+void faiss_hnsw_index_save_impl(SEXP index_ptr, const std::string& path) {
+  if (path.empty() || TYPEOF(index_ptr) != EXTPTRSXP ||
+      R_ExternalPtrTag(index_ptr) != faiss_hnsw_index_v1_tag()) {
+    Rcpp::stop("Invalid FAISS HNSW index or save path");
+  }
+  Rcpp::XPtr<FaissHnswIndexHandle> handle(index_ptr);
+  if (handle.get() == nullptr || handle->index.get() == nullptr) {
+    Rcpp::stop("FAISS HNSW index pointer is not valid");
+  }
+  try {
+    faiss::write_index(handle->index.get(), path.c_str());
+  } catch (const std::exception& e) {
+    Rcpp::stop("FAISS HNSW index save failed: %s", e.what());
+  }
+}
+
+SEXP faiss_hnsw_index_load_impl(const std::string& path, int n_threads) {
+  if (path.empty() || n_threads < 1) {
+    Rcpp::stop("Invalid FAISS HNSW load path or thread count");
+  }
+  try {
+    std::unique_ptr<faiss::Index> loaded(faiss::read_index(path.c_str()));
+    faiss::IndexHNSWFlat* hnsw = dynamic_cast<faiss::IndexHNSWFlat*>(loaded.get());
+    if (hnsw == nullptr || hnsw->ntotal < 1 || hnsw->ntotal > INT_MAX ||
+        hnsw->d < 1 || hnsw->d > INT_MAX ||
+        hnsw->metric_type != faiss::METRIC_L2 ||
+        hnsw->hnsw.nb_neighbors(0) < 1) {
+      Rcpp::stop("Saved index is not a supported Euclidean FAISS HNSW index");
+    }
+    const int n = static_cast<int>(hnsw->ntotal);
+    const int p = static_cast<int>(hnsw->d);
+    const int m = hnsw->hnsw.nb_neighbors(0) / 2;
+    const int ef_construction = hnsw->hnsw.efConstruction;
+    const int ef_search = hnsw->hnsw.efSearch;
+    std::unique_ptr<faiss::IndexHNSWFlat> owned(
+      static_cast<faiss::IndexHNSWFlat*>(loaded.release()));
+    FaissHnswIndexHandle* handle = new FaissHnswIndexHandle(
+      std::move(owned), n, p, m, ef_construction, ef_search,
+      m, ef_construction, ef_search, n_threads,
+      DistanceOutput::L2Squared, "euclidean", "saved_faiss_index", true
+    );
+    Rcpp::XPtr<FaissHnswIndexHandle> ptr(
+      handle, true, faiss_hnsw_index_v1_tag());
+    ptr.attr("class") = "faissR_faiss_hnsw_index";
+    ptr.attr("api_version") = 1;
+    ptr.attr("n") = n;
+    ptr.attr("p") = p;
+    ptr.attr("m") = m;
+    ptr.attr("ef_construction") = ef_construction;
+    ptr.attr("ef_search") = ef_search;
+    ptr.attr("n_threads") = n_threads;
+    ptr.attr("metric") = "euclidean";
+    ptr.attr("input_type") = "float32";
+    ptr.attr("input_layout") = "saved_faiss_index";
+    ptr.attr("serialization_supported") = false;
+    ptr.attr("native_persistence_supported") = true;
+    ptr.attr("concurrent_search_supported") = false;
+    return ptr;
+  } catch (const std::exception& e) {
+    Rcpp::stop("FAISS HNSW index load failed: %s", e.what());
   }
 }
 
@@ -2428,6 +2749,132 @@ List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
   out["index_input_owns_data"] = handle->input_owns_data;
   out["float32_compatibility_conversion"] = xq.compatibility_conversion;
   return out;
+}
+
+List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
+                                     Rcpp::IntegerVector self_ids, int k,
+                                     double target_recall, int initial_ef,
+                                     int n_threads) {
+  if (TYPEOF(index_ptr) != EXTPTRSXP ||
+      R_ExternalPtrTag(index_ptr) != faiss_hnsw_index_v1_tag()) {
+    Rcpp::stop("HNSW calibration requires a faissR version-1 index");
+  }
+  Rcpp::XPtr<FaissHnswIndexHandle> handle(index_ptr);
+  if (!handle.get() || !handle->index.get() ||
+      handle->metric != "euclidean") {
+    Rcpp::stop("HNSW calibration requires a valid Euclidean index");
+  }
+  if (k < 1 || k >= handle->n || initial_ef < 1 || n_threads < 1 ||
+      self_ids.size() < 1) {
+    Rcpp::stop("Invalid HNSW calibration dimensions or settings");
+  }
+  if (target_recall != 0.90 && target_recall != 0.95 &&
+      target_recall != 0.99) {
+    Rcpp::stop("target_recall must be 0.90, 0.95, or 0.99");
+  }
+  MatrixViewF32 xq = make_float32_matrix_view(
+    points, "points", "euclidean", n_threads
+  );
+  if (xq.nrow != self_ids.size() || xq.ncol != handle->p) {
+    Rcpp::stop("HNSW calibration query or self_ids shape mismatch");
+  }
+  for (int id : self_ids) {
+    if (id == NA_INTEGER || id < 0 || id > handle->n) {
+      Rcpp::stop("HNSW calibration self_ids are out of range");
+    }
+  }
+  const auto* flat = dynamic_cast<const faiss::IndexFlat*>(
+    handle->index->storage
+  );
+  if (!flat || flat->ntotal != handle->n) {
+    Rcpp::stop("HNSW calibration cannot access its full reference");
+  }
+  const int search_k = std::min(handle->n, k + 2);
+  const int candidate_k = std::min(handle->n, k + 1);
+  const std::size_t size = static_cast<std::size_t>(xq.nrow) * search_k;
+  const std::size_t candidate_size =
+    static_cast<std::size_t>(xq.nrow) * candidate_k;
+  std::vector<float> exact_dist(size), candidate_dist(candidate_size);
+  std::vector<faiss::idx_t> exact_id(size), candidate_id(candidate_size);
+  const auto started = std::chrono::steady_clock::now();
+  {
+    OmpThreadScope threads(n_threads);
+    faiss::knn_L2sqr(xq.data, flat->get_xb(), handle->p,
+                     xq.nrow, handle->n, search_k,
+                     exact_dist.data(), exact_id.data());
+  }
+  int boundary_ties = 0;
+  const int max_ef = std::min(handle->n, std::max(1024, k));
+  int ef = std::min(max_ef, std::max(k, initial_ef));
+  const double standard_error = std::sqrt(
+    target_recall * (1 - target_recall) / (xq.nrow * k)
+  );
+  const double guard = std::min(1.0, target_recall +
+                                2.58 * standard_error);
+  double recall = 0;
+  int attempts = 0;
+  for (;;) {
+    {
+      OmpThreadScope threads(n_threads);
+      handle->index->hnsw.efSearch = ef;
+      handle->index->search(xq.nrow, xq.data, candidate_k,
+                            candidate_dist.data(), candidate_id.data());
+    }
+    int hits = 0;
+    boundary_ties = 0;
+    for (int row = 0; row < xq.nrow; ++row) {
+      const int self = self_ids[row] - 1;
+      const auto offset = static_cast<std::size_t>(row) * search_k;
+      const auto candidate_offset =
+        static_cast<std::size_t>(row) * candidate_k;
+      int rank = 0;
+      float kth = 0;
+      for (int j = 0; j < search_k; ++j) {
+        const auto wanted = exact_id[offset + j];
+        if (wanted < 0 || wanted == self) continue;
+        if (rank == k) {
+          if (exact_dist[offset + j] == kth) ++boundary_ties;
+          break;
+        }
+        kth = exact_dist[offset + j];
+        ++rank;
+        int candidate_rank = 0;
+        for (int a = 0; a < candidate_k; ++a) {
+          const auto found = candidate_id[candidate_offset + a];
+          if (found < 0 || found == self) continue;
+          if (candidate_rank++ >= k) break;
+          if (found == wanted) {
+            ++hits;
+            break;
+          }
+        }
+      }
+      if (rank < k) Rcpp::stop("HNSW calibration exact reference incomplete");
+    }
+    recall = static_cast<double>(hits) / (xq.nrow * k);
+    ++attempts;
+    if (recall >= guard || ef >= max_ef) break;
+    ef = std::min(max_ef, std::max(ef + 1, ef * 2));
+  }
+  const double seconds = std::chrono::duration<double>(
+    std::chrono::steady_clock::now() - started
+  ).count();
+  if (recall < guard) {
+    Rcpp::stop("HNSW pilot recall %.6f missed guard %.6f at efSearch=%d",
+               recall, guard, ef);
+  }
+  return List::create(
+    Rcpp::Named("ef_search") = ef,
+    Rcpp::Named("pilot_recall") = recall,
+    Rcpp::Named("pilot_guard_recall") = guard,
+    Rcpp::Named("pilot_rows") = xq.nrow,
+    Rcpp::Named("pilot_boundary_ties") = boundary_ties,
+    Rcpp::Named("pilot_attempts") = attempts,
+    Rcpp::Named("pilot_seconds") = seconds,
+    Rcpp::Named("pilot_reference") = "full_cpu_flat",
+    Rcpp::Named("target_recall") = target_recall,
+    Rcpp::Named("target_met") = recall >= target_recall
+  );
 }
 
 SEXP faiss_index_build_float32_impl(SEXP data,
@@ -2789,7 +3236,16 @@ List faiss_index_search_float32_impl(SEXP index_ptr,
 
   try {
     OmpThreadScope threads(n_threads);
-    handle->index->search(n_points, xq.data, search_k, distances.data(), labels.data());
+    auto* low_dim_flat = handle->kind == "flat" &&
+      handle->metric == "euclidean" && handle->p <= 3 ?
+      dynamic_cast<faiss::IndexFlatL2*>(handle->index.get()) : nullptr;
+    if (low_dim_flat != nullptr) {
+      direct_low_dim_flat_l2(*low_dim_flat, xq.data, n_points,
+        search_k, distances, labels);
+    } else {
+      handle->index->search(n_points, xq.data, search_k,
+        distances.data(), labels.data());
+    }
   } catch (const std::exception& e) {
     Rcpp::stop("FAISS fitted-index search failed: %s", e.what());
   }
@@ -3516,6 +3972,7 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
   providers.reserve(devices.size());
   for (std::size_t i = 0; i < devices.size(); ++i) {
     state->owners.emplace_back(new faiss::gpu::StandardGpuResources());
+    state->owners.back()->setTempMemory(64 * 1024 * 1024);
     providers.push_back(state->owners.back().get());
   }
   faiss::gpu::GpuMultipleClonerOptions options;
@@ -3626,7 +4083,8 @@ List faiss_gpu_index_search_gpu_impl(SEXP pointer,
     points, "points", state->metric, 1
   );
   normalize_float32_view(query, state->metric);
-  if (query.nrow < 1 || query.ncol != state->columns || k != state->k ||
+  if (query.nrow < 1 || query.ncol != state->columns ||
+      k < 1 || k > state->k ||
       k > state->rows || (exclude_self &&
       (query.nrow != state->rows || k >= state->rows))) {
     Rcpp::stop("Invalid GPU-resident persistent query dimensions or k.");
@@ -3726,25 +4184,33 @@ List faiss_gpu_index_search_impl(SEXP pointer,
   if (state.get() == nullptr || state->gpu_index == nullptr) {
     Rcpp::stop("Persistent FAISS GPU index is invalid.");
   }
-  if (distance_storage != "float" && distance_storage != "double") {
-    Rcpp::stop("distance_storage must be `float` or `double`.");
+  const bool exclude_self = distance_storage == "float_self_exclude" ||
+    distance_storage == "double_self_exclude";
+  const bool float_distances = distance_storage == "float" ||
+    distance_storage == "float_self_exclude";
+  if (!float_distances && distance_storage != "double" &&
+      distance_storage != "double_self_exclude") {
+    Rcpp::stop("Invalid persistent GPU distance_storage.");
   }
   const auto t0 = std::chrono::steady_clock::now();
   MatrixViewF32 query = make_float32_matrix_view(
     points, "points", "euclidean", 1
   );
-  if (query.nrow < 1 || query.ncol != state->columns || k != state->k) {
+  const int search_k = exclude_self ? k + 1 : k;
+  if (query.nrow < 1 || query.ncol != state->columns ||
+      k < 1 || search_k > state->k ||
+      (exclude_self && (query.nrow != state->rows || k >= state->rows))) {
     Rcpp::stop("Invalid persistent FAISS GPU query dimensions or k.");
   }
   const R_xlen_t output_items =
-    faissr::matrix_element_count(query.nrow, k);
+    faissr::matrix_element_count(query.nrow, search_k);
   const auto t_convert = std::chrono::steady_clock::now();
   std::vector<float> distances(static_cast<std::size_t>(output_items));
   std::vector<faiss::idx_t> labels(static_cast<std::size_t>(output_items));
   FaissBatchSearchInfo batch_info;
   try {
     batch_info = search_faiss_queries(
-      *state->gpu_index, query.data, query.nrow, query.ncol, k,
+      *state->gpu_index, query.data, query.nrow, query.ncol, search_k,
       false, NA_INTEGER, true, distances, labels
     );
   } catch (const std::exception& e) {
@@ -3752,13 +4218,14 @@ List faiss_gpu_index_search_impl(SEXP pointer,
   }
   const auto t_search = std::chrono::steady_clock::now();
   List out = format_faiss_result(
-    labels, distances, query.nrow, k, k, false, false,
+    labels, distances, query.nrow, search_k, k,
+    exclude_self, exclude_self,
     state->devices.size() == 1 ?
       (state->method == "flat" ? "GpuIndexFlat" : "GpuIndexIVFFlat") :
       (state->shard ? "GpuIndexShards" : "GpuIndexReplicas"),
     state->method == "flat", DistanceOutput::L2Squared, 1,
     state->nlist, state->nprobe, NA_INTEGER, NA_INTEGER,
-    distance_storage == "float"
+    float_distances
   );
   const auto t_done = std::chrono::steady_clock::now();
   const auto seconds = [](auto a, auto b) {
@@ -3779,6 +4246,7 @@ List faiss_gpu_index_search_impl(SEXP pointer,
   out["multi_gpu_mode"] = state->devices.size() == 1 ? "single" :
     (state->shard ? "shard" : "replicate");
   out["index_reused"] = true;
+  out["exclude_self"] = exclude_self;
   out["search_batch_size"] = batch_info.batch_size;
   out["search_batches"] = batch_info.batches;
   out["input_conversion_seconds"] = seconds(t0, t_convert);
@@ -3889,6 +4357,9 @@ List faiss_gpu_knn_retain_data_impl(SEXP result, SEXP data) {
   out["n_features"] = view.ncol;
   out["data_residency"] = "cuda_device";
   out["data_layout"] = "row_major_observation_by_feature";
+  out["resident_result_bytes"] =
+    Rcpp::as<double>(out["resident_result_bytes"]) +
+    static_cast<double>(bytes);
   out["pca_data_compatible"] = true;
   out["retained_data_bytes"] = static_cast<double>(bytes);
   out.attr("class") =

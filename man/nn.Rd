@@ -10,8 +10,7 @@ nn(
   k = NULL,
   exclude_self = FALSE,
   backend = NULL,
-  method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf",
-    "ivfpq",
+  method = c("auto", "exact", "flat", "bruteforce", "grid", "hnsw", "ivf", "ivfpq",
     "vamana_style", "nsg_style", "nndescent_style", "ivfpq_fastscan", "cagra"),
   metric = c("euclidean", "cosine", "correlation"),
   tuning = c("auto", "cache", "pilot", "fixed", "off", "none"),
@@ -134,7 +133,14 @@ untuned fixed defaults while retaining metadata, and `"off"`/`"none"`
 disables tuning. Result metadata records the selected parameters, their
 provenance, and `tuning_benchmark_target_met` when a benchmark-derived row
 did not attain the requested target. Exact methods record recall 1 by
-construction; their tuning controls batching, copies, and resource reuse.}
+construction; their tuning controls batching, copies, and resource reuse.
+For independent-query Euclidean CUDA FAISS IVF, `"pilot"` compares up to
+128 evenly spaced queries with exact GPU Flat search over the full
+reference, then raises `nprobe` on one persistent index until sampled
+strict-ID recall meets `target_recall`. Kth-boundary ties fail explicitly.
+The result records `pilot_recall`, `pilot_rows`, and `pilot_probe_trace`.
+The pilot verifies its sampled queries, not untested queries or other
+data sets; `"auto"` still uses static parameters for this route.}
 
 \item{target_recall}{Requested recall tier: `0.9`, `0.95`, or `0.99`
 (default). Approximate methods use it to select a speed/quality policy;
@@ -199,6 +205,18 @@ A list with integer matrix `indices`, `distances`, and stable
   `backend_used`. Every result declares `distance_is_metric`,
   `distance_semantics`, `distance_comparable_across_queries`, and
   `distance_order`.
+  CPU FAISS fitted-index routes also return `index_build_seconds` and
+  `search_seconds` with scope labels. A cache hit reports zero build time
+  and `index_build_seconds_scope = "cached_index_reused"`; search time
+  includes the R-to-native call and result conversion. One-shot CPU FAISS
+  routes measure native index training/add and search separately.
+  With `options(faissR.measure_resources = TRUE)`, the result also has
+  `resource_measurement`: process RSS snapshots before and after the public
+  call, plus the process-lifetime RSS high-water mark when available.
+  `options(faissR.measure_device_memory = TRUE)` additionally requests
+  process-level device snapshots through `gpuinfo`. These snapshots do not
+  measure the peak during the call and the monitoring cost is outside the
+  native stage times. Unsupported measurements remain unavailable.
   Float32 routes also record `input_layout` and
   `input_owns_data` so downstream packages can distinguish direct float32
   payload use from one-time row-major conversion. Normalized Euclidean graph

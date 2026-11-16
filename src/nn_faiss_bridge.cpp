@@ -1,5 +1,7 @@
 #include <Rcpp.h>
 
+#include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -138,6 +140,12 @@ List faiss_hnsw_float32_knn_impl(SEXP data,
                                  bool exclude_self,
                                  int n_threads,
                                  std::string distance_storage);
+List faiss_hnsw_adaptive_knn_impl(SEXP data, SEXP query, int k,
+                                  int m, int ef_construction,
+                                  int initial_ef_search,
+                                  double target_recall, int n_threads,
+                                  std::string distance_storage,
+                                  bool exclude_self);
 SEXP faiss_hnsw_index_build_float32_impl(SEXP data,
                                          int m,
                                          int ef_construction,
@@ -145,6 +153,8 @@ SEXP faiss_hnsw_index_build_float32_impl(SEXP data,
                                          std::string metric,
                                          std::string distance_output,
                                          int n_threads);
+void faiss_hnsw_index_save_impl(SEXP index_ptr, const std::string& path);
+SEXP faiss_hnsw_index_load_impl(const std::string& path, int n_threads);
 List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
                                           SEXP points,
                                           int k,
@@ -152,6 +162,10 @@ List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
                                           int ef_search,
                                           int n_threads,
                                           std::string distance_storage);
+List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
+                                     Rcpp::IntegerVector self_ids, int k,
+                                     double target_recall, int initial_ef,
+                                     int n_threads);
 SEXP faiss_index_build_float32_impl(SEXP data,
                                     std::string kind,
                                     int nlist,
@@ -655,6 +669,9 @@ extern "C" SEXP faissR_hnsw_search_v1(SEXP data,
                                       SEXP target_recall,
                                       SEXP n_threads,
                                       SEXP distance_storage);
+extern "C" SEXP faissR_hnsw_search_v2(SEXP data, SEXP query,
+    SEXP n, SEXP p, SEXP k, SEXP target_recall,
+    SEXP n_threads, SEXP distance_storage);
 extern "C" SEXP faissR_hnsw_tune_v1(SEXP n, SEXP p, SEXP k,
     SEXP metric, SEXP target_recall);
 
@@ -662,6 +679,11 @@ extern "C" SEXP faissR_hnsw_index_build_v1(SEXP data, SEXP m,
     SEXP ef_construction, SEXP n_threads);
 extern "C" SEXP faissR_hnsw_index_search_v1(SEXP index, SEXP query,
     SEXP k, SEXP ef_search, SEXP n_threads);
+extern "C" SEXP faissR_hnsw_index_save_v1(SEXP index, SEXP path);
+extern "C" SEXP faissR_hnsw_index_load_v1(SEXP path, SEXP n_threads);
+extern "C" SEXP faissR_hnsw_index_calibrate_v1(SEXP index, SEXP query,
+    SEXP self_ids, SEXP k, SEXP target_recall, SEXP initial_ef,
+    SEXP n_threads);
 extern "C" SEXP faissR_flat_index_build_v1(SEXP data, SEXP n_threads);
 extern "C" SEXP faissR_flat_index_search_v1(SEXP index, SEXP query,
     SEXP k, SEXP n_threads);
@@ -669,6 +691,19 @@ extern "C" SEXP faissR_matrix_knn_batch_v1(SEXP query, SEXP reference,
     SEXP row_ids, SEXP k, SEXP backend, SEXP method,
     SEXP reference_chunk, SEXP memory_limit, SEXP n_threads,
     SEXP exclude_self);
+extern "C" SEXP faissR_matrix_knn_batch_v2(SEXP query, SEXP reference,
+    SEXP row_ids, SEXP k, SEXP backend, SEXP method,
+    SEXP reference_chunk, SEXP memory_limit, SEXP n_threads,
+    SEXP exclude_self, SEXP devices);
+extern "C" SEXP faissR_posting_search_v1(SEXP query, SEXP feature_path,
+    SEXP ids_path, SEXP offsets_path, SEXP centers, SEXP first_row,
+    SEXP count, SEXP k, SEXP nprobe, SEXP reference_chunk,
+    SEXP n_threads, SEXP exclude_self, SEXP posting_rows, SEXP verbose);
+extern "C" SEXP faissR_posting_distant_rows_v1(SEXP arguments);
+extern "C" SEXP faissR_posting_build_v1(SEXP arguments);
+extern "C" SEXP faissR_knn_rows_read_v1(SEXP arguments);
+extern "C" SEXP faissR_reorder_posting_graph_v1(SEXP arguments);
+extern "C" SEXP faissR_merge_knn_shard_v1(SEXP arguments);
 extern "C" SEXP faissR_gpu_knn_sample_v1(SEXP result, SEXP rows);
 
 extern "C" int faissR_c_api_version_impl() {
@@ -755,6 +790,11 @@ void register_faissR_ccallables(DllInfo *dll) {
   );
   R_RegisterCCallable(
     "faissR",
+    "faissR_hnsw_search_v2",
+    (DL_FUNC) &faissR_hnsw_search_v2
+  );
+  R_RegisterCCallable(
+    "faissR",
     "faissR_hnsw_tune_v1",
     (DL_FUNC) &faissR_hnsw_tune_v1
   );
@@ -770,6 +810,21 @@ void register_faissR_ccallables(DllInfo *dll) {
   );
   R_RegisterCCallable(
     "faissR",
+    "faissR_hnsw_index_save_v1",
+    (DL_FUNC) &faissR_hnsw_index_save_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_hnsw_index_load_v1",
+    (DL_FUNC) &faissR_hnsw_index_load_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_hnsw_index_calibrate_v1",
+    (DL_FUNC) &faissR_hnsw_index_calibrate_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
     "faissR_flat_index_build_v1",
     (DL_FUNC) &faissR_flat_index_build_v1
   );
@@ -782,6 +837,41 @@ void register_faissR_ccallables(DllInfo *dll) {
     "faissR",
     "faissR_matrix_knn_batch_v1",
     (DL_FUNC) &faissR_matrix_knn_batch_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_matrix_knn_batch_v2",
+    (DL_FUNC) &faissR_matrix_knn_batch_v2
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_posting_search_v1",
+    (DL_FUNC) &faissR_posting_search_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_posting_distant_rows_v1",
+    (DL_FUNC) &faissR_posting_distant_rows_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_posting_build_v1",
+    (DL_FUNC) &faissR_posting_build_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_knn_rows_read_v1",
+    (DL_FUNC) &faissR_knn_rows_read_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_reorder_posting_graph_v1",
+    (DL_FUNC) &faissR_reorder_posting_graph_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_merge_knn_shard_v1",
+    (DL_FUNC) &faissR_merge_knn_shard_v1
   );
 }
 
@@ -1041,6 +1131,28 @@ extern "C" SEXP faissR_hnsw_search_v1(SEXP data,
   END_RCPP
 }
 
+extern "C" SEXP faissR_hnsw_search_v2(SEXP data, SEXP query,
+    SEXP n, SEXP p, SEXP k, SEXP target_recall,
+    SEXP n_threads, SEXP distance_storage) {
+  BEGIN_RCPP
+  const int neighbors = Rcpp::as<int>(k);
+  const double target = Rcpp::as<double>(target_recall);
+  List params = nn_tune_faiss_hnsw_cpp(
+    Rcpp::as<int>(n), Rcpp::as<int>(p), neighbors, "euclidean",
+    target, NA_INTEGER, NA_INTEGER, NA_INTEGER, false
+  );
+  List out = faiss_hnsw_adaptive_knn_impl(
+    data, query, neighbors, Rcpp::as<int>(params["m"]),
+    Rcpp::as<int>(params["ef_construction"]),
+    Rcpp::as<int>(params["ef_search"]), target,
+    Rcpp::as<int>(n_threads),
+    Rcpp::as<std::string>(distance_storage), Rf_isNull(query)
+  );
+  out["tuning_rule"] = params["rule"];
+  return out;
+  END_RCPP
+}
+
 extern "C" SEXP faissR_hnsw_index_build_v1(SEXP data, SEXP m,
     SEXP ef_construction, SEXP n_threads) {
   BEGIN_RCPP
@@ -1067,6 +1179,35 @@ extern "C" SEXP faissR_hnsw_index_search_v1(SEXP index, SEXP query,
   return faiss_hnsw_index_search_float32_impl(
     index, query, Rcpp::as<int>(k), false,
     Rcpp::as<int>(ef_search), Rcpp::as<int>(n_threads), "double"
+  );
+  END_RCPP
+}
+
+extern "C" SEXP faissR_hnsw_index_save_v1(SEXP index, SEXP path) {
+  BEGIN_RCPP
+  faiss_hnsw_index_save_impl(index, Rcpp::as<std::string>(path));
+  return R_NilValue;
+  END_RCPP
+}
+
+extern "C" SEXP faissR_hnsw_index_load_v1(SEXP path, SEXP n_threads) {
+  BEGIN_RCPP
+  return faiss_hnsw_index_load_impl(
+    Rcpp::as<std::string>(path), Rcpp::as<int>(n_threads));
+  END_RCPP
+}
+
+extern "C" SEXP faissR_hnsw_index_calibrate_v1(SEXP index, SEXP query,
+    SEXP self_ids, SEXP k, SEXP target_recall, SEXP initial_ef,
+    SEXP n_threads) {
+  BEGIN_RCPP
+  if (!Rf_inherits(query, "float32")) {
+    Rcpp::stop("HNSW calibration requires a float::fl()/float32 query");
+  }
+  return faiss_hnsw_index_calibrate_impl(
+    index, query, Rcpp::as<Rcpp::IntegerVector>(self_ids),
+    Rcpp::as<int>(k), Rcpp::as<double>(target_recall),
+    Rcpp::as<int>(initial_ef), Rcpp::as<int>(n_threads)
   );
   END_RCPP
 }
@@ -1258,6 +1399,88 @@ List nn_faiss_gpu_ivf_flat_cpp(NumericMatrix data,
   return faiss_gpu_ivf_flat_knn_impl(
     data, points, k, nlist, nprobe, metric, distance_output, exclude_self
   );
+}
+
+// [[Rcpp::export]]
+List nn_faiss_gpu_ivf_query_pilot_cpp(NumericMatrix data,
+                                      NumericMatrix points,
+                                      int k, int nlist, int nprobe,
+                                      double target_recall,
+                                      std::string distance_storage) {
+  if (points.nrow() < 1 || points.ncol() != data.ncol() ||
+      k < 1 || k >= data.nrow() || nlist < 1 || nlist > data.nrow() ||
+      nprobe < 1 || nprobe > nlist ||
+      !(target_recall == 0.90 || target_recall == 0.95 ||
+        target_recall == 0.99) ||
+      (distance_storage != "double" && distance_storage != "float")) {
+    Rcpp::stop("Invalid CUDA IVF query pilot dimensions or controls.");
+  }
+  const int sample = std::min(points.nrow(), 128);
+  NumericMatrix pilot_points(sample, points.ncol());
+  Rcpp::IntegerVector pilot_rows(sample);
+  for (int i = 0; i < sample; ++i) {
+    const int row = sample == 1 ? 0 : static_cast<int>(std::round(
+      static_cast<double>(i) * (points.nrow() - 1) / (sample - 1)));
+    pilot_rows[i] = row + 1;
+    for (int j = 0; j < points.ncol(); ++j) {
+      pilot_points(i, j) = points(row, j);
+    }
+  }
+  List exact = faiss_gpu_flat_knn_impl(data, pilot_points, k + 1, false);
+  Rcpp::IntegerMatrix exact_ids(exact["indices"]);
+  NumericMatrix exact_distances(exact["distances"]);
+  for (int i = 0; i < sample; ++i) {
+    if (std::abs(exact_distances(i, k - 1) -
+                 exact_distances(i, k)) <= 1e-6) {
+      Rcpp::stop("CUDA IVF query pilot has kth-boundary distance ties.");
+    }
+  }
+  List built(faiss_gpu_index_build_impl(
+    data, k, "ivf", std::vector<int>{0}, nlist, nprobe, false,
+    "euclidean"));
+  SEXP index = built["pointer"];
+  std::vector<int> probes;
+  std::vector<double> recalls;
+  int probe = nprobe;
+  double measured = NA_REAL;
+  for (;;) {
+    faiss_gpu_index_set_nprobe_impl(index, probe);
+    List pilot = faiss_gpu_index_search_impl(
+      index, pilot_points, k, "double");
+    Rcpp::IntegerMatrix ids(pilot["indices"]);
+    double matched = 0;
+    for (int i = 0; i < sample; ++i) {
+      for (int j = 0; j < k; ++j) {
+        const int found = ids(i, j);
+        for (int h = 0; h < k; ++h) {
+          if (found == exact_ids(i, h)) {
+            matched += 1;
+            break;
+          }
+        }
+      }
+    }
+    measured = matched / (static_cast<double>(sample) * k);
+    probes.push_back(probe);
+    recalls.push_back(measured);
+    if (measured >= target_recall) break;
+    if (probe == nlist) {
+      Rcpp::stop("CUDA IVF query pilot missed recall at full probe width.");
+    }
+    probe = std::min(nlist, std::max(probe + 1, 2 * probe));
+  }
+  List out = faiss_gpu_index_search_impl(index, points, k,
+                                         distance_storage);
+  out["backend_used"] = "faiss_gpu_ivf_flat";
+  out["target_recall"] = target_recall;
+  out["pilot_recall"] = measured;
+  out["pilot_rows"] = pilot_rows;
+  out["pilot_reference_backend"] = "faiss_gpu_flat_exact";
+  out["pilot_probe_trace"] = List::create(
+    Rcpp::Named("nprobe") = Rcpp::wrap(probes),
+    Rcpp::Named("recall") = Rcpp::wrap(recalls));
+  out["target_met"] = true;
+  return out;
 }
 
 // [[Rcpp::export]]

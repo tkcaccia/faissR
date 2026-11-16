@@ -52,6 +52,18 @@ test_that("GPU-resident NN implementation enforces its public class contract", {
   expect_match(contract_body, "distances_ptr", fixed = TRUE)
 })
 
+test_that("FAISS resident result accounts for owned GPU buffers", {
+  skip_if_not(faiss_gpu_available())
+  set.seed(711L)
+  x <- matrix(rnorm(128L), 32L, 4L)
+  out <- nn_gpu(x, k = 3L, method = "exact", tuning = "off",
+    exclude_self = TRUE)
+  expect_identical(out$backend_used, "faiss_gpu_bfknn_l2")
+  expect_identical(out$data_residency, "unavailable")
+  expect_identical(out$result_residency, "cuda")
+  expect_equal(out$resident_result_bytes, 32 * 3 * 8)
+})
+
 
 
 test_that("public high-level APIs use session-resolved backends and auto tuning", {
@@ -2976,6 +2988,23 @@ test_that("CUDA nn backend matches CPU euclidean results", {
   expect_identical(attr(gpu, "backend"), expected_backend)
   expect_equal(gpu$indices, cpu$indices)
   expect_equal(gpu$distances, cpu$distances, tolerance = 1e-5)
+})
+
+test_that("CPU fitted Flat keeps direct low-dimensional distances", {
+  set.seed(20261713L)
+  x <- matrix(rnorm(1024L), ncol = 2L)
+  x <- x / sqrt(rowSums(x * x))
+  result <- nn(x, k = 15L, exclude_self = TRUE, backend = "cpu",
+               method = "flat", metric = "euclidean", n_threads = 2L)
+  x32 <- float::dbl(float::fl(x))
+  reference <- vapply(seq_len(nrow(x32)), function(row) {
+    delta <- sweep(x32, 2L, x32[row, ], "-")
+    distance <- rowSums(delta * delta)
+    distance[row] <- Inf
+    order(distance, seq_along(distance))[seq_len(15L)]
+  }, integer(15L))
+  expect_equal(result$indices, t(reference))
+  expect_true(all(result$distances[272L, 1:2] > 0))
 })
 
 test_that("GPU-resident 2D exact search is cancellation resistant", {

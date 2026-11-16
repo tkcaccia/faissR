@@ -27,6 +27,21 @@ test_that("untested large IVF defaults do not claim audited recall", {
     }
 })
 
+test_that("medium low dimension CUDA IVF distinguishes recall tiers", {
+    low <- faissR:::cuda_ivf_params(
+        100000L, 96L, 30L, "euclidean", 0.90)
+    mid <- faissR:::cuda_ivf_params(
+        100000L, 96L, 30L, "euclidean", 0.95)
+    high <- faissR:::cuda_ivf_params(
+        100000L, 96L, 30L, "euclidean", 0.99)
+    expect_equal(c(low$nprobe, mid$nprobe, high$nprobe),
+                 c(99L, 99L, 192L))
+    expect_equal(low$nlist, high$nlist)
+    expect_identical(high$tuning_benchmark_source,
+                     "heuristic_fallback")
+    expect_false(high$tuning_benchmark_target_met)
+})
+
 test_that("billion-row projection requires audited matching anchors", {
     observations <- data.frame(
         n = c(1e7, 1e7, 1e8, 1e8),
@@ -35,12 +50,14 @@ test_that("billion-row projection requires audited matching anchors", {
         nprobe = c(512L, 1024L, 2048L, 4096L),
         recall = c(0.985, 0.995, 0.991, 0.998),
         knn_seconds = c(100, 120, 900, 1300),
+        index_build_seconds = c(90, 105, 800, 1100),
+        persistent_search_seconds_median = c(10, 15, 100, 200),
         device_memory_bytes = c(2e9, 2e9, 15e9, 15e9),
         peak_rss_bytes = c(6e9, 6e9, 60e9, 60e9),
         full_self_performed = FALSE,
         audit_pass = TRUE,
         reference_scope = "full_database_exact",
-        timing_scope = "fixed_query_private_r_call",
+        timing_scope = "index_build_plus_persistent_search_256_queries",
         query_count = 256L,
         source_sha = paste(rep("a", 40L), collapse = ""),
         input_sha256 = paste(rep("b", 64L), collapse = ""),
@@ -59,6 +76,10 @@ test_that("billion-row projection requires audited matching anchors", {
     expect_true(is.na(plan$recall_at_target))
     expect_true(plan$projected_peak_host_bytes > 0)
     expect_true(is.na(plan$projected_knn_seconds))
+    expect_true(is.na(plan$projected_full_self_seconds))
+    expect_identical(plan$full_self_time_status,
+                     "unvalidated_query_scaling")
+    expect_equal(plan$full_self_output_bytes, 12e9 * 30)
     expect_identical(plan$time_projection_status,
                      "device_memory_exceeded")
     expect_identical(plan$device_memory_admission,
@@ -75,6 +96,16 @@ test_that("billion-row projection requires audited matching anchors", {
         observations, 1e9, 96L, 30L, 4L, "shard", 1e12
     )
     expect_true(is.finite(admitted$projected_knn_seconds))
+    expect_true(is.finite(admitted$projected_index_build_seconds))
+    expect_true(is.finite(admitted$projected_256_query_search_seconds))
+    expect_true(is.na(admitted$projected_full_self_seconds))
+    inconsistent <- observations
+    inconsistent$index_build_seconds[2L] <- 1
+    expect_error(
+        faissR:::nn_cuda_ivf_large_extrapolate(
+            inconsistent, 1e9, 96L, 30L, 4L, "shard", 1e12
+        ), "consistent 256-query stage timings"
+    )
     expect_identical(admitted$time_projection_status,
                      "conditional_extrapolation")
     expect_identical(plan$input_sha256, observations$input_sha256[[1L]])
@@ -88,6 +119,11 @@ test_that("billion-row projection requires audited matching anchors", {
     expect_error(
         faissR:::nn_cuda_ivf_large_extrapolate(
             observations, 1e9, 96L, 30L, 1.5, "shard", 96e9
+        ), "Invalid large IVF extrapolation inputs"
+    )
+    expect_error(
+        faissR:::nn_cuda_ivf_large_extrapolate(
+            observations, 1e9, 96L, 30L, 4L, "shard", 96e9, 0.975
         ), "Invalid large IVF extrapolation inputs"
     )
     invalid_ivf <- observations

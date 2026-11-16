@@ -685,15 +685,14 @@ fitted_nn_index_get_or_build <- function(
     if (!is.null(entry)) {
         return(entry)
     }
+    build_started <- proc.time()[["elapsed"]]
+    index <- fitted_nn_index_build(
+        data, kind, metric, n_threads, params, pq
+    )
+    build_seconds <- proc.time()[["elapsed"]] - build_started
     entry <- list(
-        index = fitted_nn_index_build(
-            data,
-            kind,
-            metric,
-            n_threads,
-            params,
-            pq
-        ),
+        index = index,
+        build_seconds = build_seconds,
         kind = kind,
         metric = metric,
         params = params,
@@ -737,10 +736,20 @@ fitted_nn_index_result <- function(
     entry <- fitted_nn_index_get_or_build(
         data, kind, metric, n_threads, params, pq
     )
+    search_started <- proc.time()[["elapsed"]]
     out <- search_fitted_nn_index(
         entry, points, k, exclude_self, kind, params, n_threads, output
     )
     if (is.null(out)) return(NULL)
+    out$index_build_seconds <- if (isTRUE(entry$cache_hit)) {
+        0
+    } else entry$build_seconds
+    out$index_build_seconds_scope <- if (isTRUE(entry$cache_hit)) {
+        "cached_index_reused"
+    } else "fitted_index_build_call_including_marshalling"
+    out$search_seconds <- proc.time()[["elapsed"]] - search_started
+    out$search_seconds_scope <-
+        "fitted_index_search_call_including_marshalling"
     result <- finish_nn_result(
         out, result_backend, k, self_query,
         exact = identical(kind, "flat"), metric = metric
@@ -3396,7 +3405,13 @@ double_route_faiss_gpu_ivf <- function (data, points, k, backend, exclude_self,
 
 double_route_faiss_gpu_ivf_continue <- function(context) {
     with(context, {
-        out <- if (identical(output, "float")) {
+        query_pilot <- !isTRUE(self_query) &&
+            identical(metric, "euclidean") && identical(tuning, "pilot")
+        out <- if (query_pilot) {
+            nn_faiss_gpu_ivf_query_pilot_cpp(
+                data, points, as.integer(k), as.integer(params$nlist),
+                as.integer(params$nprobe), target_recall, output)
+        } else if (identical(output, "float")) {
             nn_faiss_gpu_ivf_flat_float32_cpp(data, points, as.integer(k),
                 as.integer(params$nlist), as.integer(params$nprobe),
                 faiss_metric_search_arg(metric),
@@ -3408,6 +3423,15 @@ double_route_faiss_gpu_ivf_continue <- function(context) {
                 as.integer(params$nlist), as.integer(params$nprobe),
                 faiss_metric_search_arg(metric),
                 faiss_metric_distance_output_arg(metric), isTRUE(exclude_self))
+        }
+        if (query_pilot) {
+            params$nprobe <- as.integer(out$nprobe)
+            tuning_metadata <- list(
+                status = "target_met", policy = "pilot_query_full_reference",
+                target_recall = target_recall,
+                measured_recall = out$pilot_recall,
+                sample_size = length(out$pilot_rows),
+                probe_trace = out$pilot_probe_trace)
         }
         result <- finish_nn_result(out, "faiss_gpu_ivf_flat", k, self_query,
             exact = FALSE, metric = metric)
@@ -11487,6 +11511,13 @@ grid_self_knn <- function(
 #'   provenance, and `tuning_benchmark_target_met` when a benchmark-derived row
 #'   did not attain the requested target. Exact methods record recall 1 by
 #'   construction; their tuning controls batching, copies, and resource reuse.
+#'   For independent-query Euclidean CUDA FAISS IVF, `"pilot"` compares up to
+#'   128 evenly spaced queries with exact GPU Flat search over the full
+#'   reference, then raises `nprobe` on one persistent index until sampled
+#'   strict-ID recall meets `target_recall`. Kth-boundary ties fail explicitly.
+#'   The result records `pilot_recall`, `pilot_rows`, and `pilot_probe_trace`.
+#'   The pilot verifies its sampled queries, not untested queries or other
+#'   data sets; `"auto"` still uses static parameters for this route.
 #' @param target_recall Requested recall tier: `0.9`, `0.95`, or `0.99`
 #'   (default). Approximate methods use it to select a speed/quality policy;
 #'   `method = "auto"` may also use it when choosing a method. It is a target,
@@ -11543,6 +11574,18 @@ grid_self_knn <- function(
 #'   `backend_used`. Every result declares `distance_is_metric`,
 #'   `distance_semantics`, `distance_comparable_across_queries`, and
 #'   `distance_order`.
+#'   CPU FAISS fitted-index routes also return `index_build_seconds` and
+#'   `search_seconds` with scope labels. A cache hit reports zero build time
+#'   and `index_build_seconds_scope = "cached_index_reused"`; search time
+#'   includes the R-to-native call and result conversion. One-shot CPU FAISS
+#'   routes measure native index training/add and search separately.
+#'   With `options(faissR.measure_resources = TRUE)`, the result also has
+#'   `resource_measurement`: process RSS snapshots before and after the public
+#'   call, plus the process-lifetime RSS high-water mark when available.
+#'   `options(faissR.measure_device_memory = TRUE)` additionally requests
+#'   process-level device snapshots through `gpuinfo`. These snapshots do not
+#'   measure the peak during the call and the monitoring cost is outside the
+#'   native stage times. Unsupported measurements remain unavailable.
 #'   Float32 routes also record `input_layout` and
 #'   `input_owns_data` so downstream packages can distinguish direct float32
 #'   payload use from one-time row-major conversion. Normalized Euclidean graph

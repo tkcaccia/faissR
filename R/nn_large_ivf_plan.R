@@ -40,7 +40,8 @@ nn_cuda_ivf_large_extrapolate <- function(
 ) {
     required <- c(
         "n", "p", "k", "gpu_count", "mode", "nlist", "nprobe",
-        "recall", "knn_seconds", "device_memory_bytes",
+        "recall", "knn_seconds", "index_build_seconds",
+        "persistent_search_seconds_median", "device_memory_bytes",
         "peak_rss_bytes", "full_self_performed", "audit_pass",
         "reference_scope", "timing_scope", "query_count", "source_sha",
         "input_sha256", "query_rows_sha256", "query_rows_max",
@@ -62,7 +63,7 @@ nn_cuda_ivf_large_extrapolate <- function(
         length(gpu_memory_bytes) != 1L ||
         !is.finite(gpu_memory_bytes) || gpu_memory_bytes <= 0 ||
         length(target_recall) != 1L || !is.finite(target_recall) ||
-        target_recall <= 0 || target_recall > 1) {
+        !target_recall %in% c(0.90, 0.95, 0.99)) {
         stop("Invalid large IVF extrapolation inputs.", call. = FALSE)
     }
     complete <- stats::complete.cases(observations[required])
@@ -75,6 +76,10 @@ nn_cuda_ivf_large_extrapolate <- function(
         observations$recall >= target_recall &
         is.finite(observations$knn_seconds) &
         observations$knn_seconds > 0 &
+        is.finite(observations$index_build_seconds) &
+        observations$index_build_seconds > 0 &
+        is.finite(observations$persistent_search_seconds_median) &
+        observations$persistent_search_seconds_median > 0 &
         is.finite(observations$device_memory_bytes) &
         observations$device_memory_bytes > 0 &
         is.finite(observations$peak_rss_bytes) &
@@ -114,6 +119,15 @@ nn_cuda_ivf_large_extrapolate <- function(
         length(unique(rows$query_count)) != 1L ||
         rows$query_count[[1L]] < 1L) {
         stop("Anchors require one timing scope and fixed query count.",
+             call. = FALSE)
+    }
+    if (!identical(rows$timing_scope[[1L]],
+                   "index_build_plus_persistent_search_256_queries") ||
+        rows$query_count[[1L]] != 256L ||
+        any(abs(rows$knn_seconds - rows$index_build_seconds -
+                rows$persistent_search_seconds_median) >
+            pmax(0.01, 0.01 * rows$knn_seconds))) {
+        stop("Anchors require consistent 256-query stage timings.",
              call. = FALSE)
     }
     by_n <- split(rows, rows$n)
@@ -164,6 +178,15 @@ nn_cuda_ivf_large_extrapolate <- function(
         projected_knn_seconds = if (memory_admitted) {
             log_project(selected$knn_seconds)
         } else NA_real_,
+        projected_index_build_seconds = if (memory_admitted) {
+            log_project(selected$index_build_seconds)
+        } else NA_real_,
+        projected_256_query_search_seconds = if (memory_admitted) {
+            log_project(selected$persistent_search_seconds_median)
+        } else NA_real_,
+        projected_full_self_seconds = NA_real_,
+        full_self_time_status = "unvalidated_query_scaling",
+        full_self_output_bytes = 12 * target_n * k,
         time_projection_status = if (memory_admitted) {
             "conditional_extrapolation"
         } else "device_memory_exceeded",
@@ -174,10 +197,12 @@ nn_cuda_ivf_large_extrapolate <- function(
         device_memory_admission = if (memory_admitted) {
             "projection_within_capacity"
         } else "projection_exceeds_capacity",
-        full_self_output_supported = target_n * (k + 1) <=
+        full_self_output_supported = as.double(target_n) *
+            (as.double(k) + 1) <=
             .Machine$integer.max,
         anchor_rows = selected[, c(
             "n", "nlist", "nprobe", "recall", "knn_seconds",
+            "index_build_seconds", "persistent_search_seconds_median",
             "device_memory_bytes", "peak_rss_bytes"
         ), drop = FALSE],
         recall_at_target = NA_real_

@@ -35,6 +35,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <initializer_list>
 #include <limits>
 #include <numeric>
 #include <random>
@@ -1094,6 +1095,23 @@ int projection_dim(int p) {
   return std::max(1, q);
 }
 
+double metal_current_allocated_bytes(id<MTLDevice> device) {
+  if (device == nil ||
+      ![device respondsToSelector:@selector(currentAllocatedSize)]) {
+    return NA_REAL;
+  }
+  return static_cast<double>([device currentAllocatedSize]);
+}
+
+double metal_live_buffer_bytes(
+    std::initializer_list<id<MTLBuffer>> buffers) {
+  double bytes = 0.0;
+  for (id<MTLBuffer> buffer : buffers) {
+    if (buffer != nil) bytes += static_cast<double>([buffer allocatedSize]);
+  }
+  return bytes;
+}
+
 } // namespace
 
 bool faissr_metal_knn_available_impl() {
@@ -1175,6 +1193,8 @@ Rcpp::List faissr_metal_knn_impl(SEXP data_sexp,
     id<MTLComputePipelineState> shortlist_pipeline = state.shortlist_pipeline;
     id<MTLComputePipelineState> rerank_pipeline = state.rerank_pipeline;
     const auto t_setup = Clock::now();
+    const double metal_allocated_before_bytes =
+      metal_current_allocated_bytes(device);
 
     id<MTLBuffer> data_buffer = [device newBufferWithBytes:data.data() length:data.size() * sizeof(float) options:MTLResourceStorageModeShared];
     if (method == "exact") {
@@ -1193,6 +1213,11 @@ Rcpp::List faissr_metal_knn_impl(SEXP data_sexp,
       [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
       [encoder endEncoding];
       run_and_wait(command);
+      const double metal_allocated_after_search_bytes =
+        metal_current_allocated_bytes(device);
+      const double metal_live_buffer_bytes_after_search =
+        metal_live_buffer_bytes({data_buffer, out_id_buffer,
+          out_dist_buffer, params_buffer});
       const auto searched = Clock::now();
       const int* ids = static_cast<const int*>([out_id_buffer contents]);
       const float* internal_distances = static_cast<const float*>([out_dist_buffer contents]);
@@ -1210,6 +1235,22 @@ Rcpp::List faissr_metal_knn_impl(SEXP data_sexp,
         Rcpp::Named("method") = "native_metal_exact",
         Rcpp::Named("metric") = metric_name,
         Rcpp::Named("target_recall") = target,
+        Rcpp::Named("index_build_seconds") = 0.0,
+        Rcpp::Named("index_build_seconds_scope") =
+          "no_index_exact_search",
+        Rcpp::Named("search_seconds") =
+          std::chrono::duration<double>(searched - t_setup).count(),
+        Rcpp::Named("search_seconds_scope") =
+          "metal_buffer_setup_and_exact_search",
+        Rcpp::Named("metal_allocated_before_bytes") =
+          metal_allocated_before_bytes,
+        Rcpp::Named("metal_allocated_after_search_bytes") =
+          metal_allocated_after_search_bytes,
+        Rcpp::Named("metal_live_buffer_bytes_after_search") =
+          metal_live_buffer_bytes_after_search,
+        Rcpp::Named("device_memory_measurement_scope") =
+          "process_current_allocated_after_search_before_output_release",
+        Rcpp::Named("device_memory_peak_measured") = false,
         Rcpp::Named("timing") = Rcpp::NumericVector::create(
           Rcpp::Named("convert") = std::chrono::duration<double>(t_convert - t0).count(),
           Rcpp::Named("metal_setup") = std::chrono::duration<double>(t_setup - t_convert).count(),
@@ -1360,7 +1401,11 @@ Rcpp::List faissr_metal_knn_impl(SEXP data_sexp,
     int shortlist_size = kMetalSimdGroups * shortlist_per_group;
     int nprobe = std::min(nlist, 8);
     double measured = 0.0;
-    const double tune_target = std::min(1.0, target + 0.003);
+    const double pilot_trials = static_cast<double>(pilot_n) * k;
+    const double sampling_margin = 2.58 * std::sqrt(
+      target * (1.0 - target) / pilot_trials);
+    const double tune_target = std::min(1.0,
+      target + std::max(0.003, sampling_margin));
     std::vector<int> probe_trace;
     std::vector<double> recall_trace;
     id<MTLBuffer> pilot_id_buffer = [device newBufferWithLength:static_cast<std::size_t>(pilot_n) * k * sizeof(int) options:MTLResourceStorageModeShared];
@@ -1547,6 +1592,17 @@ Rcpp::List faissr_metal_knn_impl(SEXP data_sexp,
       [encoder endEncoding]; run_and_wait(command);
     }
     const auto t_search = Clock::now();
+    const double metal_allocated_after_search_bytes =
+      metal_current_allocated_bytes(device);
+    const double metal_live_buffer_bytes_after_search =
+      metal_live_buffer_bytes({data_buffer, offset_map_buffer,
+        feature_buffer, sign_buffer, projected_buffer,
+        project_params_buffer, centroid_buffer, assignment_buffer,
+        centroid_sum_buffer, centroid_count_buffer, index_params_buffer,
+        list_offset_buffer, list_id_buffer, exact_id_buffer,
+        exact_dist_buffer, pilot_id_buffer, pilot_dist_buffer,
+        pilot_candidate_buffer, search_params_buffer, out_id_buffer,
+        out_dist_buffer});
 
     const int* ids = static_cast<const int*>([out_id_buffer contents]);
     const float* d2 = static_cast<const float*>([out_dist_buffer contents]);
@@ -1572,9 +1628,27 @@ Rcpp::List faissr_metal_knn_impl(SEXP data_sexp,
       Rcpp::Named("shortlist_size") = use_projected_shortlist ? shortlist_size : 0,
       Rcpp::Named("shortlist_attempts") = shortlist_attempts,
       Rcpp::Named("pilot_recall") = measured,
+      Rcpp::Named("pilot_guard_recall") = tune_target,
+      Rcpp::Named("pilot_rows") = pilot_n,
       Rcpp::Named("pilot_min_recall") = pilot_quality.first,
       Rcpp::Named("pilot_max_k_distance_ratio") = pilot_quality.second,
       Rcpp::Named("target_met") = measured >= target,
+      Rcpp::Named("index_build_seconds") =
+        std::chrono::duration<double>(t_pack - t_setup).count(),
+      Rcpp::Named("index_build_seconds_scope") =
+        "metal_projection_training_and_list_pack",
+      Rcpp::Named("search_seconds") =
+        std::chrono::duration<double>(t_search - t_tune).count(),
+      Rcpp::Named("search_seconds_scope") = "metal_full_search",
+      Rcpp::Named("metal_allocated_before_bytes") =
+        metal_allocated_before_bytes,
+      Rcpp::Named("metal_allocated_after_search_bytes") =
+        metal_allocated_after_search_bytes,
+      Rcpp::Named("metal_live_buffer_bytes_after_search") =
+        metal_live_buffer_bytes_after_search,
+      Rcpp::Named("device_memory_measurement_scope") =
+        "process_current_allocated_after_search_before_output_release",
+      Rcpp::Named("device_memory_peak_measured") = false,
       Rcpp::Named("probe_trace") = probe_trace,
       Rcpp::Named("recall_trace") = recall_trace,
       Rcpp::Named("timing") = Rcpp::NumericVector::create(
@@ -1695,6 +1769,8 @@ Rcpp::List faissr_metal_query_knn_impl(SEXP data_sexp,
     MetalKnnState& state = metal_knn_state();
     id<MTLDevice> device = state.device;
     const auto t_setup = Clock::now();
+    const double metal_allocated_before_bytes =
+      metal_current_allocated_bytes(device);
     id<MTLBuffer> reference_buffer = [device
       newBufferWithBytes:reference.values.data()
       length:reference.values.size() * sizeof(float)
@@ -1749,6 +1825,11 @@ Rcpp::List faissr_metal_query_knn_impl(SEXP data_sexp,
       exact_search(
         query_buffer, query.nrow, out_id_buffer, out_dist_buffer
       );
+      const double metal_allocated_after_search_bytes =
+        metal_current_allocated_bytes(device);
+      const double metal_live_buffer_bytes_after_search =
+        metal_live_buffer_bytes({reference_buffer, query_buffer,
+          out_id_buffer, out_dist_buffer});
       const auto t_search = Clock::now();
       const int* ids =
         static_cast<const int*>([out_id_buffer contents]);
@@ -1778,6 +1859,22 @@ Rcpp::List faissr_metal_query_knn_impl(SEXP data_sexp,
         Rcpp::Named("exclude_self") = false,
         Rcpp::Named("n_reference") = reference.nrow,
         Rcpp::Named("n_query") = query.nrow,
+        Rcpp::Named("index_build_seconds") = 0.0,
+        Rcpp::Named("index_build_seconds_scope") =
+          "no_index_exact_search",
+        Rcpp::Named("search_seconds") =
+          std::chrono::duration<double>(t_search - t_setup).count(),
+        Rcpp::Named("search_seconds_scope") =
+          "metal_buffer_setup_and_exact_search",
+        Rcpp::Named("metal_allocated_before_bytes") =
+          metal_allocated_before_bytes,
+        Rcpp::Named("metal_allocated_after_search_bytes") =
+          metal_allocated_after_search_bytes,
+        Rcpp::Named("metal_live_buffer_bytes_after_search") =
+          metal_live_buffer_bytes_after_search,
+        Rcpp::Named("device_memory_measurement_scope") =
+          "process_current_allocated_after_search_before_output_release",
+        Rcpp::Named("device_memory_peak_measured") = false,
         Rcpp::Named("timing") = Rcpp::NumericVector::create(
           Rcpp::Named("convert") =
             std::chrono::duration<double>(t_convert - t0).count(),
@@ -2064,7 +2161,11 @@ Rcpp::List faissr_metal_query_knn_impl(SEXP data_sexp,
     int low_fail = 0;
     int high_pass = 0;
     double measured = 0.0;
-    const double tune_target = std::min(1.0, target + 0.002);
+    const double pilot_trials = static_cast<double>(pilot_n) * k;
+    const double sampling_margin = 2.58 * std::sqrt(
+      target * (1.0 - target) / pilot_trials);
+    const double tune_target = std::min(1.0,
+      target + std::max(0.003, sampling_margin));
     std::vector<int> probe_trace;
     std::vector<double> recall_trace;
     while (true) {
@@ -2123,6 +2224,16 @@ Rcpp::List faissr_metal_query_knn_impl(SEXP data_sexp,
       out_id_buffer, out_dist_buffer
     );
     const auto t_search = Clock::now();
+    const double metal_allocated_after_search_bytes =
+      metal_current_allocated_bytes(device);
+    const double metal_live_buffer_bytes_after_search =
+      metal_live_buffer_bytes({reference_buffer, query_buffer,
+        out_id_buffer, out_dist_buffer, offset_map_buffer,
+        feature_buffer, sign_buffer, reference_projected_buffer,
+        query_projected_buffer, centroid_buffer, assignment_buffer,
+        centroid_sum_buffer, centroid_count_buffer, index_params_buffer,
+        list_offset_buffer, list_id_buffer, exact_pilot_ids,
+        exact_pilot_distances, ivf_pilot_ids, ivf_pilot_distances});
 
     const int* ids =
       static_cast<const int*>([out_id_buffer contents]);
@@ -2147,11 +2258,29 @@ Rcpp::List faissr_metal_query_knn_impl(SEXP data_sexp,
       Rcpp::Named("metric") = metric_name,
       Rcpp::Named("target_recall") = target,
       Rcpp::Named("pilot_recall") = measured,
+      Rcpp::Named("pilot_guard_recall") = tune_target,
+      Rcpp::Named("pilot_rows") = pilot_n,
       Rcpp::Named("target_met") = measured >= target,
       Rcpp::Named("exact") = false,
       Rcpp::Named("exclude_self") = false,
       Rcpp::Named("n_reference") = reference.nrow,
       Rcpp::Named("n_query") = query.nrow,
+      Rcpp::Named("index_build_seconds") =
+        std::chrono::duration<double>(t_pack - t_setup).count(),
+      Rcpp::Named("index_build_seconds_scope") =
+        "metal_projection_training_and_list_pack",
+      Rcpp::Named("search_seconds") =
+        std::chrono::duration<double>(t_search - t_tune).count(),
+      Rcpp::Named("search_seconds_scope") = "metal_full_search",
+      Rcpp::Named("metal_allocated_before_bytes") =
+        metal_allocated_before_bytes,
+      Rcpp::Named("metal_allocated_after_search_bytes") =
+        metal_allocated_after_search_bytes,
+      Rcpp::Named("metal_live_buffer_bytes_after_search") =
+        metal_live_buffer_bytes_after_search,
+      Rcpp::Named("device_memory_measurement_scope") =
+        "process_current_allocated_after_search_before_output_release",
+      Rcpp::Named("device_memory_peak_measured") = false,
       Rcpp::Named("nlist") = nlist,
       Rcpp::Named("nprobe") = nprobe,
       Rcpp::Named("projection_dim") = qdim,
@@ -2206,5 +2335,73 @@ Rcpp::List faissr_metal_query_knn_impl(SEXP data_sexp,
     [query_buffer release];
     [reference_buffer release];
     return result;
+  }
+}
+
+// Internal float32 path for file-backed batches. The input buffers are
+// already validated and row-major; avoid conversion through R doubles.
+void faissr_metal_exact_raw(const float* reference, int n_reference,
+    const float* query, int n_query, int p, int k,
+    int* ids, float* distances) {
+  if (reference == nullptr || query == nullptr ||
+      ids == nullptr || distances == nullptr ||
+      n_reference < 1 || n_query < 1 || p < 1 ||
+      p > kMaxGlobalP || k < 1 || k > kMaxK ||
+      k > n_reference) {
+    Rcpp::stop("Invalid raw Metal file-backed KNN dimensions");
+  }
+  @autoreleasepool {
+    MetalKnnState& state = metal_knn_state();
+    id<MTLDevice> device = state.device;
+    const std::size_t reference_bytes =
+      static_cast<std::size_t>(n_reference) * p * sizeof(float);
+    const std::size_t query_bytes =
+      static_cast<std::size_t>(n_query) * p * sizeof(float);
+    const std::size_t output_items =
+      static_cast<std::size_t>(n_query) * k;
+    id<MTLBuffer> reference_buffer = [[device
+      newBufferWithBytes:reference length:reference_bytes
+      options:MTLResourceStorageModeShared] autorelease];
+    id<MTLBuffer> query_buffer = [[device
+      newBufferWithBytes:query length:query_bytes
+      options:MTLResourceStorageModeShared] autorelease];
+    id<MTLBuffer> id_buffer = [[device
+      newBufferWithLength:output_items * sizeof(int)
+      options:MTLResourceStorageModeShared] autorelease];
+    id<MTLBuffer> distance_buffer = [[device
+      newBufferWithLength:output_items * sizeof(float)
+      options:MTLResourceStorageModeShared] autorelease];
+    QuerySearchParamsHost params{
+      static_cast<std::uint32_t>(n_reference),
+      static_cast<std::uint32_t>(n_query),
+      static_cast<std::uint32_t>(p),
+      static_cast<std::uint32_t>(k)
+    };
+    id<MTLBuffer> params_buffer = [[device
+      newBufferWithBytes:&params length:sizeof(params)
+      options:MTLResourceStorageModeShared] autorelease];
+    if (reference_buffer == nil || query_buffer == nil ||
+        id_buffer == nil || distance_buffer == nil ||
+        params_buffer == nil) {
+      Rcpp::stop("Metal file-backed KNN buffer allocation failed");
+    }
+    id<MTLCommandBuffer> command = [state.queue commandBuffer];
+    id<MTLComputeCommandEncoder> encoder =
+      [command computeCommandEncoder];
+    [encoder setComputePipelineState:p <= kMaxP ?
+      state.exact_query_pipeline : state.exact_query_global_pipeline];
+    [encoder setBuffer:reference_buffer offset:0 atIndex:0];
+    [encoder setBuffer:query_buffer offset:0 atIndex:1];
+    [encoder setBuffer:id_buffer offset:0 atIndex:2];
+    [encoder setBuffer:distance_buffer offset:0 atIndex:3];
+    [encoder setBuffer:params_buffer offset:0 atIndex:4];
+    [encoder dispatchThreadgroups:MTLSizeMake(n_query, 1, 1)
+      threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
+    [encoder endEncoding];
+    run_and_wait(command);
+    std::memcpy(ids, [id_buffer contents],
+      output_items * sizeof(int));
+    std::memcpy(distances, [distance_buffer contents],
+      output_items * sizeof(float));
   }
 }

@@ -5,8 +5,8 @@
 faiss_gpu_available()
 }
 \value{
-\code{TRUE} when faissR was compiled and linked against a FAISS build
-that reports GPU support.
+\code{TRUE} when faissR has usable CUDA support and was linked against
+a FAISS build that reports GPU support.
 }
 \description{
 Check whether FAISS GPU support is available.

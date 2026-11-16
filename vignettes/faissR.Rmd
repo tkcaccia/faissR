@@ -226,19 +226,17 @@ hnsw_ready <- isTRUE(cpu_euclidean$runtime_available[
     cpu_euclidean$method == "hnsw"
 ])
 if (hnsw_ready) {
-    hnsw_time <- system.time(
-        hnsw <- nn(
-            x,
-            k = 15,
-            backend = "cpu",
-            method = "hnsw",
-            metric = "euclidean",
-            tuning = "auto",
-            target_recall = 0.99,
-            exclude_self = TRUE,
-            n_threads = 1
-        )
-    )[["elapsed"]]
+    hnsw <- nn(
+        x,
+        k = 15,
+        backend = "cpu",
+        method = "hnsw",
+        metric = "euclidean",
+        tuning = "auto",
+        target_recall = 0.99,
+        exclude_self = TRUE,
+        n_threads = 1
+    )
 
     query_recall <- vapply(
         seq_len(nrow(exact$indices)),
@@ -247,7 +245,6 @@ if (hnsw_ready) {
     )
 
     print(c(
-        elapsed_seconds = unname(hnsw_time),
         mean_recall = mean(query_recall),
         fifth_percentile_recall = unname(quantile(query_recall, 0.05)),
         minimum_recall = min(query_recall),

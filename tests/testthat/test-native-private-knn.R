@@ -1,3 +1,9 @@
+test_that("FAISS GPU availability requires a usable CUDA build", {
+    if (!isTRUE(faissR::cuda_available())) {
+        expect_false(faissR::faiss_gpu_available())
+    }
+})
+
 test_that("private Metal KNN has a truthful capability gate", {
     available <- faissR:::nn_metal_available_cpp()
     expect_type(available, "logical")

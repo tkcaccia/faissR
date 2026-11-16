@@ -2,6 +2,7 @@
 #include "faissr_console.hpp"
 
 #include <R_ext/Print.h>
+#include <cstddef>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -17,6 +18,9 @@ std::vector<Message> messages;
 std::size_t message_bytes = 0;
 constexpr std::size_t message_limit = 1024 * 1024;
 thread_local unsigned int console_depth = 0;
+// Vendored FAISS only passes these tokens to remapped console calls.
+alignas(std::max_align_t) unsigned char output_tag;
+alignas(std::max_align_t) unsigned char error_tag;
 
 bool is_console(FILE* stream) {
   return stream == faissr_console_stdout() ||
@@ -45,10 +49,10 @@ int buffer_message(FILE* stream, const char* format, va_list arguments) {
 }
 
 FILE* faissr_console_stdout() {
-  return stdout;
+  return reinterpret_cast<FILE*>(&output_tag);
 }
 FILE* faissr_console_stderr() {
-  return stderr;
+  return reinterpret_cast<FILE*>(&error_tag);
 }
 
 int faissr_console_printf(const char* format, ...) {

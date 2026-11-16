@@ -2026,6 +2026,23 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nn_faiss_gpu_ivf_query_pilot_cpp
+List nn_faiss_gpu_ivf_query_pilot_cpp(NumericMatrix data, NumericMatrix points, int k, int nlist, int nprobe, double target_recall, std::string distance_storage);
+RcppExport SEXP _faissR_nn_faiss_gpu_ivf_query_pilot_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP nlistSEXP, SEXP nprobeSEXP, SEXP target_recallSEXP, SEXP distance_storageSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type points(pointsSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type nlist(nlistSEXP);
+    Rcpp::traits::input_parameter< int >::type nprobe(nprobeSEXP);
+    Rcpp::traits::input_parameter< double >::type target_recall(target_recallSEXP);
+    Rcpp::traits::input_parameter< std::string >::type distance_storage(distance_storageSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_faiss_gpu_ivf_query_pilot_cpp(data, points, k, nlist, nprobe, target_recall, distance_storage));
+    return rcpp_result_gen;
+END_RCPP
+}
 // nn_faiss_gpu_ivf_flat_float32_cpp
 List nn_faiss_gpu_ivf_flat_float32_cpp(SEXP data, SEXP points, int k, int nlist, int nprobe, std::string metric, std::string distance_output, bool exclude_self, std::string distance_storage);
 RcppExport SEXP _faissR_nn_faiss_gpu_ivf_flat_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP kSEXP, SEXP nlistSEXP, SEXP nprobeSEXP, SEXP metricSEXP, SEXP distance_outputSEXP, SEXP exclude_selfSEXP, SEXP distance_storageSEXP) {
@@ -2324,6 +2341,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_faiss_nndescent_cpp", (DL_FUNC) &_faissR_nn_faiss_nndescent_cpp, 10},
     {"_faissR_nn_faiss_nndescent_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_nndescent_float32_cpp, 11},
     {"_faissR_nn_faiss_gpu_ivf_flat_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_ivf_flat_cpp, 8},
+    {"_faissR_nn_faiss_gpu_ivf_query_pilot_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_ivf_query_pilot_cpp, 7},
     {"_faissR_nn_faiss_gpu_ivf_flat_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_ivf_flat_float32_cpp, 9},
     {"_faissR_nn_faiss_gpu_ivfpq_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_ivfpq_cpp, 10},
     {"_faissR_nn_faiss_gpu_ivfpq_float32_cpp", (DL_FUNC) &_faissR_nn_faiss_gpu_ivfpq_float32_cpp, 11},

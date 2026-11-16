@@ -92,9 +92,13 @@ typedef SEXP (*faissR_gpu_multi_query_knn_v1_fun)(
  * owns the index; keep its `pointer` member reachable for every search. The
  * pointer is process-local, nonserializable, and not safe for concurrent calls.
  * Search accepts float32 matrices and returns one-based IDs on the host.
+ * A search may request any positive k up to the index build's k limit;
+ * this permits a k+1 pilot followed by k-neighbor self output on one index.
  * With one GPU, `distance_storage = "gpu"` returns an owned device result.
  * `"gpu_self_exclude"` additionally removes each query's same-row ID and
  * requires the query rows to correspond exactly to the indexed rows.
+ * `"double_self_exclude"` and `"float_self_exclude"` produce host results
+ * with the same identity rule. Build with capacity k+1 for these searches.
  */
 typedef SEXP (*faissR_gpu_index_build_v1_fun)(
     SEXP data,
@@ -144,6 +148,9 @@ typedef SEXP (*faissR_hnsw_search_v1_fun)(
     SEXP n_threads,
     SEXP distance_storage);
 
+/* Full-reference pilot audit and adaptive efSearch; same argument ABI. */
+typedef faissR_hnsw_search_v1_fun faissR_hnsw_search_v2_fun;
+
 /*
  * Return faissR's deterministic shape-based CPU HNSW policy without
  * constructing an index. The result contains M, efConstruction, efSearch,
@@ -176,6 +183,29 @@ typedef SEXP (*faissR_hnsw_index_search_v1_fun)(
     SEXP ef_search,
     SEXP n_threads);
 
+/*
+ * Save/load a fitted CPU HNSW index as a native FAISS file. The caller must
+ * save to a temporary path, verify size/hash, and atomically publish it with
+ * its source/settings identity. Verify that identity and hash before load.
+ * These calls do not supply a checkpoint protocol or accept untrusted files.
+ */
+typedef SEXP (*faissR_hnsw_index_save_v1_fun)(SEXP index, SEXP path);
+typedef SEXP (*faissR_hnsw_index_load_v1_fun)(SEXP path, SEXP n_threads);
+
+/*
+ * Calibrate a fitted CPU HNSW index against its full stored reference.
+ * self_ids are one-based reference rows (0 when the query is not a reference
+ * row). The float32 query and self_ids vectors must have equal row counts.
+ */
+typedef SEXP (*faissR_hnsw_index_calibrate_v1_fun)(
+    SEXP index,
+    SEXP query,
+    SEXP self_ids,
+    SEXP k,
+    SEXP target_recall,
+    SEXP initial_ef_search,
+    SEXP n_threads);
+
 /* Private persistent CPU Flat index for bounded query batches. */
 typedef SEXP (*faissR_flat_index_build_v1_fun)(
     SEXP data,
@@ -188,10 +218,14 @@ typedef SEXP (*faissR_flat_index_search_v1_fun)(
     SEXP n_threads);
 
 /*
- * Private bounded matrix KNN route; no faissR R-level export. CPU and
- * Metal support exact streamed reference batches. Metal uses the native
- * Metal query kernel, one GPU, and requires n_threads = 1 and k <= 128
- * (k <= 127 when excluding self). CUDA is rejected until implemented.
+ * Private bounded matrix KNN route; no faissR R-level export. CPU, Metal,
+ * and CUDA support exact streamed reference batches. CPU search computes
+ * distances in double precision from float32 inputs and breaks ties by
+ * one-based reference ID. Metal uses the native
+ * Metal query kernel on one GPU and requires n_threads = 1 and k <= 128
+ * (k <= 127 when excluding self). CUDA uses FAISS GPU Flat on the current
+ * CUDA device and requires n_threads = 1 and k <= 256 (255 excluding self).
+ * Multi-GPU file-backed search is a separate capability, not this v1 call.
  */
 typedef SEXP (*faissR_matrix_knn_batch_v1_fun)(
     SEXP query,
@@ -204,6 +238,50 @@ typedef SEXP (*faissR_matrix_knn_batch_v1_fun)(
     SEXP memory_limit,
     SEXP n_threads,
     SEXP exclude_self);
+
+/*
+ * v2 selects explicit CUDA device IDs. One device uses GpuIndexFlatL2;
+ * multiple devices require FAISS IndexShards backed by the selected GPUs.
+ * CPU and Metal callers use v1. A missing multi-GPU capability fails.
+ */
+typedef SEXP (*faissR_matrix_knn_batch_v2_fun)(
+    SEXP query,
+    SEXP reference,
+    SEXP row_ids,
+    SEXP k,
+    SEXP backend,
+    SEXP method,
+    SEXP reference_chunk,
+    SEXP memory_limit,
+    SEXP n_threads,
+    SEXP exclude_self,
+    SEXP devices);
+
+/* Private CPU search over validated physical posting files. */
+typedef SEXP (*faissR_posting_search_v1_fun)(
+    SEXP query, SEXP feature_path, SEXP ids_path, SEXP offsets_path,
+    SEXP centers, SEXP first_row, SEXP count, SEXP k, SEXP nprobe,
+    SEXP reference_chunk, SEXP n_threads, SEXP exclude_self,
+    SEXP posting_rows, SEXP verbose);
+
+/* Private CPU selection of rows farthest from their assigned posting. */
+typedef SEXP (*faissR_posting_distant_rows_v1_fun)(SEXP arguments);
+
+/* Private file-backed construction of physical posting lists. */
+typedef SEXP (*faissR_posting_build_v1_fun)(SEXP arguments);
+
+/* Private bounded reader for file-backed KNN result rows. */
+typedef SEXP (*faissR_knn_rows_read_v1_fun)(SEXP arguments);
+
+/* Private reorder of posting-grouped KNN files into source-row order. */
+typedef SEXP (*faissR_reorder_posting_graph_v1_fun)(SEXP arguments);
+
+/*
+ * Private file-backed KNN shard merge. `arguments` is a named list with
+ * paths, one-based shard/query ranges, neighbor matrices, dimensions,
+ * and self-exclusion controls. Returns provider and method identity.
+ */
+typedef SEXP (*faissR_merge_knn_shard_v1_fun)(SEXP arguments);
 
 /*
  * The GPU-resident callable accepts method values "auto", "exact", "flat",
@@ -233,6 +311,42 @@ static inline faissR_nn_cuda_tuned_gpu_fun
 faissR_get_nn_cuda_tuned_gpu(void) {
   return (faissR_nn_cuda_tuned_gpu_fun) R_GetCCallable(
       "faissR", "faissR_nn_cuda_tuned_gpu_call");
+}
+
+static inline faissR_posting_search_v1_fun
+faissR_get_posting_search_v1(void) {
+  return (faissR_posting_search_v1_fun) R_GetCCallable(
+      "faissR", "faissR_posting_search_v1");
+}
+
+static inline faissR_posting_distant_rows_v1_fun
+faissR_get_posting_distant_rows_v1(void) {
+  return (faissR_posting_distant_rows_v1_fun) R_GetCCallable(
+      "faissR", "faissR_posting_distant_rows_v1");
+}
+
+static inline faissR_posting_build_v1_fun
+faissR_get_posting_build_v1(void) {
+  return (faissR_posting_build_v1_fun) R_GetCCallable(
+      "faissR", "faissR_posting_build_v1");
+}
+
+static inline faissR_knn_rows_read_v1_fun
+faissR_get_knn_rows_read_v1(void) {
+  return (faissR_knn_rows_read_v1_fun) R_GetCCallable(
+      "faissR", "faissR_knn_rows_read_v1");
+}
+
+static inline faissR_reorder_posting_graph_v1_fun
+faissR_get_reorder_posting_graph_v1(void) {
+  return (faissR_reorder_posting_graph_v1_fun) R_GetCCallable(
+      "faissR", "faissR_reorder_posting_graph_v1");
+}
+
+static inline faissR_merge_knn_shard_v1_fun
+faissR_get_merge_knn_shard_v1(void) {
+  return (faissR_merge_knn_shard_v1_fun) R_GetCCallable(
+      "faissR", "faissR_merge_knn_shard_v1");
 }
 
 static inline faissR_gpu_multi_knn_v1_fun
@@ -300,6 +414,11 @@ static inline faissR_hnsw_search_v1_fun faissR_get_hnsw_search_v1(void) {
       "faissR", "faissR_hnsw_search_v1");
 }
 
+static inline faissR_hnsw_search_v2_fun faissR_get_hnsw_search_v2(void) {
+  return (faissR_hnsw_search_v2_fun) R_GetCCallable(
+      "faissR", "faissR_hnsw_search_v2");
+}
+
 static inline faissR_hnsw_tune_v1_fun faissR_get_hnsw_tune_v1(void) {
   return (faissR_hnsw_tune_v1_fun) R_GetCCallable(
       "faissR", "faissR_hnsw_tune_v1");
@@ -315,6 +434,24 @@ static inline faissR_hnsw_index_search_v1_fun
 faissR_get_hnsw_index_search_v1(void) {
   return (faissR_hnsw_index_search_v1_fun) R_GetCCallable(
       "faissR", "faissR_hnsw_index_search_v1");
+}
+
+static inline faissR_hnsw_index_save_v1_fun
+faissR_get_hnsw_index_save_v1(void) {
+  return (faissR_hnsw_index_save_v1_fun) R_GetCCallable(
+      "faissR", "faissR_hnsw_index_save_v1");
+}
+
+static inline faissR_hnsw_index_load_v1_fun
+faissR_get_hnsw_index_load_v1(void) {
+  return (faissR_hnsw_index_load_v1_fun) R_GetCCallable(
+      "faissR", "faissR_hnsw_index_load_v1");
+}
+
+static inline faissR_hnsw_index_calibrate_v1_fun
+faissR_get_hnsw_index_calibrate_v1(void) {
+  return (faissR_hnsw_index_calibrate_v1_fun) R_GetCCallable(
+      "faissR", "faissR_hnsw_index_calibrate_v1");
 }
 
 static inline faissR_flat_index_build_v1_fun
@@ -333,6 +470,12 @@ static inline faissR_matrix_knn_batch_v1_fun
 faissR_get_matrix_knn_batch_v1(void) {
   return (faissR_matrix_knn_batch_v1_fun) R_GetCCallable(
       "faissR", "faissR_matrix_knn_batch_v1");
+}
+
+static inline faissR_matrix_knn_batch_v2_fun
+faissR_get_matrix_knn_batch_v2(void) {
+  return (faissR_matrix_knn_batch_v2_fun) R_GetCCallable(
+      "faissR", "faissR_matrix_knn_batch_v2");
 }
 
 #ifdef __cplusplus

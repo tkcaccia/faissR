@@ -163,6 +163,8 @@ decorate_public_nn_result <- function(result, request, auto_selection) {
 execute_public_nn_request <- function(request) {
     auto_selection <- public_nn_auto_selection(request)
     nn_maybe_warn_auto_hardware(auto_selection, request$method)
+    measure_resources <- isTRUE(faissr_option("measure_resources", FALSE))
+    before <- if (measure_resources) nn_resource_snapshot() else NULL
     result <- nn_compute(
         request$data,
         request$points,
@@ -178,5 +180,44 @@ execute_public_nn_request <- function(request) {
         auto_selection = auto_selection,
         requested_method = request$method
     )
-    decorate_public_nn_result(result, request, auto_selection)
+    result <- decorate_public_nn_result(result, request, auto_selection)
+    if (measure_resources) {
+        result$resource_measurement <- list(
+            scope = "process_before_after_public_nn_call",
+            before = before,
+            after = nn_resource_snapshot(),
+            peak_during_call_measured = FALSE
+        )
+    }
+    result
+}
+
+nn_resource_snapshot <- function() {
+    ram <- tryCatch(
+        gpuinfo::system_memory_info(),
+        error = function(error) list(
+            process_resident_memory_bytes = NA_real_,
+            process_peak_resident_memory_bytes = NA_real_,
+            status = "unavailable",
+            reason_codes = conditionMessage(error)
+        )
+    )
+    device <- if (isTRUE(faissr_option("measure_device_memory", FALSE))) {
+        tryCatch(
+            gpuinfo::gpu_memory_sample(),
+            error = function(error) structure(
+                list(reason = conditionMessage(error)),
+                class = "faissR_device_sample_error"
+            )
+        )
+    } else NULL
+    list(
+        process_resident_memory_bytes =
+            ram$process_resident_memory_bytes %||% NA_real_,
+        process_lifetime_peak_resident_memory_bytes =
+            ram$process_peak_resident_memory_bytes %||% NA_real_,
+        ram_status = ram$status %||% "unavailable",
+        ram_reason_codes = ram$reason_codes %||% character(),
+        device_sample = device
+    )
 }

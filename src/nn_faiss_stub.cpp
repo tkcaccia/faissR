@@ -266,6 +266,14 @@ List faiss_hnsw_float32_knn_impl(SEXP,
   );
 }
 
+List faiss_hnsw_adaptive_knn_impl(SEXP, SEXP, int, int, int, int,
+                                  double, int, std::string, bool) {
+  Rcpp::stop(
+    "FAISS adaptive HNSW backend is not available. Reinstall faissR "
+    "with FAISS_HOME=/path/to/faiss."
+  );
+}
+
 SEXP faiss_hnsw_index_build_float32_impl(SEXP,
                                          int,
                                          int,
@@ -279,6 +287,14 @@ SEXP faiss_hnsw_index_build_float32_impl(SEXP,
   );
 }
 
+void faiss_hnsw_index_save_impl(SEXP, const std::string&) {
+  Rcpp::stop("FAISS HNSW persistence requires a FAISS-enabled faissR build");
+}
+
+SEXP faiss_hnsw_index_load_impl(const std::string&, int) {
+  Rcpp::stop("FAISS HNSW persistence requires a FAISS-enabled faissR build");
+}
+
 List faiss_hnsw_index_search_float32_impl(SEXP,
                                           SEXP,
                                           int,
@@ -290,6 +306,11 @@ List faiss_hnsw_index_search_float32_impl(SEXP,
     "FAISS float32 HNSW fitted-index backend is not available. Reinstall "
     "faissR with FAISS_HOME=/path/to/faiss."
   );
+}
+
+List faiss_hnsw_index_calibrate_impl(SEXP, SEXP, Rcpp::IntegerVector,
+                                     int, double, int, int) {
+  Rcpp::stop("FAISS HNSW calibration requires a FAISS-enabled faissR build");
 }
 
 SEXP faiss_index_build_float32_impl(SEXP,

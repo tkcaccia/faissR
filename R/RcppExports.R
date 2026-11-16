@@ -744,6 +744,12 @@ nn_faiss_gpu_ivf_flat_cpp <- function(data, points, k, nlist, nprobe, metric,
         metric, distance_output, exclude_self)
 }
 
+nn_faiss_gpu_ivf_query_pilot_cpp <- function(data, points, k, nlist, nprobe,
+    target_recall, distance_storage) {
+    .Call(`_faissR_nn_faiss_gpu_ivf_query_pilot_cpp`, data, points, k, nlist,
+        nprobe, target_recall, distance_storage)
+}
+
 nn_faiss_gpu_ivf_flat_float32_cpp <- function(data, points, k, nlist, nprobe,
     metric, distance_output, exclude_self, distance_storage) {
     .Call(`_faissR_nn_faiss_gpu_ivf_flat_float32_cpp`, data, points, k, nlist,
