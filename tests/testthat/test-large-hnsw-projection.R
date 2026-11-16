@@ -117,6 +117,9 @@ test_that("matched 512-query HNSW audits preserve independent holdout", {
         cases[[i]]$query_count <- 512L
         cases[[i]]$pilot_rows <- 256L
         cases[[i]]$holdout_rows <- 256L
+        cases[[i]]$fixed_query_search_seconds_by_ef <-
+            setNames(c(1, 2, 4) * c(1, 5, 10)[[i]],
+                     c("32", "512", "2048"))
         cases[[i]]$source_archive_sha256 <- strrep("a", 64L)
         cases[[i]]$input_sha256 <- strrep("b", 64L)
         cases[[i]]$audit_sha256 <- strrep(as.character(i), 64L)
@@ -126,6 +129,9 @@ test_that("matched 512-query HNSW audits preserve independent holdout", {
     cases[[2L]]$prediction_passed <- TRUE
     cases[[2L]]$build_prediction_relative_error <- abs(2244.96 / predicted - 1)
     cases[[2L]]$peak_memory_prediction_relative_error <- 0
+    cases[[2L]]$fixed_query_prediction_passed <- TRUE
+    cases[[2L]]$fixed_query_prediction_relative_error_by_ef <-
+        setNames(c(0, 0, 0), c("32", "512", "2048"))
     request <- list(n = 1e9, p = 96L, k = 10L,
         host_memory_bytes = 3e12, target_recall = 0.99,
         cases = cases, source_archive_sha256 = strrep("a", 64L),
@@ -136,9 +142,22 @@ test_that("matched 512-query HNSW audits preserve independent holdout", {
     expect_identical(plan$calibration_query_count, 512L)
     expect_identical(plan$calibration_pilot_rows, 256L)
     expect_identical(plan$calibration_holdout_rows, 256L)
+    expect_identical(plan$fixed_query_timing_status,
+                     "conditional_fixed_query_only_not_full_self_search")
+    expect_equal(plan$conditional_fixed_query_search_seconds_range_by_ef[[
+        "512"]], c(200, 200))
+    expect_true(all(is.na(plan$conditional_full_self_search_seconds_range)))
     request$cases[[2L]]$pilot_rows <- 128L
     expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
                  "mix source, input, query")
+    request$cases <- cases
+    request$cases[[2L]]$fixed_query_search_seconds_by_ef[["512"]] <- 20
+    expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
+                 "fixed-query timing holdout")
+    request$cases <- cases
+    request$cases[[3L]]$fixed_query_search_seconds_by_ef <- NULL
+    expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
+                 "timing evidence is incomplete")
 })
 
 test_that("file-input HNSW projection preserves reference residency", {

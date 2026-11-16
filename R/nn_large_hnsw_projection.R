@@ -128,6 +128,49 @@ nn_large_hnsw_project_audited <- function(
     }, logical(1L))
     if (!all(cells_ok)) stop("HNSW recall cells are incomplete or missed.",
                              call. = FALSE)
+    fixed_efs <- c("32", "512", "2048")
+    has_query_evidence <- vapply(cases, function(x)
+        !is.null(x$fixed_query_search_seconds_by_ef), logical(1L))
+    if (any(has_query_evidence) && !all(has_query_evidence)) {
+        stop("Fixed-query timing evidence is incomplete.", call. = FALSE)
+    }
+    query_ranges <- NULL
+    if (all(has_query_evidence)) {
+        query_times <- lapply(cases, function(x)
+            x$fixed_query_search_seconds_by_ef)
+        valid_times <- vapply(query_times, function(x)
+            is.numeric(x) && identical(names(x), fixed_efs) &&
+                all(is.finite(x)) && all(x > 0), logical(1L))
+        reported <- heldout$fixed_query_prediction_relative_error_by_ef
+        if (!all(valid_times) ||
+            !is.numeric(reported) ||
+            !identical(names(reported), fixed_efs) ||
+            any(!is.finite(reported)) || any(reported < 0) ||
+            !isTRUE(heldout$fixed_query_prediction_passed)) {
+            stop("Prospective fixed-query timing holdout did not pass.",
+                 call. = FALSE)
+        }
+        query_error <- vapply(fixed_efs, function(ef) {
+            lower <- query_times[[1L]][[ef]]
+            upper <- query_times[[3L]][[ef]]
+            power <- log(upper / lower) /
+                log(sizes[[3L]] / sizes[[1L]])
+            predicted <- lower * (sizes[[2L]] / sizes[[1L]])^power
+            abs(query_times[[2L]][[ef]] / predicted - 1)
+        }, numeric(1L))
+        if (any(abs(reported - query_error) > 1e-6) ||
+            any(query_error > 0.30)) {
+            stop("Prospective fixed-query timing holdout did not pass.",
+                 call. = FALSE)
+        }
+        query_ranges <- setNames(lapply(fixed_efs, function(ef) {
+            observations <- lapply(seq_along(cases), function(i)
+                list(n = cases[[i]]$n,
+                     fixed_query_seconds = query_times[[i]][[ef]]))
+            nn_large_hnsw_projection_metric(observations,
+                "fixed_query_seconds", n)
+        }), fixed_efs)
+    }
     build <- nn_large_hnsw_projection_metric(cases,
         "hnsw_build_seconds", n)
     peak <- nn_large_hnsw_projection_metric(cases,
@@ -142,6 +185,11 @@ nn_large_hnsw_project_audited <- function(
         as.double(x$cells[[tier]]$ef_search), numeric(1L))))
     base$conditional_index_build_seconds_range <- build
     base$conditional_build_peak_bytes_range <- peak
+    base$conditional_fixed_query_search_seconds_range_by_ef <- query_ranges
+    base$fixed_query_timing_status <- if (is.null(query_ranges)) {
+        "unavailable_without_prospective_timing_holdout"
+    } else "conditional_fixed_query_only_not_full_self_search"
+    base$conditional_full_self_search_seconds_range <- c(NA_real_, NA_real_)
     base$index_build_capacity_budget_bytes <-
         peak[[2L]] / (1 - headroom_fraction)
     base$source_archive_sha256 <- source_archive_sha256
