@@ -34,6 +34,9 @@ test_that("source-locked HNSW holdout yields conditional 1B ranges", {
         audit_sha256 = rep(paste(rep("c", 64L), collapse = ""), 3L))
     plan <- do.call(faissR:::nn_large_hnsw_project_audited, request)
     expect_identical(plan$index_candidate, "hnsw")
+    expect_identical(plan$storage_mode, "resident")
+    expect_identical(plan$reference_residency, "resident_cpu")
+    expect_identical(plan$index_residency, "resident_cpu")
     expect_identical(plan$selected_ef_search, 960L)
     expect_equal(plan$conditional_index_build_seconds_range,
                  c(69730.17171816045, 77186.09988197369),
@@ -68,6 +71,44 @@ test_that("source-locked HNSW holdout yields conditional 1B ranges", {
     request$cases[[2L]]$cells[[3L]]$measured_id_recall <-
         cases[[2L]]$cells[[3L]]$measured_id_recall
     request$cases[[3L]]$p <- 95L
+    expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
+                 "mixed scope")
+})
+
+test_that("file-input HNSW projection preserves reference residency", {
+    cases <- list(
+        make_hnsw_audit_case(1e7, 390, 10e9, c(32, 64, 256),
+                             c(0.94, 0.97, 0.995)),
+        make_hnsw_audit_case(5e7, 2244.96, 50e9,
+                             c(32, 64, 256), c(0.93, 0.96, 0.992)),
+        make_hnsw_audit_case(1e8, 5200, 100e9,
+                             c(32, 64, 256), c(0.92, 0.95, 0.991))
+    )
+    for (i in seq_along(cases)) {
+        cases[[i]]$scope <-
+            "file_input_resident_hnsw_build_calibration_sampled_query_exact_audit"
+    }
+    predicted <- 390 * 5^(log(5200 / 390) / log(10))
+    cases[[2L]]$prediction_passed <- TRUE
+    cases[[2L]]$build_prediction_relative_error <- abs(2244.96 / predicted - 1)
+    cases[[2L]]$peak_memory_prediction_relative_error <- 0
+    request <- list(n = 1e9, p = 96L, k = 30L,
+        host_memory_bytes = 3e12, target_recall = 0.99,
+        cases = cases, storage_mode = "file_backed",
+        source_archive_sha256 = paste(rep("a", 64L), collapse = ""),
+        input_sha256 = paste(rep("b", 64L), collapse = ""),
+        audit_sha256 = rep(paste(rep("c", 64L), collapse = ""), 3L))
+    plan <- do.call(faissR:::nn_large_hnsw_project_audited, request)
+    expect_identical(plan$storage_mode, "file_backed")
+    expect_identical(plan$reference_residency, "file_backed")
+    expect_identical(plan$index_residency, "resident_cpu")
+    expect_true(plan$file_backed_output_format_addressable)
+    request$cases[[2L]]$hnsw_build_seconds <- predicted * 1.25
+    request$cases[[2L]]$build_prediction_relative_error <- 0.25
+    expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
+                 "holdout did not pass")
+    request$cases <- cases
+    request$storage_mode <- "resident"
     expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
                  "mixed scope")
 })

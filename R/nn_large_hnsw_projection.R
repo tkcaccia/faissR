@@ -18,10 +18,11 @@ nn_large_hnsw_projection_metric <- function(cases, field, target_n) {
 nn_large_hnsw_project_audited <- function(
     n, p, k, host_memory_bytes, target_recall,
     cases, source_archive_sha256, input_sha256, audit_sha256,
-    cpu_threads = 16L, headroom_fraction = 0.20
+    cpu_threads = 16L, headroom_fraction = 0.20,
+    storage_mode = "resident"
 ) {
     base <- nn_large_knn_resource_plan(
-        n, p, k, "cpu", "resident", host_memory_bytes,
+        n, p, k, "cpu", storage_mode, host_memory_bytes,
         cpu_threads_available = cpu_threads,
         target_recall = target_recall,
         device_headroom_fraction = headroom_fraction
@@ -35,11 +36,15 @@ nn_large_hnsw_project_audited <- function(
         stop("Three source-locked HNSW audits are required.", call. = FALSE)
     }
     sizes <- vapply(cases, function(x) as.double(x$n), numeric(1L))
+    expected_scope <- if (storage_mode == "file_backed") {
+        "file_input_resident_hnsw_build_calibration_sampled_query_exact_audit"
+    } else {
+        "resident_hnsw_build_calibration_sampled_query_exact_audit"
+    }
     if (any(!is.finite(sizes)) || any(diff(sizes) <= 0) ||
         n <= sizes[[3L]] ||
         any(!vapply(cases, function(x) {
-            isTRUE(x$passed) && identical(x$scope,
-                "resident_hnsw_build_calibration_sampled_query_exact_audit") &&
+            isTRUE(x$passed) && identical(x$scope, expected_scope) &&
                 identical(x$full_graph_performed, FALSE) &&
                 length(x$p) == 1L && is.finite(x$p) && x$p == p &&
                 length(x$k) == 1L && is.finite(x$k) && x$k == k &&
@@ -70,7 +75,7 @@ nn_large_hnsw_project_audited <- function(
         abs(heldout$build_prediction_relative_error - build_error) > 1e-6 ||
         abs(heldout$peak_memory_prediction_relative_error -
             memory_error) > 1e-6 ||
-        build_error > 0.30 || memory_error > 0.25) {
+        build_error > 0.20 || memory_error > 0.25) {
         stop("Prospective HNSW interpolation holdout did not pass.",
              call. = FALSE)
     }
@@ -95,6 +100,10 @@ nn_large_hnsw_project_audited <- function(
         "peak_memory_footprint_bytes", n)
     tier <- match(target_recall, c(0.90, 0.95, 0.99))
     base$index_candidate <- "hnsw"
+    base$index_residency <- "resident_cpu"
+    base$reference_residency <- if (storage_mode == "file_backed") {
+        "file_backed"
+    } else "resident_cpu"
     base$selected_ef_search <- as.integer(max(vapply(cases, function(x)
         as.double(x$cells[[tier]]$ef_search), numeric(1L))))
     base$conditional_index_build_seconds_range <- build
