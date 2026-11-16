@@ -36,6 +36,21 @@ nn_large_hnsw_project_audited <- function(
         anyDuplicated(audit_sha256)) {
         stop("Three source-locked HNSW audits are required.", call. = FALSE)
     }
+    query_design <- cases[[1L]][c("query_count", "pilot_rows",
+                                      "holdout_rows")]
+    valid_query_design <- length(query_design) == 3L &&
+        all(vapply(query_design, function(value)
+            length(value) == 1L && is.numeric(value) &&
+                is.finite(value) && value == floor(value) && value > 0,
+            logical(1L))) &&
+        query_design$query_count >= 256L &&
+        query_design$pilot_rows == query_design$holdout_rows &&
+        query_design$pilot_rows + query_design$holdout_rows ==
+            query_design$query_count
+    if (!valid_query_design) {
+        stop("HNSW audits require balanced pilot and holdout query rows.",
+             call. = FALSE)
+    }
     identities_ok <- vapply(seq_along(cases), function(i) {
         x <- cases[[i]]
         identical(x$source_archive_sha256, source_archive_sha256) &&
@@ -43,9 +58,9 @@ nn_large_hnsw_project_audited <- function(
             identical(x$audit_sha256, audit_sha256[[i]]) &&
             hash_ok(x$query_rows_sha256) &&
             identical(x$reference_scope, "full_database_exact") &&
-            identical(x$query_count, 256L) &&
-            identical(x$pilot_rows, 128L) &&
-            identical(x$holdout_rows, 128L) &&
+            identical(x$query_count, query_design$query_count) &&
+            identical(x$pilot_rows, query_design$pilot_rows) &&
+            identical(x$holdout_rows, query_design$holdout_rows) &&
             identical(x$hnsw_m, 32L) &&
             identical(x$ef_construction, 200L)
     }, logical(1L))
@@ -134,6 +149,9 @@ nn_large_hnsw_project_audited <- function(
     base$audit_sha256 <- audit_sha256
     base$calibration_rows <- sizes
     base$calibration_threads <- cpu_threads
+    base$calibration_query_count <- query_design$query_count
+    base$calibration_pilot_rows <- query_design$pilot_rows
+    base$calibration_holdout_rows <- query_design$holdout_rows
     base$heldout_build_relative_error <-
         build_error
     base$heldout_memory_relative_error <-

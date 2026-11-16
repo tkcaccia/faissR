@@ -48,6 +48,7 @@ test_that("source-locked HNSW holdout yields conditional 1B ranges", {
     expect_identical(plan$reference_residency, "resident_cpu")
     expect_identical(plan$index_residency, "resident_cpu")
     expect_identical(plan$selected_ef_search, 960L)
+    expect_identical(plan$calibration_query_count, 256L)
     expect_equal(plan$conditional_index_build_seconds_range,
                  c(69730.17171816045, 77186.09988197369),
                  tolerance = 1e-8)
@@ -100,6 +101,44 @@ test_that("source-locked HNSW holdout yields conditional 1B ranges", {
     request$audit_sha256[[3L]] <- request$audit_sha256[[1L]]
     expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
                  "Three source-locked")
+})
+
+test_that("matched 512-query HNSW audits preserve independent holdout", {
+    cases <- list(
+        make_hnsw_audit_case(1e7, 390, 10e9, c(32, 64, 256),
+                             c(0.94, 0.97, 0.995)),
+        make_hnsw_audit_case(5e7, 2244.96, 50e9, c(32, 64, 256),
+                             c(0.93, 0.96, 0.992)),
+        make_hnsw_audit_case(1e8, 5200, 100e9, c(32, 64, 256),
+                             c(0.92, 0.95, 0.991))
+    )
+    for (i in seq_along(cases)) {
+        cases[[i]]$k <- 10L
+        cases[[i]]$query_count <- 512L
+        cases[[i]]$pilot_rows <- 256L
+        cases[[i]]$holdout_rows <- 256L
+        cases[[i]]$source_archive_sha256 <- strrep("a", 64L)
+        cases[[i]]$input_sha256 <- strrep("b", 64L)
+        cases[[i]]$audit_sha256 <- strrep(as.character(i), 64L)
+        cases[[i]]$query_rows_sha256 <- strrep(as.character(i + 3L), 64L)
+    }
+    predicted <- 390 * 5^(log(5200 / 390) / log(10))
+    cases[[2L]]$prediction_passed <- TRUE
+    cases[[2L]]$build_prediction_relative_error <- abs(2244.96 / predicted - 1)
+    cases[[2L]]$peak_memory_prediction_relative_error <- 0
+    request <- list(n = 1e9, p = 96L, k = 10L,
+        host_memory_bytes = 3e12, target_recall = 0.99,
+        cases = cases, source_archive_sha256 = strrep("a", 64L),
+        input_sha256 = strrep("b", 64L),
+        audit_sha256 = vapply(cases, function(x) x$audit_sha256,
+                             character(1L)))
+    plan <- do.call(faissR:::nn_large_hnsw_project_audited, request)
+    expect_identical(plan$calibration_query_count, 512L)
+    expect_identical(plan$calibration_pilot_rows, 256L)
+    expect_identical(plan$calibration_holdout_rows, 256L)
+    request$cases[[2L]]$pilot_rows <- 128L
+    expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
+                 "mix source, input, query")
 })
 
 test_that("file-input HNSW projection preserves reference residency", {
