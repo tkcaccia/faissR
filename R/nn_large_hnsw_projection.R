@@ -163,13 +163,14 @@ nn_large_hnsw_project_audited <- function(
             stop("Prospective fixed-query timing holdout did not pass.",
                  call. = FALSE)
         }
-        query_ranges <- stats::setNames(lapply(fixed_efs, function(ef) {
+        query_ranges <- lapply(fixed_efs, function(ef) {
             observations <- lapply(seq_along(cases), function(i)
                 list(n = cases[[i]]$n,
                      fixed_query_seconds = query_times[[i]][[ef]]))
             nn_large_hnsw_projection_metric(observations,
                 "fixed_query_seconds", n)
-        }), fixed_efs)
+        })
+        names(query_ranges) <- fixed_efs
     }
     build <- nn_large_hnsw_projection_metric(cases,
         "hnsw_build_seconds", n)
