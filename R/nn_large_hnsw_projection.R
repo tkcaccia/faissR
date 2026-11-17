@@ -1,6 +1,7 @@
 # Private conditional CPU HNSW projection from three source-locked audits.
 # The middle case must be a prospective held-out interpolation pass.
-nn_large_hnsw_projection_metric <- function(cases, field, target_n) {
+nn_large_hnsw_projection_metric <- function(cases, field, target_n,
+                                            model = "power") {
     sizes <- vapply(cases, function(x) as.double(x$n), numeric(1L))
     values <- vapply(cases, function(x) as.double(x[[field]]),
                      numeric(1L))
@@ -8,9 +9,15 @@ nn_large_hnsw_projection_metric <- function(cases, field, target_n) {
     estimate <- vapply(pairs, function(pair) {
         low <- pair[[1L]]
         high <- pair[[2L]]
-        slope <- log(values[[high]] / values[[low]]) /
-            log(sizes[[high]] / sizes[[low]])
-        values[[high]] * (target_n / sizes[[high]])^slope
+        if (identical(model, "affine")) {
+            slope <- (values[[high]] - values[[low]]) /
+                (sizes[[high]] - sizes[[low]])
+            values[[high]] + slope * (target_n - sizes[[high]])
+        } else {
+            slope <- log(values[[high]] / values[[low]]) /
+                log(sizes[[high]] / sizes[[low]])
+            values[[high]] * (target_n / sizes[[high]])^slope
+        }
     }, numeric(1L))
     c(min(estimate), max(estimate))
 }
@@ -64,8 +71,10 @@ nn_large_hnsw_project_audited <- function(
             identical(x$hnsw_m, 32L) &&
             identical(x$ef_construction, 200L)
     }, logical(1L))
-    if (!all(identities_ok) || anyDuplicated(vapply(cases, function(x)
-        x$query_rows_sha256, character(1L)))) {
+    query_hashes <- vapply(cases, function(x)
+        x$query_rows_sha256, character(1L))
+    if (!all(identities_ok) ||
+        query_hashes[[2L]] %in% query_hashes[c(1L, 3L)]) {
         stop("HNSW audits mix source, input, query, or index identity.",
              call. = FALSE)
     }
@@ -93,23 +102,30 @@ nn_large_hnsw_project_audited <- function(
              call. = FALSE)
     }
     heldout <- cases[[2L]]
-    interpolate <- function(field) {
+    interpolate_power <- function(field) {
         lower <- cases[[1L]][[field]]
         upper <- cases[[3L]][[field]]
         power <- log(upper / lower) / log(sizes[[3L]] / sizes[[1L]])
         lower * (sizes[[2L]] / sizes[[1L]])^power
     }
-    build_error <- abs(heldout$hnsw_build_seconds /
-        interpolate("hnsw_build_seconds") - 1)
-    memory_error <- abs(heldout$peak_memory_footprint_bytes /
-        interpolate("peak_memory_footprint_bytes") - 1)
+    lower_memory <- cases[[1L]]$peak_memory_footprint_bytes
+    upper_memory <- cases[[3L]]$peak_memory_footprint_bytes
+    predicted_memory <- lower_memory +
+        (upper_memory - lower_memory) *
+        (sizes[[2L]] - sizes[[1L]]) /
+        (sizes[[3L]] - sizes[[1L]])
+    build_error <- abs(interpolate_power("hnsw_build_seconds") -
+        heldout$hnsw_build_seconds) / heldout$hnsw_build_seconds
+    memory_error <- abs(predicted_memory -
+        heldout$peak_memory_footprint_bytes) /
+        heldout$peak_memory_footprint_bytes
     if (!isTRUE(heldout$prediction_passed) ||
         !is.finite(heldout$build_prediction_relative_error) ||
         !is.finite(heldout$peak_memory_prediction_relative_error) ||
         abs(heldout$build_prediction_relative_error - build_error) > 1e-6 ||
         abs(heldout$peak_memory_prediction_relative_error -
             memory_error) > 1e-6 ||
-        build_error > 0.20 || memory_error > 0.25) {
+        build_error > 0.20 || memory_error > 0.20) {
         stop("Prospective HNSW interpolation holdout did not pass.",
              call. = FALSE)
     }
@@ -175,7 +191,7 @@ nn_large_hnsw_project_audited <- function(
     build <- nn_large_hnsw_projection_metric(cases,
         "hnsw_build_seconds", n)
     peak <- nn_large_hnsw_projection_metric(cases,
-        "peak_memory_footprint_bytes", n)
+        "peak_memory_footprint_bytes", n, model = "affine")
     tier <- match(target_recall, c(0.90, 0.95, 0.99))
     base$index_candidate <- "hnsw"
     base$index_residency <- "resident_cpu"

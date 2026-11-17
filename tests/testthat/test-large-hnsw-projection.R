@@ -26,9 +26,15 @@ test_that("source-locked HNSW holdout yields conditional 1B ranges", {
                                0.9984375))
     )
     cases[[2L]]$prediction_passed <- TRUE
-    cases[[2L]]$build_prediction_relative_error <- 0.013471801560307028
+    predicted_build <- 839.421 *
+        (5e7 / 2e7)^(log(5267.396 / 839.421) / log(1e8 / 2e7))
+    predicted_peak <- 33001561848 +
+        (164255157688 - 33001561848) * (5e7 - 2e7) /
+        (1e8 - 2e7)
+    cases[[2L]]$build_prediction_relative_error <-
+        abs(predicted_build - 2420.433) / 2420.433
     cases[[2L]]$peak_memory_prediction_relative_error <-
-        0.0012309199941961113
+        abs(predicted_peak - 82188150912) / 82188150912
     for (i in seq_along(cases)) {
         cases[[i]]$source_archive_sha256 <- strrep("a", 64L)
         cases[[i]]$input_sha256 <- strrep("b", 64L)
@@ -53,10 +59,10 @@ test_that("source-locked HNSW holdout yields conditional 1B ranges", {
                  c(69730.17171816045, 77186.09988197369),
                  tolerance = 1e-8)
     expect_equal(plan$conditional_build_peak_bytes_range,
-                 c(1623284627465.5024, 1638533661329.0159),
+                 c(1639763471272, 1641461279656),
                  tolerance = 1e-8)
     expect_equal(plan$index_build_capacity_budget_bytes,
-                 1638533661329.0159 / 0.8, tolerance = 1e-8)
+                 1641461279656 / 0.8, tolerance = 1e-8)
     expect_identical(plan$tuning_status,
         "conditional_extrapolation_requires_live_recall_and_hardware_validation")
     expect_false(plan$r_full_output_vector_supported)
@@ -76,6 +82,14 @@ test_that("source-locked HNSW holdout yields conditional 1B ranges", {
                  "holdout did not pass")
     request$cases[[2L]]$build_prediction_relative_error <-
         cases[[2L]]$build_prediction_relative_error
+    request$cases[[2L]]$peak_memory_footprint_bytes <-
+        predicted_peak * 1.26
+    request$cases[[2L]]$peak_memory_prediction_relative_error <-
+        abs(predicted_peak - predicted_peak * 1.26) /
+        (predicted_peak * 1.26)
+    expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
+                 "holdout did not pass")
+    request$cases <- cases
     request$cases[[2L]]$cells[[3L]]$measured_id_recall <- 0.98
     expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
                  "recall cells")
@@ -86,6 +100,11 @@ test_that("source-locked HNSW holdout yields conditional 1B ranges", {
                  "mixed scope")
     request$cases <- cases
     request$cases[[3L]]$query_rows_sha256 <-
+        request$cases[[1L]]$query_rows_sha256
+    expect_identical(do.call(faissR:::nn_large_hnsw_project_audited,
+                             request)$index_candidate, "hnsw")
+    request$cases <- cases
+    request$cases[[2L]]$query_rows_sha256 <-
         request$cases[[1L]]$query_rows_sha256
     expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
                  "mix source, input, query")
@@ -127,7 +146,8 @@ test_that("matched 512-query HNSW audits preserve independent holdout", {
     }
     predicted <- 390 * 5^(log(5200 / 390) / log(10))
     cases[[2L]]$prediction_passed <- TRUE
-    cases[[2L]]$build_prediction_relative_error <- abs(2244.96 / predicted - 1)
+    cases[[2L]]$build_prediction_relative_error <-
+        abs(predicted - 2244.96) / 2244.96
     cases[[2L]]$peak_memory_prediction_relative_error <- 0
     cases[[2L]]$fixed_query_prediction_passed <- TRUE
     cases[[2L]]$fixed_query_prediction_relative_error_by_ef <-
@@ -179,7 +199,8 @@ test_that("file-input HNSW projection preserves reference residency", {
     }
     predicted <- 390 * 5^(log(5200 / 390) / log(10))
     cases[[2L]]$prediction_passed <- TRUE
-    cases[[2L]]$build_prediction_relative_error <- abs(2244.96 / predicted - 1)
+    cases[[2L]]$build_prediction_relative_error <-
+        abs(predicted - 2244.96) / 2244.96
     cases[[2L]]$peak_memory_prediction_relative_error <- 0
     request <- list(n = 1e9, p = 96L, k = 30L,
         host_memory_bytes = 3e12, target_recall = 0.99,
@@ -193,8 +214,9 @@ test_that("file-input HNSW projection preserves reference residency", {
     expect_identical(plan$reference_residency, "file_backed")
     expect_identical(plan$index_residency, "resident_cpu")
     expect_true(plan$file_backed_output_format_addressable)
-    request$cases[[2L]]$hnsw_build_seconds <- predicted * 1.25
-    request$cases[[2L]]$build_prediction_relative_error <- 0.25
+    request$cases[[2L]]$hnsw_build_seconds <- predicted * 1.26
+    request$cases[[2L]]$build_prediction_relative_error <-
+        abs(predicted * 1.26 - predicted) / (predicted * 1.26)
     expect_error(do.call(faissR:::nn_large_hnsw_project_audited, request),
                  "holdout did not pass")
     request$cases <- cases
