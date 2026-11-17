@@ -15,6 +15,9 @@ extern "C" {
 
 typedef int (*faissR_c_api_version_fun)(void);
 
+/* Exact double-precision kth non-self-neighbor radius of an n-by-2 layout. */
+typedef SEXP (*faissR_layout_radii_v1_fun)(SEXP layout, SEXP k);
+
 /*
  * The include_self arguments use the opposite polarity from the R-level
  * exclude_self argument: TRUE retains each query row in self-search output.
@@ -507,6 +510,12 @@ static inline faissR_matrix_knn_batch_v2_fun
 faissR_get_matrix_knn_batch_v2(void) {
   return (faissR_matrix_knn_batch_v2_fun) R_GetCCallable(
       "faissR", "faissR_matrix_knn_batch_v2");
+}
+
+static inline faissR_layout_radii_v1_fun
+faissR_get_layout_radii_v1(void) {
+  return (faissR_layout_radii_v1_fun) R_GetCCallable(
+      "faissR", "faissR_layout_radii_v1");
 }
 
 #ifdef __cplusplus

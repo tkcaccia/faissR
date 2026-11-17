@@ -8,6 +8,8 @@
 using Rcpp::List;
 using Rcpp::NumericMatrix;
 
+extern "C" SEXP faissR_layout_radii_v1(SEXP layout, SEXP neighbors);
+
 bool faiss_is_available_impl();
 std::string faiss_info_json_impl();
 List faiss_flat_knn_impl(NumericMatrix data,
@@ -721,6 +723,11 @@ extern "C" int faissR_c_api_version_impl() {
 // [[Rcpp::init]]
 void register_faissR_ccallables(DllInfo *dll) {
   (void) dll;
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_layout_radii_v1",
+    (DL_FUNC) &faissR_layout_radii_v1
+  );
   R_RegisterCCallable(
     "faissR",
     "faissR_c_api_version",
