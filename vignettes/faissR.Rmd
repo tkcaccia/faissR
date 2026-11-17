@@ -406,7 +406,8 @@ if (cuda_available()) {
         backend = "cuda",
         method = "exact",
         metric = "euclidean",
-        exclude_self = FALSE
+        exclude_self = FALSE,
+        n_threads = 1L
     )
     c(
         backend_used = attr(cuda_result, "backend_used"),

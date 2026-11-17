@@ -2421,7 +2421,7 @@ test_that("CUDA cuVS HNSW defaults use HPC shape, k, and recall tiers", {
     n = 1440L,
     p = 16384L,
     k = 10L,
-    n_threads = 12L,
+    n_threads = 2L,
     target_recall = 0.99
   )
   expect_equal(tiny$tuning_rule, "hpc_cuda_hnsw_small_n_k15_recall99")
@@ -2436,7 +2436,7 @@ test_that("CUDA cuVS HNSW defaults use HPC shape, k, and recall tiers", {
     n = 1000021L,
     p = 11L,
     k = 50L,
-    n_threads = 12L,
+    n_threads = 2L,
     target_recall = 0.99
   )
   expect_equal(large_low$tuning_rule, "hpc_cuda_hnsw_large_low_dim_k50_recall99")
@@ -2449,7 +2449,7 @@ test_that("CUDA cuVS HNSW defaults use HPC shape, k, and recall tiers", {
     n = 70000L,
     p = 784L,
     k = 50L,
-    n_threads = 12L,
+    n_threads = 2L,
     target_recall = 0.99
   )
   expect_equal(medium_high$tuning_rule, "hpc_cuda_hnsw_large_high_dim_k50_recall99")
@@ -2462,7 +2462,7 @@ test_that("CUDA cuVS HNSW defaults use HPC shape, k, and recall tiers", {
     n = 1281167L,
     p = 1024L,
     k = 15L,
-    n_threads = 12L,
+    n_threads = 2L,
     target_recall = 0.95
   )
   expect_equal(imagenet95$tuning_rule, "hpc_cuda_hnsw_large_high_dim_k15_recall95")
@@ -2475,7 +2475,7 @@ test_that("CUDA cuVS HNSW defaults use HPC shape, k, and recall tiers", {
     n = 1281167L,
     p = 1024L,
     k = 15L,
-    n_threads = 12L,
+    n_threads = 2L,
     target_recall = 0.99
   )
   expect_equal(imagenet99$tuning_rule, "hpc_cuda_hnsw_large_high_dim_k15_recall99")
