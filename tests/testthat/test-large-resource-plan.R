@@ -25,6 +25,11 @@ test_that("file-backed resource floor includes I/O without a time claim", {
     )
     expect_equal(plan$minimum_one_pass_file_io_bytes,
                  4e9 * 96 + 8e9 * 30)
+    expect_equal(plan$minimum_additional_output_disk_bytes, 240e9)
+    expect_equal(plan$minimum_input_plus_output_disk_bytes, 624e9)
+    expect_true(is.na(plan$file_backed_output_floor_fits))
+    expect_identical(plan$file_backed_disk_floor_scope,
+                     "compact_output_only_excludes_input_index_and_temp")
     expect_identical(plan$cpu_threads_candidate, 16L)
     expect_true(is.na(plan$device_payload_floor_fits))
     expect_true(is.na(plan$resident_input_plus_output_fits))
@@ -42,6 +47,14 @@ test_that("file-backed resource floor includes I/O without a time claim", {
     expect_true(is.na(metal$device_payload_model))
     expect_true(is.na(metal$minimum_cuda_gpus_raw_ivf))
     expect_true(metal$file_backed_output_format_addressable)
+    limited <- faissR:::nn_large_knn_resource_plan(
+        1e9, 96L, 30L, "cpu", "file_backed", 128 * 1024^3,
+        disk_free_bytes = 200e9)
+    expect_false(limited$file_backed_output_floor_fits)
+    roomy <- faissR:::nn_large_knn_resource_plan(
+        1e9, 96L, 30L, "cpu", "file_backed", 128 * 1024^3,
+        disk_free_bytes = 300e9)
+    expect_true(roomy$file_backed_output_floor_fits)
 })
 
 test_that("file-backed CUDA planning keeps full index and shard floors apart", {
@@ -115,6 +128,9 @@ test_that("resource request rejects inconsistent devices and recall", {
         1e7, 96L, 30L, "cuda", "resident", 64e9,
         device_memory_bytes = 32e9, gpu_count = 1L,
         device_headroom_fraction = 1), "Invalid large KNN resource")
+    expect_error(faissR:::nn_large_knn_resource_plan(
+        1e7, 96L, 30L, "cpu", "file_backed", 64e9,
+        disk_free_bytes = -1), "Invalid large KNN resource")
 })
 
 test_that("100M integer dimensions do not overflow output planning", {

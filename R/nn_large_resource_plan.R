@@ -3,7 +3,8 @@ nn_large_knn_resource_plan <- function(
     n, p, k, backend, storage_mode, host_memory_bytes,
     device_memory_bytes = NA_real_, gpu_count = 0L,
     cpu_threads_available = 16L, target_recall = 0.99,
-    device_headroom_fraction = 0.20
+    device_headroom_fraction = 0.20,
+    disk_free_bytes = NA_real_
 ) {
     whole <- function(value, lower) {
         length(value) == 1L && is.numeric(value) &&
@@ -23,7 +24,11 @@ nn_large_knn_resource_plan <- function(
         !is.numeric(device_headroom_fraction) ||
         !is.finite(device_headroom_fraction) ||
         device_headroom_fraction < 0 ||
-        device_headroom_fraction >= 1) {
+        device_headroom_fraction >= 1 ||
+        length(disk_free_bytes) != 1L ||
+        !is.numeric(disk_free_bytes) ||
+        (!is.na(disk_free_bytes) &&
+         (!is.finite(disk_free_bytes) || disk_free_bytes < 0))) {
         stop("Invalid large KNN resource request.", call. = FALSE)
     }
     if ((backend == "cpu" && gpu_count != 0L) ||
@@ -35,6 +40,9 @@ nn_large_knn_resource_plan <- function(
     input_bytes <- 4 * n * p
     r_output_bytes <- 12 * n * k
     compact_output_bytes <- 8 * n * k
+    file_output_bytes <- if (storage_mode == "file_backed") {
+        compact_output_bytes
+    } else NA_real_
     r_output_supported <- as.double(n) * (as.double(k) + 1) <=
         .Machine$integer.max
     file_offset_addressable <- as.double(n) * as.double(k) <=
@@ -90,6 +98,21 @@ nn_large_knn_resource_plan <- function(
         minimum_one_pass_file_io_bytes = if (storage_mode == "file_backed") {
             input_bytes + compact_output_bytes
         } else NA_real_,
+        minimum_additional_output_disk_bytes = file_output_bytes,
+        minimum_input_plus_output_disk_bytes = if (
+            storage_mode == "file_backed") {
+            input_bytes + file_output_bytes
+        } else NA_real_,
+        disk_free_bytes = disk_free_bytes,
+        file_backed_output_floor_fits = if (
+            storage_mode == "file_backed" &&
+            !is.na(disk_free_bytes)) {
+            disk_free_bytes >= file_output_bytes
+        } else NA,
+        file_backed_disk_floor_scope = if (
+            storage_mode == "file_backed") {
+            "compact_output_only_excludes_input_index_and_temp"
+        } else NA_character_,
         file_backed_cuda_shard_rows_raw_candidate = shard_rows,
         file_backed_cuda_minimum_reference_shards_raw = shard_count,
         file_backed_cuda_shard_index_bytes_per_gpu = if (
