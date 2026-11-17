@@ -228,6 +228,10 @@ typedef SEXP (*faissR_hnsw_index_calibrate_v2_fun)(
     SEXP max_ef_search,
     SEXP n_threads);
 
+/* Version 3 uses double-precision exact L2 on stored float32 values. */
+typedef faissR_hnsw_index_calibrate_v2_fun
+    faissR_hnsw_index_calibrate_v3_fun;
+
 /* Private persistent CPU Flat index for bounded query batches. */
 typedef SEXP (*faissR_flat_index_build_v1_fun)(
     SEXP data,
@@ -486,6 +490,12 @@ static inline faissR_hnsw_index_calibrate_v2_fun
 faissR_get_hnsw_index_calibrate_v2(void) {
   return (faissR_hnsw_index_calibrate_v2_fun) R_GetCCallable(
       "faissR", "faissR_hnsw_index_calibrate_v2");
+}
+
+static inline faissR_hnsw_index_calibrate_v3_fun
+faissR_get_hnsw_index_calibrate_v3(void) {
+  return (faissR_hnsw_index_calibrate_v3_fun) R_GetCCallable(
+      "faissR", "faissR_hnsw_index_calibrate_v3");
 }
 
 static inline faissR_flat_index_build_v1_fun

@@ -170,7 +170,8 @@ List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
 List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
                                      Rcpp::IntegerVector self_ids, int k,
                                      double target_recall, int initial_ef,
-                                     int n_threads, int max_ef);
+                                     int n_threads, int max_ef,
+                                     bool precise_reference);
 SEXP faiss_index_build_float32_impl(SEXP data,
                                     std::string kind,
                                     int nlist,
@@ -694,6 +695,9 @@ extern "C" SEXP faissR_hnsw_index_calibrate_v1(SEXP index, SEXP query,
 extern "C" SEXP faissR_hnsw_index_calibrate_v2(SEXP index, SEXP query,
     SEXP self_ids, SEXP k, SEXP target_recall, SEXP initial_ef,
     SEXP max_ef, SEXP n_threads);
+extern "C" SEXP faissR_hnsw_index_calibrate_v3(SEXP index, SEXP query,
+    SEXP self_ids, SEXP k, SEXP target_recall, SEXP initial_ef,
+    SEXP max_ef, SEXP n_threads);
 extern "C" SEXP faissR_flat_index_build_v1(SEXP data, SEXP n_threads);
 extern "C" SEXP faissR_flat_index_search_v1(SEXP index, SEXP query,
     SEXP k, SEXP n_threads);
@@ -847,6 +851,11 @@ void register_faissR_ccallables(DllInfo *dll) {
     "faissR",
     "faissR_hnsw_index_calibrate_v2",
     (DL_FUNC) &faissR_hnsw_index_calibrate_v2
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_hnsw_index_calibrate_v3",
+    (DL_FUNC) &faissR_hnsw_index_calibrate_v3
   );
   R_RegisterCCallable(
     "faissR",
@@ -1241,7 +1250,7 @@ extern "C" SEXP faissR_hnsw_index_calibrate_v1(SEXP index, SEXP query,
   return faiss_hnsw_index_calibrate_impl(
     index, query, Rcpp::as<Rcpp::IntegerVector>(self_ids),
     Rcpp::as<int>(k), Rcpp::as<double>(target_recall),
-    Rcpp::as<int>(initial_ef), Rcpp::as<int>(n_threads), 1024
+    Rcpp::as<int>(initial_ef), Rcpp::as<int>(n_threads), 1024, false
   );
   END_RCPP
 }
@@ -1261,7 +1270,27 @@ extern "C" SEXP faissR_hnsw_index_calibrate_v2(SEXP index, SEXP query,
   return faiss_hnsw_index_calibrate_impl(
     index, query, Rcpp::as<Rcpp::IntegerVector>(self_ids),
     Rcpp::as<int>(k), Rcpp::as<double>(target_recall),
-    initial, Rcpp::as<int>(n_threads), maximum
+    initial, Rcpp::as<int>(n_threads), maximum, false
+  );
+  END_RCPP
+}
+
+extern "C" SEXP faissR_hnsw_index_calibrate_v3(SEXP index, SEXP query,
+    SEXP self_ids, SEXP k, SEXP target_recall, SEXP initial_ef,
+    SEXP max_ef, SEXP n_threads) {
+  BEGIN_RCPP
+  if (!Rf_inherits(query, "float32")) {
+    Rcpp::stop("HNSW calibration requires a float::fl()/float32 query");
+  }
+  const int initial = Rcpp::as<int>(initial_ef);
+  const int maximum = Rcpp::as<int>(max_ef);
+  if (maximum < initial || maximum < Rcpp::as<int>(k)) {
+    Rcpp::stop("HNSW max_ef must be at least initial_ef and k");
+  }
+  return faiss_hnsw_index_calibrate_impl(
+    index, query, Rcpp::as<Rcpp::IntegerVector>(self_ids),
+    Rcpp::as<int>(k), Rcpp::as<double>(target_recall),
+    initial, Rcpp::as<int>(n_threads), maximum, true
   );
   END_RCPP
 }

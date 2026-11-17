@@ -2935,10 +2935,51 @@ List faiss_hnsw_index_search_float32_impl(SEXP index_ptr,
   return out;
 }
 
+void precise_hnsw_reference(const float* queries, const float* reference,
+                            const Rcpp::IntegerVector& self_ids,
+                            int query_rows, int reference_rows, int columns,
+                            int search_k, int n_threads,
+                            std::vector<double>& distances,
+                            std::vector<faiss::idx_t>& ids) {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) num_threads(n_threads)
+#endif
+  for (int qi = 0; qi < query_rows; ++qi) {
+    using Candidate = std::pair<double, faiss::idx_t>;
+    std::priority_queue<Candidate> best;
+    const float* query = queries + static_cast<std::size_t>(qi) * columns;
+    for (int row = 0; row < reference_rows; ++row) {
+      if (row == self_ids[qi] - 1) continue;
+      const float* point = reference +
+        static_cast<std::size_t>(row) * columns;
+      double distance = 0;
+      for (int col = 0; col < columns; ++col) {
+        const double delta = static_cast<double>(query[col]) - point[col];
+        distance += delta * delta;
+      }
+      const Candidate candidate{distance, row};
+      if (best.size() < static_cast<std::size_t>(search_k)) {
+        best.push(candidate);
+      } else if (candidate < best.top()) {
+        best.pop();
+        best.push(candidate);
+      }
+    }
+    for (int rank = search_k - 1; rank >= 0; --rank) {
+      const auto candidate = best.top();
+      best.pop();
+      const auto offset = static_cast<std::size_t>(qi) * search_k + rank;
+      distances[offset] = candidate.first;
+      ids[offset] = candidate.second;
+    }
+  }
+}
+
 List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
                                      Rcpp::IntegerVector self_ids, int k,
                                      double target_recall, int initial_ef,
-                                     int n_threads, int max_ef_requested) {
+                                     int n_threads, int max_ef_requested,
+                                     bool precise_reference) {
   if (TYPEOF(index_ptr) != EXTPTRSXP ||
       R_ExternalPtrTag(index_ptr) != faiss_hnsw_index_v1_tag()) {
     Rcpp::stop("HNSW calibration requires a faissR version-1 index");
@@ -2974,21 +3015,30 @@ List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
   if (!flat || flat->ntotal != handle->n) {
     Rcpp::stop("HNSW calibration cannot access its full reference");
   }
-  const int search_k = std::min(handle->n, k + 2);
+  const int search_k = precise_reference ?
+    std::min(handle->n - 1, k + 1) : std::min(handle->n, k + 2);
   const int candidate_k = std::min(handle->n, k + 1);
   const std::size_t size = static_cast<std::size_t>(xq.nrow) * search_k;
   const std::size_t candidate_size =
     static_cast<std::size_t>(xq.nrow) * candidate_k;
-  std::vector<float> exact_dist(size), candidate_dist(candidate_size);
+  std::vector<float> exact_dist, candidate_dist(candidate_size);
+  std::vector<double> precise_dist;
+  if (precise_reference) precise_dist.resize(size);
+  else exact_dist.resize(size);
   std::vector<faiss::idx_t> exact_id(size), candidate_id(candidate_size);
   const auto started = std::chrono::steady_clock::now();
-  {
+  if (precise_reference) {
+    precise_hnsw_reference(xq.data, flat->get_xb(), self_ids,
+      xq.nrow, handle->n, handle->p, search_k, n_threads,
+      precise_dist, exact_id);
+  } else {
     OmpThreadScope threads(n_threads);
     faiss::knn_L2sqr(xq.data, flat->get_xb(), handle->p,
                      xq.nrow, handle->n, search_k,
                      exact_dist.data(), exact_id.data());
   }
   int boundary_ties = 0;
+  int near_boundary_rows = 0;
   const int max_ef = std::min(handle->n,
     std::max(max_ef_requested, k));
   int ef = std::min(max_ef, std::max(k, initial_ef));
@@ -3008,21 +3058,26 @@ List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
     }
     int hits = 0;
     boundary_ties = 0;
+    near_boundary_rows = 0;
     for (int row = 0; row < xq.nrow; ++row) {
       const int self = self_ids[row] - 1;
       const auto offset = static_cast<std::size_t>(row) * search_k;
       const auto candidate_offset =
         static_cast<std::size_t>(row) * candidate_k;
       int rank = 0;
-      float kth = 0;
+      double kth = 0;
       for (int j = 0; j < search_k; ++j) {
         const auto wanted = exact_id[offset + j];
         if (wanted < 0 || wanted == self) continue;
+        const double distance = precise_reference ?
+          precise_dist[offset + j] : exact_dist[offset + j];
         if (rank == k) {
-          if (exact_dist[offset + j] == kth) ++boundary_ties;
+          if (distance == kth) ++boundary_ties;
+          if (std::abs(distance - kth) <=
+              std::max(1e-5, 1e-6 * kth)) ++near_boundary_rows;
           break;
         }
-        kth = exact_dist[offset + j];
+        kth = distance;
         ++rank;
         int candidate_rank = 0;
         for (int a = 0; a < candidate_k; ++a) {
@@ -3056,9 +3111,11 @@ List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
     Rcpp::Named("pilot_guard_recall") = guard,
     Rcpp::Named("pilot_rows") = xq.nrow,
     Rcpp::Named("pilot_boundary_ties") = boundary_ties,
+    Rcpp::Named("pilot_near_boundary_rows") = near_boundary_rows,
     Rcpp::Named("pilot_attempts") = attempts,
     Rcpp::Named("pilot_seconds") = seconds,
-    Rcpp::Named("pilot_reference") = "full_cpu_flat",
+    Rcpp::Named("pilot_reference") = precise_reference ?
+      "full_cpu_double_l2" : "full_cpu_flat",
     Rcpp::Named("target_recall") = target_recall,
     Rcpp::Named("target_met") = recall >= target_recall
   );

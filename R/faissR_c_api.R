@@ -26,6 +26,9 @@
 #' `faissR_get_hnsw_index_calibrate_v2()` adds a requested maximum
 #' `efSearch` for larger pilots; the effective maximum is bounded by the
 #' fitted reference size. The version-1 callable retains its 1024 cap.
+#' `faissR_get_hnsw_index_calibrate_v3()` preserves that signature and
+#' calculates exact pilot neighbors with double-precision squared L2 over
+#' the fitted float32 reference, matching the file-backed exact audit.
 #' `faissR_get_hnsw_search_v2()` runs a private resident Euclidean HNSW
 #' search. It checks up to 256 seeded queries against the full reference,
 #' increases `efSearch` until a guarded pilot target is met, and fails
