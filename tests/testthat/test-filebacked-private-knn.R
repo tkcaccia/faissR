@@ -59,6 +59,7 @@ test_that("private bounded KNN preserves ties and self exclusion", {
     expect_identical(observed$provider, "faissR")
     expect_true(observed$exact)
     expect_equal(length(observed$device_ids), 0L)
+    expect_equal(observed$observed_metal_owned_live_buffer_bytes, 0)
     expect_identical(observed$search_seconds_scope,
         "complete_batch_wall_including_file_io")
     stages <- unlist(observed[c("query_read_seconds",
@@ -172,6 +173,9 @@ test_that("private bounded KNN preserves ties and self exclusion", {
         expect_identical(metal$provider, "faissR")
         expect_identical(metal$residency, "file-backed")
         expect_identical(metal$device_ids, 0L)
+        expect_identical(metal$device_memory_model,
+            "unified_shared_estimate")
+        expect_gt(metal$observed_metal_owned_live_buffer_bytes, 0)
         expect_identical(metal$search_seconds_scope,
             "complete_batch_wall_including_file_io")
         expect_identical(metal$indices, observed$indices)
@@ -180,6 +184,7 @@ test_that("private bounded KNN preserves ties and self exclusion", {
         metal_resident <- faissR_test_file_batch(resident, resident,
             c(1, 3, 5), 3L, "metal", TRUE, 128 * 1024^2)
         expect_identical(metal_resident$residency, "resident")
+        expect_gt(metal_resident$observed_metal_owned_live_buffer_bytes, 0)
         expect_identical(metal_resident$search_seconds_scope,
             "complete_batch_wall_resident")
         expect_identical(metal_resident$indices, observed$indices)

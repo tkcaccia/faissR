@@ -2342,9 +2342,10 @@ Rcpp::List faissr_metal_query_knn_impl(SEXP data_sexp,
 // already validated and row-major; avoid conversion through R doubles.
 void faissr_metal_exact_raw(const float* reference, int n_reference,
     const float* query, int n_query, int p, int k,
-    int* ids, float* distances) {
+    int* ids, float* distances, double* owned_buffer_bytes) {
   if (reference == nullptr || query == nullptr ||
       ids == nullptr || distances == nullptr ||
+      owned_buffer_bytes == nullptr ||
       n_reference < 1 || n_query < 1 || p < 1 ||
       p > kMaxGlobalP || k < 1 || k > kMaxK ||
       k > n_reference) {
@@ -2399,6 +2400,8 @@ void faissr_metal_exact_raw(const float* reference, int n_reference,
       threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
     [encoder endEncoding];
     run_and_wait(command);
+    *owned_buffer_bytes = metal_live_buffer_bytes({reference_buffer,
+      query_buffer, id_buffer, distance_buffer, params_buffer});
     std::memcpy(ids, [id_buffer contents],
       output_items * sizeof(int));
     std::memcpy(distances, [distance_buffer contents],

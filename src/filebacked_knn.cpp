@@ -24,7 +24,7 @@
 #ifdef __APPLE__
 void faissr_metal_exact_raw(const float* reference, int n_reference,
     const float* query, int n_query, int p, int k,
-    int* ids, float* distances);
+    int* ids, float* distances, double* owned_buffer_bytes);
 #endif
 
 #ifdef _OPENMP
@@ -234,16 +234,18 @@ void metal_candidates(const std::vector<float>& reference,
                       const std::vector<std::uint64_t>& selected,
                       int k, bool exclude_self,
                       std::vector<std::priority_queue<Candidate>>& heaps,
-                      std::size_t columns) {
+                      std::size_t columns, double& owned_peak) {
 #ifdef __APPLE__
   const int local_k = static_cast<int>(std::min<std::uint64_t>(
     rows, k + (exclude_self ? 1 : 0)));
   std::vector<int> indices(selected.size() * local_k);
   std::vector<float> distances(selected.size() * local_k);
+  double owned_bytes = 0.0;
   faissr_metal_exact_raw(reference.data(), static_cast<int>(rows),
     query.data(), static_cast<int>(selected.size()),
     static_cast<int>(columns), local_k,
-    indices.data(), distances.data());
+    indices.data(), distances.data(), &owned_bytes);
+  owned_peak = std::max(owned_peak, owned_bytes);
   for (std::size_t qi = 0; qi < selected.size(); ++qi) {
     for (int rank = 0; rank < local_k; ++rank) {
       const auto position = qi * local_k + rank;
@@ -270,7 +272,7 @@ void metal_candidates(const std::vector<float>& reference,
 #else
   (void) reference; (void) query; (void) base; (void) rows;
   (void) selected; (void) k; (void) exclude_self;
-  (void) heaps; (void) columns;
+  (void) heaps; (void) columns; (void) owned_peak;
   Rcpp::stop("Metal-enabled file-backed KNN is unavailable here");
 #endif
 }
@@ -476,6 +478,7 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
   double build_seconds = 0.0;
   double search_seconds = 0.0;
   double device_bytes = 0.0;
+  double metal_owned_peak = 0.0;
   double reference_read_seconds = 0.0;
   double candidate_processing_seconds = 0.0;
 #ifdef FAISSR_FILEBACK_CUDA
@@ -545,7 +548,8 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
     const auto processing_started = std::chrono::steady_clock::now();
     if (metal) {
       metal_candidates(reference_values, query_values, base, rows,
-        selected, k, exclude_self, heaps, query.file.columns);
+        selected, k, exclude_self, heaps, query.file.columns,
+        metal_owned_peak);
     } else if (cuda) {
 #ifdef FAISSR_FILEBACK_CUDA
       cuda_candidates(*cuda_index, reference_values, query_values,
@@ -646,6 +650,8 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
     Rcpp::Named("peak_device_bytes_by_id") = cuda ?
       Rcpp::NumericVector(cuda_devices.size(), device_bytes) :
       Rcpp::NumericVector(),
+    Rcpp::Named("observed_metal_owned_live_buffer_bytes") =
+      metal ? metal_owned_peak : 0.0,
     Rcpp::Named("device_memory_model") = metal ?
       "unified_shared_estimate" :
       (cuda ? (cuda_devices.size() > 1 ?
