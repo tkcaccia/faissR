@@ -69,4 +69,19 @@ test_that("private HNSW calibration can search beyond efSearch 1024", {
     expect_error(faissR_test_extended_hnsw(
         float::fl(x), float::fl(x[rows, , drop = FALSE]),
         rows, 1200L, 1000L), "max_ef must be")
+
+    set.seed(42)
+    wide <- float::fl(matrix(rnorm(1024L * 72L), ncol = 72L))
+    selected <- seq_len(64L)
+    query <- wide[selected, , drop = FALSE]
+    old <- options(faissR.knn.report_recall_miss = FALSE)
+    on.exit(options(old), add = TRUE)
+    expect_error(faissR_test_extended_hnsw(wide, query, selected, 5L, 5L),
+        "HNSW pilot recall .* missed guard")
+    options(faissR.knn.report_recall_miss = TRUE)
+    retained <- faissR_test_extended_hnsw(wide, query, selected, 5L, 5L)
+    expect_identical(retained$target_recall, 0.99)
+    expect_false(retained$target_met)
+    expect_lt(retained$pilot_recall, 0.99)
+    expect_identical(retained$max_ef_search, 5L)
 })

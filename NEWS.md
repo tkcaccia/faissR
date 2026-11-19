@@ -1,5 +1,12 @@
 # faissR 0.1
 
+* Batch persistent device-output CUDA searches and report the batch size
+  and count. When CUDA runs out of temporary FAISS search memory, retry
+  the same query rows in smaller batches.
+* Allow private HNSW audit callers to retain an unmet pilot recall using
+  `options(faissR.knn.report_recall_miss = TRUE)`. Return the measured
+  recall and target status. The default continues to enforce the guard.
+
 * Add private C-callable capacity planning and one-pass float32 file-backed
   Metal IVF search. The route reuses the native Metal index for all query
   rows, checks host and device budgets, and rejects missed recall pilots.

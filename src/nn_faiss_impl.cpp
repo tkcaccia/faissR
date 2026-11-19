@@ -155,6 +155,18 @@ int env_positive_int(const char* name, const int fallback) {
   return static_cast<int>(parsed);
 }
 
+bool report_knn_recall_miss() {
+  return Rf_asLogical(Rf_GetOption1(
+    Rf_install("faissR.knn.report_recall_miss"))) == TRUE;
+}
+
+bool retry_gpu_search(const std::exception& error, int batch_size) {
+  const std::string message(error.what());
+  return batch_size > 1 &&
+    message.find("TemporaryMemoryOverflow") != std::string::npos &&
+    message.find("cudaMalloc error out of memory") != std::string::npos;
+}
+
 bool env_false(const char* name) {
   const char* value = std::getenv(name);
   if (value == nullptr) return false;
@@ -1063,12 +1075,12 @@ FaissBatchSearchInfo search_faiss_queries(faiss::Index& index,
                                           const bool gpu_index,
                                           std::vector<float>& distances,
                                           std::vector<faiss::idx_t>& labels) {
-  const int batch_size = faiss_query_batch_size(n_points, search_k, gpu_index);
+  int batch_size = faiss_query_batch_size(n_points, search_k, gpu_index);
   int batches = 0;
   faiss::SearchParametersIVF params;
   params.nprobe = static_cast<std::size_t>(std::max(1, nprobe));
 
-  for (int offset = 0; offset < n_points; offset += batch_size) {
+  for (int offset = 0; offset < n_points;) {
     const int current = std::min(batch_size, n_points - offset);
     const std::size_t output_offset =
       static_cast<std::size_t>(offset) * search_k;
@@ -1084,14 +1096,17 @@ FaissBatchSearchInfo search_faiss_queries(faiss::Index& index,
         &params
       );
     } else {
-      index.search(
-        current,
-        batch_query,
-        search_k,
-        distances.data() + output_offset,
-        labels.data() + output_offset
-      );
+      try {
+        index.search(current, batch_query, search_k,
+                     distances.data() + output_offset,
+                     labels.data() + output_offset);
+      } catch (const std::exception& error) {
+        if (!gpu_index || !retry_gpu_search(error, current)) throw;
+        batch_size = current / 2;
+        continue;
+      }
     }
+    offset += current;
     ++batches;
   }
 
@@ -2452,7 +2467,7 @@ List faiss_hnsw_adaptive_knn_impl(SEXP data, SEXP query, int k,
     ef = std::min(max_ef, std::max(ef + 1, ef * 2));
   }
   const auto audited = std::chrono::steady_clock::now();
-  if (pilot_recall < guard) {
+  if (pilot_recall < guard && !report_knn_recall_miss()) {
     Rcpp::stop(
       "HNSW pilot recall %.6f missed guard %.6f at efSearch=%d",
       pilot_recall, guard, ef
@@ -2494,7 +2509,8 @@ List faiss_hnsw_adaptive_knn_impl(SEXP data, SEXP query, int k,
   out["target_recall"] = target_recall;
   out["target_met"] = pilot_recall >= target_recall;
   out["recall_audited"] = true;
-  out["recall_status"] = "pilot_exact_reference_passed";
+  out["recall_status"] = pilot_recall >= guard ?
+    "pilot_exact_reference_passed" : "pilot_exact_reference_missed_guard";
   out["build_seconds"] = seconds(started, built);
   out["pilot_seconds"] = seconds(built, audited);
   out["search_seconds"] = seconds(audited, finished);
@@ -3100,7 +3116,7 @@ List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
   const double seconds = std::chrono::duration<double>(
     std::chrono::steady_clock::now() - started
   ).count();
-  if (recall < guard) {
+  if (recall < guard && !report_knn_recall_miss()) {
     Rcpp::stop("HNSW pilot recall %.6f missed guard %.6f at efSearch=%d",
                recall, guard, ef);
   }
@@ -4359,12 +4375,25 @@ List faiss_gpu_index_search_gpu_impl(SEXP pointer,
                                      "cudaMalloc(persistent output indices)");
   CudaDeviceAllocation d_out_distances(out_items * sizeof(float),
                                        "cudaMalloc(persistent output distances)");
-  try {
-    gpu->search(query.nrow, d_query.as<float>(), search_k,
-                d_raw_distances.as<float>(),
-                d_raw_indices.as<faiss::idx_t>());
-  } catch (const std::exception& e) {
-    Rcpp::stop("Persistent FAISS GPU device search failed: %s", e.what());
+  int batch_size = faiss_query_batch_size(query.nrow, search_k, true);
+  int batches = 0;
+  for (int offset = 0; offset < query.nrow;) {
+    const int current = std::min(batch_size, query.nrow - offset);
+    const std::size_t first = static_cast<std::size_t>(offset);
+    try {
+      gpu->search(current, d_query.as<float>() + first * query.ncol,
+                  search_k, d_raw_distances.as<float>() + first * search_k,
+                  d_raw_indices.as<faiss::idx_t>() + first * search_k);
+    } catch (const std::exception& error) {
+      if (!retry_gpu_search(error, current)) {
+        Rcpp::stop("Persistent FAISS GPU device search failed: %s",
+                   error.what());
+      }
+      batch_size = current / 2;
+      continue;
+    }
+    offset += current;
+    ++batches;
   }
   cuda_runtime_check(cudaDeviceSynchronize(),
                      "cudaDeviceSynchronize(persistent GPU search)");
@@ -4404,6 +4433,8 @@ List faiss_gpu_index_search_gpu_impl(SEXP pointer,
       "row_l2_normalize_then_ivf_ip";
   }
   out["host_to_device_data_copies"] = 0;
+  out["search_batch_size"] = batch_size;
+  out["search_batches"] = batches;
   out.attr("class") = Rcpp::CharacterVector::create("faissR_gpu_knn", "list");
   return out;
 #else
