@@ -709,6 +709,10 @@ extern "C" SEXP faissR_matrix_knn_batch_v2(SEXP query, SEXP reference,
     SEXP row_ids, SEXP k, SEXP backend, SEXP method,
     SEXP reference_chunk, SEXP memory_limit, SEXP n_threads,
     SEXP exclude_self, SEXP devices);
+extern "C" SEXP faissR_metal_file_ivf_v1(SEXP source_spec,
+    SEXP k, SEXP target_recall, SEXP memory_limit);
+extern "C" SEXP faissR_metal_file_ivf_plan_v1(SEXP source_spec,
+    SEXP k, SEXP memory_limit);
 extern "C" SEXP faissR_posting_search_v1(SEXP query, SEXP feature_path,
     SEXP ids_path, SEXP offsets_path, SEXP centers, SEXP first_row,
     SEXP count, SEXP k, SEXP nprobe, SEXP reference_chunk,
@@ -876,6 +880,16 @@ void register_faissR_ccallables(DllInfo *dll) {
     "faissR",
     "faissR_matrix_knn_batch_v2",
     (DL_FUNC) &faissR_matrix_knn_batch_v2
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_metal_file_ivf_v1",
+    (DL_FUNC) &faissR_metal_file_ivf_v1
+  );
+  R_RegisterCCallable(
+    "faissR",
+    "faissR_metal_file_ivf_plan_v1",
+    (DL_FUNC) &faissR_metal_file_ivf_plan_v1
   );
   R_RegisterCCallable(
     "faissR",

@@ -1,5 +1,10 @@
 # faissR 0.1
 
+* Add private C-callable capacity planning and one-pass float32 file-backed
+  Metal IVF search. The route reuses the native Metal index for all query
+  rows, checks host and device budgets, and rejects missed recall pilots.
+  Bounded exact file-backed Metal batches remain available.
+
 ## Initial CRAN submission
 
 * Declare the roxygen2 generator and normalize source and vignette formatting.

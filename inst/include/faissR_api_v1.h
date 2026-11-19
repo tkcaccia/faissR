@@ -283,6 +283,19 @@ typedef SEXP (*faissR_matrix_knn_batch_v2_fun)(
     SEXP exclude_self,
     SEXP devices);
 
+/* One source read and one native Metal IVF build/search. The full graph is
+ * returned in host matrices only when the conservative RAM and Metal
+ * working-set budgets admit it. The input remains float32 throughout. */
+typedef SEXP (*faissR_metal_file_ivf_v1_fun)(
+    SEXP source_spec,
+    SEXP k,
+    SEXP target_recall,
+    SEXP memory_limit);
+typedef SEXP (*faissR_metal_file_ivf_plan_v1_fun)(
+    SEXP source_spec,
+    SEXP k,
+    SEXP memory_limit);
+
 /* Private CPU search over validated physical posting files. */
 typedef SEXP (*faissR_posting_search_v1_fun)(
     SEXP query, SEXP feature_path, SEXP ids_path, SEXP offsets_path,
@@ -520,6 +533,18 @@ static inline faissR_matrix_knn_batch_v2_fun
 faissR_get_matrix_knn_batch_v2(void) {
   return (faissR_matrix_knn_batch_v2_fun) R_GetCCallable(
       "faissR", "faissR_matrix_knn_batch_v2");
+}
+
+static inline faissR_metal_file_ivf_v1_fun
+faissR_get_metal_file_ivf_v1(void) {
+  return (faissR_metal_file_ivf_v1_fun) R_GetCCallable(
+      "faissR", "faissR_metal_file_ivf_v1");
+}
+
+static inline faissR_metal_file_ivf_plan_v1_fun
+faissR_get_metal_file_ivf_plan_v1(void) {
+  return (faissR_metal_file_ivf_plan_v1_fun) R_GetCCallable(
+      "faissR", "faissR_metal_file_ivf_plan_v1");
 }
 
 static inline faissR_layout_radii_v1_fun

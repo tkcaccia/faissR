@@ -25,6 +25,9 @@
 void faissr_metal_exact_raw(const float* reference, int n_reference,
     const float* query, int n_query, int p, int k,
     int* ids, float* distances, double* owned_buffer_bytes);
+Rcpp::List faissr_metal_knn_file_float(std::vector<float> values,
+    int rows, int columns, int k, double target);
+bool faissr_metal_file_capacity(double bytes);
 #endif
 
 #ifdef _OPENMP
@@ -334,6 +337,102 @@ void cuda_candidates(faiss::Index& index,
 #endif
 
 }  // namespace
+
+extern "C" SEXP faissR_metal_file_ivf_plan_v1(SEXP source_spec,
+    SEXP k_value, SEXP memory_limit_value) {
+  BEGIN_RCPP
+  const FileMatrix source = file_matrix(Rcpp::List(source_spec));
+  const int k = Rcpp::as<int>(k_value);
+  const double memory_limit = Rcpp::as<double>(memory_limit_value);
+  const double n = static_cast<double>(source.rows);
+  const double p = static_cast<double>(source.columns);
+  const double q = p > 0 ? std::min(128.0, std::pow(2.0,
+    std::floor(std::log2(p)))) : 0.0;
+  const double estimated_ram = 8.0 * n * p + 4.0 * n * q +
+    20.0 * n * k + 256.0 * 1024 * 1024;
+  const double estimated_device = 4.0 * n * p + 4.0 * n * q +
+    8.0 * n * k + 128.0 * 1024 * 1024;
+  const bool shape_ok = source.rows <= static_cast<std::uint64_t>(INT_MAX) &&
+    source.columns <= 1024 && k >= 1 && k <= 128 &&
+    static_cast<std::uint64_t>(k) < source.rows;
+  const bool ram_ok = std::isfinite(memory_limit) &&
+    memory_limit >= estimated_ram;
+  bool device_ok = false;
+#ifdef __APPLE__
+  if (shape_ok && ram_ok) {
+    device_ok = faissr_metal_file_capacity(estimated_device);
+  }
+#endif
+  return Rcpp::List::create(
+    Rcpp::Named("fits") = shape_ok && ram_ok && device_ok,
+    Rcpp::Named("shape_supported") = shape_ok,
+    Rcpp::Named("ram_fits") = ram_ok,
+    Rcpp::Named("metal_fits") = device_ok,
+    Rcpp::Named("peak_ram_bytes_estimate") = estimated_ram,
+    Rcpp::Named("peak_device_bytes_estimate") = estimated_device,
+    Rcpp::Named("memory_budget_bytes") = memory_limit);
+  END_RCPP
+}
+
+extern "C" SEXP faissR_metal_file_ivf_v1(SEXP source_spec,
+    SEXP k_value, SEXP target_value, SEXP memory_limit_value) {
+  BEGIN_RCPP
+#ifndef __APPLE__
+  Rcpp::stop("File-backed Metal IVF is unavailable on this platform");
+#else
+  const FileMatrix source = file_matrix(Rcpp::List(source_spec));
+  const int k = Rcpp::as<int>(k_value);
+  const double target = Rcpp::as<double>(target_value);
+  const double memory_limit = Rcpp::as<double>(memory_limit_value);
+  if (source.rows > static_cast<std::uint64_t>(INT_MAX) ||
+      source.columns > 1024 || k < 1 || k > 128 ||
+      static_cast<std::uint64_t>(k) >= source.rows ||
+      (target != 0.9 && target != 0.95 && target != 0.99)) {
+    Rcpp::stop("Invalid file-backed Metal IVF shape or recall target");
+  }
+  Rcpp::List plan(faissR_metal_file_ivf_plan_v1(
+    source_spec, k_value, memory_limit_value));
+  if (!Rcpp::as<bool>(plan["fits"])) {
+    Rcpp::stop("File-backed Metal IVF exceeds RAM or Metal budget; "
+      "select bounded exact search explicitly");
+  }
+  const auto started = std::chrono::steady_clock::now();
+  const auto source_mtime = std::filesystem::last_write_time(source.path);
+  std::ifstream input(source.path, std::ios::binary);
+  if (!input) Rcpp::stop("Could not open file-backed Metal IVF input");
+  std::vector<float> values;
+  read_rows(input, source, 0, source.rows, values);
+  input.close();
+  const double read_seconds = std::chrono::duration<double>(
+    std::chrono::steady_clock::now() - started).count();
+  Rcpp::List result = faissr_metal_knn_file_float(std::move(values),
+    static_cast<int>(source.rows), static_cast<int>(source.columns),
+    k, target);
+  if (std::filesystem::last_write_time(source.path) != source_mtime ||
+      !Rcpp::as<bool>(result["target_met"])) {
+    Rcpp::stop("File-backed Metal IVF input changed or pilot missed target");
+  }
+  result["provider"] = "faissR";
+  result["backend_used"] = "faissr_native_metal_ivf_file";
+  result["method"] = "metal_ivf";
+  result["residency"] = "file-backed";
+  result["index_residency"] = "transient_metal_buffers";
+  result["accelerator"] = "metal";
+  result["gpu_count"] = 1;
+  result["index_base"] = 1;
+  result["result_residency"] = "host";
+  result["exact"] = false;
+  result["source_read_seconds"] = read_seconds;
+  result["peak_ram_bytes_estimate"] = plan["peak_ram_bytes_estimate"];
+  result["peak_device_bytes_estimate"] = plan["peak_device_bytes_estimate"];
+  result["memory_budget_bytes"] = memory_limit;
+  result["device_ids"] = Rcpp::IntegerVector::create(0);
+  result["total_seconds"] = std::chrono::duration<double>(
+    std::chrono::steady_clock::now() - started).count();
+  return result;
+#endif
+  END_RCPP
+}
 
 SEXP matrix_knn_batch_impl(SEXP query_spec,
     SEXP reference_spec, SEXP row_ids, SEXP k_value, SEXP backend,

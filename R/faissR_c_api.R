@@ -57,6 +57,13 @@
 #' resource fields describe the route actually used. The private posting,
 #' result-row reader, reorder and shard-merge callables support the
 #' file-backed graph pipeline without exporting KNN functions at R level.
+#' `faissR_get_metal_file_ivf_plan_v1()` checks shape, host memory, and the
+#' native Metal working-set budget without starting an index. Its matched
+#' `faissR_get_metal_file_ivf_v1()` reads one float32 file source, builds a
+#' transient native Metal IVF index, and returns a complete host graph. It
+#' requires a conservative RAM and Metal working-set budget and fails when
+#' its pilot misses the selected recall tier. Bounded exact Metal batches
+#' remain available through the matrix batch callable.
 #' The exact version-1 signatures are declared in `faissR_api_v1.h`;
 #' `faissR_api.h` includes the current versioned header for source
 #' compatibility.

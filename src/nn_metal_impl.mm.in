@@ -1123,15 +1123,13 @@ bool faissr_metal_knn_available_impl() {
   }
 }
 
-Rcpp::List faissr_metal_knn_impl(SEXP data_sexp,
-                                 int k,
-                                 const std::string& requested_method,
-                                 const std::string& metric_name,
-                                 double target) {
+Rcpp::List faissr_metal_knn_float_impl(
+    faissr_metal::FloatMatrix input, int k,
+    const std::string& requested_method,
+    const std::string& metric_name, double target,
+    std::chrono::steady_clock::time_point t0) {
   using Clock = std::chrono::steady_clock;
-  const auto t0 = Clock::now();
   const faissr_metal::KnnMetric metric = faissr_metal::parse_knn_metric(metric_name);
-  faissr_metal::FloatMatrix input = faissr_metal::matrix_to_row_major_float(data_sexp, metric);
   std::vector<float>& data = input.values;
   const int n = input.nrow;
   const int p = input.ncol;
@@ -1677,6 +1675,42 @@ Rcpp::List faissr_metal_knn_impl(SEXP data_sexp,
     [centroid_buffer release]; [project_params_buffer release]; [projected_buffer release];
     [sign_buffer release]; [feature_buffer release]; [offset_map_buffer release]; [data_buffer release];
     return result;
+  }
+}
+
+Rcpp::List faissr_metal_knn_impl(SEXP data_sexp, int k,
+    const std::string& requested_method,
+    const std::string& metric_name, double target) {
+  const auto started = std::chrono::steady_clock::now();
+  const auto metric = faissr_metal::parse_knn_metric(metric_name);
+  auto input = faissr_metal::matrix_to_row_major_float(
+    data_sexp, metric);
+  return faissr_metal_knn_float_impl(std::move(input), k,
+    requested_method, metric_name, target, started);
+}
+
+Rcpp::List faissr_metal_knn_file_float(std::vector<float> values,
+    int rows, int columns, int k, double target) {
+  faissr_metal::FloatMatrix input;
+  input.values = std::move(values);
+  input.nrow = rows;
+  input.ncol = columns;
+  return faissr_metal_knn_float_impl(std::move(input), k,
+    "ivf", "euclidean", target, std::chrono::steady_clock::now());
+}
+
+bool faissr_metal_file_capacity(double bytes) {
+  @autoreleasepool {
+    id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+    if (device == nil) return false;
+    const double working_set = static_cast<double>(
+      [device recommendedMaxWorkingSetSize]);
+    const double allocated = metal_current_allocated_bytes(device);
+    [device release];
+    return std::isfinite(bytes) && bytes > 0 &&
+      std::isfinite(working_set) && working_set > 0 &&
+      std::isfinite(allocated) && allocated >= 0 &&
+      bytes + allocated <= 0.7 * working_set;
   }
 }
 
