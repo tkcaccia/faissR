@@ -10,12 +10,12 @@ test_that("private bounded KNN preserves ties and self exclusion", {
         code = '
         SEXP faissR_test_file_batch(SEXP query, SEXP reference,
              SEXP rows, int k, std::string backend, bool exclude_self,
-             double memory_limit) {
+             double memory_limit, int reference_chunk = 2) {
           faissR_matrix_knn_batch_v1_fun fn =
             faissR_get_matrix_knn_batch_v1();
           return fn(query, reference, rows, Rcpp::wrap(k),
             Rcpp::wrap(backend), Rcpp::wrap("stream_exact"),
-            Rcpp::wrap(2), Rcpp::wrap(memory_limit),
+            Rcpp::wrap(reference_chunk), Rcpp::wrap(memory_limit),
             Rcpp::wrap(backend == "cpu" ? 2 : 1),
             Rcpp::wrap(exclude_self));
         }',
@@ -217,4 +217,22 @@ test_that("private bounded KNN preserves ties and self exclusion", {
         "cpu", TRUE, 128 * 1024^2), "row_ids")
     expect_error(faissR_test_file_batch(spec, spec, 1, 2L,
         "cpu", TRUE, 1), "memory_limit")
+
+    # Force reference tiling, with ties and fewer than k rows in the last tile.
+    n <- 65541L
+    x <- matrix(64, n, 32L)
+    tied <- c(1L, 16385L, 32769L, 49153L, 65537:65541)
+    x[tied, ] <- 0
+    resident <- list(format = "memory", data = float::fl(x),
+        nrow = n, ncol = ncol(x))
+    cpu <- faissR_test_file_batch(resident, resident, 1, 7L, "cpu",
+        TRUE, 128 * 1024^2, n)
+    expect_identical(as.integer(cpu$indices), tied[2:8])
+    expect_equal(as.numeric(cpu$distances), rep(0, 7L))
+    if (faissR:::nn_metal_available_cpp()) {
+        gpu <- faissR_test_file_batch(resident, resident, 1, 7L, "metal",
+            TRUE, 128 * 1024^2, n)
+        expect_identical(gpu$indices, cpu$indices)
+        expect_equal(gpu$distances, cpu$distances)
+    }
 })

@@ -260,6 +260,21 @@ double precise_l2(const float* left, const float* right,
   return sum;
 }
 
+double bounded_l2(const float* left, const float* right,
+                  std::size_t columns, double cutoff) {
+  double sum = 0.0;
+  for (std::size_t first = 0; first < columns; first += 16) {
+    const auto end = std::min(first + 16, columns);
+    for (std::size_t col = first; col < end; ++col) {
+      const double delta = static_cast<double>(left[col]) - right[col];
+      sum += delta * delta;
+    }
+    // Remaining squared differences can only increase the distance.
+    if (sum > cutoff) break;
+  }
+  return sum;
+}
+
 struct ThreadLimit {
 #ifdef _OPENMP
   int previous;
@@ -563,11 +578,14 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
   const std::size_t count = requested.size();
   const double resident_bytes = query.resident_bytes() +
     (!same_owner ? reference.resident_bytes() : 0.0);
+  const double metal_output_bytes = 8.0 * count *
+    std::min<int>(k + 1, reference_chunk) *
+    (count <= 1024 && reference_chunk >= 65536 ? 16 : 1);
   const double estimated = resident_bytes +
     4.0 * count * query.file.columns +
     4.0 * reference_chunk * reference.file.columns +
     (metal ? 4.0 * (count + reference_chunk) *
-      query.file.columns : 0.0) +
+      query.file.columns + metal_output_bytes : 0.0) +
     (cuda ? 12.0 * count * std::min<int>(k + 1,
       reference_chunk) : 0.0) +
     32.0 * count * k + 64.0 * 1024 * 1024;
@@ -714,9 +732,13 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
       auto& heap = heaps[qi];
       for (std::uint64_t ri = 0; ri < rows; ++ri) {
         if (exclude_self && selected[qi] == base + ri) continue;
-        const double distance = precise_l2(point,
-          reference_values.data() + ri * reference.file.columns,
-          static_cast<std::size_t>(query.file.columns));
+        const float* reference_row =
+          reference_values.data() + ri * reference.file.columns;
+        const auto columns = static_cast<std::size_t>(query.file.columns);
+        const double distance = columns >= 32 &&
+          heap.size() == static_cast<std::size_t>(k) ?
+          bounded_l2(point, reference_row, columns, heap.top().first) :
+          precise_l2(point, reference_row, columns);
         add_candidate(heap, Candidate{distance,
           static_cast<std::uint32_t>(base + ri + 1)}, k);
       }
@@ -793,7 +815,7 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
     Rcpp::Named("peak_ram_bytes_estimate") = estimated,
     Rcpp::Named("peak_device_bytes") = metal ?
       4.0 * (count + reference_chunk) * query.file.columns +
-        8.0 * count * std::min<int>(k + 1, reference_chunk) :
+        metal_output_bytes :
       (cuda ? device_bytes : 0.0),
     Rcpp::Named("peak_device_bytes_by_id") = cuda ?
       Rcpp::NumericVector(cuda_devices.size(), device_bytes) :

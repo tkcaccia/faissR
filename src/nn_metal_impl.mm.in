@@ -97,6 +97,7 @@ struct QuerySearchParams {
   uint n_query;
   uint p;
   uint k;
+  uint tile_rows;
 };
 
 struct QueryIvfParams {
@@ -370,14 +371,17 @@ kernel void exact_query_topk_simd(
     device int* out_ids [[buffer(2)]],
     device float* out_dist [[buffer(3)]],
     constant QuerySearchParams& params [[buffer(4)]],
-    uint q [[threadgroup_position_in_grid]],
+    uint group [[threadgroup_position_in_grid]],
     uint tid [[thread_position_in_threadgroup]],
     uint lane [[thread_index_in_simdgroup]],
     uint sg [[simdgroup_index_in_threadgroup]]) {
   threadgroup float query_row[MAX_P];
   threadgroup float local_dist[NSG * MAX_K];
   threadgroup int local_id[NSG * MAX_K];
-  if (q >= params.n_query) return;
+  uint q = group % params.n_query;
+  uint tile = group / params.n_query;
+  uint first = tile * params.tile_rows;
+  uint end = min(first + params.tile_rows, params.n_reference);
   for (uint d = tid; d < params.p; d += NSG * SIMD_WIDTH) {
     query_row[d] = query[q * params.p + d];
   }
@@ -388,7 +392,7 @@ kernel void exact_query_topk_simd(
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
   uint base = sg * params.k;
-  for (uint candidate = sg; candidate < params.n_reference; candidate += NSG) {
+  for (uint candidate = first + sg; candidate < end; candidate += NSG) {
     float partial = 0.0f;
     const device float* point = reference + candidate * params.p;
     for (uint d = lane; d < params.p; d += SIMD_WIDTH) {
@@ -422,8 +426,9 @@ kernel void exact_query_topk_simd(
           }
         }
       }
-      out_dist[q * params.k + rank] = best_d;
-      out_ids[q * params.k + rank] = best_i;
+      size_t output = size_t(group) * params.k;
+      out_dist[output + rank] = best_d;
+      out_ids[output + rank] = best_i;
       ++heads[best_g];
     }
   }
@@ -435,13 +440,16 @@ kernel void exact_query_topk_simd_global_query(
     device int* out_ids [[buffer(2)]],
     device float* out_dist [[buffer(3)]],
     constant QuerySearchParams& params [[buffer(4)]],
-    uint q [[threadgroup_position_in_grid]],
+    uint group [[threadgroup_position_in_grid]],
     uint tid [[thread_position_in_threadgroup]],
     uint lane [[thread_index_in_simdgroup]],
     uint sg [[simdgroup_index_in_threadgroup]]) {
   threadgroup float local_dist[NSG * MAX_K];
   threadgroup int local_id[NSG * MAX_K];
-  if (q >= params.n_query) return;
+  uint q = group % params.n_query;
+  uint tile = group / params.n_query;
+  uint first = tile * params.tile_rows;
+  uint end = min(first + params.tile_rows, params.n_reference);
   for (uint i = tid; i < NSG * params.k; i += NSG * SIMD_WIDTH) {
     local_dist[i] = INFINITY;
     local_id[i] = -1;
@@ -450,7 +458,7 @@ kernel void exact_query_topk_simd_global_query(
 
   uint base = sg * params.k;
   const device float* query_row = query + q * params.p;
-  for (uint candidate = sg; candidate < params.n_reference; candidate += NSG) {
+  for (uint candidate = first + sg; candidate < end; candidate += NSG) {
     float partial = 0.0f;
     const device float* point = reference + candidate * params.p;
     for (uint d = lane; d < params.p; d += SIMD_WIDTH) {
@@ -484,8 +492,9 @@ kernel void exact_query_topk_simd_global_query(
           }
         }
       }
-      out_dist[q * params.k + rank] = best_d;
-      out_ids[q * params.k + rank] = best_i;
+      size_t output = size_t(group) * params.k;
+      out_dist[output + rank] = best_d;
+      out_ids[output + rank] = best_i;
       ++heads[best_g];
     }
   }
@@ -916,7 +925,7 @@ struct SearchParamsHost {
   std::uint32_t n, p, qdim, nlist, nprobe, k, query_offset, shortlist_per_group;
 };
 struct QuerySearchParamsHost {
-  std::uint32_t n_reference, n_query, p, k;
+  std::uint32_t n_reference, n_query, p, k, tile_rows;
 };
 struct QueryIvfParamsHost {
   std::uint32_t n_reference, n_query, p, qdim, nlist, nprobe, k;
@@ -1830,7 +1839,8 @@ Rcpp::List faissr_metal_query_knn_impl(SEXP data_sexp,
         static_cast<std::uint32_t>(reference.nrow),
         static_cast<std::uint32_t>(n_queries),
         static_cast<std::uint32_t>(reference.ncol),
-        static_cast<std::uint32_t>(k)
+        static_cast<std::uint32_t>(k),
+        static_cast<std::uint32_t>(reference.nrow)
       };
       id<MTLBuffer> params_buffer = [device
         newBufferWithBytes:&params
@@ -2372,7 +2382,37 @@ Rcpp::List faissr_metal_query_knn_impl(SEXP data_sexp,
   }
 }
 
-// Internal float32 path for file-backed batches. The input buffers are
+namespace {
+
+void merge_exact_tiles(const int* tile_ids, const float* tile_distances,
+    int n_queries, int k, int tiles, int* ids, float* distances) {
+  const auto stride = static_cast<std::size_t>(n_queries) * k;
+  for (int query = 0; query < n_queries; ++query) {
+    const auto offset = static_cast<std::size_t>(query) * k;
+    int heads[16] = {};
+    for (int rank = 0; rank < k; ++rank) {
+      std::pair<float, int> best{std::numeric_limits<float>::infinity(), -1};
+      int best_tile = -1;
+      for (int tile = 0; tile < tiles; ++tile) {
+        if (heads[tile] == k) continue;
+        const auto index = tile * stride + offset + heads[tile];
+        const std::pair<float, int> candidate{
+          tile_distances[index], tile_ids[index]};
+        if (candidate.second >= 0 && candidate < best) {
+          best = candidate;
+          best_tile = tile;
+        }
+      }
+      if (best_tile >= 0) ++heads[best_tile];
+      ids[offset + rank] = best.second;
+      distances[offset + rank] = best.first;
+    }
+  }
+}
+
+}  // namespace
+
+// Internal float32 path for bounded batches. The input buffers are
 // already validated and row-major; avoid conversion through R doubles.
 void faissr_metal_exact_raw(const float* reference, int n_reference,
     const float* query, int n_query, int p, int k,
@@ -2392,6 +2432,10 @@ void faissr_metal_exact_raw(const float* reference, int n_reference,
       static_cast<std::size_t>(n_reference) * p * sizeof(float);
     const std::size_t query_bytes =
       static_cast<std::size_t>(n_query) * p * sizeof(float);
+    // More independent threadgroups keep the device busy with few queries.
+    const auto tile_rows = n_query <= 1024 && n_reference >= 65536 ?
+      std::max(16384, (n_reference - 1) / 16 + 1) : n_reference;
+    const auto tiles = (n_reference - 1) / tile_rows + 1;
     const std::size_t output_items =
       static_cast<std::size_t>(n_query) * k;
     id<MTLBuffer> reference_buffer = [[device
@@ -2401,16 +2445,17 @@ void faissr_metal_exact_raw(const float* reference, int n_reference,
       newBufferWithBytes:query length:query_bytes
       options:MTLResourceStorageModeShared] autorelease];
     id<MTLBuffer> id_buffer = [[device
-      newBufferWithLength:output_items * sizeof(int)
+      newBufferWithLength:output_items * tiles * sizeof(int)
       options:MTLResourceStorageModeShared] autorelease];
     id<MTLBuffer> distance_buffer = [[device
-      newBufferWithLength:output_items * sizeof(float)
+      newBufferWithLength:output_items * tiles * sizeof(float)
       options:MTLResourceStorageModeShared] autorelease];
     QuerySearchParamsHost params{
       static_cast<std::uint32_t>(n_reference),
       static_cast<std::uint32_t>(n_query),
       static_cast<std::uint32_t>(p),
-      static_cast<std::uint32_t>(k)
+      static_cast<std::uint32_t>(k),
+      static_cast<std::uint32_t>(tile_rows)
     };
     id<MTLBuffer> params_buffer = [[device
       newBufferWithBytes:&params length:sizeof(params)
@@ -2430,15 +2475,20 @@ void faissr_metal_exact_raw(const float* reference, int n_reference,
     [encoder setBuffer:id_buffer offset:0 atIndex:2];
     [encoder setBuffer:distance_buffer offset:0 atIndex:3];
     [encoder setBuffer:params_buffer offset:0 atIndex:4];
-    [encoder dispatchThreadgroups:MTLSizeMake(n_query, 1, 1)
+    [encoder dispatchThreadgroups:MTLSizeMake(n_query * tiles, 1, 1)
       threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
     [encoder endEncoding];
     run_and_wait(command);
     *owned_buffer_bytes = metal_live_buffer_bytes({reference_buffer,
       query_buffer, id_buffer, distance_buffer, params_buffer});
-    std::memcpy(ids, [id_buffer contents],
-      output_items * sizeof(int));
-    std::memcpy(distances, [distance_buffer contents],
-      output_items * sizeof(float));
+    if (tiles == 1) {
+      std::memcpy(ids, [id_buffer contents], output_items * sizeof(int));
+      std::memcpy(distances, [distance_buffer contents],
+        output_items * sizeof(float));
+    } else {
+      merge_exact_tiles(static_cast<const int*>([id_buffer contents]),
+        static_cast<const float*>([distance_buffer contents]),
+        n_query, k, tiles, ids, distances);
+    }
   }
 }
