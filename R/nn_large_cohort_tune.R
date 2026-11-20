@@ -6,7 +6,7 @@ nn_large_knn_tune_cohorts <- function(
     cpu_threads_available = 16L, target_recall = 0.99,
     audited_cohorts = NULL, source_archive_sha256 = NULL,
     input_sha256 = NULL, multi_gpu_mode = NULL,
-    minimum_row_recall = 0.90
+    minimum_row_recall = 0.90, expected_query_batches = 1
 ) {
     plan <- nn_large_knn_resource_plan(
         n = n, p = p, k = k, backend = backend,
@@ -27,6 +27,13 @@ nn_large_knn_tune_cohorts <- function(
     plan$measured_minimum_cohort_recall <- NA_real_
     plan$measured_minimum_row_recall <- NA_real_
     plan$measured_maximum_cohort_search_seconds <- NA_real_
+    plan$expected_query_batches <- expected_query_batches
+    if (!is.numeric(expected_query_batches) ||
+        length(expected_query_batches) != 1L ||
+        !is.finite(expected_query_batches) || expected_query_batches < 1 ||
+        expected_query_batches != floor(expected_query_batches)) {
+        stop("Invalid expected query batch count.", call. = FALSE)
+    }
     if (length(minimum_row_recall) != 1L ||
         !is.numeric(minimum_row_recall) ||
         !is.finite(minimum_row_recall) ||
@@ -186,7 +193,7 @@ nn_large_knn_tune_cohorts <- function(
     }
     plan$calibration_passing_probes <- as.integer(eligible$nprobe)
     selected <- eligible[order(eligible$worst_build_seconds +
-        eligible$worst_search_seconds, eligible$nprobe,
+        expected_query_batches * eligible$worst_search_seconds, eligible$nprobe,
         eligible$nlist)[[1L]], , drop = FALSE]
     plan$selected_nlist <- as.integer(selected$nlist[[1L]])
     plan$selected_nprobe <- as.integer(selected$nprobe[[1L]])

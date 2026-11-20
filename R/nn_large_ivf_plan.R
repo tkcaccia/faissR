@@ -247,16 +247,18 @@ nn_cuda_ivf_project_value <- function(n, values, target_n) {
     exp(coefficients[[1L]] + coefficients[[2L]] * log(target_n))
 }
 
-nn_cuda_ivf_project_settings <- function(selected, target_n) {
+nn_cuda_ivf_project_settings <- function(selected, target_n,
+                                         list_limit = 65536,
+                                         probe_limit = list_limit) {
     project <- function(values) {
         nn_cuda_ivf_project_value(selected$n, values, target_n)
     }
-    nlist <- as.integer(max(1, min(65536, target_n,
+    nlist <- as.integer(max(1, min(list_limit, target_n,
                                   round(project(selected$nlist)))))
     fraction <- project(selected$nprobe / selected$nlist)
     # Extrapolation cannot justify fewer probes than every audited anchor.
     probe_floor <- if (target_n > max(selected$n)) max(selected$nprobe) else 1L
-    nprobe <- as.integer(max(1, min(nlist, max(
+    nprobe <- as.integer(max(1, min(nlist, probe_limit, max(
         ceiling(nlist * fraction), probe_floor
     ))))
     list(nlist = nlist, nprobe = nprobe)

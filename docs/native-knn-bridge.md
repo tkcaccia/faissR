@@ -57,3 +57,53 @@ For fastEmbedR, the intended transition is to call these entry points in its
 KNN dispatch layer. Verify the returned backend, one-based IDs, dimensions,
 distance semantics, recall status, and host residency. Do not reinterpret a
 faissR host result as a fastEmbedR GPU resident pointer.
+
+## Route-specific size planning
+
+`nn_large_knn_size_tune()` is a private offline tuner for Euclidean CPU
+HNSW and CUDA or Metal IVF. Calibrate Linux and macOS CPU separately.
+Give each source, hardware, thread count, index layout, input family, and
+metric its own profile. Use different profiles for resident and file-backed
+runs. A file-backed route with a resident index also needs a distinct
+profile from a route that builds and searches one reference shard at a time.
+
+Use nested reference selections at 10M and 100M, and keep a size such as 50M
+out of the fit. Run a separate tuning query set and a disjoint audit query
+set against exact neighbors in the full calibrated index. Record the
+measured mean and worst-row recall, stages, peak host and device bytes,
+and all attempted settings, including failures. Keep the query count and
+timing scope fixed across the series. Estimate parameters separately on
+narrow, medium, and wide inputs. Array dimensions alone cannot establish
+that two data distributions have the same recall behavior.
+
+Supply the following columns in `observations`:
+
+- `n`, `p`, `k`, `backend`, `storage_mode`, `gpu_count`, `layout`,
+  and `profile_sha256`. Use the SHA-256 of the source and experiment
+  identity manifest as the profile identifier. Use `single_logical_index`
+  for one index across the requested devices or `reference_shard`
+  to model a file-backed route per reference shard.
+- `tuning_rows_sha256`, `audit_rows_sha256`, `query_count`,
+  `reference_scope = "full_database_exact"`, and
+  `timing_scope = "index_build_plus_fixed_query"`. Rows and timing
+  scope refer to the same fixed-query design at each size.
+- `audit_pass`, `mean_recall`, `min_row_recall`, `build_seconds`,
+  `search_seconds`, `peak_host_bytes`, and `peak_device_bytes` on GPU.
+- CPU settings `m`, `ef_construction`, and `ef_search`, or GPU settings
+  `nlist` and `nprobe`.
+
+The tuner ranks passing anchor settings by build time plus the requested
+number of identical fixed-query batches. The default is one batch. It
+requires the predicted setting to pass the held-out size, including the
+recall and timing tolerances, before it reports settings beyond the
+largest anchor. With 100M as the largest anchor, the extrapolation range
+ends at 1B. With `reference_shard_rows`, the settings and timing apply to
+one reference shard. The planner reports host and device fit for a fixed
+query batch separately from the disk and output checks for a full graph.
+
+The projected settings still require live recall calibration. The tuner
+leaves target-size recall and full self-search time unknown. Metal IVF
+settings respect its 1,024-list and 512-probe limits. For CUDA, supply
+the provider's probe limit if it differs from the default of 2,048.
+The self-search callables still select settings internally. The private
+planner does not add public API or change runtime defaults.
