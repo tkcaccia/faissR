@@ -15,6 +15,10 @@ extern "C" {
 
 typedef int (*faissR_c_api_version_fun)(void);
 
+/* Choose a KNN algorithm for a specified shape, recall tier, and storage. */
+typedef SEXP (*faissR_knn_select_v1_fun)(SEXP specification);
+
+
 /* Exact double-precision kth non-self-neighbor radius of an n-by-2 layout. */
 typedef SEXP (*faissR_layout_radii_v1_fun)(SEXP layout, SEXP k);
 
@@ -434,6 +438,12 @@ static inline faissR_gpu_knn_sample_v1_fun
 faissR_get_gpu_knn_sample_v1(void) {
   return (faissR_gpu_knn_sample_v1_fun) R_GetCCallable(
       "faissR", "faissR_gpu_knn_sample_v1");
+}
+
+static inline faissR_knn_select_v1_fun
+faissR_get_knn_select_v1(void) {
+  return (faissR_knn_select_v1_fun) R_GetCCallable(
+      "faissR", "faissR_knn_select_v1");
 }
 
 static inline faissR_metal_knn_v1_fun

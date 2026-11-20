@@ -724,6 +724,8 @@ extern "C" SEXP faissR_reorder_posting_graph_v1(SEXP arguments);
 extern "C" SEXP faissR_merge_knn_shard_v1(SEXP arguments);
 extern "C" SEXP faissR_gpu_knn_sample_v1(SEXP result, SEXP rows);
 
+extern "C" SEXP faissR_knn_select_v1(SEXP specification);
+
 extern "C" int faissR_c_api_version_impl() {
   return 1;
 }
@@ -731,6 +733,9 @@ extern "C" int faissR_c_api_version_impl() {
 // [[Rcpp::init]]
 void register_faissR_ccallables(DllInfo *dll) {
   (void) dll;
+  R_RegisterCCallable(
+    "faissR", "faissR_knn_select_v1", (DL_FUNC) &faissR_knn_select_v1
+  );
   R_RegisterCCallable(
     "faissR",
     "faissR_layout_radii_v1",

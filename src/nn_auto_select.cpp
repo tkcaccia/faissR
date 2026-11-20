@@ -1286,6 +1286,91 @@ std::string cagra_build_algo_for_shape_core(int n,
 
 } // namespace
 
+extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
+  BEGIN_RCPP
+  const List request(specification);
+  const std::string backend = as<std::string>(request["backend"]);
+  const std::string metric = as<std::string>(request["metric"]);
+  const int n = as<int>(request["n_reference"]);
+  const int p = as<int>(request["n_features"]);
+  const int nq = as<int>(request["n_query"]);
+  const int k = as<int>(request["k"]);
+  const bool self = as<bool>(request["self_query"]);
+  const bool file = as<bool>(request["file_backed"]);
+  const bool allow_ivf = as<bool>(request["allow_ivf"]);
+  const double recall = as<double>(request["target_recall"]);
+
+  if (backend != "cpu" && backend != "cuda" && backend != "metal") {
+    stop("Unsupported native KNN backend");
+  }
+  if (k < 1 || (n != NA_INTEGER && n < 1) ||
+      (p != NA_INTEGER && p < 1) || (nq != NA_INTEGER && nq < 1) ||
+      (recall != 0.90 && recall != 0.95 && recall != 0.99)) {
+    stop("Invalid native KNN selection dimensions or recall tier");
+  }
+
+  const bool known_shape = n != NA_INTEGER && p != NA_INTEGER;
+  const bool known_work = known_shape && nq != NA_INTEGER;
+  const double work = known_work ? static_cast<double>(n) * nq * p : NA_REAL;
+  const bool bounded_exact = finite1(work) && work <= 1.25e11;
+  const std::string shape = known_shape ?
+    cuda_auto_flat_ivf_shape_group(n, p) : "unspecified";
+  const int recall_code = hnsw_target_code_cpp(recall);
+  const bool wide_exact =
+    shape == "large_high_dim" && (recall_code == 99 || p >= 1024);
+
+  std::string method = "exact";
+  std::string reason = "bounded_work";
+  if (backend == "cpu") {
+    const bool exact = n != NA_INTEGER &&
+      (file ? n <= 5000 && bounded_exact : n < 5000);
+    method = exact ? "exact" : "hnsw";
+    reason = exact ? "bounded_work" : "cpu_hnsw";
+  } else if (wide_exact) {
+    reason = "wide_gpu_flat";
+  } else if (!allow_ivf) {
+    reason = "ivf_route_unavailable";
+  } else if (backend == "cuda" && metric == "euclidean") {
+    bool ivf = false;
+    if (self) {
+      const int features = p == NA_INTEGER ? 1 : p;
+      const double estimated_work = n == NA_INTEGER ?
+        NA_REAL : static_cast<double>(n) * n * features;
+      ivf = n != NA_INTEGER && cuda_auto_prefers_ivf(
+        true, n, features, n, k, estimated_work, recall_code, shape);
+    } else if (known_work) {
+      ivf = n >= 100000 && nq > 64 && work >= 5e9;
+    } else {
+      ivf = n != NA_INTEGER && n >= 100000;
+    }
+    if (ivf) {
+      method = "ivf";
+      reason = "cuda_ivf_shape_k_recall";
+    }
+  } else if (backend == "metal") {
+    bool ivf = false;
+    if (file) {
+      ivf = !(bounded_exact && k <= 8);
+    } else if (self) {
+      ivf = (n == NA_INTEGER || n >= 4096) &&
+        !(bounded_exact && n <= 50000 && p <= 16384);
+    } else if (known_work) {
+      ivf = n >= 4096 && work >= 5e9;
+    } else {
+      ivf = n != NA_INTEGER && n >= 20000;
+    }
+    if (ivf) {
+      method = "ivf";
+      reason = "metal_ivf_shape";
+    }
+  }
+
+  return List::create(_["provider"] = "faissR", _["backend"] = backend,
+    _["method"] = method, _["reason"] = reason, _["shape"] = shape,
+    _["target_recall"] = recall);
+  END_RCPP
+}
+
 // [[Rcpp::export]]
 List nn_auto_select_backend_cpp(std::string resolved_backend,
                                 std::string requested_backend,
