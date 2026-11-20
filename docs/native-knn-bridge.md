@@ -26,8 +26,14 @@ The private R helpers `nn_cuda_ivf_large_candidates()` and
 power-law projection from passing, source-matched 10M and 100M observations.
 The extrapolator requires exact neighbors from the full database, records
 one timing scope and query count, records device-memory admission, and leaves
-projected recall unknown. It does not
-turn an extrapolation into a verified billion-row capacity claim.
+projected recall unknown. Supply `fit_sizes` to declare other measured
+anchors for a matched dataset and GPU configuration. Supply `holdout_n`
+to leave an intermediate size out of the fit and check the projected
+list and probe counts against the exact audited setting at that size.
+The check reports recall misses, missing settings, and relative errors
+for index build, fixed-query search, host RSS, and device memory.
+A passing intermediate check supports interpolation at that size.
+The larger projected setting still requires a live recall and timing audit.
 There is no persistent multi GPU output handle yet. The implementation has
 compiled on CUDA 13/FAISS 1.14.3, but an actual two or eight GPU correctness
 and speed run is still required before production use.

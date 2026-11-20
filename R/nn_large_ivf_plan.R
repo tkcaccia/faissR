@@ -36,7 +36,8 @@ nn_cuda_ivf_large_candidates <- function(
 
 nn_cuda_ivf_large_extrapolate <- function(
     observations, target_n, p, k, gpu_count, mode,
-    gpu_memory_bytes, target_recall = 0.99
+    gpu_memory_bytes, target_recall = 0.99,
+    fit_sizes = NULL, holdout_n = NULL
 ) {
     required <- c(
         "n", "p", "k", "gpu_count", "mode", "nlist", "nprobe",
@@ -52,7 +53,7 @@ nn_cuda_ivf_large_extrapolate <- function(
         stop("Missing audited IVF observation columns.", call. = FALSE)
     }
     if (length(target_n) != 1L || !is.finite(target_n) ||
-        target_n < 1e8 || target_n != floor(target_n) ||
+        target_n < 2 || target_n != floor(target_n) ||
         target_n > .Machine$integer.max ||
         length(p) != 1L || !is.finite(p) || p < 1 || p != floor(p) ||
         length(k) != 1L || !is.finite(k) || k < 1 ||
@@ -66,14 +67,19 @@ nn_cuda_ivf_large_extrapolate <- function(
         !target_recall %in% c(0.90, 0.95, 0.99)) {
         stop("Invalid large IVF extrapolation inputs.", call. = FALSE)
     }
+    nn_cuda_ivf_validate_sizes(target_n, fit_sizes, holdout_n)
     complete <- stats::complete.cases(observations[required])
+    is_holdout <- observations$n %in% holdout_n
+    in_scope <- if (is.null(fit_sizes)) rep(TRUE, nrow(observations)) else
+        observations$n %in% c(fit_sizes, holdout_n)
     rows <- observations[
-        complete & observations$audit_pass &
+        complete & in_scope & observations$audit_pass &
         observations$reference_scope == "full_database_exact" &
         observations$p == p & observations$k == k &
         observations$gpu_count == gpu_count & observations$mode == mode &
         is.finite(observations$recall) &
-        observations$recall >= target_recall &
+        observations$recall >= 0 & observations$recall <= 1 &
+        (observations$recall >= target_recall | is_holdout) &
         is.finite(observations$knn_seconds) &
         observations$knn_seconds > 0 &
         is.finite(observations$index_build_seconds) &
@@ -130,32 +136,19 @@ nn_cuda_ivf_large_extrapolate <- function(
         stop("Anchors require consistent 256-query stage timings.",
              call. = FALSE)
     }
-    by_n <- split(rows, rows$n)
+    fit <- rows[!rows$n %in% holdout_n, , drop = FALSE]
+    nn_cuda_ivf_validate_anchors(
+        unique(fit$n), target_n, fit_sizes, holdout_n
+    )
+    by_n <- split(fit, fit$n)
     selected <- do.call(rbind, lapply(by_n, function(group) {
         group[which.min(group$knn_seconds), , drop = FALSE]
     }))
     selected <- selected[order(selected$n), , drop = FALSE]
-    if (nrow(selected) < 2L || min(selected$n) > 1e7 ||
-        max(selected$n) < 1e8 || target_n <= max(selected$n) ||
-        target_n > 10 * max(selected$n)) {
-        stop("Passing 10M and 100M anchors are required for extrapolation.",
-             call. = FALSE)
+    project <- function(values) {
+        nn_cuda_ivf_project_value(selected$n, values, target_n)
     }
-    # Log-linear power-law projection; no predicted recall is inferred.
-    log_project <- function(values) {
-        x <- log(selected$n)
-        y <- log(values)
-        coefficients <- stats::coef(stats::lm(y ~ x))
-        exp(coefficients[[1L]] + coefficients[[2L]] * log(target_n))
-    }
-    nlist <- as.integer(max(1, min(65536, round(log_project(selected$nlist)))))
-    fraction <- log_project(selected$nprobe / selected$nlist)
-    # A falling two-point trend is not evidence that a larger, unmeasured
-    # database can use fewer probes than both audited anchors. Keep the
-    # largest observed passing probe count as a conservative starting floor.
-    nprobe <- as.integer(max(1, min(nlist, max(
-        ceiling(nlist * fraction), selected$nprobe
-    ))))
+    params <- nn_cuda_ivf_project_settings(selected, target_n)
     raw_bytes <- (4 * target_n * p + 8 * target_n) /
         if (identical(mode, "shard")) gpu_count else 1
     observed_raw <- (4 * selected$n * p + 8 * selected$n) /
@@ -174,15 +167,15 @@ nn_cuda_ivf_large_extrapolate <- function(
         target_n = target_n, p = p, k = k,
         gpu_count = gpu_count, mode = mode,
         target_recall = target_recall,
-        nlist = nlist, nprobe = nprobe,
+        nlist = params$nlist, nprobe = params$nprobe,
         projected_knn_seconds = if (memory_admitted) {
-            log_project(selected$knn_seconds)
+            project(selected$knn_seconds)
         } else NA_real_,
         projected_index_build_seconds = if (memory_admitted) {
-            log_project(selected$index_build_seconds)
+            project(selected$index_build_seconds)
         } else NA_real_,
         projected_256_query_search_seconds = if (memory_admitted) {
-            log_project(selected$persistent_search_seconds_median)
+            project(selected$persistent_search_seconds_median)
         } else NA_real_,
         projected_full_self_seconds = NA_real_,
         full_self_time_status = "unvalidated_query_scaling",
@@ -190,7 +183,7 @@ nn_cuda_ivf_large_extrapolate <- function(
         time_projection_status = if (memory_admitted) {
             "conditional_extrapolation"
         } else "device_memory_exceeded",
-        projected_peak_host_bytes = log_project(selected$peak_rss_bytes),
+        projected_peak_host_bytes = project(selected$peak_rss_bytes),
         raw_index_bytes_per_device = raw_bytes,
         projected_peak_device_bytes = estimated_peak,
         gpu_memory_bytes = gpu_memory_bytes,
@@ -205,6 +198,92 @@ nn_cuda_ivf_large_extrapolate <- function(
             "index_build_seconds", "persistent_search_seconds_median",
             "device_memory_bytes", "peak_rss_bytes"
         ), drop = FALSE],
-        recall_at_target = NA_real_
+        recall_at_target = NA_real_,
+        holdout = if (!is.null(holdout_n)) {
+            nn_cuda_ivf_check_holdout(rows, selected, holdout_n, target_recall)
+        }
     )
+}
+
+nn_cuda_ivf_validate_sizes <- function(target_n, fit_sizes, holdout_n) {
+    if (!is.null(fit_sizes) &&
+        (!is.numeric(fit_sizes) || length(fit_sizes) < 2L ||
+         any(!is.finite(fit_sizes) | fit_sizes != floor(fit_sizes) |
+             fit_sizes < 2 | fit_sizes >= target_n) ||
+         anyDuplicated(fit_sizes))) {
+        stop("Supply distinct audited fit sizes below the target.")
+    }
+    if (!is.null(holdout_n) &&
+        (!is.numeric(holdout_n) || length(holdout_n) != 1L ||
+         !is.finite(holdout_n) || holdout_n != floor(holdout_n) ||
+         holdout_n < 2 || holdout_n >= target_n ||
+         holdout_n %in% fit_sizes)) {
+        stop("The held-out size must be distinct from the fit sizes.")
+    }
+}
+
+nn_cuda_ivf_validate_anchors <- function(sizes, target_n, fit_sizes,
+                                         holdout_n) {
+    if (length(sizes) < 2L ||
+        (is.null(fit_sizes) && (min(sizes) > 1e7 || max(sizes) < 1e8))) {
+        stop("Passing 10M and 100M anchors or declared fit sizes are required.")
+    }
+    if (!is.null(fit_sizes) && !setequal(sizes, fit_sizes)) {
+        stop("Every declared fit size requires a passing anchor.")
+    }
+    if (target_n <= max(sizes) || target_n > 10 * max(sizes)) {
+        stop("Target size must exceed the largest anchor by at most 10-fold.")
+    }
+    if (!is.null(holdout_n) &&
+        (holdout_n <= min(sizes) || holdout_n >= max(sizes))) {
+        stop("The held-out size must lie between the smallest and largest anchors.")
+    }
+}
+
+nn_cuda_ivf_project_value <- function(n, values, target_n) {
+    if (all(values == values[[1L]])) return(values[[1L]])
+    x <- log(n)
+    coefficients <- stats::coef(stats::lm(log(values) ~ x))
+    exp(coefficients[[1L]] + coefficients[[2L]] * log(target_n))
+}
+
+nn_cuda_ivf_project_settings <- function(selected, target_n) {
+    project <- function(values) {
+        nn_cuda_ivf_project_value(selected$n, values, target_n)
+    }
+    nlist <- as.integer(max(1, min(65536, target_n,
+                                  round(project(selected$nlist)))))
+    fraction <- project(selected$nprobe / selected$nlist)
+    # Extrapolation cannot justify fewer probes than every audited anchor.
+    probe_floor <- if (target_n > max(selected$n)) max(selected$nprobe) else 1L
+    nprobe <- as.integer(max(1, min(nlist, max(
+        ceiling(nlist * fraction), probe_floor
+    ))))
+    list(nlist = nlist, nprobe = nprobe)
+}
+
+nn_cuda_ivf_check_holdout <- function(rows, selected, holdout_n, target) {
+    params <- nn_cuda_ivf_project_settings(selected, holdout_n)
+    observed <- rows[rows$n == holdout_n & rows$nlist == params$nlist &
+        rows$nprobe == params$nprobe, , drop = FALSE]
+    result <- c(list(n = holdout_n, status = "predicted_setting_not_audited"),
+                params)
+    if (!nrow(observed)) return(result)
+    fields <- c("index_build_seconds", "persistent_search_seconds_median",
+                "peak_rss_bytes", "device_memory_bytes")
+    estimate <- vapply(fields, function(field)
+        nn_cuda_ivf_project_value(selected$n, selected[[field]], holdout_n),
+        numeric(1L))
+    worst_error <- vapply(fields, function(field)
+        max(abs(estimate[[field]] / observed[[field]] - 1)),
+        numeric(1L))
+    tolerance <- stats::setNames(c(0.30, 0.30, 0.25, 0.25), fields)
+    recall <- min(observed$recall)
+    result$status <- if (recall < target) "recall_miss" else
+        if (any(worst_error > tolerance)) "prediction_error" else
+        "interpolation_pass"
+    result$measured_recall <- recall
+    result$relative_error <- worst_error
+    result$relative_error_tolerance <- tolerance
+    result
 }

@@ -181,3 +181,54 @@ test_that("billion-row projection requires audited matching anchors", {
         "10M and 100M"
     )
 })
+
+test_that("IVF projections check a held-out size without fitting to it", {
+    n <- c(2e6, 8e6, 4e6, 4e6)
+    rows <- data.frame(
+        n = n, p = 192L, k = 40L, gpu_count = 2L, mode = "shard",
+        nlist = c(4096L, 4096L, 4096L, 4096L),
+        nprobe = c(128L, 128L, 128L, 256L),
+        recall = c(0.991, 0.992, 0.993, 1),
+        index_build_seconds = n / 1e5,
+        persistent_search_seconds_median = n / 1e7,
+        device_memory_bytes = n * 400, peak_rss_bytes = n * 1600,
+        full_self_performed = FALSE, audit_pass = TRUE,
+        reference_scope = "full_database_exact",
+        timing_scope = "index_build_plus_persistent_search_256_queries",
+        query_count = 256L,
+        source_sha = paste(rep("a", 40L), collapse = ""),
+        input_sha256 = paste(rep("b", 64L), collapse = ""),
+        query_rows_sha256 = paste(rep("c", 64L), collapse = ""),
+        query_rows_max = 1500000L,
+        database_selection = "prefix_first_n_rows"
+    )
+    rows$knn_seconds <- rows$index_build_seconds +
+        rows$persistent_search_seconds_median
+    plan <- function(observed = rows, fit = c(2e6, 8e6), holdout = 4e6) {
+        faissR:::nn_cuda_ivf_large_extrapolate(
+            observed, 16e6, 192L, 40L, 2L, "shard", 20e9,
+            fit_sizes = fit, holdout_n = holdout
+        )
+    }
+    selected <- plan()
+    expect_identical(selected$holdout$status, "interpolation_pass")
+    expect_equal(selected$anchor_rows$n, c(2e6, 8e6))
+    expect_identical(selected$holdout$nprobe, 128L)
+    expect_equal(selected$holdout$measured_recall, 0.993)
+    expect_true(is.na(selected$recall_at_target))
+    expect_equal(selected$projected_256_query_search_seconds, 1.6)
+    expect_equal(unname(selected$holdout$relative_error), rep(0, 4),
+                 tolerance = 1e-10)
+    expect_identical(plan(rows[-3L, ])$holdout$status,
+                     "predicted_setting_not_audited")
+    weak <- rows
+    weak$recall[3L] <- 0.95
+    expect_identical(plan(weak)$holdout$status, "recall_miss")
+    slow <- rows
+    slow$index_build_seconds[3L] <- 100
+    slow$knn_seconds[3L] <- 100.4
+    expect_identical(plan(slow)$holdout$status, "prediction_error")
+    expect_error(plan(holdout = 2e6), "distinct")
+    expect_error(plan(holdout = 1e6), "must lie between")
+    expect_error(plan(fit = c(2e6, 6e6, 8e6)), "declared fit size")
+})
