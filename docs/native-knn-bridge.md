@@ -21,6 +21,11 @@ recall sweeps at 10–100 million database rows without allocating an all-row
 KNN result for every candidate. GPU resources belong to the call and are
 destroyed on return.
 
+Persistent single-device Euclidean IVF-Flat trains its coarse quantizer on
+CUDA when FAISS is built without cuVS. Build metadata separates CUDA
+training, CPU training, cloning, and index insertion. It retains float32
+vectors and the caller's list and probe counts.
+
 The private R helpers `nn_cuda_ivf_large_candidates()` and
 `nn_cuda_ivf_large_extrapolate()` generate a bounded parameter grid and a
 power-law projection from passing, source-matched 10M and 100M observations.

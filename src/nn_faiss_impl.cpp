@@ -4193,7 +4193,15 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
   state->nprobe = method == "ivf" ? nprobe : NA_INTEGER;
   state->shard = shard;
   const bool normalized = metric != "euclidean";
-  if (method == "ivf") {
+  faiss::gpu::GpuIndexIVFFlatConfig ivf_config;
+  ivf_config.device = devices.front();
+  // Use the same FP32 IVF representation with CUDA centroid training.
+  // Keep the CPU-train and clone route for other metrics and cuVS builds.
+  const bool single_gpu_ivf = method == "ivf" && !normalized &&
+    devices.size() == 1 && !ivf_config.use_cuvs;
+  const auto metric_type =
+    normalized ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
+  if (method == "ivf" && !single_gpu_ivf) {
     if (normalized) {
       state->quantizer.reset(new faiss::IndexFlatIP(xb.ncol));
     } else {
@@ -4202,7 +4210,7 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
     auto ivf = std::unique_ptr<faiss::IndexIVFFlat>(
       new faiss::IndexIVFFlat(
         state->quantizer.get(), xb.ncol, nlist,
-        normalized ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2
+        metric_type
       )
     );
     ivf->own_fields = false;
@@ -4212,7 +4220,7 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
       ivf->cp.max_points_per_centroid = 64;
     }
     state->cpu_index = std::move(ivf);
-  } else {
+  } else if (method == "flat") {
     if (normalized) {
       state->cpu_index.reset(new faiss::IndexFlatIP(xb.ncol));
     } else {
@@ -4220,7 +4228,7 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
     }
   }
   try {
-    if (!state->cpu_index->is_trained) {
+    if (state->cpu_index && !state->cpu_index->is_trained) {
       state->cpu_index->train(xb.nrow, xb.data);
     }
   } catch (const std::exception& e) {
@@ -4242,9 +4250,21 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
   options.useFloat16CoarseQuantizer = false;
   options.allowCpuCoarseQuantizer = false;
   try {
-    state->gpu_index.reset(faiss::gpu::index_cpu_to_gpu_multiple(
-      providers, state->devices, state->cpu_index.get(), &options
-    ));
+    if (single_gpu_ivf) {
+      auto ivf = std::make_unique<faiss::gpu::GpuIndexIVFFlat>(
+        providers.front(), xb.ncol, nlist, metric_type, ivf_config
+      );
+      ivf->nprobe = nprobe;
+      if (xb.nrow >= 1000000) {
+        ivf->cp.niter = 15;
+        ivf->cp.max_points_per_centroid = 64;
+      }
+      state->gpu_index = std::move(ivf);
+    } else {
+      state->gpu_index.reset(faiss::gpu::index_cpu_to_gpu_multiple(
+        providers, state->devices, state->cpu_index.get(), &options
+      ));
+    }
     if (devices.size() > 1 && shard &&
         dynamic_cast<faiss::IndexShards*>(state->gpu_index.get()) == nullptr) {
       Rcpp::stop("FAISS did not create a sharded GPU index.");
@@ -4254,6 +4274,8 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
       Rcpp::stop("FAISS did not create a replicated GPU index.");
     }
     const auto t_clone = std::chrono::steady_clock::now();
+    if (single_gpu_ivf) state->gpu_index->train(xb.nrow, xb.data);
+    const auto t_gpu_train = std::chrono::steady_clock::now();
     state->gpu_index->add(xb.nrow, xb.data);
     const auto t_add = std::chrono::steady_clock::now();
     const auto seconds = [](auto a, auto b) {
@@ -4275,7 +4297,9 @@ SEXP faiss_gpu_index_build_impl(SEXP data,
       Rcpp::Named("input_conversion_seconds") = seconds(t0, t_convert),
       Rcpp::Named("cpu_training_seconds") = seconds(t_convert, t_train),
       Rcpp::Named("gpu_clone_seconds") = seconds(t_train, t_clone),
-      Rcpp::Named("gpu_add_seconds") = seconds(t_clone, t_add),
+      Rcpp::Named("gpu_training_seconds") = single_gpu_ivf ?
+        seconds(t_clone, t_gpu_train) : 0.0,
+      Rcpp::Named("gpu_add_seconds") = seconds(t_gpu_train, t_add),
       Rcpp::Named("index_reused") = true,
       Rcpp::Named("backend_used") = "faiss_gpu_persistent"
     );

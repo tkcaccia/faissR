@@ -83,3 +83,38 @@ test_that("private CUDA fixed-query KNN matches the exact CPU reference", {
                  tolerance = 1e-4)
     expect_identical(self$backend_used, "faiss_gpu_single_self")
 })
+
+test_that("single-device persistent CUDA IVF retains its search contract", {
+    skip_if_not(isTRUE(faissR::faiss_gpu_available()))
+    native <- new.env()
+    Rcpp::cppFunction(
+        code = '
+        Rcpp::List persistent_ivf_test_call(SEXP data, SEXP query) {
+          Rcpp::List index(faissR_get_gpu_index_build_v1()(
+            data, Rcpp::wrap(7), Rcpp::wrap("ivf"), Rcpp::wrap(0),
+            Rcpp::wrap(16), Rcpp::wrap(16), Rcpp::wrap(false)));
+          Rcpp::List found(faissR_get_gpu_index_search_v1()(
+            index["pointer"], query, Rcpp::wrap(7), Rcpp::wrap("double")));
+          return Rcpp::List::create(Rcpp::Named("index") = index,
+                                    Rcpp::Named("found") = found);
+        }',
+        includes = "#include <faissR_api_v1.h>",
+        depends = "faissR", env = native
+    )
+    set.seed(612L)
+    for (p in c(11L, 96L)) {
+        x <- float::fl(matrix(rnorm(1024L * p), ncol = p))
+        query <- x[c(8L, 52L, 801L), , drop = FALSE]
+        result <- native$persistent_ivf_test_call(x, query)
+        reference <- faissR::nn(x, query, k = 7L, backend = "cpu",
+            method = "flat", n_threads = 1L)
+        expect_identical(result$index$multi_gpu_mode, "single")
+        expect_identical(result$index$nprobe, 16L)
+        expect_gte(result$index$gpu_training_seconds, 0)
+        expect_identical(result$found$backend_used,
+                         "faiss_gpu_persistent_query")
+        expect_equal(result$found$indices, reference$indices)
+        expect_equal(result$found$distances, reference$distances,
+                     tolerance = 1e-4)
+    }
+})
