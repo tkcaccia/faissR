@@ -16,6 +16,8 @@
 #include <utility>
 #include <vector>
 
+#include "faissr_metal_common.h"
+
 #if defined(__unix__) || defined(__APPLE__)
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -419,7 +421,8 @@ extern "C" SEXP faissR_metal_file_ivf_plan_v1(SEXP source_spec,
   const double estimated_device = 4.0 * n * p + 4.0 * n * q +
     8.0 * n * k + 128.0 * 1024 * 1024;
   const bool shape_ok = source.rows <= static_cast<std::uint64_t>(INT_MAX) &&
-    source.columns <= 1024 && k >= 1 && k <= 128 &&
+    faissr_metal::ivf_shape_supported(source.rows, source.columns, k) &&
+    k <= 128 &&
     static_cast<std::uint64_t>(k) < source.rows;
   const bool ram_ok = std::isfinite(memory_limit) &&
     memory_limit >= estimated_ram;
@@ -451,7 +454,8 @@ extern "C" SEXP faissR_metal_file_ivf_v1(SEXP source_spec,
   const double target = Rcpp::as<double>(target_value);
   const double memory_limit = Rcpp::as<double>(memory_limit_value);
   if (source.rows > static_cast<std::uint64_t>(INT_MAX) ||
-      source.columns > 1024 || k < 1 || k > 128 ||
+      !faissr_metal::ivf_shape_supported(source.rows, source.columns, k) ||
+      k > 128 ||
       static_cast<std::uint64_t>(k) >= source.rows ||
       (target != 0.9 && target != 0.95 && target != 0.99)) {
     Rcpp::stop("Invalid file-backed Metal IVF shape or recall target");

@@ -4,6 +4,8 @@
 #include <sstream>
 #include <string>
 
+#include "faissr_metal_common.h"
+
 using namespace Rcpp;
 
 namespace {
@@ -1330,6 +1332,12 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
     reason = "wide_gpu_flat";
   } else if (!allow_ivf) {
     reason = "ivf_route_unavailable";
+  } else if (backend == "metal" && p != NA_INTEGER &&
+             (!faissr_metal::ivf_shape_supported(
+                n == NA_INTEGER ? 1 : n, p, k) ||
+              (!self && nq != NA_INTEGER &&
+               !faissr_metal::ivf_shape_supported(nq, p, k)))) {
+    reason = "metal_ivf_shape_limit";
   } else if (backend == "cuda" && metric == "euclidean") {
     bool ivf = false;
     if (self) {

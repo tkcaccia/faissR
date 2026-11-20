@@ -6,12 +6,23 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace faissr_metal {
+
+constexpr int kMaxIvfDimensions = 1024;
+
+inline bool ivf_shape_supported(std::uint64_t rows, int columns, int k) {
+  // IVF's projection, reranking and result buffers use 32-bit offsets.
+  return columns > 0 && columns <= kMaxIvfDimensions && k > 0 &&
+    rows <= std::numeric_limits<std::uint32_t>::max() /
+      static_cast<std::uint32_t>(std::max(columns, k));
+}
 
 enum class KnnMetric {
   Euclidean,

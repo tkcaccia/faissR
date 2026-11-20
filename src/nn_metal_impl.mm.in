@@ -44,7 +44,7 @@
 
 namespace {
 
-constexpr int kMaxP = 1024;
+constexpr int kMaxP = faissr_metal::kMaxIvfDimensions;
 constexpr int kMaxGlobalP = 16384;
 constexpr int kMaxLists = 1024;
 // Keep enough local top-k storage for compact t-SNE and UMAP neighborhoods
@@ -109,6 +109,13 @@ struct QueryIvfParams {
   uint nprobe;
   uint k;
 };
+
+constexpr size_t flat_offset(uint row, uint stride) {
+  return size_t(row) * stride;
+}
+
+static_assert(flat_offset(4194304u, 1024u) == 4294967296ull,
+              "Metal Flat offsets must support more than 2^32 elements");
 
 inline bool better_pair(float da, int ia, float db, int ib) {
   return da < db || (da == db && ia < ib);
@@ -254,7 +261,10 @@ kernel void exact_topk_simd(
   threadgroup int local_id[NSG * MAX_K];
   uint q = params.query_offset + qlocal;
   if (q >= params.n) return;
-  for (uint d = tid; d < params.p; d += NSG * SIMD_WIDTH) query[d] = data[q * params.p + d];
+  const device float* query_data = data + flat_offset(q, params.p);
+  for (uint d = tid; d < params.p; d += NSG * SIMD_WIDTH) {
+    query[d] = query_data[d];
+  }
   for (uint i = tid; i < NSG * params.k; i += NSG * SIMD_WIDTH) {
     local_dist[i] = INFINITY;
     local_id[i] = -1;
@@ -265,7 +275,7 @@ kernel void exact_topk_simd(
   for (uint candidate = sg; candidate < params.n; candidate += NSG) {
     if (candidate == q) continue;
     float partial = 0.0f;
-    const device float* point = data + candidate * params.p;
+    const device float* point = data + flat_offset(candidate, params.p);
     for (uint d = lane; d < params.p; d += SIMD_WIDTH) {
       float delta = query[d] - point[d];
       partial = fma(delta, delta, partial);
@@ -291,8 +301,9 @@ kernel void exact_topk_simd(
           }
         }
       }
-      out_dist[qlocal * params.k + rank] = best_d;
-      out_ids[qlocal * params.k + rank] = best_i;
+      size_t output = flat_offset(qlocal, params.k);
+      out_dist[output + rank] = best_d;
+      out_ids[output + rank] = best_i;
       ++heads[best_g];
     }
   }
@@ -322,11 +333,11 @@ kernel void exact_topk_simd_global_query(
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
   uint base = sg * params.k;
-  const device float* query = data + q * params.p;
+  const device float* query = data + flat_offset(q, params.p);
   for (uint candidate = sg; candidate < params.n; candidate += NSG) {
     if (candidate == q) continue;
     float partial = 0.0f;
-    const device float* point = data + candidate * params.p;
+    const device float* point = data + flat_offset(candidate, params.p);
     for (uint d = lane; d < params.p; d += SIMD_WIDTH) {
       float delta = query[d] - point[d];
       partial = fma(delta, delta, partial);
@@ -358,8 +369,9 @@ kernel void exact_topk_simd_global_query(
           }
         }
       }
-      out_dist[qlocal * params.k + rank] = best_d;
-      out_ids[qlocal * params.k + rank] = best_i;
+      size_t output = flat_offset(qlocal, params.k);
+      out_dist[output + rank] = best_d;
+      out_ids[output + rank] = best_i;
       ++heads[best_g];
     }
   }
@@ -382,8 +394,9 @@ kernel void exact_query_topk_simd(
   uint tile = group / params.n_query;
   uint first = tile * params.tile_rows;
   uint end = min(first + params.tile_rows, params.n_reference);
+  const device float* query_data = query + flat_offset(q, params.p);
   for (uint d = tid; d < params.p; d += NSG * SIMD_WIDTH) {
-    query_row[d] = query[q * params.p + d];
+    query_row[d] = query_data[d];
   }
   for (uint i = tid; i < NSG * params.k; i += NSG * SIMD_WIDTH) {
     local_dist[i] = INFINITY;
@@ -394,7 +407,7 @@ kernel void exact_query_topk_simd(
   uint base = sg * params.k;
   for (uint candidate = first + sg; candidate < end; candidate += NSG) {
     float partial = 0.0f;
-    const device float* point = reference + candidate * params.p;
+    const device float* point = reference + flat_offset(candidate, params.p);
     for (uint d = lane; d < params.p; d += SIMD_WIDTH) {
       float delta = query_row[d] - point[d];
       partial = fma(delta, delta, partial);
@@ -457,10 +470,10 @@ kernel void exact_query_topk_simd_global_query(
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
   uint base = sg * params.k;
-  const device float* query_row = query + q * params.p;
+  const device float* query_row = query + flat_offset(q, params.p);
   for (uint candidate = first + sg; candidate < end; candidate += NSG) {
     float partial = 0.0f;
-    const device float* point = reference + candidate * params.p;
+    const device float* point = reference + flat_offset(candidate, params.p);
     for (uint d = lane; d < params.p; d += SIMD_WIDTH) {
       float delta = query_row[d] - point[d];
       partial = fma(delta, delta, partial);
@@ -1121,6 +1134,24 @@ double metal_live_buffer_bytes(
   return bytes;
 }
 
+id<MTLBuffer> metal_shared_buffer(id<MTLDevice> device, std::size_t bytes,
+                                  const void* values = nullptr) {
+  const auto limit = [device maxBufferLength];
+  if (bytes > limit) {
+    Rcpp::stop("Metal KNN buffer requires %.0f bytes; device limit is %.0f.",
+      static_cast<double>(bytes), static_cast<double>(limit));
+  }
+  id<MTLBuffer> buffer = values == nullptr ?
+    [device newBufferWithLength:bytes options:MTLResourceStorageModeShared] :
+    [device newBufferWithBytes:values length:bytes
+      options:MTLResourceStorageModeShared];
+  if (buffer == nil) {
+    Rcpp::stop("Metal KNN could not allocate a %.0f-byte shared buffer.",
+      static_cast<double>(bytes));
+  }
+  return [buffer autorelease];
+}
+
 } // namespace
 
 bool faissr_metal_knn_available_impl() {
@@ -1151,17 +1182,17 @@ Rcpp::List faissr_metal_knn_float_impl(
     );
   }
   std::string method = requested_method;
+  const bool ivf_supported = faissr_metal::ivf_shape_supported(n, p, k);
   if (method == "auto") {
-    method = n < 4096 ? "exact" : "ivf";
+    method = n < 4096 || !ivf_supported ? "exact" : "ivf";
   }
   if (method != "exact" && method != "ivf") {
     Rcpp::stop("Native Metal KNN method must be `auto`, `exact`, or `ivf`.");
   }
-  if (method == "ivf" && p > kMaxP) {
+  if (method == "ivf" && !ivf_supported) {
     Rcpp::stop(
-      "Native Metal IVF KNN supports at most %d dimensions; use exact "
-      "search for this %d-dimensional input.",
-      kMaxP, p
+      "Native Metal IVF KNN requires at most %d dimensions and 32-bit "
+      "buffer offsets; use exact search for this input.", kMaxP
     );
   }
   const int qdim = projection_dim(p);
@@ -1203,12 +1234,17 @@ Rcpp::List faissr_metal_knn_float_impl(
     const double metal_allocated_before_bytes =
       metal_current_allocated_bytes(device);
 
-    id<MTLBuffer> data_buffer = [device newBufferWithBytes:data.data() length:data.size() * sizeof(float) options:MTLResourceStorageModeShared];
+    id<MTLBuffer> data_buffer = metal_shared_buffer(device,
+      data.size() * sizeof(float), data.data());
     if (method == "exact") {
-      id<MTLBuffer> out_id_buffer = [device newBufferWithLength:static_cast<std::size_t>(n) * k * sizeof(int) options:MTLResourceStorageModeShared];
-      id<MTLBuffer> out_dist_buffer = [device newBufferWithLength:static_cast<std::size_t>(n) * k * sizeof(float) options:MTLResourceStorageModeShared];
+      const auto output_items = static_cast<std::size_t>(n) * k;
+      id<MTLBuffer> out_id_buffer = metal_shared_buffer(
+        device, output_items * sizeof(int));
+      id<MTLBuffer> out_dist_buffer = metal_shared_buffer(
+        device, output_items * sizeof(float));
       SearchParamsHost params{static_cast<std::uint32_t>(n), static_cast<std::uint32_t>(p), 0u, 0u, 0u, static_cast<std::uint32_t>(k), 0u, 0u};
-      id<MTLBuffer> params_buffer = [device newBufferWithBytes:&params length:sizeof(params) options:MTLResourceStorageModeShared];
+      id<MTLBuffer> params_buffer = metal_shared_buffer(
+        device, sizeof(params), &params);
       id<MTLCommandBuffer> command = [queue commandBuffer];
       id<MTLComputeCommandEncoder> encoder = [command computeCommandEncoder];
       [encoder setComputePipelineState:
@@ -1268,7 +1304,6 @@ Rcpp::List faissr_metal_knn_float_impl(
       result.attr("method") = "native_metal_exact";
       result.attr("metric") = metric_name;
       result.attr("target_recall") = target;
-      [params_buffer release]; [out_dist_buffer release]; [out_id_buffer release]; [data_buffer release];
       return result;
     }
     id<MTLBuffer> offset_map_buffer = [device newBufferWithBytes:feature_offsets.data() length:feature_offsets.size() * sizeof(std::uint32_t) options:MTLResourceStorageModeShared];
@@ -1682,7 +1717,7 @@ Rcpp::List faissr_metal_knn_float_impl(
     [list_offset_buffer release]; [index_params_buffer release]; [centroid_count_buffer release];
     [centroid_sum_buffer release]; [assignment_buffer release];
     [centroid_buffer release]; [project_params_buffer release]; [projected_buffer release];
-    [sign_buffer release]; [feature_buffer release]; [offset_map_buffer release]; [data_buffer release];
+    [sign_buffer release]; [feature_buffer release]; [offset_map_buffer release];
     return result;
   }
 }
@@ -1749,19 +1784,21 @@ Rcpp::List faissr_metal_query_knn_impl(SEXP data_sexp,
     );
   }
   std::string method = requested_method;
+  const bool ivf_supported = faissr_metal::ivf_shape_supported(
+    reference.nrow, reference.ncol, k) &&
+    faissr_metal::ivf_shape_supported(query.nrow, query.ncol, k);
   if (method == "auto") {
-    method = reference.nrow < 4096 ? "exact" : "ivf";
+    method = reference.nrow < 4096 || !ivf_supported ? "exact" : "ivf";
   }
   if (method != "exact" && method != "ivf") {
     Rcpp::stop(
       "Native Metal reference-query KNN supports `exact`, `ivf`, or `auto`."
     );
   }
-  if (method == "ivf" && reference.ncol > kMaxP) {
+  if (method == "ivf" && !ivf_supported) {
     Rcpp::stop(
-      "Native Metal IVF query KNN supports at most %d dimensions; use exact "
-      "search for this %d-dimensional input.",
-      kMaxP, reference.ncol
+      "Native Metal IVF query KNN requires at most %d dimensions and "
+      "32-bit buffer offsets; use exact search for this input.", kMaxP
     );
   }
   const int qdim = projection_dim(reference.ncol);
@@ -1814,22 +1851,16 @@ Rcpp::List faissr_metal_query_knn_impl(SEXP data_sexp,
     const auto t_setup = Clock::now();
     const double metal_allocated_before_bytes =
       metal_current_allocated_bytes(device);
-    id<MTLBuffer> reference_buffer = [device
-      newBufferWithBytes:reference.values.data()
-      length:reference.values.size() * sizeof(float)
-      options:MTLResourceStorageModeShared];
-    id<MTLBuffer> query_buffer = [device
-      newBufferWithBytes:query.values.data()
-      length:query.values.size() * sizeof(float)
-      options:MTLResourceStorageModeShared];
+    id<MTLBuffer> reference_buffer = metal_shared_buffer(device,
+      reference.values.size() * sizeof(float), reference.values.data());
+    id<MTLBuffer> query_buffer = metal_shared_buffer(device,
+      query.values.size() * sizeof(float), query.values.data());
     const std::size_t output_items =
       static_cast<std::size_t>(query.nrow) * k;
-    id<MTLBuffer> out_id_buffer = [device
-      newBufferWithLength:output_items * sizeof(int)
-      options:MTLResourceStorageModeShared];
-    id<MTLBuffer> out_dist_buffer = [device
-      newBufferWithLength:output_items * sizeof(float)
-      options:MTLResourceStorageModeShared];
+    id<MTLBuffer> out_id_buffer = metal_shared_buffer(
+      device, output_items * sizeof(int));
+    id<MTLBuffer> out_dist_buffer = metal_shared_buffer(
+      device, output_items * sizeof(float));
 
     auto exact_search = [&](id<MTLBuffer> queries,
                             int n_queries,
@@ -1846,6 +1877,9 @@ Rcpp::List faissr_metal_query_knn_impl(SEXP data_sexp,
         newBufferWithBytes:&params
         length:sizeof(params)
         options:MTLResourceStorageModeShared];
+      if (params_buffer == nil) {
+        Rcpp::stop("Metal KNN could not allocate its search parameters.");
+      }
       id<MTLCommandBuffer> command = [state.queue commandBuffer];
       id<MTLComputeCommandEncoder> encoder = [command computeCommandEncoder];
       [encoder setComputePipelineState:
@@ -1936,10 +1970,6 @@ Rcpp::List faissr_metal_query_knn_impl(SEXP data_sexp,
       result.attr("exact") = true;
       result.attr("target_met") = true;
       result.attr("exclude_self") = false;
-      [out_dist_buffer release];
-      [out_id_buffer release];
-      [query_buffer release];
-      [reference_buffer release];
       return result;
     }
 
@@ -2374,10 +2404,6 @@ Rcpp::List faissr_metal_query_knn_impl(SEXP data_sexp,
     [sign_buffer release];
     [feature_buffer release];
     [offset_map_buffer release];
-    [out_dist_buffer release];
-    [out_id_buffer release];
-    [query_buffer release];
-    [reference_buffer release];
     return result;
   }
 }
@@ -2438,18 +2464,14 @@ void faissr_metal_exact_raw(const float* reference, int n_reference,
     const auto tiles = (n_reference - 1) / tile_rows + 1;
     const std::size_t output_items =
       static_cast<std::size_t>(n_query) * k;
-    id<MTLBuffer> reference_buffer = [[device
-      newBufferWithBytes:reference length:reference_bytes
-      options:MTLResourceStorageModeShared] autorelease];
-    id<MTLBuffer> query_buffer = [[device
-      newBufferWithBytes:query length:query_bytes
-      options:MTLResourceStorageModeShared] autorelease];
-    id<MTLBuffer> id_buffer = [[device
-      newBufferWithLength:output_items * tiles * sizeof(int)
-      options:MTLResourceStorageModeShared] autorelease];
-    id<MTLBuffer> distance_buffer = [[device
-      newBufferWithLength:output_items * tiles * sizeof(float)
-      options:MTLResourceStorageModeShared] autorelease];
+    id<MTLBuffer> reference_buffer = metal_shared_buffer(
+      device, reference_bytes, reference);
+    id<MTLBuffer> query_buffer = metal_shared_buffer(
+      device, query_bytes, query);
+    id<MTLBuffer> id_buffer = metal_shared_buffer(
+      device, output_items * tiles * sizeof(int));
+    id<MTLBuffer> distance_buffer = metal_shared_buffer(
+      device, output_items * tiles * sizeof(float));
     QuerySearchParamsHost params{
       static_cast<std::uint32_t>(n_reference),
       static_cast<std::uint32_t>(n_query),
@@ -2457,14 +2479,8 @@ void faissr_metal_exact_raw(const float* reference, int n_reference,
       static_cast<std::uint32_t>(k),
       static_cast<std::uint32_t>(tile_rows)
     };
-    id<MTLBuffer> params_buffer = [[device
-      newBufferWithBytes:&params length:sizeof(params)
-      options:MTLResourceStorageModeShared] autorelease];
-    if (reference_buffer == nil || query_buffer == nil ||
-        id_buffer == nil || distance_buffer == nil ||
-        params_buffer == nil) {
-      Rcpp::stop("Metal file-backed KNN buffer allocation failed");
-    }
+    id<MTLBuffer> params_buffer = metal_shared_buffer(
+      device, sizeof(params), &params);
     id<MTLCommandBuffer> command = [state.queue commandBuffer];
     id<MTLComputeCommandEncoder> encoder =
       [command computeCommandEncoder];
