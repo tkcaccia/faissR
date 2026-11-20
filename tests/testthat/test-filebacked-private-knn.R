@@ -193,6 +193,10 @@ test_that("private bounded KNN preserves ties and self exclusion", {
         expect_identical(metal$device_memory_model,
             "unified_shared_estimate")
         expect_gt(metal$observed_metal_owned_live_buffer_bytes, 0)
+        expect_identical(metal$metal_query_uploads, 1L)
+        expect_identical(metal$metal_reference_shards, 3L)
+        expect_equal(metal$peak_ram_bytes_estimate - metal$peak_device_bytes,
+            64 * 1024^2 + 4 * 3 * 2 + 32 * 3 * 3)
         expect_identical(metal$search_seconds_scope,
             "complete_batch_wall_including_file_io")
         expect_identical(metal$indices, observed$indices)
@@ -231,7 +235,9 @@ test_that("private bounded KNN preserves ties and self exclusion", {
     expect_equal(as.numeric(cpu$distances), rep(0, 7L))
     if (faissR:::nn_metal_available_cpp()) {
         gpu <- faissR_test_file_batch(resident, resident, 1, 7L, "metal",
-            TRUE, 128 * 1024^2, n)
+            TRUE, 128 * 1024^2, n - 2L)
+        expect_identical(gpu$metal_query_uploads, 1L)
+        expect_identical(gpu$metal_reference_shards, 2L)
         expect_identical(gpu$indices, cpu$indices)
         expect_equal(gpu$distances, cpu$distances)
     }

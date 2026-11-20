@@ -37,6 +37,7 @@
 #include <cstring>
 #include <initializer_list>
 #include <limits>
+#include <memory>
 #include <numeric>
 #include <random>
 #include <utility>
@@ -2438,40 +2439,83 @@ void merge_exact_tiles(const int* tile_ids, const float* tile_distances,
 
 }  // namespace
 
-// Internal float32 path for bounded batches. The input buffers are
-// already validated and row-major; avoid conversion through R doubles.
-void faissr_metal_exact_raw(const float* reference, int n_reference,
-    const float* query, int n_query, int p, int k,
-    int* ids, float* distances, double* owned_buffer_bytes) {
-  if (reference == nullptr || query == nullptr ||
-      ids == nullptr || distances == nullptr ||
-      owned_buffer_bytes == nullptr ||
-      n_reference < 1 || n_query < 1 || p < 1 ||
-      p > kMaxGlobalP || k < 1 || k > kMaxK ||
-      k > n_reference) {
-    Rcpp::stop("Invalid raw Metal file-backed KNN dimensions");
+struct FaissrMetalFlatBatch {
+  int n_query;
+  int p;
+  int reference_capacity;
+  int max_k;
+  id<MTLBuffer> reference = nil;
+  id<MTLBuffer> query = nil;
+  id<MTLBuffer> ids = nil;
+  id<MTLBuffer> distances = nil;
+  id<MTLBuffer> params = nil;
+  double owned_bytes = 0.0;
+
+  ~FaissrMetalFlatBatch() {
+    [params release];
+    [distances release];
+    [ids release];
+    [query release];
+    [reference release];
   }
+};
+
+FaissrMetalFlatBatch* faissr_metal_flat_batch_prepare(const float* query,
+    int n_query, int p, int reference_capacity, int max_k) {
   @autoreleasepool {
     MetalKnnState& state = metal_knn_state();
     id<MTLDevice> device = state.device;
-    const std::size_t reference_bytes =
-      static_cast<std::size_t>(n_reference) * p * sizeof(float);
-    const std::size_t query_bytes =
-      static_cast<std::size_t>(n_query) * p * sizeof(float);
+    auto batch = std::make_unique<FaissrMetalFlatBatch>();
+    batch->n_query = n_query;
+    batch->p = p;
+    batch->reference_capacity = reference_capacity;
+    batch->max_k = max_k;
+    const int max_tiles = n_query <= 1024 && reference_capacity >= 65536 ?
+      16 : 1;
+    const auto output_items = static_cast<std::size_t>(n_query) *
+      max_k * max_tiles;
+    batch->reference = [metal_shared_buffer(device,
+      static_cast<std::size_t>(reference_capacity) * p * sizeof(float))
+      retain];
+    batch->query = [metal_shared_buffer(device,
+      static_cast<std::size_t>(n_query) * p * sizeof(float), query) retain];
+    batch->ids = [metal_shared_buffer(
+      device, output_items * sizeof(int)) retain];
+    batch->distances = [metal_shared_buffer(
+      device, output_items * sizeof(float)) retain];
+    batch->params = [metal_shared_buffer(
+      device, sizeof(QuerySearchParamsHost)) retain];
+    batch->owned_bytes = metal_live_buffer_bytes({batch->reference,
+      batch->query, batch->ids, batch->distances, batch->params});
+    return batch.release();
+  }
+}
+
+void faissr_metal_flat_batch_release(FaissrMetalFlatBatch* batch) {
+  delete batch;
+}
+
+float* faissr_metal_flat_batch_reference(FaissrMetalFlatBatch& batch) {
+  return static_cast<float*>([batch.reference contents]);
+}
+
+void faissr_metal_flat_batch_search(FaissrMetalFlatBatch& batch,
+    int n_reference, int k,
+    int* ids, float* distances, double* owned_buffer_bytes) {
+  if (n_reference < 1 || n_reference > batch.reference_capacity ||
+      k < 1 || k > std::min(n_reference, batch.max_k)) {
+    Rcpp::stop("Metal Flat shard exceeds its staging capacity");
+  }
+  @autoreleasepool {
+    MetalKnnState& state = metal_knn_state();
+    const int n_query = batch.n_query;
+    const int p = batch.p;
     // More independent threadgroups keep the device busy with few queries.
     const auto tile_rows = n_query <= 1024 && n_reference >= 65536 ?
       std::max(16384, (n_reference - 1) / 16 + 1) : n_reference;
     const auto tiles = (n_reference - 1) / tile_rows + 1;
     const std::size_t output_items =
       static_cast<std::size_t>(n_query) * k;
-    id<MTLBuffer> reference_buffer = metal_shared_buffer(
-      device, reference_bytes, reference);
-    id<MTLBuffer> query_buffer = metal_shared_buffer(
-      device, query_bytes, query);
-    id<MTLBuffer> id_buffer = metal_shared_buffer(
-      device, output_items * tiles * sizeof(int));
-    id<MTLBuffer> distance_buffer = metal_shared_buffer(
-      device, output_items * tiles * sizeof(float));
     QuerySearchParamsHost params{
       static_cast<std::uint32_t>(n_reference),
       static_cast<std::uint32_t>(n_query),
@@ -2479,31 +2523,29 @@ void faissr_metal_exact_raw(const float* reference, int n_reference,
       static_cast<std::uint32_t>(k),
       static_cast<std::uint32_t>(tile_rows)
     };
-    id<MTLBuffer> params_buffer = metal_shared_buffer(
-      device, sizeof(params), &params);
+    std::memcpy([batch.params contents], &params, sizeof(params));
     id<MTLCommandBuffer> command = [state.queue commandBuffer];
     id<MTLComputeCommandEncoder> encoder =
       [command computeCommandEncoder];
     [encoder setComputePipelineState:p <= kMaxP ?
       state.exact_query_pipeline : state.exact_query_global_pipeline];
-    [encoder setBuffer:reference_buffer offset:0 atIndex:0];
-    [encoder setBuffer:query_buffer offset:0 atIndex:1];
-    [encoder setBuffer:id_buffer offset:0 atIndex:2];
-    [encoder setBuffer:distance_buffer offset:0 atIndex:3];
-    [encoder setBuffer:params_buffer offset:0 atIndex:4];
+    [encoder setBuffer:batch.reference offset:0 atIndex:0];
+    [encoder setBuffer:batch.query offset:0 atIndex:1];
+    [encoder setBuffer:batch.ids offset:0 atIndex:2];
+    [encoder setBuffer:batch.distances offset:0 atIndex:3];
+    [encoder setBuffer:batch.params offset:0 atIndex:4];
     [encoder dispatchThreadgroups:MTLSizeMake(n_query * tiles, 1, 1)
       threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
     [encoder endEncoding];
     run_and_wait(command);
-    *owned_buffer_bytes = metal_live_buffer_bytes({reference_buffer,
-      query_buffer, id_buffer, distance_buffer, params_buffer});
+    *owned_buffer_bytes = batch.owned_bytes;
     if (tiles == 1) {
-      std::memcpy(ids, [id_buffer contents], output_items * sizeof(int));
-      std::memcpy(distances, [distance_buffer contents],
+      std::memcpy(ids, [batch.ids contents], output_items * sizeof(int));
+      std::memcpy(distances, [batch.distances contents],
         output_items * sizeof(float));
     } else {
-      merge_exact_tiles(static_cast<const int*>([id_buffer contents]),
-        static_cast<const float*>([distance_buffer contents]),
+      merge_exact_tiles(static_cast<const int*>([batch.ids contents]),
+        static_cast<const float*>([batch.distances contents]),
         n_query, k, tiles, ids, distances);
     }
   }

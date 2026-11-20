@@ -25,8 +25,13 @@
 #endif
 
 #ifdef __APPLE__
-void faissr_metal_exact_raw(const float* reference, int n_reference,
-    const float* query, int n_query, int p, int k,
+struct FaissrMetalFlatBatch;
+FaissrMetalFlatBatch* faissr_metal_flat_batch_prepare(
+    const float* query, int n_query, int p, int reference_capacity, int max_k);
+void faissr_metal_flat_batch_release(FaissrMetalFlatBatch* batch);
+float* faissr_metal_flat_batch_reference(FaissrMetalFlatBatch& batch);
+void faissr_metal_flat_batch_search(FaissrMetalFlatBatch& batch,
+    int n_reference, int k,
     int* ids, float* distances, double* owned_buffer_bytes);
 Rcpp::List faissr_metal_knn_file_float(std::vector<float> values,
     int rows, int columns, int k, double target);
@@ -186,26 +191,31 @@ BatchSource batch_source(Rcpp::List spec) {
   return source;
 }
 
-void read_rows(std::ifstream& input, const FileMatrix& spec,
-               std::uint64_t first, std::uint64_t count,
-               std::vector<float>& values) {
+void read_file_rows(std::ifstream& input, const FileMatrix& spec,
+                    std::uint64_t first, std::uint64_t count, float* values) {
   const std::uint64_t items = count * spec.columns;
   const std::uint64_t offset = spec.header +
     (spec.first + first) * spec.columns * 4;
-  values.resize(static_cast<std::size_t>(items));
   input.seekg(static_cast<std::streamoff>(offset));
-  input.read(reinterpret_cast<char*>(values.data()),
+  input.read(reinterpret_cast<char*>(values),
     static_cast<std::streamsize>(items * 4));
   if (!input) Rcpp::stop("Could not read file-backed rows");
-  for (float value : values) {
-    if (!std::isfinite(value)) {
+  for (std::uint64_t i = 0; i < items; ++i) {
+    if (!std::isfinite(values[i])) {
       Rcpp::stop("File-backed KNN input contains nonfinite values");
     }
   }
 }
 
+void read_rows(std::ifstream& input, const FileMatrix& spec,
+               std::uint64_t first, std::uint64_t count,
+               std::vector<float>& values) {
+  values.resize(static_cast<std::size_t>(count * spec.columns));
+  read_file_rows(input, spec, first, count, values.data());
+}
+
 void read_float32_batch(const BatchSource& source, std::uint64_t first,
-                        std::uint64_t count, std::vector<float>& values) {
+                        std::uint64_t count, float* values) {
   static_assert(sizeof(int) == sizeof(float), "float32 storage needs 32-bit ints");
   const auto columns = source.file.columns;
   constexpr std::uint64_t tile_rows = 64;
@@ -226,14 +236,13 @@ void read_float32_batch(const BatchSource& source, std::uint64_t first,
   }
 }
 
-void read_batch_rows(std::ifstream& input, const BatchSource& source,
-                     std::uint64_t first, std::uint64_t count,
-                     std::vector<float>& values) {
+void read_batch_rows_into(std::ifstream& input, const BatchSource& source,
+                          std::uint64_t first, std::uint64_t count,
+                          float* values) {
   if (!source.memory) {
-    read_rows(input, source.file, first, count, values);
+    read_file_rows(input, source.file, first, count, values);
     return;
   }
-  values.resize(static_cast<std::size_t>(count * source.file.columns));
   if (source.float32_data) {
     read_float32_batch(source, first, count, values);
     return;
@@ -248,6 +257,13 @@ void read_batch_rows(std::ifstream& input, const BatchSource& source,
       values[row * source.file.columns + col] = value;
     }
   }
+}
+
+void read_batch_rows(std::ifstream& input, const BatchSource& source,
+                     std::uint64_t first, std::uint64_t count,
+                     std::vector<float>& values) {
+  values.resize(static_cast<std::size_t>(count * source.file.columns));
+  read_batch_rows_into(input, source, first, count, values.data());
 }
 
 using Candidate = std::pair<double, std::uint32_t>;
@@ -299,22 +315,20 @@ void add_candidate(std::priority_queue<Candidate>& heap,
   }
 }
 
-void metal_candidates(const std::vector<float>& reference,
+#ifdef __APPLE__
+void metal_candidates(FaissrMetalFlatBatch& batch, const float* reference,
                       const std::vector<float>& query,
                       std::uint64_t base, std::uint64_t rows,
                       const std::vector<std::uint64_t>& selected,
                       int k, bool exclude_self,
                       std::vector<std::priority_queue<Candidate>>& heaps,
                       std::size_t columns, double& owned_peak) {
-#ifdef __APPLE__
   const int local_k = static_cast<int>(std::min<std::uint64_t>(
     rows, k + (exclude_self ? 1 : 0)));
   std::vector<int> indices(selected.size() * local_k);
   std::vector<float> distances(selected.size() * local_k);
   double owned_bytes = 0.0;
-  faissr_metal_exact_raw(reference.data(), static_cast<int>(rows),
-    query.data(), static_cast<int>(selected.size()),
-    static_cast<int>(columns), local_k,
+  faissr_metal_flat_batch_search(batch, static_cast<int>(rows), local_k,
     indices.data(), distances.data(), &owned_bytes);
   owned_peak = std::max(owned_peak, owned_bytes);
   for (std::size_t qi = 0; qi < selected.size(); ++qi) {
@@ -330,7 +344,7 @@ void metal_candidates(const std::vector<float>& reference,
       if (exclude_self && selected[qi] == global) continue;
       const double checked_distance = precise_l2(
         query.data() + qi * columns,
-        reference.data() + static_cast<std::size_t>(id) * columns,
+        reference + static_cast<std::size_t>(id) * columns,
         columns);
       if (!std::isfinite(checked_distance)) {
         Rcpp::stop("FAISS Metal file-backed distance overflowed float32");
@@ -340,13 +354,8 @@ void metal_candidates(const std::vector<float>& reference,
         static_cast<std::uint32_t>(global + 1)}, k);
     }
   }
-#else
-  (void) reference; (void) query; (void) base; (void) rows;
-  (void) selected; (void) k; (void) exclude_self;
-  (void) heaps; (void) columns; (void) owned_peak;
-  Rcpp::stop("Metal-enabled file-backed KNN is unavailable here");
-#endif
 }
+#endif
 
 #ifdef FAISSR_FILEBACK_CUDA
 struct CudaDeviceScope {
@@ -522,6 +531,9 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
 #ifndef FAISSR_FILEBACK_CUDA
   if (cuda) Rcpp::stop("CUDA file-backed KNN is unavailable in this build");
 #endif
+#ifndef __APPLE__
+  if (metal) Rcpp::stop("Metal-enabled file-backed KNN is unavailable here");
+#endif
   std::vector<int> cuda_devices;
   if (devices_value != R_NilValue) {
     if (!cuda || TYPEOF(devices_value) != INTSXP) {
@@ -580,16 +592,18 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
     Rcpp::stop("Invalid file-backed KNN batch dimensions or settings");
   }
   const std::size_t count = requested.size();
+  const int metal_reference_rows = static_cast<int>(std::min<std::uint64_t>(
+    reference.file.rows, reference_chunk));
   const double resident_bytes = query.resident_bytes() +
     (!same_owner ? reference.resident_bytes() : 0.0);
   const double metal_output_bytes = 8.0 * count *
-    std::min<int>(k + 1, reference_chunk) *
-    (count <= 1024 && reference_chunk >= 65536 ? 16 : 1);
+    std::min(k + static_cast<int>(exclude_self), metal_reference_rows) *
+    (count <= 1024 && metal_reference_rows >= 65536 ? 16 : 1);
+  const double metal_bytes = 4.0 * (count + metal_reference_rows) *
+    query.file.columns + metal_output_bytes;
   const double estimated = resident_bytes +
     4.0 * count * query.file.columns +
-    4.0 * reference_chunk * reference.file.columns +
-    (metal ? 4.0 * (count + reference_chunk) *
-      query.file.columns + metal_output_bytes : 0.0) +
+    (metal ? metal_bytes : 4.0 * reference_chunk * reference.file.columns) +
     (cuda ? 12.0 * count * std::min<int>(k + 1,
       reference_chunk) : 0.0) +
     32.0 * count * k + 64.0 * 1024 * 1024;
@@ -651,6 +665,24 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
   double metal_owned_peak = 0.0;
   double reference_read_seconds = 0.0;
   double candidate_processing_seconds = 0.0;
+  double metal_staging_setup_seconds = 0.0;
+#ifdef __APPLE__
+  std::unique_ptr<FaissrMetalFlatBatch,
+    decltype(&faissr_metal_flat_batch_release)>
+    metal_batch(nullptr, faissr_metal_flat_batch_release);
+  float* metal_reference = nullptr;
+  if (metal) {
+    const auto setup_started = std::chrono::steady_clock::now();
+    const int local_k = std::min(k + static_cast<int>(exclude_self),
+      metal_reference_rows);
+    metal_batch.reset(faissr_metal_flat_batch_prepare(query_values.data(),
+      static_cast<int>(count), static_cast<int>(query.file.columns),
+      metal_reference_rows, local_k));
+    metal_reference = faissr_metal_flat_batch_reference(*metal_batch);
+    metal_staging_setup_seconds = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - setup_started).count();
+  }
+#endif
 #ifdef FAISSR_FILEBACK_CUDA
   int cuda_device = -1;
   CudaDeviceScope cuda_scope;
@@ -711,15 +743,24 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
     const auto rows = std::min<std::uint64_t>(reference_chunk,
                                               reference.file.rows - base);
     const auto read_started = std::chrono::steady_clock::now();
-    read_batch_rows(reference_file, reference, base, rows,
-                    reference_values);
+#ifdef __APPLE__
+    if (metal) {
+      read_batch_rows_into(reference_file, reference, base, rows,
+                           metal_reference);
+    } else
+#endif
+    {
+      read_batch_rows(reference_file, reference, base, rows, reference_values);
+    }
     reference_read_seconds += std::chrono::duration<double>(
       std::chrono::steady_clock::now() - read_started).count();
     const auto processing_started = std::chrono::steady_clock::now();
     if (metal) {
-      metal_candidates(reference_values, query_values, base, rows,
+#ifdef __APPLE__
+      metal_candidates(*metal_batch, metal_reference, query_values, base, rows,
         selected, k, exclude_self, heaps, query.file.columns,
         metal_owned_peak);
+#endif
     } else if (cuda) {
 #ifdef FAISSR_FILEBACK_CUDA
       cuda_candidates(*cuda_index, reference_values, query_values,
@@ -817,15 +858,17 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
     Rcpp::Named("timing_detail") =
       "read_and_processing_wall_times; CUDA build/search overlap processing",
     Rcpp::Named("peak_ram_bytes_estimate") = estimated,
-    Rcpp::Named("peak_device_bytes") = metal ?
-      4.0 * (count + reference_chunk) * query.file.columns +
-        metal_output_bytes :
+    Rcpp::Named("peak_device_bytes") = metal ? metal_bytes :
       (cuda ? device_bytes : 0.0),
     Rcpp::Named("peak_device_bytes_by_id") = cuda ?
       Rcpp::NumericVector(cuda_devices.size(), device_bytes) :
       Rcpp::NumericVector(),
     Rcpp::Named("observed_metal_owned_live_buffer_bytes") =
       metal ? metal_owned_peak : 0.0,
+    Rcpp::Named("metal_staging_setup_seconds") = metal_staging_setup_seconds,
+    Rcpp::Named("metal_query_uploads") = metal ? 1 : 0,
+    Rcpp::Named("metal_reference_shards") = metal ?
+      static_cast<int>((reference.file.rows - 1) / reference_chunk + 1) : 0,
     Rcpp::Named("device_memory_model") = metal ?
       "unified_shared_estimate" :
       (cuda ? (cuda_devices.size() > 1 ?
