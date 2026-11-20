@@ -37,9 +37,9 @@ test_that("private file-backed HNSW build streams and searches correctly", {
                      nrow = nrow(x), ncol = ncol(x))
     fbin_spec <- list(format = "fbin", path = fbin,
                       nrow = nrow(x), ncol = ncol(x))
-    index <- faissR_test_file_hnsw_build(raw_spec, 16L, 80L, 2L, 13L)
+    index <- faissR_test_file_hnsw_build(raw_spec, 16L, 80L, 1L, 13L)
     index_fbin <- faissR_test_file_hnsw_build(
-        fbin_spec, 16L, 80L, 2L, 13L)
+        fbin_spec, 16L, 80L, 1L, 300L)
     expect_identical(attr(index, "residency"),
                      "file_backed_reference_resident_index")
     expect_identical(attr(index, "backend_used"),
@@ -47,6 +47,11 @@ test_that("private file-backed HNSW build streams and searches correctly", {
     expect_identical(attr(index, "n"), 300L)
     expect_identical(attr(index, "p"), 8L)
     expect_identical(attr(index, "reference_chunk_rows"), 13L)
+    expect_identical(attr(index, "reference_add_batches"), 1L)
+    expect_identical(attr(index_fbin, "reference_chunk_rows"), 300L)
+    expect_identical(attr(index_fbin, "reference_add_batches"), 1L)
+    two_reads <- faissR_test_file_hnsw_build(raw_spec, 16L, 80L, 1L, 151L)
+    expect_identical(attr(two_reads, "reference_add_batches"), 2L)
     expect_gte(attr(index, "reference_read_seconds"), 0)
     expect_identical(attr(index, "reference_read_scope"),
                      "buffered_file_read_plus_finite_validation")
@@ -67,6 +72,12 @@ test_that("private file-backed HNSW build streams and searches correctly", {
     expect_identical(out$indices, out_fbin$indices)
     expect_equal(out$distances, out_fbin$distances,
                  tolerance = 1e-6)
+    low_effort <- faissR_test_file_hnsw_search(
+        index, float::fl(x), 5L, 8L)
+    low_effort_fbin <- faissR_test_file_hnsw_search(
+        index_fbin, float::fl(x), 5L, 8L)
+    expect_identical(low_effort$indices, low_effort_fbin$indices)
+    expect_identical(low_effort$distances, low_effort_fbin$distances)
     for (i in seq_along(rows)) {
         distance <- sqrt(rowSums(sweep(x, 2L, x[rows[[i]], ])^2))
         expected <- order(distance, seq_len(nrow(x)))[seq_len(5L)]

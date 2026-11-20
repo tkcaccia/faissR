@@ -2687,9 +2687,17 @@ SEXP faiss_hnsw_file_index_build_impl(SEXP file_spec, int m,
     Rcpp::as<Rcpp::List>(file_spec));
   const int requested_m = m;
   m = std::min(m, source.rows);
-  if (static_cast<std::uint64_t>(chunk_rows) * source.columns >
+  // FAISS shuffles rows within each add(). Coalesce builds that would
+  // need three or more additions. Preserve the small-shard streaming
+  // route: its two-add graph calibrated faster on a Deep1B holdout.
+  const int read_batches = 1 + (source.rows - 1) / chunk_rows;
+  const int insertion_rows =
+    read_batches > 2 ? source.rows : std::min(chunk_rows, source.rows);
+  const auto items =
+    static_cast<std::uint64_t>(insertion_rows) * source.columns;
+  if (items >
       std::numeric_limits<std::size_t>::max() / sizeof(float)) {
-    Rcpp::stop("HNSW file-backed chunk exceeds addressable memory");
+    Rcpp::stop("HNSW file-backed shard exceeds addressable memory");
   }
   try {
     std::ifstream input(source.path, std::ios::binary);
@@ -2698,39 +2706,47 @@ SEXP faiss_hnsw_file_index_build_impl(SEXP file_spec, int m,
       new faiss::IndexHNSWFlat(source.columns, m, faiss::METRIC_L2));
     index->hnsw.efConstruction = ef_construction;
     index->hnsw.efSearch = 1;
-    std::vector<float> chunk;
+    std::unique_ptr<float[]> values(new float[static_cast<std::size_t>(items)]);
     double read_seconds = 0;
     double build_seconds = 0;
+    int add_batches = 0;
     for (int first = 0; first < source.rows; ) {
       Rcpp::checkUserInterrupt();
       const int take = std::min(chunk_rows, source.rows - first);
       const std::size_t count = static_cast<std::size_t>(take) *
         source.columns;
-      chunk.resize(count);
+      const int buffered = first % insertion_rows;
+      float* chunk = values.get() +
+        static_cast<std::size_t>(buffered) * source.columns;
       const std::uint64_t offset = source.header_bytes +
         (source.first + static_cast<std::uint64_t>(first)) *
         source.columns * sizeof(float);
       const auto read_start = std::chrono::steady_clock::now();
       input.seekg(static_cast<std::streamoff>(offset));
-      input.read(reinterpret_cast<char*>(chunk.data()),
+      input.read(reinterpret_cast<char*>(chunk),
         static_cast<std::streamsize>(count * sizeof(float)));
       if (!input) Rcpp::stop("Could not read HNSW file-backed rows");
-      for (float value : chunk) {
-        if (!std::isfinite(value)) {
+      for (std::size_t i = 0; i < count; ++i) {
+        if (!std::isfinite(chunk[i])) {
           Rcpp::stop("HNSW file-backed input contains nonfinite values");
         }
       }
-      const auto build_start = std::chrono::steady_clock::now();
       read_seconds += std::chrono::duration<double>(
-        build_start - read_start).count();
-      {
-        OmpThreadScope threads(n_threads);
-        index->add(take, chunk.data());
-      }
-      build_seconds += std::chrono::duration<double>(
-        std::chrono::steady_clock::now() - build_start).count();
+        std::chrono::steady_clock::now() - read_start).count();
       first += take;
+      const int ready = buffered + take;
+      if (ready == insertion_rows || first == source.rows) {
+        const auto build_start = std::chrono::steady_clock::now();
+        {
+          OmpThreadScope threads(n_threads);
+          index->add(ready, values.get());
+        }
+        build_seconds += std::chrono::duration<double>(
+          std::chrono::steady_clock::now() - build_start).count();
+        ++add_batches;
+      }
     }
+    values.reset();
     if (index->ntotal != source.rows) {
       Rcpp::stop("HNSW file-backed index row count changed");
     }
@@ -2764,6 +2780,7 @@ SEXP faiss_hnsw_file_index_build_impl(SEXP file_spec, int m,
       "buffered_file_read_plus_finite_validation";
     ptr.attr("index_build_seconds") = build_seconds;
     ptr.attr("reference_chunk_rows") = chunk_rows;
+    ptr.attr("reference_add_batches") = add_batches;
     ptr.attr("serialization_supported") = false;
     ptr.attr("native_persistence_supported") = true;
     ptr.attr("concurrent_search_supported") = false;
