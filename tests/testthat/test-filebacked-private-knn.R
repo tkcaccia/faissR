@@ -76,6 +76,23 @@ test_that("private bounded KNN preserves ties and self exclusion", {
         "complete_batch_wall_resident")
     expect_identical(resident_result$indices, observed$indices)
     expect_equal(resident_result$distances, observed$distances)
+    f32_resident <- resident
+    f32_resident$data <- float::fl(x)
+    f32_result <- faissR_test_file_batch(f32_resident, f32_resident,
+        c(1, 3, 5), 3L, "cpu", TRUE, 128 * 1024^2)
+    expect_identical(f32_result$indices, resident_result$indices)
+    expect_equal(f32_result$distances, resident_result$distances)
+    expect_equal(resident_result$peak_ram_bytes_estimate -
+        f32_result$peak_ram_bytes_estimate, 4 * length(x))
+    view <- list(format = "view", source = f32_resident, first = 2,
+                 nrow = 4, ncol = 2)
+    view_result <- faissR_test_file_batch(view, view, c(1, 3), 2L, "cpu",
+        TRUE, 128 * 1024^2)
+    subset <- list(format = "memory", data = x[2:5, ], nrow = 4, ncol = 2)
+    subset_result <- faissR_test_file_batch(subset, subset, c(1, 3), 2L,
+        "cpu", TRUE, 128 * 1024^2)
+    expect_identical(view_result$indices, subset_result$indices)
+    expect_equal(view_result$distances, subset_result$distances)
     mixed <- faissR_test_file_batch(resident, spec, 1, 3L,
         "cpu", FALSE, 128 * 1024^2)
     expect_identical(mixed$residency, "mixed")

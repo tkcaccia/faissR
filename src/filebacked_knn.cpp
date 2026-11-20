@@ -5,6 +5,7 @@
 #include <climits>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -66,8 +67,15 @@ struct FileMatrix {
 struct BatchSource {
   FileMatrix file;
   Rcpp::NumericMatrix data;
+  const int* float32_data = nullptr;
+  std::uint64_t memory_rows = 0;
   SEXP owner = R_NilValue;
   bool memory = false;
+
+  double resident_bytes() const {
+    return memory_rows * static_cast<double>(file.columns) *
+      (float32_data ? sizeof(float) : sizeof(double));
+  }
 };
 
 std::uint64_t positive_integer(SEXP value, const char* name) {
@@ -144,14 +152,31 @@ BatchSource batch_source(Rcpp::List spec) {
   BatchSource source;
   if (format == "memory") {
     source.owner = spec["data"];
-    source.data = Rcpp::as<Rcpp::NumericMatrix>(source.owner);
     source.file.rows = positive_integer(spec["nrow"], "nrow");
     source.file.columns = positive_integer(spec["ncol"], "ncol");
-    if (source.data.nrow() != source.file.rows ||
-        source.data.ncol() != source.file.columns) {
-      Rcpp::stop("Resident KNN matrix differs from descriptor");
+    if (Rf_isS4(source.owner) && Rf_inherits(source.owner, "float32")) {
+      const Rcpp::S4 matrix(source.owner);
+      const SEXP payload = matrix.slot("Data");
+      const SEXP shape = Rf_getAttrib(payload, R_DimSymbol);
+      if (TYPEOF(payload) != INTSXP || TYPEOF(shape) != INTSXP ||
+          Rf_length(shape) != 2 || INTEGER(shape)[0] < 1 ||
+          INTEGER(shape)[1] < 1 ||
+          static_cast<std::uint64_t>(INTEGER(shape)[0]) != source.file.rows ||
+          static_cast<std::uint64_t>(INTEGER(shape)[1]) != source.file.columns ||
+          static_cast<std::uint64_t>(XLENGTH(payload)) !=
+            source.file.rows * source.file.columns) {
+        Rcpp::stop("Resident float32 KNN matrix differs from descriptor");
+      }
+      source.float32_data = INTEGER(payload);
+    } else {
+      source.data = Rcpp::as<Rcpp::NumericMatrix>(source.owner);
+      if (source.data.nrow() != source.file.rows ||
+          source.data.ncol() != source.file.columns) {
+        Rcpp::stop("Resident KNN matrix differs from descriptor");
+      }
     }
     source.file.first = 0;
+    source.memory_rows = source.file.rows;
     source.memory = true;
   } else {
     source.file = file_matrix(spec);
@@ -177,6 +202,28 @@ void read_rows(std::ifstream& input, const FileMatrix& spec,
   }
 }
 
+void read_float32_batch(const BatchSource& source, std::uint64_t first,
+                        std::uint64_t count, std::vector<float>& values) {
+  static_assert(sizeof(int) == sizeof(float), "float32 storage needs 32-bit ints");
+  const auto columns = source.file.columns;
+  constexpr std::uint64_t tile_rows = 64;
+  for (std::uint64_t tile = 0; tile < count; tile += tile_rows) {
+    const auto rows = std::min(tile_rows, count - tile);
+    for (std::uint64_t col = 0; col < columns; ++col) {
+      const int* input = source.float32_data + col * source.memory_rows +
+        source.file.first + first + tile;
+      for (std::uint64_t row = 0; row < rows; ++row) {
+        float value;
+        std::memcpy(&value, input + row, sizeof(value));
+        if (!std::isfinite(value)) {
+          Rcpp::stop("Resident KNN input contains nonfinite float32 values");
+        }
+        values[(tile + row) * columns + col] = value;
+      }
+    }
+  }
+}
+
 void read_batch_rows(std::ifstream& input, const BatchSource& source,
                      std::uint64_t first, std::uint64_t count,
                      std::vector<float>& values) {
@@ -185,6 +232,10 @@ void read_batch_rows(std::ifstream& input, const BatchSource& source,
     return;
   }
   values.resize(static_cast<std::size_t>(count * source.file.columns));
+  if (source.float32_data) {
+    read_float32_batch(source, first, count, values);
+    return;
+  }
   for (std::uint64_t row = 0; row < count; ++row) {
     for (std::uint64_t col = 0; col < source.file.columns; ++col) {
       const float value = static_cast<float>(source.data(
@@ -510,10 +561,8 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
     Rcpp::stop("Invalid file-backed KNN batch dimensions or settings");
   }
   const std::size_t count = requested.size();
-  const double resident_bytes =
-    (query.memory ? 8.0 * query.data.nrow() * query.data.ncol() : 0.0) +
-    (reference.memory && (!query.memory || !same_owner) ?
-      8.0 * reference.data.nrow() * reference.data.ncol() : 0.0);
+  const double resident_bytes = query.resident_bytes() +
+    (!same_owner ? reference.resident_bytes() : 0.0);
   const double estimated = resident_bytes +
     4.0 * count * query.file.columns +
     4.0 * reference_chunk * reference.file.columns +
