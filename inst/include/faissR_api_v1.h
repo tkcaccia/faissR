@@ -290,6 +290,15 @@ typedef SEXP (*faissR_matrix_knn_batch_v2_fun)(
 /* One source read and one native Metal IVF build/search. The full graph is
  * returned in host matrices only when the conservative RAM and Metal
  * working-set budgets admit it. The input remains float32 throughout. */
+/* Private Metal Flat reference shard held in shared float32 storage.
+ * Search receives a bounded file-backed query view and returns shard-local
+ * one-based IDs. The caller releases the handle before building a new shard.
+ */
+typedef SEXP (*faissR_metal_file_flat_build_v1_fun)(
+    SEXP reference, SEXP query_capacity, SEXP k, SEXP memory_limit);
+typedef SEXP (*faissR_metal_file_flat_search_v1_fun)(
+    SEXP pointer, SEXP query, SEXP k);
+
 typedef SEXP (*faissR_metal_file_ivf_v1_fun)(
     SEXP source_spec,
     SEXP k,
@@ -543,6 +552,18 @@ static inline faissR_matrix_knn_batch_v2_fun
 faissR_get_matrix_knn_batch_v2(void) {
   return (faissR_matrix_knn_batch_v2_fun) R_GetCCallable(
       "faissR", "faissR_matrix_knn_batch_v2");
+}
+
+static inline faissR_metal_file_flat_build_v1_fun
+faissR_get_metal_file_flat_build_v1(void) {
+  return (faissR_metal_file_flat_build_v1_fun) R_GetCCallable(
+      "faissR", "faissR_metal_file_flat_build_v1");
+}
+
+static inline faissR_metal_file_flat_search_v1_fun
+faissR_get_metal_file_flat_search_v1(void) {
+  return (faissR_metal_file_flat_search_v1_fun) R_GetCCallable(
+      "faissR", "faissR_metal_file_flat_search_v1");
 }
 
 static inline faissR_metal_file_ivf_v1_fun

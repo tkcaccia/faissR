@@ -30,8 +30,10 @@ FaissrMetalFlatBatch* faissr_metal_flat_batch_prepare(
     const float* query, int n_query, int p, int reference_capacity, int max_k);
 void faissr_metal_flat_batch_release(FaissrMetalFlatBatch* batch);
 float* faissr_metal_flat_batch_reference(FaissrMetalFlatBatch& batch);
+float* faissr_metal_flat_batch_query(FaissrMetalFlatBatch& batch);
+double faissr_metal_flat_batch_owned_bytes(const FaissrMetalFlatBatch& batch);
 void faissr_metal_flat_batch_search(FaissrMetalFlatBatch& batch,
-    int n_reference, int k,
+    int n_query, int n_reference, int k,
     int* ids, float* distances, double* owned_buffer_bytes);
 Rcpp::List faissr_metal_knn_file_float(std::vector<float> values,
     int rows, int columns, int k, double target);
@@ -317,7 +319,7 @@ void add_candidate(std::priority_queue<Candidate>& heap,
 
 #ifdef __APPLE__
 void metal_candidates(FaissrMetalFlatBatch& batch, const float* reference,
-                      const std::vector<float>& query,
+                      const float* query,
                       std::uint64_t base, std::uint64_t rows,
                       const std::vector<std::uint64_t>& selected,
                       int k, bool exclude_self,
@@ -328,7 +330,8 @@ void metal_candidates(FaissrMetalFlatBatch& batch, const float* reference,
   std::vector<int> indices(selected.size() * local_k);
   std::vector<float> distances(selected.size() * local_k);
   double owned_bytes = 0.0;
-  faissr_metal_flat_batch_search(batch, static_cast<int>(rows), local_k,
+  faissr_metal_flat_batch_search(batch, static_cast<int>(selected.size()),
+    static_cast<int>(rows), local_k,
     indices.data(), distances.data(), &owned_bytes);
   owned_peak = std::max(owned_peak, owned_bytes);
   for (std::size_t qi = 0; qi < selected.size(); ++qi) {
@@ -343,7 +346,7 @@ void metal_candidates(FaissrMetalFlatBatch& batch, const float* reference,
       const std::uint64_t global = base + id;
       if (exclude_self && selected[qi] == global) continue;
       const double checked_distance = precise_l2(
-        query.data() + qi * columns,
+        query + qi * columns,
         reference + static_cast<std::size_t>(id) * columns,
         columns);
       if (!std::isfinite(checked_distance)) {
@@ -355,7 +358,46 @@ void metal_candidates(FaissrMetalFlatBatch& batch, const float* reference,
     }
   }
 }
+
+struct MetalFlatFileReference {
+  FileMatrix file;
+  std::filesystem::file_time_type modified;
+  std::uintmax_t bytes;
+  int query_capacity;
+  int k;
+  std::unique_ptr<FaissrMetalFlatBatch,
+    decltype(&faissr_metal_flat_batch_release)> batch;
+};
+
+void check_metal_reference(const MetalFlatFileReference& state) {
+  if (std::filesystem::last_write_time(state.file.path) != state.modified ||
+      std::filesystem::file_size(state.file.path) != state.bytes) {
+    Rcpp::stop("Metal Flat reference changed during search");
+  }
+}
 #endif
+
+std::pair<Rcpp::IntegerMatrix, Rcpp::NumericMatrix> exact_knn_matrices(
+    std::vector<std::priority_queue<Candidate>>& heaps, int k) {
+  Rcpp::IntegerMatrix indices(heaps.size(), k);
+  Rcpp::NumericMatrix distances(heaps.size(), k);
+  for (std::size_t qi = 0; qi < heaps.size(); ++qi) {
+    auto& heap = heaps[qi];
+    if (heap.size() != static_cast<std::size_t>(k)) {
+      Rcpp::stop("Incomplete file-backed KNN row");
+    }
+    for (int rank = k - 1; rank >= 0; --rank) {
+      const Candidate candidate = heap.top();
+      heap.pop();
+      if (!std::isfinite(candidate.first)) {
+        Rcpp::stop("File-backed KNN distance overflowed float32");
+      }
+      indices(qi, rank) = static_cast<int>(candidate.second);
+      distances(qi, rank) = std::sqrt(std::max(0.0, candidate.first));
+    }
+  }
+  return {indices, distances};
+}
 
 #ifdef FAISSR_FILEBACK_CUDA
 struct CudaDeviceScope {
@@ -509,6 +551,98 @@ extern "C" SEXP faissR_metal_file_ivf_v1(SEXP source_spec,
   result["total_seconds"] = std::chrono::duration<double>(
     std::chrono::steady_clock::now() - started).count();
   return result;
+#endif
+  END_RCPP
+}
+
+extern "C" SEXP faissR_metal_file_flat_build_v1(SEXP source_spec,
+    SEXP query_capacity_value, SEXP k_value, SEXP memory_limit_value) {
+  BEGIN_RCPP
+#ifndef __APPLE__
+  Rcpp::stop("Persistent file-backed Metal Flat is unavailable here");
+#else
+  const auto started = std::chrono::steady_clock::now();
+  const FileMatrix file = file_matrix(Rcpp::List(source_spec));
+  const int query_capacity = Rcpp::as<int>(query_capacity_value);
+  const int k = Rcpp::as<int>(k_value);
+  const double memory_limit = Rcpp::as<double>(memory_limit_value);
+  if (file.rows > static_cast<std::uint64_t>(INT_MAX) ||
+      file.columns > 16384 || k < 1 || k > 128 ||
+      static_cast<std::uint64_t>(k) > file.rows ||
+      query_capacity < 1 || query_capacity > 10000) {
+    Rcpp::stop("Invalid file-backed Metal Flat shard dimensions");
+  }
+  const int max_tiles = query_capacity <= 1024 && file.rows >= 65536 ? 16 : 1;
+  const double estimated = 64.0 * 1024 * 1024 +
+    4.0 * (file.rows + query_capacity) * file.columns +
+    (8.0 * max_tiles + 32.0) * query_capacity * k;
+  if (!std::isfinite(memory_limit) || estimated > memory_limit) {
+    Rcpp::stop("File-backed Metal Flat shard exceeds memory_limit");
+  }
+  std::unique_ptr<MetalFlatFileReference> state(new MetalFlatFileReference{
+    file, std::filesystem::last_write_time(file.path),
+    std::filesystem::file_size(file.path), query_capacity, k,
+    {nullptr, faissr_metal_flat_batch_release}});
+  state->batch.reset(faissr_metal_flat_batch_prepare(nullptr,
+    query_capacity, static_cast<int>(file.columns),
+    static_cast<int>(file.rows), k));
+  std::ifstream input(file.path, std::ios::binary);
+  if (!input) Rcpp::stop("Could not open Metal Flat shard");
+  read_file_rows(input, file, 0, file.rows,
+    faissr_metal_flat_batch_reference(*state->batch));
+  check_metal_reference(*state);
+  const double owned_bytes = faissr_metal_flat_batch_owned_bytes(*state->batch);
+  Rcpp::XPtr<MetalFlatFileReference> pointer(state.release(), true,
+    Rf_install("faissR_metal_file_flat_v1"));
+  return Rcpp::List::create(Rcpp::Named("pointer") = pointer,
+    Rcpp::Named("backend_used") = "faissr_native_metal_flat_index",
+    Rcpp::Named("owned_buffer_bytes") = owned_bytes,
+    Rcpp::Named("reference_bytes") = 4.0 * file.rows * file.columns,
+    Rcpp::Named("build_seconds") = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - started).count());
+#endif
+  END_RCPP
+}
+
+extern "C" SEXP faissR_metal_file_flat_search_v1(SEXP pointer, SEXP query_spec,
+    SEXP k_value) {
+  BEGIN_RCPP
+#ifndef __APPLE__
+  Rcpp::stop("Persistent file-backed Metal Flat is unavailable here");
+#else
+  if (TYPEOF(pointer) != EXTPTRSXP ||
+      R_ExternalPtrTag(pointer) != Rf_install("faissR_metal_file_flat_v1") ||
+      !R_ExternalPtrAddr(pointer)) Rcpp::stop("Invalid Metal Flat reference");
+  Rcpp::XPtr<MetalFlatFileReference> state(pointer);
+  const FileMatrix query = file_matrix(Rcpp::List(query_spec));
+  const int k = Rcpp::as<int>(k_value);
+  if (query.columns != state->file.columns || k < 1 || k > state->k ||
+      query.rows > static_cast<std::uint64_t>(state->query_capacity)) {
+    Rcpp::stop("Metal Flat query exceeds shard dimensions or capacity");
+  }
+  check_metal_reference(*state);
+  const auto query_modified = std::filesystem::last_write_time(query.path);
+  std::ifstream input(query.path, std::ios::binary);
+  if (!input) Rcpp::stop("Could not open Metal Flat queries");
+  float* query_values = faissr_metal_flat_batch_query(*state->batch);
+  read_file_rows(input, query, 0, query.rows, query_values);
+  std::vector<std::uint64_t> selected(query.rows);
+  std::vector<std::priority_queue<Candidate>> heaps(query.rows);
+  double owned_bytes = 0.0;
+  metal_candidates(*state->batch,
+    faissr_metal_flat_batch_reference(*state->batch), query_values, 0,
+    state->file.rows, selected, k, false, heaps, query.columns, owned_bytes);
+  check_metal_reference(*state);
+  if (std::filesystem::last_write_time(query.path) != query_modified)
+    Rcpp::stop("Metal Flat queries changed during search");
+  const auto results = exact_knn_matrices(heaps, k);
+  return Rcpp::List::create(Rcpp::Named("indices") = results.first,
+    Rcpp::Named("distances") = results.second,
+    Rcpp::Named("backend_used") = "faissr_native_metal_flat_query",
+    Rcpp::Named("method") = "exact",
+    Rcpp::Named("exact") = true, Rcpp::Named("index_reused") = true,
+    Rcpp::Named("device_ids") = Rcpp::IntegerVector::create(0),
+    Rcpp::Named("observed_metal_owned_live_buffer_bytes") = owned_bytes);
 #endif
   END_RCPP
 }
@@ -757,7 +891,8 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
     const auto processing_started = std::chrono::steady_clock::now();
     if (metal) {
 #ifdef __APPLE__
-      metal_candidates(*metal_batch, metal_reference, query_values, base, rows,
+      metal_candidates(*metal_batch, metal_reference, query_values.data(),
+        base, rows,
         selected, k, exclude_self, heaps, query.file.columns,
         metal_owned_peak);
 #endif
@@ -801,24 +936,7 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
     Rcpp::stop("File-backed KNN input changed during search");
   }
   const auto format_started = std::chrono::steady_clock::now();
-  Rcpp::IntegerMatrix indices(count, k);
-  Rcpp::NumericMatrix distances(count, k);
-  for (std::size_t qi = 0; qi < count; ++qi) {
-    auto& heap = heaps[qi];
-    if (heap.size() != static_cast<std::size_t>(k)) {
-      Rcpp::stop("Incomplete file-backed KNN row");
-    }
-    for (int rank = k - 1; rank >= 0; --rank) {
-      const Candidate candidate = heap.top();
-      heap.pop();
-      if (!std::isfinite(candidate.first)) {
-        Rcpp::stop("File-backed KNN distance overflowed float32");
-      }
-      indices(qi, rank) = static_cast<int>(candidate.second);
-      distances(qi, rank) = std::sqrt(std::max(0.0,
-        candidate.first));
-    }
-  }
+  const auto results = exact_knn_matrices(heaps, k);
   const double result_format_seconds = std::chrono::duration<double>(
     std::chrono::steady_clock::now() - format_started).count();
   const double seconds = std::chrono::duration<double>(
@@ -829,8 +947,8 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
   if (metal) device_ids = Rcpp::IntegerVector::create(0);
   const bool file_io = !query.memory || !reference.memory;
   return Rcpp::List::create(
-    Rcpp::Named("indices") = indices,
-    Rcpp::Named("distances") = distances,
+    Rcpp::Named("indices") = results.first,
+    Rcpp::Named("distances") = results.second,
     Rcpp::Named("provider") = "faissR",
     Rcpp::Named("backend_used") = metal ?
       "faissr_native_metal_exact_file_batch" :

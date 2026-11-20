@@ -2440,7 +2440,7 @@ void merge_exact_tiles(const int* tile_ids, const float* tile_distances,
 }  // namespace
 
 struct FaissrMetalFlatBatch {
-  int n_query;
+  int query_capacity;
   int p;
   int reference_capacity;
   int max_k;
@@ -2461,24 +2461,24 @@ struct FaissrMetalFlatBatch {
 };
 
 FaissrMetalFlatBatch* faissr_metal_flat_batch_prepare(const float* query,
-    int n_query, int p, int reference_capacity, int max_k) {
+    int query_capacity, int p, int reference_capacity, int max_k) {
   @autoreleasepool {
     MetalKnnState& state = metal_knn_state();
     id<MTLDevice> device = state.device;
     auto batch = std::make_unique<FaissrMetalFlatBatch>();
-    batch->n_query = n_query;
+    batch->query_capacity = query_capacity;
     batch->p = p;
     batch->reference_capacity = reference_capacity;
     batch->max_k = max_k;
-    const int max_tiles = n_query <= 1024 && reference_capacity >= 65536 ?
+    const int max_tiles = query_capacity <= 1024 && reference_capacity >= 65536 ?
       16 : 1;
-    const auto output_items = static_cast<std::size_t>(n_query) *
+    const auto output_items = static_cast<std::size_t>(query_capacity) *
       max_k * max_tiles;
     batch->reference = [metal_shared_buffer(device,
       static_cast<std::size_t>(reference_capacity) * p * sizeof(float))
       retain];
     batch->query = [metal_shared_buffer(device,
-      static_cast<std::size_t>(n_query) * p * sizeof(float), query) retain];
+      static_cast<std::size_t>(query_capacity) * p * sizeof(float), query) retain];
     batch->ids = [metal_shared_buffer(
       device, output_items * sizeof(int)) retain];
     batch->distances = [metal_shared_buffer(
@@ -2499,19 +2499,27 @@ float* faissr_metal_flat_batch_reference(FaissrMetalFlatBatch& batch) {
   return static_cast<float*>([batch.reference contents]);
 }
 
+float* faissr_metal_flat_batch_query(FaissrMetalFlatBatch& batch) {
+  return static_cast<float*>([batch.query contents]);
+}
+
+double faissr_metal_flat_batch_owned_bytes(const FaissrMetalFlatBatch& batch) {
+  return batch.owned_bytes;
+}
+
 void faissr_metal_flat_batch_search(FaissrMetalFlatBatch& batch,
-    int n_reference, int k,
+    int n_query, int n_reference, int k,
     int* ids, float* distances, double* owned_buffer_bytes) {
-  if (n_reference < 1 || n_reference > batch.reference_capacity ||
+  if (n_query < 1 || n_query > batch.query_capacity ||
+      n_reference < 1 || n_reference > batch.reference_capacity ||
       k < 1 || k > std::min(n_reference, batch.max_k)) {
     Rcpp::stop("Metal Flat shard exceeds its staging capacity");
   }
   @autoreleasepool {
     MetalKnnState& state = metal_knn_state();
-    const int n_query = batch.n_query;
     const int p = batch.p;
     // More independent threadgroups keep the device busy with few queries.
-    const auto tile_rows = n_query <= 1024 && n_reference >= 65536 ?
+    const auto tile_rows = batch.query_capacity <= 1024 && n_reference >= 65536 ?
       std::max(16384, (n_reference - 1) / 16 + 1) : n_reference;
     const auto tiles = (n_reference - 1) / tile_rows + 1;
     const std::size_t output_items =
