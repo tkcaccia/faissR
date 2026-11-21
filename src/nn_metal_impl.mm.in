@@ -143,6 +143,28 @@ inline void insert_sorted(
   ids[base + pos] = id;
 }
 
+// A max heap retains the same shortlist with logarithmic replacement cost.
+// The exact reranker consumes the set of IDs regardless of heap order.
+inline void offer_shortlist(
+    threadgroup float* values, threadgroup int* ids, uint count,
+    float value, int id) {
+  if (!better_pair(value, id, values[0], ids[0])) return;
+  uint pos = 0;
+  for (uint child = 1; child < count; child = 2 * pos + 1) {
+    if (child + 1 < count &&
+        better_pair(values[child], ids[child],
+                    values[child + 1], ids[child + 1])) {
+      ++child;
+    }
+    if (!better_pair(value, id, values[child], ids[child])) break;
+    values[pos] = values[child];
+    ids[pos] = ids[child];
+    pos = child;
+  }
+  values[pos] = value;
+  ids[pos] = id;
+}
+
 kernel void signed_hash_project(
     device const float* data [[buffer(0)]],
     device const uint* feature_offsets [[buffer(1)]],
@@ -768,18 +790,25 @@ kernel void ivf_projected_shortlist(
     device const int* list_ids [[buffer(3)]],
     device int* candidate_ids [[buffer(4)]],
     constant SearchParams& params [[buffer(5)]],
+    threadgroup uint* scratch [[threadgroup(0)]],
     uint qlocal [[threadgroup_position_in_grid]],
     uint tid [[thread_position_in_threadgroup]],
     uint lane [[thread_index_in_simdgroup]],
     uint sg [[simdgroup_index_in_threadgroup]]) {
   threadgroup float query[MAX_Q];
-  threadgroup float coarse_dist[NSG * MAX_PROBE];
-  threadgroup int coarse_id[NSG * MAX_PROBE];
-  threadgroup int probes[MAX_PROBE];
-  threadgroup float candidate_dist[NSG * MAX_SHORTLIST];
-  threadgroup int candidate_local_id[NSG * MAX_SHORTLIST];
   uint q = params.query_offset + qlocal;
-  if (q >= params.n || params.shortlist_per_group > MAX_SHORTLIST) return;
+  if (q >= params.n || params.nprobe == 0 || params.nprobe > MAX_PROBE ||
+      params.shortlist_per_group == 0 ||
+      params.shortlist_per_group > MAX_SHORTLIST) return;
+  const uint coarse_count = NSG * params.nprobe;
+  const uint shortlist_count = NSG * params.shortlist_per_group;
+  auto coarse_dist = reinterpret_cast<threadgroup float*>(scratch);
+  auto coarse_id = reinterpret_cast<threadgroup int*>(scratch + coarse_count);
+  auto probes = coarse_id + coarse_count;
+  auto candidate_dist =
+    reinterpret_cast<threadgroup float*>(probes + params.nprobe);
+  auto candidate_local_id =
+    reinterpret_cast<threadgroup int*>(candidate_dist + shortlist_count);
 
   for (uint d = tid; d < params.qdim; d += NSG * SIMD_WIDTH) {
     query[d] = projected[q * params.qdim + d];
@@ -851,8 +880,9 @@ kernel void ivf_projected_shortlist(
       }
       float distance = simd_sum(partial);
       if (lane == 0) {
-        insert_sorted(candidate_dist, candidate_local_id, candidate_base,
-                      params.shortlist_per_group, distance, candidate);
+        offer_shortlist(candidate_dist + candidate_base,
+          candidate_local_id + candidate_base, params.shortlist_per_group,
+          distance, candidate);
       }
     }
   }
@@ -1053,6 +1083,7 @@ kernel void cagra_search_self(
     device float* out_dist [[buffer(3)]],
     device atomic_uint* visit_tables [[buffer(4)]],
     constant CagraSearchParams& params [[buffer(5)]],
+    threadgroup uint* edge_storage [[threadgroup(0)]],
     uint group [[threadgroup_position_in_grid]],
     uint tid [[thread_position_in_threadgroup]],
     uint lane [[thread_index_in_simdgroup]],
@@ -1064,8 +1095,9 @@ kernel void cagra_search_self(
   threadgroup float ds[CAGRA_POOL];
   threadgroup bool expanded[CAGRA_POOL];
   threadgroup uint heads[NSG];
-  threadgroup uint candidates[NSG];
-  threadgroup float distances[NSG];
+  threadgroup uint* candidates = edge_storage;
+  threadgroup float* distances =
+    reinterpret_cast<threadgroup float*>(candidates + params.width * params.degree);
   threadgroup uint size;
   threadgroup uint frontier;
   for (uint i = tid; i < CAGRA_VISITED; i += NSG * SIMD_WIDTH) {
@@ -1094,19 +1126,17 @@ kernel void cagra_search_self(
     threadgroup_barrier(mem_flags::mem_threadgroup);
     const uint work = frontier * params.degree;
     if (work == 0) break;
-    for (uint offset = 0; offset < work; offset += NSG) {
+    // The frontier stays fixed for this step. SIMD groups score its edges
+    // independently, then merge the scores into the queue in edge order.
+    for (uint edge = sg; edge < work; edge += NSG) {
       if (lane == 0) {
-        const uint edge = offset + sg;
-        uint id = params.n;
-        if (edge < work) {
-          id = graph[flat_offset(heads[edge / params.degree], params.degree) +
-              edge % params.degree];
-          if (id < params.n && !cagra_visit(visited, id)) id = params.n;
-        }
-        candidates[sg] = id;
+        uint id = graph[flat_offset(heads[edge / params.degree], params.degree) +
+            edge % params.degree];
+        if (id < params.n && !cagra_visit(visited, id)) id = params.n;
+        candidates[edge] = id;
       }
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-      const uint id = candidates[sg];
+      simdgroup_barrier(mem_flags::mem_threadgroup);
+      const uint id = candidates[edge];
       float partial = 0;
       if (id < params.n) {
         const device float* current = data + flat_offset(id, params.p);
@@ -1116,33 +1146,33 @@ kernel void cagra_search_self(
         }
       }
       const float distance = simd_sum(partial);
-      if (lane == 0) distances[sg] = distance;
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-      if (tid == 0) {
-        for (uint i = 0; i < NSG; ++i) {
-          if (candidates[i] >= params.n) continue;
-          uint pos = size;
-          if (size == params.queue) {
-            pos = size - 1;
-            if (!better_pair(distances[i], int(candidates[i]),
-                             ds[pos], int(ids[pos]))) continue;
-          } else {
-            ++size;
-          }
-          while (pos > 0 && better_pair(distances[i], int(candidates[i]),
-                                        ds[pos - 1], int(ids[pos - 1]))) {
-            ids[pos] = ids[pos - 1];
-            ds[pos] = ds[pos - 1];
-            expanded[pos] = expanded[pos - 1];
-            --pos;
-          }
-          ids[pos] = candidates[i];
-          ds[pos] = distances[i];
-          expanded[pos] = false;
-        }
-      }
-      threadgroup_barrier(mem_flags::mem_threadgroup);
+      if (lane == 0) distances[edge] = distance;
     }
+    threadgroup_barrier(mem_flags::mem_threadgroup | mem_flags::mem_device);
+    if (tid == 0) {
+      for (uint i = 0; i < work; ++i) {
+        if (candidates[i] >= params.n) continue;
+        uint pos = size;
+        if (size == params.queue) {
+          pos = size - 1;
+          if (!better_pair(distances[i], int(candidates[i]),
+                           ds[pos], int(ids[pos]))) continue;
+        } else {
+          ++size;
+        }
+        while (pos > 0 && better_pair(distances[i], int(candidates[i]),
+                                      ds[pos - 1], int(ids[pos - 1]))) {
+          ids[pos] = ids[pos - 1];
+          ds[pos] = ds[pos - 1];
+          expanded[pos] = expanded[pos - 1];
+          --pos;
+        }
+        ids[pos] = candidates[i];
+        ds[pos] = distances[i];
+        expanded[pos] = false;
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
   }
 
   if (tid == 0) {
@@ -1166,6 +1196,16 @@ struct IndexParamsHost { std::uint32_t n, p, qdim, nlist; };
 struct SearchParamsHost {
   std::uint32_t n, p, qdim, nlist, nprobe, k, query_offset, shortlist_per_group;
 };
+
+std::size_t projected_shortlist_scratch(const SearchParamsHost& params) {
+  // The shader lays out probe indices and two distance/ID workspaces.
+  constexpr std::size_t alignment = 16;
+  const std::size_t words = params.nprobe +
+    2 * kMetalSimdGroups * (params.nprobe + params.shortlist_per_group);
+  const auto bytes = words * sizeof(std::uint32_t);
+  return (bytes + alignment - 1) & ~(alignment - 1);
+}
+
 struct QuerySearchParamsHost {
   std::uint32_t n_reference, n_query, p, k, tile_rows;
 };
@@ -1447,6 +1487,8 @@ Rcpp::List metal_cagra_search(MetalCagraIndex& index, std::uint32_t first,
     [encoder setBuffer:index.distances offset:0 atIndex:3];
     [encoder setBuffer:index.visits offset:0 atIndex:4];
     [encoder setBytes:params length:sizeof(params) atIndex:5];
+    const auto scratch = index.width * index.degree * (sizeof(float) + sizeof(std::uint32_t));
+    [encoder setThreadgroupMemoryLength:scratch atIndex:0];
     [encoder dispatchThreadgroups:MTLSizeMake(count, 1, 1)
       threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
     [encoder endEncoding];
@@ -1538,6 +1580,8 @@ void metal_cagra_seed_batch(MetalKnnState& state,
     [shortlist setBuffer:buffers.members offset:0 atIndex:3];
     [shortlist setBuffer:buffers.shortlist offset:0 atIndex:4];
     [shortlist setBytes:&params length:sizeof(params) atIndex:5];
+    [shortlist setThreadgroupMemoryLength:projected_shortlist_scratch(params)
+                              atIndex:0];
     [shortlist dispatchThreadgroups:groups threadsPerThreadgroup:threads];
     [shortlist endEncoding];
 
@@ -2039,6 +2083,9 @@ Rcpp::List faissr_metal_knn_float_impl(
           [shortlist_encoder setBuffer:list_id_buffer offset:0 atIndex:3];
           [shortlist_encoder setBuffer:pilot_candidate_buffer offset:candidate_offset atIndex:4];
           [shortlist_encoder setBuffer:pilot_params_buffer offset:0 atIndex:5];
+          [shortlist_encoder
+            setThreadgroupMemoryLength:projected_shortlist_scratch(search_params)
+                                atIndex:0];
           [shortlist_encoder dispatchThreadgroups:MTLSizeMake(pilot_block_size, 1, 1)
                                      threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
           [shortlist_encoder endEncoding];
@@ -2158,6 +2205,9 @@ Rcpp::List faissr_metal_knn_float_impl(
         [shortlist_encoder setBuffer:list_id_buffer offset:0 atIndex:3];
         [shortlist_encoder setBuffer:candidate_buffer offset:0 atIndex:4];
         [shortlist_encoder setBuffer:search_params_buffer offset:0 atIndex:5];
+        [shortlist_encoder
+          setThreadgroupMemoryLength:projected_shortlist_scratch(search_params)
+                              atIndex:0];
         [shortlist_encoder dispatchThreadgroups:MTLSizeMake(batch_rows, 1, 1)
                                    threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
         [shortlist_encoder endEncoding];
