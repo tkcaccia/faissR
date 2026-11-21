@@ -5,6 +5,15 @@
 using Rcpp::List;
 using Rcpp::NumericMatrix;
 
+#ifndef FAISSR_HAS_CUVS
+extern "C" SEXP faissR_cuvs_multi_cagra_v1(SEXP arguments) {
+  BEGIN_RCPP
+  (void)arguments;
+  Rcpp::stop("Reinstall faissR with multi-GPU cuVS CAGRA support");
+  END_RCPP
+}
+#endif
+
 bool cuvs_is_available_impl();
 std::string cuvs_info_json_impl();
 List cuvs_bruteforce_knn_impl(NumericMatrix data,

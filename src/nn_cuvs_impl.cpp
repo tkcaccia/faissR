@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <cstdint>
 #include <limits>
 #include <cstdlib>
+#include <functional>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -38,6 +40,10 @@
 #  if __has_include(<cuvs/neighbors/hnsw.h>)
 #    include <cuvs/neighbors/hnsw.h>
 #    define FAISSR_HAS_CUVS_HNSW 1
+#  endif
+#  if __has_include(<cuvs/neighbors/mg_cagra.h>)
+#    include <cuvs/neighbors/mg_cagra.h>
+#    define FAISSR_HAS_CUVS_MULTI_CAGRA 1
 #  endif
 #endif
 #include <dlpack/dlpack.h>
@@ -1147,6 +1153,344 @@ std::string json_escape(const std::string& text) {
 }
 
 } // namespace
+
+namespace {
+
+struct FileCagraIndex {
+  CuvsResources resources;
+  DeviceBuffer dataset;
+  CagraIndex index;
+  CagraSearchParams search;
+  DeviceBuffer labels;
+  DeviceBuffer distances;
+  int n;
+  int p;
+  int k;
+  int capacity;
+  int device;
+
+  FileCagraIndex(int rows, int features, int neighbors, int batch, int gpu)
+    : dataset(resources.get(),
+        static_cast<std::size_t>(rows) * features * sizeof(float)),
+      labels(resources.get(),
+        static_cast<std::size_t>(batch) * (neighbors + 1) * sizeof(int64_t)),
+      distances(resources.get(),
+        static_cast<std::size_t>(batch) * (neighbors + 1) * sizeof(float)),
+      n(rows), p(features), k(neighbors), capacity(batch), device(gpu) {}
+};
+
+SEXP file_cagra_tag() {
+  return Rf_install("faissR_file_cagra_index_v1");
+}
+
+FileCagraIndex* file_cagra_pointer(SEXP pointer) {
+  if (TYPEOF(pointer) != EXTPTRSXP || R_ExternalPtrTag(pointer) != file_cagra_tag()
+      || !R_ExternalPtrAddr(pointer)) {
+    Rcpp::stop("Invalid file-backed CUDA CAGRA index");
+  }
+  return static_cast<FileCagraIndex*>(R_ExternalPtrAddr(pointer));
+}
+
+} // namespace
+
+List cuvs_file_cagra_build_impl(int n, int p, int k, int batch,
+    double limit, int width, int queue, bool nn_descent,
+    const std::function<void(int, int, float*)>& read) {
+  using Clock = std::chrono::steady_clock;
+  constexpr int graph_degree = 64;
+  constexpr int intermediate_degree = 128;
+  if (n <= intermediate_degree || p < 1 || k < 1 || k >= n ||
+      batch < 1 || batch > 1024 || width < 1 || queue <= k) {
+    Rcpp::stop("Invalid file-backed CAGRA index or search dimensions");
+  }
+  const double reference_bytes = 4.0 * n * p;
+  const double staging_bytes = 4.0 * batch * p;
+  const double result_bytes = 12.0 * batch * (k + 1);
+  const double workspace = std::max(64.0 * 1024 * 1024, reference_bytes / 5);
+  const double estimated_device = 2 * reference_bytes + workspace +
+    4.0 * n * (graph_degree + intermediate_degree) + result_bytes;
+  if (!std::isfinite(limit) || limit < estimated_device ||
+      limit < staging_bytes + 4 * result_bytes) {
+    Rcpp::stop("File-backed CUDA CAGRA index estimate exceeds memory_limit");
+  }
+  int device = -1;
+  cuda_check(cudaGetDevice(&device), "cudaGetDevice");
+  std::size_t available = 0, total = 0;
+  cuda_check(cudaMemGetInfo(&available, &total), "cudaMemGetInfo");
+  if (estimated_device > available) {
+    Rcpp::stop("File-backed CUDA CAGRA index estimate exceeds free device memory");
+  }
+
+  auto handle = std::make_unique<FileCagraIndex>(n, p, k, batch, device);
+  const auto load_start = Clock::now();
+  {
+    std::vector<float> staging(static_cast<std::size_t>(batch) * p);
+    auto* device_data = static_cast<float*>(handle->dataset.get());
+    for (int first = 0; first < n;) {
+      Rcpp::checkUserInterrupt();
+      const int count = std::min(batch, n - first);
+      read(first, count, staging.data());
+      cuda_check(cudaMemcpy(device_data + static_cast<std::size_t>(first) * p,
+        staging.data(), static_cast<std::size_t>(count) * p * sizeof(float),
+        cudaMemcpyHostToDevice), "cudaMemcpy(file-backed CAGRA rows)");
+      first += count;
+    }
+  }
+  const auto build_start = Clock::now();
+  int64_t shape[] = {n, p};
+  auto tensor = make_tensor(handle->dataset.get(), shape, 2, kDLCUDA, kDLFloat, 32);
+  CagraIndexParams config;
+  config.get()->metric = L2Expanded;
+  config.get()->graph_degree = graph_degree;
+  config.get()->intermediate_graph_degree = intermediate_degree;
+  config.get()->build_algo = nn_descent ? NN_DESCENT : IVF_PQ;
+  if (nn_descent) config.get()->nn_descent_niter = 20;
+  cuvs_check(cuvsCagraBuild(handle->resources.get(), config.get(), &tensor,
+    handle->index.get()), "cuvsCagraBuild(file-backed)");
+  cuda_sync("cuvsCagraBuild(file-backed) synchronize");
+  const auto end = Clock::now();
+  handle->search.get()->search_width = static_cast<size_t>(width);
+  handle->search.get()->itopk_size = static_cast<size_t>(queue);
+  Rcpp::XPtr<FileCagraIndex> pointer(handle.release(), true, file_cagra_tag());
+  return List::create(Rcpp::Named("pointer") = pointer,
+    Rcpp::Named("backend_used") = "cuda_cuvs_cagra_file",
+    Rcpp::Named("reference_bytes") = reference_bytes,
+    Rcpp::Named("device_bytes_estimate") = estimated_device,
+    Rcpp::Named("host_batch_bytes_estimate") =
+      std::max(staging_bytes, 4 * result_bytes),
+    Rcpp::Named("device_ids") = Rcpp::IntegerVector::create(device),
+    Rcpp::Named("source_read_and_upload_seconds") =
+      std::chrono::duration<double>(build_start - load_start).count(),
+    Rcpp::Named("build_seconds") =
+      std::chrono::duration<double>(end - build_start).count());
+}
+
+List cuvs_file_cagra_search_impl(SEXP pointer, int first, int count) {
+  auto* handle = file_cagra_pointer(pointer);
+  if (first < 1 || count < 1 || count > handle->capacity ||
+      first > handle->n || count > handle->n - first + 1) {
+    Rcpp::stop("File-backed CAGRA query batch exceeds the index or capacity");
+  }
+  int device = -1;
+  cuda_check(cudaGetDevice(&device), "cudaGetDevice");
+  if (device != handle->device) {
+    Rcpp::stop("CUDA device changed during file-backed CAGRA search");
+  }
+  int64_t query_shape[] = {count, handle->p};
+  const int search_k = handle->k + 1;
+  int64_t output_shape[] = {count, search_k};
+  auto queries = make_tensor(static_cast<float*>(handle->dataset.get()) +
+      static_cast<std::size_t>(first - 1) * handle->p,
+    query_shape, 2, kDLCUDA, kDLFloat, 32);
+  auto labels = make_tensor(handle->labels.get(), output_shape, 2, kDLCUDA, kDLInt, 64);
+  auto distances = make_tensor(handle->distances.get(), output_shape,
+    2, kDLCUDA, kDLFloat, 32);
+  cuvs_check(cuvsCagraSearch(handle->resources.get(), handle->search.get(),
+    handle->index.get(), &queries, &labels, &distances, no_filter()),
+    "cuvsCagraSearch(file-backed)");
+  cuda_sync("cuvsCagraSearch(file-backed) synchronize");
+  std::vector<int64_t> ids(static_cast<std::size_t>(count) * search_k);
+  std::vector<float> dists(ids.size());
+  cuda_check(cudaMemcpy(ids.data(), handle->labels.get(),
+    ids.size() * sizeof(int64_t), cudaMemcpyDeviceToHost), "cudaMemcpy(CAGRA IDs)");
+  cuda_check(cudaMemcpy(dists.data(), handle->distances.get(),
+    dists.size() * sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(CAGRA distances)");
+  IntegerMatrix indices(count, handle->k);
+  NumericMatrix output(count, handle->k);
+  for (int row = 0; row < count; ++row) {
+    int written = 0;
+    for (int j = 0; j < search_k && written < handle->k; ++j) {
+      const auto offset = static_cast<std::size_t>(row) * search_k + j;
+      const auto id = ids[offset];
+      if (id < 0 || id == first + row - 1) continue;
+      if (id >= handle->n || !std::isfinite(dists[offset])) {
+        Rcpp::stop("File-backed CAGRA returned an invalid neighbor");
+      }
+      indices(row, written) = static_cast<int>(id) + 1;
+      output(row, written) = std::sqrt(std::max(0.0f, dists[offset]));
+      ++written;
+    }
+    if (written != handle->k) {
+      Rcpp::stop("File-backed CAGRA returned too few non-self neighbors");
+    }
+  }
+  return List::create(Rcpp::Named("indices") = indices,
+    Rcpp::Named("distances") = output, Rcpp::Named("exact") = false,
+    Rcpp::Named("backend_used") = "cuda_cuvs_cagra_file");
+}
+
+void cuvs_file_cagra_release_impl(SEXP pointer) {
+  auto* handle = file_cagra_pointer(pointer);
+  R_ClearExternalPtr(pointer);
+  delete handle;
+}
+
+#ifdef FAISSR_HAS_CUVS_MULTI_CAGRA
+namespace {
+
+template <typename Handle, cuvsError_t (*Destroy)(Handle)>
+struct MultiCagraHandle {
+  Handle value{};
+  ~MultiCagraHandle() {
+    if (value) Destroy(value);
+  }
+  MultiCagraHandle() = default;
+  MultiCagraHandle(const MultiCagraHandle&) = delete;
+  MultiCagraHandle& operator=(const MultiCagraHandle&) = delete;
+};
+
+} // namespace
+
+List cuvs_multi_cagra_self_impl(SEXP data, Rcpp::IntegerVector devices, int k,
+                              int width, int queue, bool nn_descent,
+                              const std::string& output) {
+  using Clock = std::chrono::steady_clock;
+  int visible = 0;
+  cuda_check(cudaGetDeviceCount(&visible), "cudaGetDeviceCount");
+  if (devices.size() < 2 || devices.size() > visible) {
+    Rcpp::stop("Multi-GPU CAGRA requires at least two visible CUDA devices");
+  }
+  std::vector<std::int32_t> selected(devices.begin(), devices.end());
+  std::sort(selected.begin(), selected.end());
+  if (selected.front() < 0 || selected.back() >= visible ||
+      std::adjacent_find(selected.begin(), selected.end()) != selected.end()) {
+    Rcpp::stop("Multi-GPU CAGRA requires distinct visible CUDA device IDs");
+  }
+  if (k < 1 || k >= queue || width < 1) {
+    Rcpp::stop("Invalid multi-GPU CAGRA search settings");
+  }
+  const int search_k = k + 1;
+  MatrixViewF32 input = make_float32_matrix_view(data, "data");
+  const int n = input.nrow;
+  constexpr int graph_degree = 64;
+  constexpr int intermediate_degree = 128;
+  constexpr int batch_rows = 1024;
+  const int smallest_shard = n / static_cast<int>(selected.size());
+  if (smallest_shard <= std::max(intermediate_degree, search_k)) {
+    Rcpp::stop("Each multi-GPU CAGRA shard needs more rows than its graph degree and k");
+  }
+
+  MultiCagraHandle<cuvsResources_t, cuvsMultiGpuResourcesDestroy> resources;
+  int64_t device_shape[] = {static_cast<int64_t>(selected.size())};
+  auto device_tensor = make_tensor(
+    selected.data(), device_shape, 1, kDLCPU, kDLInt, 32);
+  cuvs_check(cuvsMultiGpuResourcesCreateWithDeviceIds(
+    &resources.value, &device_tensor), "cuvsMultiGpuResourcesCreateWithDeviceIds");
+
+  MultiCagraHandle<cuvsMultiGpuCagraIndexParams_t,
+    cuvsMultiGpuCagraIndexParamsDestroy> build;
+  cuvs_check(cuvsMultiGpuCagraIndexParamsCreate(&build.value),
+    "cuvsMultiGpuCagraIndexParamsCreate");
+  build.value->mode = CUVS_NEIGHBORS_MG_SHARDED;
+  build.value->base_params->metric = L2Expanded;
+  build.value->base_params->graph_degree = graph_degree;
+  build.value->base_params->intermediate_graph_degree = intermediate_degree;
+  build.value->base_params->build_algo = nn_descent ? NN_DESCENT : IVF_PQ;
+  if (nn_descent) build.value->base_params->nn_descent_niter = 20;
+
+  MultiCagraHandle<cuvsMultiGpuCagraIndex_t, cuvsMultiGpuCagraIndexDestroy> index;
+  cuvs_check(cuvsMultiGpuCagraIndexCreate(&index.value),
+    "cuvsMultiGpuCagraIndexCreate");
+  int64_t input_shape[] = {n, input.ncol};
+  auto input_tensor = make_tensor(
+    const_cast<float*>(input.data), input_shape, 2, kDLCPU, kDLFloat, 32);
+  const auto build_start = Clock::now();
+  cuvs_check(cuvsMultiGpuCagraBuild(resources.value, build.value,
+    &input_tensor, index.value), "cuvsMultiGpuCagraBuild");
+  const auto search_start = Clock::now();
+
+  MultiCagraHandle<cuvsMultiGpuCagraSearchParams_t,
+    cuvsMultiGpuCagraSearchParamsDestroy> search;
+  cuvs_check(cuvsMultiGpuCagraSearchParamsCreate(&search.value),
+    "cuvsMultiGpuCagraSearchParamsCreate");
+  search.value->base_params->search_width = static_cast<size_t>(width);
+  search.value->base_params->itopk_size = static_cast<size_t>(queue);
+  search.value->n_rows_per_batch = batch_rows;
+  search.value->merge_mode = CUVS_NEIGHBORS_MG_TREE_MERGE;
+  std::vector<int64_t> labels(batch_rows * static_cast<std::size_t>(search_k));
+  std::vector<float> distances(labels.size());
+  const bool use_float = wants_float_distance_storage(output);
+  IntegerMatrix indices(n, k);
+  NumericMatrix numeric_distances;
+  IntegerMatrix float_distances;
+  if (use_float) float_distances = IntegerMatrix(n, k);
+  else numeric_distances = NumericMatrix(n, k);
+  double* numeric_data = use_float ? nullptr : numeric_distances.begin();
+  int* float_data = use_float ? float_distances.begin() : nullptr;
+
+  for (int first = 0; first < n;) {
+    Rcpp::checkUserInterrupt();
+    const int count = std::min(batch_rows, n - first);
+    int64_t query_shape[] = {count, input.ncol};
+    int64_t output_shape[] = {count, search_k};
+    auto queries = make_tensor(const_cast<float*>(
+      input.data + static_cast<std::size_t>(first) * input.ncol),
+      query_shape, 2, kDLCPU, kDLFloat, 32);
+    auto neighbor_tensor = make_tensor(
+      labels.data(), output_shape, 2, kDLCPU, kDLInt, 64);
+    auto distance_tensor = make_tensor(
+      distances.data(), output_shape, 2, kDLCPU, kDLFloat, 32);
+    cuvs_check(cuvsMultiGpuCagraSearch(resources.value, search.value, index.value,
+      &queries, &neighbor_tensor, &distance_tensor), "cuvsMultiGpuCagraSearch");
+    for (int q = 0; q < count; ++q) {
+      int written = 0;
+      for (int j = 0; j < search_k && written < k; ++j) {
+        const auto slot = static_cast<std::size_t>(q) * search_k + j;
+        const auto neighbor = labels[slot];
+        if (neighbor == first + q || neighbor < 0) continue;
+        if (neighbor >= n || !std::isfinite(distances[slot])) {
+          Rcpp::stop("Multi-GPU CAGRA returned an invalid neighbor");
+        }
+        indices(first + q, written) = static_cast<int>(neighbor) + 1;
+        const auto offset = static_cast<std::size_t>(written) * n + first + q;
+        set_distance_value(numeric_data, float_data, offset,
+          distances[slot], false, use_float);
+        ++written;
+      }
+      if (written != k) {
+        Rcpp::stop("Multi-GPU CAGRA returned too few non-self neighbors");
+      }
+    }
+    first += count;
+  }
+  const auto end = Clock::now();
+  List result = List::create(
+    Rcpp::Named("indices") = indices,
+    Rcpp::Named("distances") = use_float ?
+      make_float32_distance_matrix(float_distances) :
+      static_cast<SEXP>(numeric_distances),
+    Rcpp::Named("backend_used") = "cuda_cuvs_multi_cagra",
+    Rcpp::Named("devices") = selected,
+    Rcpp::Named("distribution") = "sharded",
+    Rcpp::Named("merge") = "tree",
+    Rcpp::Named("index_build_seconds") =
+      std::chrono::duration<double>(search_start - build_start).count(),
+    Rcpp::Named("search_seconds") =
+      std::chrono::duration<double>(end - search_start).count(),
+    Rcpp::Named("search_batch_size") = batch_rows,
+    Rcpp::Named("exact") = false
+  );
+  tag_float_distance_output(result, use_float);
+  return result;
+}
+#endif
+
+extern "C" SEXP faissR_cuvs_multi_cagra_v1(SEXP arguments) {
+  BEGIN_RCPP
+#ifdef FAISSR_HAS_CUVS_MULTI_CAGRA
+  List request(arguments);
+  return cuvs_multi_cagra_self_impl(
+    request["data"], Rcpp::as<Rcpp::IntegerVector>(request["devices"]),
+    Rcpp::as<int>(request["k"]),
+    Rcpp::as<int>(request["width"]), Rcpp::as<int>(request["queue"]),
+    Rcpp::as<bool>(request["nn_descent"]),
+    Rcpp::as<std::string>(request["output"]));
+#else
+  (void)arguments;
+  Rcpp::stop("This cuVS build does not provide multi-GPU CAGRA");
+#endif
+  END_RCPP
+}
 
 bool cuvs_is_available_impl() {
   int count = 0;

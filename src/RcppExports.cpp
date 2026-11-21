@@ -323,6 +323,83 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// file_metal_cagra_build_cpp
+Rcpp::List file_metal_cagra_build_cpp(SEXP source_spec, int k, double memory_limit, double target);
+RcppExport SEXP _faissR_file_metal_cagra_build_cpp(SEXP source_specSEXP, SEXP kSEXP, SEXP memory_limitSEXP, SEXP targetSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type source_spec(source_specSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< double >::type memory_limit(memory_limitSEXP);
+    Rcpp::traits::input_parameter< double >::type target(targetSEXP);
+    rcpp_result_gen = Rcpp::wrap(file_metal_cagra_build_cpp(source_spec, k, memory_limit, target));
+    return rcpp_result_gen;
+END_RCPP
+}
+// file_metal_cagra_search_cpp
+Rcpp::List file_metal_cagra_search_cpp(SEXP pointer, int first, int count);
+RcppExport SEXP _faissR_file_metal_cagra_search_cpp(SEXP pointerSEXP, SEXP firstSEXP, SEXP countSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type pointer(pointerSEXP);
+    Rcpp::traits::input_parameter< int >::type first(firstSEXP);
+    Rcpp::traits::input_parameter< int >::type count(countSEXP);
+    rcpp_result_gen = Rcpp::wrap(file_metal_cagra_search_cpp(pointer, first, count));
+    return rcpp_result_gen;
+END_RCPP
+}
+// file_metal_cagra_release_cpp
+void file_metal_cagra_release_cpp(SEXP pointer);
+RcppExport SEXP _faissR_file_metal_cagra_release_cpp(SEXP pointerSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type pointer(pointerSEXP);
+    file_metal_cagra_release_cpp(pointer);
+    return R_NilValue;
+END_RCPP
+}
+// file_cagra_build_cpp
+Rcpp::List file_cagra_build_cpp(SEXP source_spec, int k, int batch, double memory_limit, int width, int queue, bool nn_descent);
+RcppExport SEXP _faissR_file_cagra_build_cpp(SEXP source_specSEXP, SEXP kSEXP, SEXP batchSEXP, SEXP memory_limitSEXP, SEXP widthSEXP, SEXP queueSEXP, SEXP nn_descentSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type source_spec(source_specSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type batch(batchSEXP);
+    Rcpp::traits::input_parameter< double >::type memory_limit(memory_limitSEXP);
+    Rcpp::traits::input_parameter< int >::type width(widthSEXP);
+    Rcpp::traits::input_parameter< int >::type queue(queueSEXP);
+    Rcpp::traits::input_parameter< bool >::type nn_descent(nn_descentSEXP);
+    rcpp_result_gen = Rcpp::wrap(file_cagra_build_cpp(source_spec, k, batch, memory_limit, width, queue, nn_descent));
+    return rcpp_result_gen;
+END_RCPP
+}
+// file_cagra_search_cpp
+Rcpp::List file_cagra_search_cpp(SEXP pointer, int first, int count);
+RcppExport SEXP _faissR_file_cagra_search_cpp(SEXP pointerSEXP, SEXP firstSEXP, SEXP countSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type pointer(pointerSEXP);
+    Rcpp::traits::input_parameter< int >::type first(firstSEXP);
+    Rcpp::traits::input_parameter< int >::type count(countSEXP);
+    rcpp_result_gen = Rcpp::wrap(file_cagra_search_cpp(pointer, first, count));
+    return rcpp_result_gen;
+END_RCPP
+}
+// file_cagra_release_cpp
+void file_cagra_release_cpp(SEXP pointer);
+RcppExport SEXP _faissR_file_cagra_release_cpp(SEXP pointerSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type pointer(pointerSEXP);
+    file_cagra_release_cpp(pointer);
+    return R_NilValue;
+END_RCPP
+}
 // inner_product_scores_float32_cpp
 NumericMatrix inner_product_scores_float32_cpp(SEXP data, SEXP points, IntegerMatrix indices, int cores);
 RcppExport SEXP _faissR_inner_product_scores_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP indicesSEXP, SEXP coresSEXP) {
@@ -2241,6 +2318,12 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_project_embedding_knn_cpp", (DL_FUNC) &_faissR_project_embedding_knn_cpp, 3},
     {"_faissR_project_embedding_affine_cpp", (DL_FUNC) &_faissR_project_embedding_affine_cpp, 8},
     {"_faissR_project_embedding_affine_parallel_cpp", (DL_FUNC) &_faissR_project_embedding_affine_parallel_cpp, 9},
+    {"_faissR_file_metal_cagra_build_cpp", (DL_FUNC) &_faissR_file_metal_cagra_build_cpp, 4},
+    {"_faissR_file_metal_cagra_search_cpp", (DL_FUNC) &_faissR_file_metal_cagra_search_cpp, 3},
+    {"_faissR_file_metal_cagra_release_cpp", (DL_FUNC) &_faissR_file_metal_cagra_release_cpp, 1},
+    {"_faissR_file_cagra_build_cpp", (DL_FUNC) &_faissR_file_cagra_build_cpp, 7},
+    {"_faissR_file_cagra_search_cpp", (DL_FUNC) &_faissR_file_cagra_search_cpp, 3},
+    {"_faissR_file_cagra_release_cpp", (DL_FUNC) &_faissR_file_cagra_release_cpp, 1},
     {"_faissR_inner_product_scores_float32_cpp", (DL_FUNC) &_faissR_inner_product_scores_float32_cpp, 4},
     {"_faissR_nn_cpp", (DL_FUNC) &_faissR_nn_cpp, 10},
     {"_faissR_nndescent_candidate_matrix_cpp", (DL_FUNC) &_faissR_nndescent_candidate_matrix_cpp, 3},

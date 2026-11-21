@@ -809,3 +809,27 @@ nn_metal_query_cpp <- function(data, query, k, method = "auto",
     .Call(`_faissR_nn_metal_query_cpp`, data, query, k, method, metric,
         target_recall)
 }
+
+file_cagra_build_cpp <- function(source_spec, k, batch, memory_limit, width, queue, nn_descent) {
+    .Call(`_faissR_file_cagra_build_cpp`, source_spec, k, batch, memory_limit, width, queue, nn_descent)
+}
+
+file_cagra_search_cpp <- function(pointer, first, count) {
+    .Call(`_faissR_file_cagra_search_cpp`, pointer, first, count)
+}
+
+file_cagra_release_cpp <- function(pointer) {
+    invisible(.Call(`_faissR_file_cagra_release_cpp`, pointer))
+}
+
+file_metal_cagra_build_cpp <- function(source_spec, k, memory_limit, target) {
+    .Call(`_faissR_file_metal_cagra_build_cpp`, source_spec, k, memory_limit, target)
+}
+
+file_metal_cagra_search_cpp <- function(pointer, first, count) {
+    .Call(`_faissR_file_metal_cagra_search_cpp`, pointer, first, count)
+}
+
+file_metal_cagra_release_cpp <- function(pointer) {
+    invisible(.Call(`_faissR_file_metal_cagra_release_cpp`, pointer))
+}

@@ -18,6 +18,11 @@ typedef int (*faissR_c_api_version_fun)(void);
 /* Choose a KNN algorithm for a specified shape, recall tier, and storage. */
 typedef SEXP (*faissR_knn_select_v1_fun)(SEXP specification);
 
+/* cuVS sharded Euclidean self KNN on specified visible CUDA device IDs.
+ * Pass data, devices, k, width, queue, nn_descent, and output in arguments.
+ * Returns one-based IDs and host distances. Requires two or more devices.
+ */
+typedef SEXP (*faissR_cuvs_multi_cagra_v1_fun)(SEXP arguments);
 
 /* Exact double-precision kth non-self-neighbor radius of an n-by-2 layout. */
 typedef SEXP (*faissR_layout_radii_v1_fun)(SEXP layout, SEXP k);
@@ -453,6 +458,12 @@ static inline faissR_knn_select_v1_fun
 faissR_get_knn_select_v1(void) {
   return (faissR_knn_select_v1_fun) R_GetCCallable(
       "faissR", "faissR_knn_select_v1");
+}
+
+static inline faissR_cuvs_multi_cagra_v1_fun
+faissR_get_cuvs_multi_cagra_v1(void) {
+  return (faissR_cuvs_multi_cagra_v1_fun) R_GetCCallable(
+      "faissR", "faissR_cuvs_multi_cagra_v1");
 }
 
 static inline faissR_metal_knn_v1_fun

@@ -18,6 +18,14 @@
 
 #include "faissr_metal_common.h"
 
+#ifdef FAISSR_HAS_CUVS
+Rcpp::List cuvs_file_cagra_build_impl(int n, int p, int k, int batch,
+    double limit, int width, int queue, bool nn_descent,
+    const std::function<void(int, int, float*)>& read);
+Rcpp::List cuvs_file_cagra_search_impl(SEXP pointer, int first, int count);
+void cuvs_file_cagra_release_impl(SEXP pointer);
+#endif
+
 #if defined(__unix__) || defined(__APPLE__)
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -38,6 +46,10 @@ void faissr_metal_flat_batch_search(FaissrMetalFlatBatch& batch,
 Rcpp::List faissr_metal_knn_file_float(std::vector<float> values,
     int rows, int columns, int k, double target);
 bool faissr_metal_file_capacity(double bytes);
+Rcpp::List faissr_metal_file_cagra_build_impl(int rows, int columns, int k,
+    double target, double limit, const std::function<void(float*)>& read);
+Rcpp::List faissr_metal_file_cagra_search_impl(SEXP pointer, int first, int count);
+void faissr_metal_file_cagra_release_impl(SEXP pointer);
 #endif
 
 #ifdef _OPENMP
@@ -645,6 +657,105 @@ extern "C" SEXP faissR_metal_file_flat_search_v1(SEXP pointer, SEXP query_spec,
     Rcpp::Named("observed_metal_owned_live_buffer_bytes") = owned_bytes);
 #endif
   END_RCPP
+}
+
+// [[Rcpp::export]]
+Rcpp::List file_metal_cagra_build_cpp(SEXP source_spec, int k,
+    double memory_limit, double target) {
+#ifndef __APPLE__
+  Rcpp::stop("File-backed Metal CAGRA requires Apple Metal support");
+#else
+  const FileMatrix file = file_matrix(Rcpp::List(source_spec));
+  if (file.rows > static_cast<std::uint64_t>(INT_MAX)) {
+    Rcpp::stop("File-backed Metal CAGRA supports at most INT_MAX rows");
+  }
+  const auto modified = std::filesystem::last_write_time(file.path);
+  const auto bytes = std::filesystem::file_size(file.path);
+  std::ifstream input(file.path, std::ios::binary);
+  if (!input) Rcpp::stop("Could not open the file-backed Metal CAGRA source");
+  auto read = [&](float* output) {
+    for (std::uint64_t first = 0; first < file.rows;) {
+      Rcpp::checkUserInterrupt();
+      const auto count = std::min<std::uint64_t>(1024, file.rows - first);
+      read_file_rows(input, file, first, count, output + first * file.columns);
+      first += count;
+    }
+  };
+  Rcpp::List index = faissr_metal_file_cagra_build_impl(
+    static_cast<int>(file.rows), static_cast<int>(file.columns), k,
+    target, memory_limit, read);
+  if (std::filesystem::last_write_time(file.path) != modified ||
+      std::filesystem::file_size(file.path) != bytes) {
+    faissr_metal_file_cagra_release_impl(index["pointer"]);
+    Rcpp::stop("File-backed Metal CAGRA source changed during index build");
+  }
+  return index;
+#endif
+}
+
+// [[Rcpp::export]]
+Rcpp::List file_metal_cagra_search_cpp(SEXP pointer, int first, int count) {
+#ifndef __APPLE__
+  Rcpp::stop("File-backed Metal CAGRA requires Apple Metal support");
+#else
+  return faissr_metal_file_cagra_search_impl(pointer, first, count);
+#endif
+}
+
+// [[Rcpp::export]]
+void file_metal_cagra_release_cpp(SEXP pointer) {
+#ifndef __APPLE__
+  Rcpp::stop("File-backed Metal CAGRA requires Apple Metal support");
+#else
+  faissr_metal_file_cagra_release_impl(pointer);
+#endif
+}
+
+// [[Rcpp::export]]
+Rcpp::List file_cagra_build_cpp(SEXP source_spec, int k, int batch,
+    double memory_limit, int width, int queue, bool nn_descent) {
+#ifndef FAISSR_HAS_CUVS
+  Rcpp::stop("File-backed CUDA CAGRA requires cuVS support in faissR");
+#else
+  const FileMatrix file = file_matrix(Rcpp::List(source_spec));
+  if (file.rows > static_cast<std::uint64_t>(INT_MAX)) {
+    Rcpp::stop("File-backed CUDA CAGRA supports at most INT_MAX rows");
+  }
+  const auto modified = std::filesystem::last_write_time(file.path);
+  const auto bytes = std::filesystem::file_size(file.path);
+  std::ifstream input(file.path, std::ios::binary);
+  if (!input) Rcpp::stop("Could not open file-backed CUDA CAGRA source");
+  auto read = [&](int first, int count, float* output) {
+    read_file_rows(input, file, first, count, output);
+  };
+  Rcpp::List index = cuvs_file_cagra_build_impl(static_cast<int>(file.rows),
+    static_cast<int>(file.columns), k, batch, memory_limit,
+    width, queue, nn_descent, read);
+  if (std::filesystem::last_write_time(file.path) != modified ||
+      std::filesystem::file_size(file.path) != bytes) {
+    cuvs_file_cagra_release_impl(index["pointer"]);
+    Rcpp::stop("File-backed CUDA CAGRA source changed during index build");
+  }
+  return index;
+#endif
+}
+
+// [[Rcpp::export]]
+Rcpp::List file_cagra_search_cpp(SEXP pointer, int first, int count) {
+#ifndef FAISSR_HAS_CUVS
+  Rcpp::stop("File-backed CUDA CAGRA requires cuVS support in faissR");
+#else
+  return cuvs_file_cagra_search_impl(pointer, first, count);
+#endif
+}
+
+// [[Rcpp::export]]
+void file_cagra_release_cpp(SEXP pointer) {
+#ifndef FAISSR_HAS_CUVS
+  Rcpp::stop("File-backed CUDA CAGRA requires cuVS support in faissR");
+#else
+  cuvs_file_cagra_release_impl(pointer);
+#endif
 }
 
 SEXP matrix_knn_batch_impl(SEXP query_spec,

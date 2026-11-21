@@ -1301,6 +1301,10 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
   const bool file = as<bool>(request["file_backed"]);
   const bool allow_ivf = as<bool>(request["allow_ivf"]);
   const double recall = as<double>(request["target_recall"]);
+  const std::string cuda_method = request.containsElementNamed("cuda_method") ?
+    as<std::string>(request["cuda_method"]) : "auto";
+  const std::string metal_method = request.containsElementNamed("metal_method") ?
+    as<std::string>(request["metal_method"]) : "auto";
 
   if (backend != "cpu" && backend != "cuda" && backend != "metal") {
     stop("Unsupported native KNN backend");
@@ -1323,7 +1327,25 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
 
   std::string method = "exact";
   std::string reason = "bounded_work";
-  if (backend == "cpu") {
+  if (cuda_method != "auto") {
+    if ((cuda_method != "cagra" && cuda_method != "cagra_width4") ||
+        backend != "cuda" || !self || metric != "euclidean" ||
+        shape != "large_high_dim") {
+      stop("CAGRA requires CUDA Euclidean self KNN with at "
+           "least 500,000 rows and 256 features.");
+    }
+    method = cuda_method;
+    reason = "cuda_cagra_requested";
+  } else if (metal_method != "auto") {
+    if (metal_method != "cagra" || backend != "metal" || !self ||
+        metric != "euclidean" || !known_shape || n <= 128 || k > 128 ||
+        !faissr_metal::ivf_shape_supported(n, p, k)) {
+      stop("Metal CAGRA requires Euclidean self KNN, at least 129 rows, "
+           "up to 1024 features and k up to 128.");
+    }
+    method = metal_method;
+    reason = "metal_cagra_requested";
+  } else if (backend == "cpu") {
     const bool exact = n != NA_INTEGER &&
       (file ? n <= 5000 && bounded_exact : n < 5000);
     method = exact ? "exact" : "hnsw";

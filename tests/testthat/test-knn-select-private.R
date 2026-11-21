@@ -27,3 +27,14 @@ test_that("native Metal selection respects IVF's index and width limits", {
     expect_identical(choose(4096L, 512L, query = 8388608L,
         self = FALSE)$method, "exact")
 })
+
+test_that("wide CAGRA width-four presets honor the requested recall tier", {
+  preset <- faissR:::cuvs_cagra_wide_params
+  expect_identical(preset(0.99, TRUE),
+    list(width = 4L, queue = 384L, builder = "nn_descent"))
+  expect_identical(preset(0.95, TRUE),
+    list(width = 4L, queue = 512L, builder = "ivf_pq"))
+  expect_identical(preset(0.90, TRUE), preset(0.95, TRUE))
+  expect_identical(preset(0.99, FALSE),
+    list(width = 2L, queue = 512L, builder = "nn_descent"))
+})
