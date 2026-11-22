@@ -167,3 +167,50 @@ test_that("native file-backed HNSW respects the host memory and shard limits", {
     expect_error(plan(5L, 2L, 1, 2L, 2L), "Balanced HNSW shards exceed")
     expect_error(plan(5000L, 96L, .01), "reference shard exceeds")
 })
+
+test_that("ImageNet admits the validated width-four CUDA preset", {
+    skip_if_not_installed("Rcpp")
+    header <- system.file("include", "faissR_api_v1.h", package = "faissR")
+    Rcpp::cppFunction(
+        code = '
+        SEXP select_calibrated_cuda(SEXP spec) {
+          return faissR_get_knn_select_v1()(spec);
+        }',
+        includes = paste0('#include "', header, '"')
+    )
+    choose <- function(rows = 1281167L, columns = 1024L, recall = 0.99,
+                       file = FALSE, free = 16, host = 24, limit = 26,
+                       metric = "euclidean") {
+        select_calibrated_cuda(list(backend = "cuda", metric = metric,
+            n_reference = rows, n_features = columns, n_query = rows,
+            k = 30L, target_recall = recall, self_query = TRUE,
+            file_backed = file, allow_ivf = TRUE, allow_cuda_profile = TRUE,
+            cuda_free_bytes = free * 2^30, host_available_bytes = host * 2^30,
+            memory_limit_bytes = limit * 2^30))
+    }
+    current <- choose()
+    expect_identical(current$method, "cagra_width4")
+    expect_identical(current$cuda_cagra_admission$profile_source,
+                     "imagenet_full_runs")
+    expect_equal(current$cuda_cagra_admission$batch_rows, 1024)
+    expect_null(current$cuda_cagra_profile)
+    expect_identical(choose(free = 8)$method, "exact")
+    expect_identical(choose(host = 8)$method, "exact")
+    expect_identical(choose(limit = 12)$method, "exact")
+    file_backed <- choose(file = TRUE, host = 8, limit = 22)
+    expect_identical(file_backed$method, "cagra_width4")
+    expect_equal(file_backed$cuda_cagra_profile$graph_degree, 64)
+    expect_equal(file_backed$cuda_cagra_profile$intermediate_degree, 128)
+    expect_equal(file_backed$cuda_cagra_profile$batch_rows, 1024)
+    expect_identical(choose(file = TRUE, host = 4)$method, "exact")
+    expect_identical(choose(file = TRUE, limit = 8)$method, "exact")
+    for (recall in c(0.90, 0.95)) {
+        expect_identical(choose(recall = recall)$method, "exact")
+    }
+    expect_null(choose(rows = 1281166L)$cuda_cagra_admission)
+    expect_null(choose(metric = "cosine")$cuda_cagra_admission)
+    compact <- choose(rows = 10000000L, columns = 96L, file = TRUE)
+    expect_identical(compact$cuda_cagra_admission$profile_source,
+                     "deep1b_10m_full_runs")
+    expect_equal(compact$cuda_cagra_profile$graph_degree, 32)
+})

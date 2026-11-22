@@ -1379,18 +1379,23 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
                              bool file, int recall_code) {
   const SEXP option = Rf_GetOption1(Rf_install("faissR.cuvs_cagra_profile"));
   const bool calibrated = Rf_isNull(option);
-  if (calibrated &&
-      (n != 10000000 || p != 96 || k != 30 || recall_code != 99)) {
+  const bool imagenet = n == 1281167 && p == 1024;
+  const bool deep1b = n == 10000000 && p == 96;
+  if (calibrated && ((!imagenet && !deep1b) || k != 30 ||
+                     recall_code != 99)) {
     return List();
   }
 
   constexpr double gib = 1024.0 * 1024 * 1024;
-  // The measured file-backed build peaked at 20.99 GiB of worker RSS.
-  // For resident input the existing float32 matrix is already in host RAM.
-  const double calibrated_host_workspace = 22 * gib;
+  // ImageNet peaked at 14.48 GiB resident and 4.70 GiB file-backed.
+  // The Deep1B file-backed build peaked at 20.99 GiB.
+  const double calibrated_host_workspace =
+    (imagenet ? (file ? 6 : 16) : 22) * gib;
+  const int degree = imagenet ? 64 : 32;
   const auto profile = calibrated ? List::create(
-    _["graph_degree"] = 32, _["intermediate_degree"] = 64,
-    _["batch_rows"] = 512, _["memory_limit_bytes"] = (file ? 22 : 26) * gib
+    _["graph_degree"] = degree, _["intermediate_degree"] = 2 * degree,
+    _["batch_rows"] = imagenet ? 1024 : 512,
+    _["memory_limit_bytes"] = (file ? 22 : 26) * gib
   ) : as<List>(option);
   const double graph = knn_request_count(profile, "graph_degree", 0);
   const double intermediate = knn_request_count(profile, "intermediate_degree", 0);
@@ -1426,7 +1431,8 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
     _["reason"] = fits ? "within_budget" :
       !finite1(free) ? "cuda_memory_unavailable" :
       !host_fits ? "host_workspace_unavailable" : "capacity_exceeded",
-    _["profile_source"] = calibrated ? "deep1b_10m_full_runs" : "explicit_profile",
+    _["profile_source"] = !calibrated ? "explicit_profile" :
+      imagenet ? "imagenet_full_runs" : "deep1b_10m_full_runs",
     _["graph_degree"] = graph,
     _["intermediate_degree"] = intermediate,
     _["batch_rows"] = batch,
@@ -1579,7 +1585,9 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
     selected["resources"] = plan;
   }
   if (profile.size() > 0) selected["cuda_cagra_admission"] = profile;
-  if (profile_fits) {
+  // Keep ImageNet resident on the validated width-four native preset.
+  if (profile_fits &&
+      (file || as<std::string>(profile["profile_source"]) != "imagenet_full_runs")) {
     selected["cuda_cagra_profile"] = List::create(
       _["graph_degree"] = profile["graph_degree"],
       _["intermediate_degree"] = profile["intermediate_degree"],
