@@ -38,3 +38,34 @@ test_that("wide CAGRA width-four presets honor the requested recall tier", {
   expect_identical(preset(0.99, FALSE),
     list(width = 2L, queue = 512L, builder = "nn_descent"))
 })
+
+test_that("native file-backed HNSW respects the host memory and shard limits", {
+    skip_if_not_installed("Rcpp")
+    header <- system.file("include", "faissR_api_v1.h", package = "faissR")
+    Rcpp::cppFunction(
+        code = '
+        SEXP select_file_hnsw(SEXP spec) {
+          return faissR_get_knn_select_v1()(spec);
+        }',
+        includes = paste0('#include "', header, '"')
+    )
+    plan <- function(n, p, gib, ref = NULL, k = 30L) {
+        select_file_hnsw(list(
+            backend = "cpu", metric = "euclidean", cpu_method = "hnsw",
+            n_reference = n, n_features = p, n_query = n, k = k,
+            target_recall = .99, self_query = TRUE, file_backed = TRUE,
+            allow_ivf = FALSE, memory_limit_bytes = gib * 2^30,
+            reference_chunk_rows = ref))
+    }
+    single <- plan(1281167L, 1024L, 22)
+    expect_identical(single$reason, "cpu_hnsw_one_index_fits")
+    expect_identical(single$resources$n_shards, 1L)
+    sharded <- plan(1281167L, 1024L, 8)
+    expect_identical(sharded$reason, "cpu_hnsw_balanced_shards_for_budget")
+    expect_identical(sharded$resources$n_shards, 4L)
+    expect_lt(sharded$resources$peak_ram_bytes, 0.7 * 8 * 2^30)
+    expect_identical(plan(1e7, 96L, 22)$resources$n_shards, 3L)
+    expect_equal(plan(1e9, 96L, 128)$resources$output_bytes, 240e9)
+    expect_error(plan(5L, 2L, 1, 2L, 2L), "Balanced HNSW shards exceed")
+    expect_error(plan(5000L, 96L, .01), "reference shard exceeds")
+})

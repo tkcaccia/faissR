@@ -107,3 +107,17 @@ settings respect its 1,024-list and 512-probe limits. For CUDA, supply
 the provider's probe limit if it differs from the default of 2,048.
 The self-search callables still select settings internally. The private
 planner does not add public API or change runtime defaults.
+
+### Host memory planning for file-backed HNSW
+
+The private `faissR_knn_select_v1` callable accepts
+`memory_limit_bytes` for CPU file-backed self-KNN. When it selects
+HNSW, the result includes a `resources` plan and a reason for choosing
+one index or balanced shards. An explicit `cpu_method = "hnsw"` request
+uses the same planner. The optional `reference_chunk_rows` and
+`chunk_rows` fields cap reference shards and query blocks.
+
+The plan accounts for float32 staging, index storage, query buffers,
+graph output size and reference passes. Its peak RAM field is a
+capacity estimate. Runtime resource measurements and exact-reference
+recall come from the caller's execution and audit.

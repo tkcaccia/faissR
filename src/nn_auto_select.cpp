@@ -1,6 +1,7 @@
 #include <Rcpp.h>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <sstream>
 #include <string>
 
@@ -1286,6 +1287,73 @@ std::string cagra_build_algo_for_shape_core(int n,
   return "ivf_pq";
 }
 
+double file_hnsw_rows(const List& request, const char* name,
+                      double default_value) {
+  if (!request.containsElementNamed(name) || Rf_isNull(request[name])) {
+    return default_value;
+  }
+  const double rows = as<double>(request[name]);
+  if (!finite1(rows) || rows != std::floor(rows) ||
+      rows > std::numeric_limits<int>::max()) {
+    stop("Invalid file-backed HNSW batch size: %s", name);
+  }
+  return rows;
+}
+
+List file_hnsw_plan(const List& request, int n, int p, int k) {
+  if (n < 2 || p < 1 || k < 1 || k >= n) {
+    stop("Invalid file-backed HNSW dimensions");
+  }
+  const double limit = as<double>(request["memory_limit_bytes"]);
+  if (!finite1(limit) || limit <= 0) {
+    stop("File-backed HNSW requires a finite positive memory_limit");
+  }
+  const double reference = file_hnsw_rows(request, "reference_chunk_rows", n);
+  const double query = file_hnsw_rows(request, "chunk_rows", 8192.0);
+  const double fixed = 64.0 * 1024 * 1024;
+  const double available = 0.7 * limit - fixed;
+  const double query_bytes = 12.0 * p + 16.0 * (k + 1.0) + 8.0 * k;
+
+  // A large single index can use one float32 staging copy and one FAISS copy.
+  double reference_bytes = 16.0 * p + 2048;
+  const double bulk_bytes = 8.0 * p + 2048;
+  if (n > 200000 && reference >= n && n * bulk_bytes + query_bytes <= available) {
+    reference_bytes = bulk_bytes;
+  }
+  const double max_reference = std::floor(available / reference_bytes);
+  if (reference < 2 || max_reference < 2) {
+    stop("HNSW reference shard exceeds `memory_limit`.");
+  }
+  const double cap = std::min(reference, max_reference);
+  const double shards = std::min(std::ceil(n / std::min(cap, static_cast<double>(n))),
+                                 std::floor(n / 2.0));
+  const double shard_rows = std::ceil(n / shards);
+  if (shard_rows > cap) {
+    stop("Balanced HNSW shards exceed the reference-row limit.");
+  }
+  const double used = fixed + shard_rows * reference_bytes;
+  const double query_cap = std::floor((0.7 * limit - used) / query_bytes);
+  if (query < 1 || query_cap < 1) {
+    stop("HNSW query buffers exceed `memory_limit`.");
+  }
+  const int rows = static_cast<int>(std::min({query, query_cap,
+    std::floor(128e6 / (8.0 * p)), std::floor(128e6 / (12.0 * (k + 1.0)))}));
+  if (rows < 1) {
+    stop("HNSW query batch cannot fit in R.");
+  }
+  return List::create(
+    _["chunk_rows"] = rows,
+    _["reference_chunk_rows"] = shard_rows,
+    _["n_shards"] = static_cast<int>(shards),
+    _["query_batches"] = std::ceil(static_cast<double>(n) / rows) * shards,
+    _["minimum_query_read_bytes"] = 4.0 * n * p * shards,
+    _["peak_ram_bytes"] = used + rows * query_bytes,
+    _["output_bytes"] = 8.0 * n * k,
+    _["memory_limit_bytes"] = limit,
+    _["selection_reason"] = shards == 1 ? "cpu_hnsw_one_index_fits" :
+      "cpu_hnsw_balanced_shards_for_budget");
+}
+
 } // namespace
 
 extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
@@ -1301,6 +1369,8 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
   const bool file = as<bool>(request["file_backed"]);
   const bool allow_ivf = as<bool>(request["allow_ivf"]);
   const double recall = as<double>(request["target_recall"]);
+  const std::string cpu_method = request.containsElementNamed("cpu_method") ?
+    as<std::string>(request["cpu_method"]) : "auto";
   const std::string cuda_method = request.containsElementNamed("cuda_method") ?
     as<std::string>(request["cuda_method"]) : "auto";
   const std::string metal_method = request.containsElementNamed("metal_method") ?
@@ -1313,6 +1383,11 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
       (p != NA_INTEGER && p < 1) || (nq != NA_INTEGER && nq < 1) ||
       (recall != 0.90 && recall != 0.95 && recall != 0.99)) {
     stop("Invalid native KNN selection dimensions or recall tier");
+  }
+
+  if (cpu_method != "auto" &&
+      (cpu_method != "hnsw" || backend != "cpu" || !file || !self)) {
+    stop("Explicit CPU HNSW planning requires file-backed self KNN.");
   }
 
   const bool known_shape = n != NA_INTEGER && p != NA_INTEGER;
@@ -1346,7 +1421,7 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
     method = metal_method;
     reason = "metal_cagra_requested";
   } else if (backend == "cpu") {
-    const bool exact = n != NA_INTEGER &&
+    const bool exact = cpu_method == "auto" && n != NA_INTEGER &&
       (file ? n <= 5000 && bounded_exact : n < 5000);
     method = exact ? "exact" : "hnsw";
     reason = exact ? "bounded_work" : "cpu_hnsw";
@@ -1395,9 +1470,16 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
     }
   }
 
-  return List::create(_["provider"] = "faissR", _["backend"] = backend,
+  List selected = List::create(_["provider"] = "faissR", _["backend"] = backend,
     _["method"] = method, _["reason"] = reason, _["shape"] = shape,
     _["target_recall"] = recall);
+  if (backend == "cpu" && file && method == "hnsw" &&
+      request.containsElementNamed("memory_limit_bytes")) {
+    List plan = file_hnsw_plan(request, n, p, k);
+    selected["reason"] = plan["selection_reason"];
+    selected["resources"] = plan;
+  }
+  return selected;
   END_RCPP
 }
 
