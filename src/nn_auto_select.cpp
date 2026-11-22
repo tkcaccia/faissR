@@ -18,6 +18,11 @@ bool faissr_metal_file_capacity(double bytes);
 
 using namespace Rcpp;
 
+List nn_tune_faiss_hnsw_cpp(int n, int p, int k, std::string metric,
+                           double target_recall, int m_option,
+                           int ef_construction_option, int ef_search_option,
+                           bool manual);
+
 namespace {
 
 #include "nn_hpc_tuning_tables.hpp"
@@ -1323,9 +1328,16 @@ List file_hnsw_plan(const List& request, int n, int p, int k) {
   const double available = 0.7 * limit - fixed;
   const double query_bytes = 12.0 * p + 16.0 * (k + 1.0) + 8.0 * k;
 
-  // A large single index can use one float32 staging copy and one FAISS copy.
-  double reference_bytes = 16.0 * p + 2048;
-  const double bulk_bytes = 8.0 * p + 2048;
+  const double target = as<double>(request["target_recall"]);
+  const List tuning = nn_tune_faiss_hnsw_cpp(n, p, k, "euclidean", target,
+    NA_INTEGER, NA_INTEGER, NA_INTEGER, false);
+  const double m = knn_request_count(request, "hnsw_build_m", as<int>(tuning["m"]));
+  if (m < 2) stop("Invalid HNSW build degree.");
+  // A bulk add holds two float32 copies. Reserve twice the level-zero
+  // link bytes (2*M int32 links) plus row metadata and build workspace.
+  const double graph_bytes = 16.0 * m + 128.0;
+  const double bulk_bytes = 8.0 * p + graph_bytes;
+  double reference_bytes = 16.0 * p + std::max(2048.0, graph_bytes);
   if (n > 200000 && reference >= n && n * bulk_bytes + query_bytes <= available) {
     reference_bytes = bulk_bytes;
   }
@@ -1493,18 +1505,24 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
 #ifdef __APPLE__
 List metal_cagra_wide_profile(const List& request, int n, int p, int k,
                              bool file) {
-  if (n != 1281167 || p != 1024 || k != 30) return List();
-  constexpr int projection = 128;
-  constexpr std::size_t shortlist_bytes = 1024u * 512u * sizeof(int);
+  const bool imagenet = n == 1281167 && p == 1024 && k == 30;
+  const bool balanced = faissr_metal::cagra_balanced_shape(n, p, k, .99);
+  if (!imagenet && !balanced) return List();
+  const int projection = faissr_metal::ivf_projection_dimensions(p, balanced);
+  const std::size_t shortlist_bytes = imagenet ? 1024u * 512u * sizeof(int) : 0;
+  const int degree = balanced ? faissr_metal::kCagraBalancedDegree :
+    faissr_metal::kCagraDegree;
   const double index = faissr_metal::cagra_workspace_bytes(
-    n, p, projection, shortlist_bytes);
+    n, p, projection, shortlist_bytes, degree);
   const double workspace = file ? index : index + 8.0 * n * p + 12.0 * n * k;
   const double limit = request.containsElementNamed("memory_limit_bytes") ?
     as<double>(request["memory_limit_bytes"]) :
     std::numeric_limits<double>::infinity();
   const bool fits = workspace <= limit && faissr_metal_file_capacity(workspace);
   return List::create(_["fits"] = fits, _["workspace_bytes"] = workspace,
-    _["memory_limit_bytes"] = limit, _["profile_source"] = "imagenet_full_runs");
+    _["memory_limit_bytes"] = limit, _["graph_degree"] = degree,
+    _["projection_dim"] = projection, _["profile_source"] = imagenet ?
+      "imagenet_full_runs" : "deep1b_10m_shape_profile");
 }
 #endif
 
@@ -1602,7 +1620,7 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
   } else if (metal_method != "auto") {
     if (metal_method != "cagra" || backend != "metal" || !self ||
         metric != "euclidean" || !known_shape || n <= 128 || k > 128 ||
-        !faissr_metal::ivf_shape_supported(n, p, k)) {
+        !faissr_metal::cagra_shape_supported(n, p, k)) {
       stop("Metal CAGRA requires Euclidean self KNN, at least 129 rows, "
            "up to 1024 features and k up to 128.");
     }

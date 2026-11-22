@@ -10,12 +10,13 @@ test_that("native Metal selection respects IVF's index and width limits", {
     )
     choose <- function(rows, columns, k = 30L, query = rows,
                        self = TRUE, file = FALSE, recall = 0.95,
-                       allow_ivf = TRUE, limit = Inf) {
+                       allow_ivf = TRUE, limit = Inf,
+                       method = "auto") {
         select_metal_knn(list(backend = "metal", metric = "euclidean",
             n_reference = rows, n_features = columns, n_query = query,
             k = k, target_recall = recall, self_query = self,
             file_backed = file, allow_ivf = allow_ivf,
-            memory_limit_bytes = limit))
+            memory_limit_bytes = limit, metal_method = method))
     }
     for (file in c(FALSE, TRUE)) {
         expect_identical(choose(50001L, 1024L, file = file)$method, "ivf")
@@ -39,6 +40,27 @@ test_that("native Metal selection respects IVF's index and width limits", {
         if (Sys.info()[["sysname"]] == "Darwin") {
             expect_false(limited$metal_cagra_admission$fits)
             expect_gt(limited$metal_cagra_admission$workspace_bytes, 2^30)
+        }
+    }
+    for (rows in c(50000000L, 100000000L)) {
+        for (file in c(FALSE, TRUE)) {
+            cagra <- choose(rows, 96L, file = file, recall = 0.99,
+                method = "cagra")
+            expect_identical(cagra$method, "cagra")
+            expect_identical(cagra$reason, "metal_cagra_requested")
+            if (file) {
+                expect_identical(choose(rows, 96L, file = file,
+                    recall = 0.95)$reason, "metal_ivf_shape_limit")
+            }
+            if (Sys.info()[["sysname"]] == "Darwin") {
+                plan <- choose(rows, 96L, file = file, recall = 0.99,
+                    limit = 2^30)$metal_cagra_admission
+                expect_false(plan$fits)
+                expect_identical(plan$graph_degree, 48L)
+                expect_identical(plan$projection_dim, 128L)
+                expect_identical(plan$profile_source, "deep1b_10m_shape_profile")
+                expect_gt(plan$workspace_bytes, 2^30)
+            }
         }
     }
 })
@@ -162,13 +184,13 @@ test_that("native file-backed HNSW respects the host memory and shard limits", {
         }',
         includes = paste0('#include "', header, '"')
     )
-    plan <- function(n, p, gib, ref = NULL, k = 30L) {
+    plan <- function(n, p, gib, ref = NULL, k = 30L, m = NULL) {
         select_file_hnsw(list(
             backend = "cpu", metric = "euclidean", cpu_method = "hnsw",
             n_reference = n, n_features = p, n_query = n, k = k,
             target_recall = .99, self_query = TRUE, file_backed = TRUE,
             allow_ivf = FALSE, memory_limit_bytes = gib * 2^30,
-            reference_chunk_rows = ref))
+            reference_chunk_rows = ref, hnsw_build_m = m))
     }
     single <- plan(1281167L, 1024L, 22)
     expect_identical(single$reason, "cpu_hnsw_one_index_fits")
@@ -177,7 +199,13 @@ test_that("native file-backed HNSW respects the host memory and shard limits", {
     expect_identical(sharded$reason, "cpu_hnsw_balanced_shards_for_budget")
     expect_identical(sharded$resources$n_shards, 4L)
     expect_lt(sharded$resources$peak_ram_bytes, 0.7 * 8 * 2^30)
-    expect_identical(plan(1e7, 96L, 22)$resources$n_shards, 3L)
+    deep <- plan(10000000L, 96L, 22)
+    expect_identical(deep$resources$n_shards, 1L)
+    expect_equal(deep$resources$reference_chunk_rows, 10000000)
+    expect_gt(deep$resources$peak_ram_bytes, 10689652 * 1024)
+    expect_lt(deep$resources$peak_ram_bytes, 0.7 * 22 * 2^30)
+    expect_gt(plan(10000000L, 96L, 16)$resources$n_shards, 1L)
+    expect_gt(plan(10000000L, 96L, 22, m = 128L)$resources$n_shards, 1L)
     expect_equal(plan(1e9, 96L, 128)$resources$output_bytes, 240e9)
     expect_error(plan(5L, 2L, 1, 2L, 2L), "Balanced HNSW shards exceed")
     expect_error(plan(5000L, 96L, .01), "reference shard exceeds")

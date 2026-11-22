@@ -16,16 +16,30 @@
 namespace faissr_metal {
 
 constexpr int kMaxIvfDimensions = 1024;
+constexpr std::uint32_t kCagraDegree = 64;
+constexpr std::uint32_t kCagraBalancedDegree = 48;
+
+inline bool cagra_balanced_shape(std::uint64_t rows, int columns,
+                                 int k, double target) {
+  return rows >= 5000000 && rows <= std::numeric_limits<int>::max() &&
+    columns > 0 && columns <= 128 && k > 0 &&
+    k < static_cast<int>(kCagraBalancedDegree) && target == 0.99;
+}
 
 inline double cagra_workspace_bytes(std::uint64_t rows, int columns,
-    int projected, double shortlist_bytes) {
-  constexpr auto seed_degree = 128;
-  constexpr auto graph_degree = 64;
-  constexpr auto reverse_degree = 32;
+    int projected, double shortlist_bytes, int degree) {
+  // The seed and reverse buffers store two and half as many edges per row.
   constexpr auto row_auxiliary = 4;
   constexpr double reserve = 128.0 * 1024 * 1024;
-  return 4.0 * rows * (columns + projected + seed_degree + graph_degree +
-    reverse_degree + row_auxiliary) + shortlist_bytes + reserve;
+  return 4.0 * rows * (columns + projected + 3.5 * degree + row_auxiliary) +
+    shortlist_bytes + reserve;
+}
+
+inline int ivf_projection_dimensions(int columns, bool preserve_geometry) {
+  int width = 1;
+  while (width * 2 <= columns && width < 128) width *= 2;
+  if (preserve_geometry && columns <= 128 && width < columns) width *= 2;
+  return width;
 }
 
 inline bool ivf_shape_supported(std::uint64_t rows, int columns, int k) {
@@ -33,6 +47,19 @@ inline bool ivf_shape_supported(std::uint64_t rows, int columns, int k) {
   return columns > 0 && columns <= kMaxIvfDimensions && k > 0 &&
     rows <= std::numeric_limits<std::uint32_t>::max() /
       static_cast<std::uint32_t>(std::max(columns, k));
+}
+
+inline bool cagra_shape_supported(std::uint64_t rows, int columns, int k) {
+  return rows > 128 && rows <= std::numeric_limits<int>::max() &&
+    columns > 0 && columns <= kMaxIvfDimensions && k > 0 && k <= 128;
+}
+
+inline std::uint32_t cagra_centroid_batch_rows(std::uint32_t rows,
+    std::uint32_t projected) {
+  constexpr std::uint32_t max_wide_batch = 1u << 20;
+  const auto max_elements = std::numeric_limits<std::uint32_t>::max();
+  return rows <= max_elements / projected ? rows :
+    std::min(max_wide_batch, max_elements / projected);
 }
 
 enum class KnnMetric {

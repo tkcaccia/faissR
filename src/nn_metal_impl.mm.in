@@ -119,7 +119,9 @@ constexpr size_t flat_offset(uint row, uint stride) {
 }
 
 static_assert(flat_offset(4194304u, 1024u) == 4294967296ull,
-              "Metal Flat offsets must support more than 2^32 elements");
+              "Metal reference offsets must support more than 2^32 elements");
+static_assert(flat_offset(100000000u, 96u) == 9600000000ull,
+              "Metal reference offsets must support wide Deep1B inputs");
 
 inline bool better_pair(float da, int ia, float db, int ib) {
   return da < db || (da == db && ia < ib);
@@ -179,9 +181,9 @@ kernel void signed_hash_project(
   uint begin = feature_offsets[tid];
   uint end = feature_offsets[tid + 1];
   for (uint pos = begin; pos < end; ++pos) {
-    value = fma(float(feature_signs[pos]), data[row * params.p + feature_ids[pos]], value);
+    value = fma(float(feature_signs[pos]), data[flat_offset(row, params.p) + feature_ids[pos]], value);
   }
-  projected[row * params.qdim + tid] = value;
+  projected[flat_offset(row, params.qdim) + tid] = value;
 }
 
 kernel void assign_centroid(
@@ -197,7 +199,7 @@ kernel void assign_centroid(
   threadgroup float best_dist[NSG];
   threadgroup int best_id[NSG];
   if (row >= params.n) return;
-  for (uint d = tid; d < params.qdim; d += NSG * SIMD_WIDTH) query[d] = projected[row * params.qdim + d];
+  for (uint d = tid; d < params.qdim; d += NSG * SIMD_WIDTH) query[d] = projected[flat_offset(row, params.qdim) + d];
   if (tid < NSG) { best_dist[tid] = INFINITY; best_id[tid] = -1; }
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
@@ -563,10 +565,10 @@ kernel void ivf_query_topk_fused(
   if (q >= params.n_query || params.nprobe > MAX_PROBE) return;
 
   for (uint d = tid; d < params.p; d += NSG * SIMD_WIDTH) {
-    query_row[d] = query[q * params.p + d];
+    query_row[d] = query[flat_offset(q, params.p) + d];
   }
   for (uint d = tid; d < params.qdim; d += NSG * SIMD_WIDTH) {
-    query_low[d] = query_projected[q * params.qdim + d];
+    query_low[d] = query_projected[flat_offset(q, params.qdim) + d];
   }
   for (uint i = tid; i < NSG * params.nprobe; i += NSG * SIMD_WIDTH) {
     coarse_dist[i] = INFINITY;
@@ -630,7 +632,7 @@ kernel void ivf_query_topk_fused(
       if (candidate < 0 || uint(candidate) >= params.n_reference) continue;
       float partial = 0.0f;
       const device float* point =
-        reference + uint(candidate) * params.p;
+        reference + flat_offset(uint(candidate), params.p);
       for (uint d = lane; d < params.p; d += SIMD_WIDTH) {
         float delta = query_row[d] - point[d];
         partial = fma(delta, delta, partial);
@@ -663,8 +665,8 @@ kernel void ivf_query_topk_fused(
           }
         }
       }
-      out_dist[q * params.k + rank] = best_d;
-      out_ids[q * params.k + rank] = best_i;
+      out_dist[flat_offset(q, params.k) + rank] = best_d;
+      out_ids[flat_offset(q, params.k) + rank] = best_i;
       ++heads[best_g];
     }
   }
@@ -692,7 +694,7 @@ kernel void ivf_topk_fused(
   uint q = params.query_offset + qlocal;
   if (q >= params.n) return;
 
-  for (uint d = tid; d < params.p; d += NSG * SIMD_WIDTH) query[d] = data[q * params.p + d];
+  for (uint d = tid; d < params.p; d += NSG * SIMD_WIDTH) query[d] = data[flat_offset(q, params.p) + d];
   for (uint i = tid; i < NSG * params.nprobe; i += NSG * SIMD_WIDTH) {
     coarse_dist[i] = INFINITY;
     coarse_id[i] = -1;
@@ -704,7 +706,7 @@ kernel void ivf_topk_fused(
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
   uint coarse_base = sg * params.nprobe;
-  const device float* qproj = projected + q * params.qdim;
+  const device float* qproj = projected + flat_offset(q, params.qdim);
   for (uint c = sg; c < params.nlist; c += NSG) {
     float partial = 0.0f;
     const device float* centroid = centroids + c * params.qdim;
@@ -749,7 +751,7 @@ kernel void ivf_topk_fused(
       int candidate = list_ids[pos];
       if (candidate < 0 || uint(candidate) == q) continue;
       float partial = 0.0f;
-      const device float* point = data + uint(candidate) * params.p;
+      const device float* point = data + flat_offset(uint(candidate), params.p);
       for (uint d = lane; d < params.p; d += SIMD_WIDTH) {
         float delta = query[d] - point[d];
         partial = fma(delta, delta, partial);
@@ -776,8 +778,8 @@ kernel void ivf_topk_fused(
           }
         }
       }
-      out_dist[qlocal * params.k + rank] = best_d;
-      out_ids[qlocal * params.k + rank] = best_i;
+      out_dist[flat_offset(qlocal, params.k) + rank] = best_d;
+      out_ids[flat_offset(qlocal, params.k) + rank] = best_i;
       ++heads[best_g];
     }
   }
@@ -811,7 +813,7 @@ kernel void ivf_projected_shortlist(
     reinterpret_cast<threadgroup int*>(candidate_dist + shortlist_count);
 
   for (uint d = tid; d < params.qdim; d += NSG * SIMD_WIDTH) {
-    query[d] = projected[q * params.qdim + d];
+    query[d] = projected[flat_offset(q, params.qdim) + d];
   }
   for (uint i = tid; i < NSG * params.nprobe; i += NSG * SIMD_WIDTH) {
     coarse_dist[i] = INFINITY;
@@ -873,7 +875,7 @@ kernel void ivf_projected_shortlist(
       int candidate = list_ids[pos];
       if (candidate < 0 || uint(candidate) == q) continue;
       float partial = 0.0f;
-      const device float* point = projected + uint(candidate) * params.qdim;
+      const device float* point = projected + flat_offset(uint(candidate), params.qdim);
       for (uint d = lane; d < params.qdim; d += SIMD_WIDTH) {
         float delta = query[d] - point[d];
         partial = fma(delta, delta, partial);
@@ -912,7 +914,7 @@ kernel void ivf_exact_rerank_shortlist(
   if (q >= params.n || params.shortlist_per_group > MAX_SHORTLIST) return;
 
   for (uint d = tid; d < params.p; d += NSG * SIMD_WIDTH) {
-    query[d] = data[q * params.p + d];
+    query[d] = data[flat_offset(q, params.p) + d];
   }
   for (uint i = tid; i < NSG * params.k; i += NSG * SIMD_WIDTH) {
     local_dist[i] = INFINITY;
@@ -927,7 +929,7 @@ kernel void ivf_exact_rerank_shortlist(
     int candidate = candidate_ids[candidate_base + pos];
     if (candidate < 0 || uint(candidate) == q) continue;
     float partial = 0.0f;
-    const device float* point = data + uint(candidate) * params.p;
+    const device float* point = data + flat_offset(uint(candidate), params.p);
     for (uint d = lane; d < params.p; d += SIMD_WIDTH) {
       float delta = query[d] - point[d];
       partial = fma(delta, delta, partial);
@@ -958,14 +960,13 @@ kernel void ivf_exact_rerank_shortlist(
           }
         }
       }
-      out_dist[qlocal * params.k + rank] = best_d;
-      out_ids[qlocal * params.k + rank] = best_i;
+      out_dist[flat_offset(qlocal, params.k) + rank] = best_d;
+      out_ids[flat_offset(qlocal, params.k) + rank] = best_i;
       ++heads[best_g];
     }
   }
 }
 constant uint CAGRA_POOL = 512;
-constant uint CAGRA_VISITED = 16384;
 constant uint CAGRA_INITIAL = 128;
 constant uint CAGRA_RANK_HASH = 512;
 
@@ -1054,12 +1055,13 @@ struct CagraSearchParams {
   uint width;
   uint steps;
   uint query_offset;
+  uint visit_slots;
 };
 
-inline bool cagra_visit(device atomic_uint* visited, uint id) {
+inline bool cagra_visit(device atomic_uint* visited, uint id, uint slots) {
   const uint value = id + 1;
   uint offset = (value * 2654435761u) >> 18;
-  for (uint probe = 0; probe < CAGRA_VISITED; ++probe) {
+  for (uint probe = 0; probe < slots; ++probe) {
     device atomic_uint* slot = visited + offset;
     uint previous = atomic_load_explicit(slot, memory_order_relaxed);
     if (previous == value) return false;
@@ -1068,7 +1070,7 @@ inline bool cagra_visit(device atomic_uint* visited, uint id) {
             memory_order_relaxed, memory_order_relaxed)) return true;
       if (previous == value) return false;
     }
-    offset = (offset + 1u) & (CAGRA_VISITED - 1u);
+    offset = (offset + 1u) & (slots - 1u);
   }
   return false;
 }
@@ -1090,7 +1092,8 @@ kernel void cagra_search_self(
     uint sg [[simdgroup_index_in_threadgroup]]) {
   const uint q = group + params.query_offset;
   const device float* point = data + flat_offset(q, params.p);
-  device atomic_uint* visited = visit_tables + size_t(group) * CAGRA_VISITED;
+  device atomic_uint* visited =
+    visit_tables + size_t(group) * params.visit_slots;
   threadgroup uint ids[CAGRA_POOL];
   threadgroup float ds[CAGRA_POOL];
   threadgroup bool expanded[CAGRA_POOL];
@@ -1100,12 +1103,12 @@ kernel void cagra_search_self(
     reinterpret_cast<threadgroup float*>(candidates + params.width * params.degree);
   threadgroup uint size;
   threadgroup uint frontier;
-  for (uint i = tid; i < CAGRA_VISITED; i += NSG * SIMD_WIDTH) {
+  for (uint i = tid; i < params.visit_slots; i += NSG * SIMD_WIDTH) {
     atomic_store_explicit(visited + i, 0, memory_order_relaxed);
   }
   threadgroup_barrier(mem_flags::mem_threadgroup | mem_flags::mem_device);
   if (tid == 0) {
-    cagra_visit(visited, q);
+    cagra_visit(visited, q, params.visit_slots);
     ids[0] = q;
     ds[0] = 0;
     expanded[0] = false;
@@ -1132,7 +1135,9 @@ kernel void cagra_search_self(
       if (lane == 0) {
         uint id = graph[flat_offset(heads[edge / params.degree], params.degree) +
             edge % params.degree];
-        if (id < params.n && !cagra_visit(visited, id)) id = params.n;
+        if (id < params.n && !cagra_visit(visited, id, params.visit_slots)) {
+          id = params.n;
+        }
         candidates[edge] = id;
       }
       simdgroup_barrier(mem_flags::mem_threadgroup);
@@ -1426,7 +1431,7 @@ struct MetalCagraIndex {
   id<MTLBuffer> ids = nil, distances = nil;
   id<MTLComputePipelineState> search = nil;
   std::uint32_t n, p, k, width, pool, steps;
-  static constexpr std::uint32_t degree = 64;
+  std::uint32_t degree, visit_slots;
   static constexpr std::uint32_t capacity = 1024;
 
   ~MetalCagraIndex() {
@@ -1439,9 +1444,9 @@ struct MetalCagraIndex {
   }
 };
 
-void cagra_add_reverse_edges(std::uint32_t* graph, std::uint32_t n) {
-  constexpr auto degree = MetalCagraIndex::degree;
-  constexpr auto half = degree / 2;
+void cagra_add_reverse_edges(std::uint32_t* graph, std::uint32_t n,
+    std::uint32_t degree) {
+  const auto half = degree / 2;
   std::vector<std::uint32_t> reverse(static_cast<std::size_t>(n) * half);
   std::vector<std::uint8_t> counts(n, 0);
   for (std::uint32_t rank = 0; rank < degree; ++rank) {
@@ -1453,7 +1458,7 @@ void cagra_add_reverse_edges(std::uint32_t* graph, std::uint32_t n) {
   }
   for (std::uint32_t row = 0; row < n; ++row) {
     auto* out = graph + static_cast<std::size_t>(row) * degree;
-    std::array<std::uint32_t, degree> forward;
+    std::array<std::uint32_t, faissr_metal::kCagraDegree> forward;
     std::copy_n(out, degree, forward.data());
     const auto* incoming = reverse.data() + static_cast<std::size_t>(row) * half;
     std::uint32_t filled = 0;
@@ -1474,10 +1479,12 @@ Rcpp::List metal_cagra_search(MetalCagraIndex& index, std::uint32_t first,
     std::uint32_t count) {
   if (first >= index.n || count == 0 || count > index.capacity ||
       count > index.n - first) Rcpp::stop("Invalid Metal CAGRA query batch");
+  using Clock = std::chrono::steady_clock;
+  const auto started = Clock::now();
   @autoreleasepool {
     MetalKnnState& state = metal_knn_state();
     const std::uint32_t params[] = {index.n, index.p, index.k, index.degree,
-      index.pool, index.width, index.steps, first};
+      index.pool, index.width, index.steps, first, index.visit_slots};
     id<MTLCommandBuffer> command = [state.queue commandBuffer];
     id<MTLComputeCommandEncoder> encoder = [command computeCommandEncoder];
     [encoder setComputePipelineState:index.search];
@@ -1487,12 +1494,15 @@ Rcpp::List metal_cagra_search(MetalCagraIndex& index, std::uint32_t first,
     [encoder setBuffer:index.distances offset:0 atIndex:3];
     [encoder setBuffer:index.visits offset:0 atIndex:4];
     [encoder setBytes:params length:sizeof(params) atIndex:5];
-    const auto scratch = index.width * index.degree * (sizeof(float) + sizeof(std::uint32_t));
+    const auto scratch = index.width * index.degree *
+      (sizeof(float) + sizeof(std::uint32_t));
     [encoder setThreadgroupMemoryLength:scratch atIndex:0];
     [encoder dispatchThreadgroups:MTLSizeMake(count, 1, 1)
       threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
     [encoder endEncoding];
     run_and_wait(command);
+    const double search_seconds = std::chrono::duration<double>(
+      Clock::now() - started).count();
     const auto* ids = static_cast<const int*>([index.ids contents]);
     const auto* values = static_cast<const float*>([index.distances contents]);
     Rcpp::IntegerMatrix out_ids(count, index.k);
@@ -1510,6 +1520,7 @@ Rcpp::List metal_cagra_search(MetalCagraIndex& index, std::uint32_t first,
     }
     return Rcpp::List::create(Rcpp::Named("indices") = out_ids,
       Rcpp::Named("distances") = out_values, Rcpp::Named("exact") = false,
+      Rcpp::Named("search_seconds") = search_seconds,
       Rcpp::Named("backend_used") = "faissr_native_metal_cagra_file");
   }
 }
@@ -1552,6 +1563,10 @@ Rcpp::List metal_cagra_collect(Rcpp::List built, double target) {
     Rcpp::Named("cagra_settings") = built["params"],
     Rcpp::Named("metal_live_buffer_bytes_after_search") =
       built["owned_metal_bytes"],
+    Rcpp::Named("observed_metal_owned_buffer_peak_bytes") =
+      built["observed_metal_owned_buffer_peak_bytes"],
+    Rcpp::Named("metal_memory_measurement_scope") =
+      built["metal_memory_measurement_scope"],
     Rcpp::Named("index_build_seconds") = built["build_seconds"],
     Rcpp::Named("build_timing") = built["build_timing"],
     Rcpp::Named("search_seconds") =
@@ -1619,18 +1634,24 @@ int metal_cagra_shortlist_per_group(int n, int p, int qdim, double target) {
 Rcpp::List metal_cagra_build(MetalKnnState& state, id<MTLBuffer> points,
     id<MTLBuffer> projected, id<MTLBuffer> centroids,
     id<MTLBuffer> offsets, id<MTLBuffer> members, int n, int p, int qdim,
-    int nlist, int k, double target) {
+    int nlist, int k, double target, double live_bytes) {
   using Clock = std::chrono::steady_clock;
   const auto started = Clock::now();
-  constexpr std::uint32_t initial_degree = 128;
   auto index = std::make_unique<MetalCagraIndex>();
   index->n = n;
   index->p = p;
   index->k = k;
+  const bool balanced = faissr_metal::cagra_balanced_shape(n, p, k, target);
+  index->degree = balanced ? faissr_metal::kCagraBalancedDegree :
+    faissr_metal::kCagraDegree;
+  const std::uint32_t initial_degree = 2u * index->degree;
+  // Linear-probing masks and the shader hash require a power of two.
+  index->visit_slots = 16384u;
   index->width = target == 0.90 ? 1 : target == 0.95 ? 2 : 4;
-  index->pool = target == 0.90 ? 128 : target == 0.95 ? 256 : 512;
+  index->pool = target == 0.90 ? 128 : target == 0.95 ? 256 :
+    balanced ? 384 : 512;
   index->pool = std::max(index->pool, static_cast<std::uint32_t>(k + 1));
-  index->steps = 48;
+  index->steps = balanced ? 60 : 48;
   index->data = [points retain];
   const int nprobe = n < 20000 ? std::min(nlist, kMaxProbe) :
     std::min(nlist, target == 0.90 ? 8 : target == 0.95 ? 16 : 24);
@@ -1638,6 +1659,7 @@ Rcpp::List metal_cagra_build(MetalKnnState& state, id<MTLBuffer> points,
     n, p, qdim, target);
   double seed_seconds = 0.0;
   double prune_seconds = 0.0;
+  double seed_peak_bytes = 0.0;
   index->graph = [metal_shared_buffer(state.device,
     static_cast<std::size_t>(n) * index->degree * sizeof(std::uint32_t)) retain];
   {
@@ -1651,6 +1673,8 @@ Rcpp::List metal_cagra_build(MetalKnnState& state, id<MTLBuffer> points,
         shortlist = metal_shared_buffer(state.device, index->capacity *
           kMetalSimdGroups * shortlist_per_group * sizeof(int));
       }
+      seed_peak_bytes = live_bytes + metal_live_buffer_bytes(
+        {index->graph, initial, seed_distances, shortlist});
       const MetalCagraSeedBuffers buffers{points, projected, centroids,
         offsets, members, initial, seed_distances, shortlist};
       auto rank = [make_pipeline(state.device, state.library, @"cagra_rank_prune")
@@ -1688,7 +1712,7 @@ Rcpp::List metal_cagra_build(MetalKnnState& state, id<MTLBuffer> points,
   }
   const auto reversing = Clock::now();
   cagra_add_reverse_edges(static_cast<std::uint32_t*>([index->graph contents]),
-    index->n);
+    index->n, index->degree);
   const auto finished = Clock::now();
   index->search = make_pipeline(state.device, state.library, @"cagra_search_self");
   index->ids = [metal_shared_buffer(state.device,
@@ -1696,15 +1720,21 @@ Rcpp::List metal_cagra_build(MetalKnnState& state, id<MTLBuffer> points,
   index->distances = [metal_shared_buffer(state.device,
     index->capacity * index->k * sizeof(float)) retain];
   index->visits = [state.device newBufferWithLength:
-    index->capacity * 16384u * sizeof(std::uint32_t)
+    index->capacity * index->visit_slots * sizeof(std::uint32_t)
     options:MTLResourceStorageModePrivate];
   if (index->visits == nil) Rcpp::stop("Metal CAGRA could not allocate visited tables");
   const double owned = metal_live_buffer_bytes({index->data, index->graph,
     index->ids, index->distances, index->visits});
-  const auto params = Rcpp::List::create(Rcpp::Named("width") = index->width,
-    Rcpp::Named("queue") = index->pool, Rcpp::Named("steps") = index->steps,
+  const double search_peak_bytes = live_bytes + owned -
+    metal_live_buffer_bytes({points});
+  const auto params = Rcpp::List::create(
+    Rcpp::Named("width") = index->width, Rcpp::Named("queue") = index->pool,
+    Rcpp::Named("steps") = index->steps,
     Rcpp::Named("initial_degree") = initial_degree,
     Rcpp::Named("graph_degree") = index->degree,
+    Rcpp::Named("visit_slots") = index->visit_slots,
+    Rcpp::Named("nlist") = nlist,
+    Rcpp::Named("projection_dim") = qdim,
     Rcpp::Named("initial_nprobe") = nprobe,
     Rcpp::Named("initial_shortlist") =
       kMetalSimdGroups * shortlist_per_group,
@@ -1718,6 +1748,9 @@ Rcpp::List metal_cagra_build(MetalKnnState& state, id<MTLBuffer> points,
   Rcpp::XPtr<MetalCagraIndex> pointer(index.release(), true, metal_cagra_tag());
   return Rcpp::List::create(Rcpp::Named("pointer") = pointer,
     Rcpp::Named("params") = params, Rcpp::Named("owned_metal_bytes") = owned,
+    Rcpp::Named("observed_metal_owned_buffer_peak_bytes") =
+      std::max(seed_peak_bytes, search_peak_bytes),
+    Rcpp::Named("metal_memory_measurement_scope") = "peak_owned_knn_buffers",
     Rcpp::Named("build_timing") = timing,
     Rcpp::Named("graph_build_seconds") =
       std::chrono::duration<double>(finished - started).count());
@@ -1756,7 +1789,8 @@ Rcpp::List faissr_metal_knn_float_impl(
   std::string method = requested_method;
   const bool ivf_supported = faissr_metal::ivf_shape_supported(n, p, k);
   const bool cagra = method == "cagra";
-  if (cagra && (!ivf_supported || n <= 128 ||
+  const bool cagra_supported = faissr_metal::cagra_shape_supported(n, p, k);
+  if (cagra && (!cagra_supported || n <= 128 ||
       metric != faissr_metal::KnnMetric::Euclidean ||
       (target != 0.90 && target != 0.95 && target != 0.99))) {
     Rcpp::stop("Metal CAGRA requires Euclidean self KNN and at least 129 rows");
@@ -1773,8 +1807,12 @@ Rcpp::List faissr_metal_knn_float_impl(
       "buffer offsets; use exact search for this input.", kMaxP
     );
   }
-  const int qdim = projection_dim(p);
-  const int nlist = std::max(16, std::min(kMaxLists, static_cast<int>(std::ceil(4.0 * std::sqrt(static_cast<double>(n))))));
+  const bool balanced = cagra &&
+    faissr_metal::cagra_balanced_shape(n, p, k, target);
+  const int qdim = faissr_metal::ivf_projection_dimensions(p, balanced);
+  const int limit = balanced ? 4096 : kMaxLists;
+  const int nlist = std::max(16, std::min(limit,
+    static_cast<int>(std::ceil(4.0 * std::sqrt(static_cast<double>(n))))));
 
   std::vector<std::uint32_t> feature_offsets(static_cast<std::size_t>(qdim) + 1u, 0u);
   std::vector<std::vector<std::pair<std::uint32_t, std::int8_t>>> buckets(qdim);
@@ -1944,16 +1982,35 @@ Rcpp::List faissr_metal_knn_float_impl(
                            threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
         [clear_encoder endEncoding];
 
-        id<MTLComputeCommandEncoder> accumulate_encoder = [command computeCommandEncoder];
-        [accumulate_encoder setComputePipelineState:accumulate_centroids_pipeline];
-        [accumulate_encoder setBuffer:projected_buffer offset:0 atIndex:0];
-        [accumulate_encoder setBuffer:assignment_buffer offset:0 atIndex:1];
-        [accumulate_encoder setBuffer:centroid_sum_buffer offset:0 atIndex:2];
-        [accumulate_encoder setBuffer:centroid_count_buffer offset:0 atIndex:3];
-        [accumulate_encoder setBuffer:index_params_buffer offset:0 atIndex:4];
-        [accumulate_encoder dispatchThreads:MTLSizeMake(static_cast<std::size_t>(n) * qdim, 1, 1)
-                                threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
-        [accumulate_encoder endEncoding];
+        const auto batch_rows = faissr_metal::cagra_centroid_batch_rows(n, qdim);
+        const auto vertices = static_cast<std::uint32_t>(n);
+        const bool split = batch_rows < vertices;
+        for (std::uint32_t first = 0; first < vertices;) {
+          const auto rows = std::min(batch_rows, vertices - first);
+          IndexParamsHost block{rows, index_params.p, index_params.qdim,
+            index_params.nlist};
+          id<MTLComputeCommandEncoder> accum = [command computeCommandEncoder];
+          [accum setComputePipelineState:accumulate_centroids_pipeline];
+          [accum setBuffer:projected_buffer
+                    offset:static_cast<std::size_t>(first) * qdim * sizeof(float)
+                   atIndex:0];
+          [accum setBuffer:assignment_buffer
+                    offset:static_cast<std::size_t>(first) * sizeof(int)
+                   atIndex:1];
+          [accum setBuffer:centroid_sum_buffer offset:0 atIndex:2];
+          [accum setBuffer:centroid_count_buffer offset:0 atIndex:3];
+          [accum setBytes:&block length:sizeof(block) atIndex:4];
+          [accum dispatchThreads:MTLSizeMake(
+              static_cast<std::size_t>(rows) * qdim, 1, 1)
+              threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
+          [accum endEncoding];
+          if (split) {
+            run_and_wait(command);
+            Rcpp::checkUserInterrupt();
+            command = [queue commandBuffer];
+          }
+          first += rows;
+        }
 
         id<MTLComputeCommandEncoder> finalize_encoder = [command computeCommandEncoder];
         [finalize_encoder setComputePipelineState:finalize_centroids_pipeline];
@@ -1984,9 +2041,14 @@ Rcpp::List faissr_metal_knn_float_impl(
     const auto t_pack = Clock::now();
 
     if (cagra) {
+      const double live_bytes = metal_live_buffer_bytes({data_buffer,
+        offset_map_buffer, feature_buffer, sign_buffer, projected_buffer,
+        project_params_buffer, centroid_buffer, assignment_buffer,
+        centroid_sum_buffer, centroid_count_buffer, index_params_buffer,
+        list_offset_buffer, list_id_buffer});
       Rcpp::List index = metal_cagra_build(state, data_buffer, projected_buffer,
         centroid_buffer, list_offset_buffer, list_id_buffer,
-        n, p, qdim, nlist, k, target);
+        n, p, qdim, nlist, k, target, live_bytes);
       index["build_seconds"] = std::chrono::duration<double>(
         Clock::now() - loaded).count();
       Rcpp::List timing = index["build_timing"];
@@ -2370,13 +2432,17 @@ bool faissr_metal_file_capacity(double bytes) {
 Rcpp::List faissr_metal_file_cagra_build_impl(int rows, int columns, int k,
     double target, double limit, const std::function<void(float*)>& read) {
   const double reference = 4.0 * rows * columns;
-  const int qdim = projection_dim(columns);
+  const bool balanced =
+    faissr_metal::cagra_balanced_shape(rows, columns, k, target);
+  const int qdim = faissr_metal::ivf_projection_dimensions(columns, balanced);
+  const auto degree = balanced ? faissr_metal::kCagraBalancedDegree :
+    faissr_metal::kCagraDegree;
   const int shortlist = metal_cagra_shortlist_per_group(
     rows, columns, qdim, target);
   const double shortlist_bytes = static_cast<double>(MetalCagraIndex::capacity) *
     kMetalSimdGroups * shortlist * sizeof(int);
   const double estimate = faissr_metal::cagra_workspace_bytes(
-    rows, columns, qdim, shortlist_bytes);
+    rows, columns, qdim, shortlist_bytes, degree);
   if (!std::isfinite(limit) || estimate > limit ||
       !faissr_metal_file_capacity(estimate)) {
     Rcpp::stop("File-backed Metal CAGRA exceeds the unified memory budget");

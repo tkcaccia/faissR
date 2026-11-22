@@ -480,8 +480,8 @@ extern "C" SEXP faissR_metal_file_ivf_plan_v1(SEXP source_spec,
   const double memory_limit = Rcpp::as<double>(memory_limit_value);
   const double n = static_cast<double>(source.rows);
   const double p = static_cast<double>(source.columns);
-  const double q = p > 0 ? std::min(128.0, std::pow(2.0,
-    std::floor(std::log2(p)))) : 0.0;
+  const double q = p > 0 ? faissr_metal::ivf_projection_dimensions(
+    source.columns, false) : 0.0;
   const double estimated_ram = 8.0 * n * p + 4.0 * n * q +
     20.0 * n * k + 256.0 * 1024 * 1024;
   const double estimated_device = 4.0 * n * p + 4.0 * n * q +
