@@ -361,8 +361,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // file_cagra_build_cpp
-Rcpp::List file_cagra_build_cpp(SEXP source_spec, int k, int batch, double memory_limit, int width, int queue, bool nn_descent);
-RcppExport SEXP _faissR_file_cagra_build_cpp(SEXP source_specSEXP, SEXP kSEXP, SEXP batchSEXP, SEXP memory_limitSEXP, SEXP widthSEXP, SEXP queueSEXP, SEXP nn_descentSEXP) {
+Rcpp::List file_cagra_build_cpp(SEXP source_spec, int k, int batch, double memory_limit, int width, int queue, bool nn_descent, int graph_degree, int intermediate_degree);
+RcppExport SEXP _faissR_file_cagra_build_cpp(SEXP source_specSEXP, SEXP kSEXP, SEXP batchSEXP, SEXP memory_limitSEXP, SEXP widthSEXP, SEXP queueSEXP, SEXP nn_descentSEXP, SEXP graph_degreeSEXP, SEXP intermediate_degreeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -373,7 +373,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type width(widthSEXP);
     Rcpp::traits::input_parameter< int >::type queue(queueSEXP);
     Rcpp::traits::input_parameter< bool >::type nn_descent(nn_descentSEXP);
-    rcpp_result_gen = Rcpp::wrap(file_cagra_build_cpp(source_spec, k, batch, memory_limit, width, queue, nn_descent));
+    Rcpp::traits::input_parameter< int >::type graph_degree(graph_degreeSEXP);
+    Rcpp::traits::input_parameter< int >::type intermediate_degree(intermediate_degreeSEXP);
+    rcpp_result_gen = Rcpp::wrap(file_cagra_build_cpp(source_spec, k, batch, memory_limit, width, queue, nn_descent, graph_degree, intermediate_degree));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1381,6 +1383,26 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// nn_cuvs_cagra_batched_self_cpp
+List nn_cuvs_cagra_batched_self_cpp(SEXP data, int k, int batch, double memory_limit, int width, int queue, bool nn_descent, int graph_degree, int intermediate_degree, std::string output);
+RcppExport SEXP _faissR_nn_cuvs_cagra_batched_self_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP batchSEXP, SEXP memory_limitSEXP, SEXP widthSEXP, SEXP queueSEXP, SEXP nn_descentSEXP, SEXP graph_degreeSEXP, SEXP intermediate_degreeSEXP, SEXP outputSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type batch(batchSEXP);
+    Rcpp::traits::input_parameter< double >::type memory_limit(memory_limitSEXP);
+    Rcpp::traits::input_parameter< int >::type width(widthSEXP);
+    Rcpp::traits::input_parameter< int >::type queue(queueSEXP);
+    Rcpp::traits::input_parameter< bool >::type nn_descent(nn_descentSEXP);
+    Rcpp::traits::input_parameter< int >::type graph_degree(graph_degreeSEXP);
+    Rcpp::traits::input_parameter< int >::type intermediate_degree(intermediate_degreeSEXP);
+    Rcpp::traits::input_parameter< std::string >::type output(outputSEXP);
+    rcpp_result_gen = Rcpp::wrap(nn_cuvs_cagra_batched_self_cpp(data, k, batch, memory_limit, width, queue, nn_descent, graph_degree, intermediate_degree, output));
+    return rcpp_result_gen;
+END_RCPP
+}
 // nn_cuvs_nndescent_self_cpp
 List nn_cuvs_nndescent_self_cpp(NumericMatrix data, int k, int graph_degree, int intermediate_graph_degree, int max_iterations);
 RcppExport SEXP _faissR_nn_cuvs_nndescent_self_cpp(SEXP dataSEXP, SEXP kSEXP, SEXP graph_degreeSEXP, SEXP intermediate_graph_degreeSEXP, SEXP max_iterationsSEXP) {
@@ -2321,7 +2343,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_file_metal_cagra_build_cpp", (DL_FUNC) &_faissR_file_metal_cagra_build_cpp, 4},
     {"_faissR_file_metal_cagra_search_cpp", (DL_FUNC) &_faissR_file_metal_cagra_search_cpp, 3},
     {"_faissR_file_metal_cagra_release_cpp", (DL_FUNC) &_faissR_file_metal_cagra_release_cpp, 1},
-    {"_faissR_file_cagra_build_cpp", (DL_FUNC) &_faissR_file_cagra_build_cpp, 7},
+    {"_faissR_file_cagra_build_cpp", (DL_FUNC) &_faissR_file_cagra_build_cpp, 9},
     {"_faissR_file_cagra_search_cpp", (DL_FUNC) &_faissR_file_cagra_search_cpp, 3},
     {"_faissR_file_cagra_release_cpp", (DL_FUNC) &_faissR_file_cagra_release_cpp, 1},
     {"_faissR_inner_product_scores_float32_cpp", (DL_FUNC) &_faissR_inner_product_scores_float32_cpp, 4},
@@ -2383,6 +2405,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_nn_cuvs_bruteforce_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_bruteforce_float32_cpp, 5},
     {"_faissR_nn_cuvs_cagra_cpp", (DL_FUNC) &_faissR_nn_cuvs_cagra_cpp, 9},
     {"_faissR_nn_cuvs_cagra_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_cagra_float32_cpp, 10},
+    {"_faissR_nn_cuvs_cagra_batched_self_cpp", (DL_FUNC) &_faissR_nn_cuvs_cagra_batched_self_cpp, 10},
     {"_faissR_nn_cuvs_nndescent_self_cpp", (DL_FUNC) &_faissR_nn_cuvs_nndescent_self_cpp, 5},
     {"_faissR_nn_cuvs_nndescent_self_float32_cpp", (DL_FUNC) &_faissR_nn_cuvs_nndescent_self_float32_cpp, 6},
     {"_faissR_nn_cuvs_hnsw_cpp", (DL_FUNC) &_faissR_nn_cuvs_hnsw_cpp, 9},

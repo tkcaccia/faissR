@@ -493,6 +493,10 @@ nn_cuvs_cagra_float32_cpp <- function(data, points, k, exclude_self,
         build_algo, distance_storage)
 }
 
+nn_cuvs_cagra_batched_self_cpp <- function(data, k, batch, memory_limit, width, queue, nn_descent, graph_degree, intermediate_degree, output) {
+    .Call(`_faissR_nn_cuvs_cagra_batched_self_cpp`, data, k, batch, memory_limit, width, queue, nn_descent, graph_degree, intermediate_degree, output)
+}
+
 nn_cuvs_nndescent_self_cpp <- function(data, k, graph_degree,
     intermediate_graph_degree, max_iterations) {
     .Call(`_faissR_nn_cuvs_nndescent_self_cpp`, data, k, graph_degree,
@@ -810,8 +814,8 @@ nn_metal_query_cpp <- function(data, query, k, method = "auto",
         target_recall)
 }
 
-file_cagra_build_cpp <- function(source_spec, k, batch, memory_limit, width, queue, nn_descent) {
-    .Call(`_faissR_file_cagra_build_cpp`, source_spec, k, batch, memory_limit, width, queue, nn_descent)
+file_cagra_build_cpp <- function(source_spec, k, batch, memory_limit, width, queue, nn_descent, graph_degree = 64L, intermediate_degree = 128L) {
+    .Call(`_faissR_file_cagra_build_cpp`, source_spec, k, batch, memory_limit, width, queue, nn_descent, graph_degree, intermediate_degree)
 }
 
 file_cagra_search_cpp <- function(pointer, first, count) {

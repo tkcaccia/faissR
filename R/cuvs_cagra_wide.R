@@ -16,26 +16,14 @@ cuvs_cagra_wide_params <- function(target_recall, width4) {
 }
 
 cuvs_cagra_wide_self <- function(data, k, target_recall, output,
-                                width4 = FALSE) {
+        width4 = FALSE, profile = getOption("faissR.cuvs_cagra_profile")) {
     require_cuvs_backend("cuVS CAGRA")
     params <- cuvs_cagra_wide_params(target_recall, width4)
-    previous <- options(
-        faissR.cuvs_graph_degree = 64L,
-        faissR.cuvs_intermediate_graph_degree = 128L,
-        faissR.cuvs_search_width = params$width,
-        faissR.cuvs_itopk_size = params$queue
-    )
-    on.exit(options(previous), add = TRUE)
-    batch <- Sys.getenv("FAISSR_CUVS_CAGRA_BATCH_SIZE", unset = NA_character_)
-    on.exit({
-        if (is.na(batch)) Sys.unsetenv("FAISSR_CUVS_CAGRA_BATCH_SIZE")
-        else Sys.setenv(FAISSR_CUVS_CAGRA_BATCH_SIZE = batch)
-    }, add = TRUE)
-    Sys.setenv(FAISSR_CUVS_CAGRA_BATCH_SIZE = "1024")
-    result <- nn(data, k = k, backend = "cuda", method = "cagra",
-        metric = "euclidean", exclude_self = TRUE, output = output,
-        target_recall = target_recall, cagra_implementation = "cuvs",
-        cagra_build_algo = params$builder, tuning = "fixed", n_threads = 1L)
+    result <- if (is.null(profile)) {
+        cuvs_cagra_wide_legacy_self(data, k, target_recall, output, params)
+    } else {
+        cuvs_cagra_profiled_self(data, k, output, params, profile)
+    }
     engine <- attr(result, "resolved_backend")
     stopifnot(identical(engine, "cuda_cuvs_cagra"),
         identical(dim(result$indices), c(nrow(data), as.integer(k))))
@@ -52,16 +40,77 @@ cuvs_cagra_wide_self <- function(data, k, target_recall, output,
     result
 }
 
+cuvs_validate_cagra_profile <- function(profile, n, k) {
+    fields <- c("graph_degree", "intermediate_degree", "batch_rows",
+        "memory_limit_bytes")
+    if (!is.list(profile) || !identical(sort(names(profile)), sort(fields)) ||
+        !all(vapply(profile, function(value) {
+            is.numeric(value) && length(value) == 1L &&
+                is.finite(value) && value > 0 && value == floor(value)
+        }, logical(1L))) ||
+        profile$graph_degree <= k ||
+        profile$intermediate_degree < profile$graph_degree ||
+        profile$intermediate_degree >= n || profile$batch_rows > 1024L) {
+        stop("Invalid CUDA CAGRA profile.", call. = FALSE)
+    }
+    profile
+}
+
+cuvs_cagra_profiled_self <- function(data, k, output, params, profile) {
+    profile <- cuvs_validate_cagra_profile(profile, nrow(data), k)
+    result <- nn_cuvs_cagra_batched_self_cpp(data, k,
+        as.integer(profile$batch_rows), profile$memory_limit_bytes,
+        params$width, params$queue, params$builder == "nn_descent",
+        as.integer(profile$graph_degree),
+        as.integer(profile$intermediate_degree), output)
+    result$cagra_settings <- c(params, profile)
+    result
+}
+
+cuvs_cagra_wide_legacy_self <- function(data, k, target_recall, output,
+                                       params) {
+    previous <- options(
+        faissR.cuvs_graph_degree = 64L,
+        faissR.cuvs_intermediate_graph_degree = 128L,
+        faissR.cuvs_search_width = params$width,
+        faissR.cuvs_itopk_size = params$queue
+    )
+    on.exit(options(previous), add = TRUE)
+    batch <- Sys.getenv("FAISSR_CUVS_CAGRA_BATCH_SIZE", unset = NA_character_)
+    on.exit({
+        if (is.na(batch)) Sys.unsetenv("FAISSR_CUVS_CAGRA_BATCH_SIZE")
+        else Sys.setenv(FAISSR_CUVS_CAGRA_BATCH_SIZE = batch)
+    }, add = TRUE)
+    Sys.setenv(FAISSR_CUVS_CAGRA_BATCH_SIZE = "1024")
+    nn(data, k = k, backend = "cuda", method = "cagra",
+        metric = "euclidean", exclude_self = TRUE, output = output,
+        target_recall = target_recall, cagra_implementation = "cuvs",
+        cagra_build_algo = params$builder, tuning = "fixed", n_threads = 1L)
+}
+
 cuvs_cagra_wide_file <- function(source, k, batch, memory_limit,
-                                 target_recall, width4) {
+        target_recall, width4,
+        profile = getOption("faissR.cuvs_cagra_profile")) {
     params <- cuvs_cagra_wide_params(target_recall, width4)
-    index <- file_cagra_build_cpp(source, k, batch, memory_limit,
-        params$width, params$queue, params$builder == "nn_descent")
+    if (is.null(profile)) {
+        profile <- list(graph_degree = 64L, intermediate_degree = 128L,
+            batch_rows = batch, memory_limit_bytes = memory_limit)
+    } else {
+        profile <- cuvs_validate_cagra_profile(profile, source$nrow, k)
+    }
+    batch <- as.integer(min(batch, profile$batch_rows))
+    budget <- min(memory_limit, profile$memory_limit_bytes)
+    index <- file_cagra_build_cpp(source, k, batch, budget,
+        params$width, params$queue, params$builder == "nn_descent",
+        as.integer(profile$graph_degree),
+        as.integer(profile$intermediate_degree))
     pointer <- index$pointer
     index$search_batch <- function(first, count)
         file_cagra_search_cpp(pointer, first, count)
     index$release <- function() file_cagra_release_cpp(pointer)
-    index$params <- params
+    index$params <- c(params, list(graph_degree = index$graph_degree,
+        intermediate_degree = index$intermediate_graph_degree,
+        batch_rows = index$query_batch_rows, memory_limit_bytes = budget))
     index
 }
 

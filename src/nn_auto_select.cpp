@@ -6,6 +6,11 @@
 #include <string>
 
 #include "faissr_metal_common.h"
+#include "nn_cagra_capacity.hpp"
+
+#ifdef FAISSR_HAS_CUVS
+#include <cuda_runtime_api.h>
+#endif
 
 using namespace Rcpp;
 
@@ -1287,7 +1292,7 @@ std::string cagra_build_algo_for_shape_core(int n,
   return "ivf_pq";
 }
 
-double file_hnsw_rows(const List& request, const char* name,
+double knn_request_count(const List& request, const char* name,
                       double default_value) {
   if (!request.containsElementNamed(name) || Rf_isNull(request[name])) {
     return default_value;
@@ -1295,7 +1300,7 @@ double file_hnsw_rows(const List& request, const char* name,
   const double rows = as<double>(request[name]);
   if (!finite1(rows) || rows != std::floor(rows) ||
       rows > std::numeric_limits<int>::max()) {
-    stop("Invalid file-backed HNSW batch size: %s", name);
+    stop("Invalid native KNN count: %s", name);
   }
   return rows;
 }
@@ -1308,8 +1313,8 @@ List file_hnsw_plan(const List& request, int n, int p, int k) {
   if (!finite1(limit) || limit <= 0) {
     stop("File-backed HNSW requires a finite positive memory_limit");
   }
-  const double reference = file_hnsw_rows(request, "reference_chunk_rows", n);
-  const double query = file_hnsw_rows(request, "chunk_rows", 8192.0);
+  const double reference = knn_request_count(request, "reference_chunk_rows", n);
+  const double query = knn_request_count(request, "chunk_rows", 8192.0);
   const double fixed = 64.0 * 1024 * 1024;
   const double available = 0.7 * limit - fixed;
   const double query_bytes = 12.0 * p + 16.0 * (k + 1.0) + 8.0 * k;
@@ -1352,6 +1357,86 @@ List file_hnsw_plan(const List& request, int n, int p, int k) {
     _["memory_limit_bytes"] = limit,
     _["selection_reason"] = shards == 1 ? "cpu_hnsw_one_index_fits" :
       "cpu_hnsw_balanced_shards_for_budget");
+}
+
+double cuda_free_bytes(const List& request) {
+  if (request.containsElementNamed("cuda_free_bytes")) {
+    const double available = as<double>(request["cuda_free_bytes"]);
+    if (!finite1(available) || available < 0) stop("Invalid CUDA memory budget.");
+    return available;
+  }
+#ifdef FAISSR_HAS_CUVS
+  std::size_t free = 0;
+  std::size_t total = 0;
+  if (cudaMemGetInfo(&free, &total) == cudaSuccess) {
+    return static_cast<double>(free);
+  }
+#endif
+  return NA_REAL;
+}
+
+List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
+                             bool file, int recall_code) {
+  const SEXP option = Rf_GetOption1(Rf_install("faissR.cuvs_cagra_profile"));
+  const bool calibrated = Rf_isNull(option);
+  if (calibrated &&
+      (n != 10000000 || p != 96 || k != 30 || recall_code != 99)) {
+    return List();
+  }
+
+  constexpr double gib = 1024.0 * 1024 * 1024;
+  // The measured file-backed build peaked at 20.99 GiB of worker RSS.
+  // For resident input the existing float32 matrix is already in host RAM.
+  const double calibrated_host_workspace = 22 * gib;
+  const auto profile = calibrated ? List::create(
+    _["graph_degree"] = 32, _["intermediate_degree"] = 64,
+    _["batch_rows"] = 512, _["memory_limit_bytes"] = (file ? 22 : 26) * gib
+  ) : as<List>(option);
+  const double graph = knn_request_count(profile, "graph_degree", 0);
+  const double intermediate = knn_request_count(profile, "intermediate_degree", 0);
+  const double batch = knn_request_count(profile, "batch_rows", 0);
+  double limit = profile.containsElementNamed("memory_limit_bytes") ?
+    as<double>(profile["memory_limit_bytes"]) : NA_REAL;
+  if (!finite1(limit) || limit <= 0 || graph < 2 ||
+      intermediate < graph || batch < 1 || batch > 1024) {
+    stop("Invalid CUDA CAGRA profile.");
+  }
+  if (n <= intermediate || k >= graph || p < 1) return List();
+  if (request.containsElementNamed("memory_limit_bytes")) {
+    const double caller_limit = as<double>(request["memory_limit_bytes"]);
+    if (!finite1(caller_limit) || caller_limit <= 0) {
+      stop("Invalid CUDA memory_limit.");
+    }
+    limit = std::min(limit, caller_limit);
+  }
+  const auto capacity = faissr::cagra_capacity(n, p, k,
+    static_cast<int>(batch), static_cast<int>(graph), static_cast<int>(intermediate));
+  const double resident_payload = file ? 0.0 : n * (8.0 * p + 12.0 * k);
+  const double host_buffers = resident_payload + capacity.host_batch_bytes;
+  const double free = cuda_free_bytes(request);
+  const double host_available = request.containsElementNamed("host_available_bytes") ?
+    as<double>(request["host_available_bytes"]) : NA_REAL;
+  const bool host_fits = !calibrated ||
+    (finite1(host_available) && host_available >= calibrated_host_workspace);
+  const bool fits = finite1(free) && capacity.device_bytes <= free &&
+    capacity.device_bytes <= limit && host_buffers <= limit && host_fits &&
+    (!calibrated || limit >= calibrated_host_workspace);
+  return List::create(
+    _["fits"] = fits,
+    _["reason"] = fits ? "within_budget" :
+      !finite1(free) ? "cuda_memory_unavailable" :
+      !host_fits ? "host_workspace_unavailable" : "capacity_exceeded",
+    _["profile_source"] = calibrated ? "deep1b_10m_full_runs" : "explicit_profile",
+    _["graph_degree"] = graph,
+    _["intermediate_degree"] = intermediate,
+    _["batch_rows"] = batch,
+    _["memory_limit_bytes"] = limit,
+    _["free_device_bytes"] = free,
+    _["host_available_bytes"] = host_available,
+    _["host_workspace_required_bytes"] =
+      calibrated ? calibrated_host_workspace : NA_REAL,
+    _["device_bytes_estimate"] = capacity.device_bytes,
+    _["host_payload_bytes_upper_bound"] = host_buffers);
 }
 
 } // namespace
@@ -1400,17 +1485,31 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
   const bool wide_exact =
     shape == "large_high_dim" && (recall_code == 99 || p >= 1024);
 
+  const bool allow_profile =
+    request.containsElementNamed("allow_cuda_profile") &&
+    as<bool>(request["allow_cuda_profile"]);
+  List profile;
+  if (allow_profile && backend == "cuda" && cuda_method == "auto" &&
+      metal_method == "auto" && self && metric == "euclidean" &&
+      known_shape && n >= 500000) {
+    profile = cuda_cagra_profile_plan(request, n, p, k, file, recall_code);
+  }
+  const bool profile_fits = profile.size() > 0 && as<bool>(profile["fits"]);
+
   std::string method = "exact";
   std::string reason = "bounded_work";
   if (cuda_method != "auto") {
     if ((cuda_method != "cagra" && cuda_method != "cagra_width4") ||
         backend != "cuda" || !self || metric != "euclidean" ||
-        shape != "large_high_dim") {
+        !known_shape || n < 500000) {
       stop("CAGRA requires CUDA Euclidean self KNN with at "
-           "least 500,000 rows and 256 features.");
+           "least 500,000 rows and a known feature count.");
     }
     method = cuda_method;
     reason = "cuda_cagra_requested";
+  } else if (profile_fits) {
+    method = "cagra_width4";
+    reason = "cuda_cagra_profile_fits";
   } else if (metal_method != "auto") {
     if (metal_method != "cagra" || backend != "metal" || !self ||
         metric != "euclidean" || !known_shape || n <= 128 || k > 128 ||
@@ -1478,6 +1577,14 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
     List plan = file_hnsw_plan(request, n, p, k);
     selected["reason"] = plan["selection_reason"];
     selected["resources"] = plan;
+  }
+  if (profile.size() > 0) selected["cuda_cagra_admission"] = profile;
+  if (profile_fits) {
+    selected["cuda_cagra_profile"] = List::create(
+      _["graph_degree"] = profile["graph_degree"],
+      _["intermediate_degree"] = profile["intermediate_degree"],
+      _["batch_rows"] = profile["batch_rows"],
+      _["memory_limit_bytes"] = profile["memory_limit_bytes"]);
   }
   return selected;
   END_RCPP

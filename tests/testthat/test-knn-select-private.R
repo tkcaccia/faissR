@@ -39,6 +39,104 @@ test_that("wide CAGRA width-four presets honor the requested recall tier", {
     list(width = 2L, queue = 512L, builder = "nn_descent"))
 })
 
+test_that("resident CUDA batches write compact host output with correct IDs", {
+  skip_if_not_installed("float")
+  skip_if_not(faissR::cuvs_available())
+  set.seed(1607L)
+  samples <- 513L
+  k <- 8L
+  x <- float::fl(matrix(rnorm(samples * 32L), samples))
+  profile <- list(graph_degree = 32L, intermediate_degree = 64L,
+    batch_rows = 128L, memory_limit_bytes = 2^30)
+  prior <- options(faissR.cuvs_cagra_profile = profile)
+  on.exit(options(prior))
+  knn <- faissR:::cuvs_cagra_wide_self(x, k, 0.99, "float", TRUE)
+  exact <- nn(x, k = k, backend = "cpu", method = "exact",
+    exclude_self = TRUE, n_threads = 1L)
+  expect_identical(knn$backend_used, "cuda_cuvs_cagra")
+  expect_identical(knn$input_type, "float32")
+  expect_identical(knn$full_host_input_copy, FALSE)
+  expect_s4_class(knn$distances, "float32")
+  expect_identical(dim(knn$indices), c(samples, k))
+  expect_true(all(knn$indices >= 1L & knn$indices <= samples))
+  expect_true(all(knn$indices != seq_len(samples)))
+  expect_true(all(apply(knn$indices, 1L, anyDuplicated) == 0L))
+  recall <- vapply(seq_len(samples), function(i) {
+    mean(knn$indices[i, ] %in% exact$indices[i, ])
+  }, numeric(1L))
+  expect_gte(mean(recall), 0.99)
+  profile$memory_limit_bytes <- 1024L
+  options(faissR.cuvs_cagra_profile = profile)
+  expect_error(faissR:::cuvs_cagra_wide_self(x, k, 0.99, "float", TRUE),
+    "input and output exceed memory_limit")
+})
+
+test_that("explicit native CUDA CAGRA accepts large compact reference data", {
+    skip_if_not_installed("Rcpp")
+    header <- system.file("include", "faissR_api_v1.h", package = "faissR")
+    Rcpp::cppFunction(
+        code = '
+        SEXP select_cuda_knn(SEXP spec) {
+          return faissR_get_knn_select_v1()(spec);
+        }',
+        includes = paste0('#include "', header, '"')
+    )
+    choose <- function(method = "cagra_width4", rows = 10000000L,
+                       metric = "euclidean", self = TRUE, file = FALSE) {
+        select_cuda_knn(list(backend = "cuda", metric = metric,
+            n_reference = rows, n_features = 96L, n_query = rows,
+            k = 30L, target_recall = 0.99, self_query = self,
+            file_backed = file, allow_ivf = TRUE, cuda_method = method))
+    }
+    for (file in c(FALSE, TRUE)) {
+        choice <- choose(file = file)
+        expect_identical(choice$method, "cagra_width4")
+        expect_identical(choice$reason, "cuda_cagra_requested")
+        expect_identical(choose("cagra", file = file)$method, "cagra")
+        expect_identical(choose("auto", file = file)$method, "ivf")
+    }
+    expect_error(choose(rows = 499999L), "500,000 rows")
+    expect_error(choose(metric = "cosine"), "Euclidean self KNN")
+    expect_error(choose(self = FALSE), "Euclidean self KNN")
+})
+
+test_that("a shared CUDA profile bounds and records file-backed batches", {
+    skip_if_not_installed("float")
+    skip_if_not(faissR::cuvs_available())
+    set.seed(1609L)
+    rows <- 513L
+    columns <- 32L
+    k <- 8L
+    x <- matrix(rnorm(rows * columns), rows)
+    path <- tempfile(fileext = ".f32")
+    on.exit(unlink(path), add = TRUE)
+    writeBin(as.vector(t(x)), path, size = 4L, endian = "little")
+    input <- list(format = "f32", path = path, nrow = rows, ncol = columns)
+    profile <- list(graph_degree = 32L, intermediate_degree = 64L,
+        batch_rows = 128L, memory_limit_bytes = 2^30)
+    prior <- options(faissR.cuvs_cagra_profile = profile)
+    on.exit(options(prior), add = TRUE)
+    index <- faissR:::cuvs_cagra_wide_file(input, k, 256L, 2^30, .99, TRUE)
+    release <- TRUE
+    on.exit(if (release) index$release(), add = TRUE)
+    expect_identical(index$backend_used, "cuda_cuvs_cagra_file")
+    expect_identical(index$query_batch_rows, 128L)
+    expect_identical(index$params$graph_degree, 32L)
+    expect_identical(index$params$intermediate_degree, 64L)
+    expect_lt(index$device_bytes_estimate, index$device_free_bytes_at_build)
+    expect_error(index$search_batch(1L, 129L), "exceeds the index or capacity")
+    ids <- index$search_batch(2L, 128L)$indices
+    index$release()
+    release <- FALSE
+    exact <- nn(float::fl(x), k = k, backend = "cpu", method = "exact",
+        exclude_self = TRUE, n_threads = 1L)
+    expect_true(all(ids != 2:129))
+    recall <- vapply(seq_len(nrow(ids)), function(i)
+        mean(ids[i, ] %in% exact$indices[i + 1L, ]), numeric(1L))
+    expect_gte(mean(recall), .99)
+    expect_error(faissR:::cuvs_cagra_wide_file(input, k, 256L, 1024,
+        .99, TRUE), "estimate exceeds memory_limit")
+})
 test_that("native file-backed HNSW respects the host memory and shard limits", {
     skip_if_not_installed("Rcpp")
     header <- system.file("include", "faissR_api_v1.h", package = "faissR")

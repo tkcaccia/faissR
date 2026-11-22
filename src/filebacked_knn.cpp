@@ -21,6 +21,7 @@
 #ifdef FAISSR_HAS_CUVS
 Rcpp::List cuvs_file_cagra_build_impl(int n, int p, int k, int batch,
     double limit, int width, int queue, bool nn_descent,
+    int graph_degree, int intermediate_degree,
     const std::function<void(int, int, float*)>& read);
 Rcpp::List cuvs_file_cagra_search_impl(SEXP pointer, int first, int count);
 void cuvs_file_cagra_release_impl(SEXP pointer);
@@ -713,7 +714,8 @@ void file_metal_cagra_release_cpp(SEXP pointer) {
 
 // [[Rcpp::export]]
 Rcpp::List file_cagra_build_cpp(SEXP source_spec, int k, int batch,
-    double memory_limit, int width, int queue, bool nn_descent) {
+    double memory_limit, int width, int queue, bool nn_descent,
+    int graph_degree = 64, int intermediate_degree = 128) {
 #ifndef FAISSR_HAS_CUVS
   Rcpp::stop("File-backed CUDA CAGRA requires cuVS support in faissR");
 #else
@@ -730,7 +732,7 @@ Rcpp::List file_cagra_build_cpp(SEXP source_spec, int k, int batch,
   };
   Rcpp::List index = cuvs_file_cagra_build_impl(static_cast<int>(file.rows),
     static_cast<int>(file.columns), k, batch, memory_limit,
-    width, queue, nn_descent, read);
+    width, queue, nn_descent, graph_degree, intermediate_degree, read);
   if (std::filesystem::last_write_time(file.path) != modified ||
       std::filesystem::file_size(file.path) != bytes) {
     cuvs_file_cagra_release_impl(index["pointer"]);

@@ -44,6 +44,11 @@ List cuvs_cagra_float32_knn_impl(SEXP data,
                                  int itopk_size,
                                  std::string build_algo,
                                  std::string distance_storage);
+#ifdef FAISSR_HAS_CUVS
+List cuvs_cagra_batched_self_impl(SEXP data, int k, int batch,
+    double memory_limit, int width, int queue, bool nn_descent,
+    int graph_degree, int intermediate_degree, std::string output);
+#endif
 List cuvs_nndescent_self_knn_impl(NumericMatrix data,
                                   int k,
                                   int graph_degree,
@@ -205,6 +210,18 @@ List nn_cuvs_cagra_float32_cpp(SEXP data,
     build_algo,
     distance_storage
   );
+}
+
+// [[Rcpp::export]]
+List nn_cuvs_cagra_batched_self_cpp(SEXP data, int k, int batch,
+    double memory_limit, int width, int queue, bool nn_descent,
+    int graph_degree, int intermediate_degree, std::string output) {
+#ifdef FAISSR_HAS_CUVS
+  return cuvs_cagra_batched_self_impl(data, k, batch, memory_limit, width,
+    queue, nn_descent, graph_degree, intermediate_degree, output);
+#else
+  Rcpp::stop("Resident CUDA CAGRA requires cuVS support in faissR");
+#endif
 }
 
 // [[Rcpp::export]]
