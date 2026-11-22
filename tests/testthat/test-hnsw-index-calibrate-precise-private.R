@@ -40,6 +40,12 @@ test_that("version-3 HNSW calibration matches double exact IDs", {
         length(intersect(wanted, found)) / 5
     }, numeric(1L))
     expect_equal(out$pilot$pilot_recall, mean(recall), tolerance = 1e-12)
+    query_error <- sd(recall) / sqrt(length(recall))
+    nominal_error <- sqrt(0.9 * 0.1 / (length(recall) * 5))
+    expect_equal(out$pilot$pilot_query_recall_se, query_error, tolerance = 1e-8)
+    expect_equal(out$pilot$pilot_guard_recall,
+        min(1, 0.9 + 2.58 * max(nominal_error, query_error)),
+        tolerance = 1e-8)
     outside_shard <- faissR_test_precise_hnsw(
         xf, float::fl(x[rows, , drop = FALSE]),
         rep.int(0L, length(rows)))
@@ -76,4 +82,14 @@ test_that("version-3 calibration detects a near-boundary row", {
     expect_identical(pilot$pilot_reference, "full_cpu_double_l2")
     expect_gte(pilot$pilot_near_boundary_rows, 1L)
     expect_gte(pilot$pilot_recall, pilot$pilot_guard_recall)
+})
+
+test_that("file HNSW requests broader pilots for large high-dimensional data", {
+    tune <- function(n, p, target) {
+        faissR:::nn_tune_faiss_hnsw_cpp(n, p, 30L, "euclidean",
+            target)$file_pilot_offsets
+    }
+    expect_identical(tune(1281167L, 1024L, 0.99), c(0.125, 0.25, 0.625, 0.875))
+    expect_identical(tune(10000000L, 96L, 0.99), 0.25)
+    expect_identical(tune(1281167L, 1024L, 0.95), 0.25)
 })

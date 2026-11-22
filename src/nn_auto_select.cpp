@@ -3189,6 +3189,10 @@ List nn_tune_faiss_hnsw_cpp(int n,
   const int ef_construction = option_int(ef_construction_option, default_ef_construction, m, 4096);
   const int ef_search = option_int(ef_search_option, default_ef_search, k, 4096);
 
+  const NumericVector file_pilot_offsets =
+    euclidean && target_code == 99 && n != NA_INTEGER && n >= 500000 &&
+    high_dim ? NumericVector::create(0.125, 0.25, 0.625, 0.875) :
+      NumericVector::create(0.25);
   return List::create(
     _["m"] = m,
     _["ef_construction"] = ef_construction,
@@ -3216,6 +3220,7 @@ List nn_tune_faiss_hnsw_cpp(int n,
     _["requested_m"] = default_m,
     _["requested_ef_construction"] = default_ef_construction,
     _["requested_ef_search"] = default_ef_search,
+    _["file_pilot_offsets"] = file_pilot_offsets,
     _["target_recall"] = target_recall,
     _["tuning_source"] = "cpp"
   );

@@ -3091,12 +3091,18 @@ List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
   const int max_ef = std::min(handle->n,
     std::max(max_ef_requested, k));
   int ef = std::min(max_ef, std::max(k, initial_ef));
-  const double standard_error = std::sqrt(
+  const double nominal_error = std::sqrt(
     target_recall * (1 - target_recall) / (xq.nrow * k)
   );
-  const double guard = std::min(1.0, target_recall +
-                                2.58 * standard_error);
+  double guard = 0;
   double recall = 0;
+  double query_error = 0;
+  const bool refine = precise_reference && target_recall == 0.99 &&
+                      xq.nrow > 128;
+  const int first_ef = ef;
+  const int ef_resolution = std::max(16, k / 2);
+  int last_miss = 0;
+  int best_ef = 0;
   int attempts = 0;
   for (;;) {
     {
@@ -3106,6 +3112,7 @@ List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
                             candidate_dist.data(), candidate_id.data());
     }
     int hits = 0;
+    double squared_row_recall = 0;
     boundary_ties = 0;
     near_boundary_rows = 0;
     for (int row = 0; row < xq.nrow; ++row) {
@@ -3114,6 +3121,7 @@ List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
       const auto candidate_offset =
         static_cast<std::size_t>(row) * candidate_k;
       int rank = 0;
+      int row_hits = 0;
       double kth = 0;
       for (int j = 0; j < search_k; ++j) {
         const auto wanted = exact_id[offset + j];
@@ -3134,17 +3142,43 @@ List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
           if (found < 0 || found == self) continue;
           if (candidate_rank++ >= k) break;
           if (found == wanted) {
-            ++hits;
+            ++row_hits;
             break;
           }
         }
       }
       if (rank < k) Rcpp::stop("HNSW calibration exact reference incomplete");
+      hits += row_hits;
+      const double row_recall = static_cast<double>(row_hits) / k;
+      squared_row_recall += row_recall * row_recall;
     }
     recall = static_cast<double>(hits) / (xq.nrow * k);
+    // Misses within one query can be strongly correlated. Use the
+    // between-query error when it exceeds the nominal independent-hit error.
+    if (xq.nrow > 1) {
+      const double variance =
+        std::max(0.0, squared_row_recall / xq.nrow - recall * recall);
+      query_error = std::sqrt(variance / (xq.nrow - 1));
+    }
+    guard = std::min(1.0, target_recall +
+                          2.58 * std::max(nominal_error, query_error));
     ++attempts;
-    if (recall >= guard || ef >= max_ef) break;
-    ef = std::min(max_ef, std::max(ef + 1, ef * 2));
+    if (ef == best_ef) break;
+    if (recall >= guard) {
+      if (!refine || last_miss == 0 || ef - last_miss <= ef_resolution) break;
+      best_ef = ef;
+    } else {
+      if (best_ef == 0 && ef >= max_ef) break;
+      last_miss = ef;
+    }
+    // Search within a failing/passing bracket before using a wider ef.
+    // The exact reference is already available for each additional probe.
+    if (best_ef == 0) {
+      ef += std::min(ef, max_ef - ef);
+    } else {
+      const int gap = best_ef - last_miss;
+      ef = gap <= ef_resolution ? best_ef : last_miss + gap / 2;
+    }
   }
   const double seconds = std::chrono::duration<double>(
     std::chrono::steady_clock::now() - started
@@ -3155,9 +3189,11 @@ List faiss_hnsw_index_calibrate_impl(SEXP index_ptr, SEXP points,
   }
   return List::create(
     Rcpp::Named("ef_search") = ef,
+    Rcpp::Named("initial_ef_search") = first_ef,
     Rcpp::Named("max_ef_search") = max_ef,
     Rcpp::Named("pilot_recall") = recall,
     Rcpp::Named("pilot_guard_recall") = guard,
+    Rcpp::Named("pilot_query_recall_se") = query_error,
     Rcpp::Named("pilot_rows") = xq.nrow,
     Rcpp::Named("pilot_boundary_ties") = boundary_ties,
     Rcpp::Named("pilot_near_boundary_rows") = near_boundary_rows,
