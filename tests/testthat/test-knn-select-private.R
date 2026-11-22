@@ -9,11 +9,13 @@ test_that("native Metal selection respects IVF's index and width limits", {
         includes = paste0('#include "', header, '"')
     )
     choose <- function(rows, columns, k = 30L, query = rows,
-                       self = TRUE, file = FALSE) {
+                       self = TRUE, file = FALSE, recall = 0.95,
+                       allow_ivf = TRUE, limit = Inf) {
         select_metal_knn(list(backend = "metal", metric = "euclidean",
             n_reference = rows, n_features = columns, n_query = query,
-            k = k, target_recall = 0.95, self_query = self,
-            file_backed = file, allow_ivf = TRUE))
+            k = k, target_recall = recall, self_query = self,
+            file_backed = file, allow_ivf = allow_ivf,
+            memory_limit_bytes = limit))
     }
     for (file in c(FALSE, TRUE)) {
         expect_identical(choose(50001L, 1024L, file = file)$method, "ivf")
@@ -26,6 +28,19 @@ test_that("native Metal selection respects IVF's index and width limits", {
     expect_identical(choose(33554432L, 64L, 128L)$method, "exact")
     expect_identical(choose(4096L, 512L, query = 8388608L,
         self = FALSE)$method, "exact")
+    for (file in c(FALSE, TRUE)) {
+        limited <- choose(1281167L, 1024L, file = file, recall = 0.99,
+            limit = 2^30)
+        expect_identical(limited$method, "exact")
+        skipped <- choose(1281167L, 1024L, file = file, recall = 0.99,
+            allow_ivf = FALSE)
+        expect_identical(skipped$method, "exact")
+        expect_null(skipped$metal_cagra_admission)
+        if (Sys.info()[["sysname"]] == "Darwin") {
+            expect_false(limited$metal_cagra_admission$fits)
+            expect_gt(limited$metal_cagra_admission$workspace_bytes, 2^30)
+        }
+    }
 })
 
 test_that("wide CAGRA width-four presets honor the requested recall tier", {

@@ -17,6 +17,17 @@ namespace faissr_metal {
 
 constexpr int kMaxIvfDimensions = 1024;
 
+inline double cagra_workspace_bytes(std::uint64_t rows, int columns,
+    int projected, double shortlist_bytes) {
+  constexpr auto seed_degree = 128;
+  constexpr auto graph_degree = 64;
+  constexpr auto reverse_degree = 32;
+  constexpr auto row_auxiliary = 4;
+  constexpr double reserve = 128.0 * 1024 * 1024;
+  return 4.0 * rows * (columns + projected + seed_degree + graph_degree +
+    reverse_degree + row_auxiliary) + shortlist_bytes + reserve;
+}
+
 inline bool ivf_shape_supported(std::uint64_t rows, int columns, int k) {
   // IVF's projection, reranking and result buffers use 32-bit offsets.
   return columns > 0 && columns <= kMaxIvfDimensions && k > 0 &&

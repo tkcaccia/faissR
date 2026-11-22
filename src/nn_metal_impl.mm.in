@@ -2375,8 +2375,8 @@ Rcpp::List faissr_metal_file_cagra_build_impl(int rows, int columns, int k,
     rows, columns, qdim, target);
   const double shortlist_bytes = static_cast<double>(MetalCagraIndex::capacity) *
     kMetalSimdGroups * shortlist * sizeof(int);
-  const double estimate = reference + 4.0 * rows * qdim + shortlist_bytes +
-    4.0 * rows * (128 + 64 + 32 + 4) + 128.0 * 1024 * 1024;
+  const double estimate = faissr_metal::cagra_workspace_bytes(
+    rows, columns, qdim, shortlist_bytes);
   if (!std::isfinite(limit) || estimate > limit ||
       !faissr_metal_file_capacity(estimate)) {
     Rcpp::stop("File-backed Metal CAGRA exceeds the unified memory budget");

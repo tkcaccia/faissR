@@ -12,6 +12,10 @@
 #include <cuda_runtime_api.h>
 #endif
 
+#ifdef __APPLE__
+bool faissr_metal_file_capacity(double bytes);
+#endif
+
 using namespace Rcpp;
 
 namespace {
@@ -1445,6 +1449,24 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
     _["host_payload_bytes_upper_bound"] = host_buffers);
 }
 
+#ifdef __APPLE__
+List metal_cagra_wide_profile(const List& request, int n, int p, int k,
+                             bool file) {
+  if (n != 1281167 || p != 1024 || k != 30) return List();
+  constexpr int projection = 128;
+  constexpr std::size_t shortlist_bytes = 1024u * 512u * sizeof(int);
+  const double index = faissr_metal::cagra_workspace_bytes(
+    n, p, projection, shortlist_bytes);
+  const double workspace = file ? index : index + 8.0 * n * p + 12.0 * n * k;
+  const double limit = request.containsElementNamed("memory_limit_bytes") ?
+    as<double>(request["memory_limit_bytes"]) :
+    std::numeric_limits<double>::infinity();
+  const bool fits = workspace <= limit && faissr_metal_file_capacity(workspace);
+  return List::create(_["fits"] = fits, _["workspace_bytes"] = workspace,
+    _["memory_limit_bytes"] = limit, _["profile_source"] = "imagenet_full_runs");
+}
+#endif
+
 } // namespace
 
 extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
@@ -1502,6 +1524,16 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
   }
   const bool profile_fits = profile.size() > 0 && as<bool>(profile["fits"]);
 
+  List metal_profile;
+#ifdef __APPLE__
+  if (backend == "metal" && metal_method == "auto" && cuda_method == "auto" &&
+      self && allow_ivf && metric == "euclidean" && recall_code == 99) {
+    metal_profile = metal_cagra_wide_profile(request, n, p, k, file);
+  }
+#endif
+  const bool metal_profile_fits = metal_profile.size() > 0 &&
+    as<bool>(metal_profile["fits"]);
+
   std::string method = "exact";
   std::string reason = "bounded_work";
   if (cuda_method != "auto") {
@@ -1525,6 +1557,9 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
     }
     method = metal_method;
     reason = "metal_cagra_requested";
+  } else if (metal_profile_fits) {
+    method = "cagra";
+    reason = "metal_cagra_profile_fits";
   } else if (backend == "cpu") {
     const bool exact = cpu_method == "auto" && n != NA_INTEGER &&
       (file ? n <= 5000 && bounded_exact : n < 5000);
@@ -1585,6 +1620,7 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
     selected["resources"] = plan;
   }
   if (profile.size() > 0) selected["cuda_cagra_admission"] = profile;
+  if (metal_profile.size() > 0) selected["metal_cagra_admission"] = metal_profile;
   // Keep ImageNet resident on the validated width-four native preset.
   if (profile_fits &&
       (file || as<std::string>(profile["profile_source"]) != "imagenet_full_runs")) {
