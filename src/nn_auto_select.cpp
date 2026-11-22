@@ -1379,6 +1379,47 @@ double cuda_free_bytes(const List& request) {
   return NA_REAL;
 }
 
+List cuda_cagra_shard_plan(const List& request, int n, int p, int k) {
+  const double memory = request.containsElementNamed("memory_limit_bytes") ?
+    as<double>(request["memory_limit_bytes"]) : NA_REAL;
+  const double free = cuda_free_bytes(request);
+  if (!finite1(free) || !finite1(memory) || memory <= 0) {
+    stop("Sharded CUDA CAGRA requires available VRAM and a memory limit.");
+  }
+  const int batch = 512;
+  const int degree = std::max(p <= 128 ? 32 : 64, k + 1);
+  const int intermediate = 2 * degree;
+  const auto option = Rf_GetOption1(Rf_install("faissR.cuvs_cagra_shard_rows"));
+  const double requested = Rf_isNull(option) ? 10000000.0 : as<double>(option);
+  if (!finite1(requested) || requested <= intermediate ||
+      requested > std::numeric_limits<int>::max() || requested != std::floor(requested)) {
+    stop("Invalid reference-shard row limit for CUDA CAGRA.");
+  }
+  const double query_bytes = 4.0 * p * batch;
+  const double limit = std::min(free, memory);
+  int low = intermediate;
+  int high = static_cast<int>(std::min<double>(n, requested));
+  while (low < high) {
+    const int mid = low + (high - low + 1) / 2;
+    const auto cap = faissr::cagra_capacity(mid, p, k, batch, degree, intermediate);
+    if (cap.device_bytes + query_bytes <= limit) low = mid;
+    else high = mid - 1;
+  }
+  if (low <= intermediate) stop("CUDA CAGRA cannot fit a reference shard.");
+  const int shards = static_cast<int>((static_cast<double>(n) + low - 1.0) / low);
+  const int shard_rows = static_cast<int>(std::ceil(static_cast<double>(n) / shards));
+  if (n / shards <= intermediate) stop("Balanced CUDA CAGRA shards are too small.");
+  const auto cap = faissr::cagra_capacity(shard_rows, p, k, batch, degree, intermediate);
+  return List::create(_["n_shards"] = shards, _["reference_chunk_rows"] = shard_rows,
+    _["chunk_rows"] = batch, _["graph_degree"] = degree,
+    _["intermediate_degree"] = intermediate, _["memory_limit_bytes"] = memory,
+    _["free_device_bytes"] = free,
+    _["device_bytes_estimate"] = cap.device_bytes + query_bytes,
+    _["host_batch_bytes_estimate"] = cap.host_batch_bytes,
+    _["output_bytes"] = 8.0 * n * k,
+    _["minimum_query_read_bytes"] = 4.0 * n * p * shards);
+}
+
 List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
                              bool file, int recall_code) {
   const SEXP option = Rf_GetOption1(Rf_install("faissR.cuvs_cagra_profile"));
@@ -1536,6 +1577,16 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
 
   std::string method = "exact";
   std::string reason = "bounded_work";
+  if (cuda_method == "cagra_sharded") {
+    if (backend != "cuda" || !file || !self || metric != "euclidean" ||
+        !known_shape || n <= k || k > 255) {
+      stop("Sharded CAGRA requires file-backed CUDA Euclidean self KNN.");
+    }
+    return List::create(_["provider"] = "faissR", _["backend"] = backend,
+      _["method"] = cuda_method, _["reason"] = "explicit_bounded_cuda_cagra",
+      _["shape"] = shape, _["target_recall"] = recall,
+      _["resources"] = cuda_cagra_shard_plan(request, n, p, k));
+  }
   if (cuda_method != "auto") {
     if ((cuda_method != "cagra" && cuda_method != "cagra_width4") ||
         backend != "cuda" || !self || metric != "euclidean" ||

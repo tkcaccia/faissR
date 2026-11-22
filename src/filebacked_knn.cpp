@@ -24,6 +24,8 @@ Rcpp::List cuvs_file_cagra_build_impl(int n, int p, int k, int batch,
     int graph_degree, int intermediate_degree,
     const std::function<void(int, int, float*)>& read);
 Rcpp::List cuvs_file_cagra_search_impl(SEXP pointer, int first, int count);
+Rcpp::List cuvs_file_cagra_query_impl(SEXP pointer, int features, int count,
+    const std::function<void(float*)>& read);
 void cuvs_file_cagra_release_impl(SEXP pointer);
 #endif
 
@@ -748,6 +750,29 @@ Rcpp::List file_cagra_search_cpp(SEXP pointer, int first, int count) {
   Rcpp::stop("File-backed CUDA CAGRA requires cuVS support in faissR");
 #else
   return cuvs_file_cagra_search_impl(pointer, first, count);
+#endif
+}
+
+// [[Rcpp::export]]
+Rcpp::List file_cagra_query_cpp(SEXP pointer, SEXP query_spec, int first, int count) {
+#ifndef FAISSR_HAS_CUVS
+  Rcpp::stop("File-backed CUDA CAGRA requires cuVS support in faissR");
+#else
+  const FileMatrix query = file_matrix(Rcpp::List(query_spec));
+  if (first < 1 || count < 1 || static_cast<std::uint64_t>(first) > query.rows ||
+      static_cast<std::uint64_t>(count) > query.rows - first + 1) {
+    Rcpp::stop("External CUDA CAGRA query batch is outside its file view");
+  }
+  const auto modified = std::filesystem::last_write_time(query.path);
+  std::ifstream input(query.path, std::ios::binary);
+  if (!input) Rcpp::stop("Could not open external CUDA CAGRA query file");
+  auto read = [&](float* output) {
+    read_file_rows(input, query, first - 1, count, output);
+    if (std::filesystem::last_write_time(query.path) != modified) {
+      Rcpp::stop("External CUDA CAGRA query file changed during search");
+    }
+  };
+  return cuvs_file_cagra_query_impl(pointer, static_cast<int>(query.columns), count, read);
 #endif
 }
 

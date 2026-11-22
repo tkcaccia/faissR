@@ -107,6 +107,8 @@ cuvs_cagra_wide_file <- function(source, k, batch, memory_limit,
     pointer <- index$pointer
     index$search_batch <- function(first, count)
         file_cagra_search_cpp(pointer, first, count)
+    index$query_batch <- function(query, first, count)
+        file_cagra_query_cpp(pointer, query, first, count)
     index$release <- function() file_cagra_release_cpp(pointer)
     index$params <- c(params, list(graph_degree = index$graph_degree,
         intermediate_degree = index$intermediate_graph_degree,

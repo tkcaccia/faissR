@@ -822,6 +822,10 @@ file_cagra_search_cpp <- function(pointer, first, count) {
     .Call(`_faissR_file_cagra_search_cpp`, pointer, first, count)
 }
 
+file_cagra_query_cpp <- function(pointer, query_spec, first, count) {
+    .Call(`_faissR_file_cagra_query_cpp`, pointer, query_spec, first, count)
+}
+
 file_cagra_release_cpp <- function(pointer) {
     invisible(.Call(`_faissR_file_cagra_release_cpp`, pointer))
 }

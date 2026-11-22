@@ -229,3 +229,32 @@ test_that("ImageNet admits the validated width-four CUDA preset", {
                      "deep1b_10m_full_runs")
     expect_equal(compact$cuda_cagra_profile$graph_degree, 32)
 })
+
+test_that("sharded CAGRA plans bounded CUDA indexes for larger file inputs", {
+    skip_if_not_installed("Rcpp")
+    header <- system.file("include", "faissR_api_v1.h", package = "faissR")
+    Rcpp::cppFunction(
+        code = 'SEXP select_cagra_shards(SEXP spec) {
+          return faissR_get_knn_select_v1()(spec);
+        }', includes = paste0('#include "', header, '"'))
+    previous <- options(faissR.cuvs_cagra_shard_rows = NULL)
+    on.exit(options(previous))
+    plan <- function(n, free = 16, file = TRUE) {
+        select_cagra_shards(list(backend = "cuda", metric = "euclidean",
+            cuda_method = "cagra_sharded", n_reference = n, n_query = n,
+            n_features = 96L, k = 30L, target_recall = 0.99, self_query = TRUE,
+            file_backed = file, allow_ivf = TRUE, memory_limit_bytes = 22 * 2^30,
+            cuda_free_bytes = free * 2^30))
+    }
+    for (n in c(50000000L, 100000000L)) {
+        selected <- plan(n)
+        expect_identical(selected$method, "cagra_sharded")
+        expect_equal(selected$resources$n_shards, n / 10000000)
+        expect_equal(selected$resources$reference_chunk_rows, 10000000)
+        expect_lte(selected$resources$device_bytes_estimate, 16 * 2^30)
+        expect_equal(selected$resources$output_bytes, 8 * 30 * as.double(n))
+    }
+    expect_gt(plan(50000000L, free = 8)$resources$n_shards, 5L)
+    expect_error(plan(50000000L, file = FALSE), "file-backed CUDA")
+    expect_error(plan(50000000L, free = 0.01), "cannot fit")
+})
