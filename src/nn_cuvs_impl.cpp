@@ -1884,6 +1884,8 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
                          int search_width,
                          int itopk_size,
                          std::string build_algo) {
+  using Clock = std::chrono::steady_clock;
+  const auto input_started = Clock::now();
   validate_inputs(data, points, k, exclude_self);
   const bool same_storage = same_matrix_storage(data, points);
   const bool self_query = exclude_self || same_storage;
@@ -1939,6 +1941,7 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
     std::vector<float>().swap(xq);
   }
 
+  const auto uploaded = Clock::now();
   int64_t dataset_shape[2] = {n_data, n_features};
   int64_t query_shape[2] = {n_points, n_features};
   int64_t output_shape[2] = {n_points, search_k};
@@ -1973,11 +1976,13 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
   }
 
   CagraIndex index;
+  const auto build_started = Clock::now();
   cuvs_check(
     cuvsCagraBuild(res.get(), index_params.get(), &dataset_tensor, index.get()),
     "cuvsCagraBuild"
   );
   cuda_sync("cuvsCagraBuild synchronize");
+  const auto built = Clock::now();
 
   CagraSearchParams search_params;
   if (itopk_size > 0) {
@@ -2003,6 +2008,7 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
   std::vector<int64_t> labels(static_cast<std::size_t>(n_points) * search_k);
   std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
 
+  const auto search_started = Clock::now();
   for (int offset = 0; offset < n_points; offset += batch_size) {
     const int current_batch = std::min(batch_size, n_points - offset);
     int64_t query_shape[2] = {current_batch, n_features};
@@ -2058,6 +2064,7 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
     cuda_sync("cuvsCagraSearch copy synchronize");
   }
 
+  const auto searched = Clock::now();
   List out = format_int64_result(
     labels,
     distances,
@@ -2069,6 +2076,17 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
     "cuVS_CAGRA",
     false
   );
+  const auto assembled = Clock::now();
+  out["source_read_and_upload_seconds"] =
+    std::chrono::duration<double>(uploaded - input_started).count();
+  out["index_build_seconds"] =
+    std::chrono::duration<double>(built - build_started).count();
+  out["index_build_seconds_scope"] = "cuvs_cagra_build";
+  out["search_seconds"] =
+    std::chrono::duration<double>(searched - search_started).count();
+  out["search_seconds_scope"] = "cuvs_cagra_search_and_copy_to_host";
+  out["graph_assembly_seconds"] =
+    std::chrono::duration<double>(assembled - searched).count();
   out["graph_degree"] = graph_degree;
   out["intermediate_graph_degree"] = intermediate_graph_degree;
   out["search_width"] = search_width;
@@ -2104,6 +2122,8 @@ List cuvs_cagra_float32_knn_impl(SEXP data,
                                  int itopk_size,
                                  std::string build_algo,
                                  std::string distance_storage) {
+  using Clock = std::chrono::steady_clock;
+  const auto input_started = Clock::now();
   MatrixViewF32 xb = make_float32_matrix_view(data, "data");
   const bool same_storage = same_float32_object(data, points);
   MatrixViewF32 xq = same_storage ? MatrixViewF32() :
@@ -2161,6 +2181,7 @@ List cuvs_cagra_float32_knn_impl(SEXP data,
     query_ptr = query_d.get();
   }
 
+  const auto uploaded = Clock::now();
   int64_t dataset_shape[2] = {n_data, n_features};
   DLManagedTensor dataset_tensor = make_tensor(
     dataset_d.get(), dataset_shape, 2, kDLCUDA, kDLFloat, 32
@@ -2193,11 +2214,13 @@ List cuvs_cagra_float32_knn_impl(SEXP data,
   }
 
   CagraIndex index;
+  const auto build_started = Clock::now();
   cuvs_check(
     cuvsCagraBuild(res.get(), index_params.get(), &dataset_tensor, index.get()),
     "cuvsCagraBuild"
   );
   cuda_sync("cuvsCagraBuild synchronize");
+  const auto built = Clock::now();
 
   CagraSearchParams search_params;
   if (itopk_size > 0) {
@@ -2223,6 +2246,7 @@ List cuvs_cagra_float32_knn_impl(SEXP data,
   std::vector<int64_t> labels(static_cast<std::size_t>(n_points) * search_k);
   std::vector<float> distances(static_cast<std::size_t>(n_points) * search_k);
 
+  const auto search_started = Clock::now();
   for (int offset = 0; offset < n_points; offset += batch_size) {
     const int current_batch = std::min(batch_size, n_points - offset);
     int64_t query_shape[2] = {current_batch, n_features};
@@ -2278,6 +2302,7 @@ List cuvs_cagra_float32_knn_impl(SEXP data,
     cuda_sync("cuvsCagraSearch copy synchronize");
   }
 
+  const auto searched = Clock::now();
   List out = format_int64_result(
     labels,
     distances,
@@ -2291,6 +2316,17 @@ List cuvs_cagra_float32_knn_impl(SEXP data,
     false,
     float_distances
   );
+  const auto assembled = Clock::now();
+  out["source_read_and_upload_seconds"] =
+    std::chrono::duration<double>(uploaded - input_started).count();
+  out["index_build_seconds"] =
+    std::chrono::duration<double>(built - build_started).count();
+  out["index_build_seconds_scope"] = "cuvs_cagra_build";
+  out["search_seconds"] =
+    std::chrono::duration<double>(searched - search_started).count();
+  out["search_seconds_scope"] = "cuvs_cagra_search_and_copy_to_host";
+  out["graph_assembly_seconds"] =
+    std::chrono::duration<double>(assembled - searched).count();
   out["graph_degree"] = graph_degree;
   out["intermediate_graph_degree"] = intermediate_graph_degree;
   out["search_width"] = search_width;

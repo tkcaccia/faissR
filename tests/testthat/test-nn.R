@@ -3116,6 +3116,12 @@ test_that("cuVS CAGRA reports actual and requested graph parameters", {
   out <- internal_nn(exclude_self = TRUE, x, k = 10L, backend = "cuda_cuvs_cagra")
   approx <- attr(out, "approximation")
   expect_equal(dim(out$indices), c(nrow(x), 10L))
+  stages <- c("source_read_and_upload_seconds", "index_build_seconds",
+              "search_seconds", "graph_assembly_seconds")
+  for (name in stages) {
+    expect_length(out[[name]], 1L)
+    expect_true(is.finite(out[[name]]) && out[[name]] >= 0)
+  }
   expect_equal(approx$graph_degree, 32L)
   expect_equal(approx$requested_graph_degree, 32L)
   expect_equal(approx$intermediate_graph_degree, 64L)

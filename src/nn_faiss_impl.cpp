@@ -1784,6 +1784,8 @@ List faiss_gpu_bfknn_float32_gpu_impl(SEXP data,
   if (metric != "euclidean" && metric != "inner_product") {
     Rcpp::stop("FAISS GPU-resident exact route currently supports metric = 'euclidean' or 'inner_product'");
   }
+  using Clock = std::chrono::steady_clock;
+  const auto input_started = Clock::now();
   MatrixViewF32 xb = make_float32_matrix_view(data, "data");
   const bool same_storage = same_float32_object(data, points);
   MatrixViewF32 xq = same_storage ? MatrixViewF32() :
@@ -1841,6 +1843,7 @@ List faiss_gpu_bfknn_float32_gpu_impl(SEXP data,
     query_ptr = d_query.ptr;
   }
 
+  const auto uploaded = Clock::now();
   CudaDeviceAllocation d_raw_indices(raw_items * sizeof(faiss::idx_t),
                                      "cudaMalloc(FAISS GPU raw indices)");
   CudaDeviceAllocation d_raw_distances(raw_items * sizeof(float),
@@ -1869,8 +1872,11 @@ List faiss_gpu_bfknn_float32_gpu_impl(SEXP data,
   args.device = device;
 
   faiss::gpu::StandardGpuResources& resources = reusable_faiss_gpu_resources();
+  const auto search_started = Clock::now();
   faiss::gpu::bfKnn(&resources, args);
-  cuda_runtime_check(cudaDeviceSynchronize(), "cudaDeviceSynchronize(FAISS GPU bfKnn)");
+  cuda_runtime_check(cudaDeviceSynchronize(),
+                     "cudaDeviceSynchronize(FAISS GPU bfKnn)");
+  const auto searched = Clock::now();
 
   const int conversion_status = faissr_cuda_convert_faiss_knn_gpu_result(
     d_raw_indices.as<int64_t>(),
@@ -1894,7 +1900,7 @@ List faiss_gpu_bfknn_float32_gpu_impl(SEXP data,
   handle->k = k;
   handle->device = device;
 
-  return make_faiss_gpu_knn_result(
+  List out = make_faiss_gpu_knn_result(
     handle,
     metric,
     backend_used,
@@ -1907,6 +1913,16 @@ List faiss_gpu_bfknn_float32_gpu_impl(SEXP data,
     same_storage,
     args.use_cuvs
   );
+  out["source_read_and_upload_seconds"] =
+    std::chrono::duration<double>(uploaded - input_started).count();
+  out["index_build_seconds"] = 0.0;
+  out["index_build_seconds_scope"] = "direct_search_no_index";
+  out["search_seconds"] =
+    std::chrono::duration<double>(searched - search_started).count();
+  out["search_seconds_scope"] = "faiss_gpu_bfknn";
+  out["graph_assembly_seconds"] =
+    std::chrono::duration<double>(Clock::now() - searched).count();
+  return out;
 #else
   (void)data;
   (void)points;
