@@ -14,6 +14,9 @@
 
 #ifdef __APPLE__
 bool faissr_metal_file_capacity(double bytes);
+bool faissr_metal_cagra_uses_nn_descent(double recall);
+double faissr_metal_cagra_workspace(int rows, int columns, int qdim,
+    double shortlist_bytes, int degree, bool nn_descent);
 #endif
 
 using namespace Rcpp;
@@ -1504,16 +1507,16 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
 
 #ifdef __APPLE__
 List metal_cagra_wide_profile(const List& request, int n, int p, int k,
-                             bool file) {
-  const bool imagenet = n == 1281167 && p == 1024 && k == 30;
-  const bool balanced = faissr_metal::cagra_balanced_shape(n, p, k, .99);
-  if (!imagenet && !balanced) return List();
+                             double recall, bool file) {
+  const bool imagenet = recall == .99 && n == 1281167 && p == 1024 && k == 30;
+  const bool nn_descent = faissr_metal_cagra_uses_nn_descent(recall);
+  const bool balanced = faissr_metal::cagra_balanced_shape(n, p, k, recall);
+  const int degree = faissr_metal::cagra_graph_degree(n, p, k, recall, nn_descent);
+  if (!imagenet && degree == faissr_metal::kCagraDegree) return List();
   const int projection = faissr_metal::ivf_projection_dimensions(p, balanced);
   const std::size_t shortlist_bytes = imagenet ? 1024u * 512u * sizeof(int) : 0;
-  const int degree = balanced ? faissr_metal::kCagraBalancedDegree :
-    faissr_metal::kCagraDegree;
-  const double index = faissr_metal::cagra_workspace_bytes(
-    n, p, projection, shortlist_bytes, degree);
+  const double index = faissr_metal_cagra_workspace(
+    n, p, projection, shortlist_bytes, degree, nn_descent);
   const double workspace = file ? index : index + 8.0 * n * p + 12.0 * n * k;
   const double limit = request.containsElementNamed("memory_limit_bytes") ?
     as<double>(request["memory_limit_bytes"]) :
@@ -1521,8 +1524,9 @@ List metal_cagra_wide_profile(const List& request, int n, int p, int k,
   const bool fits = workspace <= limit && faissr_metal_file_capacity(workspace);
   return List::create(_["fits"] = fits, _["workspace_bytes"] = workspace,
     _["memory_limit_bytes"] = limit, _["graph_degree"] = degree,
-    _["projection_dim"] = projection, _["profile_source"] = imagenet ?
-      "imagenet_full_runs" : "deep1b_10m_shape_profile");
+    _["projection_dim"] = nn_descent ? 0 : projection,
+    _["profile_source"] = nn_descent ? "native_nn_descent_trial" :
+      imagenet ? "imagenet_full_runs" : "deep1b_10m_shape_profile");
 }
 #endif
 
@@ -1586,8 +1590,8 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
   List metal_profile;
 #ifdef __APPLE__
   if (backend == "metal" && metal_method == "auto" && cuda_method == "auto" &&
-      self && allow_ivf && metric == "euclidean" && recall_code == 99) {
-    metal_profile = metal_cagra_wide_profile(request, n, p, k, file);
+      self && allow_ivf && metric == "euclidean" && known_shape) {
+    metal_profile = metal_cagra_wide_profile(request, n, p, k, recall, file);
   }
 #endif
   const bool metal_profile_fits = metal_profile.size() > 0 &&

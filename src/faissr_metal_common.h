@@ -18,12 +18,38 @@ namespace faissr_metal {
 constexpr int kMaxIvfDimensions = 1024;
 constexpr std::uint32_t kCagraDegree = 64;
 constexpr std::uint32_t kCagraBalancedDegree = 48;
+constexpr std::uint32_t kCagraNndReverseWidth = 4;
+
+constexpr double cagra_nnd_workspace_bytes(std::uint64_t rows,
+    int columns, int degree) {
+  const double data = 4.0 * rows * columns;
+  const double edge = 4.0 * rows * degree;
+  const double refine = 4.0 * edge + 4.0 * rows * kCagraNndReverseWidth;
+  const double prune = 3.0 * edge;
+  const double reverse = 2.0 * edge + 4.0 * rows;
+  return data + std::max({refine, prune, reverse}) + 128.0 * 1024 * 1024;
+}
+
+constexpr std::uint32_t cagra_reverse_rank_batch(std::uint32_t rows,
+    std::uint32_t degree) {
+  return std::min(degree, std::numeric_limits<std::uint32_t>::max() / rows);
+}
 
 inline bool cagra_balanced_shape(std::uint64_t rows, int columns,
                                  int k, double target) {
   return rows >= 5000000 && rows <= std::numeric_limits<int>::max() &&
     columns > 0 && columns <= 128 && k > 0 &&
     k < static_cast<int>(kCagraBalancedDegree) && target == 0.99;
+}
+
+inline std::uint32_t cagra_graph_degree(int rows, int columns, int k,
+                                        double target, bool nn_descent) {
+  if (cagra_balanced_shape(rows, columns, k, target)) return kCagraBalancedDegree;
+  if (nn_descent && rows >= 5000000 && columns > 0 && columns <= 128 && k > 0) {
+    const int degree = target == 0.90 ? 32 : target == 0.95 ? 40 : 48;
+    if (k < degree) return static_cast<std::uint32_t>(degree);
+  }
+  return kCagraDegree;
 }
 
 inline double cagra_workspace_bytes(std::uint64_t rows, int columns,

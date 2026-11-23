@@ -145,14 +145,9 @@ inline void insert_sorted(
   ids[base + pos] = id;
 }
 
-// A max heap retains the same shortlist with logarithmic replacement cost.
-// The exact reranker consumes the set of IDs regardless of heap order.
-inline void offer_shortlist(
-    threadgroup float* values, threadgroup int* ids, uint count,
-    float value, int id) {
-  if (!better_pair(value, id, values[0], ids[0])) return;
-  uint pos = 0;
-  for (uint child = 1; child < count; child = 2 * pos + 1) {
+inline void sift_shortlist(threadgroup float* values, threadgroup int* ids,
+    uint count, uint pos, float value, int id) {
+  for (uint child = 2 * pos + 1; child < count; child = 2 * pos + 1) {
     if (child + 1 < count &&
         better_pair(values[child], ids[child],
                     values[child + 1], ids[child + 1])) {
@@ -165,6 +160,24 @@ inline void offer_shortlist(
   }
   values[pos] = value;
   ids[pos] = id;
+}
+
+// A max heap retains the same shortlist with logarithmic replacement cost.
+inline void offer_shortlist(threadgroup float* values, threadgroup int* ids,
+    uint count, float value, int id) {
+  if (better_pair(value, id, values[0], ids[0]))
+    sift_shortlist(values, ids, count, 0u, value, id);
+}
+
+inline void sort_shortlist_heap(threadgroup float* ds, threadgroup int* ids,
+    uint count) {
+  for (uint end = count - 1; end > 0; --end) {
+    const float largest = ds[0], value = ds[end];
+    const int largest_id = ids[0], id = ids[end];
+    sift_shortlist(ds, ids, end, 0u, value, id);
+    ds[end] = largest;
+    ids[end] = largest_id;
+  }
 }
 
 kernel void signed_hash_project(
@@ -970,10 +983,353 @@ constant uint CAGRA_POOL = 512;
 constant uint CAGRA_INITIAL = 128;
 constant uint CAGRA_RANK_HASH = 512;
 
+constant uint NND_NEW = 0x80000000u;
+constant uint NND_ID = 0x7fffffffu;
+constant uint NND_REVERSE = 4;
+constant uint NND_MAX_PIVOTS = 16;
+
+struct NndParams {
+  uint n, p, degree, offset;
+  uint round, pivots, last;
+  uint multiplier, inverse, shift;
+  uint claim_slots, partition_ranked;
+};
+
+inline uint nnd_hash(uint key) {
+  key ^= key >> 16;
+  key *= 0x7feb352du;
+  key ^= key >> 15;
+  return key;
+}
+
+// Hash random projections into buckets before comparing nearby seed rows.
+// One SIMD group computes a signature for each row.
+kernel void cagra_nnd_seed_signature(
+    device const float* data [[buffer(0)]],
+    device const float* planes [[buffer(1)]],
+    device const float* centers [[buffer(2)]],
+    device uint* signatures [[buffer(3)]],
+    constant uint4& spec [[buffer(4)]],
+    uint group [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]]) {
+  const uint row = spec.w + group * NSG + sg;
+  if (row >= spec.x) return;
+  const device float* point = data + flat_offset(row, spec.y);
+  float values[4];
+  for (uint d = lane, block = 0; d < spec.y; d += SIMD_WIDTH, ++block)
+    values[block] = point[d];
+  uint code = 0;
+  for (uint bit = 0; bit < spec.z; ++bit) {
+    const device float* plane = planes + flat_offset(bit, spec.y);
+    float projected = 0;
+    for (uint d = lane, block = 0; d < spec.y; d += SIMD_WIDTH, ++block)
+      projected = fma(values[block], plane[d], projected);
+    const float score = simd_sum(projected);
+    code |= uint(score >= centers[bit]) << bit;
+  }
+  if (lane == 0) signatures[row] = code;
+}
+
+// Each round reads a complete snapshot. Keep bounded reciprocal hints for
+// new edges, with stable conflict resolution even when many rows target a hub.
+kernel void cagra_nnd_reverse(
+    device const uint* graph [[buffer(0)]],
+    device atomic_uint* reverse [[buffer(1)]],
+    constant NndParams& params [[buffer(2)]],
+    uint2 item [[thread_position_in_grid]]) {
+  const uint row = item.y + params.offset;
+  const uint edge = graph[flat_offset(row, params.degree) + item.x];
+  const uint to = edge & NND_ID;
+  if ((edge & NND_NEW) == 0 || to >= params.n) return;
+  const uint key = row ^ params.shift;
+  const uint slot = nnd_hash(key) & (NND_REVERSE - 1u);
+  atomic_fetch_min_explicit(reverse + flat_offset(to, NND_REVERSE) + slot,
+    key, memory_order_relaxed);
+}
+
+inline bool nnd_claim(threadgroup atomic_uint* keys, uint slots, uint id,
+    bool retained) {
+  const uint key = id + 1u;
+  const uint value = retained ? key | NND_NEW : key;
+  uint slot = nnd_hash(key) & (slots - 1u);
+  for (uint probe = 0; probe < slots; ++probe) {
+    threadgroup atomic_uint* entry = keys + slot;
+    uint old = atomic_load_explicit(entry, memory_order_relaxed);
+    while (old == 0) {
+      if (atomic_compare_exchange_weak_explicit(entry, &old, value,
+          memory_order_relaxed, memory_order_relaxed)) return true;
+    }
+    if ((old & NND_ID) == key) return false;
+    slot = (slot + 1u) & (slots - 1u);
+  }
+  return false;
+}
+
+inline bool nnd_retained(threadgroup atomic_uint* keys, uint slots, uint id) {
+  const uint key = id + 1u;
+  uint slot = nnd_hash(key) & (slots - 1u);
+  for (uint probe = 0; probe < slots; ++probe) {
+    const uint value = atomic_load_explicit(keys + slot, memory_order_relaxed);
+    if (value == 0) return false;
+    if ((value & NND_ID) == key) return (value & NND_NEW) != 0;
+    slot = (slot + 1u) & (slots - 1u);
+  }
+  return false;
+}
+
+inline void nnd_choose_pivots(device const uint* prior,
+    threadgroup uint* pivots, uint n, uint degree, uint slots, uint begin) {
+  const uint fresh_limit = (slots + 1u) / 2u;
+  const uint old_limit = slots - fresh_limit;
+  uint fresh = 0, old = 0;
+  ulong used[2] = {0, 0};
+  for (uint j = 0; j < slots; ++j) pivots[j] = n;
+  for (uint j = 0; j < degree &&
+      (fresh < fresh_limit || old < old_limit); ++j) {
+    const uint rank = (begin + j) % degree;
+    const uint edge = prior[rank];
+    const uint id = edge & NND_ID;
+    if (id >= n) continue;
+    if ((edge & NND_NEW) != 0) {
+      if (fresh == fresh_limit) continue;
+      pivots[fresh++] = id;
+    } else {
+      if (old == old_limit) continue;
+      pivots[fresh_limit + old++] = id;
+    }
+    used[rank >> 6u] |= ulong(1) << (rank & 63u);
+  }
+  if (fresh + old == slots) return;
+
+  // When a class runs out, fill its vacancies from the closest unchosen rows.
+  uint rank = 0;
+  for (uint j = 0; j < slots && rank < degree; ++j) {
+    if (pivots[j] < n) continue;
+    while (rank < degree) {
+      const uint id = prior[rank] & NND_ID;
+      const bool picked = (used[rank >> 6u] & (ulong(1) << (rank & 63u))) != 0;
+      ++rank;
+      if (id >= n || picked) continue;
+      pivots[j] = id;
+      break;
+    }
+  }
+}
+
+// Seeding compares a handful of deterministic random blocks in float32.
+// Refinement visits old edges and the neighbors of sampled new/old pivots
+// and reciprocal hints. A threadgroup owns each output row.
+kernel void cagra_nnd_update(
+    device const float* data [[buffer(0)]],
+    device const uint* prior [[buffer(1)]],
+    device uint* next [[buffer(2)]],
+    device const uint* reverse [[buffer(3)]],
+    constant NndParams& params [[buffer(4)]],
+    device const uint* seed_order [[buffer(5)]],
+    device const uint* seed_position [[buffer(6)]],
+    threadgroup atomic_uint* claims [[threadgroup(0)]],
+    threadgroup float* query [[threadgroup(1)]],
+    uint group [[threadgroup_position_in_grid]],
+    uint tid [[thread_position_in_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]],
+    uint sg [[simdgroup_index_in_threadgroup]]) {
+  const uint row = params.offset + group;
+  const bool seed = params.pivots == 0;
+  const bool has_prior = !seed || params.round > 0;
+  const uint degree = params.degree;
+  const uint threads = NSG * SIMD_WIDTH;
+  const device uint* previous = prior + flat_offset(row, degree);
+  device uint* output = next + flat_offset(row, degree);
+  const device float* point = data + flat_offset(row, params.p);
+  threadgroup float ds[NSG * CAGRA_INITIAL];
+  threadgroup int ids[NSG * CAGRA_INITIAL];
+  threadgroup uint pivots[NND_MAX_PIVOTS + NND_REVERSE];
+  threadgroup uint selected[CAGRA_INITIAL];
+  for (uint d = tid; d < params.p; d += threads) query[d] = point[d];
+  for (uint i = tid; i < params.claim_slots; i += threads) {
+    atomic_store_explicit(claims + i, 0u, memory_order_relaxed);
+  }
+  for (uint i = tid; i < NSG * degree; i += threads) {
+    ds[i] = INFINITY;
+    ids[i] = -1;
+  }
+  if (!seed && tid == 0) {
+    const uint begin = nnd_hash(row ^ params.shift) % degree;
+    nnd_choose_pivots(previous, pivots, params.n, degree, params.pivots, begin);
+    for (uint j = 0; j < NND_REVERSE; ++j) {
+      const uint key = reverse[flat_offset(row, NND_REVERSE) + j];
+      pivots[params.pivots + j] = key == 0xffffffffu ? params.n : key ^ params.shift;
+    }
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (!seed) {
+    // First tag the stored neighbors in the same table used for deduplication.
+    // Later we can test freshness without scanning the previous row per edge.
+    if (tid < degree) {
+      const uint id = previous[tid] & NND_ID;
+      if (id < params.n && id != row) nnd_claim(claims, params.claim_slots, id, true);
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+  const uint block = seed ? min(params.n, 256u) : 0u;
+  uint block_first = 0;
+  if (seed) {
+    const uint unshifted = (row + params.n - params.shift) % params.n;
+    const uint position = params.partition_ranked != 0 ? seed_position[row] :
+      uint(size_t(unshifted) * params.inverse % params.n);
+    block_first = position / block * block;
+  }
+  const uint retained = has_prior ? degree : 0u;
+  const uint work = seed ? block : (params.pivots + NND_REVERSE) * (degree + 1u);
+  for (uint i = sg; i < retained + work; i += NSG) {
+    uint id = params.n;
+    if (lane == 0) {
+      if (i < retained) {
+        id = previous[i] & NND_ID;
+      } else if (seed) {
+        const uint pos = (block_first + i - retained) % params.n;
+        id = params.partition_ranked != 0 ? seed_order[pos] :
+          uint((size_t(pos) * params.multiplier + params.shift) % params.n);
+      } else {
+        const uint entry = i - retained;
+        const uint pivot = pivots[entry / (degree + 1u)];
+        const uint rank = entry % (degree + 1u);
+        if (pivot < params.n) {
+          id = rank == degree ? pivot :
+            prior[flat_offset(pivot, degree) + rank] & NND_ID;
+        }
+      }
+      const bool preclaimed = !seed && i < retained;
+      if (id >= params.n || id == row ||
+          (!preclaimed && !nnd_claim(claims, params.claim_slots, id, false))) id = params.n;
+    }
+    id = simd_broadcast_first(id);
+    if (id < params.n) {
+      const device float* candidate = data + flat_offset(id, params.p);
+      float partial = 0.0f;
+      for (uint d = lane; d < params.p; d += SIMD_WIDTH) {
+        const float delta = query[d] - candidate[d];
+        partial = fma(delta, delta, partial);
+      }
+      const float distance = simd_sum(partial);
+      if (lane == 0) offer_shortlist(ds + sg * degree, ids + sg * degree,
+        degree, distance, int(id));
+    }
+  }
+  if (lane == 0) sort_shortlist_heap(ds + sg * degree, ids + sg * degree, degree);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid == 0) {
+    uint heads[NSG] = {0, 0, 0, 0};
+    for (uint rank = 0; rank < degree; ++rank) {
+      float best_distance = INFINITY;
+      int best_id = -1;
+      uint best_group = 0;
+      for (uint g = 0; g < NSG; ++g) {
+        if (heads[g] == degree) continue;
+        const uint pos = g * degree + heads[g];
+        if (better_pair(ds[pos], ids[pos], best_distance, best_id)) {
+          best_distance = ds[pos];
+          best_id = ids[pos];
+          best_group = g;
+        }
+      }
+      selected[rank] = best_id < 0 ? params.n : uint(best_id);
+      if (best_id >= 0) ++heads[best_group];
+    }
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid < degree) {
+    uint id = selected[tid];
+    if (params.last == 0 && id < params.n &&
+        (seed || !nnd_retained(claims, params.claim_slots, id)))
+      id |= NND_NEW;
+    output[tid] = id;
+  }
+}
+
+// A rank batch packs the reference rank and source row into one uint.
+kernel void cagra_reverse_select(
+    device const uint* graph [[buffer(0)]],
+    device atomic_uint* keys [[buffer(1)]],
+    device const uint* counts [[buffer(2)]],
+    constant uint4& spec [[buffer(3)]],
+    uint2 item [[thread_position_in_grid]]) {
+  const uint n = spec.x, degree = spec.y;
+  const uint row = item.y + spec.w;
+  const uint target = graph[flat_offset(row, degree) + spec.z + item.x];
+  if (target >= n || target == row) return;
+  const uint half_degree = degree / 2u;
+  const uint first = counts[target];
+  if (first == half_degree) return;
+  device atomic_uint* slots = keys + flat_offset(target, half_degree);
+  uint key = item.x * n + row;
+  if (key >= atomic_load_explicit(slots + half_degree - 1,
+      memory_order_relaxed)) return;
+  for (uint j = first; j < half_degree; ++j) {
+    const uint prior = atomic_fetch_min_explicit(slots + j, key,
+      memory_order_relaxed);
+    if (prior == 0xffffffffu) return;
+    key = max(prior, key);
+  }
+}
+
+kernel void cagra_reverse_collect(
+    device const uint* keys [[buffer(0)]],
+    device uint* incoming [[buffer(1)]],
+    device uint* counts [[buffer(2)]],
+    constant uint4& spec [[buffer(3)]],
+    uint2 item [[thread_position_in_grid]]) {
+  const uint row = item.y + spec.w, half_degree = spec.y / 2u;
+  const size_t base = flat_offset(row, half_degree);
+  uint count = counts[row];
+  for (; count < half_degree; ++count) {
+    const uint key = keys[base + count];
+    if (key == 0xffffffffu) break;
+    incoming[base + count] = key % spec.x;
+  }
+  counts[row] = count;
+}
+
+inline void cagra_reverse_append(device uint* output, thread uint& filled,
+    uint id, uint n, uint row, uint degree) {
+  if (filled == degree || id >= n || id == row) return;
+  for (uint j = 0; j < filled; ++j) {
+    if (output[j] == id) return;
+  }
+  output[filled++] = id;
+}
+
+kernel void cagra_reverse_merge(
+    device uint* graph [[buffer(0)]],
+    device const uint* incoming [[buffer(1)]],
+    device const uint* counts [[buffer(2)]],
+    constant uint4& spec [[buffer(3)]],
+    uint2 item [[thread_position_in_grid]]) {
+  const uint n = spec.x, degree = spec.y, row = item.y + spec.w;
+  const uint half_degree = degree / 2u;
+  device uint* output = graph + flat_offset(row, degree);
+  device const uint* reverse = incoming + flat_offset(row, half_degree);
+  uint forward[64];
+  for (uint j = 0; j < degree; ++j) forward[j] = output[j];
+  uint filled = 0;
+  for (uint j = 0; j < half_degree; ++j) {
+    cagra_reverse_append(output, filled, forward[j], n, row, degree);
+  }
+  for (uint j = 0; j < counts[row]; ++j) {
+    cagra_reverse_append(output, filled, reverse[j], n, row, degree);
+  }
+  for (uint j = half_degree; j < degree; ++j) {
+    cagra_reverse_append(output, filled, forward[j], n, row, degree);
+  }
+  for (uint j = filled; j < degree; ++j) output[j] = n;
+}
+
 struct CagraPruneParams {
   uint n;
   uint initial_degree;
   uint degree;
+  uint offset;
 };
 
 // A two-hop path through an earlier neighbor is a detour when both of
@@ -983,8 +1339,9 @@ kernel void cagra_rank_prune(
     device const uint* initial [[buffer(0)]],
     device uint* graph [[buffer(1)]],
     constant CagraPruneParams& params [[buffer(2)]],
-    uint row [[threadgroup_position_in_grid]],
+    uint group [[threadgroup_position_in_grid]],
     uint tid [[thread_position_in_threadgroup]]) {
+  const uint row = group + params.offset;
   if (row >= params.n) return;
   threadgroup uint keys[CAGRA_RANK_HASH];
   threadgroup uint ranks[CAGRA_RANK_HASH];
@@ -1075,6 +1432,61 @@ inline bool cagra_visit(device atomic_uint* visited, uint id, uint slots) {
   return false;
 }
 
+// Merge once per frontier instead of shifting the queue for each new edge.
+inline uint cagra_merge_candidates(threadgroup uint* ids, threadgroup float* ds,
+    threadgroup bool* expanded, uint size, uint capacity,
+    threadgroup int* candidates, threadgroup float* distances,
+    uint work, uint n) {
+  uint accepted = 0;
+  for (uint i = 0; i < work; ++i) {
+    if (candidates[i] >= int(n)) continue;
+    if (size == capacity && !better_pair(distances[i], candidates[i],
+        ds[size - 1u], int(ids[size - 1u]))) continue;
+    candidates[accepted] = candidates[i];
+    distances[accepted++] = distances[i];
+  }
+  if (accepted == 0) return size;
+  for (uint i = accepted / 2u; i > 0; --i) {
+    const uint parent = i - 1u;
+    sift_shortlist(distances, candidates, accepted, parent,
+      distances[parent], candidates[parent]);
+  }
+  sort_shortlist_heap(distances, candidates, accepted);
+
+  // Find the two prefixes that will fit, then merge them from the end.
+  const uint total = min(size + accepted, capacity);
+  uint low = total > accepted ? total - accepted : 0u;
+  uint high = min(size, total);
+  while (low < high) {
+    const uint old_rank = low + (high - low) / 2u;
+    const uint new_rank = total - old_rank - 1u;
+    if (!better_pair(distances[new_rank], candidates[new_rank],
+        ds[old_rank], int(ids[old_rank]))) low = old_rank + 1u;
+    else high = old_rank;
+  }
+  uint old_count = low;
+  uint new_count = total - old_count;
+  for (uint write = total; new_count > 0;) {
+    const uint slot = --write;
+    const uint next = new_count - 1u;
+    const bool use_old = old_count > 0 && better_pair(
+      distances[next], candidates[next], ds[old_count - 1u],
+      int(ids[old_count - 1u]));
+    if (use_old) {
+      const uint from = --old_count;
+      ids[slot] = ids[from];
+      ds[slot] = ds[from];
+      expanded[slot] = expanded[from];
+    } else {
+      ids[slot] = uint(candidates[next]);
+      ds[slot] = distances[next];
+      expanded[slot] = false;
+      --new_count;
+    }
+  }
+  return total;
+}
+
 // Self search starts at the query vertex, then expands the best unvisited
 // vertices in a bounded working set. A SIMD group scores one neighbor at
 // a time with direct squared L2. Each query owns its visited table.
@@ -1098,9 +1510,9 @@ kernel void cagra_search_self(
   threadgroup float ds[CAGRA_POOL];
   threadgroup bool expanded[CAGRA_POOL];
   threadgroup uint heads[NSG];
-  threadgroup uint* candidates = edge_storage;
-  threadgroup float* distances =
-    reinterpret_cast<threadgroup float*>(candidates + params.width * params.degree);
+  threadgroup int* candidates = reinterpret_cast<threadgroup int*>(edge_storage);
+  threadgroup float* distances = reinterpret_cast<threadgroup float*>(
+    edge_storage + params.width * params.degree);
   threadgroup uint size;
   threadgroup uint frontier;
   for (uint i = tid; i < params.visit_slots; i += NSG * SIMD_WIDTH) {
@@ -1129,53 +1541,32 @@ kernel void cagra_search_self(
     threadgroup_barrier(mem_flags::mem_threadgroup);
     const uint work = frontier * params.degree;
     if (work == 0) break;
-    // The frontier stays fixed for this step. SIMD groups score its edges
-    // independently, then merge the scores into the queue in edge order.
+    // SIMD groups score this frontier before merging into the sorted queue.
     for (uint edge = sg; edge < work; edge += NSG) {
+      uint id = params.n;
       if (lane == 0) {
-        uint id = graph[flat_offset(heads[edge / params.degree], params.degree) +
+        id = graph[flat_offset(heads[edge / params.degree], params.degree) +
             edge % params.degree];
         if (id < params.n && !cagra_visit(visited, id, params.visit_slots)) {
           id = params.n;
         }
-        candidates[edge] = id;
+        candidates[edge] = int(id);
       }
-      simdgroup_barrier(mem_flags::mem_threadgroup);
-      const uint id = candidates[edge];
+      id = simd_broadcast_first(id);
+      if (id >= params.n) continue;
       float partial = 0;
-      if (id < params.n) {
-        const device float* current = data + flat_offset(id, params.p);
-        for (uint d = lane; d < params.p; d += SIMD_WIDTH) {
-          const float diff = point[d] - current[d];
-          partial = fma(diff, diff, partial);
-        }
+      const device float* current = data + flat_offset(id, params.p);
+      for (uint d = lane; d < params.p; d += SIMD_WIDTH) {
+        const float diff = point[d] - current[d];
+        partial = fma(diff, diff, partial);
       }
       const float distance = simd_sum(partial);
       if (lane == 0) distances[edge] = distance;
     }
     threadgroup_barrier(mem_flags::mem_threadgroup | mem_flags::mem_device);
     if (tid == 0) {
-      for (uint i = 0; i < work; ++i) {
-        if (candidates[i] >= params.n) continue;
-        uint pos = size;
-        if (size == params.queue) {
-          pos = size - 1;
-          if (!better_pair(distances[i], int(candidates[i]),
-                           ds[pos], int(ids[pos]))) continue;
-        } else {
-          ++size;
-        }
-        while (pos > 0 && better_pair(distances[i], int(candidates[i]),
-                                      ds[pos - 1], int(ids[pos - 1]))) {
-          ids[pos] = ids[pos - 1];
-          ds[pos] = ds[pos - 1];
-          expanded[pos] = expanded[pos - 1];
-          --pos;
-        }
-        ids[pos] = candidates[i];
-        ds[pos] = distances[i];
-        expanded[pos] = false;
-      }
+      size = cagra_merge_candidates(ids, ds, expanded, size, params.queue,
+        candidates, distances, work, params.n);
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
@@ -1444,6 +1835,32 @@ struct MetalCagraIndex {
   }
 };
 
+struct MetalCagraSearchProfile {
+  std::uint32_t queue;
+  std::uint32_t steps;
+};
+
+MetalCagraSearchProfile metal_cagra_search_profile(const MetalCagraIndex& index) {
+  SEXP option = Rf_GetOption1(Rf_install("faissR.metal_cagra_search_profile"));
+  if (Rf_isNull(option)) return {index.pool, index.steps};
+  if ((TYPEOF(option) != INTSXP && TYPEOF(option) != REALSXP) ||
+      Rf_xlength(option) != 2) {
+    Rcpp::stop("Metal CAGRA search profile needs two integers: queue size and steps");
+  }
+  const double queue = TYPEOF(option) == INTSXP ? INTEGER(option)[0] : REAL(option)[0];
+  const double steps = TYPEOF(option) == INTSXP ? INTEGER(option)[1] : REAL(option)[1];
+  // The shader has a 512-entry queue. Each step can visit at most
+  // width * degree new vertices, in addition to the starting vertex.
+  constexpr std::uint32_t max_queue = 512;
+  const auto max_steps = (index.visit_slots - 1) / (index.width * index.degree);
+  if (!std::isfinite(queue) || queue != std::floor(queue) ||
+      queue <= index.k || queue > max_queue || !std::isfinite(steps) ||
+      steps != std::floor(steps) || steps < 1 || steps > max_steps) {
+    Rcpp::stop("Metal CAGRA search profile exceeds the queue or visited-table limits");
+  }
+  return {static_cast<std::uint32_t>(queue), static_cast<std::uint32_t>(steps)};
+}
+
 void cagra_add_reverse_edges(std::uint32_t* graph, std::uint32_t n,
     std::uint32_t degree) {
   const auto half = degree / 2;
@@ -1479,12 +1896,13 @@ Rcpp::List metal_cagra_search(MetalCagraIndex& index, std::uint32_t first,
     std::uint32_t count) {
   if (first >= index.n || count == 0 || count > index.capacity ||
       count > index.n - first) Rcpp::stop("Invalid Metal CAGRA query batch");
+  const auto profile = metal_cagra_search_profile(index);
   using Clock = std::chrono::steady_clock;
   const auto started = Clock::now();
   @autoreleasepool {
     MetalKnnState& state = metal_knn_state();
     const std::uint32_t params[] = {index.n, index.p, index.k, index.degree,
-      index.pool, index.width, index.steps, first, index.visit_slots};
+      profile.queue, index.width, profile.steps, first, index.visit_slots};
     id<MTLCommandBuffer> command = [state.queue commandBuffer];
     id<MTLComputeCommandEncoder> encoder = [command computeCommandEncoder];
     [encoder setComputePipelineState:index.search];
@@ -1521,6 +1939,7 @@ Rcpp::List metal_cagra_search(MetalCagraIndex& index, std::uint32_t first,
     return Rcpp::List::create(Rcpp::Named("indices") = out_ids,
       Rcpp::Named("distances") = out_values, Rcpp::Named("exact") = false,
       Rcpp::Named("search_seconds") = search_seconds,
+      Rcpp::Named("queue") = profile.queue, Rcpp::Named("steps") = profile.steps,
       Rcpp::Named("backend_used") = "faissr_native_metal_cagra_file");
   }
 }
@@ -1631,10 +2050,359 @@ int metal_cagra_shortlist_per_group(int n, int p, int qdim, double target) {
   return target == 0.99 ? kMaxShortlistPerGroup : kInitialShortlistPerGroup;
 }
 
+struct MetalNndProfile {
+  std::uint32_t seed_passes = 0, pivots = 0, iterations = 0;
+};
+
+MetalNndProfile metal_nnd_profile(double target) {
+  SEXP option = Rf_GetOption1(Rf_install("faissR.metal_cagra_nn_descent"));
+  if (Rf_isNull(option) || (TYPEOF(option) == LGLSXP &&
+      Rf_xlength(option) == 1 && LOGICAL(option)[0] == FALSE)) return {};
+  if (TYPEOF(option) == LGLSXP && Rf_xlength(option) == 1 &&
+      LOGICAL(option)[0] == TRUE) {
+    if (target == 0.90) return {4, 8, 6};
+    if (target == 0.95) return {4, 12, 10};
+    return {8, 16, 20};
+  }
+  if ((TYPEOF(option) != INTSXP && TYPEOF(option) != REALSXP) ||
+      Rf_xlength(option) != 3) {
+    Rcpp::stop("Metal NN-descent profile needs three integers: seed passes, pivots, iterations");
+  }
+  const auto limits = std::array<int, 3>{16, 16, 24};
+  std::uint32_t value[3]{};
+  for (int i = 0; i < 3; ++i) {
+    const double x = TYPEOF(option) == INTSXP ? INTEGER(option)[i] : REAL(option)[i];
+    if (!std::isfinite(x) || x < 1 || x > limits[i] || x != std::floor(x)) {
+      Rcpp::stop("Metal NN-descent profile exceeds the seed, pivot, or iteration limits");
+    }
+    value[i] = static_cast<std::uint32_t>(x);
+  }
+  return {value[0], value[1], value[2]};
+}
+
+struct MetalNndParams {
+  std::uint32_t n, p, degree, offset, round, pivots, last;
+  std::uint32_t multiplier, inverse, shift, claim_slots, partition_ranked;
+};
+
+constexpr auto kNndReverseWidth = faissr_metal::kCagraNndReverseWidth;
+constexpr std::uint32_t kNndRowsPerBatch = 8192;
+
+bool metal_nnd_partition_seed(int columns) {
+  return columns > 0 && columns <= 128 &&
+    Rf_asLogical(Rf_GetOption1(Rf_install("faissR.metal_cagra_partition_seed"))) == TRUE;
+}
+
+double metal_nnd_workspace(int rows, int columns, int degree) {
+  const double partition = metal_nnd_partition_seed(columns) ? 12.0 * rows : 0.0;
+  return faissr_metal::cagra_nnd_workspace_bytes(rows, columns, degree) + partition;
+}
+
+void metal_nnd_check_capacity(id<MTLDevice> device, int rows, int columns,
+    int k, double target) {
+  const auto degree = faissr_metal::cagra_graph_degree(rows, columns, k, target, true);
+  const double budget = 0.7 * static_cast<double>([device recommendedMaxWorkingSetSize]);
+  const double biggest_buffer = 4.0 * rows *
+    std::max(static_cast<std::uint32_t>(columns), 2u * degree);
+  if (biggest_buffer > static_cast<double>([device maxBufferLength]) ||
+      metal_nnd_workspace(rows, columns, degree) +
+      metal_current_allocated_bytes(device) > budget) {
+    Rcpp::stop("Metal NN-descent exceeds the unified memory budget or buffer limit");
+  }
+}
+
+// Extended Euclid. The multiplier and n are coprime, and both fit int32.
+std::uint32_t metal_nnd_inverse(std::uint32_t multiplier, std::uint32_t n) {
+  std::int64_t r = n, next_r = multiplier, t = 0, next_t = 1;
+  while (next_r != 0) {
+    const auto q = r / next_r;
+    const auto remainder = r - q * next_r;
+    r = next_r;
+    next_r = remainder;
+    const auto coefficient = t - q * next_t;
+    t = next_t;
+    next_t = coefficient;
+  }
+  return static_cast<std::uint32_t>(t < 0 ? t + n : t);
+}
+
+struct MetalNndBufferRelease {
+  using pointer = id<MTLBuffer>;
+  void operator()(id<MTLBuffer> buffer) const { [buffer release]; }
+};
+
+using MetalNndBuffer = std::unique_ptr<void, MetalNndBufferRelease>;
+
+struct MetalNndPartition {
+  MetalNndBuffer signatures, order, position;
+};
+
+MetalNndBuffer metal_nnd_private_buffer(id<MTLDevice> device,
+                                       std::size_t bytes) {
+  MetalNndBuffer buffer([device newBufferWithLength:bytes
+    options:MTLResourceStorageModePrivate]);
+  if (!buffer) {
+    Rcpp::stop("Metal NN-descent could not allocate a %.0f-byte buffer.",
+      static_cast<double>(bytes));
+  }
+  return buffer;
+}
+
+void metal_nnd_rank_partitions(MetalKnnState& state,
+    id<MTLComputePipelineState> pipeline, id<MTLBuffer> data,
+    const MetalNndPartition& partition, const MetalNndParams& params) {
+  const auto n = params.n;
+  const auto columns = params.p;
+  const auto* matrix = static_cast<const float*>([data contents]);
+  const auto sample = std::min(n, 2048u);
+  std::array<double, 128> mean{};
+  for (std::uint32_t i = 0; i < sample; ++i) {
+    const auto* point = matrix + (static_cast<std::size_t>(i) * n / sample) * columns;
+    for (std::uint32_t d = 0; d < columns; ++d) mean[d] += point[d];
+  }
+  std::uint32_t bits = 1;
+  while (bits < 20 && (std::uint64_t(256) << bits) < n) ++bits;
+  std::vector<float> planes(bits * columns), centers(bits);
+  std::mt19937 random(params.shift ^ (0x9e3779b9u * (params.round + 1u)));
+  for (std::uint32_t bit = 0; bit < bits; ++bit) {
+    double center = 0;
+    for (std::uint32_t d = 0; d < columns; ++d) {
+      const float weight = (random() & 1u) == 0 ? -1.f : 1.f;
+      planes[bit * columns + d] = weight;
+      center += mean[d] * weight;
+    }
+    centers[bit] = static_cast<float>(center / sample);
+  }
+  @autoreleasepool {
+    id<MTLBuffer> weights = metal_shared_buffer(state.device,
+      planes.size() * sizeof(float), planes.data());
+    id<MTLBuffer> offsets = metal_shared_buffer(state.device,
+      centers.size() * sizeof(float), centers.data());
+    for (std::uint32_t first = 0; first < n;) {
+      Rcpp::checkUserInterrupt();
+      const auto count = std::min(262144u, n - first);
+      @autoreleasepool {
+        const std::uint32_t spec[]{n, columns, bits, first};
+        auto command = [state.queue commandBuffer];
+        auto encoder = [command computeCommandEncoder];
+        [encoder setComputePipelineState:pipeline];
+        [encoder setBuffer:data offset:0 atIndex:0];
+        [encoder setBuffer:weights offset:0 atIndex:1];
+        [encoder setBuffer:offsets offset:0 atIndex:2];
+        [encoder setBuffer:partition.signatures.get() offset:0 atIndex:3];
+        [encoder setBytes:spec length:sizeof(spec) atIndex:4];
+        [encoder dispatchThreadgroups:MTLSizeMake((count + 3u) / 4u, 1, 1)
+          threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
+        [encoder endEncoding];
+        run_and_wait(command);
+      }
+      first += count;
+    }
+  }
+
+  const auto* keys = static_cast<const std::uint32_t*>([partition.signatures.get() contents]);
+  auto* order = static_cast<std::uint32_t*>([partition.order.get() contents]);
+  auto* position = static_cast<std::uint32_t*>([partition.position.get() contents]);
+  std::vector<std::uint32_t> offset(std::size_t(1) << bits, 0u);
+  for (std::uint32_t i = 0; i < n; ++i) {
+    if ((i & 1048575u) == 0) Rcpp::checkUserInterrupt();
+    ++offset[keys[i]];
+  }
+  std::uint32_t start = 0;
+  for (auto& count : offset) {
+    const auto size = count;
+    count = start;
+    start += size;
+  }
+  // An affine permutation breaks up an oversized bucket reproducibly.
+  auto row = params.shift;
+  for (std::uint32_t i = 0; i < n; ++i) {
+    if ((i & 1048575u) == 0) Rcpp::checkUserInterrupt();
+    const auto slot = offset[keys[row]]++;
+    order[slot] = row;
+    position[row] = slot;
+    row += params.multiplier;
+    if (row >= n) row -= n;
+  }
+}
+
+void metal_nnd_update(MetalKnnState& state, id<MTLComputePipelineState> pipeline,
+    id<MTLBuffer> data, id<MTLBuffer> previous, id<MTLBuffer> next,
+    id<MTLBuffer> reverse, MetalNndParams params,
+    const MetalNndPartition* partition = nullptr) {
+  const auto candidates = params.degree + (params.pivots == 0 ? 256u :
+    (params.pivots + kNndReverseWidth) * (params.degree + 1u));
+  params.claim_slots = candidates <= 512u ? 1024u :
+    candidates <= 1536u ? 2048u : 4096u;
+  const auto query_bytes = (params.p * sizeof(float) + 15u) & ~std::size_t(15u);
+  for (std::uint32_t first = 0; first < params.n;) {
+    Rcpp::checkUserInterrupt();
+    const auto count = std::min(kNndRowsPerBatch, params.n - first);
+    @autoreleasepool {
+      params.offset = first;
+      auto command = [state.queue commandBuffer];
+      auto encoder = [command computeCommandEncoder];
+      [encoder setComputePipelineState:pipeline];
+      [encoder setBuffer:data offset:0 atIndex:0];
+      [encoder setBuffer:previous offset:0 atIndex:1];
+      [encoder setBuffer:next offset:0 atIndex:2];
+      [encoder setBuffer:reverse offset:0 atIndex:3];
+      [encoder setBytes:&params length:sizeof(params) atIndex:4];
+      [encoder setBuffer:partition == nullptr ? reverse : partition->order.get()
+                   offset:0 atIndex:5];
+      [encoder setBuffer:partition == nullptr ? reverse : partition->position.get()
+                   offset:0 atIndex:6];
+      [encoder setThreadgroupMemoryLength:params.claim_slots * sizeof(std::uint32_t)
+                                  atIndex:0];
+      [encoder setThreadgroupMemoryLength:query_bytes atIndex:1];
+      [encoder dispatchThreadgroups:MTLSizeMake(count, 1, 1)
+        threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
+      [encoder endEncoding];
+      run_and_wait(command);
+    }
+    first += count;
+  }
+}
+
+void metal_nnd_reverse(MetalKnnState& state, id<MTLComputePipelineState> pipeline,
+    id<MTLBuffer> previous, id<MTLBuffer> reverse, MetalNndParams params) {
+  @autoreleasepool {
+    auto command = [state.queue commandBuffer];
+    auto blit = [command blitCommandEncoder];
+    [blit fillBuffer:reverse range:NSMakeRange(0, [reverse length]) value:0xff];
+    [blit endEncoding];
+    run_and_wait(command);
+  }
+  constexpr std::uint32_t batch = 262144;
+  for (std::uint32_t first = 0; first < params.n;) {
+    Rcpp::checkUserInterrupt();
+    const auto count = std::min(batch, params.n - first);
+    @autoreleasepool {
+      params.offset = first;
+      auto command = [state.queue commandBuffer];
+      auto encoder = [command computeCommandEncoder];
+      [encoder setComputePipelineState:pipeline];
+      [encoder setBuffer:previous offset:0 atIndex:0];
+      [encoder setBuffer:reverse offset:0 atIndex:1];
+      [encoder setBytes:&params length:sizeof(params) atIndex:2];
+      [encoder dispatchThreadgroups:MTLSizeMake(1, count, 1)
+        threadsPerThreadgroup:MTLSizeMake(params.degree, 1, 1)];
+      [encoder endEncoding];
+      run_and_wait(command);
+    }
+    first += count;
+  }
+}
+
+void metal_cagra_reverse_dispatch(MetalKnnState& state,
+    id<MTLComputePipelineState> pipeline, const MetalCagraIndex& index,
+    std::initializer_list<id<MTLBuffer>> buffers,
+    std::uint32_t first_rank, std::uint32_t ranks) {
+  constexpr std::uint32_t batch_rows = 65536;
+  const auto threads_x = std::min(8u, ranks);
+  const auto threads = MTLSizeMake(threads_x, 128u / threads_x, 1);
+  for (std::uint32_t first = 0; first < index.n;) {
+    Rcpp::checkUserInterrupt();
+    const auto count = std::min(batch_rows, index.n - first);
+    @autoreleasepool {
+      const std::uint32_t spec[] = {index.n, index.degree, first_rank, first};
+      auto command = [state.queue commandBuffer];
+      auto encoder = [command computeCommandEncoder];
+      if (encoder == nil) Rcpp::stop("Cannot encode Metal CAGRA reverse pass");
+      [encoder setComputePipelineState:pipeline];
+      NSUInteger slot = 0;
+      for (auto buffer : buffers) [encoder setBuffer:buffer offset:0 atIndex:slot++];
+      [encoder setBytes:spec length:sizeof(spec) atIndex:slot];
+      [encoder dispatchThreads:MTLSizeMake(ranks, count, 1)
+        threadsPerThreadgroup:threads];
+      [encoder endEncoding];
+      run_and_wait(command);
+    }
+    first += count;
+  }
+}
+
+double metal_cagra_reverse_edges(MetalKnnState& state,
+    const MetalCagraIndex& index, std::uint32_t rank_batch) {
+  @autoreleasepool {
+    const auto bytes = static_cast<std::size_t>(index.n) *
+      (index.degree / 2u) * sizeof(std::uint32_t);
+    const auto keys = metal_nnd_private_buffer(state.device, bytes);
+    const auto incoming = metal_nnd_private_buffer(state.device, bytes);
+    const auto counts = metal_nnd_private_buffer(state.device,
+      static_cast<std::size_t>(index.n) * sizeof(std::uint32_t));
+    auto select = [make_pipeline(state.device, state.library,
+      @"cagra_reverse_select") autorelease];
+    auto collect = [make_pipeline(state.device, state.library,
+      @"cagra_reverse_collect") autorelease];
+    auto merge = [make_pipeline(state.device, state.library,
+      @"cagra_reverse_merge") autorelease];
+    for (std::uint32_t first = 0; first < index.degree; first += rank_batch) {
+      @autoreleasepool {
+        auto command = [state.queue commandBuffer];
+        auto blit = [command blitCommandEncoder];
+        if (blit == nil) Rcpp::stop("Cannot clear Metal CAGRA reverse buffers");
+        [blit fillBuffer:keys.get() range:NSMakeRange(0, bytes) value:0xff];
+        if (first == 0) {
+          [blit fillBuffer:counts.get()
+            range:NSMakeRange(0, [counts.get() length]) value:0];
+        }
+        [blit endEncoding];
+        run_and_wait(command);
+      }
+      const auto ranks = std::min(rank_batch, index.degree - first);
+      metal_cagra_reverse_dispatch(state, select, index,
+        {index.graph, keys.get(), counts.get()}, first, ranks);
+      metal_cagra_reverse_dispatch(state, collect, index,
+        {keys.get(), incoming.get(), counts.get()}, 0, 1);
+    }
+    metal_cagra_reverse_dispatch(state, merge, index,
+      {index.graph, incoming.get(), counts.get()}, 0, 1);
+    return metal_live_buffer_bytes({keys.get(), incoming.get(), counts.get()});
+  }
+}
+
+void metal_cagra_prune(MetalKnnState& state, id<MTLBuffer> initial,
+    const MetalCagraIndex& index, std::uint32_t initial_degree, bool batched) {
+  auto pipeline = [make_pipeline(state.device, state.library, @"cagra_rank_prune")
+    autorelease];
+  for (std::uint32_t first = 0; first < index.n;) {
+    Rcpp::checkUserInterrupt();
+    const auto count = std::min(batched ? 65536u : index.n, index.n - first);
+    @autoreleasepool {
+      auto command = [state.queue commandBuffer];
+      auto encoder = [command computeCommandEncoder];
+      const std::uint32_t params[]{index.n, initial_degree, index.degree, first};
+      [encoder setComputePipelineState:pipeline];
+      [encoder setBuffer:initial offset:0 atIndex:0];
+      [encoder setBuffer:index.graph offset:0 atIndex:1];
+      [encoder setBytes:params length:sizeof(params) atIndex:2];
+      [encoder dispatchThreadgroups:MTLSizeMake(count, 1, 1)
+        threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
+      [encoder endEncoding];
+      run_and_wait(command);
+    }
+    first += count;
+  }
+}
+
+Rcpp::List metal_cagra_finish_call(Rcpp::List index, bool file, double target,
+    double build_seconds, double upload_seconds) {
+  index["build_seconds"] = build_seconds;
+  if (file) {
+    index["source_read_and_upload_seconds"] = upload_seconds;
+    index["backend_used"] = "faissr_native_metal_cagra_file";
+    index["device_ids"] = Rcpp::IntegerVector::create(0);
+    return index;
+  }
+  return metal_cagra_collect(index, target);
+}
+
 Rcpp::List metal_cagra_build(MetalKnnState& state, id<MTLBuffer> points,
     id<MTLBuffer> projected, id<MTLBuffer> centroids,
     id<MTLBuffer> offsets, id<MTLBuffer> members, int n, int p, int qdim,
-    int nlist, int k, double target, double live_bytes) {
+    int nlist, int k, double target, double live_bytes,
+    MetalNndProfile nnd = {}) {
   using Clock = std::chrono::steady_clock;
   const auto started = Clock::now();
   auto index = std::make_unique<MetalCagraIndex>();
@@ -1642,8 +2410,9 @@ Rcpp::List metal_cagra_build(MetalKnnState& state, id<MTLBuffer> points,
   index->p = p;
   index->k = k;
   const bool balanced = faissr_metal::cagra_balanced_shape(n, p, k, target);
-  index->degree = balanced ? faissr_metal::kCagraBalancedDegree :
-    faissr_metal::kCagraDegree;
+  const bool nn_descent = nnd.seed_passes > 0;
+  const bool partition_seed = nn_descent && metal_nnd_partition_seed(p);
+  index->degree = faissr_metal::cagra_graph_degree(n, p, k, target, nn_descent);
   const std::uint32_t initial_degree = 2u * index->degree;
   // Linear-probing masks and the shader hash require a power of two.
   index->visit_slots = 16384u;
@@ -1651,19 +2420,97 @@ Rcpp::List metal_cagra_build(MetalKnnState& state, id<MTLBuffer> points,
   index->pool = target == 0.90 ? 128 : target == 0.95 ? 256 :
     balanced ? 384 : 512;
   index->pool = std::max(index->pool, static_cast<std::uint32_t>(k + 1));
-  index->steps = balanced ? 60 : 48;
+  index->steps = nn_descent && target == 0.90 ? 36 : balanced ? 60 : 48;
+  const auto search_profile = metal_cagra_search_profile(*index);
   index->data = [points retain];
   const int nprobe = n < 20000 ? std::min(nlist, kMaxProbe) :
     std::min(nlist, target == 0.90 ? 8 : target == 0.95 ? 16 : 24);
-  const int shortlist_per_group = metal_cagra_shortlist_per_group(
-    n, p, qdim, target);
+  const int shortlist_per_group = nn_descent ? 0 :
+    metal_cagra_shortlist_per_group(n, p, qdim, target);
   double seed_seconds = 0.0;
+  double partition_seconds = 0.0;
+  double refine_seconds = 0.0;
   double prune_seconds = 0.0;
   double seed_peak_bytes = 0.0;
-  index->graph = [metal_shared_buffer(state.device,
-    static_cast<std::size_t>(n) * index->degree * sizeof(std::uint32_t)) retain];
-  {
+  const auto graph_bytes = static_cast<std::size_t>(n) * index->degree *
+    sizeof(std::uint32_t);
+  if (nnd.seed_passes > 0) {
     @autoreleasepool {
+      const auto bytes = static_cast<std::size_t>(n) * initial_degree *
+        sizeof(std::uint32_t);
+      auto previous = metal_nnd_private_buffer(state.device, bytes);
+      auto next = metal_nnd_private_buffer(state.device, bytes);
+      auto reverse = metal_nnd_private_buffer(state.device,
+        static_cast<std::size_t>(n) * kNndReverseWidth * sizeof(std::uint32_t));
+      seed_peak_bytes = live_bytes + metal_live_buffer_bytes(
+        {previous.get(), next.get(), reverse.get()});
+      auto update = [make_pipeline(state.device, state.library,
+        @"cagra_nnd_update") autorelease];
+      auto incoming = [make_pipeline(state.device, state.library,
+        @"cagra_nnd_reverse") autorelease];
+      MetalNndParams params{index->n, index->p, initial_degree, 0, 0, 0, 0,
+        0, 0, 0, 0, 0};
+      std::mt19937 generator(42);
+      std::uniform_int_distribution<std::uint32_t> number(1, index->n - 1);
+      const auto seeding = Clock::now();
+      @autoreleasepool {
+        MetalNndPartition partition;
+        id<MTLComputePipelineState> signatures = nil;
+        if (partition_seed) {
+          const auto row_bytes = static_cast<std::size_t>(index->n) * sizeof(std::uint32_t);
+          partition.signatures.reset([metal_shared_buffer(state.device, row_bytes) retain]);
+          partition.order.reset([metal_shared_buffer(state.device, row_bytes) retain]);
+          partition.position.reset([metal_shared_buffer(state.device, row_bytes) retain]);
+          signatures = [make_pipeline(state.device, state.library,
+            @"cagra_nnd_seed_signature") autorelease];
+          seed_peak_bytes += metal_live_buffer_bytes(
+            {partition.signatures.get(), partition.order.get(), partition.position.get()});
+          params.partition_ranked = 1;
+        }
+        for (params.round = 0; params.round < nnd.seed_passes; ++params.round) {
+          do {
+            params.multiplier = number(generator);
+          } while (std::gcd(params.multiplier, index->n) != 1u);
+          params.inverse = metal_nnd_inverse(params.multiplier, index->n);
+          params.shift = number(generator);
+          if (partition_seed) {
+            const auto partition_started = Clock::now();
+            metal_nnd_rank_partitions(state, signatures, points, partition, params);
+            partition_seconds += std::chrono::duration<double>(
+              Clock::now() - partition_started).count();
+          }
+          metal_nnd_update(state, update, points, previous.get(), next.get(),
+            reverse.get(), params, partition_seed ? &partition : nullptr);
+          std::swap(previous, next);
+        }
+      }
+      const auto refining = Clock::now();
+      seed_seconds = std::chrono::duration<double>(refining - seeding).count();
+      params.pivots = nnd.pivots;
+      params.partition_ranked = 0;
+      for (params.round = 0; params.round < nnd.iterations; ++params.round) {
+        params.shift = generator() & 0x7fffffffu;
+        params.last = params.round + 1 == nnd.iterations;
+        metal_nnd_reverse(state, incoming, previous.get(), reverse.get(),
+          params);
+        metal_nnd_update(state, update, points, previous.get(), next.get(),
+          reverse.get(), params);
+        std::swap(previous, next);
+      }
+      const auto pruning = Clock::now();
+      refine_seconds = std::chrono::duration<double>(pruning - refining).count();
+      // Only the final snapshot is read by pruning.
+      next.reset();
+      reverse.reset();
+      index->graph = [metal_shared_buffer(state.device, graph_bytes) retain];
+      seed_peak_bytes = std::max(seed_peak_bytes, live_bytes +
+        metal_live_buffer_bytes({previous.get(), index->graph}));
+      metal_cagra_prune(state, previous.get(), *index, initial_degree, true);
+      prune_seconds = std::chrono::duration<double>(Clock::now() - pruning).count();
+    }
+  } else {
+    @autoreleasepool {
+      index->graph = [metal_shared_buffer(state.device, graph_bytes) retain];
       id<MTLBuffer> initial = metal_shared_buffer(state.device,
         static_cast<std::size_t>(n) * initial_degree * sizeof(std::uint32_t));
       id<MTLBuffer> seed_distances = metal_shared_buffer(state.device,
@@ -1677,8 +2524,6 @@ Rcpp::List metal_cagra_build(MetalKnnState& state, id<MTLBuffer> points,
         {index->graph, initial, seed_distances, shortlist});
       const MetalCagraSeedBuffers buffers{points, projected, centroids,
         offsets, members, initial, seed_distances, shortlist};
-      auto rank = [make_pipeline(state.device, state.library, @"cagra_rank_prune")
-        autorelease];
       const auto seeding = Clock::now();
       for (int first = 0; first < n;) {
         Rcpp::checkUserInterrupt();
@@ -1695,24 +2540,22 @@ Rcpp::List metal_cagra_build(MetalKnnState& state, id<MTLBuffer> points,
       }
       const auto pruning = Clock::now();
       seed_seconds = std::chrono::duration<double>(pruning - seeding).count();
-      id<MTLCommandBuffer> command = [state.queue commandBuffer];
-      id<MTLComputeCommandEncoder> encoder = [command computeCommandEncoder];
-      const std::uint32_t params[]{index->n, initial_degree, index->degree};
-      [encoder setComputePipelineState:rank];
-      [encoder setBuffer:initial offset:0 atIndex:0];
-      [encoder setBuffer:index->graph offset:0 atIndex:1];
-      [encoder setBytes:params length:sizeof(params) atIndex:2];
-      [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1)
-        threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
-      [encoder endEncoding];
-      run_and_wait(command);
+      metal_cagra_prune(state, initial, *index, initial_degree, false);
       prune_seconds =
         std::chrono::duration<double>(Clock::now() - pruning).count();
     }
   }
   const auto reversing = Clock::now();
-  cagra_add_reverse_edges(static_cast<std::uint32_t*>([index->graph contents]),
-    index->n, index->degree);
+  if (nnd.seed_passes > 0) {
+    const auto ranks = faissr_metal::cagra_reverse_rank_batch(n, index->degree);
+    const double reverse_bytes = metal_cagra_reverse_edges(state, *index, ranks);
+    seed_peak_bytes = std::max(seed_peak_bytes, live_bytes + reverse_bytes +
+      metal_live_buffer_bytes({index->graph}));
+  } else {
+    cagra_add_reverse_edges(
+      static_cast<std::uint32_t*>([index->graph contents]), index->n,
+      index->degree);
+  }
   const auto finished = Clock::now();
   index->search = make_pipeline(state.device, state.library, @"cagra_search_self");
   index->ids = [metal_shared_buffer(state.device,
@@ -1727,9 +2570,9 @@ Rcpp::List metal_cagra_build(MetalKnnState& state, id<MTLBuffer> points,
     index->ids, index->distances, index->visits});
   const double search_peak_bytes = live_bytes + owned -
     metal_live_buffer_bytes({points});
-  const auto params = Rcpp::List::create(
-    Rcpp::Named("width") = index->width, Rcpp::Named("queue") = index->pool,
-    Rcpp::Named("steps") = index->steps,
+  auto params = Rcpp::List::create(
+    Rcpp::Named("width") = index->width, Rcpp::Named("queue") = search_profile.queue,
+    Rcpp::Named("steps") = search_profile.steps,
     Rcpp::Named("initial_degree") = initial_degree,
     Rcpp::Named("graph_degree") = index->degree,
     Rcpp::Named("visit_slots") = index->visit_slots,
@@ -1740,11 +2583,26 @@ Rcpp::List metal_cagra_build(MetalKnnState& state, id<MTLBuffer> points,
       kMetalSimdGroups * shortlist_per_group,
     Rcpp::Named("builder") = shortlist_per_group == 0 ?
       "metal_ivf" : "metal_ivf_projected_rerank");
-  const auto timing = Rcpp::List::create(
+  params["search_queue_update"] = "sorted_frontier";
+  auto timing = Rcpp::List::create(
     Rcpp::Named("seed_seconds") = seed_seconds,
     Rcpp::Named("rank_prune_seconds") = prune_seconds,
     Rcpp::Named("reverse_edges_seconds") =
       std::chrono::duration<double>(finished - reversing).count());
+  if (nnd.seed_passes > 0) {
+    params["builder"] = "metal_nn_descent";
+    params["nn_descent_seed_passes"] = nnd.seed_passes;
+    params["nn_descent_pivots"] = nnd.pivots;
+    params["nn_descent_iterations"] = nnd.iterations;
+    params["nn_descent_pivot_refill"] = true;
+    params["nn_descent_reciprocal_slots"] = kNndReverseWidth;
+    params["nn_descent_retained_membership"] = "candidate_hash";
+    params["nn_descent_threadgroup_workspace"] = "shape_sized";
+    params["nn_descent_seed_order"] = partition_seed ? "projection_hash" : "permuted_blocks";
+    params["reverse_edges_backend"] = "metal";
+    timing["nn_descent_refinement_seconds"] = refine_seconds;
+    if (partition_seed) timing["seed_partition_seconds"] = partition_seconds;
+  }
   Rcpp::XPtr<MetalCagraIndex> pointer(index.release(), true, metal_cagra_tag());
   return Rcpp::List::create(Rcpp::Named("pointer") = pointer,
     Rcpp::Named("params") = params, Rcpp::Named("owned_metal_bytes") = owned,
@@ -1807,6 +2665,7 @@ Rcpp::List faissr_metal_knn_float_impl(
       "buffer offsets; use exact search for this input.", kMaxP
     );
   }
+  const MetalNndProfile nnd = cagra ? metal_nnd_profile(target) : MetalNndProfile{};
   const bool balanced = cagra &&
     faissr_metal::cagra_balanced_shape(n, p, k, target);
   const int qdim = faissr_metal::ivf_projection_dimensions(p, balanced);
@@ -1851,12 +2710,21 @@ Rcpp::List faissr_metal_knn_float_impl(
       metal_current_allocated_bytes(device);
 
     const auto load_start = Clock::now();
+    if (nnd.seed_passes > 0) metal_nnd_check_capacity(device, n, p, k, target);
     id<MTLBuffer> data_buffer = metal_shared_buffer(device,
       static_cast<std::size_t>(n) * p * sizeof(float),
       read_file ? nullptr : data.data());
     if (read_file) read_file(static_cast<float*>([data_buffer contents]));
     if (cagra) std::vector<float>().swap(data);
     const auto loaded = Clock::now();
+    if (nnd.seed_passes > 0) {
+      Rcpp::List index = metal_cagra_build(state, data_buffer,
+        nil, nil, nil, nil, n, p, 0, 0, k, target,
+        metal_live_buffer_bytes({data_buffer}), nnd);
+      return metal_cagra_finish_call(index, static_cast<bool>(read_file), target,
+        std::chrono::duration<double>(Clock::now() - loaded).count(),
+        std::chrono::duration<double>(loaded - load_start).count());
+    }
     if (method == "exact") {
       const auto output_items = static_cast<std::size_t>(n) * k;
       id<MTLBuffer> out_id_buffer = metal_shared_buffer(
@@ -2049,7 +2917,7 @@ Rcpp::List faissr_metal_knn_float_impl(
       Rcpp::List index = metal_cagra_build(state, data_buffer, projected_buffer,
         centroid_buffer, list_offset_buffer, list_id_buffer,
         n, p, qdim, nlist, k, target, live_bytes);
-      index["build_seconds"] = std::chrono::duration<double>(
+      const double build_seconds = std::chrono::duration<double>(
         Clock::now() - loaded).count();
       Rcpp::List timing = index["build_timing"];
       timing["project_seconds"] =
@@ -2059,14 +2927,8 @@ Rcpp::List faissr_metal_knn_float_impl(
       timing["pack_seconds"] =
         std::chrono::duration<double>(t_pack - t_train).count();
       index["build_timing"] = timing;
-      if (read_file) {
-        index["source_read_and_upload_seconds"] = std::chrono::duration<double>(
-          loaded - load_start).count();
-        index["backend_used"] = "faissr_native_metal_cagra_file";
-        index["device_ids"] = Rcpp::IntegerVector::create(0);
-        return index;
-      }
-      return metal_cagra_collect(index, target);
+      return metal_cagra_finish_call(index, static_cast<bool>(read_file), target,
+        build_seconds, std::chrono::duration<double>(loaded - load_start).count());
     }
 
     const int pilot_block_size = std::min(64, n);
@@ -2429,20 +3291,31 @@ bool faissr_metal_file_capacity(double bytes) {
   }
 }
 
+bool faissr_metal_cagra_uses_nn_descent(double target) {
+  return metal_nnd_profile(target).seed_passes > 0;
+}
+
+double faissr_metal_cagra_workspace(int rows, int columns, int qdim,
+    double shortlist_bytes, int degree, bool nn_descent) {
+  return nn_descent ?
+    metal_nnd_workspace(rows, columns, degree) :
+    faissr_metal::cagra_workspace_bytes(rows, columns, qdim, shortlist_bytes, degree);
+}
+
 Rcpp::List faissr_metal_file_cagra_build_impl(int rows, int columns, int k,
     double target, double limit, const std::function<void(float*)>& read) {
   const double reference = 4.0 * rows * columns;
+  const bool nn_descent = faissr_metal_cagra_uses_nn_descent(target);
   const bool balanced =
     faissr_metal::cagra_balanced_shape(rows, columns, k, target);
   const int qdim = faissr_metal::ivf_projection_dimensions(columns, balanced);
-  const auto degree = balanced ? faissr_metal::kCagraBalancedDegree :
-    faissr_metal::kCagraDegree;
+  const auto degree = faissr_metal::cagra_graph_degree(rows, columns, k, target, nn_descent);
   const int shortlist = metal_cagra_shortlist_per_group(
     rows, columns, qdim, target);
   const double shortlist_bytes = static_cast<double>(MetalCagraIndex::capacity) *
     kMetalSimdGroups * shortlist * sizeof(int);
-  const double estimate = faissr_metal::cagra_workspace_bytes(
-    rows, columns, qdim, shortlist_bytes, degree);
+  const double estimate = faissr_metal_cagra_workspace(
+    rows, columns, qdim, shortlist_bytes, degree, nn_descent);
   if (!std::isfinite(limit) || estimate > limit ||
       !faissr_metal_file_capacity(estimate)) {
     Rcpp::stop("File-backed Metal CAGRA exceeds the unified memory budget");
