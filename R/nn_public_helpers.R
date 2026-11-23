@@ -79,6 +79,10 @@ public_nn_auto_selection <- function(request) {
             "calibration_informed_not_independently_validated"
         selection$auto_policy_evidence_scope <-
             "cpu_static_policy_experimental"
+    } else if (identical(selection$reason, "cuda_auto_cagra_nn_descent")) {
+        selection$auto_policy_status <- "shape_based_cuvs_cagra"
+        selection$auto_policy_evidence_scope <-
+            "imagenet_and_deep1b_10m_full_runs_other_shapes_extrapolated"
     } else if (
         identical(selection$predicted_device %||% NA_character_, "cuda")
     ) {

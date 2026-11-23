@@ -2598,6 +2598,38 @@ test_that("CUDA auto selector follows the calibrated shape policy", {
   if (faiss_gpu_available()) expect_equal(large, "faiss_gpu_flat_l2")
 })
 
+test_that("CUDA auto selects cuVS NN-descent for large Euclidean self-KNN", {
+  choose <- function(n, p, k = 30L, self = TRUE, cuvs = TRUE,
+                     recall = 0.99) {
+    faissR:::nn_auto_select_shape_cpp(
+      "cuda_auto", "cuda", shape = list(n = n, p = p, k = k,
+        n_points = if (self) n else 128L, self_query = self,
+        metric = "euclidean", exclude_self = self),
+      cuda_available_value = TRUE, cuvs_available_value = cuvs,
+      faiss_available_value = TRUE, faiss_gpu_available_value = TRUE,
+      target_recall = recall)
+  }
+  old <- options(faissR.cuvs_cagra_build_algo = NULL,
+                 faissR.cagra_implementation = NULL)
+  on.exit(options(old))
+  for (shape in list(c(1281167L, 1024L), c(50000000L, 96L))) {
+    for (recall in c(.9, .95, .99)) {
+      selected <- choose(shape[1L], shape[2L], recall = recall)
+      expect_identical(selected$selected_backend, "cuda_cuvs_cagra")
+      expect_identical(selected$predicted_method, "cagra")
+      expect_identical(faissR:::cuvs_cagra_build_algo_for(
+        NULL, 30L, TRUE, list(cagra_build_algo = "ivf_pq"), selected),
+        "nn_descent")
+    }
+  }
+  for (other in list(choose(50000000L, 32L),
+                     choose(50000000L, 96L, k = 8L),
+                     choose(50000000L, 96L, self = FALSE),
+                     choose(50000000L, 96L, cuvs = FALSE))) {
+    expect_false(identical(other$selected_backend, "cuda_cuvs_cagra"))
+  }
+})
+
 test_that("CUDA method auto uses Flat for compact very-wide self-KNN", {
   route <- faissR:::nn_auto_select_shape_cpp(
     resolved_backend = "cuda_auto",

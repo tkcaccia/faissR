@@ -1999,7 +1999,8 @@ float32_route_cuvs_cagra <- function (data, points, k, data_dim, points_dim,
     distance_output <- if (is.null(metric_inputs)) output else "double"
     params <- cuvs_cagra_params(data_dim[[1]], k, p = data_dim[[2]],
         metric = metric, target_recall = target_recall)
-    build_algo <- cuvs_cagra_build_algo_for(search_data, k, self_query, params)
+    build_algo <- cuvs_cagra_build_algo_for(search_data, k, self_query, params,
+        auto_selection)
     float32_route_cuvs_cagra_continue(as.list(environment()))
 }
 
@@ -3996,7 +3997,8 @@ double_route_cuvs_cagra <- function (data, points, k, backend, exclude_self,
     use_float32_output <- identical(output, "float") && is.null(metric_inputs)
     params <- cuvs_cagra_params(nrow(data), k, p = ncol(data), metric = metric,
         target_recall = target_recall)
-    build_algo <- cuvs_cagra_build_algo_for(search_data, k, self_query, params)
+    build_algo <- cuvs_cagra_build_algo_for(search_data, k, self_query, params,
+        auto_selection)
     tuned <- tune_cuvs_cagra_route(
         search_data, k, self_query, params, tuning, build_algo
     )
@@ -5841,7 +5843,13 @@ cagra_build_algo_preference <- function(default = "auto") {
     )
 }
 
-cuvs_cagra_build_algo_for <- function(data, k, self_query, params = NULL) {
+cuvs_cagra_build_algo_for <- function(
+    data, k, self_query, params = NULL, auto_selection = NULL
+) {
+    if (identical(auto_selection$reason, "cuda_auto_cagra_nn_descent") &&
+        identical(cagra_build_algo_preference(), "auto")) {
+        return("nn_descent")
+    }
     cuvs_cagra_build_algo_for_shape(
         n = nrow(data),
         p = ncol(data),

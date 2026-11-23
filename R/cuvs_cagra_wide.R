@@ -1,6 +1,6 @@
-cuvs_cagra_wide_params <- function(target_recall, width4) {
+cuvs_cagra_wide_params <- function(target_recall, width4, nn_descent = FALSE) {
     target <- normalize_hnsw_target_recall(target_recall)
-    if (isTRUE(width4) && target == 0.99) {
+    if (isTRUE(width4) && (target == 0.99 || isTRUE(nn_descent))) {
         return(list(width = 4L, queue = 384L, builder = "nn_descent"))
     }
     if (isTRUE(width4)) {
@@ -18,7 +18,8 @@ cuvs_cagra_wide_params <- function(target_recall, width4) {
 cuvs_cagra_wide_self <- function(data, k, target_recall, output,
         width4 = FALSE, profile = getOption("faissR.cuvs_cagra_profile")) {
     require_cuvs_backend("cuVS CAGRA")
-    params <- cuvs_cagra_wide_params(target_recall, width4)
+    params <- cuvs_cagra_wide_params(target_recall, width4,
+        nn_descent = identical(profile$builder, "nn_descent"))
     result <- if (is.null(profile)) {
         cuvs_cagra_wide_legacy_self(data, k, target_recall, output, params)
     } else {
@@ -41,9 +42,14 @@ cuvs_cagra_wide_self <- function(data, k, target_recall, output,
 }
 
 cuvs_validate_cagra_profile <- function(profile, n, k) {
+    if (!is.list(profile) || (!is.null(profile$builder) &&
+        !identical(profile$builder, "nn_descent"))) {
+        stop("Invalid CUDA CAGRA profile.", call. = FALSE)
+    }
+    profile$builder <- NULL
     fields <- c("graph_degree", "intermediate_degree", "batch_rows",
         "memory_limit_bytes")
-    if (!is.list(profile) || !identical(sort(names(profile)), sort(fields)) ||
+    if (!identical(sort(names(profile)), sort(fields)) ||
         !all(vapply(profile, function(value) {
             is.numeric(value) && length(value) == 1L &&
                 is.finite(value) && value > 0 && value == floor(value)
@@ -91,7 +97,8 @@ cuvs_cagra_wide_legacy_self <- function(data, k, target_recall, output,
 cuvs_cagra_wide_file <- function(source, k, batch, memory_limit,
         target_recall, width4,
         profile = getOption("faissR.cuvs_cagra_profile")) {
-    params <- cuvs_cagra_wide_params(target_recall, width4)
+    params <- cuvs_cagra_wide_params(target_recall, width4,
+        nn_descent = identical(profile$builder, "nn_descent"))
     if (is.null(profile)) {
         profile <- list(graph_degree = 64L, intermediate_degree = 128L,
             batch_rows = batch, memory_limit_bytes = memory_limit)

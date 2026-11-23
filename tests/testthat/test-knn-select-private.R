@@ -65,13 +65,16 @@ test_that("native Metal selection respects IVF's index and width limits", {
     }
 })
 
-test_that("wide CAGRA width-four presets honor the requested recall tier", {
+test_that("wide CAGRA supports NN-descent for automatic lower recall tiers", {
   preset <- faissR:::cuvs_cagra_wide_params
   expect_identical(preset(0.99, TRUE),
     list(width = 4L, queue = 384L, builder = "nn_descent"))
   expect_identical(preset(0.95, TRUE),
     list(width = 4L, queue = 512L, builder = "ivf_pq"))
   expect_identical(preset(0.90, TRUE), preset(0.95, TRUE))
+  for (recall in c(0.90, 0.95)) {
+    expect_identical(preset(recall, TRUE, nn_descent = TRUE), preset(0.99, TRUE))
+  }
   expect_identical(preset(0.99, FALSE),
     list(width = 2L, queue = 512L, builder = "nn_descent"))
 })
@@ -237,25 +240,46 @@ test_that("ImageNet admits the validated width-four CUDA preset", {
                      "imagenet_full_runs")
     expect_equal(current$cuda_cagra_admission$batch_rows, 1024)
     expect_null(current$cuda_cagra_profile)
-    expect_identical(choose(free = 8)$method, "exact")
-    expect_identical(choose(host = 8)$method, "exact")
-    expect_identical(choose(limit = 12)$method, "exact")
+    for (limited in list(choose(free = 8), choose(host = 8),
+                         choose(limit = 12))) {
+        expect_identical(limited$method, "cagra_width4")
+        expect_identical(limited$reason, "cuda_cagra_resident_capacity_exceeded")
+        expect_false(limited$cuda_cagra_admission$fits)
+    }
     file_backed <- choose(file = TRUE, host = 8, limit = 22)
     expect_identical(file_backed$method, "cagra_width4")
     expect_equal(file_backed$cuda_cagra_profile$graph_degree, 64)
     expect_equal(file_backed$cuda_cagra_profile$intermediate_degree, 128)
     expect_equal(file_backed$cuda_cagra_profile$batch_rows, 1024)
-    expect_identical(choose(file = TRUE, host = 4)$method, "exact")
-    expect_identical(choose(file = TRUE, limit = 8)$method, "exact")
+    expect_identical(choose(file = TRUE, host = 4)$method, "cagra_sharded")
+    expect_identical(choose(file = TRUE, limit = 8)$method, "cagra_sharded")
     for (recall in c(0.90, 0.95)) {
-        expect_identical(choose(recall = recall)$method, "exact")
+        selected <- choose(recall = recall)
+        expect_identical(selected$method, "cagra_width4")
+        expect_identical(selected$cuda_cagra_profile$builder, "nn_descent")
     }
-    expect_null(choose(rows = 1281166L)$cuda_cagra_admission)
+    expect_identical(choose(rows = 1281166L)$cuda_cagra_admission$profile_source,
+                     "shape_extrapolation")
+    expect_null(choose(rows = 999999L)$cuda_cagra_admission)
     expect_null(choose(metric = "cosine")$cuda_cagra_admission)
     compact <- choose(rows = 10000000L, columns = 96L, file = TRUE)
     expect_identical(compact$cuda_cagra_admission$profile_source,
                      "deep1b_10m_full_runs")
     expect_equal(compact$cuda_cagra_profile$graph_degree, 32)
+    for (rows in c(50000000L, 100000000L, 1000000000L)) {
+        args <- list(rows = rows, columns = 96L)
+        resident <- do.call(choose, args)
+        expect_identical(resident$method, "cagra_width4")
+        expect_false(resident$cuda_cagra_admission$fits)
+        sharded <- do.call(choose, c(args, list(file = TRUE, limit = 22)))
+        expect_identical(sharded$method, "cagra_sharded")
+        expect_equal(sharded$resources$n_shards, rows / 10000000)
+        expect_identical(sharded$resources$builder, "nn_descent")
+    }
+    large <- choose(rows = 50000000L, columns = 96L, free = 96,
+                    host = 192, limit = 192)
+    expect_true(large$cuda_cagra_admission$fits)
+    expect_identical(large$method, "cagra_width4")
 })
 
 test_that("sharded CAGRA plans bounded CUDA indexes for larger file inputs", {

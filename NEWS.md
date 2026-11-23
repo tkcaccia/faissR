@@ -1,5 +1,10 @@
 # faissR 0.1
 
+* With cuVS, automatic CUDA Euclidean self-KNN selects CAGRA with NN-descent
+  for at least one million rows, 65 to 1,024 features, and 9 to 128 neighbors.
+  The downstream file-backed planner can fit smaller CAGRA indexes in
+  sequence when a single index exceeds the memory budget.
+
 * Batch persistent device-output CUDA searches and report the batch size
   and count. When CUDA runs out of temporary FAISS search memory, retry
   the same query rows in smaller batches.
