@@ -64,6 +64,11 @@ cuvs_validate_cagra_profile <- function(profile, n, k) {
 
 cuvs_cagra_profiled_self <- function(data, k, output, params, profile) {
     profile <- cuvs_validate_cagra_profile(profile, nrow(data), k)
+    params <- cuvs_cagra_file_search(params, k,
+        getOption("faissR.cuvs_cagra_resident_search"))
+    profile$batch_rows <- min(profile$batch_rows,
+        params$batch %||% profile$batch_rows)
+    params$batch <- NULL
     result <- nn_cuvs_cagra_batched_self_cpp(data, k,
         as.integer(profile$batch_rows), profile$memory_limit_bytes,
         params$width, params$queue, params$builder == "nn_descent",
@@ -221,6 +226,8 @@ cuvs_cagra_wide_file_multi <- function(source, k, batch, memory_limit,
     pointer <- index$pointer
     index$search_batch <- function(first, count)
         file_cagra_multi_search_cpp(pointer, source, first, count)
+    index$set_search <- function(width, queue)
+        file_cagra_set_search_cpp(pointer, width, queue)
     index$release <- function() file_cagra_multi_release_cpp(pointer)
     index$params <- list(width = params$width, queue = params$queue,
         builder = "nn_descent", graph_degree = degree,

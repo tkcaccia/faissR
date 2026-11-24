@@ -21,9 +21,10 @@ struct CagraShard {
 };
 
 // The shards cover disjoint global IDs. Shift local IDs before ranking.
-inline void merge_cagra_batches(const std::vector<CagraBatch>& batches,
+template <typename Write>
+inline void merge_cagra_candidates(const std::vector<CagraBatch>& batches,
     const std::vector<CagraShard>& shards, int first, int rows, int k,
-    int* indices, double* distances) {
+    int stride, int output_first, Write write) {
   const int width = k + 1;
   using Candidate = std::pair<float, int>;
   std::vector<Candidate> candidates;
@@ -72,15 +73,24 @@ inline void merge_cagra_batches(const std::vector<CagraBatch>& batches,
       const auto& item = candidates[next[best]++];
       if (std::find(selected.begin(), selected.end(), item.second) !=
           selected.end()) continue;
-      const auto output = selected.size() * rows + row;
-      indices[output] = item.second + 1;
-      distances[output] = std::sqrt(item.first);
+      const auto output = selected.size() * stride + output_first + row;
+      write(output, item.second + 1, item.first);
       selected.push_back(item.second);
     }
     if (static_cast<int>(selected.size()) != k) {
       throw std::runtime_error("CUDA CAGRA shards returned too few neighbors");
     }
   }
+}
+
+inline void merge_cagra_batches(const std::vector<CagraBatch>& batches,
+    const std::vector<CagraShard>& shards, int first, int rows, int k,
+    int* indices, double* distances) {
+  merge_cagra_candidates(batches, shards, first, rows, k, rows, 0,
+    [&](std::size_t slot, int id, float squared) {
+      indices[slot] = id;
+      distances[slot] = std::sqrt(squared);
+    });
 }
 
 }  // namespace faissr
