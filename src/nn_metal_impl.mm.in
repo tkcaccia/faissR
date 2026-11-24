@@ -2101,7 +2101,7 @@ double metal_nnd_workspace(int rows, int columns, int degree) {
 void metal_nnd_check_capacity(id<MTLDevice> device, int rows, int columns,
     int k, double target) {
   const auto degree = faissr_metal::cagra_graph_degree(rows, columns, k, target, true);
-  const double budget = 0.7 * static_cast<double>([device recommendedMaxWorkingSetSize]);
+  const double budget = static_cast<double>([device recommendedMaxWorkingSetSize]);
   const double biggest_buffer = 4.0 * rows *
     std::max(static_cast<std::uint32_t>(columns), 2u * degree);
   if (biggest_buffer > static_cast<double>([device maxBufferLength]) ||
@@ -3287,7 +3287,7 @@ bool faissr_metal_file_capacity(double bytes) {
     return std::isfinite(bytes) && bytes > 0 &&
       std::isfinite(working_set) && working_set > 0 &&
       std::isfinite(allocated) && allocated >= 0 &&
-      bytes + allocated <= 0.7 * working_set;
+      bytes + allocated <= working_set;
   }
 }
 

@@ -1353,7 +1353,7 @@ List file_hnsw_plan(const List& request, int n, int p, int k) {
   if (n > 200000 && reference >= n && n * bulk_bytes + query_bytes <= available) {
     reference_bytes = bulk_bytes;
   }
-  const double max_reference = std::floor(available / reference_bytes);
+  const double max_reference = std::floor((available - query_bytes) / reference_bytes);
   if (reference < 2 || max_reference < 2) {
     stop("HNSW reference shard exceeds `memory_limit`.");
   }
@@ -1422,11 +1422,14 @@ int cuda_cagra_file_batch(int fallback) {
 }
 
 List cuda_cagra_shard_plan(const List& request, int n, int p, int k) {
-  const double memory = request.containsElementNamed("memory_limit_bytes") ?
-    as<double>(request["memory_limit_bytes"]) : NA_REAL;
   const double free = cuda_free_bytes(request);
+  const double host = request.containsElementNamed("host_available_bytes") ?
+    as<double>(request["host_available_bytes"]) : NA_REAL;
+  const bool explicit_limit = request.containsElementNamed("memory_limit_bytes");
+  const double memory = explicit_limit ?
+    as<double>(request["memory_limit_bytes"]) : std::max(host, free);
   if (!finite1(free) || !finite1(memory) || memory <= 0) {
-    stop("Sharded CUDA CAGRA requires available VRAM and a memory limit.");
+    stop("Sharded CUDA CAGRA requires available VRAM and RAM capacity.");
   }
   const int batch = cuda_cagra_file_batch(512);
   const int degree = std::max(p <= 128 ? 32 : 64, k + 1);
@@ -1439,10 +1442,8 @@ List cuda_cagra_shard_plan(const List& request, int n, int p, int k) {
   }
   const double query_bytes = 4.0 * p * batch;
   const double limit = std::min(free, memory);
-  const double available_host = request.containsElementNamed("host_available_bytes") ?
-    as<double>(request["host_available_bytes"]) : memory;
-  const double host_budget = finite1(available_host) ?
-    std::min(available_host, memory) : memory;
+  const double host_budget = finite1(host) ?
+    std::min(host, memory) : memory;
   const double host_row_bytes = cuda_cagra_host_bytes_per_row(p, k);
   const double host_rows = std::floor(host_budget / host_row_bytes);
   if (host_rows <= intermediate) {
@@ -1482,6 +1483,7 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
     return List();
   }
 
+  const double free = cuda_free_bytes(request);
   const double host_available = request.containsElementNamed("host_available_bytes") ?
     as<double>(request["host_available_bytes"]) : NA_REAL;
   // ImageNet peaked at 14.48 GiB resident and 4.70 GiB file-backed.
@@ -1495,7 +1497,8 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
       imagenet ? 1024 : 512,
     _["memory_limit_bytes"] = request.containsElementNamed("memory_limit_bytes") ?
       as<double>(request["memory_limit_bytes"]) :
-      finite1(host_available) ? host_available : (file ? 22 : 26) * cagra_gib
+      finite1(host_available) ? std::max(host_available, free) :
+      (file ? 22 : 26) * cagra_gib
   ) : as<List>(option);
   const double graph = knn_request_count(profile, "graph_degree", 0);
   const double intermediate = knn_request_count(profile, "intermediate_degree", 0);
@@ -1518,7 +1521,6 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
     static_cast<int>(batch), static_cast<int>(graph), static_cast<int>(intermediate));
   const double resident_payload = file ? 0.0 : n * (8.0 * p + 12.0 * k);
   const double host_buffers = resident_payload + capacity.host_batch_bytes;
-  const double free = cuda_free_bytes(request);
   const bool host_fits = !calibrated ||
     (finite1(host_available) && host_available >= calibrated_host_workspace);
   const bool fits = finite1(free) && capacity.device_bytes <= free &&

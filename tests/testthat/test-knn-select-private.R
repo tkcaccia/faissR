@@ -291,12 +291,14 @@ test_that("sharded CAGRA plans bounded CUDA indexes for larger file inputs", {
         }', includes = paste0('#include "', header, '"'))
     previous <- options(faissR.cuvs_cagra_shard_rows = NULL)
     on.exit(options(previous))
-    plan <- function(n, free = 16, file = TRUE) {
-        select_cagra_shards(list(backend = "cuda", metric = "euclidean",
+    plan <- function(n, free = 16, file = TRUE, host = NULL, cap = 22) {
+        request <- list(backend = "cuda", metric = "euclidean",
             cuda_method = "cagra_sharded", n_reference = n, n_query = n,
             n_features = 96L, k = 30L, target_recall = 0.99, self_query = TRUE,
-            file_backed = file, allow_ivf = TRUE, memory_limit_bytes = 22 * 2^30,
-            cuda_free_bytes = free * 2^30))
+            file_backed = file, allow_ivf = TRUE, cuda_free_bytes = free * 2^30)
+        if (!is.null(host)) request$host_available_bytes <- host * 2^30
+        if (!is.null(cap)) request$memory_limit_bytes <- cap * 2^30
+        select_cagra_shards(request)
     }
     for (n in c(50000000L, 100000000L)) {
         selected <- plan(n)
@@ -307,6 +309,11 @@ test_that("sharded CAGRA plans bounded CUDA indexes for larger file inputs", {
         expect_equal(selected$resources$output_bytes, 8 * 30 * as.double(n))
     }
     expect_gt(plan(50000000L, free = 8)$resources$n_shards, 5L)
+    automatic <- plan(50000000L, host = 22, cap = NULL)$resources
+    expect_equal(automatic$n_shards, 5L)
+    expect_equal(automatic$memory_limit_bytes, 22 * 2^30)
+    expect_gt(plan(50000000L, host = 16, cap = NULL)$resources$n_shards, 5L)
+    expect_gt(plan(50000000L, host = 22, cap = 8)$resources$n_shards, 5L)
     expect_error(plan(50000000L, file = FALSE), "file-backed CUDA")
     expect_error(plan(50000000L, free = 0.01), "cannot fit")
     tuned <- options(faissR.cuvs_cagra_file_search =
