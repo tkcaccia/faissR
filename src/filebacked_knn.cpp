@@ -26,6 +26,7 @@ Rcpp::List cuvs_file_cagra_build_impl(int n, int p, int k, int batch,
 Rcpp::List cuvs_file_cagra_search_impl(SEXP pointer, int first, int count);
 Rcpp::List cuvs_file_cagra_query_impl(SEXP pointer, int features, int count,
     const std::function<void(float*)>& read);
+Rcpp::List cuvs_file_cagra_set_search_impl(SEXP pointer, int width, int queue);
 void cuvs_file_cagra_release_impl(SEXP pointer);
 #endif
 
@@ -773,6 +774,15 @@ Rcpp::List file_cagra_query_cpp(SEXP pointer, SEXP query_spec, int first, int co
     }
   };
   return cuvs_file_cagra_query_impl(pointer, static_cast<int>(query.columns), count, read);
+#endif
+}
+
+// [[Rcpp::export]]
+Rcpp::List file_cagra_set_search_cpp(SEXP pointer, int width, int queue) {
+#ifndef FAISSR_HAS_CUVS
+  Rcpp::stop("File-backed CUDA CAGRA requires cuVS support in faissR");
+#else
+  return cuvs_file_cagra_set_search_impl(pointer, width, queue);
 #endif
 }
 

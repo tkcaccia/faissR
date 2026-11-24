@@ -406,6 +406,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// file_cagra_set_search_cpp
+Rcpp::List file_cagra_set_search_cpp(SEXP pointer, int width, int queue);
+RcppExport SEXP _faissR_file_cagra_set_search_cpp(SEXP pointerSEXP, SEXP widthSEXP, SEXP queueSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type pointer(pointerSEXP);
+    Rcpp::traits::input_parameter< int >::type width(widthSEXP);
+    Rcpp::traits::input_parameter< int >::type queue(queueSEXP);
+    rcpp_result_gen = Rcpp::wrap(file_cagra_set_search_cpp(pointer, width, queue));
+    return rcpp_result_gen;
+END_RCPP
+}
 // file_cagra_release_cpp
 void file_cagra_release_cpp(SEXP pointer);
 RcppExport SEXP _faissR_file_cagra_release_cpp(SEXP pointerSEXP) {
@@ -2360,6 +2373,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_file_cagra_build_cpp", (DL_FUNC) &_faissR_file_cagra_build_cpp, 9},
     {"_faissR_file_cagra_search_cpp", (DL_FUNC) &_faissR_file_cagra_search_cpp, 3},
     {"_faissR_file_cagra_query_cpp", (DL_FUNC) &_faissR_file_cagra_query_cpp, 4},
+    {"_faissR_file_cagra_set_search_cpp", (DL_FUNC) &_faissR_file_cagra_set_search_cpp, 3},
     {"_faissR_file_cagra_release_cpp", (DL_FUNC) &_faissR_file_cagra_release_cpp, 1},
     {"_faissR_inner_product_scores_float32_cpp", (DL_FUNC) &_faissR_inner_product_scores_float32_cpp, 4},
     {"_faissR_nn_cpp", (DL_FUNC) &_faissR_nn_cpp, 10},

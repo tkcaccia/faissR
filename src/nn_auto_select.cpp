@@ -1409,6 +1409,18 @@ double cuda_cagra_host_bytes_per_row(int p, int k) {
   return std::max(22 * cagra_gib / 1e7, 8.0 * p + 12.0 * k);
 }
 
+int cuda_cagra_file_batch(int fallback) {
+  const SEXP option = Rf_GetOption1(
+    Rf_install("faissR.cuvs_cagra_file_search"));
+  if (Rf_isNull(option)) return fallback;
+  if (TYPEOF(option) != VECSXP) stop("Invalid CUDA CAGRA file search profile.");
+  const double batch = knn_request_count(List(option), "batch", fallback);
+  if (batch < 1 || batch > 1024) {
+    stop("CUDA CAGRA file batch must be between 1 and 1024.");
+  }
+  return static_cast<int>(batch);
+}
+
 List cuda_cagra_shard_plan(const List& request, int n, int p, int k) {
   const double memory = request.containsElementNamed("memory_limit_bytes") ?
     as<double>(request["memory_limit_bytes"]) : NA_REAL;
@@ -1416,7 +1428,7 @@ List cuda_cagra_shard_plan(const List& request, int n, int p, int k) {
   if (!finite1(free) || !finite1(memory) || memory <= 0) {
     stop("Sharded CUDA CAGRA requires available VRAM and a memory limit.");
   }
-  const int batch = 512;
+  const int batch = cuda_cagra_file_batch(512);
   const int degree = std::max(p <= 128 ? 32 : 64, k + 1);
   const int intermediate = 2 * degree;
   const auto option = Rf_GetOption1(Rf_install("faissR.cuvs_cagra_shard_rows"));
@@ -1479,7 +1491,8 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
   const int degree = std::max(p <= 128 ? 32 : 64, k + 1);
   const auto profile = calibrated ? List::create(
     _["graph_degree"] = degree, _["intermediate_degree"] = 2 * degree,
-    _["batch_rows"] = imagenet ? 1024 : 512,
+    _["batch_rows"] = file ? cuda_cagra_file_batch(imagenet ? 1024 : 512) :
+      imagenet ? 1024 : 512,
     _["memory_limit_bytes"] = request.containsElementNamed("memory_limit_bytes") ?
       as<double>(request["memory_limit_bytes"]) :
       finite1(host_available) ? host_available : (file ? 22 : 26) * cagra_gib

@@ -309,4 +309,14 @@ test_that("sharded CAGRA plans bounded CUDA indexes for larger file inputs", {
     expect_gt(plan(50000000L, free = 8)$resources$n_shards, 5L)
     expect_error(plan(50000000L, file = FALSE), "file-backed CUDA")
     expect_error(plan(50000000L, free = 0.01), "cannot fit")
+    tuned <- options(faissR.cuvs_cagra_file_search =
+        list(width = 2L, queue = 192L, batch = 1024L))
+    on.exit(options(tuned), add = TRUE)
+    selected <- plan(50000000L)
+    expect_equal(selected$resources$chunk_rows, 1024)
+    expect_equal(selected$resources$n_shards, 5L)
+    expect_gt(plan(50000000L, free = 8)$resources$n_shards, 5L)
+    options(faissR.cuvs_cagra_file_search =
+        list(width = 2L, queue = 192L, batch = 1025L))
+    expect_error(plan(50000000L), "between 1 and 1024")
 })

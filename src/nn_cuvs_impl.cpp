@@ -1406,7 +1406,21 @@ List cuvs_file_cagra_query_impl(SEXP pointer, int features, int count,
   return List::create(Rcpp::Named("indices") = indices,
     Rcpp::Named("distances") = distances, Rcpp::Named("exact") = false,
     Rcpp::Named("index_reused") = true,
+    Rcpp::Named("search_width") = static_cast<double>(index.search.get()->search_width),
+    Rcpp::Named("search_queue") = static_cast<double>(index.search.get()->itopk_size),
     Rcpp::Named("backend_used") = "cuda_cuvs_cagra_file_query");
+}
+
+List cuvs_file_cagra_set_search_impl(SEXP pointer, int width, int queue) {
+  auto& index = *file_cagra_pointer(pointer);
+  validate_cagra_device(index);
+  if (width < 1 || width > 64 || queue <= index.k || queue > 4096) {
+    Rcpp::stop("Invalid CUDA CAGRA file search width or queue");
+  }
+  index.search.get()->search_width = static_cast<std::size_t>(width);
+  index.search.get()->itopk_size = static_cast<std::size_t>(queue);
+  return List::create(Rcpp::Named("width") = width,
+    Rcpp::Named("queue") = queue);
 }
 
 void cuvs_file_cagra_release_impl(SEXP pointer) {
