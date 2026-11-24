@@ -12,6 +12,7 @@
 #include <limits>
 #include <memory>
 #include <queue>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -28,6 +29,14 @@ Rcpp::List cuvs_file_cagra_query_impl(SEXP pointer, int features, int count,
     const std::function<void(float*)>& read);
 Rcpp::List cuvs_file_cagra_set_search_impl(SEXP pointer, int width, int queue);
 void cuvs_file_cagra_release_impl(SEXP pointer);
+Rcpp::List cuvs_file_cagra_multi_build_impl(int n, int p, int k, int batch,
+    double limit, int width, int queue, bool nn_descent,
+    int graph_degree, int intermediate_degree,
+    const std::vector<int>& devices,
+    const std::function<void(std::size_t, int, int, float*)>& read);
+Rcpp::List cuvs_file_cagra_multi_search_impl(SEXP pointer, int features,
+    int first, int count, const std::function<void(float*)>& read);
+void cuvs_file_cagra_multi_release_impl(SEXP pointer);
 #endif
 
 #if defined(__unix__) || defined(__APPLE__)
@@ -217,10 +226,10 @@ void read_file_rows(std::ifstream& input, const FileMatrix& spec,
   input.seekg(static_cast<std::streamoff>(offset));
   input.read(reinterpret_cast<char*>(values),
     static_cast<std::streamsize>(items * 4));
-  if (!input) Rcpp::stop("Could not read file-backed rows");
+  if (!input) throw std::runtime_error("Could not read file-backed rows");
   for (std::uint64_t i = 0; i < items; ++i) {
     if (!std::isfinite(values[i])) {
-      Rcpp::stop("File-backed KNN input contains nonfinite values");
+      throw std::runtime_error("File-backed KNN input contains nonfinite values");
     }
   }
 }
@@ -792,6 +801,73 @@ void file_cagra_release_cpp(SEXP pointer) {
   Rcpp::stop("File-backed CUDA CAGRA requires cuVS support in faissR");
 #else
   cuvs_file_cagra_release_impl(pointer);
+#endif
+}
+
+// [[Rcpp::export]]
+Rcpp::List file_cagra_multi_build_cpp(SEXP source_spec, int k, int batch,
+    double limit, int width, int queue, int degree, int intermediate,
+    std::vector<int> devices) {
+#ifndef FAISSR_HAS_CUVS
+  Rcpp::stop("File-backed CUDA CAGRA requires cuVS support in faissR");
+#else
+  const FileMatrix file = file_matrix(Rcpp::List(source_spec));
+  if (file.rows > static_cast<std::uint64_t>(INT_MAX)) {
+    Rcpp::stop("File-backed CUDA CAGRA supports at most INT_MAX rows");
+  }
+  const auto modified = std::filesystem::last_write_time(file.path);
+  const auto bytes = std::filesystem::file_size(file.path);
+  std::vector<std::ifstream> inputs;
+  for (std::size_t rank = 0; rank < devices.size(); ++rank) {
+    inputs.emplace_back(file.path, std::ios::binary);
+    if (!inputs.back()) Rcpp::stop("Cannot open a CUDA CAGRA shard source");
+  }
+  auto read = [&](std::size_t rank, int first, int count, float* output) {
+    read_file_rows(inputs[rank], file, first, count, output);
+  };
+  Rcpp::List index = cuvs_file_cagra_multi_build_impl(
+    static_cast<int>(file.rows), static_cast<int>(file.columns), k, batch,
+    limit, width, queue, true, degree, intermediate, devices, read);
+  if (std::filesystem::last_write_time(file.path) != modified ||
+      std::filesystem::file_size(file.path) != bytes) {
+    cuvs_file_cagra_multi_release_impl(index["pointer"]);
+    Rcpp::stop("File-backed CUDA CAGRA source changed during index build");
+  }
+  return index;
+#endif
+}
+
+// [[Rcpp::export]]
+Rcpp::List file_cagra_multi_search_cpp(SEXP pointer, SEXP source_spec,
+    int first, int count) {
+#ifndef FAISSR_HAS_CUVS
+  Rcpp::stop("File-backed CUDA CAGRA requires cuVS support in faissR");
+#else
+  const FileMatrix file = file_matrix(Rcpp::List(source_spec));
+  if (first < 1 || count < 1 || static_cast<std::uint64_t>(first) > file.rows ||
+      static_cast<std::uint64_t>(count) > file.rows - first + 1) {
+    Rcpp::stop("CUDA CAGRA query batch is outside its file view");
+  }
+  const auto modified = std::filesystem::last_write_time(file.path);
+  std::ifstream input(file.path, std::ios::binary);
+  if (!input) Rcpp::stop("Cannot open the CUDA CAGRA query source");
+  auto read = [&](float* output) {
+    read_file_rows(input, file, first - 1, count, output);
+    if (std::filesystem::last_write_time(file.path) != modified) {
+      Rcpp::stop("CUDA CAGRA query file changed during search");
+    }
+  };
+  return cuvs_file_cagra_multi_search_impl(pointer,
+    static_cast<int>(file.columns), first, count, read);
+#endif
+}
+
+// [[Rcpp::export]]
+void file_cagra_multi_release_cpp(SEXP pointer) {
+#ifndef FAISSR_HAS_CUVS
+  Rcpp::stop("File-backed CUDA CAGRA requires cuVS support in faissR");
+#else
+  cuvs_file_cagra_multi_release_impl(pointer);
 #endif
 }
 

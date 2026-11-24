@@ -9,6 +9,7 @@
 #include <limits>
 #include <cstdlib>
 #include <functional>
+#include <future>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -16,6 +17,7 @@
 
 #include "faissr_size_utils.hpp"
 #include "nn_cagra_capacity.hpp"
+#include "nn_cagra_merge.hpp"
 
 #include <cuda_runtime.h>
 #include <cuvs/core/c_api.h>
@@ -83,12 +85,13 @@ void cuvs_check(const cuvsError_t status, const char* context) {
       "faissR does not silently fall back to CPU or another algorithm for "
       "an explicit CUDA/cuVS NN-descent request.";
   }
-  Rcpp::stop("%s", message.c_str());
+  throw std::runtime_error(message);
 }
 
 void cuda_check(const cudaError_t status, const char* context) {
   if (status == cudaSuccess) return;
-  Rcpp::stop("%s failed: %s", context, cudaGetErrorString(status));
+  throw std::runtime_error(std::string(context) + " failed: " +
+    cudaGetErrorString(status));
 }
 
 void cuda_sync(const char* context) {
@@ -1196,33 +1199,51 @@ FileCagraIndex* file_cagra_pointer(SEXP pointer) {
   return static_cast<FileCagraIndex*>(R_ExternalPtrAddr(pointer));
 }
 
-} // namespace
+struct FileCagraDeleter {
+  void operator()(FileCagraIndex* index) const noexcept {
+    int previous = -1;
+    cudaGetDevice(&previous);
+    cudaSetDevice(index->device);
+    delete index;
+    if (previous >= 0) cudaSetDevice(previous);
+  }
+};
 
-List cuvs_file_cagra_build_impl(int n, int p, int k, int batch,
+using FileCagraOwner = std::unique_ptr<FileCagraIndex, FileCagraDeleter>;
+
+struct FileCagraBuild {
+  FileCagraOwner index;
+  faissr::CagraCapacity capacity;
+  double available;
+  double upload_seconds;
+  double build_seconds;
+};
+
+FileCagraBuild build_file_cagra(int n, int p, int k, int batch,
     double limit, int width, int queue, bool nn_descent,
     int graph_degree, int intermediate_degree,
-    const std::function<void(int, int, float*)>& read) {
+    const std::function<void(int, int, float*)>& read, bool check_interrupt) {
   using Clock = std::chrono::steady_clock;
   if (graph_degree < 1 || graph_degree > intermediate_degree ||
       n <= intermediate_degree || p < 1 || k < 1 || k >= n ||
       batch < 1 || batch > 1024 || width < 1 || queue <= k) {
-    Rcpp::stop("Invalid file-backed CAGRA index or search dimensions");
+    throw std::runtime_error("Invalid file-backed CAGRA index or search dimensions");
   }
   const auto capacity = faissr::cagra_capacity(n, p, k, batch,
     graph_degree, intermediate_degree);
   if (!std::isfinite(limit) || limit < capacity.device_bytes ||
       limit < capacity.host_batch_bytes) {
-    Rcpp::stop("File-backed CUDA CAGRA index estimate exceeds memory_limit");
+    throw std::runtime_error("File-backed CUDA CAGRA index estimate exceeds memory_limit");
   }
   int device = -1;
   cuda_check(cudaGetDevice(&device), "cudaGetDevice");
   std::size_t available = 0, total = 0;
   cuda_check(cudaMemGetInfo(&available, &total), "cudaMemGetInfo");
   if (capacity.device_bytes > available) {
-    Rcpp::stop("File-backed CUDA CAGRA index estimate exceeds free device memory");
+    throw std::runtime_error("File-backed CUDA CAGRA index estimate exceeds free device memory");
   }
 
-  auto handle = std::make_unique<FileCagraIndex>(n, p, k, batch, device);
+  FileCagraOwner handle(new FileCagraIndex(n, p, k, batch, device));
   handle->memory_limit = limit;
   handle->device_bytes_estimate = capacity.device_bytes;
   const auto load_start = Clock::now();
@@ -1230,7 +1251,7 @@ List cuvs_file_cagra_build_impl(int n, int p, int k, int batch,
     std::vector<float> staging(static_cast<std::size_t>(batch) * p);
     auto* device_data = static_cast<float*>(handle->dataset.get());
     for (int first = 0; first < n;) {
-      Rcpp::checkUserInterrupt();
+      if (check_interrupt) Rcpp::checkUserInterrupt();
       const int count = std::min(batch, n - first);
       read(first, count, staging.data());
       cuda_check(cudaMemcpy(device_data + static_cast<std::size_t>(first) * p,
@@ -1254,21 +1275,34 @@ List cuvs_file_cagra_build_impl(int n, int p, int k, int batch,
   const auto end = Clock::now();
   handle->search.get()->search_width = static_cast<size_t>(width);
   handle->search.get()->itopk_size = static_cast<size_t>(queue);
-  Rcpp::XPtr<FileCagraIndex> pointer(handle.release(), true, file_cagra_tag());
+  return {std::move(handle), capacity, static_cast<double>(available),
+    std::chrono::duration<double>(build_start - load_start).count(),
+    std::chrono::duration<double>(end - build_start).count()};
+}
+
+} // namespace
+
+List cuvs_file_cagra_build_impl(int n, int p, int k, int batch,
+    double limit, int width, int queue, bool nn_descent,
+    int graph_degree, int intermediate_degree,
+    const std::function<void(int, int, float*)>& read) {
+  auto built = build_file_cagra(n, p, k, batch, limit, width, queue, nn_descent,
+    graph_degree, intermediate_degree, read, true);
+  const int device = built.index->device;
+  Rcpp::XPtr<FileCagraIndex> pointer(built.index.release(), true,
+    file_cagra_tag());
   return List::create(Rcpp::Named("pointer") = pointer,
     Rcpp::Named("backend_used") = "cuda_cuvs_cagra_file",
     Rcpp::Named("graph_degree") = graph_degree,
     Rcpp::Named("intermediate_graph_degree") = intermediate_degree,
-    Rcpp::Named("reference_bytes") = capacity.reference_bytes,
-    Rcpp::Named("device_bytes_estimate") = capacity.device_bytes,
-    Rcpp::Named("host_batch_bytes_estimate") = capacity.host_batch_bytes,
-    Rcpp::Named("device_free_bytes_at_build") = static_cast<double>(available),
+    Rcpp::Named("reference_bytes") = built.capacity.reference_bytes,
+    Rcpp::Named("device_bytes_estimate") = built.capacity.device_bytes,
+    Rcpp::Named("host_batch_bytes_estimate") = built.capacity.host_batch_bytes,
+    Rcpp::Named("device_free_bytes_at_build") = built.available,
     Rcpp::Named("query_batch_rows") = batch,
     Rcpp::Named("device_ids") = Rcpp::IntegerVector::create(device),
-    Rcpp::Named("source_read_and_upload_seconds") =
-      std::chrono::duration<double>(build_start - load_start).count(),
-    Rcpp::Named("build_seconds") =
-      std::chrono::duration<double>(end - build_start).count());
+    Rcpp::Named("source_read_and_upload_seconds") = built.upload_seconds,
+    Rcpp::Named("build_seconds") = built.build_seconds);
 }
 
 namespace {
@@ -1289,12 +1323,7 @@ void validate_cagra_batch(const FileCagraIndex& index, int first, int count) {
   validate_cagra_device(index);
 }
 
-struct FileCagraBatch {
-  std::vector<int64_t> ids;
-  std::vector<float> distances;
-};
-
-FileCagraBatch search_file_cagra_index(FileCagraIndex& index,
+faissr::CagraBatch search_file_cagra_index(FileCagraIndex& index,
     float* query_data, int count) {
   int64_t query_shape[] = {count, index.p};
   const int search_k = index.k + 1;
@@ -1309,12 +1338,32 @@ FileCagraBatch search_file_cagra_index(FileCagraIndex& index,
     "cuvsCagraSearch(batched)");
   cuda_sync("cuvsCagraSearch(batched) synchronize");
   const std::size_t elements = static_cast<std::size_t>(count) * search_k;
-  FileCagraBatch batch{std::vector<int64_t>(elements), std::vector<float>(elements)};
+  faissr::CagraBatch batch{std::vector<int64_t>(elements),
+    std::vector<float>(elements)};
   cuda_check(cudaMemcpy(batch.ids.data(), index.labels.get(),
     elements * sizeof(int64_t), cudaMemcpyDeviceToHost), "cudaMemcpy(CAGRA IDs)");
   cuda_check(cudaMemcpy(batch.distances.data(), index.distances.get(),
     elements * sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(CAGRA distances)");
   return batch;
+}
+
+faissr::CagraBatch search_external_cagra(FileCagraIndex& index,
+    const float* host, int count) {
+  if (!index.external_queries) {
+    const auto elements = static_cast<std::size_t>(index.capacity) * index.p;
+    const auto bytes = elements * sizeof(float);
+    std::size_t available = 0, total = 0;
+    cuda_check(cudaMemGetInfo(&available, &total), "cudaMemGetInfo");
+    if (bytes > available || bytes + index.device_bytes_estimate > index.memory_limit) {
+      throw std::runtime_error("External CUDA CAGRA query buffer exceeds the memory budget");
+    }
+    index.external_queries = std::make_unique<DeviceBuffer>(index.resources.get(), bytes);
+  }
+  auto* device = static_cast<float*>(index.external_queries->get());
+  cuda_check(cudaMemcpy(device, host,
+    static_cast<std::size_t>(count) * index.p * sizeof(float), cudaMemcpyHostToDevice),
+    "cudaMemcpy(file-backed CAGRA queries)");
+  return search_file_cagra_index(index, device, count);
 }
 
 void cuvs_cagra_search_batch(FileCagraIndex& index, int first, int count,
@@ -1372,23 +1421,10 @@ List cuvs_file_cagra_query_impl(SEXP pointer, int features, int count,
     Rcpp::stop("External CUDA CAGRA queries differ from index dimensions or capacity");
   }
   validate_cagra_device(index);
-  if (!index.external_queries) {
-    const auto elements = static_cast<std::size_t>(index.capacity) * index.p;
-    const auto bytes = elements * sizeof(float);
-    std::size_t available = 0, total = 0;
-    cuda_check(cudaMemGetInfo(&available, &total), "cudaMemGetInfo");
-    if (bytes > available || bytes + index.device_bytes_estimate > index.memory_limit) {
-      Rcpp::stop("External CUDA CAGRA query buffer exceeds the memory budget");
-    }
-    index.external_staging.resize(elements);
-    index.external_queries = std::make_unique<DeviceBuffer>(index.resources.get(), bytes);
-  }
+  index.external_staging.resize(static_cast<std::size_t>(count) * features);
   read(index.external_staging.data());
-  auto* device = static_cast<float*>(index.external_queries->get());
-  cuda_check(cudaMemcpy(device, index.external_staging.data(),
-    static_cast<std::size_t>(count) * features * sizeof(float), cudaMemcpyHostToDevice),
-    "cudaMemcpy(file-backed CAGRA queries)");
-  const auto found = search_file_cagra_index(index, device, count);
+  const auto found = search_external_cagra(index, index.external_staging.data(),
+    count);
   const int k = index.k + 1;
   IntegerMatrix indices(Rcpp::no_init(count, k));
   NumericMatrix distances(Rcpp::no_init(count, k));
@@ -1427,6 +1463,168 @@ void cuvs_file_cagra_release_impl(SEXP pointer) {
   auto* handle = file_cagra_pointer(pointer);
   R_ClearExternalPtr(pointer);
   delete handle;
+}
+
+namespace {
+
+struct FileCagraMultiIndex {
+  int rows;
+  int features;
+  int k;
+  int batch;
+  std::vector<faissr::CagraShard> shards;
+  std::vector<FileCagraBuild> builds;
+};
+
+SEXP file_cagra_multi_tag() {
+  return Rf_install("faissR_file_cagra_multi_index_v1");
+}
+
+FileCagraMultiIndex& file_cagra_multi_pointer(SEXP pointer) {
+  if (TYPEOF(pointer) != EXTPTRSXP ||
+      R_ExternalPtrTag(pointer) != file_cagra_multi_tag() ||
+      !R_ExternalPtrAddr(pointer)) {
+    Rcpp::stop("Invalid multi-device file-backed CUDA CAGRA index");
+  }
+  return *static_cast<FileCagraMultiIndex*>(R_ExternalPtrAddr(pointer));
+}
+
+template<typename Result>
+Result take_cagra_result(std::future<Result>& task) {
+  while (task.wait_for(std::chrono::milliseconds(20)) !=
+      std::future_status::ready) {
+    Rcpp::checkUserInterrupt();
+  }
+  return task.get();
+}
+
+} // namespace
+
+List cuvs_file_cagra_multi_build_impl(int n, int p, int k, int batch,
+    double limit, int width, int queue, bool nn_descent,
+    int graph_degree, int intermediate_degree,
+    const std::vector<int>& devices,
+    const std::function<void(std::size_t, int, int, float*)>& read) {
+  using Clock = std::chrono::steady_clock;
+  int visible = 0;
+  cuda_check(cudaGetDeviceCount(&visible), "cudaGetDeviceCount");
+  const auto sorted = [&] {
+    auto copy = devices;
+    std::sort(copy.begin(), copy.end());
+    return copy;
+  }();
+  if (sorted.size() < 2 || sorted.back() >= visible || sorted.front() < 0 ||
+      std::adjacent_find(sorted.begin(), sorted.end()) != sorted.end()) {
+    Rcpp::stop("File-backed CAGRA requires distinct visible CUDA devices");
+  }
+  if (p < 1 || k < 1 || k >= n || batch < 1 || batch > 1024) {
+    Rcpp::stop("Invalid multi-device CUDA CAGRA dimensions");
+  }
+  const int count = static_cast<int>(devices.size());
+  if (n / count <= std::max(intermediate_degree, k + 1)) {
+    Rcpp::stop("Each reference shard needs more rows than the graph degree");
+  }
+  const double host_workspace = n * std::max(22.0 * (1ULL << 30) / 1e7,
+    8.0 * p + 12.0 * k);
+  if (!std::isfinite(limit) || limit < host_workspace) {
+    Rcpp::stop("Parallel CAGRA build exceeds the host workspace budget");
+  }
+  auto index = std::make_unique<FileCagraMultiIndex>();
+  index->rows = n;
+  index->features = p;
+  index->k = k;
+  index->batch = batch;
+  for (int rank = 0, first = 0; rank < count; ++rank) {
+    const int rows = n / count + (rank < n % count);
+    index->shards.push_back({first, rows});
+    first += rows;
+  }
+
+  std::vector<std::future<FileCagraBuild>> tasks;
+  const auto started = Clock::now();
+  for (std::size_t rank = 0; rank < devices.size(); ++rank) {
+    tasks.push_back(std::async(std::launch::async, [&, rank] {
+      cuda_check(cudaSetDevice(devices[rank]), "cudaSetDevice");
+      const auto shard = index->shards[rank];
+      return build_file_cagra(shard.rows, p, k, batch, limit, width, queue,
+        nn_descent, graph_degree, intermediate_degree,
+        [&](int first, int rows, float* out) {
+          read(rank, shard.first + first, rows, out);
+        }, false);
+    }));
+  }
+  Rcpp::NumericVector build(count), upload(count), device_bytes(count),
+      free_bytes(count);
+  Rcpp::IntegerVector shard_rows(count);
+  for (int rank = 0; rank < count; ++rank) {
+    auto task = take_cagra_result(tasks[rank]);
+    shard_rows[rank] = task.index->n;
+    build[rank] = task.build_seconds;
+    upload[rank] = task.upload_seconds;
+    device_bytes[rank] = task.capacity.device_bytes +
+      static_cast<double>(batch) * p * sizeof(float);
+    free_bytes[rank] = task.available;
+    index->builds.push_back(std::move(task));
+  }
+  Rcpp::XPtr<FileCagraMultiIndex> pointer(index.release(), true,
+    file_cagra_multi_tag());
+  return List::create(Rcpp::Named("pointer") = pointer,
+    Rcpp::Named("backend_used") = "cuda_cuvs_cagra_file_multi_sharded",
+    Rcpp::Named("device_ids") = devices,
+    Rcpp::Named("reference_bytes") = 4.0 * n * p,
+    Rcpp::Named("shard_rows") = shard_rows,
+    Rcpp::Named("device_bytes_estimate") = device_bytes,
+    Rcpp::Named("device_free_bytes_at_build") = free_bytes,
+    Rcpp::Named("host_workspace_required_bytes") = host_workspace,
+    Rcpp::Named("query_batch_rows") = batch,
+    Rcpp::Named("build_seconds") = *std::max_element(build.begin(), build.end()),
+    Rcpp::Named("source_read_and_upload_seconds") = *std::max_element(upload.begin(), upload.end()),
+    Rcpp::Named("build_and_upload_seconds") =
+      std::chrono::duration<double>(Clock::now() - started).count(),
+    Rcpp::Named("build_timing") = List::create(
+      Rcpp::Named("device_build_seconds") = build,
+      Rcpp::Named("device_upload_seconds") = upload));
+}
+
+List cuvs_file_cagra_multi_search_impl(SEXP pointer, int features, int first,
+    int count, const std::function<void(float*)>& read) {
+  auto& index = file_cagra_multi_pointer(pointer);
+  if (features != index.features || first < 1 || first > index.rows ||
+      count < 1 || count > index.batch || count > index.rows - first + 1) {
+    Rcpp::stop("Multi-device CAGRA query batch is outside the source");
+  }
+  const int query = first - 1;
+  std::vector<float> staging(static_cast<std::size_t>(count) * features);
+  read(staging.data());
+  std::vector<std::future<faissr::CagraBatch>> tasks;
+  for (std::size_t rank = 0; rank < index.shards.size(); ++rank) {
+    tasks.push_back(std::async(std::launch::async, [&, rank] {
+      auto& shard = *index.builds[rank].index;
+      const int local = query - index.shards[rank].first;
+      cuda_check(cudaSetDevice(shard.device), "cudaSetDevice");
+      if (local >= 0 && local <= shard.n - count) {
+        auto* data = static_cast<float*>(shard.dataset.get());
+        return search_file_cagra_index(shard,
+          data + static_cast<std::size_t>(local) * features, count);
+      }
+      return search_external_cagra(shard, staging.data(), count);
+    }));
+  }
+  std::vector<faissr::CagraBatch> batches;
+  for (auto& task : tasks) batches.push_back(take_cagra_result(task));
+  IntegerMatrix indices(Rcpp::no_init(count, index.k));
+  NumericMatrix distances(Rcpp::no_init(count, index.k));
+  faissr::merge_cagra_batches(batches, index.shards, query, count, index.k,
+    indices.begin(), distances.begin());
+  return List::create(Rcpp::Named("indices") = indices,
+    Rcpp::Named("distances") = distances, Rcpp::Named("exact") = false,
+    Rcpp::Named("backend_used") = "cuda_cuvs_cagra_file_multi_sharded");
+}
+
+void cuvs_file_cagra_multi_release_impl(SEXP pointer) {
+  auto* index = &file_cagra_multi_pointer(pointer);
+  R_ClearExternalPtr(pointer);
+  delete index;
 }
 
 List cuvs_cagra_batched_self_impl(SEXP data, int k, int batch,

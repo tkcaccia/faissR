@@ -429,6 +429,49 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
+// file_cagra_multi_build_cpp
+Rcpp::List file_cagra_multi_build_cpp(SEXP source_spec, int k, int batch, double limit, int width, int queue, int degree, int intermediate, std::vector<int> devices);
+RcppExport SEXP _faissR_file_cagra_multi_build_cpp(SEXP source_specSEXP, SEXP kSEXP, SEXP batchSEXP, SEXP limitSEXP, SEXP widthSEXP, SEXP queueSEXP, SEXP degreeSEXP, SEXP intermediateSEXP, SEXP devicesSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type source_spec(source_specSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type batch(batchSEXP);
+    Rcpp::traits::input_parameter< double >::type limit(limitSEXP);
+    Rcpp::traits::input_parameter< int >::type width(widthSEXP);
+    Rcpp::traits::input_parameter< int >::type queue(queueSEXP);
+    Rcpp::traits::input_parameter< int >::type degree(degreeSEXP);
+    Rcpp::traits::input_parameter< int >::type intermediate(intermediateSEXP);
+    Rcpp::traits::input_parameter< std::vector<int> >::type devices(devicesSEXP);
+    rcpp_result_gen = Rcpp::wrap(file_cagra_multi_build_cpp(source_spec, k, batch, limit, width, queue, degree, intermediate, devices));
+    return rcpp_result_gen;
+END_RCPP
+}
+// file_cagra_multi_search_cpp
+Rcpp::List file_cagra_multi_search_cpp(SEXP pointer, SEXP source_spec, int first, int count);
+RcppExport SEXP _faissR_file_cagra_multi_search_cpp(SEXP pointerSEXP, SEXP source_specSEXP, SEXP firstSEXP, SEXP countSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type pointer(pointerSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type source_spec(source_specSEXP);
+    Rcpp::traits::input_parameter< int >::type first(firstSEXP);
+    Rcpp::traits::input_parameter< int >::type count(countSEXP);
+    rcpp_result_gen = Rcpp::wrap(file_cagra_multi_search_cpp(pointer, source_spec, first, count));
+    return rcpp_result_gen;
+END_RCPP
+}
+// file_cagra_multi_release_cpp
+void file_cagra_multi_release_cpp(SEXP pointer);
+RcppExport SEXP _faissR_file_cagra_multi_release_cpp(SEXP pointerSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type pointer(pointerSEXP);
+    file_cagra_multi_release_cpp(pointer);
+    return R_NilValue;
+END_RCPP
+}
 // inner_product_scores_float32_cpp
 NumericMatrix inner_product_scores_float32_cpp(SEXP data, SEXP points, IntegerMatrix indices, int cores);
 RcppExport SEXP _faissR_inner_product_scores_float32_cpp(SEXP dataSEXP, SEXP pointsSEXP, SEXP indicesSEXP, SEXP coresSEXP) {
@@ -2375,6 +2418,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_file_cagra_query_cpp", (DL_FUNC) &_faissR_file_cagra_query_cpp, 4},
     {"_faissR_file_cagra_set_search_cpp", (DL_FUNC) &_faissR_file_cagra_set_search_cpp, 3},
     {"_faissR_file_cagra_release_cpp", (DL_FUNC) &_faissR_file_cagra_release_cpp, 1},
+    {"_faissR_file_cagra_multi_build_cpp", (DL_FUNC) &_faissR_file_cagra_multi_build_cpp, 9},
+    {"_faissR_file_cagra_multi_search_cpp", (DL_FUNC) &_faissR_file_cagra_multi_search_cpp, 4},
+    {"_faissR_file_cagra_multi_release_cpp", (DL_FUNC) &_faissR_file_cagra_multi_release_cpp, 1},
     {"_faissR_inner_product_scores_float32_cpp", (DL_FUNC) &_faissR_inner_product_scores_float32_cpp, 4},
     {"_faissR_nn_cpp", (DL_FUNC) &_faissR_nn_cpp, 10},
     {"_faissR_nndescent_candidate_matrix_cpp", (DL_FUNC) &_faissR_nndescent_candidate_matrix_cpp, 3},

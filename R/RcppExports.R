@@ -120,6 +120,18 @@ project_embedding_affine_parallel_cpp <- function(reference_data, query_data,
         max_neighbors, ridge, max_extrapolation, n_threads)
 }
 
+file_cagra_multi_build_cpp <- function(source_spec, k, batch, limit, width, queue, degree, intermediate, devices) {
+    .Call(`_faissR_file_cagra_multi_build_cpp`, source_spec, k, batch, limit, width, queue, degree, intermediate, devices)
+}
+
+file_cagra_multi_search_cpp <- function(pointer, source_spec, first, count) {
+    .Call(`_faissR_file_cagra_multi_search_cpp`, pointer, source_spec, first, count)
+}
+
+file_cagra_multi_release_cpp <- function(pointer) {
+    invisible(.Call(`_faissR_file_cagra_multi_release_cpp`, pointer))
+}
+
 inner_product_scores_float32_cpp <- function(data, points, indices, cores) {
     .Call(`_faissR_inner_product_scores_float32_cpp`, data, points, indices,
         cores)

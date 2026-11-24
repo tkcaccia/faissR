@@ -209,3 +209,22 @@ metal_cagra_file <- function(source, k, batch, memory_limit,
     index$release <- function() file_metal_cagra_release_cpp(pointer)
     index
 }
+
+cuvs_cagra_wide_file_multi <- function(source, k, batch, memory_limit,
+        target_recall, width4, devices) {
+    params <- cuvs_cagra_wide_params(target_recall, width4, nn_descent = TRUE)
+    params <- cuvs_cagra_file_search(params, k)
+    batch <- as.integer(min(batch, params$batch %||% batch))
+    degree <- as.integer(max(if (source$ncol <= 128L) 32L else 64L, k + 1L))
+    index <- file_cagra_multi_build_cpp(source, k, batch, memory_limit,
+        params$width, params$queue, degree, 2L * degree, devices)
+    pointer <- index$pointer
+    index$search_batch <- function(first, count)
+        file_cagra_multi_search_cpp(pointer, source, first, count)
+    index$release <- function() file_cagra_multi_release_cpp(pointer)
+    index$params <- list(width = params$width, queue = params$queue,
+        builder = "nn_descent", graph_degree = degree,
+        intermediate_degree = 2L * degree, batch_rows = batch,
+        memory_limit_bytes = memory_limit, shard_rows = index$shard_rows)
+    index
+}
