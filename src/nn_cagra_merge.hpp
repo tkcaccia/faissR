@@ -32,10 +32,19 @@ inline void merge_cagra_candidates(const std::vector<CagraBatch>& batches,
   std::vector<std::size_t> next(batches.size()), end(batches.size());
   std::vector<int> selected;
   selected.reserve(k);
+  const auto none = batches.size();
+  const bool use_tree = none >= 8;
+  std::size_t base = 1;
+  while (use_tree && base < none) base *= 2;
+  std::vector<std::size_t> winners(use_tree ? 2 * base : 0, none);
+  const auto earlier = [&](std::size_t a, std::size_t b) {
+    if (a == none) return b;
+    if (b == none) return a;
+    return candidates[next[a]] < candidates[next[b]] ? a : b;
+  };
   for (int row = 0; row < rows; ++row) {
     candidates.clear();
     selected.clear();
-    std::uint64_t seen = 0;
     const auto offset = static_cast<std::size_t>(row) * width;
     for (std::size_t shard = 0; shard < batches.size(); ++shard) {
       next[shard] = candidates.size();
@@ -60,25 +69,39 @@ inline void merge_cagra_candidates(const std::vector<CagraBatch>& batches,
       }
     }
 
+    // For many shards, refresh only the winners along the path from
+    // the shard just consumed instead of scanning every shard head.
+    if (use_tree) {
+      for (std::size_t rank = 0; rank < none; ++rank)
+        winners[base + rank] = next[rank] < end[rank] ? rank : none;
+      for (std::size_t node = base - 1; node > 0; --node)
+        winners[node] = earlier(winners[2 * node], winners[2 * node + 1]);
+    }
+
     // Each run is sorted, so only the next candidate per shard is needed.
     while (static_cast<int>(selected.size()) < k) {
-      std::size_t best = batches.size();
-      for (std::size_t shard = 0; shard < batches.size(); ++shard) {
-        if (next[shard] < end[shard] &&
-            (best == batches.size() ||
-             candidates[next[shard]] < candidates[next[best]])) {
-          best = shard;
+      std::size_t best = none;
+      if (use_tree) {
+        best = winners[1];
+      } else {
+        for (std::size_t shard = 0; shard < none; ++shard) {
+          if (next[shard] < end[shard] &&
+              (best == none || candidates[next[shard]] <
+                candidates[next[best]])) {
+            best = shard;
+          }
         }
       }
-      if (best == batches.size()) break;
+      if (best == none) break;
       const auto& item = candidates[next[best]++];
-      // A clear bit proves the ID has not been emitted. Resolve collisions
-      // with the exact check so ties and repeated IDs keep the same behavior.
-      const auto bit = std::uint64_t{1} << (item.second % 64);
-      if ((seen & bit) &&
-          std::find(selected.begin(), selected.end(), item.second) !=
-            selected.end()) continue;
-      seen |= bit;
+      if (use_tree) {
+        std::size_t node = base + best;
+        winners[node] = next[best] < end[best] ? best : none;
+        for (node /= 2; node > 0; node /= 2)
+          winners[node] = earlier(winners[2 * node], winners[2 * node + 1]);
+      }
+      if (std::find(selected.begin(), selected.end(), item.second) !=
+          selected.end()) continue;
       const auto output = selected.size() * stride + output_first + row;
       write(output, item.second + 1, item.first);
       selected.push_back(item.second);
