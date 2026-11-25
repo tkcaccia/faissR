@@ -18,6 +18,7 @@
 #include "faissr_size_utils.hpp"
 #include "nn_cagra_capacity.hpp"
 #include "nn_cagra_merge.hpp"
+#include "nn_cagra_search_worker.hpp"
 
 #include <cuda_runtime.h>
 #include <cuvs/core/c_api.h>
@@ -1458,6 +1459,9 @@ struct FileCagraMultiIndex {
   int batch;
   std::vector<faissr::CagraShard> shards;
   std::vector<FileCagraBuild> builds;
+  std::vector<float> query_staging;
+  // Stop threads before releasing their CUDA indexes and staging buffer.
+  std::vector<std::unique_ptr<faissr::CagraSearchWorker>> search_workers;
 };
 
 SEXP file_cagra_multi_tag() {
@@ -1593,27 +1597,74 @@ List cuvs_file_cagra_multi_build_impl(int n, int p, int k, int batch,
 
 namespace {
 
+using CagraClock = std::chrono::steady_clock;
+
+double cagra_elapsed(CagraClock::time_point started) {
+  return std::chrono::duration<double>(CagraClock::now() - started).count();
+}
+
+struct CagraSearchTiming {
+  double read = 0.0;
+  double search = 0.0;
+  double merge = 0.0;
+  std::vector<double> device_seconds;
+  double rows = 0.0;
+
+  explicit CagraSearchTiming(std::size_t devices)
+    : device_seconds(devices, 0.0) {}
+
+  List receipt() const {
+    return List::create(Rcpp::Named("query_read_seconds") = read,
+      Rcpp::Named("search_seconds") = search,
+      Rcpp::Named("merge_seconds") = merge,
+      Rcpp::Named("device_query_rows") =
+        Rcpp::NumericVector(device_seconds.size(), rows),
+      Rcpp::Named("device_query_seconds") = device_seconds);
+  }
+};
+
 std::vector<faissr::CagraBatch> search_cagra_shards(
     FileCagraMultiIndex& index, int query, int count,
-    const std::function<void(float*)>& read) {
-  std::vector<float> staging(static_cast<std::size_t>(count) * index.features);
-  read(staging.data());
-  std::vector<std::future<faissr::CagraBatch>> tasks;
-  for (std::size_t rank = 0; rank < index.shards.size(); ++rank) {
-    tasks.push_back(std::async(std::launch::async, [&, rank] {
-      auto& shard = *index.builds[rank].index;
-      const int local = query - index.shards[rank].first;
-      cuda_check(cudaSetDevice(shard.device), "cudaSetDevice");
-      if (local >= 0 && local <= shard.n - count) {
-        auto* data = static_cast<float*>(shard.dataset.get());
-        return search_file_cagra_index(shard,
-          data + static_cast<std::size_t>(local) * index.features, count);
-      }
-      return search_external_cagra(shard, staging.data(), count);
-    }));
+    const std::function<void(float*)>& read, CagraSearchTiming& timing) {
+  const auto shard_count = index.shards.size();
+  while (index.search_workers.size() < shard_count) {
+    index.search_workers.push_back(
+      std::make_unique<faissr::CagraSearchWorker>());
   }
+  auto started = CagraClock::now();
+  index.query_staging.resize(static_cast<std::size_t>(count) * index.features);
+  read(index.query_staging.data());
+  timing.read += cagra_elapsed(started);
+
+  std::vector<std::future<faissr::CagraBatch>> tasks;
   std::vector<faissr::CagraBatch> batches;
-  for (auto& task : tasks) batches.push_back(take_cagra_result(task));
+  tasks.reserve(shard_count);
+  batches.reserve(shard_count);
+  started = CagraClock::now();
+  try {
+    for (std::size_t rank = 0; rank < shard_count; ++rank) {
+      tasks.push_back(index.search_workers[rank]->submit([&, rank] {
+        const auto tick = CagraClock::now();
+        auto& shard = *index.builds[rank].index;
+        const int local = query - index.shards[rank].first;
+        cuda_check(cudaSetDevice(shard.device), "cudaSetDevice");
+        auto* data = static_cast<float*>(shard.dataset.get());
+        auto batch = local >= 0 && local <= shard.n - count ?
+          search_file_cagra_index(shard,
+            data + static_cast<std::size_t>(local) * index.features, count) :
+          search_external_cagra(shard, index.query_staging.data(), count);
+        timing.device_seconds[rank] += cagra_elapsed(tick);
+        return batch;
+      }));
+    }
+    for (auto& task : tasks) batches.push_back(take_cagra_result(task));
+  } catch (...) {
+    // Packaged-task futures do not join automatically on interruption.
+    for (auto& task : tasks) if (task.valid()) task.wait();
+    throw;
+  }
+  timing.search += cagra_elapsed(started);
+  timing.rows += count;
   return batches;
 }
 
@@ -1627,14 +1678,18 @@ List cuvs_file_cagra_multi_search_impl(SEXP pointer, int features, int first,
     Rcpp::stop("Multi-device CAGRA query batch is outside the source");
   }
   const int query = first - 1;
-  const auto batches = search_cagra_shards(index, query, count, read);
+  CagraSearchTiming timing(index.shards.size());
+  const auto batches = search_cagra_shards(index, query, count, read, timing);
   IntegerMatrix indices(Rcpp::no_init(count, index.k));
   NumericMatrix distances(Rcpp::no_init(count, index.k));
+  const auto merge_start = CagraClock::now();
   faissr::merge_cagra_batches(batches, index.shards, query, count, index.k,
     indices.begin(), distances.begin());
+  timing.merge = cagra_elapsed(merge_start);
   return List::create(Rcpp::Named("indices") = indices,
     Rcpp::Named("distances") = distances, Rcpp::Named("exact") = false,
-    Rcpp::Named("backend_used") = "cuda_cuvs_cagra_file_multi_sharded");
+    Rcpp::Named("backend_used") = "cuda_cuvs_cagra_file_multi_sharded",
+    Rcpp::Named("search_timing") = timing.receipt());
 }
 
 void cuvs_file_cagra_multi_release_impl(SEXP pointer) {
@@ -1810,17 +1865,17 @@ List cuvs_multi_cagra_self_impl(SEXP data, const std::vector<int>& devices,
     set_distance_value(numeric_data, float_data, slot, squared, false,
       float_output);
   };
-  double assembly = 0.0;
+  CagraSearchTiming timing(index->shards.size());
   const auto started = Clock::now();
   for (int first = 0; first < n;) {
     Rcpp::checkUserInterrupt();
     const int count = std::min(batch, n - first);
     auto shards = search_cagra_shards(*index, first, count,
-      [&](float* staging) { source.read(first, count, staging); });
+      [&](float* staging) { source.read(first, count, staging); }, timing);
     const auto merge_start = Clock::now();
     faissr::merge_cagra_candidates(shards, index->shards, first, count, k,
       n, first, write);
-    assembly += std::chrono::duration<double>(Clock::now() - merge_start).count();
+    timing.merge += cagra_elapsed(merge_start);
     first += count;
   }
   const double total = std::chrono::duration<double>(Clock::now() - started).count();
@@ -1837,8 +1892,9 @@ List cuvs_multi_cagra_self_impl(SEXP data, const std::vector<int>& devices,
   built["index_build_seconds"] = Rcpp::as<double>(
     built["build_and_upload_seconds"]);
   built["search_batch_size"] = batch;
-  built["search_seconds"] = total - assembly;
-  built["graph_assembly_seconds"] = assembly;
+  built["search_seconds"] = total - timing.merge;
+  built["graph_assembly_seconds"] = timing.merge;
+  built["search_timing"] = timing.receipt();
   built["input_bytes"] = source.bytes();
   built["output_bytes"] = result_bytes;
   built["full_host_input_copy"] = false;

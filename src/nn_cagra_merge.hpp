@@ -35,6 +35,7 @@ inline void merge_cagra_candidates(const std::vector<CagraBatch>& batches,
   for (int row = 0; row < rows; ++row) {
     candidates.clear();
     selected.clear();
+    std::uint64_t seen = 0;
     const auto offset = static_cast<std::size_t>(row) * width;
     for (std::size_t shard = 0; shard < batches.size(); ++shard) {
       next[shard] = candidates.size();
@@ -71,8 +72,13 @@ inline void merge_cagra_candidates(const std::vector<CagraBatch>& batches,
       }
       if (best == batches.size()) break;
       const auto& item = candidates[next[best]++];
-      if (std::find(selected.begin(), selected.end(), item.second) !=
-          selected.end()) continue;
+      // A clear bit proves the ID has not been emitted. Resolve collisions
+      // with the exact check so ties and repeated IDs keep the same behavior.
+      const auto bit = std::uint64_t{1} << (item.second % 64);
+      if ((seen & bit) &&
+          std::find(selected.begin(), selected.end(), item.second) !=
+            selected.end()) continue;
+      seen |= bit;
       const auto output = selected.size() * stride + output_first + row;
       write(output, item.second + 1, item.first);
       selected.push_back(item.second);

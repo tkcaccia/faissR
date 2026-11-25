@@ -224,8 +224,15 @@ cuvs_cagra_wide_file_multi <- function(source, k, batch, memory_limit,
     index <- file_cagra_multi_build_cpp(source, k, batch, memory_limit,
         params$width, params$queue, degree, 2L * degree, devices)
     pointer <- index$pointer
-    index$search_batch <- function(first, count)
-        file_cagra_multi_search_cpp(pointer, source, first, count)
+    timing <- NULL
+    index$search_batch <- function(first, count) {
+        found <- file_cagra_multi_search_cpp(pointer, source, first, count)
+        next_timing <- found$search_timing
+        timing <<- if (is.null(timing)) next_timing else
+            Map(`+`, timing, next_timing)
+        found
+    }
+    index$search_timing <- function() timing
     index$set_search <- function(width, queue)
         file_cagra_set_search_cpp(pointer, width, queue)
     index$release <- function() file_cagra_multi_release_cpp(pointer)
