@@ -24,7 +24,7 @@ struct CagraShard {
 template <typename Write>
 inline void merge_cagra_candidates(const std::vector<CagraBatch>& batches,
     const std::vector<CagraShard>& shards, int first, int rows, int k,
-    int stride, int output_first, Write write) {
+    int stride, int output_first, Write write, int input_first = 0) {
   const int width = k + 1;
   using Candidate = std::pair<float, int>;
   std::vector<Candidate> candidates;
@@ -45,7 +45,7 @@ inline void merge_cagra_candidates(const std::vector<CagraBatch>& batches,
   for (int row = 0; row < rows; ++row) {
     candidates.clear();
     selected.clear();
-    const auto offset = static_cast<std::size_t>(row) * width;
+    const auto offset = (static_cast<std::size_t>(input_first) + row) * width;
     for (std::size_t shard = 0; shard < batches.size(); ++shard) {
       next[shard] = candidates.size();
       const auto& batch = batches[shard];
@@ -110,16 +110,6 @@ inline void merge_cagra_candidates(const std::vector<CagraBatch>& batches,
       throw std::runtime_error("CUDA CAGRA shards returned too few neighbors");
     }
   }
-}
-
-inline void merge_cagra_batches(const std::vector<CagraBatch>& batches,
-    const std::vector<CagraShard>& shards, int first, int rows, int k,
-    int* indices, double* distances) {
-  merge_cagra_candidates(batches, shards, first, rows, k, rows, 0,
-    [&](std::size_t slot, int id, float squared) {
-      indices[slot] = id;
-      distances[slot] = std::sqrt(squared);
-    });
 }
 
 }  // namespace faissr

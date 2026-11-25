@@ -120,8 +120,10 @@ project_embedding_affine_parallel_cpp <- function(reference_data, query_data,
         max_neighbors, ridge, max_extrapolation, n_threads)
 }
 
-file_cagra_multi_build_cpp <- function(source_spec, k, batch, limit, width, queue, degree, intermediate, devices) {
-    .Call(`_faissR_file_cagra_multi_build_cpp`, source_spec, k, batch, limit, width, queue, degree, intermediate, devices)
+file_cagra_multi_build_cpp <- function(source_spec, k, batch, limit, width,
+    queue, degree, intermediate, devices, merge_workers = 1L) {
+    .Call(`_faissR_file_cagra_multi_build_cpp`, source_spec, k, batch, limit,
+        width, queue, degree, intermediate, devices, merge_workers)
 }
 
 file_cagra_multi_search_cpp <- function(pointer, source_spec, first, count) {

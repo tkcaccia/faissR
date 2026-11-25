@@ -1457,12 +1457,17 @@ struct FileCagraMultiIndex {
   int features;
   int k;
   int batch;
+  int merge_workers;
   std::vector<faissr::CagraShard> shards;
   std::vector<FileCagraBuild> builds;
   std::vector<float> query_staging;
   std::vector<faissr::CagraBatch> search_batches;
   // Stop threads before releasing their CUDA indexes and staging buffer.
   std::vector<std::unique_ptr<faissr::CagraSearchWorker>> search_workers;
+
+  faissr::CagraSearchWorker* merge_worker() const {
+    return merge_workers == 2 ? search_workers.front().get() : nullptr;
+  }
 };
 
 SEXP file_cagra_multi_tag() {
@@ -1513,7 +1518,7 @@ List cuvs_file_cagra_set_search_impl(SEXP pointer, int width, int queue) {
 List cuvs_file_cagra_multi_build_impl(int n, int p, int k, int batch,
     double limit, int width, int queue, bool nn_descent,
     int graph_degree, int intermediate_degree,
-    const std::vector<int>& devices,
+    const std::vector<int>& devices, int merge_workers,
     const std::function<void(std::size_t, int, int, float*)>& read) {
   using Clock = std::chrono::steady_clock;
   int visible = 0;
@@ -1530,6 +1535,9 @@ List cuvs_file_cagra_multi_build_impl(int n, int p, int k, int batch,
   if (p < 1 || k < 1 || k >= n || batch < 1 || batch > 1024) {
     Rcpp::stop("Invalid multi-device CUDA CAGRA dimensions");
   }
+  if (merge_workers != 1 && merge_workers != 2) {
+    Rcpp::stop("CAGRA merge_workers must be one or two");
+  }
   const int count = static_cast<int>(devices.size());
   if (n / count <= std::max(intermediate_degree, k + 1)) {
     Rcpp::stop("Each reference shard needs more rows than the graph degree");
@@ -1544,6 +1552,7 @@ List cuvs_file_cagra_multi_build_impl(int n, int p, int k, int batch,
   index->features = p;
   index->k = k;
   index->batch = batch;
+  index->merge_workers = merge_workers;
   for (int rank = 0, first = 0; rank < count; ++rank) {
     const int rows = n / count + (rank < n % count);
     index->shards.push_back({first, rows});
@@ -1608,6 +1617,7 @@ struct CagraSearchTiming {
   double read = 0.0;
   double search = 0.0;
   double merge = 0.0;
+  int merge_workers = 1;
   std::vector<double> device_seconds;
   double rows = 0.0;
 
@@ -1618,6 +1628,7 @@ struct CagraSearchTiming {
     return List::create(Rcpp::Named("query_read_seconds") = read,
       Rcpp::Named("search_seconds") = search,
       Rcpp::Named("merge_seconds") = merge,
+      Rcpp::Named("merge_cpu_workers") = merge_workers,
       Rcpp::Named("device_query_rows") =
         Rcpp::NumericVector(device_seconds.size(), rows),
       Rcpp::Named("device_query_seconds") = device_seconds);
@@ -1689,8 +1700,14 @@ List cuvs_file_cagra_multi_search_impl(SEXP pointer, int features, int first,
   IntegerMatrix indices(Rcpp::no_init(count, index.k));
   NumericMatrix distances(Rcpp::no_init(count, index.k));
   const auto merge_start = CagraClock::now();
-  faissr::merge_cagra_batches(batches, index.shards, query, count, index.k,
-    indices.begin(), distances.begin());
+  int* ids = indices.begin();
+  double* values = distances.begin();
+  timing.merge_workers = faissr::merge_cagra_rows(index.merge_worker(),
+    batches, index.shards, query, count, index.k, count, 0,
+    [&](std::size_t slot, int id, float squared) {
+      ids[slot] = id;
+      values[slot] = std::sqrt(squared);
+    });
   timing.merge = cagra_elapsed(merge_start);
   return List::create(Rcpp::Named("indices") = indices,
     Rcpp::Named("distances") = distances, Rcpp::Named("exact") = false,
@@ -1836,7 +1853,7 @@ namespace {
 
 List cuvs_multi_cagra_self_impl(SEXP data, const std::vector<int>& devices,
     int k, int width, int queue, bool nn_descent, int degree,
-    int intermediate, int batch,
+    int intermediate, int batch, int merge_workers,
     double memory_limit, const std::string& output) {
   using Clock = std::chrono::steady_clock;
   const auto source = resident_cagra_source(data);
@@ -1853,7 +1870,8 @@ List cuvs_multi_cagra_self_impl(SEXP data, const std::vector<int>& devices,
 
   List built = cuvs_file_cagra_multi_build_impl(n, p, k, batch,
     memory_limit - result_bytes, width, queue, nn_descent, degree, intermediate,
-    devices, [&](std::size_t, int first, int count, float* staging) {
+    devices, merge_workers,
+    [&](std::size_t, int first, int count, float* staging) {
       source.read(first, count, staging);
     });
   SEXP pointer = built["pointer"];
@@ -1879,8 +1897,9 @@ List cuvs_multi_cagra_self_impl(SEXP data, const std::vector<int>& devices,
     const auto& shards = search_cagra_shards(*index, first, count,
       [&](float* staging) { source.read(first, count, staging); }, timing);
     const auto merge_start = Clock::now();
-    faissr::merge_cagra_candidates(shards, index->shards, first, count, k,
-      n, first, write);
+    const int workers = faissr::merge_cagra_rows(index->merge_worker(),
+      shards, index->shards, first, count, k, n, first, write);
+    timing.merge_workers = std::max(timing.merge_workers, workers);
     timing.merge += cagra_elapsed(merge_start);
     first += count;
   }
@@ -1925,11 +1944,14 @@ extern "C" SEXP faissR_cuvs_multi_cagra_v1(SEXP arguments) {
   const double memory_limit = request.containsElementNamed("memory_limit_bytes") ?
     Rcpp::as<double>(request["memory_limit_bytes"]) :
     std::numeric_limits<double>::max();
+  const int merge_workers = request.containsElementNamed("merge_workers") ?
+    Rcpp::as<int>(request["merge_workers"]) : 1;
   return cuvs_multi_cagra_self_impl(
     request["data"], devices, Rcpp::as<int>(request["k"]),
     Rcpp::as<int>(request["width"]),
     Rcpp::as<int>(request["queue"]), Rcpp::as<bool>(request["nn_descent"]),
-    degree, intermediate, batch, memory_limit, Rcpp::as<std::string>(request["output"]));
+    degree, intermediate, batch, merge_workers, memory_limit,
+    Rcpp::as<std::string>(request["output"]));
   END_RCPP
 }
 

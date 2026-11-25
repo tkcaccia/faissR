@@ -216,20 +216,26 @@ metal_cagra_file <- function(source, k, batch, memory_limit,
 }
 
 cuvs_cagra_wide_file_multi <- function(source, k, batch, memory_limit,
-        target_recall, width4, devices) {
+        target_recall, width4, devices, merge_workers = 1L) {
     params <- cuvs_cagra_wide_params(target_recall, width4, nn_descent = TRUE)
     params <- cuvs_cagra_file_search(params, k)
     batch <- as.integer(min(batch, params$batch %||% batch))
     degree <- as.integer(max(if (source$ncol <= 128L) 32L else 64L, k + 1L))
     index <- file_cagra_multi_build_cpp(source, k, batch, memory_limit,
-        params$width, params$queue, degree, 2L * degree, devices)
+        params$width, params$queue, degree, 2L * degree, devices,
+        merge_workers = merge_workers)
     pointer <- index$pointer
     timing <- NULL
     index$search_batch <- function(first, count) {
         found <- file_cagra_multi_search_cpp(pointer, source, first, count)
         next_timing <- found$search_timing
-        timing <<- if (is.null(timing)) next_timing else
-            Map(`+`, timing, next_timing)
+        if (!is.null(timing)) {
+            workers <- max(timing$merge_cpu_workers,
+                next_timing$merge_cpu_workers)
+            next_timing <- Map(`+`, timing, next_timing)
+            next_timing$merge_cpu_workers <- workers
+        }
+        timing <<- next_timing
         found
     }
     index$search_timing <- function() timing

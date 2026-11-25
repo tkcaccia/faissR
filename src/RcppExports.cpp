@@ -430,8 +430,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // file_cagra_multi_build_cpp
-Rcpp::List file_cagra_multi_build_cpp(SEXP source_spec, int k, int batch, double limit, int width, int queue, int degree, int intermediate, std::vector<int> devices);
-RcppExport SEXP _faissR_file_cagra_multi_build_cpp(SEXP source_specSEXP, SEXP kSEXP, SEXP batchSEXP, SEXP limitSEXP, SEXP widthSEXP, SEXP queueSEXP, SEXP degreeSEXP, SEXP intermediateSEXP, SEXP devicesSEXP) {
+Rcpp::List file_cagra_multi_build_cpp(SEXP source_spec, int k, int batch, double limit, int width, int queue, int degree, int intermediate, std::vector<int> devices, int merge_workers);
+RcppExport SEXP _faissR_file_cagra_multi_build_cpp(SEXP source_specSEXP, SEXP kSEXP, SEXP batchSEXP, SEXP limitSEXP, SEXP widthSEXP, SEXP queueSEXP, SEXP degreeSEXP, SEXP intermediateSEXP, SEXP devicesSEXP, SEXP merge_workersSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -444,7 +444,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type degree(degreeSEXP);
     Rcpp::traits::input_parameter< int >::type intermediate(intermediateSEXP);
     Rcpp::traits::input_parameter< std::vector<int> >::type devices(devicesSEXP);
-    rcpp_result_gen = Rcpp::wrap(file_cagra_multi_build_cpp(source_spec, k, batch, limit, width, queue, degree, intermediate, devices));
+    Rcpp::traits::input_parameter< int >::type merge_workers(merge_workersSEXP);
+    rcpp_result_gen = Rcpp::wrap(file_cagra_multi_build_cpp(source_spec, k, batch, limit, width, queue, degree, intermediate, devices, merge_workers));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2418,7 +2419,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_faissR_file_cagra_query_cpp", (DL_FUNC) &_faissR_file_cagra_query_cpp, 4},
     {"_faissR_file_cagra_set_search_cpp", (DL_FUNC) &_faissR_file_cagra_set_search_cpp, 3},
     {"_faissR_file_cagra_release_cpp", (DL_FUNC) &_faissR_file_cagra_release_cpp, 1},
-    {"_faissR_file_cagra_multi_build_cpp", (DL_FUNC) &_faissR_file_cagra_multi_build_cpp, 9},
+    {"_faissR_file_cagra_multi_build_cpp", (DL_FUNC) &_faissR_file_cagra_multi_build_cpp, 10},
     {"_faissR_file_cagra_multi_search_cpp", (DL_FUNC) &_faissR_file_cagra_multi_search_cpp, 4},
     {"_faissR_file_cagra_multi_release_cpp", (DL_FUNC) &_faissR_file_cagra_multi_release_cpp, 1},
     {"_faissR_inner_product_scores_float32_cpp", (DL_FUNC) &_faissR_inner_product_scores_float32_cpp, 4},

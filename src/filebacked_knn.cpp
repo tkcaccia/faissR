@@ -32,7 +32,7 @@ void cuvs_file_cagra_release_impl(SEXP pointer);
 Rcpp::List cuvs_file_cagra_multi_build_impl(int n, int p, int k, int batch,
     double limit, int width, int queue, bool nn_descent,
     int graph_degree, int intermediate_degree,
-    const std::vector<int>& devices,
+    const std::vector<int>& devices, int merge_workers,
     const std::function<void(std::size_t, int, int, float*)>& read);
 Rcpp::List cuvs_file_cagra_multi_search_impl(SEXP pointer, int features,
     int first, int count, const std::function<void(float*)>& read);
@@ -807,7 +807,7 @@ void file_cagra_release_cpp(SEXP pointer) {
 // [[Rcpp::export]]
 Rcpp::List file_cagra_multi_build_cpp(SEXP source_spec, int k, int batch,
     double limit, int width, int queue, int degree, int intermediate,
-    std::vector<int> devices) {
+    std::vector<int> devices, int merge_workers = 1) {
 #ifndef FAISSR_HAS_CUVS
   Rcpp::stop("File-backed CUDA CAGRA requires cuVS support in faissR");
 #else
@@ -827,7 +827,8 @@ Rcpp::List file_cagra_multi_build_cpp(SEXP source_spec, int k, int batch,
   };
   Rcpp::List index = cuvs_file_cagra_multi_build_impl(
     static_cast<int>(file.rows), static_cast<int>(file.columns), k, batch,
-    limit, width, queue, true, degree, intermediate, devices, read);
+    limit, width, queue, true, degree, intermediate, devices,
+    merge_workers, read);
   if (std::filesystem::last_write_time(file.path) != modified ||
       std::filesystem::file_size(file.path) != bytes) {
     cuvs_file_cagra_multi_release_impl(index["pointer"]);

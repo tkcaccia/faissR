@@ -61,6 +61,35 @@ class CagraSearchWorker {
   std::thread thread_;
 };
 
+// The writer must touch only the supplied output slot, with no R API calls.
+template <typename Write>
+int merge_cagra_rows(CagraSearchWorker* worker,
+    const std::vector<CagraBatch>& batches,
+    const std::vector<CagraShard>& shards, int first, int rows, int k,
+    int stride, int output_first, Write write) {
+  const auto merge = [&](int begin, int count) {
+    merge_cagra_candidates(batches, shards, first + begin, count, k,
+      stride, output_first + begin, write, begin);
+  };
+  if (!worker || rows < 128) {
+    merge(0, rows);
+    return 1;
+  }
+  const int half = rows / 2;
+  auto task = worker->submit([&] {
+    merge(0, half);
+    return CagraBatch{};
+  });
+  try {
+    merge(half, rows - half);
+  } catch (...) {
+    task.wait();
+    throw;
+  }
+  task.get();
+  return 2;
+}
+
 }  // namespace faissr
 
 #endif
