@@ -1321,7 +1321,7 @@ void validate_cagra_batch(const FileCagraIndex& index, int first, int count) {
 }
 
 faissr::CagraBatch search_file_cagra_index(FileCagraIndex& index,
-    float* query_data, int count) {
+    float* query_data, int count, faissr::CagraBatch batch = {}) {
   int64_t query_shape[] = {count, index.p};
   const int search_k = index.k + 1;
   int64_t output_shape[] = {count, search_k};
@@ -1335,8 +1335,8 @@ faissr::CagraBatch search_file_cagra_index(FileCagraIndex& index,
     "cuvsCagraSearch(batched)");
   cuda_sync("cuvsCagraSearch(batched) synchronize");
   const std::size_t elements = static_cast<std::size_t>(count) * search_k;
-  faissr::CagraBatch batch{std::vector<int64_t>(elements),
-    std::vector<float>(elements)};
+  batch.ids.resize(elements);
+  batch.distances.resize(elements);
   cuda_check(cudaMemcpy(batch.ids.data(), index.labels.get(),
     elements * sizeof(int64_t), cudaMemcpyDeviceToHost), "cudaMemcpy(CAGRA IDs)");
   cuda_check(cudaMemcpy(batch.distances.data(), index.distances.get(),
@@ -1345,7 +1345,7 @@ faissr::CagraBatch search_file_cagra_index(FileCagraIndex& index,
 }
 
 faissr::CagraBatch search_external_cagra(FileCagraIndex& index,
-    const float* host, int count) {
+    const float* host, int count, faissr::CagraBatch batch = {}) {
   if (!index.external_queries) {
     const auto elements = static_cast<std::size_t>(index.capacity) * index.p;
     const auto bytes = elements * sizeof(float);
@@ -1360,7 +1360,7 @@ faissr::CagraBatch search_external_cagra(FileCagraIndex& index,
   cuda_check(cudaMemcpy(device, host,
     static_cast<std::size_t>(count) * index.p * sizeof(float), cudaMemcpyHostToDevice),
     "cudaMemcpy(file-backed CAGRA queries)");
-  return search_file_cagra_index(index, device, count);
+  return search_file_cagra_index(index, device, count, std::move(batch));
 }
 
 void cuvs_cagra_search_batch(FileCagraIndex& index, int first, int count,
@@ -1460,6 +1460,7 @@ struct FileCagraMultiIndex {
   std::vector<faissr::CagraShard> shards;
   std::vector<FileCagraBuild> builds;
   std::vector<float> query_staging;
+  std::vector<faissr::CagraBatch> search_batches;
   // Stop threads before releasing their CUDA indexes and staging buffer.
   std::vector<std::unique_ptr<faissr::CagraSearchWorker>> search_workers;
 };
@@ -1623,7 +1624,7 @@ struct CagraSearchTiming {
   }
 };
 
-std::vector<faissr::CagraBatch> search_cagra_shards(
+const std::vector<faissr::CagraBatch>& search_cagra_shards(
     FileCagraMultiIndex& index, int query, int count,
     const std::function<void(float*)>& read, CagraSearchTiming& timing) {
   const auto shard_count = index.shards.size();
@@ -1637,9 +1638,9 @@ std::vector<faissr::CagraBatch> search_cagra_shards(
   timing.read += cagra_elapsed(started);
 
   std::vector<std::future<faissr::CagraBatch>> tasks;
-  std::vector<faissr::CagraBatch> batches;
   tasks.reserve(shard_count);
-  batches.reserve(shard_count);
+  auto& batches = index.search_batches;
+  batches.resize(shard_count);
   started = CagraClock::now();
   try {
     for (std::size_t rank = 0; rank < shard_count; ++rank) {
@@ -1649,15 +1650,20 @@ std::vector<faissr::CagraBatch> search_cagra_shards(
         const int local = query - index.shards[rank].first;
         cuda_check(cudaSetDevice(shard.device), "cudaSetDevice");
         auto* data = static_cast<float*>(shard.dataset.get());
+        auto scratch = std::move(batches[rank]);
         auto batch = local >= 0 && local <= shard.n - count ?
           search_file_cagra_index(shard,
-            data + static_cast<std::size_t>(local) * index.features, count) :
-          search_external_cagra(shard, index.query_staging.data(), count);
+            data + static_cast<std::size_t>(local) * index.features, count,
+            std::move(scratch)) :
+          search_external_cagra(shard, index.query_staging.data(), count,
+            std::move(scratch));
         timing.device_seconds[rank] += cagra_elapsed(tick);
         return batch;
       }));
     }
-    for (auto& task : tasks) batches.push_back(take_cagra_result(task));
+    for (std::size_t rank = 0; rank < shard_count; ++rank) {
+      batches[rank] = take_cagra_result(tasks[rank]);
+    }
   } catch (...) {
     // Packaged-task futures do not join automatically on interruption.
     for (auto& task : tasks) if (task.valid()) task.wait();
@@ -1679,7 +1685,7 @@ List cuvs_file_cagra_multi_search_impl(SEXP pointer, int features, int first,
   }
   const int query = first - 1;
   CagraSearchTiming timing(index.shards.size());
-  const auto batches = search_cagra_shards(index, query, count, read, timing);
+  const auto& batches = search_cagra_shards(index, query, count, read, timing);
   IntegerMatrix indices(Rcpp::no_init(count, index.k));
   NumericMatrix distances(Rcpp::no_init(count, index.k));
   const auto merge_start = CagraClock::now();
@@ -1870,7 +1876,7 @@ List cuvs_multi_cagra_self_impl(SEXP data, const std::vector<int>& devices,
   for (int first = 0; first < n;) {
     Rcpp::checkUserInterrupt();
     const int count = std::min(batch, n - first);
-    auto shards = search_cagra_shards(*index, first, count,
+    const auto& shards = search_cagra_shards(*index, first, count,
       [&](float* staging) { source.read(first, count, staging); }, timing);
     const auto merge_start = Clock::now();
     faissr::merge_cagra_candidates(shards, index->shards, first, count, k,
