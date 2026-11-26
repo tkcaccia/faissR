@@ -5,6 +5,8 @@
 
 namespace faissr {
 
+constexpr int cagra_max_batch_rows = 4096;
+
 struct CagraCapacity {
   double reference_bytes;
   double device_bytes;

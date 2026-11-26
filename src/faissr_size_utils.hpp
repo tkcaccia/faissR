@@ -3,6 +3,7 @@
 
 #include <Rinternals.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -41,6 +42,25 @@ inline R_xlen_t float_payload_byte_count(const R_xlen_t elements,
     );
   }
   return elements * width;
+}
+
+// Pack an existing column-major row window into a caller-owned float32 buffer.
+template <typename Source>
+void copy_column_rows_to_row_major_float(const Source* source, float* destination,
+    std::size_t stride, std::size_t columns, std::size_t first, std::size_t count) {
+  constexpr std::size_t tile = 32;
+  for (std::size_t row_begin = 0; row_begin < count; row_begin += tile) {
+    const auto row_end = std::min(row_begin + tile, count);
+    for (std::size_t col_begin = 0; col_begin < columns; col_begin += tile) {
+      const auto col_end = std::min(col_begin + tile, columns);
+      for (auto col = col_begin; col < col_end; ++col) {
+        const auto* source_column = source + col * stride + first;
+        for (auto row = row_begin; row < row_end; ++row) {
+          destination[row * columns + col] = static_cast<float>(source_column[row]);
+        }
+      }
+    }
+  }
 }
 
 template <typename Source>

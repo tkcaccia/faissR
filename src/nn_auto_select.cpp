@@ -1415,8 +1415,9 @@ int cuda_cagra_file_batch(int fallback) {
   if (Rf_isNull(option)) return fallback;
   if (TYPEOF(option) != VECSXP) stop("Invalid CUDA CAGRA file search profile.");
   const double batch = knn_request_count(List(option), "batch", fallback);
-  if (batch < 1 || batch > 1024) {
-    stop("CUDA CAGRA file batch must be between 1 and 1024.");
+  if (batch < 1 || batch > faissr::cagra_max_batch_rows) {
+    stop("CUDA CAGRA file batch must be between 1 and %d.",
+         faissr::cagra_max_batch_rows);
   }
   return static_cast<int>(batch);
 }
@@ -1511,7 +1512,8 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
   double limit = profile.containsElementNamed("memory_limit_bytes") ?
     as<double>(profile["memory_limit_bytes"]) : NA_REAL;
   if (!finite1(limit) || limit <= 0 || graph < 2 ||
-      intermediate < graph || batch < 1 || batch > 1024) {
+      intermediate < graph || batch < 1 ||
+      batch > faissr::cagra_max_batch_rows) {
     stop("Invalid CUDA CAGRA profile.");
   }
   if (n <= intermediate || k >= graph || p < 1) return List();

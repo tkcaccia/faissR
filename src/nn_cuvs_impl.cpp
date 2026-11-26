@@ -1223,7 +1223,8 @@ FileCagraBuild build_file_cagra(int n, int p, int k, int batch,
   using Clock = std::chrono::steady_clock;
   if (graph_degree < 1 || graph_degree > intermediate_degree ||
       n <= intermediate_degree || p < 1 || k < 1 || k >= n ||
-      batch < 1 || batch > 1024 || width < 1 || queue <= k) {
+      batch < 1 || batch > faissr::cagra_max_batch_rows ||
+      width < 1 || queue <= k) {
     throw std::runtime_error("Invalid file-backed CAGRA index or search dimensions");
   }
   const auto capacity = faissr::cagra_capacity(n, p, k, batch,
@@ -1532,7 +1533,8 @@ List cuvs_file_cagra_multi_build_impl(int n, int p, int k, int batch,
       std::adjacent_find(sorted.begin(), sorted.end()) != sorted.end()) {
     Rcpp::stop("Sharded CAGRA requires distinct visible CUDA devices");
   }
-  if (p < 1 || k < 1 || k >= n || batch < 1 || batch > 1024) {
+  if (p < 1 || k < 1 || k >= n ||
+      batch < 1 || batch > faissr::cagra_max_batch_rows) {
     Rcpp::stop("Invalid multi-device CUDA CAGRA dimensions");
   }
   if (merge_workers != 1 && merge_workers != 2) {
@@ -1617,6 +1619,7 @@ struct CagraSearchTiming {
   double read = 0.0;
   double search = 0.0;
   double merge = 0.0;
+  double overlap = 0.0;
   int merge_workers = 1;
   std::vector<double> device_seconds;
   double rows = 0.0;
@@ -1628,6 +1631,7 @@ struct CagraSearchTiming {
     return List::create(Rcpp::Named("query_read_seconds") = read,
       Rcpp::Named("search_seconds") = search,
       Rcpp::Named("merge_seconds") = merge,
+      Rcpp::Named("query_and_merge_overlap_seconds") = overlap,
       Rcpp::Named("merge_cpu_workers") = merge_workers,
       Rcpp::Named("device_query_rows") =
         Rcpp::NumericVector(device_seconds.size(), rows),
@@ -1637,15 +1641,19 @@ struct CagraSearchTiming {
 
 const std::vector<faissr::CagraBatch>& search_cagra_shards(
     FileCagraMultiIndex& index, int query, int count,
-    const std::function<void(float*)>& read, CagraSearchTiming& timing) {
+    const std::function<void(float*)>& read, CagraSearchTiming& timing,
+    const float* resident_queries = nullptr) {
   const auto shard_count = index.shards.size();
   while (index.search_workers.size() < shard_count) {
     index.search_workers.push_back(
       std::make_unique<faissr::CagraSearchWorker>());
   }
   auto started = CagraClock::now();
-  index.query_staging.resize(static_cast<std::size_t>(count) * index.features);
-  read(index.query_staging.data());
+  if (!resident_queries) {
+    index.query_staging.resize(static_cast<std::size_t>(count) * index.features);
+    read(index.query_staging.data());
+    resident_queries = index.query_staging.data();
+  }
   timing.read += cagra_elapsed(started);
 
   std::vector<std::future<faissr::CagraBatch>> tasks;
@@ -1666,7 +1674,7 @@ const std::vector<faissr::CagraBatch>& search_cagra_shards(
           search_file_cagra_index(shard,
             data + static_cast<std::size_t>(local) * index.features, count,
             std::move(scratch)) :
-          search_external_cagra(shard, index.query_staging.data(), count,
+          search_external_cagra(shard, resident_queries, count,
             std::move(scratch));
         timing.device_seconds[rank] += cagra_elapsed(tick);
         return batch;
@@ -1730,22 +1738,22 @@ struct ResidentCagraSource {
   const double* double_data;
   bool row_major;
 
-  void read(int first, int count, float* staging) const {
-    const auto size = static_cast<std::size_t>(count) * p;
+  void pack(int first, int count, float* staging) const {
     if (row_major) {
       std::copy_n(float_data + static_cast<std::size_t>(first) * p,
-        size, staging);
+        static_cast<std::size_t>(count) * p, staging);
+    } else if (double_data) {
+      faissr::copy_column_rows_to_row_major_float(double_data, staging,
+        n, p, first, count);
     } else {
-      for (int col = 0; col < p; ++col) {
-        const auto source = static_cast<std::size_t>(col) * n + first;
-        for (int row = 0; row < count; ++row) {
-          staging[static_cast<std::size_t>(row) * p + col] = double_data ?
-            static_cast<float>(double_data[source + row]) :
-            float_data[source + row];
-        }
-      }
+      faissr::copy_column_rows_to_row_major_float(float_data, staging,
+        n, p, first, count);
     }
-    if (!finite_float32_payload(staging, size)) {
+  }
+
+  void read(int first, int count, float* staging) const {
+    pack(first, count, staging);
+    if (!finite_float32_payload(staging, static_cast<std::size_t>(count) * p)) {
       throw std::runtime_error("Resident CUDA CAGRA requires finite input");
     }
   }
@@ -1789,7 +1797,8 @@ List cuvs_cagra_batched_self_impl(SEXP data, int k, int batch,
   using Clock = std::chrono::steady_clock;
   const auto source = resident_cagra_source(data);
   const int n = source.n, p = source.p;
-  if (k < 1 || k >= n || batch < 1 || batch > 1024 || graph_degree <= k) {
+  if (k < 1 || k >= n || batch < 1 ||
+      batch > faissr::cagra_max_batch_rows || graph_degree <= k) {
     Rcpp::stop("Invalid resident CUDA CAGRA dimensions or graph degree");
   }
   faissr::matrix_element_count(n, k);
@@ -1853,12 +1862,13 @@ namespace {
 
 List cuvs_multi_cagra_self_impl(SEXP data, const std::vector<int>& devices,
     int k, int width, int queue, bool nn_descent, int degree,
-    int intermediate, int batch, int merge_workers,
+    int intermediate, int batch, int merge_workers, bool overlap_merge,
     double memory_limit, const std::string& output) {
   using Clock = std::chrono::steady_clock;
   const auto source = resident_cagra_source(data);
   const int n = source.n, p = source.p;
-  if (k < 1 || k >= n || batch < 1 || batch > 1024) {
+  if (k < 1 || k >= n || batch < 1 ||
+      batch > faissr::cagra_max_batch_rows) {
     Rcpp::stop("Invalid resident multi-device CUDA CAGRA dimensions");
   }
   faissr::matrix_element_count(n, k);
@@ -1890,19 +1900,49 @@ List cuvs_multi_cagra_self_impl(SEXP data, const std::vector<int>& devices,
       float_output);
   };
   CagraSearchTiming timing(index->shards.size());
+  Clock::time_point merge_started, merge_done;
+  std::unique_ptr<faissr::CagraMergePipeline> pipeline;
+  if (overlap_merge) {
+    pipeline = std::make_unique<faissr::CagraMergePipeline>(merge_workers);
+  }
   const auto started = Clock::now();
   for (int first = 0; first < n;) {
     Rcpp::checkUserInterrupt();
     const int count = std::min(batch, n - first);
-    const auto& shards = search_cagra_shards(*index, first, count,
-      [&](float* staging) { source.read(first, count, staging); }, timing);
-    const auto merge_start = Clock::now();
-    const int workers = faissr::merge_cagra_rows(index->merge_worker(),
-      shards, index->shards, first, count, k, n, first, write);
-    timing.merge_workers = std::max(timing.merge_workers, workers);
-    timing.merge += cagra_elapsed(merge_start);
+    const auto query_started = Clock::now();
+    // The build checked every row for finite float32 values before search.
+    const float* resident_queries = overlap_merge && source.row_major ?
+      source.float_data + static_cast<std::size_t>(first) * p : nullptr;
+    const auto& batches = search_cagra_shards(*index, first, count,
+      [&](float* staging) {
+        if (overlap_merge) source.pack(first, count, staging);
+        else source.read(first, count, staging);
+      }, timing, resident_queries);
+    const auto query_done = Clock::now();
+    const auto merge = [&, first, count](const auto& shards, auto* worker) {
+      const auto started = Clock::now();
+      const int workers = faissr::merge_cagra_rows(worker, shards,
+        index->shards, first, count, k, n, first, write);
+      merge_started = started;
+      merge_done = Clock::now();
+      timing.merge_workers = std::max(timing.merge_workers, workers);
+      timing.merge += std::chrono::duration<double>(merge_done - merge_started).count();
+    };
+    if (pipeline) {
+      if (pipeline->pending().valid()) {
+        take_cagra_result(pipeline->pending());
+        const auto shared = std::min(query_done, merge_done) -
+          std::max(query_started, merge_started);
+        timing.overlap += std::max(0.0,
+          std::chrono::duration<double>(shared).count());
+      }
+      pipeline->submit(index->search_batches, merge);
+    } else {
+      merge(batches, index->merge_worker());
+    }
     first += count;
   }
+  if (pipeline) take_cagra_result(pipeline->pending());
   const double total = std::chrono::duration<double>(Clock::now() - started).count();
   index.reset();
   Rcpp::RObject distance_output(float_output ?
@@ -1917,7 +1957,10 @@ List cuvs_multi_cagra_self_impl(SEXP data, const std::vector<int>& devices,
   built["index_build_seconds"] = Rcpp::as<double>(
     built["build_and_upload_seconds"]);
   built["search_batch_size"] = batch;
-  built["search_seconds"] = total - timing.merge;
+  built["search_seconds"] = overlap_merge ? timing.read + timing.search :
+    total - timing.merge;
+  built["query_merge_overlap_enabled"] = overlap_merge;
+  built["query_search_and_merge_seconds"] = total;
   built["graph_assembly_seconds"] = timing.merge;
   built["search_timing"] = timing.receipt();
   built["input_bytes"] = source.bytes();
@@ -1946,11 +1989,13 @@ extern "C" SEXP faissR_cuvs_multi_cagra_v1(SEXP arguments) {
     std::numeric_limits<double>::max();
   const int merge_workers = request.containsElementNamed("merge_workers") ?
     Rcpp::as<int>(request["merge_workers"]) : 1;
+  const bool overlap_merge = request.containsElementNamed("overlap_merge") &&
+    Rcpp::as<bool>(request["overlap_merge"]);
   return cuvs_multi_cagra_self_impl(
     request["data"], devices, Rcpp::as<int>(request["k"]),
     Rcpp::as<int>(request["width"]),
     Rcpp::as<int>(request["queue"]), Rcpp::as<bool>(request["nn_descent"]),
-    degree, intermediate, batch, merge_workers, memory_limit,
+    degree, intermediate, batch, merge_workers, overlap_merge, memory_limit,
     Rcpp::as<std::string>(request["output"]));
   END_RCPP
 }

@@ -1,3 +1,5 @@
+cuvs_cagra_max_batch_rows <- 4096L
+
 cuvs_cagra_wide_params <- function(target_recall, width4, nn_descent = FALSE) {
     target <- normalize_hnsw_target_recall(target_recall)
     if (isTRUE(width4) && (target == 0.99 || isTRUE(nn_descent))) {
@@ -56,7 +58,8 @@ cuvs_validate_cagra_profile <- function(profile, n, k) {
         }, logical(1L))) ||
         profile$graph_degree <= k ||
         profile$intermediate_degree < profile$graph_degree ||
-        profile$intermediate_degree >= n || profile$batch_rows > 1024L) {
+        profile$intermediate_degree >= n ||
+        profile$batch_rows > cuvs_cagra_max_batch_rows) {
         stop("Invalid CUDA CAGRA profile.", call. = FALSE)
     }
     profile
@@ -110,7 +113,8 @@ cuvs_cagra_file_search <- function(params, k,
         }, logical(1L))) ||
         search$width < 1L || search$width > 64L ||
         search$queue <= k || search$queue > 4096L ||
-        (!is.null(search$batch) && (search$batch < 1L || search$batch > 1024L))) {
+        (!is.null(search$batch) && (search$batch < 1L ||
+            search$batch > cuvs_cagra_max_batch_rows))) {
         stop("Invalid CUDA CAGRA file search width or queue.", call. = FALSE)
     }
     params$width <- as.integer(search$width)
@@ -124,7 +128,7 @@ cuvs_cagra_file_search_candidates <- function(k, incumbent, max_batch) {
     incumbent <- cuvs_cagra_file_search(list(), k, incumbent)
     stopifnot(length(max_batch) == 1L, is.finite(max_batch),
         max_batch == floor(max_batch), max_batch >= incumbent$batch,
-        max_batch <= 1024L, length(incumbent$batch) == 1L)
+        max_batch <= cuvs_cagra_max_batch_rows, length(incumbent$batch) == 1L)
     widths <- unique(c(incumbent$width, max(1L, incumbent$width %/% 2L)))
     queues <- unique(as.integer(pmax(k + 1L,
         ceiling(incumbent$queue * c(1, 2 / 3, 1 / 2, 1 / 3)))))

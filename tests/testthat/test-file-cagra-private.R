@@ -48,7 +48,9 @@ test_that("file CAGRA only advances verified speed and recall improvements", {
     expect_true(all(grid$queue > 128L))
     expect_equal(sort(unique(grid$width)), c(3L, 6L))
     expect_equal(sort(unique(grid$batch)), c(256L, 768L))
-    expect_error(cuvs_cagra_file_search_candidates(128L, incumbent, 2048L))
+    wide <- cuvs_cagra_file_search_candidates(128L, incumbent, 4096L)
+    expect_equal(sort(unique(wide$batch)), c(256L, 4096L))
+    expect_error(cuvs_cagra_file_search_candidates(128L, incumbent, 4097L))
 
     rows <- data.frame(width = c(6L, 3L, 3L, 3L),
         queue = c(384L, 256L, 192L, 129L), batch = c(256L, 768L, 768L, 768L),

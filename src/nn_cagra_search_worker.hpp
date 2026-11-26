@@ -3,6 +3,7 @@
 
 #include <condition_variable>
 #include <future>
+#include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
@@ -89,6 +90,37 @@ int merge_cagra_rows(CagraSearchWorker* worker,
   task.get();
   return 2;
 }
+
+// The previous merge owns its host buffers while the devices fill the next.
+class CagraMergePipeline {
+ public:
+  explicit CagraMergePipeline(int workers)
+    : second_(workers == 2 ? std::make_unique<CagraSearchWorker>() : nullptr) {}
+
+  ~CagraMergePipeline() {
+    if (pending_.valid()) pending_.wait();
+  }
+
+  template <typename Merge>
+  void submit(std::vector<CagraBatch>& ready, Merge merge) {
+    if (pending_.valid()) {
+      throw std::logic_error("A CAGRA merge is already in flight");
+    }
+    previous_.swap(ready);
+    pending_ = first_.submit([this, merge = std::move(merge)] {
+      merge(previous_, second_.get());
+      return CagraBatch{};
+    });
+  }
+
+  std::future<CagraBatch>& pending() { return pending_; }
+
+ private:
+  std::vector<CagraBatch> previous_;
+  std::unique_ptr<CagraSearchWorker> second_;
+  CagraSearchWorker first_;
+  std::future<CagraBatch> pending_;
+};
 
 }  // namespace faissr
 
