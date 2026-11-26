@@ -1503,6 +1503,11 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
   const double graph = knn_request_count(profile, "graph_degree", 0);
   const double intermediate = knn_request_count(profile, "intermediate_degree", 0);
   const double batch = knn_request_count(profile, "batch_rows", 0);
+  const double device_count = knn_request_count(request, "cuda_device_count", 1);
+  if (device_count < 1 || device_count > n ||
+      device_count != std::floor(device_count)) {
+    stop("Invalid CUDA CAGRA device count.");
+  }
   double limit = profile.containsElementNamed("memory_limit_bytes") ?
     as<double>(profile["memory_limit_bytes"]) : NA_REAL;
   if (!finite1(limit) || limit <= 0 || graph < 2 ||
@@ -1510,6 +1515,10 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
     stop("Invalid CUDA CAGRA profile.");
   }
   if (n <= intermediate || k >= graph || p < 1) return List();
+  const int smallest_shard = n / static_cast<int>(device_count);
+  if (device_count > 1 && smallest_shard <= std::max(intermediate, k + 1.0)) {
+    return List();
+  }
   if (request.containsElementNamed("memory_limit_bytes")) {
     const double caller_limit = as<double>(request["memory_limit_bytes"]);
     if (!finite1(caller_limit) || caller_limit <= 0) {
@@ -1517,15 +1526,29 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
     }
     limit = std::min(limit, caller_limit);
   }
-  const auto capacity = faissr::cagra_capacity(n, p, k,
+  limit = std::floor(limit);
+  const int largest_shard = static_cast<int>(std::ceil(n / device_count));
+  const auto capacity = faissr::cagra_capacity(largest_shard, p, k,
     static_cast<int>(batch), static_cast<int>(graph), static_cast<int>(intermediate));
+  const double device_bytes = capacity.device_bytes +
+    (device_count > 1 ? 4.0 * batch * p : 0.0);
   const double resident_payload = file ? 0.0 : n * (8.0 * p + 12.0 * k);
-  const double host_buffers = resident_payload + capacity.host_batch_bytes;
-  const bool host_fits = !calibrated ||
-    (finite1(host_available) && host_available >= calibrated_host_workspace);
-  const bool fits = finite1(free) && capacity.device_bytes <= free &&
-    capacity.device_bytes <= limit && host_buffers <= limit && host_fits &&
-    (!calibrated || limit >= calibrated_host_workspace);
+  const double host_buffers = resident_payload +
+    device_count * capacity.host_batch_bytes;
+  // The resident native path subtracts its result storage from the limit.
+  const double result_bytes = device_count > 1 && !file ? 12.0 * n * k : 0;
+  if (device_count > 1 && finite1(host_available)) {
+    limit = std::min(limit, std::floor(host_available));
+  }
+  const double host_required = device_count > 1 ?
+    n * cuda_cagra_host_bytes_per_row(p, k) + result_bytes :
+    calibrated ? calibrated_host_workspace : NA_REAL;
+  const bool host_fits = !finite1(host_required) ||
+    (finite1(host_available) && host_available >= host_required);
+  const bool fits = finite1(free) && device_bytes <= free &&
+    device_bytes <= limit - result_bytes && host_buffers <= limit &&
+    host_fits &&
+    (!finite1(host_required) || limit >= host_required);
   return List::create(
     _["fits"] = fits,
     _["reason"] = fits ? "within_budget" :
@@ -1540,9 +1563,10 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
     _["memory_limit_bytes"] = limit,
     _["free_device_bytes"] = free,
     _["host_available_bytes"] = host_available,
-    _["host_workspace_required_bytes"] =
-      calibrated ? calibrated_host_workspace : NA_REAL,
-    _["device_bytes_estimate"] = capacity.device_bytes,
+    _["host_workspace_required_bytes"] = host_required,
+    _["device_count"] = device_count,
+    _["largest_reference_shard_rows"] = largest_shard,
+    _["device_bytes_estimate"] = device_bytes,
     _["host_payload_bytes_upper_bound"] = host_buffers);
 }
 
@@ -1617,17 +1641,27 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
   const bool wide_exact =
     shape == "large_high_dim" && (recall_code == 99 || p >= 1024);
 
-  const bool allow_profile =
-    request.containsElementNamed("allow_cuda_profile") &&
+  const bool single_profile = request.containsElementNamed("allow_cuda_profile") &&
     as<bool>(request["allow_cuda_profile"]);
+  const bool multi_profile = request.containsElementNamed("cuda_device_count") &&
+    as<double>(request["cuda_device_count"]) > 1;
   List profile;
-  if (allow_profile && backend == "cuda" && cuda_method == "auto" &&
+  if ((single_profile || multi_profile) && backend == "cuda" &&
+      cuda_method == "auto" &&
       metal_method == "auto" && self && metric == "euclidean" &&
       known_shape && n >= 500000) {
     profile = cuda_cagra_profile_plan(request, n, p, k, file);
   }
   const bool profile_fits = profile.size() > 0 && as<bool>(profile["fits"]);
-  const bool prefer_cagra = profile.size() > 0 &&
+  const bool multi_cagra = profile.size() > 0 &&
+    as<double>(profile["device_count"]) > 1;
+  if (multi_cagra && !profile_fits) {
+    stop("Reference-sharded CUDA CAGRA exceeds the available RAM or VRAM "
+         "(requires %.2f GiB of host workspace and %.2f GiB per device).",
+         as<double>(profile["host_workspace_required_bytes"]) / cagra_gib,
+         as<double>(profile["device_bytes_estimate"]) / cagra_gib);
+  }
+  const bool prefer_cagra = profile.size() > 0 && !multi_cagra &&
     finite1(as<double>(profile["free_device_bytes"])) &&
     cuda_auto_cagra_shape(n, p, k);
 
@@ -1667,7 +1701,8 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
     reason = "cuda_cagra_requested";
   } else if (profile_fits || prefer_cagra) {
     method = "cagra_width4";
-    reason = profile_fits ? "cuda_cagra_profile_fits" :
+    reason = multi_cagra ? "cuda_cagra_reference_shards_fit" :
+      profile_fits ? "cuda_cagra_profile_fits" :
       "cuda_cagra_resident_capacity_exceeded";
   } else if (metal_method != "auto") {
     if (metal_method != "cagra" || backend != "metal" || !self ||
@@ -1744,14 +1779,14 @@ extern "C" SEXP faissR_knn_select_v1(SEXP specification) {
   if (metal_profile.size() > 0) selected["metal_cagra_admission"] = metal_profile;
   // Keep ImageNet resident on the validated width-four native preset.
   if (profile_fits &&
-      (file || recall_code != 99 ||
+      (file || multi_cagra || recall_code != 99 ||
        as<std::string>(profile["profile_source"]) != "imagenet_full_runs")) {
     List execution_profile = List::create(
       _["graph_degree"] = profile["graph_degree"],
       _["intermediate_degree"] = profile["intermediate_degree"],
       _["batch_rows"] = profile["batch_rows"],
       _["memory_limit_bytes"] = profile["memory_limit_bytes"]);
-    if (prefer_cagra) execution_profile["builder"] = "nn_descent";
+    if (prefer_cagra || multi_cagra) execution_profile["builder"] = "nn_descent";
     selected["cuda_cagra_profile"] = execution_profile;
   }
   return selected;

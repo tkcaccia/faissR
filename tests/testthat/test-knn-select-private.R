@@ -226,11 +226,12 @@ test_that("ImageNet admits the validated width-four CUDA preset", {
     )
     choose <- function(rows = 1281167L, columns = 1024L, recall = 0.99,
                        file = FALSE, free = 16, host = 24, limit = 26,
-                       metric = "euclidean") {
+                       metric = "euclidean", devices = 1L) {
         select_calibrated_cuda(list(backend = "cuda", metric = metric,
             n_reference = rows, n_features = columns, n_query = rows,
             k = 30L, target_recall = recall, self_query = TRUE,
-            file_backed = file, allow_ivf = TRUE, allow_cuda_profile = TRUE,
+            file_backed = file, allow_ivf = TRUE,
+            allow_cuda_profile = devices <= 1L, cuda_device_count = devices,
             cuda_free_bytes = free * 2^30, host_available_bytes = host * 2^30,
             memory_limit_bytes = limit * 2^30))
     }
@@ -280,6 +281,23 @@ test_that("ImageNet admits the validated width-four CUDA preset", {
                     host = 192, limit = 192)
     expect_true(large$cuda_cagra_admission$fits)
     expect_identical(large$method, "cagra_width4")
+
+    multi <- choose(free = 8, devices = 2L)
+    expect_identical(multi$reason, "cuda_cagra_reference_shards_fit")
+    expect_equal(multi$cuda_cagra_admission$largest_reference_shard_rows, 640584)
+    expect_lt(multi$cuda_cagra_admission$device_bytes_estimate,
+              current$cuda_cagra_admission$device_bytes_estimate)
+    expect_identical(multi$cuda_cagra_profile$builder, "nn_descent")
+    expect_error(choose(free = 2, devices = 2L), "sharded CUDA CAGRA exceeds")
+    expect_error(choose(free = 8, host = 8, devices = 2L),
+        "sharded CUDA CAGRA exceeds")
+    even <- choose(rows = 10000000L, columns = 96L, free = 8, host = 32,
+        limit = 32, file = TRUE, devices = 2L)
+    expect_identical(even$method, "cagra_width4")
+    expect_equal(even$cuda_cagra_admission$largest_reference_shard_rows, 5000000)
+    expect_error(choose(free = 2, file = TRUE, devices = 2L),
+        "sharded CUDA CAGRA exceeds")
+    expect_error(choose(devices = 0L), "Invalid CUDA CAGRA device count")
 })
 
 test_that("sharded CAGRA plans bounded CUDA indexes for larger file inputs", {

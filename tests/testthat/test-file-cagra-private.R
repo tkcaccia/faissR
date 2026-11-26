@@ -68,3 +68,23 @@ test_that("file CAGRA only advances verified speed and recall improvements", {
     expect_error(cuvs_cagra_file_search(list(), 128L,
         list(width = 3L, queue = 128L, batch = 768L)), "Invalid CUDA CAGRA")
 })
+
+test_that("multi-device file CAGRA uses the admitted profile", {
+    observed <- NULL
+    testthat::local_mocked_bindings(file_cagra_multi_build_cpp = function(
+            source, k, batch, memory_limit, width, queue, degree,
+            intermediate, devices, merge_workers) {
+        observed <<- list(batch, memory_limit, degree, intermediate,
+            devices, merge_workers)
+        list(shard_rows = c(50001L, 50000L))
+    }, .package = "faissR")
+    withr::local_options(list(faissR.cuvs_cagra_file_search = NULL))
+    profile <- list(graph_degree = 64L, intermediate_degree = 96L,
+        batch_rows = 256L, memory_limit_bytes = 8 * 2^30,
+        builder = "nn_descent")
+    index <- faissR:::cuvs_cagra_wide_file_multi(
+        list(nrow = 100001L, ncol = 96L), 30L, 1024L, 16 * 2^30,
+        0.99, TRUE, 0:1, merge_workers = 2L, profile = profile)
+    expect_identical(observed, list(256L, 8 * 2^30, 64L, 96L, 0:1, 2L))
+    expect_identical(index$params$shard_rows, c(50001L, 50000L))
+})
