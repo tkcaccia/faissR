@@ -8,11 +8,12 @@ cuvs_cagra_wide_params <- function(target_recall, width4, nn_descent = FALSE) {
     if (isTRUE(width4)) {
         return(list(width = 4L, queue = 512L, builder = "ivf_pq"))
     }
+    builder <- if (isTRUE(nn_descent)) "nn_descent" else "ivf_pq"
     if (target == 0.90) {
-        return(list(width = 2L, queue = 256L, builder = "ivf_pq"))
+        return(list(width = 2L, queue = 256L, builder = builder))
     }
     if (target == 0.95) {
-        return(list(width = 2L, queue = 384L, builder = "ivf_pq"))
+        return(list(width = 2L, queue = 384L, builder = builder))
     }
     list(width = 2L, queue = 512L, builder = "nn_descent")
 }

@@ -74,6 +74,10 @@ test_that("wide CAGRA supports NN-descent for automatic lower recall tiers", {
   expect_identical(preset(0.90, TRUE), preset(0.95, TRUE))
   for (recall in c(0.90, 0.95)) {
     expect_identical(preset(recall, TRUE, nn_descent = TRUE), preset(0.99, TRUE))
+    expected <- preset(recall, FALSE)
+    expect_identical(expected$builder, "ivf_pq")
+    expected$builder <- "nn_descent"
+    expect_identical(preset(recall, FALSE, nn_descent = TRUE), expected)
   }
   expect_identical(preset(0.99, FALSE),
     list(width = 2L, queue = 512L, builder = "nn_descent"))
@@ -342,6 +346,9 @@ test_that("sharded CAGRA plans bounded CUDA indexes for larger file inputs", {
     expect_equal(selected$resources$n_shards, 5L)
     expect_gt(plan(50000000L, free = 8)$resources$n_shards, 5L)
     options(faissR.cuvs_cagra_file_search =
-        list(width = 2L, queue = 192L, batch = 1025L))
-    expect_error(plan(50000000L), "between 1 and 1024")
+        list(width = 2L, queue = 192L, batch = 4096L))
+    expect_equal(plan(50000000L)$resources$chunk_rows, 4096)
+    options(faissR.cuvs_cagra_file_search =
+        list(width = 2L, queue = 192L, batch = 4097L))
+    expect_error(plan(50000000L), "between 1 and 4096")
 })
