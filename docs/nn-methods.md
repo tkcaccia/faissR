@@ -739,6 +739,12 @@ CAGRA is an important CUDA graph-search method. In faissR, it should be treated
 as an approximate route: report its parameters and recall, especially on raw
 high-dimensional data.
 
+For cuVS CAGRA built with NN-descent,
+FAISSR_CUVS_CAGRA_NN_DESCENT_NITER sets the iteration limit.
+The default is 20. The native result records the resolved limit as
+nn_descent_niter, including for batched and sharded builds. Measure recall
+against independent exact neighbors when tuning this value.
+
 ## Tuning And Quality Reporting
 
 Approximate methods should be reported with:

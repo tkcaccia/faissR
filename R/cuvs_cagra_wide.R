@@ -79,6 +79,7 @@ cuvs_cagra_profiled_self <- function(data, k, output, params, profile) {
         as.integer(profile$graph_degree),
         as.integer(profile$intermediate_degree), output)
     result$cagra_settings <- c(params, profile)
+    result$cagra_settings$nn_descent_niter <- result$nn_descent_niter
     result
 }
 
@@ -206,6 +207,7 @@ cuvs_cagra_wide_file <- function(source, k, batch, memory_limit,
     index$params <- c(params, list(graph_degree = index$graph_degree,
         intermediate_degree = index$intermediate_graph_degree,
         batch_rows = index$query_batch_rows, memory_limit_bytes = budget))
+    index$params$nn_descent_niter <- index$nn_descent_niter
     index
 }
 
@@ -259,5 +261,6 @@ cuvs_cagra_wide_file_multi <- function(source, k, batch, memory_limit,
         builder = "nn_descent", graph_degree = degree,
         intermediate_degree = intermediate, batch_rows = batch,
         memory_limit_bytes = memory_limit, shard_rows = index$shard_rows)
+    index$params$nn_descent_niter <- index$nn_descent_niter
     index
 }

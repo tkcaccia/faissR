@@ -464,6 +464,10 @@ int env_int(const char* name, const int default_value, const int min_value) {
   return static_cast<int>(value);
 }
 
+int cagra_nn_descent_iterations() {
+  return env_int("FAISSR_CUVS_CAGRA_NN_DESCENT_NITER", 20, 1);
+}
+
 struct CuvsIvfBatchSize {
   int requested = 0;
   int actual = 1;
@@ -1217,7 +1221,7 @@ struct FileCagraBuild {
 };
 
 FileCagraBuild build_file_cagra(int n, int p, int k, int batch,
-    double limit, int width, int queue, bool nn_descent,
+    double limit, int width, int queue, int nn_descent_niter,
     int graph_degree, int intermediate_degree,
     const std::function<void(int, int, float*)>& read, bool check_interrupt) {
   using Clock = std::chrono::steady_clock;
@@ -1265,8 +1269,10 @@ FileCagraBuild build_file_cagra(int n, int p, int k, int batch,
   config.get()->metric = L2Expanded;
   config.get()->graph_degree = graph_degree;
   config.get()->intermediate_graph_degree = intermediate_degree;
-  config.get()->build_algo = nn_descent ? NN_DESCENT : IVF_PQ;
-  if (nn_descent) config.get()->nn_descent_niter = 20;
+  config.get()->build_algo = nn_descent_niter > 0 ? NN_DESCENT : IVF_PQ;
+  if (nn_descent_niter > 0) {
+    config.get()->nn_descent_niter = static_cast<std::size_t>(nn_descent_niter);
+  }
   cuvs_check(cuvsCagraBuild(handle->resources.get(), config.get(), &tensor,
     handle->index.get()), "cuvsCagraBuild(file-backed)");
   cuda_sync("cuvsCagraBuild(file-backed) synchronize");
@@ -1284,8 +1290,9 @@ List cuvs_file_cagra_build_impl(int n, int p, int k, int batch,
     double limit, int width, int queue, bool nn_descent,
     int graph_degree, int intermediate_degree,
     const std::function<void(int, int, float*)>& read) {
-  auto built = build_file_cagra(n, p, k, batch, limit, width, queue, nn_descent,
-    graph_degree, intermediate_degree, read, true);
+  const int nn_descent_niter = nn_descent ? cagra_nn_descent_iterations() : 0;
+  auto built = build_file_cagra(n, p, k, batch, limit, width, queue,
+    nn_descent_niter, graph_degree, intermediate_degree, read, true);
   const int device = built.index->device;
   Rcpp::XPtr<FileCagraIndex> pointer(built.index.release(), true,
     file_cagra_tag());
@@ -1293,6 +1300,8 @@ List cuvs_file_cagra_build_impl(int n, int p, int k, int batch,
     Rcpp::Named("backend_used") = "cuda_cuvs_cagra_file",
     Rcpp::Named("graph_degree") = graph_degree,
     Rcpp::Named("intermediate_graph_degree") = intermediate_degree,
+    Rcpp::Named("nn_descent_niter") =
+      nn_descent ? nn_descent_niter : NA_INTEGER,
     Rcpp::Named("reference_bytes") = built.capacity.reference_bytes,
     Rcpp::Named("device_bytes_estimate") = built.capacity.device_bytes,
     Rcpp::Named("host_batch_bytes_estimate") = built.capacity.host_batch_bytes,
@@ -1562,13 +1571,14 @@ List cuvs_file_cagra_multi_build_impl(int n, int p, int k, int batch,
   }
 
   std::vector<std::future<FileCagraBuild>> tasks;
+  const int nn_descent_niter = nn_descent ? cagra_nn_descent_iterations() : 0;
   const auto started = Clock::now();
   for (std::size_t rank = 0; rank < devices.size(); ++rank) {
     tasks.push_back(std::async(std::launch::async, [&, rank] {
       cuda_check(cudaSetDevice(devices[rank]), "cudaSetDevice");
       const auto shard = index->shards[rank];
       return build_file_cagra(shard.rows, p, k, batch, limit, width, queue,
-        nn_descent, graph_degree, intermediate_degree,
+        nn_descent_niter, graph_degree, intermediate_degree,
         [&](int first, int rows, float* out) {
           read(rank, shard.first + first, rows, out);
         }, false);
@@ -1591,6 +1601,8 @@ List cuvs_file_cagra_multi_build_impl(int n, int p, int k, int batch,
     file_cagra_multi_tag());
   return List::create(Rcpp::Named("pointer") = pointer,
     Rcpp::Named("backend_used") = "cuda_cuvs_cagra_file_multi_sharded",
+    Rcpp::Named("nn_descent_niter") =
+      nn_descent ? nn_descent_niter : NA_INTEGER,
     Rcpp::Named("device_ids") = devices,
     Rcpp::Named("reference_bytes") = 4.0 * n * p,
     Rcpp::Named("shard_rows") = shard_rows,
@@ -2346,8 +2358,7 @@ List cuvs_cagra_knn_impl(NumericMatrix data,
     selected_build_algo = "ivf_pq";
   } else if (selected_build_algo == "nn_descent" || selected_build_algo == "nndescent") {
     index_params.get()->build_algo = NN_DESCENT;
-    index_params.get()->nn_descent_niter =
-      static_cast<std::size_t>(env_int("FAISSR_CUVS_CAGRA_NN_DESCENT_NITER", 20, 1));
+    index_params.get()->nn_descent_niter = cagra_nn_descent_iterations();
     selected_build_algo = "nn_descent";
   } else if (selected_build_algo == "iterative" || selected_build_algo == "iterative_cagra_search") {
     index_params.get()->build_algo = ITERATIVE_CAGRA_SEARCH;
@@ -2584,8 +2595,7 @@ List cuvs_cagra_float32_knn_impl(SEXP data,
     selected_build_algo = "ivf_pq";
   } else if (selected_build_algo == "nn_descent" || selected_build_algo == "nndescent") {
     index_params.get()->build_algo = NN_DESCENT;
-    index_params.get()->nn_descent_niter =
-      static_cast<std::size_t>(env_int("FAISSR_CUVS_CAGRA_NN_DESCENT_NITER", 20, 1));
+    index_params.get()->nn_descent_niter = cagra_nn_descent_iterations();
     selected_build_algo = "nn_descent";
   } else if (selected_build_algo == "iterative" || selected_build_algo == "iterative_cagra_search") {
     index_params.get()->build_algo = ITERATIVE_CAGRA_SEARCH;
@@ -2813,8 +2823,7 @@ List cuvs_hnsw_knn_from_row_major(const float* xb,
     selected_build_algo = "ivf_pq";
   } else if (selected_build_algo == "nn_descent" || selected_build_algo == "nndescent") {
     cagra_params.get()->build_algo = NN_DESCENT;
-    cagra_params.get()->nn_descent_niter =
-      static_cast<std::size_t>(env_int("FAISSR_CUVS_CAGRA_NN_DESCENT_NITER", 20, 1));
+    cagra_params.get()->nn_descent_niter = cagra_nn_descent_iterations();
     selected_build_algo = "nn_descent";
   } else if (selected_build_algo == "iterative" || selected_build_algo == "iterative_cagra_search") {
     cagra_params.get()->build_algo = ITERATIVE_CAGRA_SEARCH;

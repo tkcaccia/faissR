@@ -1,6 +1,7 @@
 test_that("file CAGRA queries an external row view with shard-local IDs", {
     skip_if_not(isTRUE(cuvs_available()))
     skip_if_not(isTRUE(cuda_available()))
+    withr::local_envvar(c(FAISSR_CUVS_CAGRA_NN_DESCENT_NITER = "12"))
     set.seed(42L)
     reference <- matrix(runif(768L * 4L), ncol = 4L)
     queries <- reference[c(60L, 73L, 91L, 254L, 401L), , drop = FALSE]
@@ -15,6 +16,7 @@ test_that("file CAGRA queries an external row view with shard-local IDs", {
     index <- file_cagra_build_cpp(shard, 8L, 16L, 2^30, 4L, 64L,
         TRUE, 32L, 64L)
     on.exit(file_cagra_release_cpp(index$pointer), add = TRUE)
+    expect_identical(index$nn_descent_niter, 12L)
 
     raw <- tempfile(fileext = ".f32")
     writeBin(as.numeric(t(queries)), raw, size = 4L, endian = "little")
@@ -78,7 +80,7 @@ test_that("multi-device file CAGRA uses the admitted profile", {
             intermediate, devices, merge_workers) {
         observed <<- list(batch, memory_limit, degree, intermediate,
             devices, merge_workers)
-        list(shard_rows = c(50001L, 50000L))
+        list(shard_rows = c(50001L, 50000L), nn_descent_niter = 12L)
     }, .package = "faissR")
     withr::local_options(list(faissR.cuvs_cagra_file_search = NULL))
     profile <- list(graph_degree = 64L, intermediate_degree = 96L,
@@ -89,4 +91,5 @@ test_that("multi-device file CAGRA uses the admitted profile", {
         0.99, TRUE, 0:1, merge_workers = 2L, profile = profile)
     expect_identical(observed, list(256L, 8 * 2^30, 64L, 96L, 0:1, 2L))
     expect_identical(index$params$shard_rows, c(50001L, 50000L))
+    expect_identical(index$params$nn_descent_niter, 12L)
 })
