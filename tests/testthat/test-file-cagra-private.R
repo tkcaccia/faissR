@@ -80,9 +80,11 @@ test_that("multi-device file CAGRA uses the admitted profile", {
             intermediate, devices, merge_workers) {
         observed <<- list(batch, memory_limit, degree, intermediate,
             devices, merge_workers)
-        list(shard_rows = c(50001L, 50000L), nn_descent_niter = 12L)
+        list(shard_rows = c(50001L, 50000L), nn_descent_niter = 12L,
+            query_batch_rows = batch, overlap_batch_rows = 2L * batch)
     }, .package = "faissR")
-    withr::local_options(list(faissR.cuvs_cagra_file_search = NULL))
+    withr::local_options(list(faissR.cuvs_cagra_file_search = NULL,
+        faissR.cuvs_cagra_overlap = NULL))
     profile <- list(graph_degree = 64L, intermediate_degree = 96L,
         batch_rows = 256L, memory_limit_bytes = 8 * 2^30,
         builder = "nn_descent")
@@ -92,4 +94,12 @@ test_that("multi-device file CAGRA uses the admitted profile", {
     expect_identical(observed, list(256L, 8 * 2^30, 64L, 96L, 0:1, 2L))
     expect_identical(index$params$shard_rows, c(50001L, 50000L))
     expect_identical(index$params$nn_descent_niter, 12L)
+    expect_identical(index$output_batch_rows, 512L)
+    expect_true(index$query_merge_overlap_enabled)
+    options(faissR.cuvs_cagra_overlap = FALSE)
+    serial <- faissR:::cuvs_cagra_wide_file_multi(
+        list(nrow = 100001L, ncol = 96L), 30L, 1024L, 16 * 2^30,
+        0.99, TRUE, 0:1, merge_workers = 2L, profile = profile)
+    expect_identical(serial$output_batch_rows, 256L)
+    expect_false(serial$query_merge_overlap_enabled)
 })

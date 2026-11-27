@@ -1,5 +1,9 @@
 # faissR 0.1
 
+- Reference-sharded CUDA CAGRA self-search now prefers 4,096-query batches
+  and overlaps CPU merging with GPU search in memory and for file-backed
+  input when the available memory admits the additional buffers.
+
 * With cuVS, automatic CUDA Euclidean self-KNN selects CAGRA with NN-descent
   for at least one million rows, 65 to 1,024 features, and 9 to 128 neighbors.
   The downstream file-backed planner can fit smaller CAGRA indexes in

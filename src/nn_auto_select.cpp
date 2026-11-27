@@ -1492,10 +1492,12 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
   const double calibrated_host_workspace = imagenet && k == 30 ?
     (file ? 6 : 16) * cagra_gib : n * cuda_cagra_host_bytes_per_row(p, k);
   const int degree = std::max(p <= 128 ? 32 : 64, k + 1);
+  const double device_count = knn_request_count(request, "cuda_device_count", 1);
+  const int default_batch = device_count > 1 ? faissr::cagra_max_batch_rows :
+    imagenet ? 1024 : 512;
   const auto profile = calibrated ? List::create(
     _["graph_degree"] = degree, _["intermediate_degree"] = 2 * degree,
-    _["batch_rows"] = file ? cuda_cagra_file_batch(imagenet ? 1024 : 512) :
-      imagenet ? 1024 : 512,
+    _["batch_rows"] = file ? cuda_cagra_file_batch(default_batch) : default_batch,
     _["memory_limit_bytes"] = request.containsElementNamed("memory_limit_bytes") ?
       as<double>(request["memory_limit_bytes"]) :
       finite1(host_available) ? std::max(host_available, free) :
@@ -1503,8 +1505,7 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
   ) : as<List>(option);
   const double graph = knn_request_count(profile, "graph_degree", 0);
   const double intermediate = knn_request_count(profile, "intermediate_degree", 0);
-  const double batch = knn_request_count(profile, "batch_rows", 0);
-  const double device_count = knn_request_count(request, "cuda_device_count", 1);
+  double batch = knn_request_count(profile, "batch_rows", 0);
   if (device_count < 1 || device_count > n ||
       device_count != std::floor(device_count)) {
     stop("Invalid CUDA CAGRA device count.");
@@ -1529,18 +1530,30 @@ List cuda_cagra_profile_plan(const List& request, int n, int p, int k,
     limit = std::min(limit, caller_limit);
   }
   limit = std::floor(limit);
-  const int largest_shard = static_cast<int>(std::ceil(n / device_count));
-  const auto capacity = faissr::cagra_capacity(largest_shard, p, k,
-    static_cast<int>(batch), static_cast<int>(graph), static_cast<int>(intermediate));
-  const double device_bytes = capacity.device_bytes +
-    (device_count > 1 ? 4.0 * batch * p : 0.0);
-  const double resident_payload = file ? 0.0 : n * (8.0 * p + 12.0 * k);
-  const double host_buffers = resident_payload +
-    device_count * capacity.host_batch_bytes;
-  // The resident native path subtracts its result storage from the limit.
+  // The resident native path reserves output before admitting the index.
   const double result_bytes = device_count > 1 && !file ? 12.0 * n * k : 0;
   if (device_count > 1 && finite1(host_available)) {
     limit = std::min(limit, std::floor(host_available));
+  }
+  const int largest_shard = static_cast<int>(std::ceil(n / device_count));
+  const bool multi = device_count > 1;
+  const double resident_payload = file ? 0.0 : n * (8.0 * p + 12.0 * k);
+  const auto estimate = [&] {
+    return faissr::cagra_capacity(largest_shard, p, k,
+      static_cast<int>(batch), static_cast<int>(graph),
+      static_cast<int>(intermediate));
+  };
+  auto capacity = estimate();
+  auto device_bytes = capacity.device_bytes + (multi ? 4.0 * batch * p : 0.0);
+  auto host_buffers = resident_payload + device_count * capacity.host_batch_bytes;
+  // Retain the requested graph and search parameters under tighter capacity.
+  while (calibrated && multi && batch > 1 && finite1(free) &&
+         (device_bytes > std::min(free, limit - result_bytes) ||
+          host_buffers > limit)) {
+    batch = std::floor(batch / 2);
+    capacity = estimate();
+    device_bytes = capacity.device_bytes + 4.0 * batch * p;
+    host_buffers = resident_payload + device_count * capacity.host_batch_bytes;
   }
   const double host_required = device_count > 1 ?
     n * cuda_cagra_host_bytes_per_row(p, k) + result_bytes :

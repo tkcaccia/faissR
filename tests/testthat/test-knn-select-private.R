@@ -292,12 +292,17 @@ test_that("ImageNet admits the validated width-four CUDA preset", {
     expect_lt(multi$cuda_cagra_admission$device_bytes_estimate,
               current$cuda_cagra_admission$device_bytes_estimate)
     expect_identical(multi$cuda_cagra_profile$builder, "nn_descent")
+    expect_equal(multi$cuda_cagra_profile$batch_rows, 4096)
+    restricted <- (multi$cuda_cagra_admission$device_bytes_estimate - 1) / 2^30
+    tight <- choose(free = restricted, devices = 2L)
+    expect_equal(tight$cuda_cagra_profile$batch_rows, 2048)
     expect_error(choose(free = 2, devices = 2L), "sharded CUDA CAGRA exceeds")
     expect_error(choose(free = 8, host = 8, devices = 2L),
         "sharded CUDA CAGRA exceeds")
     even <- choose(rows = 10000000L, columns = 96L, free = 8, host = 32,
         limit = 32, file = TRUE, devices = 2L)
     expect_identical(even$method, "cagra_width4")
+    expect_equal(even$cuda_cagra_profile$batch_rows, 4096)
     expect_equal(even$cuda_cagra_admission$largest_reference_shard_rows, 5000000)
     expect_error(choose(free = 2, file = TRUE, devices = 2L),
         "sharded CUDA CAGRA exceeds")

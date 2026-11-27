@@ -239,6 +239,9 @@ cuvs_cagra_wide_file_multi <- function(source, k, batch, memory_limit,
     index <- file_cagra_multi_build_cpp(source, k, batch, memory_limit,
         params$width, params$queue, degree, intermediate, devices,
         merge_workers = merge_workers)
+    overlap <- isTRUE(getOption("faissR.cuvs_cagra_overlap", TRUE))
+    index$output_batch_rows <- if (overlap) index$overlap_batch_rows else batch
+    index$query_merge_overlap_enabled <- index$output_batch_rows > batch
     pointer <- index$pointer
     timing <- NULL
     index$search_batch <- function(first, count) {

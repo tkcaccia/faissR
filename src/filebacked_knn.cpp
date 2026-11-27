@@ -35,7 +35,7 @@ Rcpp::List cuvs_file_cagra_multi_build_impl(int n, int p, int k, int batch,
     const std::vector<int>& devices, int merge_workers,
     const std::function<void(std::size_t, int, int, float*)>& read);
 Rcpp::List cuvs_file_cagra_multi_search_impl(SEXP pointer, int features,
-    int first, int count, const std::function<void(float*)>& read);
+    int first, int count, const std::function<void(int, int, float*)>& read);
 void cuvs_file_cagra_multi_release_impl(SEXP pointer);
 #endif
 
@@ -852,8 +852,8 @@ Rcpp::List file_cagra_multi_search_cpp(SEXP pointer, SEXP source_spec,
   const auto modified = std::filesystem::last_write_time(file.path);
   std::ifstream input(file.path, std::ios::binary);
   if (!input) Rcpp::stop("Cannot open the CUDA CAGRA query source");
-  auto read = [&](float* output) {
-    read_file_rows(input, file, first - 1, count, output);
+  auto read = [&](int row, int rows, float* output) {
+    read_file_rows(input, file, row, rows, output);
     if (std::filesystem::last_write_time(file.path) != modified) {
       Rcpp::stop("CUDA CAGRA query file changed during search");
     }

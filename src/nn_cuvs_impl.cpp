@@ -1468,12 +1468,22 @@ struct FileCagraMultiIndex {
   int k;
   int batch;
   int merge_workers;
+  double merge_headroom;
   std::vector<faissr::CagraShard> shards;
   std::vector<FileCagraBuild> builds;
   std::vector<float> query_staging;
   std::vector<faissr::CagraBatch> search_batches;
   // Stop threads before releasing their CUDA indexes and staging buffer.
   std::vector<std::unique_ptr<faissr::CagraSearchWorker>> search_workers;
+  std::unique_ptr<faissr::CagraMergePipeline> pipeline;
+
+  bool can_overlap() const {
+    // Admit a second candidate bank and both batches of returned ID/distance
+    // pairs. Host limits already reserve the resident result when applicable.
+    const double candidates = 12.0 * batch * (k + 1.0) * shards.size();
+    const double returned = 24.0 * batch * k;
+    return rows > batch && merge_headroom >= candidates + returned;
+  }
 
   faissr::CagraSearchWorker* merge_worker() const {
     return merge_workers == 2 ? search_workers.front().get() : nullptr;
@@ -1564,6 +1574,7 @@ List cuvs_file_cagra_multi_build_impl(int n, int p, int k, int batch,
   index->k = k;
   index->batch = batch;
   index->merge_workers = merge_workers;
+  index->merge_headroom = limit - host_workspace;
   for (int rank = 0, first = 0; rank < count; ++rank) {
     const int rows = n / count + (rank < n % count);
     index->shards.push_back({first, rows});
@@ -1597,6 +1608,7 @@ List cuvs_file_cagra_multi_build_impl(int n, int p, int k, int batch,
     free_bytes[rank] = task.available;
     index->builds.push_back(std::move(task));
   }
+  const int overlap_rows = index->can_overlap() ? 2 * batch : batch;
   Rcpp::XPtr<FileCagraMultiIndex> pointer(index.release(), true,
     file_cagra_multi_tag());
   return List::create(Rcpp::Named("pointer") = pointer,
@@ -1610,6 +1622,7 @@ List cuvs_file_cagra_multi_build_impl(int n, int p, int k, int batch,
     Rcpp::Named("device_free_bytes_at_build") = free_bytes,
     Rcpp::Named("host_workspace_required_bytes") = host_workspace,
     Rcpp::Named("query_batch_rows") = batch,
+    Rcpp::Named("overlap_batch_rows") = overlap_rows,
     Rcpp::Named("build_seconds") = *std::max_element(build.begin(), build.end()),
     Rcpp::Named("source_read_and_upload_seconds") = *std::max_element(upload.begin(), upload.end()),
     Rcpp::Named("build_and_upload_seconds") =
@@ -1705,30 +1718,85 @@ const std::vector<faissr::CagraBatch>& search_cagra_shards(
   return batches;
 }
 
+// The same ranked merge serves resident matrices and bounded disk tiles.
+template<class Read, class Direct, class Write>
+CagraSearchTiming run_cagra_merge(FileCagraMultiIndex& index, int first,
+    int count, int stride, int output_first, bool overlap,
+    const Read& read, const Direct& direct, const Write& write) {
+  CagraSearchTiming timing(index.shards.size());
+  CagraClock::time_point merge_started, merge_done;
+  if (overlap && !index.pipeline) {
+    index.pipeline = std::make_unique<faissr::CagraMergePipeline>(
+      index.merge_workers);
+  }
+  auto* pipeline = overlap ? index.pipeline.get() : nullptr;
+  try {
+    for (int done = 0; done < count;) {
+      Rcpp::checkUserInterrupt();
+      const int query = first + done;
+      const int rows = std::min(index.batch, count - done);
+      const int offset = output_first + done;
+      const auto query_started = CagraClock::now();
+      const auto& batches = search_cagra_shards(index, query, rows,
+        [&](float* staging) { read(query, rows, staging); },
+        timing, direct(query));
+      const auto query_done = CagraClock::now();
+      const auto merge = [&, query, rows, offset](const auto& shards,
+                                                  auto* worker) {
+        merge_started = CagraClock::now();
+        const int workers = faissr::merge_cagra_rows(worker, shards,
+          index.shards, query, rows, index.k, stride, offset, write);
+        merge_done = CagraClock::now();
+        timing.merge_workers = std::max(timing.merge_workers, workers);
+        timing.merge += cagra_elapsed(merge_started);
+      };
+      if (pipeline) {
+        if (pipeline->pending().valid()) {
+          take_cagra_result(pipeline->pending());
+          const auto shared = std::min(query_done, merge_done) -
+            std::max(query_started, merge_started);
+          timing.overlap += std::max(0.0,
+            std::chrono::duration<double>(shared).count());
+        }
+        pipeline->submit(index.search_batches, merge);
+      } else {
+        merge(batches, index.merge_worker());
+      }
+      done += rows;
+    }
+    if (pipeline) take_cagra_result(pipeline->pending());
+  } catch (...) {
+    // A pending merge can reference the caller's output matrices.
+    if (pipeline && pipeline->pending().valid()) {
+      pipeline->pending().wait();
+      pipeline->pending() = {};
+    }
+    throw;
+  }
+  return timing;
+}
+
 }  // namespace
 
 List cuvs_file_cagra_multi_search_impl(SEXP pointer, int features, int first,
-    int count, const std::function<void(float*)>& read) {
+    int count, const std::function<void(int, int, float*)>& read) {
   auto& index = file_cagra_multi_pointer(pointer);
+  const bool overlap = count > index.batch && index.can_overlap();
   if (features != index.features || first < 1 || first > index.rows ||
-      count < 1 || count > index.batch || count > index.rows - first + 1) {
+      count < 1 || count > index.batch * (overlap ? 2 : 1) ||
+      count > index.rows - first + 1) {
     Rcpp::stop("Multi-device CAGRA query batch is outside the source");
   }
-  const int query = first - 1;
-  CagraSearchTiming timing(index.shards.size());
-  const auto& batches = search_cagra_shards(index, query, count, read, timing);
   IntegerMatrix indices(Rcpp::no_init(count, index.k));
   NumericMatrix distances(Rcpp::no_init(count, index.k));
-  const auto merge_start = CagraClock::now();
   int* ids = indices.begin();
   double* values = distances.begin();
-  timing.merge_workers = faissr::merge_cagra_rows(index.merge_worker(),
-    batches, index.shards, query, count, index.k, count, 0,
+  const auto timing = run_cagra_merge(index, first - 1, count, count, 0,
+    overlap, read, [](int) -> const float* { return nullptr; },
     [&](std::size_t slot, int id, float squared) {
       ids[slot] = id;
       values[slot] = std::sqrt(squared);
     });
-  timing.merge = cagra_elapsed(merge_start);
   return List::create(Rcpp::Named("indices") = indices,
     Rcpp::Named("distances") = distances, Rcpp::Named("exact") = false,
     Rcpp::Named("backend_used") = "cuda_cuvs_cagra_file_multi_sharded",
@@ -1911,51 +1979,18 @@ List cuvs_multi_cagra_self_impl(SEXP data, const std::vector<int>& devices,
     set_distance_value(numeric_data, float_data, slot, squared, false,
       float_output);
   };
-  CagraSearchTiming timing(index->shards.size());
-  Clock::time_point merge_started, merge_done;
-  std::unique_ptr<faissr::CagraMergePipeline> pipeline;
-  if (overlap_merge) {
-    pipeline = std::make_unique<faissr::CagraMergePipeline>(merge_workers);
-  }
+  overlap_merge = overlap_merge && index->can_overlap();
   const auto started = Clock::now();
-  for (int first = 0; first < n;) {
-    Rcpp::checkUserInterrupt();
-    const int count = std::min(batch, n - first);
-    const auto query_started = Clock::now();
-    // The build checked every row for finite float32 values before search.
-    const float* resident_queries = overlap_merge && source.row_major ?
-      source.float_data + static_cast<std::size_t>(first) * p : nullptr;
-    const auto& batches = search_cagra_shards(*index, first, count,
-      [&](float* staging) {
-        if (overlap_merge) source.pack(first, count, staging);
-        else source.read(first, count, staging);
-      }, timing, resident_queries);
-    const auto query_done = Clock::now();
-    const auto merge = [&, first, count](const auto& shards, auto* worker) {
-      const auto started = Clock::now();
-      const int workers = faissr::merge_cagra_rows(worker, shards,
-        index->shards, first, count, k, n, first, write);
-      merge_started = started;
-      merge_done = Clock::now();
-      timing.merge_workers = std::max(timing.merge_workers, workers);
-      timing.merge += std::chrono::duration<double>(merge_done - merge_started).count();
-    };
-    if (pipeline) {
-      if (pipeline->pending().valid()) {
-        take_cagra_result(pipeline->pending());
-        const auto shared = std::min(query_done, merge_done) -
-          std::max(query_started, merge_started);
-        timing.overlap += std::max(0.0,
-          std::chrono::duration<double>(shared).count());
-      }
-      pipeline->submit(index->search_batches, merge);
-    } else {
-      merge(batches, index->merge_worker());
-    }
-    first += count;
-  }
-  if (pipeline) take_cagra_result(pipeline->pending());
-  const double total = std::chrono::duration<double>(Clock::now() - started).count();
+  const auto timing = run_cagra_merge(*index, 0, n, n, 0, overlap_merge,
+    [&](int first, int rows, float* staging) {
+      if (overlap_merge) source.pack(first, rows, staging);
+      else source.read(first, rows, staging);
+    },
+    [&](int first) -> const float* {
+      return overlap_merge && source.row_major ?
+        source.float_data + static_cast<std::size_t>(first) * p : nullptr;
+    }, write);
+  const double total = cagra_elapsed(started);
   index.reset();
   Rcpp::RObject distance_output(float_output ?
     make_float32_distance_matrix(packed) : static_cast<SEXP>(distances));
@@ -1995,13 +2030,13 @@ extern "C" SEXP faissR_cuvs_multi_cagra_v1(SEXP arguments) {
   const int intermediate = request.containsElementNamed("intermediate_degree") ?
     Rcpp::as<int>(request["intermediate_degree"]) : 128;
   const int batch = request.containsElementNamed("batch_rows") ?
-    Rcpp::as<int>(request["batch_rows"]) : 1024;
+    Rcpp::as<int>(request["batch_rows"]) : faissr::cagra_max_batch_rows;
   const double memory_limit = request.containsElementNamed("memory_limit_bytes") ?
     Rcpp::as<double>(request["memory_limit_bytes"]) :
     std::numeric_limits<double>::max();
   const int merge_workers = request.containsElementNamed("merge_workers") ?
     Rcpp::as<int>(request["merge_workers"]) : 1;
-  const bool overlap_merge = request.containsElementNamed("overlap_merge") &&
+  const bool overlap_merge = !request.containsElementNamed("overlap_merge") ||
     Rcpp::as<bool>(request["overlap_merge"]);
   return cuvs_multi_cagra_self_impl(
     request["data"], devices, Rcpp::as<int>(request["k"]),
