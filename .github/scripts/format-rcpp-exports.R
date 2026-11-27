@@ -91,6 +91,11 @@ format_wrapper <- function(expression) {
         }
         wrapper_body <- wrapper_body[[2L]]
     }
+    invisible_call <- is.call(wrapper_body) && length(wrapper_body) == 2L &&
+        identical(wrapper_body[[1L]], as.name("invisible"))
+    if (invisible_call) {
+        wrapper_body <- wrapper_body[[2L]]
+    }
     if (!is.call(wrapper_body) ||
         !identical(wrapper_body[[1L]], as.name(".Call"))) {
         stop("Rcpp wrapper does not contain one .Call().", call. = FALSE)
@@ -112,9 +117,9 @@ format_wrapper <- function(expression) {
     )
     call_block <- pack_tokens(
         call_lines,
-        "    .Call(",
+        if (invisible_call) "    invisible(.Call(" else "    .Call(",
         "        ",
-        ")"
+        if (invisible_call) "))" else ")"
     )
     output <- c(formal_block, call_block, "}")
 

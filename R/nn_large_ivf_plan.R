@@ -236,7 +236,10 @@ nn_cuda_ivf_validate_anchors <- function(sizes, target_n, fit_sizes,
     }
     if (!is.null(holdout_n) &&
         (holdout_n <= min(sizes) || holdout_n >= max(sizes))) {
-        stop("The held-out size must lie between the smallest and largest anchors.")
+        stop(
+            "The held-out size must lie between the smallest ",
+            "and largest anchors."
+        )
     }
 }
 

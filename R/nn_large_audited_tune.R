@@ -129,7 +129,8 @@ nn_large_knn_tune_audited <- function(
     cost <- passed$index_build_seconds + passed$search_seconds_median
     selected <- passed[order(cost, passed$nprobe, passed$nlist)[[1L]],
                        , drop = FALSE]
-    plan$tuning_status <- "measured_fixed_query_candidate_requires_live_recall_check"
+    plan$tuning_status <-
+        "measured_fixed_query_candidate_requires_live_recall_check"
     plan$selected_nlist <- as.integer(selected$nlist[[1L]])
     plan$selected_nprobe <- as.integer(selected$nprobe[[1L]])
     plan$measured_recall <- selected$measured_recall[[1L]]

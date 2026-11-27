@@ -127,7 +127,8 @@ file_cagra_multi_build_cpp <- function(source_spec, k, batch, limit, width,
 }
 
 file_cagra_multi_search_cpp <- function(pointer, source_spec, first, count) {
-    .Call(`_faissR_file_cagra_multi_search_cpp`, pointer, source_spec, first, count)
+    .Call(`_faissR_file_cagra_multi_search_cpp`, pointer, source_spec, first,
+        count)
 }
 
 file_cagra_multi_release_cpp <- function(pointer) {
@@ -507,8 +508,11 @@ nn_cuvs_cagra_float32_cpp <- function(data, points, k, exclude_self,
         build_algo, distance_storage)
 }
 
-nn_cuvs_cagra_batched_self_cpp <- function(data, k, batch, memory_limit, width, queue, nn_descent, graph_degree, intermediate_degree, output) {
-    .Call(`_faissR_nn_cuvs_cagra_batched_self_cpp`, data, k, batch, memory_limit, width, queue, nn_descent, graph_degree, intermediate_degree, output)
+nn_cuvs_cagra_batched_self_cpp <- function(data, k, batch, memory_limit, width,
+    queue, nn_descent, graph_degree, intermediate_degree, output) {
+    .Call(`_faissR_nn_cuvs_cagra_batched_self_cpp`, data, k, batch,
+        memory_limit, width, queue, nn_descent, graph_degree,
+        intermediate_degree, output)
 }
 
 nn_cuvs_nndescent_self_cpp <- function(data, k, graph_degree,
@@ -828,8 +832,10 @@ nn_metal_query_cpp <- function(data, query, k, method = "auto",
         target_recall)
 }
 
-file_cagra_build_cpp <- function(source_spec, k, batch, memory_limit, width, queue, nn_descent, graph_degree = 64L, intermediate_degree = 128L) {
-    .Call(`_faissR_file_cagra_build_cpp`, source_spec, k, batch, memory_limit, width, queue, nn_descent, graph_degree, intermediate_degree)
+file_cagra_build_cpp <- function(source_spec, k, batch, memory_limit, width,
+    queue, nn_descent, graph_degree = 64L, intermediate_degree = 128L) {
+    .Call(`_faissR_file_cagra_build_cpp`, source_spec, k, batch, memory_limit,
+        width, queue, nn_descent, graph_degree, intermediate_degree)
 }
 
 file_cagra_search_cpp <- function(pointer, first, count) {
@@ -849,7 +855,8 @@ file_cagra_release_cpp <- function(pointer) {
 }
 
 file_metal_cagra_build_cpp <- function(source_spec, k, memory_limit, target) {
-    .Call(`_faissR_file_metal_cagra_build_cpp`, source_spec, k, memory_limit, target)
+    .Call(`_faissR_file_metal_cagra_build_cpp`, source_spec, k, memory_limit,
+        target)
 }
 
 file_metal_cagra_search_cpp <- function(pointer, first, count) {

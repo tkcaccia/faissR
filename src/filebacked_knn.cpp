@@ -887,7 +887,13 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
       Rcpp::as<std::string>(method) != "stream_exact") {
     Rcpp::stop("Requested file-backed KNN backend/method is unavailable");
   }
-#ifndef FAISSR_FILEBACK_CUDA
+#ifdef FAISSR_FILEBACK_CUDA
+  int available_devices = 0;
+  if (cuda && (cudaGetDeviceCount(&available_devices) != cudaSuccess ||
+      available_devices == 0)) {
+    Rcpp::stop("CUDA file-backed KNN is unavailable: no CUDA device is accessible");
+  }
+#else
   if (cuda) Rcpp::stop("CUDA file-backed KNN is unavailable in this build");
 #endif
 #ifndef __APPLE__
@@ -903,10 +909,6 @@ SEXP matrix_knn_batch_impl(SEXP query_spec,
       Rcpp::stop("CUDA KNN needs 1 to 16 selected devices");
     }
 #ifdef FAISSR_FILEBACK_CUDA
-    int available_devices = 0;
-    if (cudaGetDeviceCount(&available_devices) != cudaSuccess) {
-      Rcpp::stop("Could not enumerate CUDA devices");
-    }
     for (int device : requested_devices) {
       if (device < 0 || device >= available_devices ||
           std::find(cuda_devices.begin(), cuda_devices.end(), device) !=
